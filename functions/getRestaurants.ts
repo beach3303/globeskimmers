@@ -516,13 +516,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Append "restaurant" to dish queries so Google returns restaurants, not
-    // grocery stores or recipe sites. "pasta" → "pasta restaurant" yields 20+
-    // results vs 6 for just "pasta". Skip appending if user already typed
-    // "restaurant", "food", or "near me".
+    // Append "restaurant" to ALL search queries so Google returns restaurants,
+    // not grocery stores or recipe sites. Works for dishes ("pasta restaurant"),
+    // dietary ("kosher restaurant", "halal restaurant"), and cuisines ("thai restaurant").
+    // Skip appending if user already typed a venue word.
     const rawQuery = searchQuery?.trim() || '';
-    const skipAppend = /restaurant|food|near me|cafe|bar|bakery|shop/i.test(rawQuery);
-    const enhancedQuery = rawQuery && intent.kind !== 'GENERAL' && !skipAppend
+    const skipAppend = /restaurant|food|near me|cafe|bar|bakery|shop|grill|diner|bistro/i.test(rawQuery);
+    const enhancedQuery = rawQuery && !skipAppend
       ? `${rawQuery} restaurant`
       : rawQuery;
     const queries: string[] = enhancedQuery
