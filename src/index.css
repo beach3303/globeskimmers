@@ -1,0 +1,216 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ============================================================================
+   GLOBESKIMMERS THEME CSS
+   ============================================================================ */
+
+/* Globeskimmers CSS Variables */
+:root {
+  --gs-primary: #2A9D8F;
+  --gs-secondary: #3B82F6;
+  --gs-accent: #F59E0B;
+  --gs-background: #F7FAFC;
+  --gs-surface: #FFFFFF;
+  --gs-surface-muted: #F1F5F9;
+  --gs-text-primary: #0F172A;
+  --gs-text-secondary: #64748B;
+  --gs-text-inverse: #FFFFFF;
+  --gs-header-gradient: linear-gradient(135deg, #5FA8D3 0%, #3B82F6 100%);
+  --gs-hero-gradient: linear-gradient(180deg, #E0F2FE 0%, #BAE6FD 100%);
+  --gs-money-gradient: linear-gradient(135deg, #16A34A 0%, #22C55E 100%);
+}
+
+/* Smooth theme transitions */
+body,
+.theme-transition {
+  transition: background-color 0.25s ease-in-out, color 0.25s ease-in-out;
+}
+
+/* Dark theme adjustments */
+.dark-theme {
+  color-scheme: dark;
+}
+
+.dark-theme input,
+.dark-theme textarea,
+.dark-theme select {
+  background-color: var(--gs-surface);
+  color: var(--gs-text-primary);
+  border-color: var(--gs-surface-muted);
+}
+
+/* ============================================================================
+   COSMIC THEME - Star Background Effect
+   ============================================================================ */
+
+.cosmic-theme::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: 
+    radial-gradient(2px 2px at 20px 30px, rgba(255,255,255,0.3), transparent),
+    radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.2), transparent),
+    radial-gradient(2px 2px at 50px 160px, rgba(255,255,255,0.25), transparent),
+    radial-gradient(2px 2px at 90px 40px, rgba(255,255,255,0.15), transparent),
+    radial-gradient(2px 2px at 130px 80px, rgba(255,255,255,0.3), transparent),
+    radial-gradient(2px 2px at 160px 120px, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1px 1px at 200px 50px, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 220px 90px, rgba(255,255,255,0.25), transparent),
+    radial-gradient(2px 2px at 250px 150px, rgba(255,255,255,0.2), transparent),
+    radial-gradient(2px 2px at 280px 30px, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 310px 100px, rgba(255,255,255,0.35), transparent),
+    radial-gradient(2px 2px at 340px 60px, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1px 1px at 370px 130px, rgba(255,255,255,0.4), transparent),
+    radial-gradient(2px 2px at 100px 200px, rgba(255,255,255,0.25), transparent),
+    radial-gradient(1px 1px at 150px 250px, rgba(255,255,255,0.3), transparent),
+    radial-gradient(2px 2px at 200px 220px, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1px 1px at 300px 190px, rgba(255,255,255,0.35), transparent);
+  background-size: 400px 300px;
+  animation: starTwinkle 4s ease-in-out infinite alternate;
+}
+
+@keyframes starTwinkle {
+  0% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Cosmic glassmorphism for cards */
+.cosmic-theme .glass-card {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Cosmic neon glow for buttons */
+.cosmic-theme .neon-button {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+}
+
+.cosmic-theme .neon-button:hover {
+  box-shadow: 0 0 30px rgba(6, 182, 212, 0.5);
+}
+
+/* ============================================================================
+   HELPER CLASSES
+   ============================================================================ */
+
+.gs-bg-primary { background-color: var(--gs-primary); }
+.gs-bg-secondary { background-color: var(--gs-secondary); }
+.gs-bg-accent { background-color: var(--gs-accent); }
+.gs-bg-background { background-color: var(--gs-background); }
+.gs-bg-surface { background-color: var(--gs-surface); }
+.gs-bg-surface-muted { background-color: var(--gs-surface-muted); }
+
+.gs-text-primary { color: var(--gs-text-primary); }
+.gs-text-secondary { color: var(--gs-text-secondary); }
+.gs-text-inverse { color: var(--gs-text-inverse); }
+
+.gs-header-gradient { background: var(--gs-header-gradient); }
+.gs-hero-gradient { background: var(--gs-hero-gradient); }
+.gs-money-gradient { background: var(--gs-money-gradient); }
+
+/* ============================================================================
+   BOTTOM NAVIGATION SAFE AREA
+   ============================================================================ */
+
+.main-content {
+  padding-bottom: 100px;
+}
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .bottom-nav {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+  
+  .main-content {
+    padding-bottom: calc(100px + env(safe-area-inset-bottom));
+  }
+}

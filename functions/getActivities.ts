@@ -1,0 +1,258 @@
+/**
+ * ============================================================================
+ * GLOBESKIMMERS — getActivities v3.0
+ * ============================================================================
+ * Worldwide: landmarks, museums, parks, tours, nightlife, sports, beaches,
+ * cultural experiences, theme parks, historic sites.
+ * v3.0 changes:
+ *  - safeLower() fix (r.text object crash)
+ *  - Nearby search fallback when text search yields < 5 results
+ *  - Wikipedia API integration for top 10 results
+ *  - Review sentiment: highlights + warnings + bestTime
+ *  - editorialSummary passthrough from Google
+ *  - Audience detection: couples, seniors, pet-friendly
+ * ============================================================================
+ */
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
+
+const WORKER = "https://globeskimmers-api.maizasimeon.workers.dev";
+const TTL    = 60 * 60 * 6; // 6 hours
+
+const QUERIES = [
+  // Landmarks & Culture
+  "tourist attraction","landmark","historic site","monument","heritage site",
+  "museum","art gallery","cultural center","exhibition",
+  // Nature & Outdoors
+  "national park","nature reserve","botanical garden","wildlife sanctuary",
+  "scenic viewpoint","hiking trail","beach","waterfall","lake",
+  // Entertainment
+  "theme park","amusement park","water park","escape room",
+  "live music venue","concert hall","theater","comedy club",
+  "casino","bowling alley","arcade",
+  // Tours & Experiences
+  "guided tour","walking tour","food tour","bike tour","boat tour",
+  "cooking class","cultural experience","local experience",
+  // Sports & Adventure
+  "sports complex","stadium","golf course","surfing",
+  "rock climbing","zip line","skydiving","snorkeling","diving",
+  // Wellness
+  "spa","hot spring","onsen","hammam","bath house",
+  // Nightlife
+  "rooftop bar","night club","jazz bar","craft brewery","winery","distillery",
+  // Family
+  "zoo","aquarium","children's museum","mini golf","go kart",
+];
+
+// Nearby search types used as fallback when text search yields < 5 results
+const NEARBY_TYPES = [
+  'tourist_attraction','museum','park','amusement_park','zoo','aquarium',
+  'art_gallery','bowling_alley','casino','night_club','spa','stadium',
+  'movie_theater','campground',
+];
+
+const CATEGORY_NEARBY: Record<string,string[]> = {
+  culture:       ['museum','art_gallery','tourist_attraction'],
+  outdoor:       ['park','campground','tourist_attraction'],
+  entertainment: ['amusement_park','bowling_alley','casino','movie_theater'],
+  nightlife:     ['night_club','bar'],
+  family:        ['zoo','aquarium','amusement_park'],
+  wellness:      ['spa'],
+  tours:         ['tourist_attraction','museum'],
+};
+
+const SIG = {
+  free:        ['free admission','free entry','no charge','no fee','free access','complimentary'],
+  family:      ['family','kids','children','all ages','child-friendly','stroller'],
+  outdoor:     ['outdoor','outside','open air','nature','garden','park','beach','trail'],
+  indoor:      ['indoor','inside','air conditioned','museum','gallery','theater'],
+  guided:      ['guided','tour guide','expert','led tour','docent','commentary'],
+  bucket:      ['bucket list','must see','once in lifetime','world famous','iconic','legendary'],
+  hidden:      ['hidden gem','off the beaten','secret','local secret','underrated','undiscovered'],
+  photo:       ['photo','instagram','photogenic','beautiful','stunning views','scenic','panoramic'],
+  adventure:   ['adventure','thrill','extreme','adrenaline','exciting','challenging'],
+  cultural:    ['cultural','traditional','authentic','local','historic','heritage'],
+  budget:      ['free','cheap','affordable','budget','inexpensive','worth every penny'],
+  accessibility:['wheelchair','accessible','disabled','ada','mobility'],
+  couples:     ['romantic','date','couples','honeymoon','anniversary','intimate','perfect for couples'],
+  seniors:     ['senior','elderly','easy walk','gentle','leisurely','no stairs','slow pace'],
+  petFriendly: ['dog friendly','pet friendly','dogs allowed','pets welcome','bring your dog'],
+  highlights:  ['amazing','spectacular','breathtaking','incredible','beautiful','must visit','loved it','fantastic','perfect','outstanding','stunning','highly recommend','worth it'],
+  warnings:    ['long line','wait time','crowded','expensive','overpriced','disappointing','avoid','rude','dirty','loud','overcrowded','parking issue','too hot','too cold'],
+};
+
+function safeLower(v:any):string{
+  if(typeof v==='string') return v.toLowerCase();
+  if(v==null) return '';
+  if(typeof v==='object') return (v.text||'').toLowerCase();
+  return String(v).toLowerCase();
+}
+
+function sc(t:string,k:string[]){return k.filter(w=>t.includes(w)).length;}
+function km(la1:number,lo1:number,la2:number,lo2:number){
+  const R=6371,dL=(la2-la1)*Math.PI/180,dN=(lo2-lo1)*Math.PI/180;
+  const a=Math.sin(dL/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dN/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function activityType(name:string,types:string[]){
+  const n=name.toLowerCase(); const t=types.join(' ');
+  if(/museum|gallery|exhibit/.test(n)||/museum/.test(t))             return {icon:'🏛️',label:'Museum / Gallery',color:'#7C3AED',category:'culture'};
+  if(/park|garden|nature|reserve/.test(n)||/park/.test(t))           return {icon:'🌳',label:'Nature & Parks',color:'#059669',category:'outdoor'};
+  if(/beach|surf/.test(n)||/beach/.test(t))                          return {icon:'🏖️',label:'Beach',color:'#0891B2',category:'outdoor'};
+  if(/theme park|amusement|water park/.test(n))                      return {icon:'🎢',label:'Theme Park',color:'#DC2626',category:'entertainment'};
+  if(/zoo|aquarium|wildlife/.test(n)||/zoo/.test(t))                 return {icon:'🦁',label:'Zoo / Aquarium',color:'#D97706',category:'family'};
+  if(/spa|hot spring|onsen|hammam|bath/.test(n))                     return {icon:'♨️',label:'Spa & Wellness',color:'#DB2777',category:'wellness'};
+  if(/bar|club|nightlife|brewery|winery|distillery/.test(n))         return {icon:'🍻',label:'Nightlife',color:'#1D4ED8',category:'nightlife'};
+  if(/tour|walking|food tour|experience/.test(n))                    return {icon:'🗺️',label:'Tours & Experiences',color:'#F59E0B',category:'tour'};
+  if(/historic|heritage|monument|landmark|castle|temple|church|cathedral|mosque|shrine/.test(n)) return {icon:'🏰',label:'Historic Site',color:'#92400E',category:'culture'};
+  if(/sport|stadium|arena|gym|fitness/.test(n))                      return {icon:'🏟️',label:'Sports & Fitness',color:'#1D4ED8',category:'sport'};
+  if(/adventure|climb|zip|surf|dive|skydive/.test(n))                return {icon:'🧗',label:'Adventure',color:'#DC2626',category:'adventure'};
+  if(/cooking|class|workshop|lesson/.test(n))                        return {icon:'👨‍🍳',label:'Classes & Workshops',color:'#059669',category:'experience'};
+  return {icon:'⭐',label:'Attraction',color:'#F59E0B',category:'attraction'};
+}
+
+async function fetchWiki(name:string):Promise<{wikiSummary:string,wikiExtract:string}|null>{
+  try{
+    const r=await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`,
+      {headers:{'User-Agent':'Globeskimmers/3.0 (travel app)'}}
+    );
+    if(!r.ok) return null;
+    const d=await r.json();
+    if(d.type==='disambiguation'||!d.extract) return null;
+    return {wikiSummary:d.description||'',wikiExtract:d.extract.slice(0,400)};
+  }catch{return null;}
+}
+
+Deno.serve(async (req)=>{
+  try {
+    const base44=createClientFromRequest(req);
+    if(!await base44.auth.me()) return Response.json({error:'Unauthorized'},{status:401});
+    const {latitude,longitude,radius=24140,maxResults=30,category='all'}=await req.json();
+    if(!latitude||!longitude) return Response.json({error:'Location required'},{status:400});
+
+    const queries=category==='all'?QUERIES:QUERIES.filter(q=>{
+      const map:Record<string,string[]>={
+        culture:['museum','gallery','historic','monument','cultural','heritage'],
+        outdoor:['park','nature','beach','hiking','waterfall'],
+        entertainment:['theme park','escape room','casino','bowling','arcade'],
+        nightlife:['bar','club','music','brewery','winery'],
+        family:['zoo','aquarium','children','mini golf','go kart'],
+        wellness:['spa','hot spring','onsen','hammam'],
+        tours:['tour','experience','cooking class'],
+      };
+      return (map[category]||[]).some(k=>q.toLowerCase().includes(k));
+    });
+
+    const seen=new Set<string>(); const places:any[]=[];
+
+    // Primary: text search
+    for(let i=0;i<queries.length;i+=3){
+      await Promise.all(queries.slice(i,i+3).map(async q=>{
+        try{
+          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:String(radius),maxResults:'10',cacheTtl:String(TTL)});
+          const r=await fetch(`${WORKER}/places/text-search?${p}`);
+          if(!r.ok) return;
+          for(const pl of (await r.json()).places||[]){const id=pl.id;if(id&&!seen.has(id)){seen.add(id);places.push(pl);}}
+        }catch{}
+      }));
+    }
+
+    // Fallback: nearby search when text search yielded < 5 results
+    if(places.length<5){
+      const nearbyTypes=(CATEGORY_NEARBY[category]||NEARBY_TYPES).slice(0,8);
+      await Promise.all(nearbyTypes.map(async t=>{
+        try{
+          const p=new URLSearchParams({type:t,latitude:String(latitude),longitude:String(longitude),radius:String(radius),maxResults:'10',cacheTtl:String(TTL)});
+          const r=await fetch(`${WORKER}/places/nearby?${p}`);
+          if(!r.ok) return;
+          for(const pl of (await r.json()).places||[]){const id=pl.id;if(id&&!seen.has(id)){seen.add(id);places.push(pl);}}
+        }catch{}
+      }));
+    }
+
+    if(!places.length) return Response.json({activities:[],count:0,error:'No activities found.'});
+
+    const out=places.slice(0,maxResults).map(p=>{
+      const lat=p.location?.latitude||0,lng=p.location?.longitude||0;
+      const d=km(latitude,longitude,lat,lng);
+      const name=p.displayName?.text||p.name||'';
+      const revArr=(p.reviews||[]).map((r:any)=>safeLower(r?.text?.text??r?.text??''));
+      const rev=revArr.join(' ');
+      const txt=`${name.toLowerCase()} ${rev}`;
+      const at=activityType(name,p.types||[]);
+      const photos=(p.photos||[]).map((ph:any)=>ph.url||ph).filter(Boolean).slice(0,2);
+      const hours=p.currentOpeningHours?.weekdayDescriptions||p.regularOpeningHours?.weekdayDescriptions||p.hours||[];
+      const editorialSummary=p.editorialSummary?.text||p.editorialSummary||'';
+
+      // Review sentiment
+      const highlights=SIG.highlights.filter(w=>rev.includes(w)).slice(0,5);
+      const warnings=SIG.warnings.filter(w=>rev.includes(w)).slice(0,4);
+      const timeMatches=(rev.match(/\b(morning|afternoon|evening|sunrise|sunset|weekday|weekend|summer|winter|spring|fall|autumn|off.season)\b/gi)||[]);
+      const bestTime=timeMatches.length>0?[...new Set(timeMatches.map((s:string)=>s.toLowerCase()))].slice(0,3).join(', '):'';
+
+      const badges:string[]=[];
+      if(sc(txt,SIG.bucket)>0)    badges.push('🏆 Bucket List');
+      if(sc(txt,SIG.hidden)>0)    badges.push('💎 Hidden Gem');
+      if(sc(txt,SIG.photo)>1)     badges.push('📸 Photo Worthy');
+      if(sc(txt,SIG.free)>0)      badges.push('🆓 Free Entry');
+      if(sc(txt,SIG.family)>0)    badges.push('👨‍👩‍👧 Family Friendly');
+      if(sc(txt,SIG.adventure)>0) badges.push('⚡ Adventure');
+      if(sc(txt,SIG.cultural)>1)  badges.push('🎭 Authentic Culture');
+
+      let qs=50;
+      if(p.rating>=4.5) qs+=25; else if(p.rating>=4.0) qs+=15;
+      if(p.userRatingCount>1000) qs+=10; else if(p.userRatingCount>200) qs+=5;
+      if(sc(txt,SIG.bucket)>0) qs+=10;
+      if(sc(txt,SIG.photo)>0)  qs+=5;
+      if(sc(txt,SIG.hidden)>0) qs+=5;
+
+      return {
+        id:p.id,placeId:p.id,
+        displayName:p.displayName||{text:name},
+        name,location:{latitude:lat,longitude:lng},lat,lng,
+        formattedAddress:p.formattedAddress||'',
+        shortFormattedAddress:p.shortFormattedAddress||'',
+        distanceKm:d,distanceMiles:d*0.621371,distance:`${(d*0.621371).toFixed(1)} mi`,
+        rating:p.rating||null,userRatingCount:p.userRatingCount||0,
+        isOpen:p.isOpen??null,hours,
+        currentOpeningHours:{openNow:p.isOpen,weekdayDescriptions:hours},
+        photos,photoUrl:photos[0]||null,photoUrl2:photos[1]||null,
+        nationalPhoneNumber:p.nationalPhoneNumber||'',
+        websiteUri:p.websiteUri||'',googleMapsUri:p.googleMapsUri||'',
+        activityIcon:at.icon,activityLabel:at.label,activityColor:at.color,activityCategory:at.category,
+        editorialSummary,
+        badges,qualityScore:Math.min(qs,100),
+        highlights,warnings,bestTime,
+        props:{
+          isFree:           sc(txt,SIG.free)>0,
+          isFamilyFriendly: sc(txt,SIG.family)>0,
+          isOutdoor:        sc(txt,SIG.outdoor)>0,
+          isIndoor:         sc(txt,SIG.indoor)>0,
+          hasGuidedTour:    sc(txt,SIG.guided)>0,
+          isBucketList:     sc(txt,SIG.bucket)>0,
+          isHiddenGem:      sc(txt,SIG.hidden)>0,
+          isPhotoWorthy:    sc(txt,SIG.photo)>1,
+          isAdventure:      sc(txt,SIG.adventure)>0,
+          isCultural:       sc(txt,SIG.cultural)>1,
+          isAccessible:     sc(txt,SIG.accessibility)>0,
+          isBudgetFriendly: sc(txt,SIG.budget)>0,
+          isGoodForCouples: sc(txt,SIG.couples)>0,
+          isSeniorFriendly: sc(txt,SIG.seniors)>0,
+          isPetFriendly:    sc(txt,SIG.petFriendly)>0,
+        },
+      };
+    });
+    out.sort((a:any,b:any)=>b.qualityScore-a.qualityScore||(b.rating||0)-(a.rating||0));
+
+    // Wikipedia fetch for top 10 results (parallel, non-blocking on failure)
+    await Promise.all(out.slice(0,10).map(async (a:any)=>{
+      const wiki=await fetchWiki(a.name);
+      if(wiki){a.wikiSummary=wiki.wikiSummary;a.wikiExtract=wiki.wikiExtract;}
+    }));
+
+    return Response.json({activities:out,count:out.length,version:'v3.0'});
+  } catch(e:any){
+    return Response.json({error:e.message,activities:[]},{status:200});
+  }
+});
