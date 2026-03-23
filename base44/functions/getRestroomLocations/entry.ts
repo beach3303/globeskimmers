@@ -470,8 +470,36 @@ Deno.serve(async (req) => {
       }));
     }
 
-    console.log(`📊 Total unique places: ${allPlaces.length}`);
-    if (allPlaces.length === 0) {
+    // ── STRICT TYPE FILTER ───────────────────────────────────────────────
+    // When a specific category is selected (Parks, Transit, etc.), filter
+    // results to ONLY include places whose Google types match that category.
+    // Prevents 99 Ranch Market from appearing in Parks results.
+    const STRICT_TYPE_MAP: Record<string, Set<string>> = {
+      public:      new Set(['library','city_hall','community_center','local_government_office']),
+      transit:     new Set(['transit_station','bus_station','train_station','subway_station','light_rail_station','airport']),
+      coffee_food: new Set(['cafe','coffee_shop','fast_food_restaurant','restaurant','bakery','meal_takeaway']),
+      shopping:    new Set(['shopping_mall','department_store','supermarket','grocery_store','grocery_or_supermarket']),
+      medical:     new Set(['hospital','doctor','medical_clinic','health']),
+      fuel:        new Set(['gas_station','convenience_store','rest_stop']),
+      outdoor:     new Set(['park','national_park','campground','hiking_area','amusement_park','zoo']),
+    };
+    const strictTypes = STRICT_TYPE_MAP[venueType];
+    let filteredPlaces = allPlaces;
+    if (strictTypes && venueType !== 'all') {
+      filteredPlaces = allPlaces.filter(p => {
+        const types: string[] = p.types || [];
+        return types.some(t => strictTypes.has(t));
+      });
+      console.log(`🔒 Strict filter "${venueType}": ${allPlaces.length} → ${filteredPlaces.length}`);
+      // Fallback: if strict filter killed all results, use unfiltered
+      if (filteredPlaces.length === 0) {
+        console.log(`⚠️ Strict filter empty — falling back to all results`);
+        filteredPlaces = allPlaces;
+      }
+    }
+
+    console.log(`📊 Total unique places: ${filteredPlaces.length}`);
+    if (filteredPlaces.length === 0) {
       return Response.json({
         restrooms: [],
         count: 0,
@@ -482,7 +510,7 @@ Deno.serve(async (req) => {
     }
 
     // ── Process each place ──────────────────────────────────────────────
-    const processed = allPlaces.slice(0, maxResults).map(place => {
+    const processed = filteredPlaces.slice(0, maxResults).map(place => {
       const lat = place.location?.latitude || 0;
       const lng = place.location?.longitude || 0;
       const distKm = calcDist(latitude, longitude, lat, lng);

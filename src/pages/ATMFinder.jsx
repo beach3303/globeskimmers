@@ -493,6 +493,7 @@ export default function ATMFinderPage() {
   const [sortBy,         setSortBy]         = useState("nearby");
   const [radius,         setRadius]         = useState(10);
   const [showLocPicker,  setShowLocPicker]  = useState(false);
+  const [showLegend,     setShowLegend]     = useState(true);
   const [directionsATM,  setDirectionsATM]  = useState(null);
   const [highlightIdx,   setHighlightIdx]   = useState(null);
   const [expandedIdx,    setExpandedIdx]    = useState(null);
@@ -816,22 +817,29 @@ export default function ATMFinderPage() {
         // Map view
         <div style={{ position:"relative" }}>
           <div ref={mapRef} style={{ height:"calc(100vh - 300px)", width:"100%" }} />
-          {/* Legend */}
-          <div style={{ position:"absolute", bottom:"16px", left:"16px", zIndex:1000, background:"rgba(255,255,255,0.95)", borderRadius:"10px", padding:"8px 12px", fontSize:"11px", boxShadow:"0 2px 8px rgba(0,0,0,0.15)" }}>
-            <div style={{ fontWeight:"700", color:DARK, marginBottom:"4px" }}>Pin Colors</div>
-            <div style={{ display:"flex", alignItems:"center", gap:"6px", marginBottom:"2px" }}>
-              <span style={{ width:"12px", height:"12px", borderRadius:"50%", background:"#FF6B35", display:"inline-block" }}></span>
-              <span style={{ color:GRAY }}>Selected ATM</span>
+          {/* Legend — collapsible */}
+          {showLegend ? (
+            <div style={{ position:"absolute", bottom:"16px", left:"16px", zIndex:1000, background:"rgba(255,255,255,0.95)", borderRadius:"10px", padding:"8px 12px", fontSize:"11px", boxShadow:"0 2px 8px rgba(0,0,0,0.15)" }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"4px" }}>
+                <span style={{ fontWeight:"700", color:DARK }}>Pin Colors</span>
+                <button onClick={()=>setShowLegend(false)} style={{ background:"none", border:"none", fontSize:"14px", color:GRAY, cursor:"pointer", padding:"0 0 0 8px", lineHeight:1 }}>✕</button>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:"6px", marginBottom:"2px" }}>
+                <span style={{ width:"12px", height:"12px", borderRadius:"50%", background:"#FF6B35", display:"inline-block" }}></span>
+                <span style={{ color:GRAY }}>Selected ATM</span>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:"6px", marginBottom:"2px" }}>
+                <span style={{ width:"12px", height:"12px", borderRadius:"50%", background:"#1565C0", display:"inline-block" }}></span>
+                <span style={{ color:GRAY }}>Bank ATM</span>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+                <span style={{ width:"12px", height:"12px", borderRadius:"50%", background:TEAL, display:"inline-block" }}></span>
+                <span style={{ color:GRAY }}>Other ATM</span>
+              </div>
             </div>
-            <div style={{ display:"flex", alignItems:"center", gap:"6px", marginBottom:"2px" }}>
-              <span style={{ width:"12px", height:"12px", borderRadius:"50%", background:"#1565C0", display:"inline-block" }}></span>
-              <span style={{ color:GRAY }}>Bank ATM</span>
-            </div>
-            <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-              <span style={{ width:"12px", height:"12px", borderRadius:"50%", background:TEAL, display:"inline-block" }}></span>
-              <span style={{ color:GRAY }}>Other ATM</span>
-            </div>
-          </div>
+          ) : (
+            <button onClick={()=>setShowLegend(true)} style={{ position:"absolute", bottom:"16px", left:"16px", zIndex:1000, background:"rgba(255,255,255,0.95)", borderRadius:"8px", padding:"6px 10px", fontSize:"11px", fontWeight:"600", color:GRAY, border:"none", boxShadow:"0 2px 8px rgba(0,0,0,0.15)", cursor:"pointer" }}>🎨 Legend</button>
+          )}
           {/* Close button */}
           <button onClick={() => setViewMode("list")} style={{ position:"absolute", top:"16px", right:"16px", zIndex:1000, background:"#fff", borderRadius:"50%", width:"40px", height:"40px", border:"none", boxShadow:"0 2px 8px rgba(0,0,0,0.2)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", fontSize:"20px", color:DARK }}>✕</button>
         </div>
