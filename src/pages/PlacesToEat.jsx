@@ -1226,6 +1226,14 @@ export default function PlacesToEat() {
         </div>
       </div>
 
+      {/* ── STICKY SEARCH CONTEXT BAR ── */}
+      {searchText?.trim() && !loading && (
+        <div style={{position:"sticky",top:0,zIndex:50,background:"#FFFBEB",borderBottom:"1px solid #FDE68A",padding:"6px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:"12px"}}>
+          <span style={{color:"#92400E",fontWeight:"600"}}>🔍 "{searchText}" · {RADIUS_OPTIONS.find(o=>o.v===radius)?.l||`${radius} mi`} · {filtered.length} found</span>
+          <button onClick={()=>{setSearchInput("");setSearchText("");}} style={{background:"none",border:"none",color:"#B45309",fontWeight:"700",fontSize:"12px",cursor:"pointer",fontFamily:"inherit",padding:"2px 6px"}}>✕ Clear</button>
+        </div>
+      )}
+
       {/* ── CONTENT ── */}
       {loading?(
         <div style={{textAlign:"center",padding:"60px 20px"}}>
