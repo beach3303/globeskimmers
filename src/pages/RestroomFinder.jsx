@@ -605,6 +605,8 @@ export default function RestroomFinderPage() {
       const map = window.L.map(mapRef.current).setView([lat, lng], 15);
       window.L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { attribution: "© OSM © CARTO" }).addTo(map);
       mapInstRef.current = map;
+      window._gsRRDirs = (i) => { if (filtered[i]) setDirectionsRR(filtered[i]); };
+      window._gsRRView = (i) => { setActiveMapPin(i); setSheetExpanded(true); };
 
       // User location
       window.L.marker([lat, lng], { icon: window.L.divIcon({ html: `<div style="width:14px;height:14px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>`, iconSize: [14, 14], className: "" }) }).addTo(map);
@@ -622,6 +624,29 @@ export default function RestroomFinderPage() {
             iconSize: [size, size], className: ""
           })
         }).addTo(map);
+        const openSt = computeOpenStatus(r);
+        const accCfg = ACCESS_CONFIG[r.accessType] || ACCESS_CONFIG.unknown;
+        const phone = r.nationalPhoneNumber || r.internationalPhoneNumber || '';
+        const chips = getFeatureChips(r).slice(0,4).map(c=>`<span style="display:inline-flex;align-items:center;gap:2px;background:${c.bg};color:${c.color};padding:3px 8px;border-radius:12px;font-size:10px;font-weight:600;">${c.icon} ${c.label}</span>`).join('');
+        const popupHtml = `
+          <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:260px;">
+            <div style="padding:12px 14px;">
+              <div style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:${accCfg.bg};border-radius:6px;font-size:11px;font-weight:700;color:${accCfg.color};margin-bottom:6px;">${accCfg.icon} ${accCfg.label}</div>
+              <div style="font-weight:700;font-size:14px;color:#1A2332;margin-bottom:4px;">${r.name||'Restroom'}</div>
+              <div style="font-size:11px;color:#64748B;margin-bottom:6px;">${r.formattedAddress||''}</div>
+              <div style="font-size:11px;padding:5px 8px;border-radius:6px;background:${openSt.is24H?'#E3F2FD':openSt.isOpen===true?'#F0FDF4':openSt.isOpen===false?'#FEF2F2':'#F5F5F5'};margin-bottom:6px;">
+                <span style="font-weight:700;color:${openSt.is24H?'#1565C0':openSt.isOpen===true?'#15803D':openSt.isOpen===false?'#DC2626':'#9E9E9E'};">${openSt.label}</span>
+              </div>
+              ${r.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:6px;">★ <strong style="color:#1A2332;">${r.rating}</strong> <span style="color:#64748B;">(${r.userRatingCount||0})</span> · <span style="color:#0D9488;">📍 ${r.distanceMiles?.toFixed(1)||'?'} mi</span></div>`:''}
+              ${chips?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${chips}</div>`:''}
+              ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#3B82F6;font-size:11px;font-weight:600;">📞 ${phone}</a>`:''}
+              <div style="display:flex;gap:8px;">
+                <button onclick="window._gsRRDirs&&window._gsRRDirs(${i})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#0D9488;color:#fff;font-weight:600;font-size:11px;cursor:pointer;">🧭 Directions</button>
+                <button onclick="window._gsRRView&&window._gsRRView(${i})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#F1F5F9;color:#1A2332;font-weight:600;font-size:11px;cursor:pointer;">📋 Details</button>
+              </div>
+            </div>
+          </div>`;
+        marker.bindPopup(popupHtml, {maxWidth:270,autoPan:true,autoPanPaddingTopLeft:[0,160],autoPanPaddingBottomRight:[20,20],keepInView:true,className:"gs-popup"});
         marker.on("click", () => { setActiveMapPin(i); setSheetExpanded(false); });
         markersRef.current[i] = marker;
       });

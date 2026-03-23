@@ -443,68 +443,21 @@ function buildMapPopup(atm, index) {
   const hoursLabel = is24H ? "🔄 Open 24/7" : isOpen===true ? "Open Now" : isOpen===false ? "Closed" : "Hours N/A";
 
   return `
-<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:240px;position:relative;">
-
-  <!-- X Close -->
-  <button
-    onclick="if(window._gsMapInstance){window._gsMapInstance.closePopup();}"
-    style="position:absolute;top:8px;right:8px;z-index:10;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.95);border:none;box-shadow:0 2px 6px rgba(0,0,0,0.2);cursor:pointer;font-size:16px;color:#64748B;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>
-
-  <div style="padding:14px 14px 12px;">
-
-    <!-- Type chip -->
-    <div style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:#E0F7FA;border-radius:6px;font-size:11px;font-weight:700;color:#00838F;margin-bottom:8px;">
-      ${venueIcon} ${network}
-    </div>
-
-    <!-- Clickable name → list card -->
-    <div
-      onclick="window._gsViewATM && window._gsViewATM(${index})"
-      style="font-weight:800;font-size:15px;color:#1A2332;margin-bottom:8px;cursor:pointer;text-decoration:underline;text-decoration-color:#00BCD4;text-underline-offset:2px;line-height:1.3;padding-right:24px;">
-      ${name}
-    </div>
-
-    <!-- Address -->
-    <div style="display:flex;align-items:flex-start;gap:6px;font-size:12px;color:#64748B;margin-bottom:9px;padding:7px 9px;background:#F8FAFC;border-radius:6px;">
-      <span style="flex-shrink:0;margin-top:1px;">📍</span>
-      <span style="line-height:1.4;">${address}</span>
-    </div>
-
-    <!-- Rating + Distance row -->
-    <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:#64748B;margin-bottom:9px;">
-      ${rating ? `<span><span style="color:#FFB74D;">★</span><span style="font-weight:700;color:#1A2332;margin-left:2px;">${rating}</span>${ratingCount>0?` <span>(${ratingCount})</span>`:""}</span>` : ""}
-      ${distance ? `<span style="font-weight:600;color:#00838F;">📍 ${distance}</span>` : ""}
-      <span style="font-size:11px;color:#9E9E9E;font-weight:600;">💵 ${feeInfo}</span>
-    </div>
-
-    <!-- Hours -->
-    <div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:9px;padding:8px 10px;border-radius:7px;background:${hoursBg};">
-      <span style="width:8px;height:8px;border-radius:50%;background:${hoursDot};flex-shrink:0;"></span>
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:260px;position:relative;">
+  <div style="padding:12px;padding-top:14px;">
+    <div style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:#E0F7FA;border-radius:6px;font-size:11px;font-weight:700;color:#00838F;margin-bottom:6px;">${venueIcon} ${network}</div>
+    <div onclick="window._gsViewATM&&window._gsViewATM(${index})" style="font-weight:700;font-size:14px;color:#1A2332;margin-bottom:5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;">${name}</div>
+    <div style="font-size:11px;color:#64748B;margin-bottom:6px;">${address}</div>
+    <div style="font-size:11px;padding:5px 8px;border-radius:6px;background:${hoursBg};margin-bottom:6px;">
       <span style="font-weight:700;color:${hoursColor};">${hoursLabel}</span>
-      ${todayHours && !is24H ? `<span style="color:#64748B;">· ${todayHours}</span>` : ""}
+      ${todayHours && !is24H ? `<span style="color:#64748B;"> · ${todayHours}</span>` : ""}
     </div>
-
-    <!-- Phone -->
-    ${phone ? `
-      <a href="tel:${phone}" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 10px;background:#E3F2FD;border-radius:7px;text-decoration:none;color:#1565C0;">
-        <span style="width:26px;height:26px;background:#1565C0;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">📞</span>
-        <div>
-          <div style="font-weight:700;font-size:13px;">${phone}</div>
-          <div style="font-size:10px;color:#64748B;">Tap to call</div>
-        </div>
-      </a>
-    ` : `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 10px;background:#F5F5F5;border-radius:7px;color:#9E9E9E;font-size:12px;">
-        <span>📞</span><span>Phone not available</span>
-      </div>
-    `}
-
-    <!-- Action buttons -->
+    ${rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:6px;">★ <strong style="color:#1A2332;">${rating}</strong> <span style="color:#64748B;">(${ratingCount})</span>${distance?` · <span style="color:#00838F;">${distance}</span>`:''} · <span style="color:#9E9E9E;">💵 ${feeInfo}</span></div>`:`<div style="font-size:11px;color:#9E9E9E;margin-bottom:6px;">${distance?`📍 ${distance} · `:''}💵 ${feeInfo}</div>`}
+    ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#1565C0;font-size:11px;font-weight:600;">📞 ${phone}</a>`:''}
     <div style="display:flex;gap:8px;">
-      <button onclick="window._gsATMDirs && window._gsATMDirs(${index})" style="flex:1;padding:10px;border:none;border-radius:8px;background:#00BCD4;color:#fff;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">🧭 Directions</button>
-      <button onclick="window._gsViewATM && window._gsViewATM(${index})" style="flex:1;padding:10px;border:none;border-radius:8px;background:#F1F5F9;color:#1A2332;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">📋 Details</button>
+      <button onclick="window._gsATMDirs&&window._gsATMDirs(${index})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#00BCD4;color:#fff;font-weight:600;font-size:11px;cursor:pointer;">🧭 Directions</button>
+      <button onclick="window._gsViewATM&&window._gsViewATM(${index})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#F1F5F9;color:#1A2332;font-weight:600;font-size:11px;cursor:pointer;">📋 Details</button>
     </div>
-
   </div>
 </div>
   `;
@@ -668,7 +621,7 @@ export default function ATMFinderPage() {
           })
         }).addTo(map);
 
-        marker.bindPopup(buildMapPopup(atm, i), { maxWidth:260, className:"gs-popup", autoPanPaddingTopLeft:[0,120], autoPanPaddingBottomRight:[10,10], keepInView:true });
+        marker.bindPopup(buildMapPopup(atm, i), { maxWidth:270, autoPan:true, autoPanPaddingTopLeft:[0,160], autoPanPaddingBottomRight:[20,20], keepInView:true, className:"gs-popup" });
 
         // Update active pin color on popup open
         marker.on("popupopen", () => {
