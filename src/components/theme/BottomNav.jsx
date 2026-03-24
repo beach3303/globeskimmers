@@ -4,19 +4,17 @@
 // Navigation: Home | Saved Locations | Theme | Settings
 // ============================================================================
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
-import { Home, Bookmark, Palette, Settings } from 'lucide-react';
+import { Home, Bookmark, Settings } from 'lucide-react';
 import { useTheme } from './ThemeContext';
-import ThemePickerModal from './ThemePickerModal';
 
 export default function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useTheme();
-  const [showThemePicker, setShowThemePicker] = useState(false);
-  
+
   // Determine active tab from current path
   const getActiveTab = () => {
     const path = location.pathname.toLowerCase();
@@ -25,20 +23,17 @@ export default function BottomNav() {
     if (path === '/' || path.includes('home')) return 'home';
     return 'home';
   };
-  
+
   const activeTab = getActiveTab();
-  
+
   const navItems = [
     { id: 'home', label: 'Home', icon: Home, page: 'Home' },
     { id: 'saved', label: 'Saved Locations', icon: Bookmark, page: 'SavedLocations' },
-    { id: 'theme', label: 'Theme', icon: Palette, page: null }, // Opens modal
     { id: 'settings', label: 'Settings', icon: Settings, page: 'Settings' },
   ];
-  
+
   const handleNavClick = (item) => {
-    if (item.id === 'theme') {
-      setShowThemePicker(true);
-    } else if (item.page) {
+    if (item.page) {
       navigate(createPageUrl(item.page));
     }
   };
@@ -59,17 +54,11 @@ export default function BottomNav() {
       >
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = item.id === 'theme' 
-            ? showThemePicker 
-            : activeTab === item.id;
-          
-          // Theme icon always shows primary color
-          const iconColor = item.id === 'theme'
-            ? theme.colors.primary
-            : isActive 
-              ? theme.colors.navActive
-              : theme.colors.navInactive;
-          
+          const isActive = activeTab === item.id;
+          const iconColor = isActive
+            ? theme.colors.navActive
+            : theme.colors.navInactive;
+
           return (
             <button
               key={item.id}
@@ -78,8 +67,8 @@ export default function BottomNav() {
               style={{ minWidth: '64px' }}
             >
               <div className="relative">
-                <Icon 
-                  size={24} 
+                <Icon
+                  size={24}
                   color={iconColor}
                   strokeWidth={isActive ? 2.5 : 2}
                   style={{
@@ -87,28 +76,14 @@ export default function BottomNav() {
                     transform: isActive ? 'scale(1.1)' : 'scale(1)',
                   }}
                 />
-                
-                {/* Active indicator dot */}
                 {isActive && (
-                  <div 
+                  <div
                     className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
                     style={{ background: theme.colors.navActive }}
                   />
                 )}
-                
-                {/* Theme indicator - colored dot showing current theme */}
-                {item.id === 'theme' && !isActive && (
-                  <div 
-                    className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
-                    style={{ 
-                      background: theme.colors.primary,
-                      borderColor: theme.colors.navBg,
-                    }}
-                  />
-                )}
               </div>
-              
-              <span 
+              <span
                 className="text-[10px] transition-all whitespace-nowrap"
                 style={{
                   fontWeight: isActive ? '700' : '500',
@@ -121,12 +96,6 @@ export default function BottomNav() {
           );
         })}
       </nav>
-      
-      {/* Theme Picker Modal */}
-      <ThemePickerModal 
-        isOpen={showThemePicker} 
-        onClose={() => setShowThemePicker(false)} 
-      />
     </>
   );
 }
