@@ -413,21 +413,20 @@ export default function HomePage() {
           </button>
         </div>
 
-        {/* Main 2-column grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', padding: '8px 16px 120px' }}>
+        {/* Main 4-column compact grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', padding: '8px 16px 120px' }}>
           {MODERN_TILES.map((tile, i) => {
             const Icon = tile.icon;
             return (
               <button key={i} onClick={() => handleQuickAction(tile.action)} style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                background: '#fff', border: '1px solid #E8EDF2', borderRadius: '16px', padding: '24px 16px',
-                cursor: 'pointer', transition: 'all 0.15s ease',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
+                background: 'transparent', border: 'none', padding: '12px 4px',
+                cursor: 'pointer',
               }}>
-                <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: `${tile.bg}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon size={24} color={tile.bg} strokeWidth={2} />
+                <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: `${tile.bg}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon size={20} color={tile.bg} strokeWidth={2.2} />
                 </div>
-                <span style={{ fontSize: '13px', fontWeight: '600', color: '#1E293B' }}>{tile.label}</span>
+                <span style={{ fontSize: '11px', fontWeight: '600', color: '#475569', lineHeight: '1.2', textAlign: 'center' }}>{tile.label}</span>
               </button>
             );
           })}
