@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { MapPin, Cloud } from "lucide-react";
+import { MapPin, Cloud, Utensils, Coffee as CoffeeIcon, CreditCard, Bath, Store, CloudSun, Search, ShoppingBag, Compass, Landmark, Camera, MessageSquare, Car, LayoutGrid, Navigation, DollarSign } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -99,6 +99,19 @@ export default function HomePage() {
   // NEW: State for showing home flag
   const [showHomeFlag, setShowHomeFlag] = useState(false);
   const [homeFlagUrl, setHomeFlagUrl] = useState(null);
+
+  // Layout toggle: classic vs modern (persisted in localStorage)
+  const [homeLayout, setHomeLayout] = useState(() => localStorage.getItem('gs_home_layout') || 'classic');
+  const toggleHomeLayout = () => {
+    const next = homeLayout === 'classic' ? 'modern' : 'classic';
+    setHomeLayout(next);
+    localStorage.setItem('gs_home_layout', next);
+  };
+  useEffect(() => {
+    const handler = () => setHomeLayout(localStorage.getItem('gs_home_layout') || 'classic');
+    window.addEventListener('globeskimmers:layoutChanged', handler);
+    return () => window.removeEventListener('globeskimmers:layoutChanged', handler);
+  }, []);
 
   useEffect(() => {
     if (!locationLoading) loadUserAndWeather();
@@ -306,6 +319,126 @@ export default function HomePage() {
 
   const activeLocation = getActiveLocation();
 
+  // ── MODERN "BOLD BLOCKS" LAYOUT ─────────────────────────────────────────
+  const MODERN_TILES = [
+    { icon: Utensils,    label: 'Places to Eat',  action: 'Places to Eat',     bg: '#475569' },
+    { icon: CoffeeIcon,  label: 'Coffee',         action: 'Coffee',            bg: '#78716C' },
+    { icon: CreditCard,  label: 'ATM Finder',     action: 'ATM',               bg: '#0D9488' },
+    { icon: Bath,        label: 'Restroom',        action: 'Restroom',          bg: '#6366F1' },
+    { icon: Store,       label: 'Convenience',     action: 'Convenience Store', bg: '#EA580C' },
+    { icon: CloudSun,    label: 'Weather',         action: 'Weather',           bg: '#0284C7' },
+    { icon: MessageSquare, label: 'Phrases',       action: 'Basic Phrases',     bg: '#7C3AED' },
+    { icon: ShoppingBag, label: 'Shopping',        action: 'Shopping',          bg: '#DB2777' },
+    { icon: Compass,     label: 'Things to Do',    action: 'Things to Do',      bg: '#9333EA' },
+    { icon: Landmark,    label: 'Culture Info',    action: 'Culture Information',bg: '#4F46E5' },
+    { icon: Camera,      label: 'Text Scanner',   action: 'Smart Text Scanner', bg: '#059669' },
+    { icon: Search,      label: 'Price Scanner',  action: 'Smart Price Scanner',bg: '#0F766E' },
+  ];
+  const QUICK_ACTIONS = [
+    { icon: Navigation,  label: 'Directions', action: 'Transportation' },
+    { icon: MessageSquare, label: 'Translate', action: 'Basic Phrases' },
+    { icon: DollarSign,  label: 'Currency',   action: 'Money Exchange' },
+    { icon: Car,         label: 'Transport',  action: 'Transportation' },
+  ];
+
+  const locationText = activeLocation?.address
+    ? `${activeLocation.address.city || activeLocation.address.neighborhood || ''}, ${activeLocation.address.country || ''}`.replace(/^,\s*/, '')
+    : 'Set location';
+
+  const displayTemp = weatherInfo
+    ? (tempUnit === 'C' ? `${weatherInfo.tempC}°C` : `${weatherInfo.tempF}°F`)
+    : null;
+
+  if (homeLayout === 'modern') {
+    return (
+      <div style={{ background: '#F1F5F9', minHeight: '100vh', fontFamily: "'DM Sans',-apple-system,sans-serif" }}>
+        {/* Dark header */}
+        <div style={{ background: '#0F172A', padding: '20px 16px 24px', borderRadius: '0 0 24px 24px' }}>
+          {/* Toggle + greeting row */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div>
+              <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>
+                {localGreeting ? `${localGreeting} 👋` : 'Hello 👋'}
+              </div>
+              <div style={{ fontSize: '22px', fontWeight: '800', color: '#fff' }}>
+                {getFirstName() || 'Traveler'}
+              </div>
+            </div>
+            <button onClick={toggleHomeLayout} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '10px', padding: '8px 12px', color: 'rgba(255,255,255,0.6)', fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}>
+              <LayoutGrid size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Classic
+            </button>
+          </div>
+          {/* Location + weather */}
+          <div onClick={() => setShowLocationPicker(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '12px', padding: '10px 14px', cursor: 'pointer', marginBottom: '12px' }}>
+            <MapPin size={14} color="#94A3B8" />
+            <span style={{ fontSize: '13px', color: '#CBD5E1', fontWeight: '500', flex: 1 }}>{locationText}</span>
+            {displayTemp && <span style={{ fontSize: '13px', color: '#94A3B8', fontWeight: '600' }}>☁️ {displayTemp}</span>}
+          </div>
+          {/* Time */}
+          {timezone && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>
+              <span>{formatLocalDate(currentTime, timezone)}</span>
+              <span style={{ fontWeight: '700', color: 'rgba(255,255,255,0.7)' }}>{formatLocalTime(currentTime, timezone)}</span>
+              {displayTemp && <span onClick={toggleTempUnit} style={{ cursor: 'pointer' }}>{displayTemp}</span>}
+            </div>
+          )}
+          {shouldShowHomeCountryTime && homeCountryInfo && (
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>
+              Home: {homeCountryInfo.country} · {formatLocalTime(homeCountryTime, homeCountryInfo.timezone)}
+            </div>
+          )}
+        </div>
+
+        {/* Quick Actions */}
+        <div style={{ display: 'flex', gap: '8px', padding: '16px 16px 8px', overflowX: 'auto' }}>
+          {QUICK_ACTIONS.map((qa, i) => {
+            const Icon = qa.icon;
+            return (
+              <button key={i} onClick={() => handleQuickAction(qa.action)} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '10px 14px', fontSize: '12px', fontWeight: '600', color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <Icon size={16} color="#6366F1" />
+                {qa.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Money Exchange banner */}
+        <div style={{ padding: '8px 16px' }}>
+          <button onClick={() => handleQuickAction('Money Exchange')} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', background: 'linear-gradient(135deg, #059669 0%, #0D9488 100%)', borderRadius: '16px', padding: '16px 20px', border: 'none', cursor: 'pointer' }}>
+            <span style={{ fontSize: '24px' }}>💱</span>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: '15px', fontWeight: '700', color: '#fff' }}>Money Exchange</div>
+              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>Compare rates near you</div>
+            </div>
+          </button>
+        </div>
+
+        {/* Main 2-column grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', padding: '8px 16px 120px' }}>
+          {MODERN_TILES.map((tile, i) => {
+            const Icon = tile.icon;
+            return (
+              <button key={i} onClick={() => handleQuickAction(tile.action)} style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                background: '#fff', border: '1px solid #E8EDF2', borderRadius: '16px', padding: '24px 16px',
+                cursor: 'pointer', transition: 'all 0.15s ease',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: `${tile.bg}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon size={24} color={tile.bg} strokeWidth={2} />
+                </div>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: '#1E293B' }}>{tile.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <LocationModePicker isOpen={showLocationPicker} onClose={() => setShowLocationPicker(false)} />
+      </div>
+    );
+  }
+
+  // ── CLASSIC LAYOUT (original) ───────────────────────────────────────────
   return (
     <div className="min-h-screen transition-colors duration-300" style={{ background: theme.colors.background }}>
       
@@ -351,6 +484,10 @@ export default function HomePage() {
             }} />
 
           <div className="relative p-5 z-10">
+            {/* Layout toggle */}
+            <button onClick={toggleHomeLayout} style={{ position: 'absolute', top: '12px', right: '12px', background: theme.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)', border: 'none', borderRadius: '8px', padding: '6px 10px', color: theme.colors.textSecondary, fontSize: '11px', fontWeight: '600', cursor: 'pointer', zIndex: 10, display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <LayoutGrid size={12} /> Modern
+            </button>
             {/* Greeting */}
             <div className="mb-4">
               <p className="text-sm mb-1" style={{ color: theme.colors.textSecondary }}>
