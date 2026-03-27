@@ -915,10 +915,11 @@ async function handleRestaurantSearch(request, env) {
       openNow ? 'open' : '',
       minRating > 0 ? `r${minRating}` : '',
       priceLevels?.length ? priceLevels.join('-') : '',
+      `rad${Math.round(radiusMiles)}`,  // v7.9: prevent 10mi/15mi cache collisions
     ].filter(Boolean).join('_');
     const cacheKey = generateCacheKey('restaurants', {
       latitude, longitude, radius: radiusMeters, textQuery: searchQuery
-    }) + (filterSuffix ? `_${filterSuffix}` : '');
+    }) + `_${filterSuffix}`;
 
     if (!forceRefresh) {
       const cached = await getFromCache(env, cacheKey);
@@ -935,7 +936,7 @@ async function handleRestaurantSearch(request, env) {
     // Call Google Places API — server-side filters applied at source
     const requestBody = {
       textQuery: searchQuery,
-      maxResultCount: 20,
+      maxResultCount: 60,  // v7.9: increased from 20 to give filters a larger pool
       rankPreference: 'RELEVANCE',   // v7.8: explicit relevance for text queries
       locationBias: {
         circle: {

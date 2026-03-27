@@ -481,7 +481,7 @@ Deno.serve(async (req) => {
 
     // ── IMPORTANT: Worker POST / expects radiusMiles, not meters ──────────────
     // PlacesToEat.jsx sends `radius: radius * 1609` (meters), so convert back.
-    const radiusMiles = radius / 1609.34;
+    const radiusMiles = Math.round(radius / 1609.34);  // Clean integer for Worker cache key
 
     console.log("📋 Request:", { latitude, longitude, radius, radiusMiles: radiusMiles.toFixed(1), cuisine, searchQuery, forceRefresh });
 
@@ -590,7 +590,10 @@ Deno.serve(async (req) => {
     //   Without POPULARITY, DISTANCE fills all 20 slots with the closest dive bars first,
     //   leaving out the famous game-day spots in Pasadena that users actually want.
     // DISTANCE — correct for all food cuisines: nearest restaurants always most useful.
-    const nearbyRankBy = (cuisine === 'sports_bar') ? 'POPULARITY' : 'DISTANCE';
+    // POPULARITY for sports_bar and bakery — DISTANCE fills 20 slots with closest,
+    // missing famous/popular spots further away. POPULARITY surfaces the best ones
+    // across the full radius. All other cuisines use DISTANCE (nearest first).
+    const nearbyRankBy = (cuisine === 'sports_bar' || cuisine === 'bakery') ? 'POPULARITY' : 'DISTANCE';
 
     const nearbyPromise = Promise.allSettled(
       nearbyTypeList.map(async (type) => {
