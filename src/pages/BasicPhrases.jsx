@@ -21,7 +21,7 @@ import LocationModePicker from "../components/location/LocationModePicker";
 // ============================================================================
 // CLOUDFLARE WORKER URL - Your TTS endpoint
 // ============================================================================
-const CLOUDFLARE_TTS_URL = 'https://globeskimmers-tts.maizasimeon.workers.dev';
+const CLOUDFLARE_TTS_URL = 'https://globeskimmers-api.maizasimeon.workers.dev/tts';
 
 // ============================================================================
 // PRESET PHRASES FROM YOUR WORD DOCUMENT

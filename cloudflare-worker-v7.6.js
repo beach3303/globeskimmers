@@ -1,9 +1,14 @@
 /**
  * ============================================================================
- * GLOBESKIMMERS API WORKER v7.11
+ * GLOBESKIMMERS API WORKER v7.12
  * ============================================================================
  *
- * Stable baseline: v7.10 (Mar 2026)
+ * Stable baseline: v7.11 (Mar 2026)
+ *
+ * Changes in v7.12:
+ * - FIX: Add caching to handleDietarySearch (was hitting Google API every toggle!)
+ * - MERGE: TTS worker (globeskimmers-tts) into main API at /tts route
+ *   Requires: GOOGLE_TTS_API_KEY secret + TTS_CACHE KV binding
  *
  * Changes in v7.11:
  * - REVERT: locationRestriction → locationBias in all text search handlers
@@ -680,10 +685,16 @@ async function handleDietarySearch(request, env) {
 
   const textQuery = dietaryQueries[dietary] || `${dietary} restaurant`;
 
+  // v7.12: ADD CACHING — was completely missing, every toggle hit Google API fresh
+  const cacheKey = generateCacheKey('dietary', { latitude, longitude, radius, textQuery: dietary });
+  const cached = await getFromCache(env, cacheKey);
+  if (cached && cached.age < CONFIG.CACHE_TTL.TEXT_SEARCH * 1000) {
+    return jsonResponse({ places: cached.data, count: cached.data.length, dietary, cached: true });
+  }
+
   const apiKey = env.GOOGLE_API_KEY;
   const baseUrl = url.origin;
 
-  // v7.11: back to locationBias — locationRestriction was dropping valid text search results
   const requestBody = {
     textQuery,
     maxResultCount: maxResults,
@@ -718,10 +729,14 @@ async function handleDietarySearch(request, env) {
     const data = await response.json();
     const places = (data.places || []).map(p => normalizePlace(p, baseUrl));
 
+    // Cache dietary results (was missing — cost leak)
+    await setInCache(env, cacheKey, places, CONFIG.CACHE_TTL.TEXT_SEARCH);
+
     return jsonResponse({
       places,
       count: places.length,
-      dietary: dietary
+      dietary: dietary,
+      cached: false
     });
 
   } catch (error) {
@@ -737,7 +752,7 @@ async function handleDietarySearch(request, env) {
 async function handleCacheStats(request, env) {
   return jsonResponse({
     status: 'ok',
-    version: '7.11',
+    version: '7.12',
     kvBound: !!env.GLOBESKIMMERS_KV,
     cacheTTLs: {
       textSearch: `${CONFIG.CACHE_TTL.TEXT_SEARCH / 3600} hours`,
@@ -998,6 +1013,267 @@ function extractCustomerFavorites(reviews) {
 }
 
 // ============================================================================
+// TTS: PHONETIC PREPROCESSING (merged from globeskimmers-tts worker)
+// ============================================================================
+
+function applyPhoneticTweaks(text, languageCode, city) {
+  const code = (languageCode || '').toLowerCase();
+  const cityLower = (city || '').toLowerCase();
+  const isBoholano = code === 'ceb-bohol' || code === 'boholano' ||
+    cityLower.includes('bohol') || cityLower.includes('tagbilaran') ||
+    cityLower.includes('panglao') || cityLower.includes('loboc');
+  if (isBoholano) {
+    let tweaked = text;
+    tweaked = tweaked.replace(/y(?=[a-zA-Z])/g, 'j');
+    tweaked = tweaked.replace(/Y(?=[a-zA-Z])/g, 'J');
+    tweaked = tweaked.replace(/nj/g, 'ny');
+    tweaked = tweaked.replace(/Nj/g, 'Ny');
+    return tweaked;
+  }
+  return text;
+}
+
+const TTS_VOICE_MAP = {
+  'en': { languageCode: 'en-US', name: 'en-US-Neural2-J', gender: 'MALE' },
+  'en-US': { languageCode: 'en-US', name: 'en-US-Neural2-J', gender: 'MALE' },
+  'en-GB': { languageCode: 'en-GB', name: 'en-GB-Neural2-B', gender: 'MALE' },
+  'en-AU': { languageCode: 'en-AU', name: 'en-AU-Neural2-B', gender: 'MALE' },
+  'es': { languageCode: 'es-ES', name: 'es-ES-Neural2-B', gender: 'MALE' },
+  'es-ES': { languageCode: 'es-ES', name: 'es-ES-Neural2-B', gender: 'MALE' },
+  'es-MX': { languageCode: 'es-US', name: 'es-US-Neural2-A', gender: 'FEMALE' },
+  'fr': { languageCode: 'fr-FR', name: 'fr-FR-Neural2-B', gender: 'MALE' },
+  'fr-FR': { languageCode: 'fr-FR', name: 'fr-FR-Neural2-B', gender: 'MALE' },
+  'fr-CA': { languageCode: 'fr-CA', name: 'fr-CA-Neural2-B', gender: 'MALE' },
+  'de': { languageCode: 'de-DE', name: 'de-DE-Neural2-B', gender: 'MALE' },
+  'de-DE': { languageCode: 'de-DE', name: 'de-DE-Neural2-B', gender: 'MALE' },
+  'it': { languageCode: 'it-IT', name: 'it-IT-Neural2-C', gender: 'MALE' },
+  'it-IT': { languageCode: 'it-IT', name: 'it-IT-Neural2-C', gender: 'MALE' },
+  'pt': { languageCode: 'pt-BR', name: 'pt-BR-Neural2-B', gender: 'MALE' },
+  'pt-BR': { languageCode: 'pt-BR', name: 'pt-BR-Neural2-B', gender: 'MALE' },
+  'pt-PT': { languageCode: 'pt-PT', name: 'pt-PT-Neural2-B', gender: 'MALE' },
+  'ja': { languageCode: 'ja-JP', name: 'ja-JP-Neural2-B', gender: 'MALE' },
+  'ja-JP': { languageCode: 'ja-JP', name: 'ja-JP-Neural2-B', gender: 'MALE' },
+  'ko': { languageCode: 'ko-KR', name: 'ko-KR-Neural2-B', gender: 'MALE' },
+  'ko-KR': { languageCode: 'ko-KR', name: 'ko-KR-Neural2-B', gender: 'MALE' },
+  'zh': { languageCode: 'cmn-CN', name: 'cmn-CN-Neural2-B', gender: 'MALE' },
+  'zh-CN': { languageCode: 'cmn-CN', name: 'cmn-CN-Neural2-B', gender: 'MALE' },
+  'cmn-CN': { languageCode: 'cmn-CN', name: 'cmn-CN-Neural2-B', gender: 'MALE' },
+  'zh-TW': { languageCode: 'cmn-TW', name: 'cmn-TW-Neural2-A', gender: 'FEMALE' },
+  'yue': { languageCode: 'yue-HK', name: 'yue-HK-Neural2-A', gender: 'FEMALE' },
+  'yue-HK': { languageCode: 'yue-HK', name: 'yue-HK-Neural2-A', gender: 'FEMALE' },
+  'vi': { languageCode: 'vi-VN', name: 'vi-VN-Neural2-A', gender: 'FEMALE' },
+  'vi-VN': { languageCode: 'vi-VN', name: 'vi-VN-Neural2-A', gender: 'FEMALE' },
+  'th': { languageCode: 'th-TH', name: 'th-TH-Neural2-C', gender: 'FEMALE' },
+  'th-TH': { languageCode: 'th-TH', name: 'th-TH-Neural2-C', gender: 'FEMALE' },
+  'id': { languageCode: 'id-ID', name: 'id-ID-Neural2-B', gender: 'MALE' },
+  'id-ID': { languageCode: 'id-ID', name: 'id-ID-Neural2-B', gender: 'MALE' },
+  'ms': { languageCode: 'ms-MY', name: 'ms-MY-Neural2-A', gender: 'FEMALE' },
+  'tl': { languageCode: 'fil-PH', name: 'fil-PH-Neural2-B', gender: 'MALE' },
+  'fil': { languageCode: 'fil-PH', name: 'fil-PH-Neural2-B', gender: 'MALE' },
+  'fil-PH': { languageCode: 'fil-PH', name: 'fil-PH-Neural2-B', gender: 'MALE' },
+  'hi': { languageCode: 'hi-IN', name: 'hi-IN-Neural2-B', gender: 'MALE' },
+  'hi-IN': { languageCode: 'hi-IN', name: 'hi-IN-Neural2-B', gender: 'MALE' },
+  'bn': { languageCode: 'bn-IN', name: 'bn-IN-Neural2-B', gender: 'MALE' },
+  'ta': { languageCode: 'ta-IN', name: 'ta-IN-Neural2-B', gender: 'MALE' },
+  'te': { languageCode: 'te-IN', name: 'te-IN-Neural2-B', gender: 'MALE' },
+  'mr': { languageCode: 'mr-IN', name: 'mr-IN-Neural2-B', gender: 'MALE' },
+  'gu': { languageCode: 'gu-IN', name: 'gu-IN-Neural2-B', gender: 'MALE' },
+  'kn': { languageCode: 'kn-IN', name: 'kn-IN-Neural2-B', gender: 'MALE' },
+  'ml': { languageCode: 'ml-IN', name: 'ml-IN-Neural2-B', gender: 'MALE' },
+  'pa': { languageCode: 'pa-IN', name: 'pa-IN-Neural2-B', gender: 'MALE' },
+  'ar': { languageCode: 'ar-XA', name: 'ar-XA-Neural2-B', gender: 'MALE' },
+  'he': { languageCode: 'he-IL', name: 'he-IL-Neural2-B', gender: 'MALE' },
+  'tr': { languageCode: 'tr-TR', name: 'tr-TR-Neural2-B', gender: 'MALE' },
+  'ru': { languageCode: 'ru-RU', name: 'ru-RU-Neural2-B', gender: 'MALE' },
+  'pl': { languageCode: 'pl-PL', name: 'pl-PL-Neural2-B', gender: 'MALE' },
+  'nl': { languageCode: 'nl-NL', name: 'nl-NL-Neural2-B', gender: 'MALE' },
+  'uk': { languageCode: 'uk-UA', name: 'uk-UA-Neural2-A', gender: 'FEMALE' },
+  'cs': { languageCode: 'cs-CZ', name: 'cs-CZ-Neural2-A', gender: 'FEMALE' },
+  'hu': { languageCode: 'hu-HU', name: 'hu-HU-Neural2-A', gender: 'FEMALE' },
+  'el': { languageCode: 'el-GR', name: 'el-GR-Neural2-A', gender: 'FEMALE' },
+  'sv': { languageCode: 'sv-SE', name: 'sv-SE-Neural2-A', gender: 'FEMALE' },
+  'da': { languageCode: 'da-DK', name: 'da-DK-Neural2-D', gender: 'FEMALE' },
+  'no': { languageCode: 'nb-NO', name: 'nb-NO-Neural2-B', gender: 'MALE' },
+  'nb': { languageCode: 'nb-NO', name: 'nb-NO-Neural2-B', gender: 'MALE' },
+  'fi': { languageCode: 'fi-FI', name: 'fi-FI-Neural2-A', gender: 'FEMALE' },
+  'ro': { languageCode: 'ro-RO', name: 'ro-RO-Neural2-A', gender: 'FEMALE' },
+  'sk': { languageCode: 'sk-SK', name: 'sk-SK-Neural2-A', gender: 'FEMALE' },
+  'bg': { languageCode: 'bg-BG', name: 'bg-BG-Neural2-A', gender: 'FEMALE' },
+  'hr': { languageCode: 'hr-HR', name: 'hr-HR-Wavenet-A', gender: 'FEMALE' },
+  'sr': { languageCode: 'sr-RS', name: 'sr-RS-Neural2-A', gender: 'FEMALE' },
+  'ca': { languageCode: 'ca-ES', name: 'ca-ES-Neural2-A', gender: 'FEMALE' },
+  'eu': { languageCode: 'eu-ES', name: 'eu-ES-Neural2-A', gender: 'FEMALE' },
+  'gl': { languageCode: 'gl-ES', name: 'gl-ES-Neural2-A', gender: 'FEMALE' },
+  'af': { languageCode: 'af-ZA', name: 'af-ZA-Neural2-A', gender: 'FEMALE' },
+  'sw': { languageCode: 'sw-KE', name: 'sw-KE-Neural2-A', gender: 'FEMALE' },
+  'is': { languageCode: 'is-IS', name: 'is-IS-Neural2-A', gender: 'FEMALE' },
+  'lv': { languageCode: 'lv-LV', name: 'lv-LV-Neural2-B', gender: 'MALE' },
+  'lt': { languageCode: 'lt-LT', name: 'lt-LT-Neural2-B', gender: 'MALE' },
+};
+
+const TTS_DIALECT_FALLBACKS = {
+  'ceb': 'fil-PH', 'ceb-bohol': 'fil-PH', 'hil': 'fil-PH', 'war': 'fil-PH',
+  'ilo': 'fil-PH', 'bik': 'fil-PH', 'pam': 'fil-PH', 'akl': 'fil-PH',
+  'cbk': 'es-ES', 'wuu': 'cmn-CN', 'nan': 'cmn-CN', 'hak': 'cmn-CN',
+  'jv': 'id-ID', 'su': 'id-ID', 'ban': 'id-ID',
+  'nap': 'it-IT', 'scn': 'it-IT', 'vec': 'it-IT',
+  'bar': 'de-DE', 'gsw': 'de-DE', 'ryu': 'ja-JP',
+};
+
+function getTtsVoiceConfig(inputCode) {
+  const code = (inputCode || 'en').toLowerCase().trim();
+  if (TTS_VOICE_MAP[inputCode]) return TTS_VOICE_MAP[inputCode];
+  if (TTS_VOICE_MAP[code]) return TTS_VOICE_MAP[code];
+  if (TTS_DIALECT_FALLBACKS[code]) {
+    const fb = TTS_DIALECT_FALLBACKS[code];
+    if (TTS_VOICE_MAP[fb]) return { ...TTS_VOICE_MAP[fb], isDialectFallback: true };
+  }
+  const base = code.split('-')[0];
+  if (TTS_VOICE_MAP[base]) return TTS_VOICE_MAP[base];
+  return TTS_VOICE_MAP['en'];
+}
+
+function ttsCreateHash(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+// ============================================================================
+// HANDLER: TTS (merged from globeskimmers-tts worker)
+// Requires: env.GOOGLE_TTS_API_KEY, env.TTS_CACHE (KV)
+// ============================================================================
+
+async function handleTts(request, env, ctx) {
+  const url = new URL(request.url);
+
+  // GET: Retrieve cached translation
+  if (request.method === 'GET' && url.searchParams.get('action') === 'getTranslation') {
+    const key = url.searchParams.get('key');
+    if (!key) return jsonResponse({ error: 'Missing key' }, 400);
+    try {
+      if (env.TTS_CACHE) {
+        const cached = await env.TTS_CACHE.get(key);
+        if (cached) return jsonResponse({ phrases: JSON.parse(cached), cached: true });
+      }
+      return jsonResponse({ phrases: null, cached: false });
+    } catch (e) {
+      return jsonResponse({ phrases: null, error: e.message });
+    }
+  }
+
+  if (request.method !== 'POST') return jsonResponse({ error: 'POST required' }, 405);
+
+  const body = await request.json();
+
+  // POST: Save translation to KV
+  if (body.action === 'saveTranslation') {
+    const { key, phrases } = body;
+    if (!key || !phrases) return jsonResponse({ error: 'Missing key or phrases' }, 400);
+    try {
+      if (env.TTS_CACHE) await env.TTS_CACHE.put(key, JSON.stringify(phrases));
+      return jsonResponse({ success: true, key });
+    } catch (e) {
+      return jsonResponse({ error: e.message }, 500);
+    }
+  }
+
+  // POST: Text-to-Speech
+  const { text, languageCode, city } = body;
+  if (!text) return jsonResponse({ error: 'Missing text', useFallback: true }, 400);
+
+  const truncatedText = text.length > 500 ? text.substring(0, 500) : text;
+  const voiceConfig = getTtsVoiceConfig(languageCode);
+  if (!voiceConfig) return jsonResponse({ error: `No voice for: ${languageCode}`, useFallback: true });
+
+  const phoneticText = applyPhoneticTweaks(truncatedText, languageCode, city);
+  const cacheKey = `tts_v6_${voiceConfig.name}_${ttsCreateHash(phoneticText)}`;
+
+  // Check KV cache
+  if (env.TTS_CACHE) {
+    const cached = await env.TTS_CACHE.get(cacheKey);
+    if (cached) {
+      return jsonResponse({ audioContent: cached, cached: true, cacheType: 'kv', voiceUsed: voiceConfig.name });
+    }
+  }
+
+  if (!env.GOOGLE_TTS_API_KEY) {
+    return jsonResponse({ error: 'API key not configured', useFallback: true }, 500);
+  }
+
+  // SSML for pause markers
+  const hasPauseMarkers = phoneticText.includes('...');
+  let inputConfig;
+  if (hasPauseMarkers) {
+    const escaped = phoneticText.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&apos;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const ssml = `<speak>${escaped.replace(/\.\.\./g, '<break time="2s"/>')}</speak>`;
+    inputConfig = { ssml };
+  } else {
+    inputConfig = { text: phoneticText };
+  }
+
+  try {
+    const response = await fetch(
+      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${env.GOOGLE_TTS_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: inputConfig,
+          voice: { languageCode: voiceConfig.languageCode, name: voiceConfig.name, ssmlGender: voiceConfig.gender },
+          audioConfig: { audioEncoding: 'MP3', speakingRate: 0.9, pitch: 0.0, volumeGainDb: 3.0, sampleRateHertz: 24000 }
+        })
+      }
+    );
+
+    if (!response.ok) {
+      // Fallback to auto-select voice
+      if (response.status === 400) {
+        const fbRes = await fetch(
+          `https://texttospeech.googleapis.com/v1/text:synthesize?key=${env.GOOGLE_TTS_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              input: inputConfig,
+              voice: { languageCode: voiceConfig.languageCode, ssmlGender: 'NEUTRAL' },
+              audioConfig: { audioEncoding: 'MP3', speakingRate: 0.9, volumeGainDb: 3.0 }
+            })
+          }
+        );
+        if (fbRes.ok) {
+          const data = await fbRes.json();
+          if (data.audioContent) {
+            if (env.TTS_CACHE) ctx.waitUntil(env.TTS_CACHE.put(cacheKey, data.audioContent));
+            return jsonResponse({ audioContent: data.audioContent, cached: false, voiceUsed: 'auto' });
+          }
+        }
+      }
+      return jsonResponse({ error: `TTS error: ${response.status}`, useFallback: true }, 500);
+    }
+
+    const data = await response.json();
+    if (!data.audioContent) return jsonResponse({ error: 'No audio', useFallback: true }, 500);
+
+    if (env.TTS_CACHE) {
+      ctx.waitUntil(env.TTS_CACHE.put(cacheKey, data.audioContent));
+    }
+
+    return jsonResponse({
+      audioContent: data.audioContent,
+      cached: false,
+      voiceUsed: voiceConfig.name,
+      charCount: phoneticText.length
+    });
+  } catch (error) {
+    return jsonResponse({ error: error.message, useFallback: true }, 500);
+  }
+}
+
+// ============================================================================
 // MAIN WORKER EXPORT
 // ============================================================================
 
@@ -1015,7 +1291,7 @@ export default {
         if (request.method === 'POST') {
           return await handleRestaurantSearch(request, env);
         }
-        return new Response('Globeskimmers API Worker v7.11 - All Systems Ready! 📸🍽️☕', {
+        return new Response('Globeskimmers API Worker v7.12 - All Systems Ready! 📸🍽️☕', {
           headers: CORS_HEADERS
         });
       }
@@ -1023,8 +1299,8 @@ export default {
       if (pathname === '/health') {
         return jsonResponse({
           status: 'ok',
-          version: '7.11',
-          features: ['text-search', 'nearby-search', 'details', 'photo-proxy', 'dietary', 'restaurants', 'coffee', 'business-status', 'serves-cocktails', 'strict-radius'],
+          version: '7.12',
+          features: ['text-search', 'nearby-search', 'details', 'photo-proxy', 'dietary', 'restaurants', 'coffee', 'tts', 'business-status', 'serves-cocktails'],
           kvBound: !!env.GLOBESKIMMERS_KV,
           timestamp: new Date().toISOString()
         });
@@ -1060,6 +1336,11 @@ export default {
 
       if (pathname === '/places/coffee') {
         return await handleCoffeeSearch(request, env);
+      }
+
+      // TTS routes (merged from globeskimmers-tts worker)
+      if (pathname === '/tts') {
+        return await handleTts(request, env, ctx);
       }
 
       return jsonResponse({ error: 'Not found', path: pathname }, 404);
