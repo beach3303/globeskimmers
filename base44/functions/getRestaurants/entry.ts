@@ -39,6 +39,8 @@ const NON_FOOD_TYPES = new Set([
   'pharmacy', 'drug_store', 'gas_station', 'car_wash', 'laundry',
   'health', 'beauty_salon', 'hair_care', 'bank', 'atm',
   'school', 'church', 'hospital', 'doctor',
+  'book_store', 'library', 'shopping_mall', 'furniture_store', 'home_goods_store',
+  'electronics_store', 'pet_store', 'shoe_store', 'jewelry_store',
 ]);
 
 // Types that indicate a place is actually a food/dining venue

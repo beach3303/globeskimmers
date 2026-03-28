@@ -814,7 +814,7 @@ export default function PlacesToEat() {
           ? base44.functions.invoke('getRestaurants', {
               latitude: lat, longitude: lng,
               radius: radius * 1609,
-              maxResults: 40,
+              maxResults: 120,
               cuisine: 'bakery',
               searchQuery: '',
             })
@@ -893,29 +893,32 @@ export default function PlacesToEat() {
     if (filterIndoor)    r = r.filter(x => x.hasIndoorSeating  === true);
     if (filterDriveThru) r = r.filter(x => x.hasDriveThru === true);
     if (filterBakery) r = r.filter(x => {
-      // When in dedicated bakery mode (no cuisine/search override), trust the backend completely
-      // — the bakery fetch already returned only bakeries, no need to re-filter and risk
-      // hiding Chinese/Korean/Spanish bakeries that lack English keywords
-      if (primaryCuisine === 'all' && !searchText.trim()) return true;
-
       const types = x.types || [];
       const pt = (x.primaryType || '').toLowerCase();
 
-      // 1. Types-first (language-agnostic — catches Chinese, Korean, Spanish bakeries etc.)
+      // Hard exclude non-bakery junk Google sneaks in (book stores, malls, etc.)
+      const JUNK_TYPES = ['book_store','library','shopping_mall','furniture_store','clothing_store',
+        'electronics_store','hardware_store','department_store','shoe_store','pet_store'];
+      if (JUNK_TYPES.some(t => types.includes(t) || pt === t)) return false;
+
+      // 1. Types-first (language-agnostic — catches Chinese, Korean, Spanish bakeries)
       const bakeryTypes = ['bakery', 'pastry_shop', 'dessert_shop', 'donut_shop', 'bagel_shop', 'bakery_cafe'];
       if (types.some(t => bakeryTypes.includes(t))) return true;
       if (bakeryTypes.includes(pt)) return true;
 
-      // 2. Name fallback — Google labels many real bakeries as 'cafe' or 'store'
+      // 2. Name fallback — Google labels many real bakeries as 'cafe' or 'restaurant'
       const name = (x.name || '').toLowerCase();
       if (name.includes('bakery') || name.includes('pastry') || name.includes('patisserie')
         || name.includes('boulangerie') || name.includes('donut') || name.includes('bagel')
-        || name.includes('cake') || name.includes('panaderia') || name.includes('bake shop')) return true;
+        || name.includes('cake shop') || name.includes('panaderia') || name.includes('bake shop')
+        || name.includes('bread') || name.includes('croissant') || name.includes('cupcake')
+        || name.includes('麵包') || name.includes('パン') || name.includes('빵')) return true;
 
-      // 3. Review fallback — catches places Google mistyped but reviewers confirm
+      // 3. Review fallback — catches places Google mistyped but reviewers confirm as bakery
       const reviewText = (x.reviews || []).map(r => r.text || '').join(' ').toLowerCase();
-      return reviewText.includes('fresh bread') || reviewText.includes('pastries')
-        || reviewText.includes('bakery') || reviewText.includes('croissant');
+      const bakeryMentions = ['fresh bread','pastries','bakery','croissant','danish','muffin','scone','cinnamon roll']
+        .filter(kw => reviewText.includes(kw)).length;
+      return bakeryMentions >= 2; // need 2+ bakery signals from reviews to qualify
     });
     if (filterMinRating>0) r = r.filter(x => (x.rating||0) >= filterMinRating);
     if (filterMaxPrice>0) r = r.filter(x => !x.priceLevel || (parseInt(x.priceLevel)||0) <= filterMaxPrice);
