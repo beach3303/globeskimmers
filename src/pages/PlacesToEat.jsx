@@ -131,7 +131,7 @@ const CUISINE_TYPE_MAP = {
   halal:         ['halal_restaurant'],
   kosher:        ['kosher_restaurant'],
   dessert:       ['dessert_shop','ice_cream_shop','donut_shop'],
-  bakery:        ['bakery'],
+  bakery:        ['bakery', 'pastry_shop', 'dessert_shop', 'donut_shop', 'bagel_shop'],
 };
 
 // ─── BAR-DOMINANT DETECTION ──────────────────────────────────────────────────
@@ -893,14 +893,29 @@ export default function PlacesToEat() {
     if (filterIndoor)    r = r.filter(x => x.hasIndoorSeating  === true);
     if (filterDriveThru) r = r.filter(x => x.hasDriveThru === true);
     if (filterBakery) r = r.filter(x => {
+      // When in dedicated bakery mode (no cuisine/search override), trust the backend completely
+      // — the bakery fetch already returned only bakeries, no need to re-filter and risk
+      // hiding Chinese/Korean/Spanish bakeries that lack English keywords
+      if (primaryCuisine === 'all' && !searchText.trim()) return true;
+
       const types = x.types || [];
       const pt = (x.primaryType || '').toLowerCase();
+
+      // 1. Types-first (language-agnostic — catches Chinese, Korean, Spanish bakeries etc.)
+      const bakeryTypes = ['bakery', 'pastry_shop', 'dessert_shop', 'donut_shop', 'bagel_shop', 'bakery_cafe'];
+      if (types.some(t => bakeryTypes.includes(t))) return true;
+      if (bakeryTypes.includes(pt)) return true;
+
+      // 2. Name fallback — Google labels many real bakeries as 'cafe' or 'store'
       const name = (x.name || '').toLowerCase();
-      return types.some(t => ['bakery','donut_shop','bagel_shop','pastry_shop'].includes(t))
-        || pt.includes('bakery') || pt.includes('donut') || pt.includes('bagel') || pt.includes('pastry')
-        || name.includes('bakery') || name.includes('pastry') || name.includes('patisserie')
-        || name.includes('boulangerie') || name.includes('donuts') || name.includes('donut')
-        || name.includes('bagel') || name.includes('croissant') || name.includes('bake shop');
+      if (name.includes('bakery') || name.includes('pastry') || name.includes('patisserie')
+        || name.includes('boulangerie') || name.includes('donut') || name.includes('bagel')
+        || name.includes('cake') || name.includes('panaderia') || name.includes('bake shop')) return true;
+
+      // 3. Review fallback — catches places Google mistyped but reviewers confirm
+      const reviewText = (x.reviews || []).map(r => r.text || '').join(' ').toLowerCase();
+      return reviewText.includes('fresh bread') || reviewText.includes('pastries')
+        || reviewText.includes('bakery') || reviewText.includes('croissant');
     });
     if (filterMinRating>0) r = r.filter(x => (x.rating||0) >= filterMinRating);
     if (filterMaxPrice>0) r = r.filter(x => !x.priceLevel || (parseInt(x.priceLevel)||0) <= filterMaxPrice);

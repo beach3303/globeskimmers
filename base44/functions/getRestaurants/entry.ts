@@ -51,7 +51,7 @@ const FOOD_TYPES = new Set([
   'seafood_restaurant', 'steak_house', 'pizza_restaurant', 'ramen_restaurant',
   'sushi_restaurant', 'breakfast_restaurant', 'brunch_restaurant',
   'sandwich_shop', 'hamburger_restaurant', 'ice_cream_shop', 'dessert_shop',
-  'coffee_shop', 'donut_shop', 'bagel_shop', 'diner', 'buffet_restaurant',
+  'coffee_shop', 'donut_shop', 'bagel_shop', 'pastry_shop', 'diner', 'buffet_restaurant',
   'tapas_bar', 'wine_bar', 'juice_bar', 'boba_tea_shop', 'food_court',
   'halal_restaurant', 'kosher_restaurant', 'vegan_restaurant',
   'vegetarian_restaurant', 'middle_eastern_restaurant', 'greek_restaurant',
@@ -420,7 +420,7 @@ const CUISINE_QUERIES: Record<string, string[]> = {
   halal:         ['halal restaurant', 'halal food', 'halal meat'],
   kosher:        ['kosher restaurant', 'kosher food', 'kosher deli'],
   dessert:       ['dessert shop', 'ice cream', 'bakery'],
-  bakery:        ['bakery', 'pastry shop', 'patisserie', 'donut shop', 'cafe with pastries', 'boulangerie'],
+  bakery:        ['bakery', 'pastry shop', 'asian bakery', 'panaderia', 'patisserie', 'donut shop'],
   // Sports bar: 2 text queries max (more causes network timeouts at 25mi).
   // Query 1 "sports bar" — finds explicitly self-labeled sports bars (Rocco's Tavern,
   //   Barney's Beanery, 33 Taps — anything with "sports bar" in Google name/description/reviews).
@@ -571,10 +571,9 @@ Deno.serve(async (req) => {
       breakfast:     ['breakfast_restaurant', 'brunch_restaurant'],
       dessert:       ['ice_cream_shop', 'dessert_shop', 'bakery', 'donut_shop'],
       filipino:      ['filipino_restaurant'],
-      // Bakery: cast wide net — many bakeries/pastry shops register as 'cafe' in Google.
-      // 'pastry_shop' and 'dessert_shop' are officially supported types in Places API (New).
-      // café results are filtered client-side to bakery-name places; not displayed as "Café".
-      bakery:        ['bakery', 'pastry_shop', 'dessert_shop', 'cafe'],
+      // Bakery: removed 'cafe' — it flooded results with Starbucks that stole the 40-item slots,
+      // then got filtered out by the frontend bakery filter, leaving 0 results.
+      bakery:        ['bakery', 'pastry_shop', 'dessert_shop'],
       sports_bar:    ['sports_bar', 'bar'],  // nearby fetch; text search queries above do the heavy lifting
     };
 
@@ -593,7 +592,8 @@ Deno.serve(async (req) => {
     // POPULARITY for sports_bar and bakery — DISTANCE fills 20 slots with closest,
     // missing famous/popular spots further away. POPULARITY surfaces the best ones
     // across the full radius. All other cuisines use DISTANCE (nearest first).
-    const nearbyRankBy = (cuisine === 'sports_bar' || cuisine === 'bakery') ? 'POPULARITY' : 'DISTANCE';
+    // Bakery uses DISTANCE (nearest outward) like normal food — POPULARITY was starving close results
+    const nearbyRankBy = cuisine === 'sports_bar' ? 'POPULARITY' : 'DISTANCE';
 
     const nearbyPromise = Promise.allSettled(
       nearbyTypeList.map(async (type) => {
@@ -810,7 +810,7 @@ Deno.serve(async (req) => {
         tier:      getTierForPlace(place, intent),
         tierLabel: TIER_LABELS[getTierForPlace(place, intent)] || 'Match',
       };
-    });
+    }).filter(p => p.distanceMiles <= radiusMiles + 1); // +1 mi buffer for GPS inaccuracy
 
     // ── DIETARY HARD-FILTER (client-side safety net) ──────────────────────────
     function hasStrongDietaryMatch(place: any, cuisine: string): boolean {
@@ -877,13 +877,20 @@ Deno.serve(async (req) => {
         // Distance: nearest first — they're hungry
         return (a.distanceKm || 999) - (b.distanceKm || 999);
       });
+    } else if (cuisine === 'sports_bar') {
+      // Sort by quality so amazing spots further away don't get sliced off at the 40-item cutoff
+      finalPlaces.sort((a, b) => {
+        const qa = (a.rating || 0) * Math.log10(Math.max(a.userRatingCount || 1, 1));
+        const qb = (b.rating || 0) * Math.log10(Math.max(b.userRatingCount || 1, 1));
+        return qb - qa;
+      });
     } else {
       // Default: sort by distance — nearest restaurants first
       finalPlaces.sort((a, b) => a.distanceKm - b.distanceKm);
     }
 
-    // Slice AFTER sort — returns the best maxResults, not the first-fetched
-    finalPlaces = finalPlaces.slice(0, maxResults);
+    // No slice — send ALL results to frontend so filters (bakery, sports bar, dietary)
+    // have the full pool. Frontend already paginates with "Load More" (20 at a time).
 
     // Stamp each result with its backend-computed rank so the frontend
     // can preserve the intent-aware order even if it re-sorts.

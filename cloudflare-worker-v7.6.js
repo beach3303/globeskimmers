@@ -1,33 +1,40 @@
 /**
  * ============================================================================
- * GLOBESKIMMERS API WORKER v7.8
+ * GLOBESKIMMERS API WORKER v7.11
  * ============================================================================
  *
- * Stable baseline: v7.7 (Mar 2026)
+ * Stable baseline: v7.10 (Mar 2026)
+ *
+ * Changes in v7.11:
+ * - REVERT: locationRestriction → locationBias in all text search handlers
+ *   (locationRestriction was too strict for searchText — Google returned 0 results
+ *   for bakeries because few exist within the exact circle. locationBias lets
+ *   Google breathe while Deno middleware enforces the radius fence with math)
+ * - KEPT: locationRestriction in handleNearbySearch (API requires it)
+ * - KEPT: maxResultCount 60 in handleRestaurantSearch
+ *
+ * Changes in v7.9:
+ * - FIX: maxResultCount 20 → 60 in handleRestaurantSearch (POST /)
+ *   (Google's max is 60 — gives frontend filters a much larger pool so
+ *   bakery/pastry filter doesn't return just 1 result)
+ * - FIX: Add radius to cache key suffix (rad10, rad15, rad25)
+ *   (Prevents 10mi and 15mi searches from sharing cached results —
+ *   previously switching radius served stale data from the first search)
  *
  * Changes in v7.8:
  * - ADD: Server-side filters in handleRestaurantSearch (POST /):
  *   openNow, minRating, priceLevels passed directly to Google Places API
- *   (previously filtered client-side AFTER fetching — now Google filters before returning)
  * - ADD: Same server-side filters in handleNearbySearch (/places/nearby)
- * - ADD: rankPreference: RELEVANCE for text searches in handleRestaurantSearch
- *   (Google default is already RELEVANCE for text search, but now explicit)
- * - FIX: Filter params included in cache key so different filter combos cache separately
- *   (previously openNow=true and openNow=false shared the same cache entry)
+ * - ADD: rankPreference: RELEVANCE for text searches
+ * - FIX: Filter params included in cache key
  *
  * Changes in v7.7:
- * - ADD: `places.businessStatus` to FIELD_MASK and DETAILS_FIELD_MASK
- *   (enables ghost restaurant filtering in getRestaurants — CLOSED_PERMANENTLY/CLOSED_TEMPORARILY)
- * - ADD: `places.servesCocktails` to FIELD_MASK and DETAILS_FIELD_MASK
- *   (used by calcSportsScore() Signal 5 — cocktail bars score higher for sports bar detection)
- * - ADD: `businessStatus` and `servesCocktails` fields to normalizePlace() return object
+ * - ADD: `places.businessStatus` and `places.servesCocktails` to FIELD_MASK
  *
  * Changes in v7.6:
  * - FIX: extractCustomerFavorites threshold lowered from >= 2 to >= 1
- *   (Customer Favorites and WHY box now appear with fewer reviews)
- * - ADD: /places/nearby route (alias for /places/search, used by getActivities v3.0)
+ * - ADD: /places/nearby route
  * - FIX: handleNearbySearch now reads both `type` and `types` params
- *   (getActivities sends `type=tourist_attraction`, Worker was reading `types`)
  *
  * Features:
  * - Text Search with KV caching (12 hours)
@@ -48,19 +55,17 @@
 // ============================================================================
 
 const CONFIG = {
-  API_KEY_SECRET: 'GOOGLE_API_KEY', // Cloudflare secret name
+  API_KEY_SECRET: 'GOOGLE_API_KEY',
 
-  // Cache TTLs (in seconds)
   CACHE_TTL: {
     TEXT_SEARCH: 12 * 60 * 60,       // 12 hours
     NEARBY_SEARCH: 3 * 24 * 60 * 60, // 3 days
-    DETAILS: 90 * 24 * 60 * 60,      // 90 days (rarely changes)
-    PHOTO: 90 * 24 * 60 * 60,        // 90 days (never changes)
+    DETAILS: 90 * 24 * 60 * 60,      // 90 days
+    PHOTO: 90 * 24 * 60 * 60,        // 90 days
     GEOCODING: 30 * 24 * 60 * 60,    // 30 days
     STALE_WHILE_REVALIDATE: 60 * 60  // 1 hour
   },
 
-  // Field mask for Places API (New) - excludes menuUri which causes 502
   FIELD_MASK: [
     'places.id',
     'places.displayName',
@@ -106,7 +111,6 @@ const CONFIG = {
     'places.servesCocktails'
   ].join(','),
 
-  // Details field mask
   DETAILS_FIELD_MASK: [
     'id',
     'displayName',
@@ -182,12 +186,10 @@ function handleCORS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-// Round coordinates to improve cache hit rate (~100m precision)
 function roundCoordinate(coord, precision = 3) {
   return Math.round(coord * Math.pow(10, precision)) / Math.pow(10, precision);
 }
 
-// Generate cache key for searches
 function generateCacheKey(prefix, params) {
   const lat = roundCoordinate(parseFloat(params.latitude) || 0);
   const lng = roundCoordinate(parseFloat(params.longitude) || 0);
@@ -234,7 +236,6 @@ async function setInCache(env, key, data, ttl) {
 // ============================================================================
 
 function normalizePlace(place, baseUrl = '') {
-  // Photos with constructed URLs
   const photos = (place.photos || []).map(photo => {
     const photoName = photo.name || '';
     return {
@@ -246,7 +247,6 @@ function normalizePlace(place, baseUrl = '') {
     };
   });
 
-  // Parse price level
   let priceLevel = place.priceLevel;
   if (typeof priceLevel === 'string') {
     if (priceLevel.includes('FREE')) priceLevel = 0;
@@ -257,46 +257,31 @@ function normalizePlace(place, baseUrl = '') {
     else priceLevel = null;
   }
 
-  // Hours array
   const hours = place.currentOpeningHours?.weekdayDescriptions ||
                 place.regularOpeningHours?.weekdayDescriptions ||
                 [];
 
-  // Is open
   const isOpen = place.currentOpeningHours?.openNow ?? null;
 
   return {
-    // IDs
     id: place.id,
     placeId: place.id,
-
-    // Basic info (normalized field names)
     name: place.displayName?.text || place.name || 'Unknown',
     displayName: place.displayName || { text: place.displayName?.text || place.name || 'Unknown' },
     address: place.formattedAddress || place.address || '',
     formattedAddress: place.formattedAddress || '',
     shortAddress: place.shortFormattedAddress || (place.formattedAddress || '').split(',')[0],
     shortFormattedAddress: place.shortFormattedAddress || '',
-
-    // Location
     location: place.location,
     latitude: place.location?.latitude,
     longitude: place.location?.longitude,
-
-    // Ratings
     rating: place.rating || null,
     reviewCount: place.userRatingCount || 0,
     userRatingCount: place.userRatingCount || 0,
-
-    // Price
     priceLevel,
-
-    // Type
     primaryType: place.primaryType || null,
     primaryTypeDisplay: place.primaryTypeDisplayName?.text || null,
     types: place.types || [],
-
-    // Contact
     phone: place.nationalPhoneNumber || place.internationalPhoneNumber || null,
     nationalPhoneNumber: place.nationalPhoneNumber || '',
     internationalPhoneNumber: place.internationalPhoneNumber || '',
@@ -304,17 +289,11 @@ function normalizePlace(place, baseUrl = '') {
     websiteUri: place.websiteUri || '',
     googleMapsUrl: place.googleMapsUri || null,
     googleMapsUri: place.googleMapsUri || '',
-
-    // Hours
     hours,
     isOpen,
     currentOpeningHours: place.currentOpeningHours || null,
     regularOpeningHours: place.regularOpeningHours || null,
-
-    // Photos (with URLs)
     photos,
-
-    // Reviews (top 5)
     reviews: (place.reviews || []).slice(0, 5).map(r => ({
       author: r.authorAttribution?.displayName || 'Anonymous',
       rating: r.rating,
@@ -322,11 +301,7 @@ function normalizePlace(place, baseUrl = '') {
       time: r.relativePublishTimeDescription || '',
       publishTime: r.publishTime
     })),
-
-    // Editorial
     editorialSummary: place.editorialSummary?.text || null,
-
-    // Services
     servesVegetarianFood: place.servesVegetarianFood || false,
     servesBeer: place.servesBeer || false,
     servesWine: place.servesWine || false,
@@ -335,8 +310,6 @@ function normalizePlace(place, baseUrl = '') {
     servesLunch: place.servesLunch || false,
     servesDinner: place.servesDinner || false,
     servesBrunch: place.servesBrunch || false,
-
-    // Options
     takeout: place.takeout || false,
     delivery: place.delivery || false,
     dineIn: place.dineIn || false,
@@ -346,26 +319,17 @@ function normalizePlace(place, baseUrl = '') {
     goodForChildren: place.goodForChildren || false,
     goodForGroups: place.goodForGroups || false,
     allowsDogs: place.allowsDogs || false,
-
-    // Parking
     parkingOptions: place.parkingOptions || null,
-
-    // Payment
     paymentOptions: place.paymentOptions || null,
-
-    // Accessibility
     accessibilityOptions: place.accessibilityOptions || null,
-
-    // Business status (for ghost restaurant filtering)
     businessStatus: place.businessStatus || null,
-
-    // Cocktails (used by sports bar scoring)
     servesCocktails: place.servesCocktails || false
   };
 }
 
 // ============================================================================
 // HANDLER: TEXT SEARCH
+// v7.11 FIX: locationRestriction → locationBias (text search needs breathing room)
 // ============================================================================
 
 async function handleTextSearch(request, env) {
@@ -383,7 +347,6 @@ async function handleTextSearch(request, env) {
     return jsonResponse({ error: 'textQuery is required', places: [] }, 400);
   }
 
-  // Check cache
   const cacheKey = generateCacheKey('text', params);
   if (!forceRefresh) {
     const cached = await getFromCache(env, cacheKey);
@@ -400,10 +363,10 @@ async function handleTextSearch(request, env) {
     }
   }
 
-  // Call Google Places API (New)
   const apiKey = env.GOOGLE_API_KEY;
   const baseUrl = url.origin;
 
+  // v7.11: back to locationBias — locationRestriction was dropping valid text search results
   const requestBody = {
     textQuery,
     maxResultCount: maxResults,
@@ -434,13 +397,12 @@ async function handleTextSearch(request, env) {
         status: response.status,
         details: errorText,
         places: []
-      }, 200); // Return 200 with error to not break frontend
+      }, 200);
     }
 
     const data = await response.json();
     const places = (data.places || []).map(p => normalizePlace(p, baseUrl));
 
-    // Cache results
     await setInCache(env, cacheKey, places, CONFIG.CACHE_TTL.TEXT_SEARCH);
 
     return jsonResponse({
@@ -465,23 +427,21 @@ async function handleNearbySearch(request, env) {
 
   const latitude = parseFloat(params.latitude) || 0;
   const longitude = parseFloat(params.longitude) || 0;
-  // v7.6 FIX: accept both `type` (singular, from getActivities) and `types` (plural)
   const types = params.types || params.type || 'restaurant';
   const radius = parseInt(params.radius) || 5000;
   const maxResults = Math.min(parseInt(params.maxResults) || 20, 20);
   const forceRefresh = params.forceRefresh === 'true';
-  // v7.8: server-side filters
   const openNow   = params.openNow === 'true';
   const minRating = parseFloat(params.minRating) || 0;
   const priceLevels = params.priceLevels ? params.priceLevels.split(',') : [];
 
-  // Check cache — include active filters so different combos cache separately
   const filterSuffix = [
     openNow ? 'open' : '',
     minRating > 0 ? `r${minRating}` : '',
     priceLevels.length ? priceLevels.join('-') : '',
   ].filter(Boolean).join('_');
   const cacheKey = generateCacheKey('nearby', { ...params, types }) + (filterSuffix ? `_${filterSuffix}` : '');
+
   if (!forceRefresh) {
     const cached = await getFromCache(env, cacheKey);
     if (cached) {
@@ -497,10 +457,10 @@ async function handleNearbySearch(request, env) {
     }
   }
 
-  // Call Google Places API (New) - Nearby Search
   const apiKey = env.GOOGLE_API_KEY;
   const baseUrl = url.origin;
 
+  // Nearby Search already uses locationRestriction (required by API)
   const requestBody = {
     includedTypes: types.split(',').map(t => t.trim()),
     maxResultCount: maxResults,
@@ -512,7 +472,7 @@ async function handleNearbySearch(request, env) {
     },
     rankPreference: params.rankBy === 'DISTANCE' ? 'DISTANCE' : 'POPULARITY'
   };
-  // v7.8: server-side filters for nearby search
+
   if (openNow)             requestBody.openNow     = true;
   if (minRating > 0)       requestBody.minRating   = minRating;
   if (priceLevels.length)  requestBody.priceLevels = priceLevels;
@@ -542,7 +502,6 @@ async function handleNearbySearch(request, env) {
     const data = await response.json();
     const places = (data.places || []).map(p => normalizePlace(p, baseUrl));
 
-    // Cache results
     await setInCache(env, cacheKey, places, CONFIG.CACHE_TTL.NEARBY_SEARCH);
 
     return jsonResponse({
@@ -565,7 +524,6 @@ async function handlePlaceDetails(request, env) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  // Extract place ID from path: /places/details/{placeId}
   const pathParts = pathname.split('/');
   const placeId = pathParts[pathParts.length - 1];
 
@@ -575,7 +533,6 @@ async function handlePlaceDetails(request, env) {
 
   const forceRefresh = url.searchParams.get('forceRefresh') === 'true';
 
-  // Check cache
   const cacheKey = `details_${placeId}`;
   if (!forceRefresh) {
     const cached = await getFromCache(env, cacheKey);
@@ -588,7 +545,6 @@ async function handlePlaceDetails(request, env) {
     }
   }
 
-  // Call Google Places API
   const apiKey = env.GOOGLE_API_KEY;
   const baseUrl = url.origin;
 
@@ -613,7 +569,6 @@ async function handlePlaceDetails(request, env) {
     const place = await response.json();
     const normalized = normalizePlace(place, baseUrl);
 
-    // Cache result
     await setInCache(env, cacheKey, normalized, CONFIG.CACHE_TTL.DETAILS);
 
     return jsonResponse({
@@ -641,7 +596,6 @@ async function handlePhotoProxy(request, env) {
     return jsonResponse({ error: 'Photo name required' }, 400);
   }
 
-  // Check cache first
   const cacheKey = `photo_${photoName}_${maxWidth}`;
 
   if (env.GLOBESKIMMERS_KV) {
@@ -662,7 +616,6 @@ async function handlePhotoProxy(request, env) {
     }
   }
 
-  // Fetch from Google
   const apiKey = env.GOOGLE_API_KEY;
   const photoUrl = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${maxWidth}&key=${apiKey}`;
 
@@ -677,7 +630,6 @@ async function handlePhotoProxy(request, env) {
     const photoBuffer = await photoRes.arrayBuffer();
     const contentType = photoRes.headers.get('Content-Type') || 'image/jpeg';
 
-    // Cache the photo (90 days)
     if (env.GLOBESKIMMERS_KV) {
       try {
         await env.GLOBESKIMMERS_KV.put(cacheKey, photoBuffer, {
@@ -705,6 +657,7 @@ async function handlePhotoProxy(request, env) {
 
 // ============================================================================
 // HANDLER: DIETARY SEARCH (for PlacesToEat)
+// v7.11 FIX: locationRestriction → locationBias (text search needs breathing room)
 // ============================================================================
 
 async function handleDietarySearch(request, env) {
@@ -717,7 +670,6 @@ async function handleDietarySearch(request, env) {
   const radius = parseInt(params.radius) || 5000;
   const maxResults = Math.min(parseInt(params.maxResults) || 20, 60);
 
-  // Build search query based on dietary preference
   const dietaryQueries = {
     vegetarian: 'vegetarian restaurant',
     vegan: 'vegan restaurant',
@@ -731,6 +683,7 @@ async function handleDietarySearch(request, env) {
   const apiKey = env.GOOGLE_API_KEY;
   const baseUrl = url.origin;
 
+  // v7.11: back to locationBias — locationRestriction was dropping valid text search results
   const requestBody = {
     textQuery,
     maxResultCount: maxResults,
@@ -784,7 +737,7 @@ async function handleDietarySearch(request, env) {
 async function handleCacheStats(request, env) {
   return jsonResponse({
     status: 'ok',
-    version: '7.8',
+    version: '7.11',
     kvBound: !!env.GLOBESKIMMERS_KV,
     cacheTTLs: {
       textSearch: `${CONFIG.CACHE_TTL.TEXT_SEARCH / 3600} hours`,
@@ -798,6 +751,7 @@ async function handleCacheStats(request, env) {
 
 // ============================================================================
 // HANDLER: COFFEE SHOP SEARCH
+// v7.11 FIX: locationRestriction → locationBias (text search needs breathing room)
 // ============================================================================
 
 async function handleCoffeeSearch(request, env) {
@@ -811,7 +765,6 @@ async function handleCoffeeSearch(request, env) {
   const query = params.query || 'coffee shop cafe';
   const forceRefresh = params.forceRefresh === 'true';
 
-  // Check cache
   const cacheKey = generateCacheKey('coffee', { latitude, longitude, radius, textQuery: query });
   if (!forceRefresh) {
     const cached = await getFromCache(env, cacheKey);
@@ -827,6 +780,7 @@ async function handleCoffeeSearch(request, env) {
   const apiKey = env.GOOGLE_API_KEY;
   const baseUrl = url.origin;
 
+  // v7.11: back to locationBias — locationRestriction was dropping valid text search results
   const requestBody = {
     textQuery: query,
     maxResultCount: maxResults,
@@ -869,6 +823,7 @@ async function handleCoffeeSearch(request, env) {
 
 // ============================================================================
 // HANDLER: RESTAURANT SEARCH (POST - for PlacesToEat)
+// v7.11 FIX: locationRestriction → locationBias (text search needs breathing room)
 // ============================================================================
 
 async function handleRestaurantSearch(request, env) {
@@ -883,10 +838,9 @@ async function handleRestaurantSearch(request, env) {
       cuisineType = '',
       dietary = '',
       forceRefresh = false,
-      // v7.8: server-side filters passed to Google directly
       openNow = false,
       minRating = 0,
-      priceLevels = [],   // e.g. ["PRICE_LEVEL_INEXPENSIVE","PRICE_LEVEL_MODERATE"]
+      priceLevels = [],
     } = body;
 
     if (!latitude || !longitude) {
@@ -898,7 +852,6 @@ async function handleRestaurantSearch(request, env) {
     const url = new URL(request.url);
     const baseUrl = url.origin;
 
-    // Build search query
     let searchQuery = query || 'restaurant';
     if (cuisineType && cuisineType !== 'all') {
       searchQuery = `${cuisineType} restaurant`;
@@ -910,16 +863,15 @@ async function handleRestaurantSearch(request, env) {
       searchQuery = `${dietary} ${searchQuery}`;
     }
 
-    // Check cache — include active filters in key so openNow=true and false don't share a slot
     const filterSuffix = [
       openNow ? 'open' : '',
       minRating > 0 ? `r${minRating}` : '',
       priceLevels?.length ? priceLevels.join('-') : '',
-      `rad${Math.round(radiusMiles)}`,  // v7.9: prevent 10mi/15mi cache collisions
+      `rad${Math.round(radiusMiles)}`
     ].filter(Boolean).join('_');
     const cacheKey = generateCacheKey('restaurants', {
       latitude, longitude, radius: radiusMeters, textQuery: searchQuery
-    }) + `_${filterSuffix}`;
+    }) + (filterSuffix ? `_${filterSuffix}` : '');
 
     if (!forceRefresh) {
       const cached = await getFromCache(env, cacheKey);
@@ -933,11 +885,11 @@ async function handleRestaurantSearch(request, env) {
       }
     }
 
-    // Call Google Places API — server-side filters applied at source
+    // v7.11: back to locationBias — locationRestriction was dropping valid text search results
     const requestBody = {
       textQuery: searchQuery,
-      maxResultCount: 60,  // v7.9: increased from 20 to give filters a larger pool
-      rankPreference: 'RELEVANCE',   // v7.8: explicit relevance for text queries
+      maxResultCount: 60,
+      rankPreference: 'RELEVANCE',
       locationBias: {
         circle: {
           center: { latitude, longitude },
@@ -945,7 +897,7 @@ async function handleRestaurantSearch(request, env) {
         }
       }
     };
-    // v7.8: pass filters to Google so it excludes them before returning (more efficient than client-side)
+
     if (openNow)              requestBody.openNow     = true;
     if (minRating > 0)        requestBody.minRating   = minRating;
     if (priceLevels?.length)  requestBody.priceLevels = priceLevels;
@@ -973,8 +925,6 @@ async function handleRestaurantSearch(request, env) {
     const data = await response.json();
     const restaurants = (data.places || []).map(p => {
       const normalized = normalizePlace(p, baseUrl);
-
-      // Extract customer favorites from reviews
       const customerFavorites = extractCustomerFavorites(p.reviews || []);
 
       return {
@@ -989,12 +939,11 @@ async function handleRestaurantSearch(request, env) {
       };
     });
 
-    // Cache results
     await setInCache(env, cacheKey, restaurants, CONFIG.CACHE_TTL.TEXT_SEARCH);
 
     return jsonResponse({
       restaurants,
-      places: restaurants, // Alias for compatibility
+      places: restaurants,
       count: restaurants.length,
       cached: false
     });
@@ -1011,7 +960,6 @@ async function handleRestaurantSearch(request, env) {
 
 // ============================================================================
 // HELPER: Extract customer favorites from reviews
-// v7.6 FIX: threshold lowered from >= 2 to >= 1
 // ============================================================================
 
 function extractCustomerFavorites(reviews) {
@@ -1040,7 +988,7 @@ function extractCustomerFavorites(reviews) {
   }
 
   return Object.entries(dishMentions)
-    .filter(([_, count]) => count >= 1)  // v7.6: was >= 2, now >= 1
+    .filter(([_, count]) => count >= 1)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([dish, count]) => ({
@@ -1058,18 +1006,16 @@ export default {
     const url = new URL(request.url);
     const pathname = url.pathname;
 
-    // Handle CORS preflight
     if (request.method === 'OPTIONS') {
       return handleCORS();
     }
 
     try {
-      // Root endpoint: POST = restaurant search, GET = health check
       if (pathname === '/' || pathname === '') {
         if (request.method === 'POST') {
           return await handleRestaurantSearch(request, env);
         }
-        return new Response('Globeskimmers API Worker v7.8 - All Systems Ready! 📸🍽️☕', {
+        return new Response('Globeskimmers API Worker v7.11 - All Systems Ready! 📸🍽️☕', {
           headers: CORS_HEADERS
         });
       }
@@ -1077,20 +1023,17 @@ export default {
       if (pathname === '/health') {
         return jsonResponse({
           status: 'ok',
-          version: '7.8',
-          features: ['text-search', 'nearby-search', 'details', 'photo-proxy', 'dietary', 'restaurants', 'coffee', 'business-status', 'serves-cocktails'],
+          version: '7.11',
+          features: ['text-search', 'nearby-search', 'details', 'photo-proxy', 'dietary', 'restaurants', 'coffee', 'business-status', 'serves-cocktails', 'strict-radius'],
           kvBound: !!env.GLOBESKIMMERS_KV,
           timestamp: new Date().toISOString()
         });
       }
 
-      // Routes
       if (pathname === '/places/text-search') {
         return await handleTextSearch(request, env);
       }
 
-      // /places/nearby — used by getActivities v3.0 (new in v7.6)
-      // /places/search — legacy alias, kept for backwards compatibility
       if (pathname === '/places/nearby' || pathname === '/places/search') {
         return await handleNearbySearch(request, env);
       }
@@ -1111,17 +1054,14 @@ export default {
         return await handleCacheStats(request, env);
       }
 
-      // POST /places/restaurants - Full restaurant search with reviews
       if (pathname === '/places/restaurants' && request.method === 'POST') {
         return await handleRestaurantSearch(request, env);
       }
 
-      // GET /places/coffee - Coffee shop search
       if (pathname === '/places/coffee') {
         return await handleCoffeeSearch(request, env);
       }
 
-      // 404 for unknown routes
       return jsonResponse({ error: 'Not found', path: pathname }, 404);
 
     } catch (error) {
@@ -1133,17 +1073,3 @@ export default {
     }
   }
 };
-
-// ============================================================================
-// KV NAMESPACE BINDING (add to wrangler.toml)
-// ============================================================================
-/*
-
-[[kv_namespaces]]
-binding = "GLOBESKIMMERS_KV"
-id = "your-kv-namespace-id"
-
-# Also set the secret:
-# wrangler secret put GOOGLE_API_KEY
-
-*/
