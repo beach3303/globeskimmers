@@ -814,7 +814,7 @@ export default function PlacesToEat() {
           ? base44.functions.invoke('getRestaurants', {
               latitude: lat, longitude: lng,
               radius: radius * 1609,
-              maxResults: 120,
+              maxResults: 60,
               cuisine: 'bakery',
               searchQuery: '',
             })

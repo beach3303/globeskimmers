@@ -399,8 +399,9 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
 const TIER_LABELS: Record<number, string> = { 1:'Authentic', 2:'Good Match', 3:'Has It', 4:'Other' };
 
 const CUISINE_QUERIES: Record<string, string[]> = {
-  // 'all' now runs more targeted queries to catch chains & local spots
-  all:           ['restaurant', 'fast food restaurant', 'chinese restaurant', 'asian restaurant', 'american restaurant', 'mexican restaurant', 'pizza restaurant', 'cafe bistro'],
+  // 'all': reduced from 8 to 3 queries (saves 5 API calls per page load)
+  // nearby types already cover fast food, bakery, takeout — no need to duplicate via text
+  all:           ['restaurant', 'best restaurant near me', 'popular restaurant'],
   american:      ['american restaurant', 'burger restaurant', 'diner'],
   mexican:       ['mexican restaurant', 'taqueria', 'tacos'],
   italian:       ['italian restaurant', 'pasta restaurant', 'trattoria'],
@@ -422,7 +423,8 @@ const CUISINE_QUERIES: Record<string, string[]> = {
   halal:         ['halal restaurant', 'halal food', 'halal meat'],
   kosher:        ['kosher restaurant', 'kosher food', 'kosher deli'],
   dessert:       ['dessert shop', 'ice cream', 'bakery'],
-  bakery:        ['bakery', 'pastry shop', 'asian bakery', 'panaderia', 'patisserie', 'donut shop'],
+  // reduced from 6 to 3 (nearby types cover pastry_shop/dessert_shop already)
+  bakery:        ['bakery', 'pastry shop', 'donut shop'],
   // Sports bar: 2 text queries max (more causes network timeouts at 25mi).
   // Query 1 "sports bar" — finds explicitly self-labeled sports bars (Rocco's Tavern,
   //   Barney's Beanery, 33 Taps — anything with "sports bar" in Google name/description/reviews).
@@ -544,15 +546,12 @@ Deno.serve(async (req) => {
     // Each result is cached in the Worker KV for 3 days — so parallel calls are
     // only expensive on first load for a new area; after that all are cache hits.
 
+    // Reduced from 6 to 3 types (saves 3 API calls per page load)
+    // 'bakery' covered by dedicated bakery fetch; 'bar'/'sports_bar' by sports bar fetch
     const NEARBY_TYPES_ALL = [
       'restaurant',           // general: local, ethnic, sit-down
       'fast_food_restaurant', // chains: Subway, Taco Bell, KFC, Panda Express, McDonald's, IHOP
-      'bakery',               // bakeries, pastry shops, donut shops
       'meal_takeaway',        // takeout-only spots often missed by other types
-      'sports_bar',           // sports bars tagged specifically as sports_bar
-      'bar',                  // generic bars — hidden by default in UI; needed so Sports Bar vibe filter
-                              // has full candidate pool (many sports bars are tagged 'bar' not 'sports_bar')
-      // NOTE: 'cafe' removed — covered by separate Coffee Finder feature
     ];
 
     const NEARBY_TYPES_CUISINE: Record<string, string[]> = {
