@@ -380,14 +380,11 @@ export default function CoffeeFinderPage() {
   const [quickFilter,setQuickFilter]   = useState("all");
   const [sortBy,setSortBy]             = useState("nearby");
   const [filterOpenNow,setFilterOpenNow]       = useState(false);
-  const [filterDrinks,setFilterDrinks]         = useState({});
   const [filterShopType,setFilterShopType]     = useState("all");
   const [filterWorkFriendly,setFilterWorkFriendly] = useState(false);
   const [filterOutdoor,setFilterOutdoor]       = useState(false);
   const [filterParking,setFilterParking]       = useState(false);
   const [filterIndoorSeating,setFilterIndoorSeating] = useState(false);
-  const [filterMinRating,setFilterMinRating]   = useState(0);
-  const [filterMaxPrice,setFilterMaxPrice]     = useState(0);
   const [selectedMapIndex, setSelectedMapIndex] = useState(null);
   const cardRefs = useRef({}); const mapRef = useRef(null); const mapInstanceRef = useRef(null);
 
@@ -396,7 +393,7 @@ export default function CoffeeFinderPage() {
   const lng = activeLocation?.coordinates?.longitude;
   const locationText = activeLocation?.label || activeLocation?.address?.formatted || "Set location";
 
-  const activeFilterCount = [filterOpenNow,Object.values(filterDrinks).some(Boolean),filterShopType!=="all",filterWorkFriendly,filterOutdoor,filterParking,filterIndoorSeating,filterMinRating>0,filterMaxPrice>0].filter(Boolean).length;
+  const activeFilterCount = [filterOpenNow,filterShopType!=="all",filterWorkFriendly,filterOutdoor,filterParking,filterIndoorSeating].filter(Boolean).length;
 
   useEffect(()=>{
     if(!lat||!lng)return;
@@ -429,10 +426,6 @@ export default function CoffeeFinderPage() {
     if(filterOutdoor)       r=r.filter(s=>s.hasOutdoorSeating===true);
     if(filterParking)       r=r.filter(s=>s.parking&&!s.parking.noParking);
     if(filterIndoorSeating) r=r.filter(s=>s.hasIndoorSeating===true);
-    if(filterMinRating>0)   r=r.filter(s=>(s.rating||0)>=filterMinRating);
-    if(filterMaxPrice>0)    r=r.filter(s=>!s.priceLevel||s.priceLevel<=filterMaxPrice);
-    const activeDrinks=Object.entries(filterDrinks).filter(([_,v])=>v).map(([k])=>k);
-    if(activeDrinks.length>0)r=r.filter(s=>activeDrinks.some(d=>s.detectedDrinks?.[d]));
     if(filterShopType==="independent")r=r.filter(s=>!s.isChain);
     if(filterShopType==="chain")      r=r.filter(s=>s.isChain);
     if(filterShopType==="specialty")  r=r.filter(s=>s.tier===1);
@@ -440,9 +433,9 @@ export default function CoffeeFinderPage() {
     else if(sortBy==="rating") r.sort((a,b)=>(b.rating||0)-(a.rating||0));
     else if(sortBy==="work")   r.sort((a,b)=>(b.workScore||0)-(a.workScore||0));
     return r;
-  },[shops,quickFilter,sortBy,filterOpenNow,filterDrinks,filterShopType,filterWorkFriendly,filterOutdoor,filterParking,filterIndoorSeating,filterMinRating,filterMaxPrice]);
+  },[shops,quickFilter,sortBy,filterOpenNow,filterShopType,filterWorkFriendly,filterOutdoor,filterParking,filterIndoorSeating]);
 
-  const clearFilters=()=>{setFilterOpenNow(false);setFilterDrinks({});setFilterShopType("all");setFilterWorkFriendly(false);setFilterOutdoor(false);setFilterParking(false);setFilterIndoorSeating(false);setFilterMinRating(0);setFilterMaxPrice(0);};
+  const clearFilters=()=>{setFilterOpenNow(false);setFilterShopType("all");setFilterWorkFriendly(false);setFilterOutdoor(false);setFilterParking(false);setFilterIndoorSeating(false);};
 
   const handleShowOnMap=(index)=>{setSelectedMapIndex(index);setViewMode("map");setTimeout(()=>{const s=filtered[index];if(mapInstanceRef.current&&s?.lat&&s?.lng)mapInstanceRef.current.setView([s.lat,s.lng],16);},300);};
 
@@ -524,13 +517,6 @@ export default function CoffeeFinderPage() {
                 </div>
 
                 <div>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>☕ Drink Types</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-                    {Object.entries(DRINK_PATTERNS).map(([k,cfg])=><ToggleChip key={k} label={cfg.label} icon={cfg.icon} active={!!filterDrinks[k]} onClick={()=>setFilterDrinks(p=>({...p,[k]:!p[k]}))}/>)}
-                  </div>
-                </div>
-
-                <div>
                   <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>🏪 Shop Type</div>
                   <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
                     {[{v:"all",l:"All",i:"☕"},{v:"specialty",l:"Specialty Only",i:"✨"},{v:"independent",l:"Independent/Local",i:"🏘️"},{v:"chain",l:"Chains Only",i:"🏪"}].map(({v,l,i})=><ToggleChip key={v} label={l} icon={i} active={filterShopType===v} onClick={()=>setFilterShopType(v)}/>)}
@@ -553,19 +539,6 @@ export default function CoffeeFinderPage() {
                   <ToggleChip label="Work-Friendly" icon="💼" active={filterWorkFriendly} onClick={()=>setFilterWorkFriendly(!filterWorkFriendly)}/>
                 </div>
 
-                <div>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>⭐ Min Rating</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-                    {[{v:0,l:"Any"},{v:3,l:"3.0+"},{v:4,l:"4.0+"},{v:4.5,l:"4.5+"}].map(({v,l})=><ToggleChip key={v} label={l} active={filterMinRating===v} onClick={()=>setFilterMinRating(v)}/>)}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>💰 Max Price</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-                    {[{v:0,l:"Any"},{v:1,l:"$ Budget"},{v:2,l:"$$ Moderate"},{v:3,l:"$$$ Premium"}].map(({v,l})=><ToggleChip key={v} label={l} active={filterMaxPrice===v} onClick={()=>setFilterMaxPrice(v)}/>)}
-                  </div>
-                </div>
 
                 {/* Trust legend */}
                 <div style={{padding:"10px 12px",background:"#F8FAFC",borderRadius:"8px",border:"1px solid #E8EDF2"}}>
