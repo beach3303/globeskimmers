@@ -110,25 +110,23 @@ function processShop(shop, userLat, userLng) {
   const hasOutdoorSeating = seating?.hasOutdoorSeating ?? shop.hasOutdoorSeating ?? (shop.outdoorSeating===true) ?? null;
   const seatingSource     = seating?.source || (hasIndoorSeating!==null||hasOutdoorSeating!==null?'api':null);
 
-  let workScore=0;
-  if(amenities.wifi?.available)    workScore+=3;
-  if(amenities.outlets?.available) workScore+=2;
-  if(amenities.quiet?.available)   workScore+=2;
-  if(hasOutdoorSeating)            workScore+=1;
-
   const chainFlag = isChainShop(name);
+  // Infer wifi for chains (virtually all chains offer wifi); review detection covers independents
+  if(chainFlag && !amenities.wifi) amenities.wifi={icon:'📶',label:'WiFi (chain)',available:true};
+  const hasWifi = !!amenities.wifi?.available;
+
   const specialtyFlag = isSpecialtyByName(name) || (!chainFlag && (shop.rating||0) >= 4.5 && (shop.userRatingCount||0) >= 50);
   let tier = specialtyFlag ? 1 : chainFlag ? 3 : 2;
 
   const badges=[];
   if(specialtyFlag)   badges.push({icon:'✨',label:'Specialty',    color:'#E65100',bg:'#FFF3E0'});
   if(chainFlag)       badges.push({icon:'🏪',label:'Chain',        color:'#78909C',bg:'#ECEFF1'});
+  if(hasWifi)         badges.push({icon:'📶',label:'WiFi',         color:'#0288D1',bg:'#E3F2FD'});
   if(detectedDrinks.matcha)   badges.push({icon:'🍵',label:'Matcha',   color:'#2E7D32',bg:'#E8F5E9'});
   if(detectedDrinks.coldBrew) badges.push({icon:'🥤',label:'Cold Brew',color:'#1565C0',bg:'#E3F2FD'});
-  if(workScore>=4)    badges.push({icon:'💼',label:'Work-Friendly',color:'#1565C0',bg:'#E3F2FD'});
 
   const photos = shop.photos||(shop.photoUrl?[shop.photoUrl]:[]);
-  return { ...shop, lat, lng, name, distanceMiles, distance:distanceMiles?`${distanceMiles.toFixed(1)} mi`:null, isOpen:openStatus.isOpen, todayHours:openStatus.todayHours, is24Hours:openStatus.is24Hours, detectedDrinks, amenities, parking, seating, hasIndoorSeating, hasOutdoorSeating, seatingSource, workScore, isChain:chainFlag, isSpecialty:specialtyFlag, tier, badges:badges.slice(0,5), photos, photoUrl:photos[0]||null };
+  return { ...shop, lat, lng, name, distanceMiles, distance:distanceMiles?`${distanceMiles.toFixed(1)} mi`:null, isOpen:openStatus.isOpen, todayHours:openStatus.todayHours, is24Hours:openStatus.is24Hours, detectedDrinks, amenities, parking, seating, hasIndoorSeating, hasOutdoorSeating, seatingSource, hasWifi, isChain:chainFlag, isSpecialty:specialtyFlag, tier, badges:badges.slice(0,5), photos, photoUrl:photos[0]||null };
 }
 
 // ─── DIRECTIONS PICKER ─────────────────────────────────────────────────────
@@ -281,11 +279,10 @@ function CoffeeCard({ shop, index, onShowOnMap }) {
           </div>
         )}
 
-        {/* Work score */}
-        {shop.workScore>=4&&(
-          <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px",padding:"8px 10px",background:"#EFF6FF",borderRadius:"8px",fontSize:"12px"}}>
-            <span>💼</span><span style={{fontWeight:"600",color:"#1D4ED8"}}>Work-Friendly</span>
-            <span style={{color:GRAY}}>· Score {shop.workScore}/8 (reviews)</span>
+        {/* WiFi badge */}
+        {shop.hasWifi&&(
+          <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px",padding:"8px 10px",background:"#E3F2FD",borderRadius:"8px",fontSize:"12px"}}>
+            <span>📶</span><span style={{fontWeight:"600",color:"#0288D1"}}>WiFi Available</span>
           </div>
         )}
 
@@ -385,7 +382,7 @@ export default function CoffeeFinderPage() {
   const [sortBy,setSortBy]             = useState("nearby");
   const [filterOpenNow,setFilterOpenNow]       = useState(false);
   const [filterShopType,setFilterShopType]     = useState("all");
-  const [filterWorkFriendly,setFilterWorkFriendly] = useState(false);
+  const [filterWifi,setFilterWifi]               = useState(false);
   const [filterOutdoor,setFilterOutdoor]       = useState(false);
   const [filterParking,setFilterParking]       = useState(false);
   const [filterIndoorSeating,setFilterIndoorSeating] = useState(false);
@@ -397,7 +394,7 @@ export default function CoffeeFinderPage() {
   const lng = activeLocation?.coordinates?.longitude;
   const locationText = activeLocation?.label || activeLocation?.address?.formatted || "Set location";
 
-  const activeFilterCount = [filterOpenNow,filterShopType!=="all",filterWorkFriendly,filterOutdoor,filterParking,filterIndoorSeating].filter(Boolean).length;
+  const activeFilterCount = [filterOpenNow,filterShopType!=="all",filterWifi,filterOutdoor,filterParking,filterIndoorSeating].filter(Boolean).length;
 
   useEffect(()=>{
     if(!lat||!lng)return;
@@ -422,10 +419,10 @@ export default function CoffeeFinderPage() {
     if(quickFilter==="specialty")    r=r.filter(s=>s.isSpecialty);
     if(quickFilter==="matcha")       r=r.filter(s=>s.detectedDrinks?.matcha);
     if(quickFilter==="coldBrew")     r=r.filter(s=>s.detectedDrinks?.coldBrew);
-    if(quickFilter==="workFriendly") r=r.filter(s=>s.workScore>=4);
+    if(quickFilter==="wifi")         r=r.filter(s=>s.hasWifi);
     if(quickFilter==="parking")      r=r.filter(s=>s.parking&&!s.parking.noParking);
     if(filterOpenNow)       r=r.filter(s=>s.isOpen===true);
-    if(filterWorkFriendly)  r=r.filter(s=>s.workScore>=4);
+    if(filterWifi)          r=r.filter(s=>s.hasWifi);
     if(filterOutdoor)       r=r.filter(s=>s.hasOutdoorSeating===true);
     if(filterParking)       r=r.filter(s=>s.parking&&!s.parking.noParking);
     if(filterIndoorSeating) r=r.filter(s=>s.hasIndoorSeating===true);
@@ -433,11 +430,10 @@ export default function CoffeeFinderPage() {
     if(filterShopType==="specialty")  r=r.filter(s=>s.isSpecialty);
     if(sortBy==="nearby")  r.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
     else if(sortBy==="rating") r.sort((a,b)=>(b.rating||0)-(a.rating||0));
-    else if(sortBy==="work")   r.sort((a,b)=>(b.workScore||0)-(a.workScore||0));
     return r;
-  },[shops,quickFilter,sortBy,filterOpenNow,filterShopType,filterWorkFriendly,filterOutdoor,filterParking,filterIndoorSeating]);
+  },[shops,quickFilter,sortBy,filterOpenNow,filterWifi,filterShopType,filterOutdoor,filterParking,filterIndoorSeating]);
 
-  const clearFilters=()=>{setFilterOpenNow(false);setFilterShopType("all");setFilterWorkFriendly(false);setFilterOutdoor(false);setFilterParking(false);setFilterIndoorSeating(false);};
+  const clearFilters=()=>{setFilterOpenNow(false);setFilterShopType("all");setFilterWifi(false);setFilterOutdoor(false);setFilterParking(false);setFilterIndoorSeating(false);};
 
   const handleShowOnMap=(index)=>{setSelectedMapIndex(index);setViewMode("map");setTimeout(()=>{const s=filtered[index];if(mapInstanceRef.current&&s?.lat&&s?.lng)mapInstanceRef.current.setView([s.lat,s.lng],16);},300);};
 
@@ -474,7 +470,7 @@ export default function CoffeeFinderPage() {
         <button onClick={()=>window.history.back()} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0",color:BROWN,fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit",marginBottom:"12px"}}>← Back to Home</button>
         <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}>
           <span style={{fontSize:"28px"}}>☕</span>
-          <div><div style={{fontWeight:"800",fontSize:"20px",color:DARK}}>Coffee Finder</div><div style={{fontSize:"13px",color:GRAY}}>Drink types · Parking · Seating · Work-friendly</div></div>
+          <div><div style={{fontWeight:"800",fontSize:"20px",color:DARK}}>Coffee Finder</div><div style={{fontSize:"13px",color:GRAY}}>WiFi · Parking · Seating · Specialty</div></div>
         </div>
 
         <div onClick={()=>setShowLocPicker(true)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:"#fff",borderRadius:"10px",border:"1px solid #E2E8F0",fontSize:"13px",marginBottom:"10px",cursor:"pointer"}}>
@@ -493,12 +489,12 @@ export default function CoffeeFinderPage() {
         {/* Sort + quick filters */}
         <div style={{display:"flex",gap:"8px",overflowX:"auto",padding:"4px 0 8px",scrollbarWidth:"none",alignItems:"center"}}>
           <div style={{display:"flex",background:"#F1F5F9",borderRadius:"10px",padding:"2px",flexShrink:0}}>
-            {[{v:"nearby",l:"📍 Nearby"},{v:"rating",l:"⭐ Best"},{v:"work",l:"💼 Work"}].map(({v,l})=>(
+            {[{v:"nearby",l:"📍 Nearby"},{v:"rating",l:"⭐ Best"}].map(({v,l})=>(
               <button key={v} onClick={()=>setSortBy(v)} style={{padding:"6px 10px",borderRadius:"8px",border:"none",background:sortBy===v?BROWN:"transparent",color:sortBy===v?"#fff":GRAY,fontWeight:"600",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{l}</button>
             ))}
           </div>
           <div style={{width:"1px",height:"20px",background:"#E2E8F0",flexShrink:0}}/>
-          {[{value:"all",label:"All",emoji:"☕"},{value:"open",label:"Open Now",emoji:"🟢"},{value:"specialty",label:"Specialty",emoji:"✨"},{value:"matcha",label:"Matcha",emoji:"🍵"},{value:"coldBrew",label:"Cold Brew",emoji:"🥤"},{value:"workFriendly",label:"Work-Friendly",emoji:"💼"},{value:"parking",label:"Has Parking",emoji:"🅿️"}].map(f=><FilterPill key={f.value} {...f} active={quickFilter===f.value} onClick={()=>setQuickFilter(f.value)}/>)}
+          {[{value:"all",label:"All",emoji:"☕"},{value:"open",label:"Open Now",emoji:"🟢"},{value:"specialty",label:"Specialty",emoji:"✨"},{value:"matcha",label:"Matcha",emoji:"🍵"},{value:"coldBrew",label:"Cold Brew",emoji:"🥤"},{value:"wifi",label:"WiFi",emoji:"📶"},{value:"parking",label:"Has Parking",emoji:"🅿️"}].map(f=><FilterPill key={f.value} {...f} active={quickFilter===f.value} onClick={()=>setQuickFilter(f.value)}/>)}
         </div>
 
         {/* Advanced filters toggle */}
@@ -536,9 +532,8 @@ export default function CoffeeFinderPage() {
                 </div>
 
                 <div>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"4px"}}>💼 Amenities</div>
-                  <div style={{fontSize:"11px",color:"#E65100",marginBottom:"8px",fontWeight:"600"}}>⚠️ Based on customer reviews — call ahead to confirm</div>
-                  <ToggleChip label="Work-Friendly" icon="💼" active={filterWorkFriendly} onClick={()=>setFilterWorkFriendly(!filterWorkFriendly)}/>
+                  <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>📶 WiFi</div>
+                  <ToggleChip label="Has WiFi" icon="📶" active={filterWifi} onClick={()=>setFilterWifi(!filterWifi)}/>
                 </div>
 
 
