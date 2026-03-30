@@ -122,7 +122,6 @@ function processShop(shop, userLat, userLng) {
 
   const badges=[];
   if(specialtyFlag)   badges.push({icon:'✨',label:'Specialty',    color:'#E65100',bg:'#FFF3E0'});
-  if(!chainFlag)      badges.push({icon:'🏘️',label:'Independent',  color:'#5E35B1',bg:'#EDE7F6'});
   if(chainFlag)       badges.push({icon:'🏪',label:'Chain',        color:'#78909C',bg:'#ECEFF1'});
   if(detectedDrinks.matcha)   badges.push({icon:'🍵',label:'Matcha',   color:'#2E7D32',bg:'#E8F5E9'});
   if(detectedDrinks.coldBrew) badges.push({icon:'🥤',label:'Cold Brew',color:'#1565C0',bg:'#E3F2FD'});
@@ -425,13 +424,11 @@ export default function CoffeeFinderPage() {
     if(quickFilter==="coldBrew")     r=r.filter(s=>s.detectedDrinks?.coldBrew);
     if(quickFilter==="workFriendly") r=r.filter(s=>s.workScore>=4);
     if(quickFilter==="parking")      r=r.filter(s=>s.parking&&!s.parking.noParking);
-    if(quickFilter==="independent")  r=r.filter(s=>!s.isChain);
     if(filterOpenNow)       r=r.filter(s=>s.isOpen===true);
     if(filterWorkFriendly)  r=r.filter(s=>s.workScore>=4);
     if(filterOutdoor)       r=r.filter(s=>s.hasOutdoorSeating===true);
     if(filterParking)       r=r.filter(s=>s.parking&&!s.parking.noParking);
     if(filterIndoorSeating) r=r.filter(s=>s.hasIndoorSeating===true);
-    if(filterShopType==="independent")r=r.filter(s=>!s.isChain);
     if(filterShopType==="chain")      r=r.filter(s=>s.isChain);
     if(filterShopType==="specialty")  r=r.filter(s=>s.isSpecialty);
     if(sortBy==="nearby")  r.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
@@ -501,7 +498,7 @@ export default function CoffeeFinderPage() {
             ))}
           </div>
           <div style={{width:"1px",height:"20px",background:"#E2E8F0",flexShrink:0}}/>
-          {[{value:"all",label:"All",emoji:"☕"},{value:"open",label:"Open Now",emoji:"🟢"},{value:"specialty",label:"Specialty",emoji:"✨"},{value:"matcha",label:"Matcha",emoji:"🍵"},{value:"coldBrew",label:"Cold Brew",emoji:"🥤"},{value:"workFriendly",label:"Work-Friendly",emoji:"💼"},{value:"parking",label:"Has Parking",emoji:"🅿️"},{value:"independent",label:"Local Only",emoji:"🏘️"}].map(f=><FilterPill key={f.value} {...f} active={quickFilter===f.value} onClick={()=>setQuickFilter(f.value)}/>)}
+          {[{value:"all",label:"All",emoji:"☕"},{value:"open",label:"Open Now",emoji:"🟢"},{value:"specialty",label:"Specialty",emoji:"✨"},{value:"matcha",label:"Matcha",emoji:"🍵"},{value:"coldBrew",label:"Cold Brew",emoji:"🥤"},{value:"workFriendly",label:"Work-Friendly",emoji:"💼"},{value:"parking",label:"Has Parking",emoji:"🅿️"}].map(f=><FilterPill key={f.value} {...f} active={quickFilter===f.value} onClick={()=>setQuickFilter(f.value)}/>)}
         </div>
 
         {/* Advanced filters toggle */}
@@ -524,7 +521,7 @@ export default function CoffeeFinderPage() {
                 <div>
                   <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>🏪 Shop Type</div>
                   <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-                    {[{v:"all",l:"All",i:"☕"},{v:"specialty",l:"Specialty Only",i:"✨"},{v:"independent",l:"Independent/Local",i:"🏘️"},{v:"chain",l:"Chains Only",i:"🏪"}].map(({v,l,i})=><ToggleChip key={v} label={l} icon={i} active={filterShopType===v} onClick={()=>setFilterShopType(v)}/>)}
+                    {[{v:"all",l:"All",i:"☕"},{v:"specialty",l:"Specialty Only",i:"✨"},{v:"chain",l:"Chains Only",i:"🏪"}].map(({v,l,i})=><ToggleChip key={v} label={l} icon={i} active={filterShopType===v} onClick={()=>setFilterShopType(v)}/>)}
                   </div>
                 </div>
 
