@@ -1,13 +1,14 @@
 /**
  * ============================================================================
- * GLOBESKIMMERS - getCoffeeShops v5.1
+ * GLOBESKIMMERS - getCoffeeShops v5.2
  * ============================================================================
  *
- * FIXES vs v5.0:
- * - Reduced to 2 queries (was 5-10 calls) → fixes Deno CPU time limit crash
- * - Sends "query" param (not "textQuery") → matches Worker v7.2
- * - Still deduplicates across queries
- * - forceRefresh support retained
+ * FIXES vs v5.1:
+ * - Query 2 changed from text search "cafe" → nearby type search for cafe,coffee_shop
+ *   Nearby type search returns ALL matching businesses in radius (chains included)
+ *   Text search was relevance-ranked and often skipped chains entirely
+ * - Still 2 queries (within Deno CPU limit)
+ * - Deduplication + forceRefresh retained
  *
  * ============================================================================
  */
@@ -17,7 +18,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
 const API_BASE_URL = "https://globeskimmers-api.maizasimeon.workers.dev";
 
 Deno.serve(async (req) => {
-  console.log("\n☕ === getCoffeeShops v5.1 START ===\n");
+  console.log("\n☕ === getCoffeeShops v5.2 START ===\n");
 
   try {
     const base44 = createClientFromRequest(req);
@@ -39,46 +40,68 @@ Deno.serve(async (req) => {
     console.log("Request:", { latitude, longitude, radius, maxResults, forceRefresh });
 
     // ── 2 queries max to stay under Deno CPU limit ─────────────────────────
-    const searchQueries = [
-      'coffee shop',
-      'cafe',
-    ];
+    // Query 1: text search — relevance-ranked (specialty, local favorites)
+    // Query 2: nearby type search — returns ALL cafes/coffee_shops in radius (ensures chains appear)
 
     const allPlaces = [];
     const seenIds = new Set();
     const errors = [];
 
-    for (const query of searchQueries) {
-      try {
-        const p = new URLSearchParams({
-          query,                              // ← "query" not "textQuery"
-          latitude: String(latitude),
-          longitude: String(longitude),
-          radius: String(radius),
-          maxResults: '20',
-        });
-        if (forceRefresh) p.set('forceRefresh', 'true');
-
-        console.log(`Searching: "${query}"`);
-        const r1 = await fetch(`${API_BASE_URL}/places/text-search?${p}`);
-
-        if (!r1.ok) {
-          errors.push(`"${query}": HTTP ${r1.status}`);
-          continue;
-        }
-
-        const d1 = await r1.json();
-        console.log(`  cached:${d1.fromCache||false} count:${d1.count||0}`);
-
-        for (const place of (d1.places || [])) {
-          const id = place.id || place.placeId;
-          if (id && !seenIds.has(id)) { seenIds.add(id); allPlaces.push(place); }
-        }
-
-      } catch (e) {
-        console.error(`Error "${query}":`, e.message);
-        errors.push(`"${query}": ${e.message}`);
+    const addPlaces = (places) => {
+      for (const place of places) {
+        const id = place.id || place.placeId;
+        if (id && !seenIds.has(id)) { seenIds.add(id); allPlaces.push(place); }
       }
+    };
+
+    // Query 1: Text search for "coffee shop"
+    try {
+      const p1 = new URLSearchParams({
+        query: 'coffee shop',
+        latitude: String(latitude),
+        longitude: String(longitude),
+        radius: String(radius),
+        maxResults: '20',
+      });
+      if (forceRefresh) p1.set('forceRefresh', 'true');
+
+      console.log('Searching: "coffee shop" (text)');
+      const r1 = await fetch(`${API_BASE_URL}/places/text-search?${p1}`);
+      if (r1.ok) {
+        const d1 = await r1.json();
+        console.log(`  cached:${d1.cached||false} count:${d1.count||0}`);
+        addPlaces(d1.places || []);
+      } else {
+        errors.push(`text-search: HTTP ${r1.status}`);
+      }
+    } catch (e) {
+      console.error('Error text-search:', e.message);
+      errors.push(`text-search: ${e.message}`);
+    }
+
+    // Query 2: Nearby type search for cafe + coffee_shop (catches chains Google text search may skip)
+    try {
+      const p2 = new URLSearchParams({
+        types: 'cafe,coffee_shop',
+        latitude: String(latitude),
+        longitude: String(longitude),
+        radius: String(radius),
+        maxResults: '20',
+      });
+      if (forceRefresh) p2.set('forceRefresh', 'true');
+
+      console.log('Searching: nearby cafe,coffee_shop (type)');
+      const r2 = await fetch(`${API_BASE_URL}/places/nearby?${p2}`);
+      if (r2.ok) {
+        const d2 = await r2.json();
+        console.log(`  cached:${d2.cached||false} count:${d2.count||0}`);
+        addPlaces(d2.places || []);
+      } else {
+        errors.push(`nearby: HTTP ${r2.status}`);
+      }
+    } catch (e) {
+      console.error('Error nearby:', e.message);
+      errors.push(`nearby: ${e.message}`);
     }
 
     console.log(`Total unique: ${allPlaces.length}`);
@@ -145,12 +168,12 @@ Deno.serve(async (req) => {
     processedPlaces.sort((a, b) => a.distanceKm - b.distanceKm);
 
     console.log(`Returning ${processedPlaces.length} shops`);
-    console.log("☕ === getCoffeeShops v5.1 END ===\n");
+    console.log("☕ === getCoffeeShops v5.2 END ===\n");
 
     return Response.json({
       places: processedPlaces,
       count: processedPlaces.length,
-      version: 'v5.1',
+      version: 'v5.2',
     });
 
   } catch (error) {
