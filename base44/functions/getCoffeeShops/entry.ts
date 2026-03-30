@@ -82,15 +82,16 @@ Deno.serve(async (req) => {
     // Query 2: Nearby type search for cafe + coffee_shop (catches chains Google text search may skip)
     try {
       const p2 = new URLSearchParams({
-        types: 'cafe,coffee_shop',
+        types: 'coffee_shop',
         latitude: String(latitude),
         longitude: String(longitude),
         radius: String(radius),
         maxResults: '20',
+        rankBy: 'DISTANCE',
       });
       if (forceRefresh) p2.set('forceRefresh', 'true');
 
-      console.log('Searching: nearby cafe,coffee_shop (type)');
+      console.log('Searching: nearby coffee_shop ranked by distance');
       const r2 = await fetch(`${API_BASE_URL}/places/nearby?${p2}`);
       if (r2.ok) {
         const d2 = await r2.json();
