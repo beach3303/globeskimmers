@@ -1,0 +1,10 @@
+name = "globeskimmers-api"
+main = "cloudflare-worker-v7.12.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "GLOBESKIMMERS_KV"
+id = "68ae9c62099f4834a8c6f0ff3eb57e71"
+
+# Your GOOGLE_API_KEY is already set as a secret in Cloudflare
+# If you need to update it: wrangler secret put GOOGLE_API_KEY

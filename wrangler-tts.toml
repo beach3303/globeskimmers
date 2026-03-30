@@ -1,0 +1,9 @@
+name = "globeskimmers-tts"
+main = "globeskimmers-tts-worker.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "TTS_CACHE"
+id = "9ffec0f376db4fa9aa744a23b816ffe6"
+
+# Secret: GOOGLE_TTS_API_KEY (already set in Cloudflare)

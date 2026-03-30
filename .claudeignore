@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+.next/
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.gif
+.cache/
+.git/
+*.log
+*.mp3
+*.mp4
+.base44/
