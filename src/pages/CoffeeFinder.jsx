@@ -38,6 +38,11 @@ const AMENITY_PATTERNS = {
 const COFFEE_CHAINS = ['starbucks','dunkin',"peet's",'peets','caribou','dutch bros','coffee bean','the coffee bean','philz','blue bottle','intelligentsia','la colombe','verve','portola','tierra mia','groundwork','tim hortons','costa coffee','caffe nero','gloria jean','mcdonalds','mcdonald','panera','7-eleven','wawa','krispy kreme','biggby','scooter\'s coffee',"scooter's",'black rock coffee','tully\'s','gregorys','gregorys coffee','it\'s a grind','joe & the juice','joe and the juice','paris baguette','tous les jours','caffè pascucci','doutor','tully\'s coffee','ediya','a twosome','hollys coffee','coffee island','wayne\'s coffee','robert\'s coffee','%arabica','arabica coffee','the human bean','human bean','dutch bros coffee','cinnabon','jamba'];
 const isChainShop = name => COFFEE_CHAINS.some(c => name.toLowerCase().includes(c));
 
+// ─── SPECIALTY DETECTION ──────────────────────────────────────────────────
+const SPECIALTY_INDICATORS = ['roaster','roastery','roasting','artisan','specialty','single origin','pour over','pour-over','third wave','micro roast','small batch','craft coffee','brew bar','coffee lab','coffee works'];
+const SPECIALTY_BRANDS = ['blue bottle','intelligentsia','stumptown','counter culture','verve','ritual coffee','sightglass','four barrel','equator','philz','la colombe','coava','onyx coffee','proud mary','madcap','portola','groundwork'];
+const isSpecialtyByName = name => { const n = name.toLowerCase(); return SPECIALTY_INDICATORS.some(s => n.includes(s)) || SPECIALTY_BRANDS.some(b => n.includes(b)); };
+
 // ─── OPEN STATUS ───────────────────────────────────────────────────────────
 function computeOpenStatus(place) {
   const hours = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
@@ -112,11 +117,11 @@ function processShop(shop, userLat, userLng) {
   if(hasOutdoorSeating)            workScore+=1;
 
   const chainFlag = isChainShop(name);
-  let tier = chainFlag?3:2;
-  if(detectedDrinks.espresso?.confidence==='high'&&(shop.rating||0)>=4.5)tier=1;
+  const specialtyFlag = isSpecialtyByName(name) || (!chainFlag && (shop.rating||0) >= 4.5 && (shop.userRatingCount||0) >= 50);
+  let tier = specialtyFlag ? 1 : chainFlag ? 3 : 2;
 
   const badges=[];
-  if(tier===1)        badges.push({icon:'✨',label:'Specialty',    color:'#E65100',bg:'#FFF3E0'});
+  if(specialtyFlag)   badges.push({icon:'✨',label:'Specialty',    color:'#E65100',bg:'#FFF3E0'});
   if(!chainFlag)      badges.push({icon:'🏘️',label:'Independent',  color:'#5E35B1',bg:'#EDE7F6'});
   if(chainFlag)       badges.push({icon:'🏪',label:'Chain',        color:'#78909C',bg:'#ECEFF1'});
   if(detectedDrinks.matcha)   badges.push({icon:'🍵',label:'Matcha',   color:'#2E7D32',bg:'#E8F5E9'});
@@ -124,7 +129,7 @@ function processShop(shop, userLat, userLng) {
   if(workScore>=4)    badges.push({icon:'💼',label:'Work-Friendly',color:'#1565C0',bg:'#E3F2FD'});
 
   const photos = shop.photos||(shop.photoUrl?[shop.photoUrl]:[]);
-  return { ...shop, lat, lng, name, distanceMiles, distance:distanceMiles?`${distanceMiles.toFixed(1)} mi`:null, isOpen:openStatus.isOpen, todayHours:openStatus.todayHours, is24Hours:openStatus.is24Hours, detectedDrinks, amenities, parking, seating, hasIndoorSeating, hasOutdoorSeating, seatingSource, workScore, isChain:chainFlag, tier, badges:badges.slice(0,5), photos, photoUrl:photos[0]||null };
+  return { ...shop, lat, lng, name, distanceMiles, distance:distanceMiles?`${distanceMiles.toFixed(1)} mi`:null, isOpen:openStatus.isOpen, todayHours:openStatus.todayHours, is24Hours:openStatus.is24Hours, detectedDrinks, amenities, parking, seating, hasIndoorSeating, hasOutdoorSeating, seatingSource, workScore, isChain:chainFlag, isSpecialty:specialtyFlag, tier, badges:badges.slice(0,5), photos, photoUrl:photos[0]||null };
 }
 
 // ─── DIRECTIONS PICKER ─────────────────────────────────────────────────────
@@ -415,7 +420,7 @@ export default function CoffeeFinderPage() {
   const filtered = useMemo(()=>{
     let r=[...shops];
     if(quickFilter==="open")         r=r.filter(s=>s.isOpen===true);
-    if(quickFilter==="specialty")    r=r.filter(s=>s.tier===1);
+    if(quickFilter==="specialty")    r=r.filter(s=>s.isSpecialty);
     if(quickFilter==="matcha")       r=r.filter(s=>s.detectedDrinks?.matcha);
     if(quickFilter==="coldBrew")     r=r.filter(s=>s.detectedDrinks?.coldBrew);
     if(quickFilter==="workFriendly") r=r.filter(s=>s.workScore>=4);
@@ -428,7 +433,7 @@ export default function CoffeeFinderPage() {
     if(filterIndoorSeating) r=r.filter(s=>s.hasIndoorSeating===true);
     if(filterShopType==="independent")r=r.filter(s=>!s.isChain);
     if(filterShopType==="chain")      r=r.filter(s=>s.isChain);
-    if(filterShopType==="specialty")  r=r.filter(s=>s.tier===1);
+    if(filterShopType==="specialty")  r=r.filter(s=>s.isSpecialty);
     if(sortBy==="nearby")  r.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
     else if(sortBy==="rating") r.sort((a,b)=>(b.rating||0)-(a.rating||0));
     else if(sortBy==="work")   r.sort((a,b)=>(b.workScore||0)-(a.workScore||0));
