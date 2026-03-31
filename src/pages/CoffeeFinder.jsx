@@ -122,8 +122,6 @@ function processShop(shop, userLat, userLng) {
   if(specialtyFlag)   badges.push({icon:'✨',label:'Specialty',    color:'#E65100',bg:'#FFF3E0'});
   if(chainFlag)       badges.push({icon:'🏪',label:'Chain',        color:'#78909C',bg:'#ECEFF1'});
   if(hasWifi)         badges.push({icon:'📶',label:'WiFi',         color:'#0288D1',bg:'#E3F2FD'});
-  if(detectedDrinks.matcha)   badges.push({icon:'🍵',label:'Matcha',   color:'#2E7D32',bg:'#E8F5E9'});
-  if(detectedDrinks.coldBrew) badges.push({icon:'🥤',label:'Cold Brew',color:'#1565C0',bg:'#E3F2FD'});
 
   const photos = shop.photos||(shop.photoUrl?[shop.photoUrl]:[]);
   return { ...shop, lat, lng, name, distanceMiles, distance:distanceMiles?`${distanceMiles.toFixed(1)} mi`:null, isOpen:openStatus.isOpen, todayHours:openStatus.todayHours, is24Hours:openStatus.is24Hours, detectedDrinks, amenities, parking, seating, hasIndoorSeating, hasOutdoorSeating, seatingSource, hasWifi, isChain:chainFlag, isSpecialty:specialtyFlag, tier, badges:badges.slice(0,5), photos, photoUrl:photos[0]||null };
@@ -417,8 +415,6 @@ export default function CoffeeFinderPage() {
     let r=[...shops];
     if(quickFilter==="open")         r=r.filter(s=>s.isOpen===true);
     if(quickFilter==="specialty")    r=r.filter(s=>s.isSpecialty);
-    if(quickFilter==="matcha")       r=r.filter(s=>s.detectedDrinks?.matcha);
-    if(quickFilter==="coldBrew")     r=r.filter(s=>s.detectedDrinks?.coldBrew);
     if(quickFilter==="wifi")         r=r.filter(s=>s.hasWifi);
     if(quickFilter==="parking")      r=r.filter(s=>s.parking&&!s.parking.noParking);
     if(filterOpenNow)       r=r.filter(s=>s.isOpen===true);
@@ -494,7 +490,7 @@ export default function CoffeeFinderPage() {
             ))}
           </div>
           <div style={{width:"1px",height:"20px",background:"#E2E8F0",flexShrink:0}}/>
-          {[{value:"all",label:"All",emoji:"☕"},{value:"open",label:"Open Now",emoji:"🟢"},{value:"specialty",label:"Specialty",emoji:"✨"},{value:"matcha",label:"Matcha",emoji:"🍵"},{value:"coldBrew",label:"Cold Brew",emoji:"🥤"},{value:"wifi",label:"WiFi",emoji:"📶"},{value:"parking",label:"Has Parking",emoji:"🅿️"}].map(f=><FilterPill key={f.value} {...f} active={quickFilter===f.value} onClick={()=>setQuickFilter(f.value)}/>)}
+          {[{value:"all",label:"All",emoji:"☕"},{value:"open",label:"Open Now",emoji:"🟢"},{value:"specialty",label:"Specialty",emoji:"✨"},{value:"wifi",label:"WiFi",emoji:"📶"},{value:"parking",label:"Has Parking",emoji:"🅿️"}].map(f=><FilterPill key={f.value} {...f} active={quickFilter===f.value} onClick={()=>setQuickFilter(f.value)}/>)}
         </div>
 
         {/* Advanced filters toggle */}
