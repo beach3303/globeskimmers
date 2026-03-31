@@ -382,7 +382,6 @@ export default function CoffeeFinderPage() {
   const [filterShopType,setFilterShopType]     = useState("all");
   const [filterWifi,setFilterWifi]               = useState(false);
   const [filterOutdoor,setFilterOutdoor]       = useState(false);
-  const [filterParking,setFilterParking]       = useState(false);
   const [filterIndoorSeating,setFilterIndoorSeating] = useState(false);
   const [selectedMapIndex, setSelectedMapIndex] = useState(null);
   const cardRefs = useRef({}); const mapRef = useRef(null); const mapInstanceRef = useRef(null);
@@ -392,7 +391,7 @@ export default function CoffeeFinderPage() {
   const lng = activeLocation?.coordinates?.longitude;
   const locationText = activeLocation?.label || activeLocation?.address?.formatted || "Set location";
 
-  const activeFilterCount = [filterOpenNow,filterShopType!=="all",filterWifi,filterOutdoor,filterParking,filterIndoorSeating].filter(Boolean).length;
+  const activeFilterCount = [filterOpenNow,filterShopType!=="all",filterWifi,filterOutdoor,filterIndoorSeating].filter(Boolean).length;
 
   useEffect(()=>{
     if(!lat||!lng)return;
@@ -416,20 +415,18 @@ export default function CoffeeFinderPage() {
     if(quickFilter==="open")         r=r.filter(s=>s.isOpen===true);
     if(quickFilter==="specialty")    r=r.filter(s=>s.isSpecialty);
     if(quickFilter==="wifi")         r=r.filter(s=>s.hasWifi);
-    if(quickFilter==="parking")      r=r.filter(s=>s.parking&&!s.parking.noParking);
     if(filterOpenNow)       r=r.filter(s=>s.isOpen===true);
     if(filterWifi)          r=r.filter(s=>s.hasWifi);
     if(filterOutdoor)       r=r.filter(s=>s.hasOutdoorSeating===true);
-    if(filterParking)       r=r.filter(s=>s.parking&&!s.parking.noParking);
     if(filterIndoorSeating) r=r.filter(s=>s.hasIndoorSeating===true);
     if(filterShopType==="chain")      r=r.filter(s=>s.isChain);
     if(filterShopType==="specialty")  r=r.filter(s=>s.isSpecialty);
     if(sortBy==="nearby")  r.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
     else if(sortBy==="rating") r.sort((a,b)=>(b.rating||0)-(a.rating||0));
     return r;
-  },[shops,quickFilter,sortBy,filterOpenNow,filterWifi,filterShopType,filterOutdoor,filterParking,filterIndoorSeating]);
+  },[shops,quickFilter,sortBy,filterOpenNow,filterWifi,filterShopType,filterOutdoor,filterIndoorSeating]);
 
-  const clearFilters=()=>{setFilterOpenNow(false);setFilterShopType("all");setFilterWifi(false);setFilterOutdoor(false);setFilterParking(false);setFilterIndoorSeating(false);};
+  const clearFilters=()=>{setFilterOpenNow(false);setFilterShopType("all");setFilterWifi(false);setFilterOutdoor(false);setFilterIndoorSeating(false);};
 
   const handleShowOnMap=(index)=>{setSelectedMapIndex(index);setViewMode("map");setTimeout(()=>{const s=filtered[index];if(mapInstanceRef.current&&s?.lat&&s?.lng)mapInstanceRef.current.setView([s.lat,s.lng],16);},300);};
 
@@ -490,7 +487,7 @@ export default function CoffeeFinderPage() {
             ))}
           </div>
           <div style={{width:"1px",height:"20px",background:"#E2E8F0",flexShrink:0}}/>
-          {[{value:"all",label:"All",emoji:"☕"},{value:"open",label:"Open Now",emoji:"🟢"},{value:"specialty",label:"Specialty",emoji:"✨"},{value:"wifi",label:"WiFi",emoji:"📶"},{value:"parking",label:"Has Parking",emoji:"🅿️"}].map(f=><FilterPill key={f.value} {...f} active={quickFilter===f.value} onClick={()=>setQuickFilter(f.value)}/>)}
+          {[{value:"all",label:"All",emoji:"☕"},{value:"open",label:"Open Now",emoji:"🟢"},{value:"specialty",label:"Specialty",emoji:"✨"},{value:"wifi",label:"WiFi",emoji:"📶"}].map(f=><FilterPill key={f.value} {...f} active={quickFilter===f.value} onClick={()=>setQuickFilter(f.value)}/>)}
         </div>
 
         {/* Advanced filters toggle */}
@@ -523,7 +520,6 @@ export default function CoffeeFinderPage() {
                   <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
                     <ToggleChip label="Indoor Seating"  icon="🏠" active={filterIndoorSeating} onClick={()=>setFilterIndoorSeating(!filterIndoorSeating)}/>
                     <ToggleChip label="Outdoor Seating" icon="🌿" active={filterOutdoor}        onClick={()=>setFilterOutdoor(!filterOutdoor)}/>
-                    <ToggleChip label="Has Parking"     icon="🅿️" active={filterParking}        onClick={()=>setFilterParking(!filterParking)}/>
                   </div>
                 </div>
 
