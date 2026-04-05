@@ -284,8 +284,8 @@ export default function ThingsToDoFinder() {
   },[viewMode,filtered,lat,lng,activePin]);
 
   const stats={total:filtered.length,free:filtered.filter((a)=>a.props?.isFree).length,bucket:filtered.filter((a)=>a.props?.isBucketList).length};
-  const advFilterCount=[openOnly,freeOnly,bucketOnly,couplesOnly,kidsOnly,seniorsOnly,petOnly].filter(Boolean).length;
-  const clearFilters=()=>{setOpenOnly(false);setFreeOnly(false);setBucketOnly(false);setCouplesOnly(false);setKidsOnly(false);setSeniorsOnly(false);setPetOnly(false);};
+  const advFilterCount=[category!=="all",openOnly,freeOnly,bucketOnly,couplesOnly,kidsOnly,seniorsOnly,petOnly].filter(Boolean).length;
+  const clearFilters=()=>{setCategory("all");setOpenOnly(false);setFreeOnly(false);setBucketOnly(false);setCouplesOnly(false);setKidsOnly(false);setSeniorsOnly(false);setPetOnly(false);};
 
   return(
     <div style={{fontFamily:"'DM Sans',-apple-system,sans-serif",background:"#F0F4F8",minHeight:"100vh"}}>
@@ -304,7 +304,6 @@ export default function ThingsToDoFinder() {
           <div style={{display:"flex",gap:"5px"}}>{[5,10,15,25].map(r=><button key={r} onClick={()=>setRadius(r)} style={{padding:"6px 12px",borderRadius:"20px",border:radius===r?`2px solid ${T.accent}`:"1px solid rgba(255,255,255,0.2)",background:radius===r?T.accent:"rgba(255,255,255,0.1)",color:radius===r?"#fff":"rgba(255,255,255,0.7)",fontWeight:radius===r?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{r} mi</button>)}</div>
           <span style={{fontSize:"11px",color:"rgba(255,255,255,0.5)",marginLeft:"auto"}}>{loading?"Searching…":`${activities.length} found`}</span>
         </div>
-        <div style={{overflowX:"auto",scrollbarWidth:"none",paddingBottom:"2px"}}><div style={{display:"flex",gap:"7px",paddingBottom:"14px"}}>{CATEGORIES.map(c=><motion.button key={c.id} whileTap={{scale:0.94}} onClick={()=>setCategory(c.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",padding:"8px 12px",borderRadius:"14px",flexShrink:0,border:category===c.id?`2px solid ${c.color}`:"1.5px solid rgba(255,255,255,0.2)",background:category===c.id?`${c.color}22`:"rgba(255,255,255,0.08)",color:category===c.id?c.color:"rgba(255,255,255,0.75)",fontWeight:category===c.id?"700":"500",fontSize:"11px",cursor:"pointer",fontFamily:"inherit",minWidth:"64px",backdropFilter:"blur(6px)"}}><span style={{fontSize:"18px"}}>{c.icon}</span><span>{c.label}</span></motion.button>)}</div></div>
       </div>
 
       <div style={{background:"#fff",padding:"10px 14px",borderBottom:"1px solid #E8EDF2"}}>
@@ -322,23 +321,33 @@ export default function ThingsToDoFinder() {
         <AnimatePresence>
           {showAdvanced&&(
             <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2",padding:"14px",display:"flex",flexDirection:"column",gap:"10px"}}>
-                {[
-                  {label:"Open Now",icon:"🟢",state:openOnly,set:setOpenOnly,color:T.green},
-                  {label:"Free Entry",icon:"🆓",state:freeOnly,set:setFreeOnly,color:"#059669"},
-                  {label:"Bucket List",icon:"🏆",state:bucketOnly,set:setBucketOnly,color:T.accentD},
-                  {label:"Great for Couples",icon:"💑",state:couplesOnly,set:setCouplesOnly,color:"#DB2777"},
-                  {label:"Kid Friendly",icon:"👧",state:kidsOnly,set:setKidsOnly,color:"#D97706"},
-                  {label:"Senior Friendly",icon:"🧓",state:seniorsOnly,set:setSeniorsOnly,color:"#0891B2"},
-                  {label:"Pet Friendly",icon:"🐾",state:petOnly,set:setPetOnly,color:"#059669"},
-                ].map(f=>(
-                  <button key={f.label} onClick={()=>f.set(x=>!x)} style={{display:"flex",alignItems:"center",gap:"10px",width:"100%",padding:"10px 14px",borderRadius:"10px",border:f.state?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.state?f.color+"12":"#fff",color:f.state?f.color:T.dark,fontWeight:f.state?"700":"500",fontSize:"13px",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
-                    <span style={{fontSize:"16px"}}>{f.icon}</span>
-                    <span style={{flex:1}}>{f.label}</span>
-                    {f.state&&<span style={{color:f.color,fontWeight:"800",fontSize:"16px"}}>✓</span>}
-                  </button>
-                ))}
-                {advFilterCount>0&&<button onClick={clearFilters} style={{padding:"9px",borderRadius:"8px",border:`1.5px solid ${T.coral}`,background:"#FFF5F5",color:T.coral,fontWeight:"700",fontSize:"13px",cursor:"pointer",fontFamily:"inherit",marginTop:"4px"}}>✕ Clear All Filters ({advFilterCount})</button>}
+              <div style={{background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2",padding:"12px"}}>
+                <div style={{fontSize:"10px",fontWeight:"700",color:T.gray,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Category</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"10px"}}>
+                  {CATEGORIES.map(c=>(
+                    <button key={c.id} onClick={()=>setCategory(c.id)} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"20px",border:category===c.id?`2px solid ${c.color}`:"1.5px solid #E2E8F0",background:category===c.id?`${c.color}12`:"#fff",color:category===c.id?c.color:T.dark,fontWeight:category===c.id?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>
+                      <span style={{fontSize:"14px"}}>{c.icon}</span>{c.label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{height:"1px",background:"#E2E8F0",marginBottom:"10px"}}/>
+                <div style={{fontSize:"10px",fontWeight:"700",color:T.gray,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Filters</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+                  {[
+                    {label:"Open Now",icon:"🟢",state:openOnly,set:setOpenOnly,color:T.green},
+                    {label:"Free Entry",icon:"🆓",state:freeOnly,set:setFreeOnly,color:"#059669"},
+                    {label:"Bucket List",icon:"🏆",state:bucketOnly,set:setBucketOnly,color:T.accentD},
+                    {label:"Couples",icon:"💑",state:couplesOnly,set:setCouplesOnly,color:"#DB2777"},
+                    {label:"Kid Friendly",icon:"👧",state:kidsOnly,set:setKidsOnly,color:"#D97706"},
+                    {label:"Senior Friendly",icon:"🧓",state:seniorsOnly,set:setSeniorsOnly,color:"#0891B2"},
+                    {label:"Pet Friendly",icon:"🐾",state:petOnly,set:setPetOnly,color:"#059669"},
+                  ].map(f=>(
+                    <button key={f.label} onClick={()=>f.set(x=>!x)} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"20px",border:f.state?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.state?f.color+"12":"#fff",color:f.state?f.color:T.dark,fontWeight:f.state?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>
+                      <span style={{fontSize:"14px"}}>{f.icon}</span>{f.label}
+                    </button>
+                  ))}
+                </div>
+                {advFilterCount>0&&<button onClick={clearFilters} style={{padding:"7px",borderRadius:"8px",border:`1.5px solid ${T.coral}`,background:"#FFF5F5",color:T.coral,fontWeight:"700",fontSize:"12px",cursor:"pointer",fontFamily:"inherit",marginTop:"10px",width:"100%"}}>✕ Clear All ({advFilterCount})</button>}
               </div>
             </motion.div>
           )}
