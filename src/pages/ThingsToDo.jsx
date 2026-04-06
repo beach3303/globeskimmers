@@ -224,6 +224,7 @@ export default function ThingsToDoFinder() {
   const [kidsOnly,setKidsOnly]=useState(false);
   const [seniorsOnly,setSeniorsOnly]=useState(false);
   const [petOnly,setPetOnly]=useState(false);
+  const [outdoorOnly,setOutdoorOnly]=useState(false);
   const [showAdvanced,setShowAdvanced]=useState(false);
   const [locPicker,setLocPicker]=useState(false);
   const [dirsA,setDirsA]=useState(null);
@@ -240,7 +241,7 @@ export default function ThingsToDoFinder() {
     if(!lat||!lng) return; setLoading(true); setError(null);
     (async()=>{
       try{
-        const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,category});
+        const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,category,smartRadius:radius>25});
         const raw=data?.activities||[];
         if(raw.length) setActivities(raw); else setError(data?.error||"No activities found nearby.");
       }catch(e){setError(`Failed: ${e.message}`);}
@@ -257,8 +258,9 @@ export default function ThingsToDoFinder() {
     if(kidsOnly)    r=r.filter(a=>a.props?.isFamilyFriendly);
     if(seniorsOnly) r=r.filter(a=>a.props?.isSeniorFriendly);
     if(petOnly)     r=r.filter(a=>a.props?.isPetFriendly);
+    if(outdoorOnly) r=r.filter(a=>a.props?.isOutdoor);
     return r;
-  },[activities,openOnly,freeOnly,bucketOnly,couplesOnly,kidsOnly,seniorsOnly,petOnly]);
+  },[activities,openOnly,freeOnly,bucketOnly,couplesOnly,kidsOnly,seniorsOnly,petOnly,outdoorOnly]);
 
   const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const a=filtered[i];if(mapInst.current&&a?.lat&&a?.lng){mapInst.current.setView([a.lat,a.lng],17);markers.current[i]?.openPopup();}},350);};
 
@@ -287,8 +289,8 @@ export default function ThingsToDoFinder() {
   },[viewMode,filtered,lat,lng,activePin]);
 
   const stats={total:filtered.length,free:filtered.filter((a)=>a.props?.isFree).length,bucket:filtered.filter((a)=>a.props?.isBucketList).length};
-  const advFilterCount=[category!=="all",openOnly,freeOnly,bucketOnly,couplesOnly,kidsOnly,seniorsOnly,petOnly].filter(Boolean).length;
-  const clearFilters=()=>{setCategory("all");setOpenOnly(false);setFreeOnly(false);setBucketOnly(false);setCouplesOnly(false);setKidsOnly(false);setSeniorsOnly(false);setPetOnly(false);};
+  const advFilterCount=[openOnly,freeOnly,bucketOnly,couplesOnly,kidsOnly,seniorsOnly,petOnly,outdoorOnly].filter(Boolean).length;
+  const clearFilters=()=>{setOpenOnly(false);setFreeOnly(false);setBucketOnly(false);setCouplesOnly(false);setKidsOnly(false);setSeniorsOnly(false);setPetOnly(false);setOutdoorOnly(false);};
 
   return(
     <div style={{fontFamily:"'DM Sans',-apple-system,sans-serif",background:"#F0F4F8",minHeight:"100vh"}}>
@@ -302,11 +304,12 @@ export default function ThingsToDoFinder() {
           <span style={{fontSize:"18px"}}>📍</span><span style={{flex:1,color:"rgba(255,255,255,0.9)",fontSize:"13px",fontWeight:"600",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{locLabel}</span>
           <span style={{background:T.accent,color:"#fff",padding:"5px 12px",borderRadius:"8px",fontWeight:"700",fontSize:"12px",flexShrink:0}}>Change</span>
         </motion.div>
-        <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"14px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:radius>25?"6px":"14px"}}>
           <span style={{fontSize:"12px",color:"rgba(255,255,255,0.6)",fontWeight:"600",flexShrink:0}}>Radius:</span>
-          <div style={{display:"flex",gap:"5px"}}>{[5,10,15,25].map(r=><button key={r} onClick={()=>setRadius(r)} style={{padding:"6px 12px",borderRadius:"20px",border:radius===r?`2px solid ${T.accent}`:"1px solid rgba(255,255,255,0.2)",background:radius===r?T.accent:"rgba(255,255,255,0.1)",color:radius===r?"#fff":"rgba(255,255,255,0.7)",fontWeight:radius===r?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{r} mi</button>)}</div>
+          <div style={{display:"flex",gap:"5px"}}>{[5,10,15,25,50].map(r=><button key={r} onClick={()=>setRadius(r)} style={{padding:"6px 12px",borderRadius:"20px",border:radius===r?`2px solid ${T.accent}`:"1px solid rgba(255,255,255,0.2)",background:radius===r?T.accent:"rgba(255,255,255,0.1)",color:radius===r?"#fff":"rgba(255,255,255,0.7)",fontWeight:radius===r?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{r} mi</button>)}</div>
           <span style={{fontSize:"11px",color:"rgba(255,255,255,0.5)",marginLeft:"auto"}}>{loading?"Searching…":`${activities.length} found`}</span>
         </div>
+        {radius>25&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.55)",marginBottom:"14px",padding:"0 2px"}}>⭐ Beyond 25mi: showing iconic spots only (landmarks, theme parks, must-see attractions)</div>}
       </div>
 
       <div style={{background:"#fff",padding:"10px 14px",borderBottom:"1px solid #E8EDF2"}}>
@@ -325,15 +328,6 @@ export default function ThingsToDoFinder() {
           {showAdvanced&&(
             <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
               <div style={{background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2",padding:"12px"}}>
-                <div style={{fontSize:"10px",fontWeight:"700",color:T.gray,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Category</div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"10px"}}>
-                  {CATEGORIES.map(c=>(
-                    <button key={c.id} onClick={()=>setCategory(c.id)} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"20px",border:category===c.id?`2px solid ${c.color}`:"1.5px solid #E2E8F0",background:category===c.id?`${c.color}12`:"#fff",color:category===c.id?c.color:T.dark,fontWeight:category===c.id?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>
-                      <span style={{fontSize:"14px"}}>{c.icon}</span>{c.label}
-                    </button>
-                  ))}
-                </div>
-                <div style={{height:"1px",background:"#E2E8F0",marginBottom:"10px"}}/>
                 <div style={{fontSize:"10px",fontWeight:"700",color:T.gray,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Filters</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
                   {[
@@ -344,6 +338,7 @@ export default function ThingsToDoFinder() {
                     {label:"Kid Friendly",icon:"👧",state:kidsOnly,set:setKidsOnly,color:"#D97706"},
                     {label:"Senior Friendly",icon:"🧓",state:seniorsOnly,set:setSeniorsOnly,color:"#0891B2"},
                     {label:"Pet Friendly",icon:"🐾",state:petOnly,set:setPetOnly,color:"#059669"},
+                    {label:"Outdoors",icon:"🌳",state:outdoorOnly,set:setOutdoorOnly,color:"#059669"},
                   ].map(f=>(
                     <button key={f.label} onClick={()=>f.set(x=>!x)} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"20px",border:f.state?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.state?f.color+"12":"#fff",color:f.state?f.color:T.dark,fontWeight:f.state?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>
                       <span style={{fontSize:"14px"}}>{f.icon}</span>{f.label}

@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * GLOBESKIMMERS — getActivities v3.0
+ * GLOBESKIMMERS — getActivities v4.0
  * ============================================================================
  * Worldwide: landmarks, museums, parks, tours, nightlife, sports, beaches,
  * cultural experiences, theme parks, historic sites.
@@ -25,6 +25,10 @@ const QUERIES = [
   // Nature & Outdoors
   "national park","nature reserve","botanical garden","wildlife sanctuary",
   "scenic viewpoint","hiking trail","beach","waterfall","lake",
+  "forest trail","canyon","cave","volcano",
+  "river","fishing spot","coral reef",
+  "scenic drive","lighthouse",
+  "bird sanctuary","campground","ancient ruins",
   // Entertainment
   "theme park","amusement park","water park","escape room",
   "live music venue","concert hall","theater","comedy club",
@@ -52,7 +56,7 @@ const NEARBY_TYPES = [
 
 const CATEGORY_NEARBY: Record<string,string[]> = {
   culture:       ['museum','art_gallery','tourist_attraction'],
-  outdoor:       ['park','campground','tourist_attraction'],
+  outdoor:       ['park','campground','tourist_attraction','natural_feature'],
   entertainment: ['amusement_park','bowling_alley','casino','movie_theater'],
   nightlife:     ['night_club','bar'],
   family:        ['zoo','aquarium','amusement_park'],
@@ -63,7 +67,10 @@ const CATEGORY_NEARBY: Record<string,string[]> = {
 const SIG = {
   free:        ['free admission','free entry','no charge','no fee','free access','complimentary'],
   family:      ['family','kids','children','all ages','child-friendly','stroller'],
-  outdoor:     ['outdoor','outside','open air','nature','garden','park','beach','trail'],
+  outdoor:     ['outdoor','outside','open air','nature','garden','park','beach','trail',
+               'hiking','forest','mountain','lake','river','waterfall','canyon','cave',
+               'cliff','scenic','campground','wilderness','reef','snorkel','dive',
+               'lighthouse','ruins','bird watching','wildlife','fishing','volcano'],
   indoor:      ['indoor','inside','air conditioned','museum','gallery','theater'],
   guided:      ['guided','tour guide','expert','led tour','docent','commentary'],
   bucket:      ['bucket list','must see','once in lifetime','world famous','iconic','legendary'],
@@ -97,8 +104,8 @@ function km(la1:number,lo1:number,la2:number,lo2:number){
 function activityType(name:string,types:string[]){
   const n=name.toLowerCase(); const t=types.join(' ');
   if(/museum|gallery|exhibit/.test(n)||/museum/.test(t))             return {icon:'🏛️',label:'Museum / Gallery',color:'#7C3AED',category:'culture'};
-  if(/park|garden|nature|reserve/.test(n)||/park/.test(t))           return {icon:'🌳',label:'Nature & Parks',color:'#059669',category:'outdoor'};
-  if(/beach|surf/.test(n)||/beach/.test(t))                          return {icon:'🏖️',label:'Beach',color:'#0891B2',category:'outdoor'};
+  if(/park|garden|nature|reserve|trail|forest|canyon|cave|waterfall|lake|river|volcano|lighthouse|campground|ruins/.test(n)||/park|natural_feature/.test(t)) return {icon:'🌳',label:'Nature & Outdoors',color:'#059669',category:'outdoor'};
+  if(/beach|surf|reef|snorkel|dive|coast/.test(n)||/beach/.test(t))  return {icon:'🏖️',label:'Beach & Water',color:'#0891B2',category:'outdoor'};
   if(/theme park|amusement|water park/.test(n))                      return {icon:'🎢',label:'Theme Park',color:'#DC2626',category:'entertainment'};
   if(/zoo|aquarium|wildlife/.test(n)||/zoo/.test(t))                 return {icon:'🦁',label:'Zoo / Aquarium',color:'#D97706',category:'family'};
   if(/spa|hot spring|onsen|hammam|bath/.test(n))                     return {icon:'♨️',label:'Spa & Wellness',color:'#DB2777',category:'wellness'};
@@ -128,13 +135,16 @@ Deno.serve(async (req)=>{
   try {
     const base44=createClientFromRequest(req);
     if(!await base44.auth.me()) return Response.json({error:'Unauthorized'},{status:401});
-    const {latitude,longitude,radius=24140,maxResults=30,category='all'}=await req.json();
+    const {latitude,longitude,radius=24140,maxResults=30,category='all',smartRadius=false}=await req.json();
     if(!latitude||!longitude) return Response.json({error:'Location required'},{status:400});
+
+    const INNER_RADIUS=40234; // 25 miles in meters
+    const useSmartRadius=smartRadius&&radius>INNER_RADIUS;
 
     const queries=category==='all'?QUERIES:QUERIES.filter(q=>{
       const map:Record<string,string[]>={
         culture:['museum','gallery','historic','monument','cultural','heritage'],
-        outdoor:['park','nature','beach','hiking','waterfall'],
+        outdoor:['national park','nature','beach','hiking','waterfall','forest','canyon','cave','volcano','river','fishing','reef','lighthouse','ruins','scenic','campground','bird','trail','lake','reserve','sanctuary','botanical'],
         entertainment:['theme park','escape room','casino','bowling','arcade'],
         nightlife:['bar','club','music','brewery','winery'],
         family:['zoo','aquarium','children','mini golf','go kart'],
@@ -145,12 +155,13 @@ Deno.serve(async (req)=>{
     });
 
     const seen=new Set<string>(); const places:any[]=[];
+    const searchRadius=useSmartRadius?INNER_RADIUS:radius;
 
-    // Primary: text search
+    // Primary: text search (uses inner radius when smartRadius active)
     for(let i=0;i<queries.length;i+=3){
       await Promise.all(queries.slice(i,i+3).map(async q=>{
         try{
-          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:String(radius),maxResults:'10',cacheTtl:String(TTL)});
+          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:String(searchRadius),maxResults:'10',cacheTtl:String(TTL)});
           const r=await fetch(`${WORKER}/places/text-search?${p}`);
           if(!r.ok) return;
           for(const pl of (await r.json()).places||[]){const id=pl.id;if(id&&!seen.has(id)){seen.add(id);places.push(pl);}}
@@ -163,10 +174,52 @@ Deno.serve(async (req)=>{
       const nearbyTypes=(CATEGORY_NEARBY[category]||NEARBY_TYPES).slice(0,8);
       await Promise.all(nearbyTypes.map(async t=>{
         try{
-          const p=new URLSearchParams({type:t,latitude:String(latitude),longitude:String(longitude),radius:String(radius),maxResults:'10',cacheTtl:String(TTL)});
+          const p=new URLSearchParams({type:t,latitude:String(latitude),longitude:String(longitude),radius:String(searchRadius),maxResults:'10',cacheTtl:String(TTL)});
           const r=await fetch(`${WORKER}/places/nearby?${p}`);
           if(!r.ok) return;
           for(const pl of (await r.json()).places||[]){const id=pl.id;if(id&&!seen.has(id)){seen.add(id);places.push(pl);}}
+        }catch{}
+      }));
+    }
+
+    // Smart Radius Pass 2: iconic spots at full radius (25-50mi zone)
+    if(useSmartRadius){
+      const iconicQueries=['tourist attraction','landmark','national park','theme park','amusement park','world heritage site','famous museum','iconic landmark'];
+      for(let i=0;i<iconicQueries.length;i+=3){
+        await Promise.all(iconicQueries.slice(i,i+3).map(async q=>{
+          try{
+            const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:String(radius),maxResults:'10',cacheTtl:String(TTL)});
+            const r=await fetch(`${WORKER}/places/text-search?${p}`);
+            if(!r.ok) return;
+            for(const pl of (await r.json()).places||[]){
+              const id=pl.id; if(!id||seen.has(id)) continue;
+              // Only include iconic places beyond inner radius with high quality
+              const plLat=pl.location?.latitude||0,plLng=pl.location?.longitude||0;
+              const dist=km(latitude,longitude,plLat,plLng);
+              const distMi=dist*0.621371;
+              if(distMi>25&&(pl.rating>=4.5||(pl.rating>=4.0&&(pl.userRatingCount||0)>=500))){
+                seen.add(id); places.push(pl);
+              }
+            }
+          }catch{}
+        }));
+      }
+      // Iconic nearby types at full radius
+      const iconicNearby=['tourist_attraction','amusement_park','museum'];
+      await Promise.all(iconicNearby.map(async t=>{
+        try{
+          const p=new URLSearchParams({type:t,latitude:String(latitude),longitude:String(longitude),radius:String(radius),maxResults:'10',cacheTtl:String(TTL)});
+          const r=await fetch(`${WORKER}/places/nearby?${p}`);
+          if(!r.ok) return;
+          for(const pl of (await r.json()).places||[]){
+            const id=pl.id; if(!id||seen.has(id)) continue;
+            const plLat=pl.location?.latitude||0,plLng=pl.location?.longitude||0;
+            const dist=km(latitude,longitude,plLat,plLng);
+            const distMi=dist*0.621371;
+            if(distMi>25&&(pl.rating>=4.5||(pl.rating>=4.0&&(pl.userRatingCount||0)>=500))){
+              seen.add(id); places.push(pl);
+            }
+          }
         }catch{}
       }));
     }
@@ -227,7 +280,7 @@ Deno.serve(async (req)=>{
         props:{
           isFree:           sc(txt,SIG.free)>0,
           isFamilyFriendly: sc(txt,SIG.family)>0,
-          isOutdoor:        sc(txt,SIG.outdoor)>0,
+          isOutdoor:        sc(txt,SIG.outdoor)>0||at.category==='outdoor',
           isIndoor:         sc(txt,SIG.indoor)>0,
           hasGuidedTour:    sc(txt,SIG.guided)>0,
           isBucketList:     sc(txt,SIG.bucket)>0,
@@ -251,7 +304,7 @@ Deno.serve(async (req)=>{
       if(wiki){a.wikiSummary=wiki.wikiSummary;a.wikiExtract=wiki.wikiExtract;}
     }));
 
-    return Response.json({activities:out,count:out.length,version:'v3.0'});
+    return Response.json({activities:out,count:out.length,version:'v4.0'});
   } catch(e:any){
     return Response.json({error:e.message,activities:[]},{status:200});
   }
