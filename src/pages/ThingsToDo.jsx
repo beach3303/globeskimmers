@@ -211,8 +211,46 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
   );
 }
 
+const TRAVEL_COLORS={'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'}};
+
+function TierCard({a,userLat,userLng}){
+  const [dirs,setDirs]=useState(false);
+  const name=a.displayName?.text||a.name||"Activity";
+  const tc=TRAVEL_COLORS[a.travelType]||{bg:'#F1F5F9',color:'#64748B'};
+  const photo=a.photos?.[0]||null;
+  return(
+    <div style={{flexShrink:0,width:"220px",background:"#fff",borderRadius:"16px",boxShadow:"0 2px 12px rgba(0,0,0,0.08)",overflow:"hidden",border:"1px solid #E8EDF2"}}>
+      <div style={{position:"relative",height:"130px",background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
+        {photo?<img src={photo} alt="" style={{width:"100%",height:"130px",objectFit:"cover"}}/>:<div style={{height:"130px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"40px"}}>{a.activityIcon||"⭐"}</div>}
+        <div style={{position:"absolute",bottom:"8px",left:"8px",right:"8px",display:"flex",gap:"4px"}}>
+          <span style={{background:tc.bg,color:tc.color,padding:"3px 8px",borderRadius:"12px",fontSize:"10px",fontWeight:"700",backdropFilter:"blur(4px)"}}>{a.travelType} · {a.distance}</span>
+        </div>
+      </div>
+      <div style={{padding:"10px 12px"}}>
+        <div style={{fontWeight:"700",fontSize:"13px",color:T.dark,lineHeight:"1.3",marginBottom:"6px",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
+        {a.rating&&<div style={{display:"flex",alignItems:"center",gap:"4px",marginBottom:"6px"}}><span style={{color:T.gold,fontSize:"12px"}}>★</span><span style={{fontWeight:"700",color:T.dark,fontSize:"12px"}}>{a.rating}</span><span style={{color:T.gray,fontSize:"11px"}}>({(a.userRatingCount||0).toLocaleString()})</span></div>}
+        {a.activityLabel&&<div style={{fontSize:"10px",fontWeight:"600",color:a.activityColor||T.accent,marginBottom:"6px"}}>{a.activityIcon} {a.activityLabel}</div>}
+        <button onClick={()=>setDirs(true)} style={{width:"100%",padding:"8px",borderRadius:"8px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"11px",cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
+      </div>
+      <Directions isOpen={dirs} onClose={()=>setDirs(false)} lat={a.lat} lng={a.lng} name={name} userLat={userLat} userLng={userLng}/>
+    </div>
+  );
+}
+
+function TierSection({title,icon,items,userLat,userLng}){
+  if(!items?.length) return null;
+  return(
+    <div style={{marginBottom:"16px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px",padding:"0 4px"}}><span style={{fontSize:"18px"}}>{icon}</span><span style={{fontWeight:"800",fontSize:"15px",color:T.dark}}>{title}</span><span style={{fontSize:"12px",color:T.gray}}>({items.length})</span></div>
+      <div style={{display:"flex",gap:"12px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none"}}>{items.map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng}/>)}</div>
+    </div>
+  );
+}
+
 export default function ThingsToDoFinder() {
   const [activities,setActivities]=useState([]);
+  const [nationalIcons,setNationalIcons]=useState([]);
+  const [regionalGems,setRegionalGems]=useState([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState(null);
   const [viewMode,setViewMode]=useState("list");
@@ -238,17 +276,24 @@ export default function ThingsToDoFinder() {
   const lat=activeLocation?.coordinates?.latitude; const lng=activeLocation?.coordinates?.longitude;
   const locLabel=activeLocation?.label||activeLocation?.address?.formatted||"Set your location";
 
+  const country=activeLocation?.address?.country||'';
+  const region=activeLocation?.address?.state||activeLocation?.address?.city||'';
+  const city=activeLocation?.address?.city||'';
+
   useEffect(()=>{
     if(!lat||!lng) return; setLoading(true); setError(null);
     (async()=>{
       try{
-        const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,category,smartRadius:radius>25});
+        const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:radius*1609,maxResults:20,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city});
         const raw=data?.activities||[];
-        if(raw.length) setActivities(raw); else setError(data?.error||"No activities found nearby.");
+        setNationalIcons(data?.nationalIcons||[]);
+        setRegionalGems(data?.regionalGems||[]);
+        if(raw.length||data?.nationalIcons?.length||data?.regionalGems?.length) setActivities(raw);
+        else setError(data?.error||"No activities found nearby.");
       }catch(e){setError(`Failed: ${e.message}`);}
       finally{setLoading(false);}
     })();
-  },[lat,lng,radius,category]);
+  },[lat,lng,radius,category,country,region]);
 
   const filtered=useMemo(()=>{
     let r=[...activities];
@@ -358,7 +403,13 @@ export default function ThingsToDoFinder() {
 
       {loading?(<div style={{textAlign:"center",padding:"70px 24px"}}><motion.div animate={{scale:[1,1.1,1],rotate:[0,5,-5,0]}} transition={{repeat:Infinity,duration:1.8}} style={{fontSize:"52px",marginBottom:"16px",display:"inline-block"}}>⭐</motion.div><div style={{color:T.dark,fontWeight:"700",fontSize:"16px",marginBottom:"6px"}}>Discovering things to do…</div><div style={{color:T.gray,fontSize:"13px"}}>Landmarks · Museums · Parks · Outdoors</div><div style={{display:"flex",justifyContent:"center",gap:"6px",marginTop:"18px"}}>{[0,1,2].map(i=><motion.div key={i} animate={{opacity:[0.3,1,0.3]}} transition={{repeat:Infinity,duration:1.2,delay:i*0.2}} style={{width:"8px",height:"8px",borderRadius:"50%",background:T.accent}}/>)}</div></div>)
       :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"48px",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"16px"}}>{error}</div><button onClick={()=>setRadius(r=>Math.min(r+5,25))} style={{marginTop:"14px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"14px",cursor:"pointer",fontFamily:"inherit"}}>Expand Radius</button></div>)
-      :viewMode==="list"?(<div style={{padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"14px"}}>{filtered.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"52px",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"18px",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"13px",marginTop:"6px"}}>Try a different category or expand your radius</div></div>:filtered.map((a,i)=><ActivityCard key={a.id||i} a={a} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng}/>)}</div>)
+      :viewMode==="list"?(<div style={{padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"4px"}}>
+        <TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng}/>
+        <TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng}/>
+        {(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"18px"}}>📍</span><span style={{fontWeight:"800",fontSize:"15px",color:T.dark}}>Near You</span><span style={{fontSize:"12px",color:T.gray}}>({filtered.length})</span></div>}
+        {filtered.length===0&&nationalIcons.length===0&&regionalGems.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"52px",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"18px",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"13px",marginTop:"6px"}}>Try a different category or expand your radius</div></div>:null}
+        <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>{filtered.map((a,i)=><ActivityCard key={a.id||i} a={a} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng}/>)}</div>
+      </div>)
       :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"absolute",top:"14px",right:"14px",zIndex:1000,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"20px",color:T.dark}}>✕</button></div>)}
 
       {showAdvanced&&<button onClick={()=>setShowAdvanced(false)} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9999,width:"40px",height:"40px",borderRadius:"50%",border:"none",background:T.dark,color:"#fff",fontWeight:"700",fontSize:"18px",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}

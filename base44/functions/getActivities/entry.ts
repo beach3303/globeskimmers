@@ -144,7 +144,7 @@ Deno.serve(async (req)=>{
   try {
     const base44=createClientFromRequest(req);
     if(!await base44.auth.me()) return Response.json({error:'Unauthorized'},{status:401});
-    const {latitude,longitude,radius=24140,maxResults=30,category='all',smartRadius=false}=await req.json();
+    const {latitude,longitude,radius=24140,maxResults=30,category='all',smartRadius=false,countryName='',regionName='',cityName=''}=await req.json();
     if(!latitude||!longitude) return Response.json({error:'Location required'},{status:400});
 
     const INNER_RADIUS=40234; // 25 miles in meters
@@ -233,20 +233,18 @@ Deno.serve(async (req)=>{
       }));
     }
 
-    if(!places.length) return Response.json({activities:[],count:0,error:'No activities found.'});
-
     // Filter out shrines, memorials, monuments — not real "things to do"
-    const EXCLUDE_TYPES = new Set(['cemetery','funeral_home']);
-    const EXCLUDE_NAME = /\bshrine\b|\bmemorial wall\b|\bplaque\b/i;
-    const filtered=places.filter(p=>{
+    const EXCLUDE_TYPES_SET = new Set(['cemetery','funeral_home']);
+    const EXCLUDE_NAME_RE = /\bshrine\b|\bmemorial wall\b|\bplaque\b/i;
+    const filterJunk=(arr:any[])=>arr.filter(p=>{
       const types=p.types||[];
-      if(types.some((t:string)=>EXCLUDE_TYPES.has(t))) return false;
-      const n=(p.displayName?.text||p.name||'').toLowerCase();
-      if(EXCLUDE_NAME.test(n)) return false;
+      if(types.some((t:string)=>EXCLUDE_TYPES_SET.has(t))) return false;
+      if(EXCLUDE_NAME_RE.test(p.displayName?.text||p.name||'')) return false;
       return true;
     });
 
-    const out=filtered.slice(0,maxResults).map(p=>{
+    // Reusable: process raw Google place into enriched activity object
+    const processPlace=(p:any)=>{
       const lat=p.location?.latitude||0,lng=p.location?.longitude||0;
       const d=km(latitude,longitude,lat,lng);
       const name=p.displayName?.text||p.name||'';
@@ -262,13 +260,10 @@ Deno.serve(async (req)=>{
       const photos=(p.photos||[]).map((ph:any)=>ph.url||ph).filter(Boolean).slice(0,2);
       const hours=p.currentOpeningHours?.weekdayDescriptions||p.regularOpeningHours?.weekdayDescriptions||p.hours||[];
       const editorialSummary=p.editorialSummary?.text||p.editorialSummary||'';
-
-      // Review sentiment
       const highlights=SIG.highlights.filter(w=>rev.includes(w)).slice(0,5);
       const warnings=SIG.warnings.filter(w=>rev.includes(w)).slice(0,4);
       const timeMatches=(rev.match(/\b(morning|afternoon|evening|sunrise|sunset|weekday|weekend|summer|winter|spring|fall|autumn|off.season)\b/gi)||[]);
       const bestTime=timeMatches.length>0?[...new Set(timeMatches.map((s:string)=>s.toLowerCase()))].slice(0,3).join(', '):'';
-
       const badges:string[]=[];
       if(sc(txt,SIG.bucket)>0)    badges.push('🏆 Bucket List');
       if(sc(txt,SIG.hidden)>0)    badges.push('💎 Hidden Gem');
@@ -277,20 +272,16 @@ Deno.serve(async (req)=>{
       if(sc(txt,SIG.family)>0)    badges.push('👨‍👩‍👧 Family Friendly');
       if(sc(txt,SIG.adventure)>0) badges.push('⚡ Adventure');
       if(sc(txt,SIG.cultural)>1)  badges.push('🎭 Authentic Culture');
-
       let qs=50;
       if(p.rating>=4.5) qs+=25; else if(p.rating>=4.0) qs+=15;
       if(p.userRatingCount>1000) qs+=10; else if(p.userRatingCount>200) qs+=5;
       if(sc(txt,SIG.bucket)>0) qs+=10;
       if(sc(txt,SIG.photo)>0)  qs+=5;
       if(sc(txt,SIG.hidden)>0) qs+=5;
-
       return {
-        id:p.id,placeId:p.id,
-        displayName:p.displayName||{text:name},
+        id:p.id,placeId:p.id,displayName:p.displayName||{text:name},
         name,location:{latitude:lat,longitude:lng},lat,lng,
-        formattedAddress:p.formattedAddress||'',
-        shortFormattedAddress:p.shortFormattedAddress||'',
+        formattedAddress:p.formattedAddress||'',shortFormattedAddress:p.shortFormattedAddress||'',
         distanceKm:d,distanceMiles:d*0.621371,distance:`${(d*0.621371).toFixed(1)} mi`,
         rating:p.rating||null,userRatingCount:p.userRatingCount||0,
         isOpen:p.isOpen??null,hours,
@@ -300,40 +291,84 @@ Deno.serve(async (req)=>{
         websiteUri:p.websiteUri||'',googleMapsUri:p.googleMapsUri||'',
         activityIcon:at.icon,activityLabel:at.label,activityColor:at.color,activityCategory:at.category,
         editorialSummary,outdoorContext,types:placeTypes,
-        badges,qualityScore:Math.min(qs,100),
-        highlights,warnings,bestTime,
+        badges,qualityScore:Math.min(qs,100),highlights,warnings,bestTime,
         props:{
-          isFree:           sc(txt,SIG.free)>0,
-          isFamilyFriendly: sc(txt,SIG.family)>0,
-          isOutdoor:        (()=>{
-            if(placeTypes.some((t:string)=>NON_NATURE_TYPES.has(t))) return false;
-            const hasNatureType=placeTypes.some((t:string)=>NATURE_TYPES.includes(t));
-            return hasNatureType||sc(txt,SIG.outdoor)>=2||at.category==='outdoor';
-          })(),
-          isIndoor:         sc(txt,SIG.indoor)>0,
-          hasGuidedTour:    sc(txt,SIG.guided)>0,
-          isBucketList:     sc(txt,SIG.bucket)>0,
-          isHiddenGem:      sc(txt,SIG.hidden)>0,
-          isPhotoWorthy:    sc(txt,SIG.photo)>1,
-          isAdventure:      sc(txt,SIG.adventure)>0,
-          isCultural:       sc(txt,SIG.cultural)>1,
-          isAccessible:     sc(txt,SIG.accessibility)>0,
-          isBudgetFriendly: sc(txt,SIG.budget)>0,
-          isGoodForCouples: sc(txt,SIG.couples)>0,
-          isSeniorFriendly: sc(txt,SIG.seniors)>0,
-          isPetFriendly:    sc(txt,SIG.petFriendly)>0,
+          isFree:sc(txt,SIG.free)>0,isFamilyFriendly:sc(txt,SIG.family)>0,
+          isOutdoor:(()=>{if(placeTypes.some((t:string)=>NON_NATURE_TYPES.has(t)))return false;return placeTypes.some((t:string)=>NATURE_TYPES.includes(t))||sc(txt,SIG.outdoor)>=2||at.category==='outdoor';})(),
+          isIndoor:sc(txt,SIG.indoor)>0,hasGuidedTour:sc(txt,SIG.guided)>0,
+          isBucketList:sc(txt,SIG.bucket)>0,isHiddenGem:sc(txt,SIG.hidden)>0,
+          isPhotoWorthy:sc(txt,SIG.photo)>1,isAdventure:sc(txt,SIG.adventure)>0,
+          isCultural:sc(txt,SIG.cultural)>1,isAccessible:sc(txt,SIG.accessibility)>0,
+          isBudgetFriendly:sc(txt,SIG.budget)>0,isGoodForCouples:sc(txt,SIG.couples)>0,
+          isSeniorFriendly:sc(txt,SIG.seniors)>0,isPetFriendly:sc(txt,SIG.petFriendly)>0,
         },
       };
-    });
-    out.sort((a:any,b:any)=>b.qualityScore-a.qualityScore||(b.rating||0)-(a.rating||0));
+    };
+    const popScore=(a:any)=>(a.rating||0)*Math.log10((a.userRatingCount||0)+1);
 
-    // Wikipedia fetch for top 10 results (parallel, non-blocking on failure)
-    await Promise.all(out.slice(0,10).map(async (a:any)=>{
+    // ── TIER 3: Nearby (existing search) ──────────────────────────────
+    const nearbyFiltered=filterJunk(places);
+    const nearby=nearbyFiltered.slice(0,20).map(processPlace);
+    nearby.sort((a:any,b:any)=>b.qualityScore-a.qualityScore||(b.rating||0)-(a.rating||0));
+
+    // ── TIER 1: National Icons ────────────────────────────────────────
+    let nationalIcons:any[]=[];
+    if(countryName){
+      const t1Seen=new Set(nearby.map((a:any)=>a.id));
+      const t1Places:any[]=[];
+      const t1Queries=[`top tourist attractions in ${countryName}`,`bucket list ${countryName}`,`famous landmarks ${countryName}`];
+      await Promise.all(t1Queries.map(async q=>{
+        try{
+          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:'500000',maxResults:'10',cacheTtl:String(TTL)});
+          const r=await fetch(`${WORKER}/places/text-search?${p}`);
+          if(!r.ok) return;
+          for(const pl of (await r.json()).places||[]){const id=pl.id;if(id&&!t1Seen.has(id)){t1Seen.add(id);t1Places.push(pl);}}
+        }catch{}
+      }));
+      const t1Processed=filterJunk(t1Places).map(processPlace)
+        .filter((a:any)=>(a.rating||0)>=4.0&&(a.userRatingCount||0)>=100)
+        .sort((a:any,b:any)=>popScore(b)-popScore(a))
+        .slice(0,5);
+      t1Processed.forEach((a:any)=>{
+        const mi=a.distanceMiles;
+        a.travelType=mi>200?'✈️ Flight / Ferry Required':mi>100?'🚗 Long Drive':mi>50?'🚗 Drive':'🚗 Short Drive';
+      });
+      nationalIcons=t1Processed;
+    }
+
+    // ── TIER 2: Regional Gems ─────────────────────────────────────────
+    let regionalGems:any[]=[];
+    const region=regionName||cityName;
+    if(region){
+      const t2Seen=new Set([...nearby.map((a:any)=>a.id),...nationalIcons.map((a:any)=>a.id)]);
+      const t2Places:any[]=[];
+      const radiusMiles=radius/1609;
+      const t2Queries=[`top attractions in ${region}`,`things to do in ${region}`,`nature spots ${region}`];
+      await Promise.all(t2Queries.map(async q=>{
+        try{
+          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:'160934',maxResults:'10',cacheTtl:String(TTL)});
+          const r=await fetch(`${WORKER}/places/text-search?${p}`);
+          if(!r.ok) return;
+          for(const pl of (await r.json()).places||[]){const id=pl.id;if(id&&!t2Seen.has(id)){t2Seen.add(id);t2Places.push(pl);}}
+        }catch{}
+      }));
+      const t2Processed=filterJunk(t2Places).map(processPlace)
+        .filter((a:any)=>a.distanceMiles>radiusMiles&&a.distanceMiles<100&&(a.rating||0)>=3.5)
+        .sort((a:any,b:any)=>popScore(b)-popScore(a))
+        .slice(0,5);
+      t2Processed.forEach((a:any)=>{a.travelType='🚗 Day Trip';});
+      regionalGems=t2Processed;
+    }
+
+    // ── Wikipedia for all tiers ───────────────────────────────────────
+    const allForWiki=[...nearby.slice(0,10),...nationalIcons,...regionalGems];
+    await Promise.all(allForWiki.map(async (a:any)=>{
       const wiki=await fetchWiki(a.name);
       if(wiki){a.wikiSummary=wiki.wikiSummary;a.wikiExtract=wiki.wikiExtract;}
     }));
 
-    return Response.json({activities:out,count:out.length,version:'v4.0'});
+    const total=nearby.length+nationalIcons.length+regionalGems.length;
+    return Response.json({activities:nearby,nationalIcons,regionalGems,count:total,version:'v5.0'});
   } catch(e:any){
     return Response.json({error:e.message,activities:[]},{status:200});
   }
