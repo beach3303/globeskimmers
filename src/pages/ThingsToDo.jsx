@@ -219,12 +219,6 @@ export default function ThingsToDoFinder() {
   const [category,setCategory]=useState("all");
   const [radius,setRadius]=useState(15);
   const [openOnly,setOpenOnly]=useState(false);
-  const [freeOnly,setFreeOnly]=useState(false);
-  const [bucketOnly,setBucketOnly]=useState(false);
-  const [couplesOnly,setCouplesOnly]=useState(false);
-  const [kidsOnly,setKidsOnly]=useState(false);
-  const [seniorsOnly,setSeniorsOnly]=useState(false);
-  const [petOnly,setPetOnly]=useState(false);
   const [outdoorOnly,setOutdoorOnly]=useState(false);
   const [showAdvanced,setShowAdvanced]=useState(false);
   const [locPicker,setLocPicker]=useState(false);
@@ -253,15 +247,9 @@ export default function ThingsToDoFinder() {
   const filtered=useMemo(()=>{
     let r=[...activities];
     if(openOnly)    r=r.filter(a=>a.isOpen===true);
-    if(freeOnly)    r=r.filter(a=>a.props?.isFree);
-    if(bucketOnly)  r=r.filter(a=>a.props?.isBucketList);
-    if(couplesOnly) r=r.filter(a=>a.props?.isGoodForCouples);
-    if(kidsOnly)    r=r.filter(a=>a.props?.isFamilyFriendly);
-    if(seniorsOnly) r=r.filter(a=>a.props?.isSeniorFriendly);
-    if(petOnly)     r=r.filter(a=>a.props?.isPetFriendly);
     if(outdoorOnly) r=r.filter(a=>a.props?.isOutdoor);
     return r;
-  },[activities,openOnly,freeOnly,bucketOnly,couplesOnly,kidsOnly,seniorsOnly,petOnly,outdoorOnly]);
+  },[activities,openOnly,outdoorOnly]);
 
   const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const a=filtered[i];if(mapInst.current&&a?.lat&&a?.lng){mapInst.current.setView([a.lat,a.lng],17);markers.current[i]?.openPopup();}},350);};
 
@@ -289,9 +277,9 @@ export default function ThingsToDoFinder() {
     return()=>{delete window._gsTDMapInst;delete window._gsTDView;delete window._gsTDDirs;if(mapInst.current){mapInst.current.remove();mapInst.current=null;}};
   },[viewMode,filtered,lat,lng,activePin]);
 
-  const stats={total:filtered.length,free:filtered.filter((a)=>a.props?.isFree).length,bucket:filtered.filter((a)=>a.props?.isBucketList).length};
-  const advFilterCount=[openOnly,freeOnly,bucketOnly,couplesOnly,kidsOnly,seniorsOnly,petOnly,outdoorOnly].filter(Boolean).length;
-  const clearFilters=()=>{setOpenOnly(false);setFreeOnly(false);setBucketOnly(false);setCouplesOnly(false);setKidsOnly(false);setSeniorsOnly(false);setPetOnly(false);setOutdoorOnly(false);};
+  const stats={total:filtered.length};
+  const advFilterCount=[openOnly,outdoorOnly].filter(Boolean).length;
+  const clearFilters=()=>{setOpenOnly(false);setOutdoorOnly(false);};
 
   return(
     <div style={{fontFamily:"'DM Sans',-apple-system,sans-serif",background:"#F0F4F8",minHeight:"100vh"}}>
@@ -321,8 +309,6 @@ export default function ThingsToDoFinder() {
             <span style={{marginLeft:"auto"}}>{showAdvanced?"▲":"▼"}</span>
           </button>
           <span style={{background:T.accent,color:"#fff",padding:"2px 9px",borderRadius:"10px",fontWeight:"800",fontSize:"12px"}}>{stats.total}</span>
-          {stats.bucket>0&&<span style={{color:T.accentD,fontSize:"12px",fontWeight:"600"}}>· {stats.bucket} 🏆</span>}
-          {stats.free>0&&<span style={{color:"#059679",fontSize:"12px",fontWeight:"600"}}>· {stats.free} free</span>}
           <div style={{display:"flex",gap:"3px"}}>{["list","map"].map(v=><button key={v} onClick={()=>setViewMode(v)} style={{padding:"6px 11px",borderRadius:"8px",border:"none",background:viewMode===v?T.accent:"#E2E8F0",color:viewMode===v?"#fff":T.gray,fontWeight:"700",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{v==="list"?"📋":"🗺️"}</button>)}</div>
         </div>
         <AnimatePresence>
@@ -333,12 +319,6 @@ export default function ThingsToDoFinder() {
                 <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
                   {[
                     {label:"Open Now",icon:"🟢",state:openOnly,set:setOpenOnly,color:T.green},
-                    {label:"Free Entry",icon:"🆓",state:freeOnly,set:setFreeOnly,color:"#059669"},
-                    {label:"Bucket List",icon:"🏆",state:bucketOnly,set:setBucketOnly,color:T.accentD},
-                    {label:"Couples",icon:"💑",state:couplesOnly,set:setCouplesOnly,color:"#DB2777"},
-                    {label:"Kid Friendly",icon:"👧",state:kidsOnly,set:setKidsOnly,color:"#D97706"},
-                    {label:"Senior Friendly",icon:"🧓",state:seniorsOnly,set:setSeniorsOnly,color:"#0891B2"},
-                    {label:"Pet Friendly",icon:"🐾",state:petOnly,set:setPetOnly,color:"#059669"},
                     {label:"Outdoors",icon:"🌳",state:outdoorOnly,set:setOutdoorOnly,color:"#059669"},
                   ].map(f=>(
                     <button key={f.label} onClick={()=>f.set(x=>!x)} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"20px",border:f.state?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.state?f.color+"12":"#fff",color:f.state?f.color:T.dark,fontWeight:f.state?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>
