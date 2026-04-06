@@ -259,7 +259,12 @@ export default function ThingsToDoFinder() {
     if(entertainOnly) r=r.filter(a=>a.activityCategory==='entertainment'||a.activityCategory==='family');
     if(adventureOnly) r=r.filter(a=>a.props?.isAdventure||a.activityCategory==='adventure');
     if(wellnessOnly)  r=r.filter(a=>a.activityCategory==='wellness');
-    if(popularOnly)   r=r.filter(a=>(a.userRatingCount||0)>=200&&(a.rating||0)>=4.0);
+    if(popularOnly)   r=r.filter(a=>{
+      const isIconic=(a.types||[]).some(t=>['tourist_attraction','national_park','amusement_park','historical_landmark'].includes(t));
+      const isHighlyRated=(a.userRatingCount||0)>=200&&(a.rating||0)>=4.0;
+      const isBucketList=a.props?.isBucketList;
+      return isIconic||isHighlyRated||isBucketList;
+    });
     return r;
   },[activities,openOnly,outdoorOnly,familyOnly,cultureOnly,entertainOnly,adventureOnly,wellnessOnly,popularOnly]);
 
