@@ -20,7 +20,7 @@ const TTL    = 60 * 60 * 6; // 6 hours
 
 const QUERIES = [
   // Landmarks & Culture
-  "tourist attraction","landmark","historic site","monument","heritage site",
+  "tourist attraction","historic landmark","historic site","monument","heritage site",
   "museum","art gallery","cultural center","exhibition",
   // Nature & Outdoors
   "national park","nature reserve","botanical garden","wildlife sanctuary",
@@ -111,7 +111,7 @@ function activityType(name:string,types:string[]){
   if(/spa|hot spring|onsen|hammam|bath/.test(n))                     return {icon:'♨️',label:'Spa & Wellness',color:'#DB2777',category:'wellness'};
   if(/bar|club|nightlife|brewery|winery|distillery/.test(n))         return {icon:'🍻',label:'Nightlife',color:'#1D4ED8',category:'nightlife'};
   if(/tour|walking|food tour|experience/.test(n))                    return {icon:'🗺️',label:'Tours & Experiences',color:'#F59E0B',category:'tour'};
-  if(/historic|heritage|monument|landmark|castle|temple|church|cathedral|mosque|shrine/.test(n)) return {icon:'🏰',label:'Historic Site',color:'#92400E',category:'culture'};
+  if(/historic|heritage|monument|castle|temple|church|cathedral|mosque|shrine/.test(n)||/historical_landmark|place_of_worship/.test(t)) return {icon:'🏰',label:'Historic Site',color:'#92400E',category:'culture'};
   if(/sport|stadium|arena|gym|fitness/.test(n))                      return {icon:'🏟️',label:'Sports & Fitness',color:'#1D4ED8',category:'sport'};
   if(/adventure|climb|zip|surf|dive|skydive/.test(n))                return {icon:'🧗',label:'Adventure',color:'#DC2626',category:'adventure'};
   if(/cooking|class|workshop|lesson/.test(n))                        return {icon:'👨‍🍳',label:'Classes & Workshops',color:'#059669',category:'experience'};
@@ -184,7 +184,7 @@ Deno.serve(async (req)=>{
 
     // Smart Radius Pass 2: iconic spots at full radius (25-50mi zone)
     if(useSmartRadius){
-      const iconicQueries=['tourist attraction','landmark','national park','theme park','amusement park','world heritage site','famous museum','iconic landmark'];
+      const iconicQueries=['tourist attraction','historic landmark','national park','theme park','amusement park','world heritage site','famous museum','iconic landmark'];
       for(let i=0;i<iconicQueries.length;i+=3){
         await Promise.all(iconicQueries.slice(i,i+3).map(async q=>{
           try{
