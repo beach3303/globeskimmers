@@ -235,7 +235,18 @@ Deno.serve(async (req)=>{
 
     if(!places.length) return Response.json({activities:[],count:0,error:'No activities found.'});
 
-    const out=places.slice(0,maxResults).map(p=>{
+    // Filter out shrines, memorials, monuments — not real "things to do"
+    const EXCLUDE_TYPES = new Set(['cemetery','funeral_home']);
+    const EXCLUDE_NAME = /\bshrine\b|\bmemorial wall\b|\bplaque\b/i;
+    const filtered=places.filter(p=>{
+      const types=p.types||[];
+      if(types.some((t:string)=>EXCLUDE_TYPES.has(t))) return false;
+      const n=(p.displayName?.text||p.name||'').toLowerCase();
+      if(EXCLUDE_NAME.test(n)) return false;
+      return true;
+    });
+
+    const out=filtered.slice(0,maxResults).map(p=>{
       const lat=p.location?.latitude||0,lng=p.location?.longitude||0;
       const d=km(latitude,longitude,lat,lng);
       const name=p.displayName?.text||p.name||'';
@@ -244,9 +255,10 @@ Deno.serve(async (req)=>{
       const txt=`${name.toLowerCase()} ${rev}`;
       const placeTypes=p.types||[];
       const at=activityType(name,placeTypes);
+      const isSmallFeature=/waterfall|fountain|pond|stream|creek/.test(name.toLowerCase());
+      const isWilderness=placeTypes.some((t:string)=>['national_park','hiking_area','state_park','natural_feature'].includes(t));
       const isInsideManagedPark=placeTypes.some((t:string)=>['botanical_garden','amusement_park','zoo'].includes(t));
-      const isSmallFeature=/waterfall|fountain|pond|stream|garden/.test(name.toLowerCase());
-      const outdoorContext=isSmallFeature&&isInsideManagedPark?'Managed Park / Walk-through':null;
+      const outdoorContext=isSmallFeature&&!isWilderness?'Walk-through inside a park':isSmallFeature&&isInsideManagedPark?'Managed Park / Walk-through':null;
       const photos=(p.photos||[]).map((ph:any)=>ph.url||ph).filter(Boolean).slice(0,2);
       const hours=p.currentOpeningHours?.weekdayDescriptions||p.regularOpeningHours?.weekdayDescriptions||p.hours||[];
       const editorialSummary=p.editorialSummary?.text||p.editorialSummary||'';
