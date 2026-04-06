@@ -1179,6 +1179,8 @@ export default function MoneyExchangePage() {
         isOpen={showMapSelector}
         onClose={() => setShowMapSelector(false)}
         destination={selectedDestination}
+        userLat={activeLocation?.coordinates?.latitude}
+        userLng={activeLocation?.coordinates?.longitude}
       />
     </div>
   );

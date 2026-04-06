@@ -158,11 +158,12 @@ function enrichATM(atm, userLat, userLng) {
 }
 
 // ─── DIRECTIONS PICKER ─────────────────────────────────────────────────────
-function DirectionsPicker({ isOpen, onClose, lat, lng, name }) {
+function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng }) {
   if (!isOpen) return null;
+  const origin = userLat && userLng;
   const apps = [
-    { key: "google", icon: "🗺️", label: "Google Maps",  url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving` },
-    { key: "apple",  icon: "🍎", label: "Apple Maps",   url: `https://maps.apple.com/?daddr=${lat},${lng}&dirflg=d` },
+    { key: "google", icon: "🗺️", label: "Google Maps",  url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}${origin?`&origin=${userLat},${userLng}`:""}&travelmode=driving` },
+    { key: "apple",  icon: "🍎", label: "Apple Maps",   url: `https://maps.apple.com/?daddr=${lat},${lng}${origin?`&saddr=${userLat},${userLng}`:""}&dirflg=d` },
     { key: "waze",   icon: "📍", label: "Waze",         url: `https://waze.com/ul?ll=${lat},${lng}&navigate=yes` },
   ];
   return (
@@ -232,7 +233,7 @@ function ATMPhotoStrip({ photos, fallbackIcon = "🏧" }) {
 }
 
 // ─── ATM CARD ──────────────────────────────────────────────────────────────
-function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange }) {
+function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng }) {
   const [showDirs, setShowDirs] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -409,7 +410,7 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
         </AnimatePresence>
       </div>
 
-      <DirectionsPicker isOpen={showDirs} onClose={() => setShowDirs(false)} lat={atm.lat} lng={atm.lng} name={name} />
+      <DirectionsPicker isOpen={showDirs} onClose={() => setShowDirs(false)} lat={atm.lat} lng={atm.lng} name={name} userLat={userLat} userLng={userLng} />
     </motion.div>
   );
 }
@@ -809,6 +810,8 @@ export default function ATMFinderPage() {
                 cardRef={el => cardRefs.current[i] = el}
                 forceExpanded={expandedIdx === i ? true : undefined}
                 onExpandChange={(exp) => { if (!exp && expandedIdx === i) setExpandedIdx(null); }}
+                userLat={lat}
+                userLng={lng}
               />
             ))
           )}
@@ -863,6 +866,8 @@ export default function ATMFinderPage() {
           lat={directionsATM.lat}
           lng={directionsATM.lng}
           name={directionsATM.displayName?.text || directionsATM.name || "ATM"}
+          userLat={lat}
+          userLng={lng}
         />
       )}
     </div>

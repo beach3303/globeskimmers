@@ -333,10 +333,11 @@ function processRest(place, userLat, userLng) {
 }
 
 // ─── DIRECTIONS PICKER ───────────────────────────────────────────────────────
-function DirectionsPicker({ isOpen, onClose, lat, lng, name }) {
+function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng }) {
   if (!isOpen) return null;
+  const origin = userLat && userLng;
   const go = app => {
-    const urls = { google:`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`, apple:`https://maps.apple.com/?daddr=${lat},${lng}&dirflg=d`, waze:`https://waze.com/ul?ll=${lat},${lng}&navigate=yes` };
+    const urls = { google:`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}${origin?`&origin=${userLat},${userLng}`:""}&travelmode=driving`, apple:`https://maps.apple.com/?daddr=${lat},${lng}${origin?`&saddr=${userLat},${userLng}`:""}&dirflg=d`, waze:`https://waze.com/ul?ll=${lat},${lng}&navigate=yes` };
     window.open(urls[app],'_blank'); onClose();
   };
   return (
@@ -1312,7 +1313,7 @@ export default function PlacesToEat() {
         <button onClick={()=>setShowAdvanced(false)} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9999,width:"40px",height:"40px",borderRadius:"50%",border:"none",background:BLUE,color:"#fff",fontWeight:"700",fontSize:"18px",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       )}
       <LocationModePicker isOpen={showLocPicker} onClose={()=>setShowLocPicker(false)}/>
-      <DirectionsPicker isOpen={dirModal.open} onClose={()=>setDirModal({open:false,lat:null,lng:null,name:''})} lat={dirModal.lat} lng={dirModal.lng} name={dirModal.name}/>
+      <DirectionsPicker isOpen={dirModal.open} onClose={()=>setDirModal({open:false,lat:null,lng:null,name:''})} lat={dirModal.lat} lng={dirModal.lng} name={dirModal.name} userLat={lat} userLng={lng}/>
     </div>
   );
 }

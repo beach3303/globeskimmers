@@ -158,11 +158,12 @@ function PhotoStrip({ photos, fallbackIcon = "🚻" }) {
 }
 
 // ─── DIRECTIONS PICKER ─────────────────────────────────────────────────────
-function DirectionsPicker({ isOpen, onClose, lat, lng, name }) {
+function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng }) {
   if (!isOpen) return null;
+  const origin = userLat && userLng;
   const apps = [
-    { key: "google", icon: "🗺️", label: "Google Maps", url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=walking` },
-    { key: "apple", icon: "🍎", label: "Apple Maps", url: `https://maps.apple.com/?daddr=${lat},${lng}&dirflg=w` },
+    { key: "google", icon: "🗺️", label: "Google Maps", url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}${origin?`&origin=${userLat},${userLng}`:""}&travelmode=walking` },
+    { key: "apple", icon: "🍎", label: "Apple Maps", url: `https://maps.apple.com/?daddr=${lat},${lng}${origin?`&saddr=${userLat},${userLng}`:""}&dirflg=w` },
     { key: "waze", icon: "📍", label: "Waze", url: `https://waze.com/ul?ll=${lat},${lng}&navigate=yes` },
   ];
   return (
@@ -193,7 +194,7 @@ function DirectionsPicker({ isOpen, onClose, lat, lng, name }) {
 }
 
 // ─── RESTROOM CARD (Cleaned up per ChatGPT #2) ─────────────────────────────
-function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange }) {
+function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng }) {
   const [showDirs, setShowDirs] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -384,7 +385,7 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
         </AnimatePresence>
       </div>
 
-      <DirectionsPicker isOpen={showDirs} onClose={() => setShowDirs(false)} lat={r.lat} lng={r.lng} name={name} />
+      <DirectionsPicker isOpen={showDirs} onClose={() => setShowDirs(false)} lat={r.lat} lng={r.lng} name={name} userLat={userLat} userLng={userLng} />
     </motion.div>
   );
 }
@@ -774,6 +775,8 @@ export default function RestroomFinderPage() {
               cardRef={el => cardRefs.current[i] = el}
               forceExpanded={expandedIdx === i}
               onExpandChange={exp => { if (!exp && expandedIdx === i) setExpandedIdx(null); }}
+              userLat={lat}
+              userLng={lng}
             />
           ))}
         </div>
@@ -815,7 +818,7 @@ export default function RestroomFinderPage() {
       `}</style>
 
       <AnimatePresence>
-        {directionsRR && <DirectionsPicker isOpen={true} onClose={() => setDirectionsRR(null)} lat={directionsRR.lat} lng={directionsRR.lng} name={directionsRR.name || "Restroom"} />}
+        {directionsRR && <DirectionsPicker isOpen={true} onClose={() => setDirectionsRR(null)} lat={directionsRR.lat} lng={directionsRR.lng} name={directionsRR.name || "Restroom"} userLat={lat} userLng={lng} />}
       </AnimatePresence>
       <LocationModePicker isOpen={showLocPicker} onClose={() => setShowLocPicker(false)} />
     </div>

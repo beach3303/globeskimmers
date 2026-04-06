@@ -2,13 +2,14 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Navigation } from 'lucide-react';
 
-export default function MapAppSelector({ isOpen, onClose, destination }) {
+export default function MapAppSelector({ isOpen, onClose, destination, userLat, userLng }) {
   if (!isOpen || !destination) return null;
 
   const { latitude, longitude, name, address } = destination;
+  const origin = userLat && userLng;
 
   const openGoogleMaps = () => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}${origin?`&origin=${userLat},${userLng}`:""}`;
     window.open(url, '_blank');
     onClose();
   };
@@ -20,7 +21,7 @@ export default function MapAppSelector({ isOpen, onClose, destination }) {
   };
 
   const openAppleMaps = () => {
-    const url = `http://maps.apple.com/?daddr=${latitude},${longitude}&dirflg=d&t=m`;
+    const url = `http://maps.apple.com/?daddr=${latitude},${longitude}${origin?`&saddr=${userLat},${userLng}`:""}&dirflg=d&t=m`;
     window.open(url, '_blank');
     onClose();
   };

@@ -301,11 +301,12 @@ function PhotoGallery({ photos, storeName, onClose }) {
 // COMPONENT: Directions Picker Modal
 // ============================================================================
 
-function DirectionsPicker({ isOpen, onClose, lat, lng, name }) {
+function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng }) {
   if (!isOpen) return null;
+  const origin = userLat && userLng;
   const apps = [
-    { icon: '🗺️', label: 'Google Maps', url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}` },
-    { icon: '🍎', label: 'Apple Maps',  url: `https://maps.apple.com/?daddr=${lat},${lng}` },
+    { icon: '🗺️', label: 'Google Maps', url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}${origin?`&origin=${userLat},${userLng}`:""}` },
+    { icon: '🍎', label: 'Apple Maps',  url: `https://maps.apple.com/?daddr=${lat},${lng}${origin?`&saddr=${userLat},${userLng}`:""}` },
     { icon: '📍', label: 'Waze',        url: `https://waze.com/ul?ll=${lat},${lng}&navigate=yes` },
   ];
   return (
@@ -335,7 +336,7 @@ function DirectionsPicker({ isOpen, onClose, lat, lng, name }) {
 // COMPONENT: Store Card (Beautiful Design)
 // ============================================================================
 
-function StoreCard({ store: rawStore, onSelect, isExpanded }) {
+function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng }) {
   const [showGallery, setShowGallery] = useState(false);
   const [photoError, setPhotoError] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
@@ -376,7 +377,7 @@ function StoreCard({ store: rawStore, onSelect, isExpanded }) {
           onClose={() => setShowGallery(false)}
         />
       )}
-      <DirectionsPicker isOpen={showDirs} onClose={() => setShowDirs(false)} lat={store.lat} lng={store.lng} name={store.name} />
+      <DirectionsPicker isOpen={showDirs} onClose={() => setShowDirs(false)} lat={store.lat} lng={store.lng} name={store.name} userLat={userLat} userLng={userLng} />
       
       <div
         style={{
@@ -1239,6 +1240,8 @@ export default function ConvenienceStorePage() {
             store={store}
             onSelect={(s) => setSelectedStore(selectedStore?.id === s.id ? null : s)}
             isExpanded={selectedStore?.id === (store.id || store.place_id)}
+            userLat={location?.latitude}
+            userLng={location?.longitude}
           />
         ))}
         
