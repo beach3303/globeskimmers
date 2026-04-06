@@ -220,6 +220,12 @@ export default function ThingsToDoFinder() {
   const [radius,setRadius]=useState(15);
   const [openOnly,setOpenOnly]=useState(false);
   const [outdoorOnly,setOutdoorOnly]=useState(false);
+  const [familyOnly,setFamilyOnly]=useState(false);
+  const [cultureOnly,setCultureOnly]=useState(false);
+  const [entertainOnly,setEntertainOnly]=useState(false);
+  const [adventureOnly,setAdventureOnly]=useState(false);
+  const [wellnessOnly,setWellnessOnly]=useState(false);
+  const [popularOnly,setPopularOnly]=useState(false);
   const [showAdvanced,setShowAdvanced]=useState(false);
   const [locPicker,setLocPicker]=useState(false);
   const [dirsA,setDirsA]=useState(null);
@@ -246,10 +252,16 @@ export default function ThingsToDoFinder() {
 
   const filtered=useMemo(()=>{
     let r=[...activities];
-    if(openOnly)    r=r.filter(a=>a.isOpen===true);
-    if(outdoorOnly) r=r.filter(a=>a.props?.isOutdoor);
+    if(openOnly)      r=r.filter(a=>a.isOpen===true);
+    if(outdoorOnly)   r=r.filter(a=>a.props?.isOutdoor);
+    if(familyOnly)    r=r.filter(a=>a.props?.isFamilyFriendly);
+    if(cultureOnly)   r=r.filter(a=>a.activityCategory==='culture');
+    if(entertainOnly) r=r.filter(a=>a.activityCategory==='entertainment'||a.activityCategory==='family');
+    if(adventureOnly) r=r.filter(a=>a.props?.isAdventure||a.activityCategory==='adventure');
+    if(wellnessOnly)  r=r.filter(a=>a.activityCategory==='wellness');
+    if(popularOnly)   r=r.filter(a=>(a.userRatingCount||0)>=200&&(a.rating||0)>=4.0);
     return r;
-  },[activities,openOnly,outdoorOnly]);
+  },[activities,openOnly,outdoorOnly,familyOnly,cultureOnly,entertainOnly,adventureOnly,wellnessOnly,popularOnly]);
 
   const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const a=filtered[i];if(mapInst.current&&a?.lat&&a?.lng){mapInst.current.setView([a.lat,a.lng],17);markers.current[i]?.openPopup();}},350);};
 
@@ -278,8 +290,8 @@ export default function ThingsToDoFinder() {
   },[viewMode,filtered,lat,lng,activePin]);
 
   const stats={total:filtered.length};
-  const advFilterCount=[openOnly,outdoorOnly].filter(Boolean).length;
-  const clearFilters=()=>{setOpenOnly(false);setOutdoorOnly(false);};
+  const advFilterCount=[openOnly,outdoorOnly,familyOnly,cultureOnly,entertainOnly,adventureOnly,wellnessOnly,popularOnly].filter(Boolean).length;
+  const clearFilters=()=>{setOpenOnly(false);setOutdoorOnly(false);setFamilyOnly(false);setCultureOnly(false);setEntertainOnly(false);setAdventureOnly(false);setWellnessOnly(false);setPopularOnly(false);};
 
   return(
     <div style={{fontFamily:"'DM Sans',-apple-system,sans-serif",background:"#F0F4F8",minHeight:"100vh"}}>
@@ -319,7 +331,13 @@ export default function ThingsToDoFinder() {
                 <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
                   {[
                     {label:"Open Now",icon:"🟢",state:openOnly,set:setOpenOnly,color:T.green},
+                    {label:"Popular",icon:"🏛️",state:popularOnly,set:setPopularOnly,color:T.accent},
                     {label:"Outdoors",icon:"🌳",state:outdoorOnly,set:setOutdoorOnly,color:"#059669"},
+                    {label:"Arts & Culture",icon:"🎭",state:cultureOnly,set:setCultureOnly,color:"#7C3AED"},
+                    {label:"Fun",icon:"🎢",state:entertainOnly,set:setEntertainOnly,color:"#DC2626"},
+                    {label:"Adventure",icon:"⚡",state:adventureOnly,set:setAdventureOnly,color:"#DC2626"},
+                    {label:"Wellness",icon:"🧘",state:wellnessOnly,set:setWellnessOnly,color:"#DB2777"},
+                    {label:"Family",icon:"👨‍👩‍👧",state:familyOnly,set:setFamilyOnly,color:"#D97706"},
                   ].map(f=>(
                     <button key={f.label} onClick={()=>f.set(x=>!x)} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"20px",border:f.state?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.state?f.color+"12":"#fff",color:f.state?f.color:T.dark,fontWeight:f.state?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>
                       <span style={{fontSize:"14px"}}>{f.icon}</span>{f.label}
