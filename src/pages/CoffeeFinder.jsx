@@ -497,8 +497,7 @@ export default function CoffeeFinderPage() {
         <AnimatePresence>
           {showAdvanced&&(
             <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{position:"relative",background:"#fff",borderRadius:"12px",border:"1px solid #E8EDF2",padding:"14px",marginBottom:"10px",display:"flex",flexDirection:"column",gap:"14px"}}>
-                <button onClick={()=>setShowAdvanced(false)} style={{position:"sticky",top:"0",float:"right",width:"32px",height:"32px",borderRadius:"50%",border:"none",background:DARK,color:"#fff",fontSize:"15px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10,boxShadow:"0 3px 10px rgba(0,0,0,0.2)",alignSelf:"flex-end"}}>✕</button>
+              <div style={{background:"#fff",borderRadius:"12px",border:"1px solid #E8EDF2",padding:"14px",marginBottom:"10px",display:"flex",flexDirection:"column",gap:"14px"}}>
 
                 <div>
                   <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>⏰ Status</div>
@@ -573,6 +572,7 @@ export default function CoffeeFinderPage() {
         </div>
       )}
 
+      {showAdvanced&&<button onClick={()=>setShowAdvanced(false)} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9999,width:"40px",height:"40px",borderRadius:"50%",border:"none",background:DARK,color:"#fff",fontWeight:"700",fontSize:"18px",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:12px;padding:0;overflow:hidden}.gs-popup .leaflet-popup-content{margin:0}`}</style>
       <LocationModePicker isOpen={showLocPicker} onClose={()=>setShowLocPicker(false)}/>
       {directionsShop&&<DirectionsPicker isOpen={true} onClose={()=>setDirectionsShop(null)} lat={directionsShop.lat} lng={directionsShop.lng} name={directionsShop.displayName?.text||directionsShop.name||"Coffee Shop"} userLat={lat} userLng={lng}/>}

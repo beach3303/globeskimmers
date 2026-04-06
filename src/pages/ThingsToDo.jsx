@@ -322,8 +322,7 @@ export default function ThingsToDoFinder() {
         <AnimatePresence>
           {showAdvanced&&(
             <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{position:"relative",background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2",padding:"12px"}}>
-                <button onClick={()=>setShowAdvanced(false)} style={{position:"sticky",top:"0",float:"right",width:"32px",height:"32px",borderRadius:"50%",border:"none",background:T.dark,color:"#fff",fontSize:"15px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10,boxShadow:"0 3px 10px rgba(0,0,0,0.2)"}}>✕</button>
+              <div style={{background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2",padding:"12px"}}>
                 <div style={{fontSize:"10px",fontWeight:"700",color:T.gray,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Category</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"10px"}}>
                   {CATEGORIES.map(c=>(
@@ -361,6 +360,7 @@ export default function ThingsToDoFinder() {
       :viewMode==="list"?(<div style={{padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"14px"}}>{filtered.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"52px",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"18px",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"13px",marginTop:"6px"}}>Try a different category or expand your radius</div></div>:filtered.map((a,i)=><ActivityCard key={a.id||i} a={a} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng}/>)}</div>)
       :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"absolute",top:"14px",right:"14px",zIndex:1000,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"20px",color:T.dark}}>✕</button></div>)}
 
+      {showAdvanced&&<button onClick={()=>setShowAdvanced(false)} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9999,width:"40px",height:"40px",borderRadius:"50%",border:"none",background:T.dark,color:"#fff",fontWeight:"700",fontSize:"18px",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
       <style>{`::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:16px;padding:0;overflow:hidden;}.gs-popup .leaflet-popup-content{margin:0;}.gs-popup .leaflet-popup-tip-container{display:none;}`}</style>
       <AnimatePresence>{dirsA&&<Directions isOpen={true} onClose={()=>setDirsA(null)} lat={dirsA.lat} lng={dirsA.lng} name={dirsA.displayName?.text||dirsA.name} userLat={lat} userLng={lng}/>}</AnimatePresence>
       <LocationModePicker isOpen={locPicker} onClose={()=>setLocPicker(false)}/>
