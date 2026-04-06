@@ -67,10 +67,10 @@ const CATEGORY_NEARBY: Record<string,string[]> = {
 const SIG = {
   free:        ['free admission','free entry','no charge','no fee','free access','complimentary'],
   family:      ['family','kids','children','all ages','child-friendly','stroller'],
-  outdoor:     ['outdoor','outside','open air','nature','garden','park','beach','trail',
+  outdoor:     ['outdoor','outside','open air','nature','trail',
                'hiking','forest','mountain','lake','river','waterfall','canyon','cave',
                'cliff','scenic','campground','wilderness','reef','snorkel','dive',
-               'lighthouse','ruins','bird watching','wildlife','fishing','volcano'],
+               'lighthouse','bird watching','wildlife','fishing','volcano'],
   indoor:      ['indoor','inside','air conditioned','museum','gallery','theater'],
   guided:      ['guided','tour guide','expert','led tour','docent','commentary'],
   bucket:      ['bucket list','must see','once in lifetime','world famous','iconic','legendary'],
@@ -86,6 +86,15 @@ const SIG = {
   highlights:  ['amazing','spectacular','breathtaking','incredible','beautiful','must visit','loved it','fantastic','perfect','outstanding','stunning','highly recommend','worth it'],
   warnings:    ['long line','wait time','crowded','expensive','overpriced','disappointing','avoid','rude','dirty','loud','overcrowded','parking issue','too hot','too cold'],
 };
+
+const NON_NATURE_TYPES = new Set([
+  'museum','art_gallery','historical_landmark','monument','cemetery',
+  'church','place_of_worship','city_hall','library','school','university',
+  'shopping_mall','store','restaurant','cafe','lodging','hospital',
+]);
+
+const NATURE_TYPES = ['park','national_park','campground','natural_feature',
+  'hiking_area','state_park','beach','ski_resort','marina'];
 
 function safeLower(v:any):string{
   if(typeof v==='string') return v.toLowerCase();
@@ -233,7 +242,11 @@ Deno.serve(async (req)=>{
       const revArr=(p.reviews||[]).map((r:any)=>safeLower(r?.text?.text??r?.text??''));
       const rev=revArr.join(' ');
       const txt=`${name.toLowerCase()} ${rev}`;
-      const at=activityType(name,p.types||[]);
+      const placeTypes=p.types||[];
+      const at=activityType(name,placeTypes);
+      const isInsideManagedPark=placeTypes.some((t:string)=>['botanical_garden','amusement_park','zoo'].includes(t));
+      const isSmallFeature=/waterfall|fountain|pond|stream|garden/.test(name.toLowerCase());
+      const outdoorContext=isSmallFeature&&isInsideManagedPark?'Managed Park / Walk-through':null;
       const photos=(p.photos||[]).map((ph:any)=>ph.url||ph).filter(Boolean).slice(0,2);
       const hours=p.currentOpeningHours?.weekdayDescriptions||p.regularOpeningHours?.weekdayDescriptions||p.hours||[];
       const editorialSummary=p.editorialSummary?.text||p.editorialSummary||'';
@@ -274,13 +287,17 @@ Deno.serve(async (req)=>{
         nationalPhoneNumber:p.nationalPhoneNumber||'',
         websiteUri:p.websiteUri||'',googleMapsUri:p.googleMapsUri||'',
         activityIcon:at.icon,activityLabel:at.label,activityColor:at.color,activityCategory:at.category,
-        editorialSummary,
+        editorialSummary,outdoorContext,types:placeTypes,
         badges,qualityScore:Math.min(qs,100),
         highlights,warnings,bestTime,
         props:{
           isFree:           sc(txt,SIG.free)>0,
           isFamilyFriendly: sc(txt,SIG.family)>0,
-          isOutdoor:        sc(txt,SIG.outdoor)>0||at.category==='outdoor',
+          isOutdoor:        (()=>{
+            if(placeTypes.some((t:string)=>NON_NATURE_TYPES.has(t))) return false;
+            const hasNatureType=placeTypes.some((t:string)=>NATURE_TYPES.includes(t));
+            return hasNatureType||sc(txt,SIG.outdoor)>=2||at.category==='outdoor';
+          })(),
           isIndoor:         sc(txt,SIG.indoor)>0,
           hasGuidedTour:    sc(txt,SIG.guided)>0,
           isBucketList:     sc(txt,SIG.bucket)>0,

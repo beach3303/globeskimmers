@@ -140,8 +140,9 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
         )}
 
         {/* Property tags */}
-        {activeTags.length>0&&(
+        {(activeTags.length>0||a.outdoorContext)&&(
           <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"12px"}}>
+            {a.outdoorContext&&<span style={{display:"inline-flex",alignItems:"center",gap:"4px",background:"#FEF3C7",color:"#92400E",padding:"4px 10px",borderRadius:"20px",fontSize:"11px",fontWeight:"700"}}>🏛️ {a.outdoorContext}</span>}
             {activeTags.map((t,i)=><span key={i} style={{display:"inline-flex",alignItems:"center",gap:"4px",background:t.bg,color:t.color,padding:"4px 10px",borderRadius:"20px",fontSize:"11px",fontWeight:"700"}}>{t.icon} {t.label}</span>)}
           </div>
         )}
