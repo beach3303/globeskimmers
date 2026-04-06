@@ -322,7 +322,8 @@ export default function ThingsToDoFinder() {
         <AnimatePresence>
           {showAdvanced&&(
             <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2",padding:"12px"}}>
+              <div style={{position:"relative",background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2",padding:"12px"}}>
+                <button onClick={()=>setShowAdvanced(false)} style={{position:"sticky",top:"0",float:"right",width:"32px",height:"32px",borderRadius:"50%",border:"none",background:T.dark,color:"#fff",fontSize:"15px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10,boxShadow:"0 3px 10px rgba(0,0,0,0.2)"}}>✕</button>
                 <div style={{fontSize:"10px",fontWeight:"700",color:T.gray,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Category</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"10px"}}>
                   {CATEGORIES.map(c=>(
