@@ -284,13 +284,15 @@ export default function ThingsToDoFinder() {
     if(!lat||!lng) return; setLoading(true); setError(null);
     (async()=>{
       try{
+        console.log('[ThingsToDo] Fetching with:',{country,region,city,lat,lng});
         const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:radius*1609,maxResults:20,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city});
+        console.log('[ThingsToDo] Response:',{nearby:data?.activities?.length,icons:data?.nationalIcons?.length,gems:data?.regionalGems?.length,version:data?.version});
         const raw=data?.activities||[];
         setNationalIcons(data?.nationalIcons||[]);
         setRegionalGems(data?.regionalGems||[]);
         if(raw.length||data?.nationalIcons?.length||data?.regionalGems?.length) setActivities(raw);
         else setError(data?.error||"No activities found nearby.");
-      }catch(e){setError(`Failed: ${e.message}`);}
+      }catch(e){console.error('[ThingsToDo] Error:',e);setError(`Failed: ${e.message}`);}
       finally{setLoading(false);}
     })();
   },[lat,lng,radius,category,country,region]);
