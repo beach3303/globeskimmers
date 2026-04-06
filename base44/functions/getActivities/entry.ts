@@ -311,10 +311,10 @@ Deno.serve(async (req)=>{
     const nearby=nearbyFiltered.slice(0,20).map(processPlace);
     nearby.sort((a:any,b:any)=>b.qualityScore-a.qualityScore||(b.rating||0)-(a.rating||0));
 
-    // ── TIER 1: National Icons ────────────────────────────────────────
+    // ── TIER 1: National Icons (independent search, no dedup against nearby) ──
     let nationalIcons:any[]=[];
     {
-      const t1Seen=new Set(nearby.map((a:any)=>a.id));
+      const t1Seen=new Set<string>();
       const t1Places:any[]=[];
       const cn=countryName||'nearby';
       const t1Queries=[`top tourist attractions in ${cn}`,`bucket list landmarks ${cn}`,`famous must see ${cn}`];
@@ -337,14 +337,13 @@ Deno.serve(async (req)=>{
       nationalIcons=t1Processed;
     }
 
-    // ── TIER 2: Regional Gems ─────────────────────────────────────────
+    // ── TIER 2: Regional Gems (dedup against Tier 1 only) ─────────────
     let regionalGems:any[]=[];
     {
-      const t2Seen=new Set([...nearby.map((a:any)=>a.id),...nationalIcons.map((a:any)=>a.id)]);
+      const t2Seen=new Set(nationalIcons.map((a:any)=>a.id));
       const t2Places:any[]=[];
-      const radiusMiles=radius/1609;
       const rn=regionName||cityName||'nearby';
-      const t2Queries=[`top attractions in ${rn}`,`things to do in ${rn}`,`nature spots ${rn}`];
+      const t2Queries=[`top attractions in ${rn}`,`things to do in ${rn}`,`best places to visit ${rn}`];
       await Promise.all(t2Queries.map(async q=>{
         try{
           const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:'160934',maxResults:'10',cacheTtl:String(TTL)});
@@ -354,22 +353,29 @@ Deno.serve(async (req)=>{
         }catch{}
       }));
       const t2Processed=filterJunk(t2Places).map(processPlace)
-        .filter((a:any)=>a.distanceMiles>radiusMiles&&a.distanceMiles<100&&(a.rating||0)>=3.5)
+        .filter((a:any)=>(a.rating||0)>=3.5)
         .sort((a:any,b:any)=>popScore(b)-popScore(a))
         .slice(0,5);
-      t2Processed.forEach((a:any)=>{a.travelType='🚗 Day Trip';});
+      t2Processed.forEach((a:any)=>{
+        const mi=a.distanceMiles;
+        a.travelType=mi>50?'🚗 Drive':mi>15?'🚗 Short Drive':'📍 Nearby';
+      });
       regionalGems=t2Processed;
     }
 
+    // Deduplicate nearby against Tier 1 & 2 (icons get priority)
+    const iconIds=new Set([...nationalIcons.map((a:any)=>a.id),...regionalGems.map((a:any)=>a.id)]);
+    const dedupedNearby=nearby.filter((a:any)=>!iconIds.has(a.id));
+
     // ── Wikipedia for all tiers ───────────────────────────────────────
-    const allForWiki=[...nearby.slice(0,10),...nationalIcons,...regionalGems];
+    const allForWiki=[...dedupedNearby.slice(0,10),...nationalIcons,...regionalGems];
     await Promise.all(allForWiki.map(async (a:any)=>{
       const wiki=await fetchWiki(a.name);
       if(wiki){a.wikiSummary=wiki.wikiSummary;a.wikiExtract=wiki.wikiExtract;}
     }));
 
-    const total=nearby.length+nationalIcons.length+regionalGems.length;
-    return Response.json({activities:nearby,nationalIcons,regionalGems,count:total,version:'v5.0'});
+    const total=dedupedNearby.length+nationalIcons.length+regionalGems.length;
+    return Response.json({activities:dedupedNearby,nationalIcons,regionalGems,count:total,version:'v5.0'});
   } catch(e:any){
     return Response.json({error:e.message,activities:[]},{status:200});
   }
