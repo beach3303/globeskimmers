@@ -313,10 +313,11 @@ Deno.serve(async (req)=>{
 
     // ── TIER 1: National Icons ────────────────────────────────────────
     let nationalIcons:any[]=[];
-    if(countryName){
+    {
       const t1Seen=new Set(nearby.map((a:any)=>a.id));
       const t1Places:any[]=[];
-      const t1Queries=[`top tourist attractions in ${countryName}`,`bucket list ${countryName}`,`famous landmarks ${countryName}`];
+      const cn=countryName||'nearby';
+      const t1Queries=[`top tourist attractions in ${cn}`,`bucket list landmarks ${cn}`,`famous must see ${cn}`];
       await Promise.all(t1Queries.map(async q=>{
         try{
           const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:'500000',maxResults:'10',cacheTtl:String(TTL)});
@@ -338,12 +339,12 @@ Deno.serve(async (req)=>{
 
     // ── TIER 2: Regional Gems ─────────────────────────────────────────
     let regionalGems:any[]=[];
-    const region=regionName||cityName;
-    if(region){
+    {
       const t2Seen=new Set([...nearby.map((a:any)=>a.id),...nationalIcons.map((a:any)=>a.id)]);
       const t2Places:any[]=[];
       const radiusMiles=radius/1609;
-      const t2Queries=[`top attractions in ${region}`,`things to do in ${region}`,`nature spots ${region}`];
+      const rn=regionName||cityName||'nearby';
+      const t2Queries=[`top attractions in ${rn}`,`things to do in ${rn}`,`nature spots ${rn}`];
       await Promise.all(t2Queries.map(async q=>{
         try{
           const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:'160934',maxResults:'10',cacheTtl:String(TTL)});
