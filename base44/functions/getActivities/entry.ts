@@ -86,6 +86,7 @@ const SIG = {
   petFriendly: ['dog friendly','pet friendly','dogs allowed','pets welcome','bring your dog'],
   highlights:  ['amazing','spectacular','breathtaking','incredible','beautiful','must visit','loved it','fantastic','perfect','outstanding','stunning','highly recommend','worth it'],
   warnings:    ['long line','wait time','crowded','expensive','overpriced','disappointing','avoid','rude','dirty','loud','overcrowded','parking issue','too hot','too cold'],
+  adultsOnly:  ['shooting range','gun range','clay shooting','skeet shooting','shooting club','axe throwing','rage room','smash room'],
 };
 
 const NON_NATURE_TYPES = new Set([
@@ -274,6 +275,7 @@ Deno.serve(async (req)=>{
       if(sc(txt,SIG.family)>0)    badges.push('👨‍👩‍👧 Family Friendly');
       if(sc(txt,SIG.adventure)>0) badges.push('⚡ Adventure');
       if(sc(txt,SIG.cultural)>1)  badges.push('🎭 Authentic Culture');
+      if(sc(txt,SIG.adultsOnly)>0||/shooting range|gun club|axe throwing|clay shooting/i.test(name)) badges.push('🔞 Adults Only');
       let qs=50;
       if(p.rating>=4.5) qs+=25; else if(p.rating>=4.0) qs+=15;
       if(p.userRatingCount>1000) qs+=10; else if(p.userRatingCount>200) qs+=5;
