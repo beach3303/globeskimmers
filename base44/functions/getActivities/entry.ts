@@ -61,6 +61,7 @@ const CATEGORY_NEARBY: Record<string,string[]> = {
   nightlife:     ['night_club','bar'],
   family:        ['zoo','aquarium','amusement_park'],
   wellness:      ['spa'],
+  adventure:     ['park','campground','tourist_attraction'],
   tours:         ['tourist_attraction','museum'],
 };
 
@@ -158,6 +159,7 @@ Deno.serve(async (req)=>{
         nightlife:['bar','club','music','brewery','winery'],
         family:['zoo','aquarium','children','mini golf','go kart'],
         wellness:['spa','hot spring','onsen','hammam'],
+        adventure:['adventure','climb','zip','surf','dive','skydive','snorkeling','rock climbing'],
         tours:['tour','experience','cooking class'],
       };
       return (map[category]||[]).some(k=>q.toLowerCase().includes(k));
@@ -308,7 +310,7 @@ Deno.serve(async (req)=>{
 
     // ── TIER 3: Nearby (existing search) ──────────────────────────────
     const nearbyFiltered=filterJunk(places);
-    const nearby=nearbyFiltered.slice(0,20).map(processPlace);
+    const nearby=nearbyFiltered.slice(0,60).map(processPlace);
     nearby.sort((a:any,b:any)=>b.qualityScore-a.qualityScore||(b.rating||0)-(a.rating||0));
 
     // ── TIER 1: National Icons (independent search, no dedup against nearby) ──
@@ -329,7 +331,7 @@ Deno.serve(async (req)=>{
       const t1Processed=filterJunk(t1Places).map(processPlace)
         .filter((a:any)=>(a.rating||0)>=4.0&&(a.userRatingCount||0)>=100)
         .sort((a:any,b:any)=>popScore(b)-popScore(a))
-        .slice(0,5);
+        .slice(0,20);
       t1Processed.forEach((a:any)=>{
         const mi=a.distanceMiles;
         a.travelType=mi>200?'✈️ Flight / Ferry Required':mi>100?'🚗 Long Drive':mi>50?'🚗 Drive':'🚗 Short Drive';
@@ -355,7 +357,8 @@ Deno.serve(async (req)=>{
       const t2Processed=filterJunk(t2Places).map(processPlace)
         .filter((a:any)=>(a.rating||0)>=3.5)
         .sort((a:any,b:any)=>popScore(b)-popScore(a))
-        .slice(0,5);
+        .slice(0,20)
+        .sort((a:any,b:any)=>(a.distanceMiles||0)-(b.distanceMiles||0)); // re-sort closest first
       t2Processed.forEach((a:any)=>{
         const mi=a.distanceMiles;
         a.travelType=mi>50?'🚗 Drive':mi>15?'🚗 Short Drive':'📍 Nearby';

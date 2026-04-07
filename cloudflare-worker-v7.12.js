@@ -126,7 +126,7 @@ function handleCORS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-function roundCoordinate(coord, precision = 3) {
+function roundCoordinate(coord, precision = 1) {
   return Math.round(coord * Math.pow(10, precision)) / Math.pow(10, precision);
 }
 

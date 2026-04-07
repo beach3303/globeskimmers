@@ -258,11 +258,6 @@ export default function ThingsToDoFinder() {
   const [radius,setRadius]=useState(15);
   const [openOnly,setOpenOnly]=useState(false);
   const [outdoorOnly,setOutdoorOnly]=useState(false);
-  const [familyOnly,setFamilyOnly]=useState(false);
-  const [cultureOnly,setCultureOnly]=useState(false);
-  const [entertainOnly,setEntertainOnly]=useState(false);
-  const [adventureOnly,setAdventureOnly]=useState(false);
-  const [wellnessOnly,setWellnessOnly]=useState(false);
   const [popularOnly,setPopularOnly]=useState(false);
   const [showAdvanced,setShowAdvanced]=useState(false);
   const [locPicker,setLocPicker]=useState(false);
@@ -285,7 +280,8 @@ export default function ThingsToDoFinder() {
     if(!lat||!lng) return; setLoading(true); setError(null);
     (async()=>{
       try{
-        const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:radius*1609,maxResults:20,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city});
+        const fetchRadius=Math.max(radius,25)*1609; // always fetch at least 25mi
+        const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:fetchRadius,maxResults:60,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city});
         const raw=data?.activities||[];
         setNationalIcons(data?.nationalIcons||[]);
         setRegionalGems(data?.regionalGems||[]);
@@ -294,25 +290,20 @@ export default function ThingsToDoFinder() {
       }catch(e){setError(`Failed: ${e.message}`);}
       finally{setLoading(false);}
     })();
-  },[lat,lng,radius,category,country,region]);
+  },[lat,lng,category,country,region]);
 
   const filtered=useMemo(()=>{
     let r=[...activities];
-    if(openOnly)      r=r.filter(a=>a.isOpen===true);
-    if(outdoorOnly)   r=r.filter(a=>a.props?.isOutdoor);
-    if(familyOnly)    r=r.filter(a=>a.props?.isFamilyFriendly);
-    if(cultureOnly)   r=r.filter(a=>a.activityCategory==='culture');
-    if(entertainOnly) r=r.filter(a=>a.activityCategory==='entertainment'||a.activityCategory==='family');
-    if(adventureOnly) r=r.filter(a=>a.props?.isAdventure||a.activityCategory==='adventure');
-    if(wellnessOnly)  r=r.filter(a=>a.activityCategory==='wellness');
-    if(popularOnly)   r=r.filter(a=>{
+    r=r.filter(a=>(a.distanceMiles||999)<=radius); // client-side radius filter
+    if(openOnly)    r=r.filter(a=>a.isOpen===true);
+    if(outdoorOnly) r=r.filter(a=>a.props?.isOutdoor);
+    if(popularOnly) r=r.filter(a=>{
       const isIconic=(a.types||[]).some(t=>['tourist_attraction','national_park','amusement_park','historical_landmark'].includes(t));
       const isHighlyRated=(a.userRatingCount||0)>=200&&(a.rating||0)>=4.0;
-      const isBucketList=a.props?.isBucketList;
-      return isIconic||isHighlyRated||isBucketList;
+      return isIconic||isHighlyRated||a.props?.isBucketList;
     });
     return r;
-  },[activities,openOnly,outdoorOnly,familyOnly,cultureOnly,entertainOnly,adventureOnly,wellnessOnly,popularOnly]);
+  },[activities,radius,openOnly,outdoorOnly,popularOnly]);
 
   const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const a=filtered[i];if(mapInst.current&&a?.lat&&a?.lng){mapInst.current.setView([a.lat,a.lng],17);markers.current[i]?.openPopup();}},350);};
 
@@ -341,8 +332,8 @@ export default function ThingsToDoFinder() {
   },[viewMode,filtered,lat,lng,activePin]);
 
   const stats={total:filtered.length};
-  const advFilterCount=[openOnly,outdoorOnly,familyOnly,cultureOnly,entertainOnly,adventureOnly,wellnessOnly,popularOnly].filter(Boolean).length;
-  const clearFilters=()=>{setOpenOnly(false);setOutdoorOnly(false);setFamilyOnly(false);setCultureOnly(false);setEntertainOnly(false);setAdventureOnly(false);setWellnessOnly(false);setPopularOnly(false);};
+  const advFilterCount=[openOnly,outdoorOnly,popularOnly,category!=='all'].filter(Boolean).length;
+  const clearFilters=()=>{setOpenOnly(false);setOutdoorOnly(false);setPopularOnly(false);setCategory('all');};
 
   return(
     <div style={{fontFamily:"'DM Sans',-apple-system,sans-serif",background:"#F0F4F8",minHeight:"100vh"}}>
@@ -381,16 +372,16 @@ export default function ThingsToDoFinder() {
                 <div style={{fontSize:"10px",fontWeight:"700",color:T.gray,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Filters</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
                   {[
-                    {label:"Open Now",icon:"🟢",state:openOnly,set:setOpenOnly,color:T.green},
-                    {label:"Popular",icon:"🏛️",state:popularOnly,set:setPopularOnly,color:T.accent},
-                    {label:"Outdoors",icon:"🌳",state:outdoorOnly,set:setOutdoorOnly,color:"#059669"},
-                    {label:"Arts & Culture",icon:"🎭",state:cultureOnly,set:setCultureOnly,color:"#7C3AED"},
-                    {label:"Fun",icon:"🎢",state:entertainOnly,set:setEntertainOnly,color:"#DC2626"},
-                    {label:"Adventure",icon:"⚡",state:adventureOnly,set:setAdventureOnly,color:"#DC2626"},
-                    {label:"Wellness",icon:"🧘",state:wellnessOnly,set:setWellnessOnly,color:"#DB2777"},
-                    {label:"Family",icon:"👨‍👩‍👧",state:familyOnly,set:setFamilyOnly,color:"#D97706"},
+                    {label:"Open Now",icon:"🟢",active:openOnly,onClick:()=>setOpenOnly(x=>!x),color:T.green},
+                    {label:"Popular",icon:"🏛️",active:popularOnly,onClick:()=>setPopularOnly(x=>!x),color:T.accent},
+                    {label:"Outdoors",icon:"🌳",active:outdoorOnly,onClick:()=>setOutdoorOnly(x=>!x),color:"#059669"},
+                    {label:"Arts & Culture",icon:"🎭",active:category==='culture',onClick:()=>setCategory(category==='culture'?'all':'culture'),color:"#7C3AED"},
+                    {label:"Fun",icon:"🎢",active:category==='entertainment',onClick:()=>setCategory(category==='entertainment'?'all':'entertainment'),color:"#DC2626"},
+                    {label:"Adventure",icon:"⚡",active:category==='adventure',onClick:()=>setCategory(category==='adventure'?'all':'adventure'),color:"#DC2626"},
+                    {label:"Wellness",icon:"🧘",active:category==='wellness',onClick:()=>setCategory(category==='wellness'?'all':'wellness'),color:"#DB2777"},
+                    {label:"Family",icon:"👨‍👩‍👧",active:category==='family',onClick:()=>setCategory(category==='family'?'all':'family'),color:"#D97706"},
                   ].map(f=>(
-                    <button key={f.label} onClick={()=>f.set(x=>!x)} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"20px",border:f.state?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.state?f.color+"12":"#fff",color:f.state?f.color:T.dark,fontWeight:f.state?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>
+                    <button key={f.label} onClick={f.onClick} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"20px",border:f.active?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.active?f.color+"12":"#fff",color:f.active?f.color:T.dark,fontWeight:f.active?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>
                       <span style={{fontSize:"14px"}}>{f.icon}</span>{f.label}
                     </button>
                   ))}
