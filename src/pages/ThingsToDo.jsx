@@ -211,7 +211,7 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
   );
 }
 
-const TRAVEL_COLORS={'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'}};
+const TRAVEL_COLORS={'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'},'📍 Nearby':{bg:'#D1FAE5',color:'#059669'}};
 
 function TierCard({a,userLat,userLng}){
   const [dirs,setDirs]=useState(false);
@@ -276,23 +276,22 @@ export default function ThingsToDoFinder() {
   const lat=activeLocation?.coordinates?.latitude; const lng=activeLocation?.coordinates?.longitude;
   const locLabel=activeLocation?.label||activeLocation?.address?.formatted||"Set your location";
 
-  const country=activeLocation?.address?.country||'';
-  const region=activeLocation?.address?.state||activeLocation?.address?.city||'';
-  const city=activeLocation?.address?.city||'';
+  const fallbackParts=(activeLocation?.label||activeLocation?.address?.formatted||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const country=activeLocation?.address?.country||fallbackParts[fallbackParts.length-1]||'the area';
+  const region=activeLocation?.address?.state||activeLocation?.address?.city||fallbackParts[fallbackParts.length-2]||country;
+  const city=activeLocation?.address?.city||activeLocation?.address?.municipality||fallbackParts[0]||'';
 
   useEffect(()=>{
     if(!lat||!lng) return; setLoading(true); setError(null);
     (async()=>{
       try{
-        console.log('[ThingsToDo] Fetching with:',{country,region,city,lat,lng});
         const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:radius*1609,maxResults:20,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city});
-        console.log('[ThingsToDo] Response:',{nearby:data?.activities?.length,icons:data?.nationalIcons?.length,gems:data?.regionalGems?.length,version:data?.version});
         const raw=data?.activities||[];
         setNationalIcons(data?.nationalIcons||[]);
         setRegionalGems(data?.regionalGems||[]);
         if(raw.length||data?.nationalIcons?.length||data?.regionalGems?.length) setActivities(raw);
         else setError(data?.error||"No activities found nearby.");
-      }catch(e){console.error('[ThingsToDo] Error:',e);setError(`Failed: ${e.message}`);}
+      }catch(e){setError(`Failed: ${e.message}`);}
       finally{setLoading(false);}
     })();
   },[lat,lng,radius,category,country,region]);
