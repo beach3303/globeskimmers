@@ -373,7 +373,7 @@ Deno.serve(async (req)=>{
     const dedupedNearby=nearby.filter((a:any)=>!iconIds.has(a.id));
 
     // ── Wikipedia for all tiers ───────────────────────────────────────
-    const allForWiki=[...dedupedNearby.slice(0,10),...nationalIcons,...regionalGems];
+    const allForWiki=[...dedupedNearby,...nationalIcons,...regionalGems];
     await Promise.all(allForWiki.map(async (a:any)=>{
       const wiki=await fetchWiki(a.name);
       if(wiki){a.wikiSummary=wiki.wikiSummary;a.wikiExtract=wiki.wikiExtract;}
