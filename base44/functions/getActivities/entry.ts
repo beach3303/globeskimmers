@@ -154,12 +154,12 @@ Deno.serve(async (req)=>{
     const queries=category==='all'?QUERIES:QUERIES.filter(q=>{
       const map:Record<string,string[]>={
         culture:['museum','gallery','historic','heritage','ancient ruins','cultural center','fine arts'],
-        outdoor:['national park','nature','beach','hiking','waterfall','forest','canyon','cave','volcano','river','fishing','reef','lighthouse','ruins','scenic','campground','bird','trail','lake','reserve','sanctuary','botanical'],
-        entertainment:['escape room','arcade','live theater','comedy club','virtual reality','live music venue','casino'],
-        nightlife:['bar','club','music','brewery','winery'],
-        family:['zoo','aquarium','childrens museum','family fun center','mini golf','kid friendly activities','interactive exhibits'],
+        outdoor:['national park','nature','beach','hiking','waterfall','forest','canyon','cave','volcano','river','fishing','reef','lighthouse','ruins','scenic','campground','bird','trail','lake','reserve','sanctuary','botanical','kayaking','canoeing'],
+        entertainment:['theme park','escape room','arcade','live theater','comedy club','virtual reality','live music venue','casino','bowling','cable car','gondola ride','karaoke','batting cage','indoor baseball','go kart','kayaking','canoeing','ice skating','indoor rock climbing','water park','indoor playground','paintball','laser tag','golf range','topgolf','shooting range','clay shooting','trampoline park','beach','axe throwing','rage room','indoor skydiving','roller skating','bumper cars','indoor miniature golf','mini golf','dave and busters','arcade bar','entertainment center'],
+        nightlife:['bar','club','music','brewery','winery','arcade bar'],
+        family:['zoo','aquarium','childrens museum','family fun center','mini golf','indoor miniature golf','kid friendly activities','interactive exhibits','theme park','cable car','indoor playground','water park','trampoline park','go kart','roller skating','dave and busters','entertainment center'],
         wellness:['spa','hot springs','massage therapy','wellness retreat','onsen','bathhouse'],
-        adventure:['rock climbing','zip lining','ATV trails','white water rafting','scuba diving','bungee jumping','extreme sports'],
+        adventure:['rock climbing','zip lining','ATV trails','white water rafting','scuba diving','bungee jumping','extreme sports','kayaking','indoor skydiving'],
         tours:['tour','experience','cooking class'],
       };
       return (map[category]||[]).some(k=>q.toLowerCase().includes(k));
