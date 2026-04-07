@@ -285,7 +285,7 @@ export default function ThingsToDoFinder() {
     (async()=>{
       try{
         const fetchRadius=Math.max(radius,25)*1609; // always fetch at least 25mi
-        const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:fetchRadius,maxResults:60,category:'all',smartRadius:radius>25,countryName:country,regionName:region,cityName:city});
+        const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:fetchRadius,maxResults:60,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city});
         const raw=data?.activities||[];
         setNationalIcons(data?.nationalIcons||[]);
         setRegionalGems(data?.regionalGems||[]);
@@ -294,7 +294,7 @@ export default function ThingsToDoFinder() {
       }catch(e){setError(`Failed: ${e.message}`);}
       finally{setLoading(false);}
     })();
-  },[lat,lng,country,region]);
+  },[lat,lng,country,region,category]);
 
   const filtered=useMemo(()=>{
     let r=[...activities];
