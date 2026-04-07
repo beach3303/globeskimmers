@@ -215,19 +215,18 @@ const TRAVEL_COLORS={'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC26
 
 function TierCard({a,userLat,userLng}){
   const [dirs,setDirs]=useState(false);
+  const [gallery,setGallery]=useState({open:false,idx:0});
   const name=a.displayName?.text||a.name||"Activity";
   const tc=TRAVEL_COLORS[a.travelType]||{bg:'#F1F5F9',color:'#64748B'};
   const photo=a.photos?.[0]||null;
   return(
     <div style={{flexShrink:0,width:"220px",background:"#fff",borderRadius:"16px",boxShadow:"0 2px 12px rgba(0,0,0,0.08)",overflow:"hidden",border:"1px solid #E8EDF2"}}>
       <div style={{position:"relative",height:"130px",background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
-        {photo?<img src={photo} alt="" style={{width:"100%",height:"130px",objectFit:"cover"}}/>:<div style={{height:"130px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"40px"}}>{a.activityIcon||"⭐"}</div>}
-        <div style={{position:"absolute",bottom:"8px",left:"8px",right:"8px",display:"flex",gap:"4px"}}>
-          <span style={{background:tc.bg,color:tc.color,padding:"3px 8px",borderRadius:"12px",fontSize:"10px",fontWeight:"700",backdropFilter:"blur(4px)"}}>{a.travelType} · {a.distance}</span>
-        </div>
+        {photo?<img src={photo} alt="" onClick={()=>setGallery({open:true,idx:0})} style={{width:"100%",height:"130px",objectFit:"cover",cursor:"pointer"}}/>:<div style={{height:"130px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"40px"}}>{a.activityIcon||"⭐"}</div>}
       </div>
       <div style={{padding:"10px 12px"}}>
         <div style={{fontWeight:"700",fontSize:"13px",color:T.dark,lineHeight:"1.3",marginBottom:"6px",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
+        {a.travelType&&<div style={{marginBottom:"6px"}}><span style={{background:tc.bg,color:tc.color,padding:"3px 8px",borderRadius:"12px",fontSize:"10px",fontWeight:"700",display:"inline-block"}}>{a.travelType} · {a.distance}</span></div>}
         {a.rating&&<div style={{display:"flex",alignItems:"center",gap:"4px",marginBottom:"6px"}}><span style={{color:T.gold,fontSize:"12px"}}>★</span><span style={{fontWeight:"700",color:T.dark,fontSize:"12px"}}>{a.rating}</span><span style={{color:T.gray,fontSize:"11px"}}>({(a.userRatingCount||0).toLocaleString()})</span></div>}
         {a.activityLabel&&<div style={{fontSize:"10px",fontWeight:"600",color:a.activityColor||T.accent,marginBottom:"4px"}}>{a.activityIcon} {a.activityLabel}</div>}
         {a.formattedAddress&&<div style={{fontSize:"10px",color:T.gray,marginBottom:"6px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress.split(',').slice(-3,-1).join(',').trim()}</div>}
@@ -237,6 +236,7 @@ function TierCard({a,userLat,userLng}){
         </div>
       </div>
       <Directions isOpen={dirs} onClose={()=>setDirs(false)} lat={a.lat} lng={a.lng} name={name} userLat={userLat} userLng={userLng}/>
+      <PhotoGalleryModal photos={a.photos||[]} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
     </div>
   );
 }
