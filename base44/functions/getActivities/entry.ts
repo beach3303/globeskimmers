@@ -55,13 +55,13 @@ const NEARBY_TYPES = [
 ];
 
 const CATEGORY_NEARBY: Record<string,string[]> = {
-  culture:       ['museum','art_gallery','tourist_attraction'],
-  outdoor:       ['park','campground','tourist_attraction','natural_feature'],
-  entertainment: ['amusement_park','bowling_alley','casino','movie_theater'],
+  culture:       ['museum','art_gallery','historical_landmark','performing_arts_theater'],
+  outdoor:       ['park','national_park','hiking_area','marina','campground'],
+  entertainment: ['amusement_center','bowling_alley','movie_theater','casino'],
   nightlife:     ['night_club','bar'],
-  family:        ['zoo','aquarium','amusement_park'],
-  wellness:      ['spa'],
-  adventure:     ['park','campground','tourist_attraction'],
+  family:        ['amusement_park','aquarium','zoo','park'],
+  wellness:      ['spa','beauty_salon'],
+  adventure:     ['campground','ski_resort','marina','national_park'],
   tours:         ['tourist_attraction','museum'],
 };
 
@@ -153,13 +153,13 @@ Deno.serve(async (req)=>{
 
     const queries=category==='all'?QUERIES:QUERIES.filter(q=>{
       const map:Record<string,string[]>={
-        culture:['museum','gallery','historic','monument','cultural','heritage'],
+        culture:['museum','gallery','historic','heritage','ancient ruins','cultural center','fine arts'],
         outdoor:['national park','nature','beach','hiking','waterfall','forest','canyon','cave','volcano','river','fishing','reef','lighthouse','ruins','scenic','campground','bird','trail','lake','reserve','sanctuary','botanical'],
-        entertainment:['theme park','escape room','casino','bowling','arcade'],
+        entertainment:['escape room','arcade','live theater','comedy club','virtual reality','live music venue','casino'],
         nightlife:['bar','club','music','brewery','winery'],
-        family:['zoo','aquarium','children','mini golf','go kart'],
-        wellness:['spa','hot spring','onsen','hammam'],
-        adventure:['adventure','climb','zip','surf','dive','skydive','snorkeling','rock climbing'],
+        family:['zoo','aquarium','childrens museum','family fun center','mini golf','kid friendly activities','interactive exhibits'],
+        wellness:['spa','hot springs','massage therapy','wellness retreat','onsen','bathhouse'],
+        adventure:['rock climbing','zip lining','ATV trails','white water rafting','scuba diving','bungee jumping','extreme sports'],
         tours:['tour','experience','cooking class'],
       };
       return (map[category]||[]).some(k=>q.toLowerCase().includes(k));
@@ -172,7 +172,7 @@ Deno.serve(async (req)=>{
     for(let i=0;i<queries.length;i+=3){
       await Promise.all(queries.slice(i,i+3).map(async q=>{
         try{
-          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:String(searchRadius),maxResults:'10',cacheTtl:String(TTL)});
+          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:String(searchRadius),maxResults:'20',cacheTtl:String(TTL)});
           const r=await fetch(`${WORKER}/places/text-search?${p}`);
           if(!r.ok) return;
           for(const pl of (await r.json()).places||[]){const id=pl.id;if(id&&!seen.has(id)){seen.add(id);places.push(pl);}}
