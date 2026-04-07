@@ -307,7 +307,7 @@ async function handleTextSearch(request, env) {
   const textQuery = params.textQuery || params.query || '';
   const latitude = parseFloat(params.latitude) || 0;
   const longitude = parseFloat(params.longitude) || 0;
-  const radius = parseInt(params.radius) || 5000;
+  const radius = Math.min(parseInt(params.radius) || 5000, 50000);
   const maxResults = Math.min(parseInt(params.maxResults) || 20, 60);
   const forceRefresh = params.forceRefresh === 'true';
 
@@ -361,7 +361,7 @@ async function handleNearbySearch(request, env) {
   const latitude = parseFloat(params.latitude) || 0;
   const longitude = parseFloat(params.longitude) || 0;
   const types = params.types || params.type || 'restaurant';
-  const radius = parseInt(params.radius) || 5000;
+  const radius = Math.min(parseInt(params.radius) || 5000, 50000);
   const maxResults = Math.min(parseInt(params.maxResults) || 20, 20);
   const forceRefresh = params.forceRefresh === 'true';
   const openNow = params.openNow === 'true';
@@ -521,7 +521,7 @@ async function handleDietarySearch(request, env) {
   const dietary = params.dietary || '';
   const latitude = parseFloat(params.latitude) || 0;
   const longitude = parseFloat(params.longitude) || 0;
-  const radius = parseInt(params.radius) || 5000;
+  const radius = Math.min(parseInt(params.radius) || 5000, 50000);
   const maxResults = Math.min(parseInt(params.maxResults) || 20, 60);
   const forceRefresh = params.forceRefresh === 'true';
 
@@ -580,7 +580,7 @@ async function handleCoffeeSearch(request, env) {
   const params = Object.fromEntries(url.searchParams);
   const latitude = parseFloat(params.latitude) || 0;
   const longitude = parseFloat(params.longitude) || 0;
-  const radius = parseInt(params.radius) || 5000;
+  const radius = Math.min(parseInt(params.radius) || 5000, 50000);
   const maxResults = Math.min(parseInt(params.maxResults) || 20, 40);
   const query = params.query || 'coffee shop cafe';
   const forceRefresh = params.forceRefresh === 'true';
