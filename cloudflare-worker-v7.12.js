@@ -336,6 +336,7 @@ async function handleTextSearch(request, env) {
       },
       body: JSON.stringify({
         textQuery,
+        languageCode: "en",
         maxResultCount: maxResults,
         locationBias: { circle: { center: { latitude, longitude }, radius } }
       })
@@ -383,6 +384,7 @@ async function handleNearbySearch(request, env) {
 
   const requestBody = {
     includedTypes: types.split(',').map(t => t.trim()),
+    languageCode: "en",
     maxResultCount: maxResults,
     locationRestriction: { circle: { center: { latitude, longitude }, radius } },
     rankPreference: params.rankBy === 'DISTANCE' ? 'DISTANCE' : 'POPULARITY'
@@ -441,7 +443,7 @@ async function handlePlaceDetails(request, env) {
   const baseUrl = url.origin;
 
   try {
-    const response = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+    const response = await fetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=en`, {
       method: 'GET',
       headers: {
         'X-Goog-Api-Key': apiKey,
@@ -556,6 +558,7 @@ async function handleDietarySearch(request, env) {
       },
       body: JSON.stringify({
         textQuery,
+        languageCode: "en",
         maxResultCount: maxResults,
         locationBias: { circle: { center: { latitude, longitude }, radius } }
       })
@@ -607,6 +610,7 @@ async function handleCoffeeSearch(request, env) {
       },
       body: JSON.stringify({
         textQuery: query,
+        languageCode: "en",
         maxResultCount: maxResults,
         locationBias: { circle: { center: { latitude, longitude }, radius } }
       })
