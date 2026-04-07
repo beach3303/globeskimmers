@@ -322,7 +322,7 @@ Deno.serve(async (req)=>{
       const t1Queries=[`top tourist attractions in ${cn}`,`bucket list landmarks ${cn}`,`famous must see ${cn}`];
       await Promise.all(t1Queries.map(async q=>{
         try{
-          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:'500000',maxResults:'10',cacheTtl:String(TTL)});
+          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:'500000',maxResults:'20',cacheTtl:String(TTL)});
           const r=await fetch(`${WORKER}/places/text-search?${p}`);
           if(!r.ok) return;
           for(const pl of (await r.json()).places||[]){const id=pl.id;if(id&&!t1Seen.has(id)){t1Seen.add(id);t1Places.push(pl);}}
@@ -331,7 +331,7 @@ Deno.serve(async (req)=>{
       const t1Processed=filterJunk(t1Places).map(processPlace)
         .filter((a:any)=>(a.rating||0)>=4.0&&(a.userRatingCount||0)>=100)
         .sort((a:any,b:any)=>popScore(b)-popScore(a))
-        .slice(0,20);
+        .slice(0,40);
       t1Processed.forEach((a:any)=>{
         const mi=a.distanceMiles;
         a.travelType=mi>200?'✈️ Flight / Ferry Required':mi>100?'🚗 Long Drive':mi>50?'🚗 Drive':'🚗 Short Drive';
@@ -348,7 +348,7 @@ Deno.serve(async (req)=>{
       const t2Queries=[`top attractions in ${rn}`,`things to do in ${rn}`,`best places to visit ${rn}`];
       await Promise.all(t2Queries.map(async q=>{
         try{
-          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:'160934',maxResults:'10',cacheTtl:String(TTL)});
+          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:'160934',maxResults:'20',cacheTtl:String(TTL)});
           const r=await fetch(`${WORKER}/places/text-search?${p}`);
           if(!r.ok) return;
           for(const pl of (await r.json()).places||[]){const id=pl.id;if(id&&!t2Seen.has(id)){t2Seen.add(id);t2Places.push(pl);}}

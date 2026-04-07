@@ -229,8 +229,12 @@ function TierCard({a,userLat,userLng}){
       <div style={{padding:"10px 12px"}}>
         <div style={{fontWeight:"700",fontSize:"13px",color:T.dark,lineHeight:"1.3",marginBottom:"6px",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
         {a.rating&&<div style={{display:"flex",alignItems:"center",gap:"4px",marginBottom:"6px"}}><span style={{color:T.gold,fontSize:"12px"}}>★</span><span style={{fontWeight:"700",color:T.dark,fontSize:"12px"}}>{a.rating}</span><span style={{color:T.gray,fontSize:"11px"}}>({(a.userRatingCount||0).toLocaleString()})</span></div>}
-        {a.activityLabel&&<div style={{fontSize:"10px",fontWeight:"600",color:a.activityColor||T.accent,marginBottom:"6px"}}>{a.activityIcon} {a.activityLabel}</div>}
-        <button onClick={()=>setDirs(true)} style={{width:"100%",padding:"8px",borderRadius:"8px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"11px",cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
+        {a.activityLabel&&<div style={{fontSize:"10px",fontWeight:"600",color:a.activityColor||T.accent,marginBottom:"4px"}}>{a.activityIcon} {a.activityLabel}</div>}
+        {a.formattedAddress&&<div style={{fontSize:"10px",color:T.gray,marginBottom:"6px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress.split(',').slice(-3,-1).join(',').trim()}</div>}
+        <div style={{display:"flex",gap:"6px"}}>
+          <button onClick={()=>setDirs(true)} style={{flex:1,padding:"8px",borderRadius:"8px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"11px",cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
+          {a.websiteUri&&<button onClick={()=>window.open(a.websiteUri,'_blank')} style={{flex:1,padding:"8px",borderRadius:"8px",border:"1px solid #E8EDF2",background:"#F8FAFC",color:T.dark,fontWeight:"700",fontSize:"11px",cursor:"pointer",fontFamily:"inherit"}}>🌐 Website</button>}
+        </div>
       </div>
       <Directions isOpen={dirs} onClose={()=>setDirs(false)} lat={a.lat} lng={a.lng} name={name} userLat={userLat} userLng={userLng}/>
     </div>
@@ -281,7 +285,7 @@ export default function ThingsToDoFinder() {
     (async()=>{
       try{
         const fetchRadius=Math.max(radius,25)*1609; // always fetch at least 25mi
-        const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:fetchRadius,maxResults:60,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city});
+        const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:fetchRadius,maxResults:60,category:'all',smartRadius:radius>25,countryName:country,regionName:region,cityName:city});
         const raw=data?.activities||[];
         setNationalIcons(data?.nationalIcons||[]);
         setRegionalGems(data?.regionalGems||[]);
@@ -290,7 +294,7 @@ export default function ThingsToDoFinder() {
       }catch(e){setError(`Failed: ${e.message}`);}
       finally{setLoading(false);}
     })();
-  },[lat,lng,category,country,region]);
+  },[lat,lng,country,region]);
 
   const filtered=useMemo(()=>{
     let r=[...activities];
@@ -302,8 +306,14 @@ export default function ThingsToDoFinder() {
       const isHighlyRated=(a.userRatingCount||0)>=200&&(a.rating||0)>=4.0;
       return isIconic||isHighlyRated||a.props?.isBucketList;
     });
+    // Category filters (client-side on pre-fetched "all" data)
+    if(category==='culture')       r=r.filter(a=>a.activityCategory==='culture');
+    if(category==='entertainment') r=r.filter(a=>a.activityCategory==='entertainment'||a.activityCategory==='family');
+    if(category==='adventure')     r=r.filter(a=>a.props?.isAdventure||a.activityCategory==='adventure');
+    if(category==='wellness')      r=r.filter(a=>a.activityCategory==='wellness');
+    if(category==='family')        r=r.filter(a=>a.props?.isFamilyFriendly||a.activityCategory==='family');
     return r;
-  },[activities,radius,openOnly,outdoorOnly,popularOnly]);
+  },[activities,radius,openOnly,outdoorOnly,popularOnly,category]);
 
   const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const a=filtered[i];if(mapInst.current&&a?.lat&&a?.lng){mapInst.current.setView([a.lat,a.lng],17);markers.current[i]?.openPopup();}},350);};
 
