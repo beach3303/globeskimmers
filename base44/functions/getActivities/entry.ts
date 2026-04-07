@@ -295,7 +295,7 @@ Deno.serve(async (req)=>{
         editorialSummary,outdoorContext,types:placeTypes,
         badges,qualityScore:Math.min(qs,100),highlights,warnings,bestTime,
         props:{
-          isFree:sc(txt,SIG.free)>0,isFamilyFriendly:sc(txt,SIG.family)>0,
+          isFree:sc(txt,SIG.free)>0,isFamilyFriendly:p.goodForChildren===true||sc(txt,SIG.family)>0,
           isOutdoor:(()=>{if(placeTypes.some((t:string)=>NON_NATURE_TYPES.has(t)))return false;return placeTypes.some((t:string)=>NATURE_TYPES.includes(t))||sc(txt,SIG.outdoor)>=2||at.category==='outdoor';})(),
           isIndoor:sc(txt,SIG.indoor)>0,hasGuidedTour:sc(txt,SIG.guided)>0,
           isBucketList:sc(txt,SIG.bucket)>0,isHiddenGem:sc(txt,SIG.hidden)>0,
@@ -335,6 +335,7 @@ Deno.serve(async (req)=>{
       t1Processed.forEach((a:any)=>{
         const mi=a.distanceMiles;
         a.travelType=mi>200?'✈️ Flight / Ferry Required':mi>100?'🚗 Long Drive':mi>50?'🚗 Drive':'🚗 Short Drive';
+        if(a.photos?.length>0) a.photos=[a.photos[0]];
       });
       nationalIcons=t1Processed;
     }
@@ -362,6 +363,7 @@ Deno.serve(async (req)=>{
       t2Processed.forEach((a:any)=>{
         const mi=a.distanceMiles;
         a.travelType=mi>50?'🚗 Drive':mi>15?'🚗 Short Drive':'📍 Nearby';
+        if(a.photos?.length>0) a.photos=[a.photos[0]];
       });
       regionalGems=t2Processed;
     }

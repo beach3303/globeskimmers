@@ -306,12 +306,6 @@ export default function ThingsToDoFinder() {
       const isHighlyRated=(a.userRatingCount||0)>=200&&(a.rating||0)>=4.0;
       return isIconic||isHighlyRated||a.props?.isBucketList;
     });
-    // Category filters (client-side on pre-fetched "all" data)
-    if(category==='culture')       r=r.filter(a=>a.activityCategory==='culture');
-    if(category==='entertainment') r=r.filter(a=>a.activityCategory==='entertainment'||a.activityCategory==='family');
-    if(category==='adventure')     r=r.filter(a=>a.props?.isAdventure||a.activityCategory==='adventure');
-    if(category==='wellness')      r=r.filter(a=>a.activityCategory==='wellness');
-    if(category==='family')        r=r.filter(a=>a.props?.isFamilyFriendly||a.activityCategory==='family');
     return r;
   },[activities,radius,openOnly,outdoorOnly,popularOnly,category]);
 
