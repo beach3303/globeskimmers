@@ -372,11 +372,26 @@ Deno.serve(async (req)=>{
     const iconIds=new Set([...nationalIcons.map((a:any)=>a.id),...regionalGems.map((a:any)=>a.id)]);
     const dedupedNearby=nearby.filter((a:any)=>!iconIds.has(a.id));
 
-    // ── Wikipedia for all tiers ───────────────────────────────────────
+    // ── Wikipedia for all tiers, with generated fallback ────────────
     const allForWiki=[...dedupedNearby,...nationalIcons,...regionalGems];
     await Promise.all(allForWiki.map(async (a:any)=>{
       const wiki=await fetchWiki(a.name);
       if(wiki){a.wikiSummary=wiki.wikiSummary;a.wikiExtract=wiki.wikiExtract;}
+      else if(!a.wikiExtract){
+        const city=(a.formattedAddress||'').split(',').slice(-3,-1).join(',').trim();
+        const cat=a.activityLabel||'attraction';
+        const parts:string[]=[`A popular ${cat.toLowerCase()}${city?` in ${city}`:''}.`];
+        const tags:string[]=[];
+        if(a.props?.isFamilyFriendly) tags.push('Family friendly');
+        if(a.props?.isOutdoor) tags.push('Outdoor');
+        if(a.props?.isFree) tags.push('Free entry');
+        if(a.props?.isAdventure) tags.push('Adventure');
+        if(a.props?.isGoodForCouples) tags.push('Great for couples');
+        if(tags.length) parts.push(tags.join(' · ')+'.');
+        if(a.highlights?.length>0) parts.push(`Visitors love: ${a.highlights.slice(0,3).join(', ')}.`);
+        if(a.rating&&a.userRatingCount>0) parts.push(`Rated ${a.rating} by ${a.userRatingCount.toLocaleString()} reviewers.`);
+        a.wikiExtract=parts.join(' ');
+      }
     }));
 
     const total=dedupedNearby.length+nationalIcons.length+regionalGems.length;
