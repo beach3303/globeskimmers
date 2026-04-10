@@ -242,11 +242,19 @@ function TierCard({a,userLat,userLng}){
 }
 
 function TierSection({title,icon,items,userLat,userLng}){
+  const [collapsed,setCollapsed]=useState(false);
   if(!items?.length) return null;
   return(
     <div style={{marginBottom:"16px"}}>
-      <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px",padding:"0 4px"}}><span style={{fontSize:"18px"}}>{icon}</span><span style={{fontWeight:"800",fontSize:"15px",color:T.dark}}>{title}</span><span style={{fontSize:"12px",color:T.gray}}>({items.length})</span></div>
-      <div style={{display:"flex",gap:"12px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none"}}>{items.map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng}/>)}</div>
+      <div onClick={()=>setCollapsed(c=>!c)} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:collapsed?"0":"10px",padding:"0 4px",cursor:"pointer"}}>
+        <span style={{fontSize:"18px"}}>{icon}</span><span style={{fontWeight:"800",fontSize:"15px",color:T.dark}}>{title}</span><span style={{fontSize:"12px",color:T.gray}}>({items.length})</span>
+        <span style={{marginLeft:"auto",fontSize:"12px",color:T.gray,fontWeight:"700"}}>{collapsed?"▶":"▼"}</span>
+      </div>
+      <AnimatePresence>{!collapsed&&(
+        <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
+          <div style={{display:"flex",gap:"12px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none"}}>{items.map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng}/>)}</div>
+        </motion.div>
+      )}</AnimatePresence>
     </div>
   );
 }
