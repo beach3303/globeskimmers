@@ -1,4 +1,4 @@
-// ============================================================================
+                // ============================================================================
 // GLOBESKIMMERS — PlacesToEat v6.4
 // ============================================================================
 // FEATURES:
@@ -1094,52 +1094,66 @@ export default function PlacesToEat() {
   return (
     <div style={{fontFamily:"'DM Sans',-apple-system,sans-serif",background:"#F8FAFC",minHeight:"100vh"}}>
 
-      {/* ── HEADER ── */}
-      <div style={{background:`linear-gradient(135deg,${BLUE} 0%,${BLUE_DARK} 100%)`,padding:"20px 16px 16px"}}>
-        <button onClick={()=>window.history.back()} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"8px",padding:"6px 10px",color:"#fff",fontSize:"13px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit",marginBottom:"12px"}}>← Back</button>
-        <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"4px"}}><span style={{fontSize:"26px"}}>🍽️</span><div style={{color:"#fff"}}><div style={{fontWeight:"800",fontSize:"22px"}}>Places to Eat</div><div style={{fontSize:"13px",opacity:0.85}}>Restaurants · Parking · Seating · Reviews</div></div></div>
+      {/* ── HERO: blue gradient with title + labeled starting location ── */}
+      <div style={{background:`linear-gradient(135deg,${BLUE} 0%,${BLUE_DARK} 100%)`,padding:"20px 16px 20px"}}>
+        <button onClick={()=>window.history.back()} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"8px",padding:"6px 10px",color:"#fff",fontSize:"13px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit",marginBottom:"14px"}}>← Back</button>
+        <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"18px"}}>
+          <span style={{fontSize:"26px"}}>🍽️</span>
+          <div style={{color:"#fff"}}>
+            <div style={{fontWeight:"800",fontSize:"22px"}}>Places to Eat</div>
+            <div style={{fontSize:"13px",opacity:0.85}}>Restaurants · Parking · Seating · Reviews</div>
+          </div>
+        </div>
+
+        {/* Labeled starting location */}
+        <div style={{fontSize:"10px",fontWeight:"800",letterSpacing:"1px",color:"rgba(255,255,255,0.75)",marginBottom:"6px"}}>📍 STARTING POINT</div>
+        <div onClick={()=>setShowLocPicker(true)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",padding:"12px 14px",background:"#fff",borderRadius:"14px",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.12)"}}>
+          <span style={{color:DARK,fontSize:"14px",fontWeight:"600",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{locationText}</span>
+          <span style={{background:BLUE_LT,color:BLUE,padding:"4px 10px",borderRadius:"8px",fontWeight:"700",fontSize:"12px",flexShrink:0}}>Change</span>
+        </div>
       </div>
 
-      <div style={{padding:"12px 14px 0"}}>
-        {/* Location bar */}
-        <div onClick={()=>setShowLocPicker(true)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:"#fff",borderRadius:"10px",border:"1px solid #E2E8F0",marginBottom:"10px",cursor:"pointer",fontSize:"13px"}}>
-          <span style={{color:GRAY}}>📍 {locationText}</span>
-          <span style={{background:"#EFF6FF",color:BLUE,padding:"3px 8px",borderRadius:"6px",fontWeight:"600",fontSize:"12px"}}>Change</span>
+      {/* ── WHITE PANEL: search, radius, sort/view, filter trigger ── */}
+      <div style={{padding:"16px"}}>
+        {/* Hero search bar with gold submit */}
+        <div style={{display:"flex",gap:"8px",marginBottom:"14px"}}>
+          <input value={searchInput} onChange={e=>setSearchInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleSearch()} placeholder="🔎  Search dish or restaurant..." style={{flex:1,padding:"14px 16px",borderRadius:"14px",border:"2px solid #E2E8F0",fontSize:"15px",fontFamily:"inherit",outline:"none",color:DARK,background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}/>
+          <button onClick={handleSearch} style={{padding:"14px 18px",borderRadius:"14px",border:"none",background:`linear-gradient(135deg,${GOLD},${ORANGE})`,color:"#fff",fontWeight:"800",fontSize:"16px",cursor:"pointer",fontFamily:"inherit",boxShadow:`0 3px 10px ${GOLD}55`}}>→</button>
+          {searchText&&<button onClick={()=>{setSearchInput("");setSearchText("");}} style={{padding:"14px 14px",borderRadius:"14px",border:"2px solid #E2E8F0",background:"#fff",color:GRAY,fontWeight:"700",fontSize:"14px",cursor:"pointer",fontFamily:"inherit"}}>✕</button>}
         </div>
 
-        {/* Search bar */}
-        <div style={{display:"flex",gap:"8px",marginBottom:"10px"}}>
-          <input value={searchInput} onChange={e=>setSearchInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleSearch()} placeholder="Search dish or restaurant..." style={{flex:1,padding:"10px 14px",borderRadius:"10px",border:"1.5px solid #E2E8F0",fontSize:"14px",fontFamily:"inherit",outline:"none",color:DARK,background:"#fff"}}/>
-          <button onClick={handleSearch} style={{padding:"10px 16px",borderRadius:"10px",border:"none",background:BLUE,color:"#fff",fontWeight:"700",fontSize:"14px",cursor:"pointer",fontFamily:"inherit"}}>🔍</button>
-          {searchText&&<button onClick={()=>{setSearchInput("");setSearchText("");}} style={{padding:"10px 12px",borderRadius:"10px",border:"1px solid #E2E8F0",background:"#fff",color:GRAY,fontWeight:"600",fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>✕</button>}
-        </div>
-
-        {/* Radius */}
-        <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px"}}>
-          <span style={{fontSize:"12px",color:GRAY,fontWeight:"600",flexShrink:0}}>📏</span>
-          <div style={{display:"flex",gap:"4px"}}>
-            {RADIUS_OPTIONS.map(o=><button key={o.v} onClick={()=>setRadius(o.v)} style={{padding:"5px 10px",borderRadius:"8px",border:radius===o.v?`2px solid ${BLUE}`:"1px solid #E2E8F0",background:radius===o.v?BLUE_LT:"#fff",color:radius===o.v?BLUE:GRAY,fontWeight:radius===o.v?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{o.l}</button>)}
-          </div>
-          <span style={{fontSize:"11px",color:GRAY,marginLeft:"auto"}}>{loading?"Loading...":`${restaurants.length} found`}</span>
-        </div>
-
-        {/* Sort + view toggle */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"10px",gap:"8px"}}>
-          <div style={{display:"flex",background:"#F1F5F9",borderRadius:"10px",padding:"2px"}}>
-            {[{v:"nearby",l:"📍 Nearby"},{v:"best",l:"⭐ Best"}].map(({v,l})=>(
-              <button key={v} onClick={()=>setSortBy(v)} style={{padding:"6px 12px",borderRadius:"8px",border:"none",background:sortBy===v?BLUE:"transparent",color:sortBy===v?"#fff":GRAY,fontWeight:"600",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{l}</button>
+        {/* Radius: labeled segmented control (equal widths) */}
+        <div style={{marginBottom:"14px"}}>
+          <div style={{fontSize:"10px",fontWeight:"800",letterSpacing:"1px",color:GRAY,marginBottom:"8px"}}>📏 RADIUS</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"6px",background:"#F1F5F9",padding:"4px",borderRadius:"12px"}}>
+            {RADIUS_OPTIONS.map(o=>(
+              <button key={o.v} onClick={()=>setRadius(o.v)} style={{padding:"10px 0",borderRadius:"9px",border:"none",background:radius===o.v?BLUE:"transparent",color:radius===o.v?"#fff":GRAY,fontWeight:radius===o.v?"800":"600",fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>{o.l}</button>
             ))}
           </div>
-          <div style={{display:"flex",gap:"4px"}}>
-            {["list","map"].map(v=><button key={v} onClick={()=>setViewMode(v)} style={{padding:"6px 12px",borderRadius:"8px",border:"none",background:viewMode===v?BLUE:"#E2E8F0",color:viewMode===v?"#fff":GRAY,fontWeight:"700",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{v==="list"?"📋 List":"🗺️ Map"}</button>)}
+        </div>
+
+        {/* Sort + view toggle — sibling pill groups */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"8px",marginBottom:"14px"}}>
+          <div style={{display:"flex",background:"#F1F5F9",borderRadius:"10px",padding:"3px"}}>
+            {[{v:"nearby",l:"📍 Nearby"},{v:"best",l:"⭐ Best"}].map(({v,l})=>(
+              <button key={v} onClick={()=>setSortBy(v)} style={{padding:"7px 14px",borderRadius:"8px",border:"none",background:sortBy===v?BLUE:"transparent",color:sortBy===v?"#fff":GRAY,fontWeight:"700",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{l}</button>
+            ))}
+          </div>
+          <div style={{display:"flex",background:"#F1F5F9",borderRadius:"10px",padding:"3px"}}>
+            {["list","map"].map(v=>(
+              <button key={v} onClick={()=>setViewMode(v)} style={{padding:"7px 14px",borderRadius:"8px",border:"none",background:viewMode===v?BLUE:"transparent",color:viewMode===v?"#fff":GRAY,fontWeight:"700",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{v==="list"?"📋":"🗺️"}</button>
+            ))}
           </div>
         </div>
 
-        {/* Advanced filters toggle */}
-        <button onClick={()=>setShowAdvanced(!showAdvanced)} style={{display:"flex",alignItems:"center",gap:"8px",width:"100%",padding:"10px 14px",borderRadius:"10px",border:`1.5px solid ${showAdvanced||activeFilterCount>0?BLUE:"#E2E8F0"}`,background:showAdvanced||activeFilterCount>0?BLUE_LT:"#fff",color:showAdvanced||activeFilterCount>0?BLUE:GRAY,fontWeight:"600",fontSize:"13px",cursor:"pointer",fontFamily:"inherit",marginBottom:"6px"}}>
+        {/* Advanced Filters + result summary (single merged row) */}
+        <button onClick={()=>setShowAdvanced(!showAdvanced)} style={{display:"flex",alignItems:"center",gap:"10px",width:"100%",padding:"12px 14px",borderRadius:"12px",border:`1.5px solid ${showAdvanced||activeFilterCount>0?BLUE:"#E2E8F0"}`,background:showAdvanced||activeFilterCount>0?BLUE_LT:"#fff",color:showAdvanced||activeFilterCount>0?BLUE:DARK,fontWeight:"700",fontSize:"13px",cursor:"pointer",fontFamily:"inherit",marginBottom:"10px"}}>
           <span>⚙️ Advanced Filters</span>
-          {activeFilterCount>0&&<span style={{background:BLUE,color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"11px",fontWeight:"700"}}>{activeFilterCount}</span>}
-          <span style={{marginLeft:"auto"}}>{showAdvanced?"▲":"▼"}</span>
+          {activeFilterCount>0&&<span style={{background:BLUE,color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"11px",fontWeight:"800"}}>{activeFilterCount}</span>}
+          <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"10px",color:GRAY,fontSize:"12px",fontWeight:"600"}}>
+            {loading?"Loading…":<><span>{stats.total} results</span>{stats.open>0&&<span style={{color:GREEN}}>· {stats.open} open</span>}</>}
+            <span style={{color:GRAY}}>{showAdvanced?"▲":"▼"}</span>
+          </span>
         </button>
 
         {/* Advanced panel */}
@@ -1225,23 +1239,7 @@ export default function PlacesToEat() {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Stats */}
-        <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"12px",fontSize:"13px",flexWrap:"wrap"}}>
-          <span style={{background:BLUE,color:"#fff",padding:"2px 8px",borderRadius:"10px",fontWeight:"700",fontSize:"12px"}}>{stats.total}</span>
-          <span style={{color:GRAY,fontWeight:"600"}}>restaurants</span>
-          {stats.open>0&&<span style={{color:GREEN}}>· {stats.open} open</span>}
-          {stats.withParking>0&&<span style={{color:GRAY}}>· {stats.withParking} 🅿️</span>}
-        </div>
       </div>
-
-      {/* ── STICKY SEARCH CONTEXT BAR ── */}
-      {searchText?.trim() && !loading && (
-        <div style={{position:"sticky",top:0,zIndex:50,background:"#FFFBEB",borderBottom:"1px solid #FDE68A",padding:"6px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:"12px"}}>
-          <span style={{color:"#92400E",fontWeight:"600"}}>🔍 "{searchText}" · {RADIUS_OPTIONS.find(o=>o.v===radius)?.l||`${radius} mi`} · {filtered.length} found</span>
-          <button onClick={()=>{setSearchInput("");setSearchText("");}} style={{background:"none",border:"none",color:"#B45309",fontWeight:"700",fontSize:"12px",cursor:"pointer",fontFamily:"inherit",padding:"2px 6px"}}>✕ Clear</button>
-        </div>
-      )}
 
       {/* ── CONTENT ── */}
       {loading?(
