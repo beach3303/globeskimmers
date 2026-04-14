@@ -174,27 +174,31 @@ async function test5_openNow() {
 }
 
 async function test6_radius() {
+  // Google Places API (New) searchText: locationRestriction accepts only
+  // 'rectangle'; circular bias is only valid under 'locationBias'. Our app
+  // uses locationBias.circle everywhere, so that's what we verify here.
+  // Bias isn't a strict filter — results *mostly* fall inside the circle —
+  // so we assert that at least 80% of results are within radius.
   const radiusMeters = 5000;
   const data = await searchText({
     textQuery: "coffee",
     maxResultCount: 10,
-    locationRestriction: {
+    locationBias: {
       circle: { center: { latitude: LAT, longitude: LNG }, radius: radiusMeters },
     },
   });
   const places = data.places || [];
-  const allInRadius =
-    places.length > 0 &&
-    places.every((p) => {
-      const plat = p.location?.latitude;
-      const plng = p.location?.longitude;
-      if (plat == null || plng == null) return false;
-      return km(LAT, LNG, plat, plng) * 1000 <= radiusMeters + 200; // 200m slack
-    });
+  const within = places.filter((p) => {
+    const plat = p.location?.latitude;
+    const plng = p.location?.longitude;
+    if (plat == null || plng == null) return false;
+    return km(LAT, LNG, plat, plng) * 1000 <= radiusMeters + 500; // 500m slack
+  });
+  const pct = places.length ? within.length / places.length : 0;
   report(
-    "6. locationRestriction radius 5km → all results within 5km",
-    allInRadius,
-    `${places.length} results`
+    "6. locationBias 5km → at least 80% of results within radius",
+    pct >= 0.8,
+    `${within.length}/${places.length} inside`
   );
 }
 
