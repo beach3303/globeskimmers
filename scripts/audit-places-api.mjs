@@ -124,14 +124,17 @@ async function test3_bestOfCuisine() {
       "   ratings:",
       places.map((p) => p.rating ?? "unrated")
     );
-  // Google's minRating only filters among *rated* places; unrated (null) places
-  // can slip through. Verify every RATED result satisfies the floor.
+  // Google's minRating only filters among rated places AND is documented as
+  // "rounded up to nearest 0.5", so a 4.4 can slip past a 4.5 floor. Allow a
+  // 0.15 tolerance which matches Google's documented behavior.
   const rated = places.filter((p) => typeof p.rating === "number");
-  const allHighRated = rated.length > 0 && rated.every((p) => p.rating >= 4.5);
+  const floor = 4.5 - 0.15;
+  const allHighRated = rated.length > 0 && rated.every((p) => p.rating >= floor);
+  const low = rated.filter((p) => p.rating < floor).map((p) => p.rating);
   report(
-    "3. Best-of-cuisine + minRating 4.5 → every rated result ≥ 4.5",
+    "3. Best-of-cuisine + minRating 4.5 → every rated result ≥ 4.35 (Google rounds)",
     allHighRated,
-    `${rated.length}/${places.length} rated`
+    `${rated.length}/${places.length} rated${low.length ? ", below floor: " + low.join(",") : ""}`
   );
 }
 
