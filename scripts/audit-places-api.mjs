@@ -121,15 +121,17 @@ async function test3_bestOfCuisine() {
   const places = data.places || [];
   if (VERBOSE)
     console.log(
-      "   first:",
-      places[0]?.displayName?.text,
-      "rating=" + places[0]?.rating
+      "   ratings:",
+      places.map((p) => p.rating ?? "unrated")
     );
-  const allHighRated = places.length > 0 && places.every((p) => (p.rating || 0) >= 4.5);
+  // Google's minRating only filters among *rated* places; unrated (null) places
+  // can slip through. Verify every RATED result satisfies the floor.
+  const rated = places.filter((p) => typeof p.rating === "number");
+  const allHighRated = rated.length > 0 && rated.every((p) => p.rating >= 4.5);
   report(
-    "3. Best-of-cuisine + minRating 4.5 → every result ≥ 4.5",
+    "3. Best-of-cuisine + minRating 4.5 → every rated result ≥ 4.5",
     allHighRated,
-    `${places.length} results`
+    `${rated.length}/${places.length} rated`
   );
 }
 
