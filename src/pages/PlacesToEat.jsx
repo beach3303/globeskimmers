@@ -51,9 +51,6 @@ const ORANGE    = "#EA580C";
 // ─── CUISINE CATEGORIES ─────────────────────────────────────────────────────
 const CUISINES = [
   { id:'all',           label:'All Food',    icon:'🍽️', special:false },
-  { id:'trending',      label:'Trending',    icon:'🔥', special:true  },
-  { id:'local',         label:'Local Favs',  icon:'💎', special:true  },
-  { id:'hidden',        label:'Hidden Gems', icon:'🔮', special:true  },
   { id:'fine',          label:'Fine Dining', icon:'🥂', special:true  },
   { id:'budget',        label:'Budget',      icon:'💸', special:true  },
   { id:'latenight',     label:'Late Night',  icon:'🌙', special:true  },
@@ -89,10 +86,7 @@ const RADIUS_OPTIONS = [
 ];
 
 const VIBE_OPTIONS = [
-  { id:'photoWorthy', icon:'📸', label:'Photo-Worthy'   },
-  { id:'dateNight',   icon:'🕯️', label:'Date Night'     },
   { id:'family',      icon:'👨‍👩‍👧', label:'Family'         },
-  { id:'workFriendly',icon:'💼', label:'Work-Friendly'  },
   { id:'outdoor',     icon:'🌿', label:'Outdoor'        },
   { id:'liveMusic',   icon:'🎵', label:'Live Music'     },
   { id:'groups',      icon:'🎉', label:'Good for Groups'},
@@ -172,17 +166,11 @@ function detectVibes(place) {
   const reviews = place.reviews || [];
   const text = reviews.map(r => r.text || '').join(' ').toLowerCase();
   return {
-    photoWorthy:  (place.photos?.length >= 5) || (place.rating >= 4.5 && place.userRatingCount > 300),
-    // Hidden Gem: highly rated (4.5+) but under the radar (50–500 reviews).
-    // Not just "low reviews" — must be proven good. 500 cap keeps it truly undiscovered.
-    dateNight:    (place.servesWine || place.servesCocktails) || text.includes('romantic') || text.includes('date night'),
     family:       place.goodForChildren || text.includes('family') || text.includes('kids'),
-    workFriendly: text.includes('wifi') || text.includes('laptop') || text.includes('remote work'),
     outdoor:      place.hasOutdoorSeating === true || place.outdoorSeating === true,
     liveMusic:    place.liveMusic || text.includes('live music') || text.includes('live band'),
     groups:       place.goodForGroups || text.includes('group') || text.includes('party'),
     lateNight:    text.includes('late night') || text.includes('open late') || text.includes('midnight'),
-    hiddenGem:    (place.rating >= 4.5) && (place.userRatingCount >= 50) && (place.userRatingCount <= 500),
     // sportsBar: use backend sportsScore if available (0–100 multi-signal score),
     // otherwise fall back to client-side keyword detection.
     // Threshold 55 = "Casual Watch Spot" minimum per ChatGPT + Gemini algorithm.
@@ -289,7 +277,6 @@ function processRest(place, userLat, userLng) {
   if (place.tier === 1) badges.push({ icon:'✓', label:'Authentic',   color:'#15803D', bg:'#DCFCE7' });
   if (place.tier === 3) badges.push({ icon:'~', label:'Has It',       color:'#A16207', bg:'#FEF9C3' });
   if (place.tier === 4) badges.push({ icon:'?', label:'Not Specialist', color:'#6B7280', bg:'#F3F4F6' });
-  if (vibes.hiddenGem)                badges.push({ icon:'💎', label:'Hidden Gem', color:'#5E35B1', bg:'#EDE7F6' });
   if (place.hasDriveThru)             badges.push({ icon:'🚗', label:'Drive-Thru',  color:'#0277BD', bg:'#E1F5FE' });
   if (place.isTakeoutOnly)            badges.push({ icon:'📦', label:'Takeout Only',color:'#E65100', bg:'#FFF3E0' });
   if (open.is24Hours||vibes.lateNight)badges.push({ icon:'🌙', label:'Late Night',  color:'#1565C0', bg:'#E3F2FD' });
@@ -730,7 +717,7 @@ export default function PlacesToEat() {
   }, [selectedCuisines]);
 
   // Which cuisines need client-side type filtering (non-special, non-dietary, non-all)
-  const SPECIAL_CUISINES = new Set(['all','trending','local','hidden','fine','budget','latenight','halal','kosher','vegan','vegetarian']);
+  const SPECIAL_CUISINES = new Set(['all','fine','budget','latenight','halal','kosher','vegan','vegetarian']);
   const cuisineTypeFilter = useMemo(() => {
     const active = [...selectedCuisines].filter(c => !SPECIAL_CUISINES.has(c));
     if (active.length === 0) return null;
