@@ -38,7 +38,6 @@ const CONFIG = {
     'places.googleMapsUri',
     'places.photos',
     'places.servesVegetarianFood',
-    'places.servesVeganFood',
     'places.servesBeer',
     'places.servesWine',
     'places.servesCoffee',
@@ -85,7 +84,6 @@ const CONFIG = {
     'reviews',
     'editorialSummary',
     'servesVegetarianFood',
-    'servesVeganFood',
     'servesBeer',
     'servesWine',
     'servesCoffee',
@@ -227,7 +225,6 @@ function normalizePlace(place, baseUrl = '', includeReviews = false) {
     regularOpeningHours: place.regularOpeningHours || null,
     photos,
     servesVegetarianFood: place.servesVegetarianFood || false,
-    servesVeganFood: place.servesVeganFood || false,
     servesBeer: place.servesBeer || false,
     servesWine: place.servesWine || false,
     servesCoffee: place.servesCoffee || false,
@@ -576,12 +573,12 @@ async function handleDietarySearch(request, env) {
 
     const data = await response.json();
     let places = (data.places || []).map(p => normalizePlace(p, baseUrl, false));
-    // Native boolean verification: for vegetarian/vegan, prefer places where Google
-    // has explicitly tagged the field. Keep places without the field as fallback
-    // so we don't return zero results when Google hasn't populated the boolean.
-    if (dietary === 'vegetarian' || dietary === 'vegan') {
-      const key = dietary === 'vegan' ? 'servesVeganFood' : 'servesVegetarianFood';
-      const verified = places.filter(p => p[key] === true);
+    // Native boolean verification: Google Places API (New) only exposes
+    // servesVegetarianFood (there is no servesVeganFood field). Use it to
+    // prefer verified vegetarian places, but fall back to the full set if
+    // Google hasn't populated the boolean for most results.
+    if (dietary === 'vegetarian') {
+      const verified = places.filter(p => p.servesVegetarianFood === true);
       if (verified.length >= 3) places = verified;
     }
     await setInCache(env, cacheKey, places, CONFIG.CACHE_TTL.DIETARY);

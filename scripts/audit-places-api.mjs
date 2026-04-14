@@ -35,7 +35,6 @@ const FIELD_MASK = [
   "places.location",
   "places.regularOpeningHours",
   "places.servesVegetarianFood",
-  "places.servesVeganFood",
 ].join(",");
 
 async function searchText(payload) {
