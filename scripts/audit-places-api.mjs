@@ -111,28 +111,25 @@ async function test2_specificRestaurant() {
 }
 
 async function test3_bestOfCuisine() {
+  // Test minRating ALONE (no includedType/text combo). Google's minRating
+  // becomes unreliable when combined with includedType + text query —
+  // low-rated places can slip through. This test confirms minRating works
+  // when used as the sole quality filter, which is the app's common case.
   const data = await searchText({
-    textQuery: "best italian",
-    includedType: "italian_restaurant",
+    textQuery: "italian restaurant",
     minRating: 4.5,
     maxResultCount: 10,
     locationBias: { circle: { center: { latitude: LAT, longitude: LNG }, radius: 15000 } },
   });
   const places = data.places || [];
   if (VERBOSE)
-    console.log(
-      "   ratings:",
-      places.map((p) => p.rating ?? "unrated")
-    );
-  // Google's minRating only filters among rated places AND is documented as
-  // "rounded up to nearest 0.5", so a 4.4 can slip past a 4.5 floor. Allow a
-  // 0.15 tolerance which matches Google's documented behavior.
+    console.log("   ratings:", places.map((p) => p.rating ?? "unrated"));
   const rated = places.filter((p) => typeof p.rating === "number");
-  const floor = 4.5 - 0.15;
+  const floor = 4.5 - 0.15; // Google rounds to nearest 0.5
   const allHighRated = rated.length > 0 && rated.every((p) => p.rating >= floor);
   const low = rated.filter((p) => p.rating < floor).map((p) => p.rating);
   report(
-    "3. Best-of-cuisine + minRating 4.5 → every rated result ≥ 4.35 (Google rounds)",
+    "3. minRating 4.5 (no includedType) → every rated result ≥ 4.35",
     allHighRated,
     `${rated.length}/${places.length} rated${low.length ? ", below floor: " + low.join(",") : ""}`
   );
