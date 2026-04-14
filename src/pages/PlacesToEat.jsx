@@ -769,13 +769,16 @@ export default function PlacesToEat() {
           ? [firstDietary, searchText, filterParking ? 'with parking' : ''].filter(Boolean).join(' ')
           : searchText;
 
-        // Main "All Food" fetch — skipped when user has a specific intent
+        // Main "All Food" fetch — skipped when user has a specific intent.
+        // Client-side filters (seating/parking/drive-thru) have no Google API
+        // equivalent, so fetch a larger pool when any are active.
+        const clientFilterActive = filterOutdoor || filterParking || filterDriveThru;
         const runMainFetch = !isSportsBarMode && !isBakeryMode && !isDietaryMode;
         const mainFetch = runMainFetch
           ? base44.functions.invoke('getRestaurants', {
               latitude: lat, longitude: lng,
               radius: radius * 1609,
-              maxResults: 40,
+              maxResults: clientFilterActive ? 60 : 40,
               cuisine: primaryCuisine,
               searchQuery: enhancedSearchQuery,
               // v5.0: server-side filters — Google applies these before returning results
@@ -862,7 +865,7 @@ export default function PlacesToEat() {
       finally { setLoading(false); }
     })();
   // filterOpenNow/filterMinRating/filterMaxPrice added: they now go server-side so a change requires a new fetch
-  }, [lat, lng, radius, primaryCuisine, searchText, filterDietary, filterBakery, filterVibes['sportsBar'], filterOpenNow, filterMinRating, filterMaxPrice, filterParking]);
+  }, [lat, lng, radius, primaryCuisine, searchText, filterDietary, filterBakery, filterVibes['sportsBar'], filterOpenNow, filterMinRating, filterMaxPrice, filterParking, filterOutdoor, filterDriveThru]);
 
   // ── FILTER + SORT ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {

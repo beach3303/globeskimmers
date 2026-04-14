@@ -38,6 +38,7 @@ const CONFIG = {
     'places.googleMapsUri',
     'places.photos',
     'places.servesVegetarianFood',
+    'places.servesVeganFood',
     'places.servesBeer',
     'places.servesWine',
     'places.servesCoffee',
@@ -84,6 +85,7 @@ const CONFIG = {
     'reviews',
     'editorialSummary',
     'servesVegetarianFood',
+    'servesVeganFood',
     'servesBeer',
     'servesWine',
     'servesCoffee',
@@ -135,8 +137,9 @@ function generateCacheKey(prefix, params) {
   const lng = roundCoordinate(parseFloat(params.longitude) || 0);
   const query = (params.textQuery || params.query || '').toLowerCase().trim();
   const types = (params.types || params.type || '').toLowerCase();
+  const includedType = (params.includedType || '').toLowerCase();
   const radius = params.radius || '5000';
-  return `${prefix}_${lat}_${lng}_${radius}_${query}_${types}`.replace(/\s+/g, '_');
+  return `${prefix}_${lat}_${lng}_${radius}_${query}_${types}_${includedType}`.replace(/\s+/g, '_');
 }
 
 async function getFromCache(env, key) {
@@ -224,6 +227,7 @@ function normalizePlace(place, baseUrl = '', includeReviews = false) {
     regularOpeningHours: place.regularOpeningHours || null,
     photos,
     servesVegetarianFood: place.servesVegetarianFood || false,
+    servesVeganFood: place.servesVeganFood || false,
     servesBeer: place.servesBeer || false,
     servesWine: place.servesWine || false,
     servesCoffee: place.servesCoffee || false,
@@ -338,7 +342,8 @@ async function handleTextSearch(request, env) {
         textQuery,
         languageCode: "en",
         maxResultCount: maxResults,
-        locationBias: { circle: { center: { latitude, longitude }, radius } }
+        locationBias: { circle: { center: { latitude, longitude }, radius } },
+        ...(params.includedType ? { includedType: params.includedType, strictTypeFiltering: false } : {})
       })
     });
 
@@ -570,7 +575,15 @@ async function handleDietarySearch(request, env) {
     }
 
     const data = await response.json();
-    const places = (data.places || []).map(p => normalizePlace(p, baseUrl, false));
+    let places = (data.places || []).map(p => normalizePlace(p, baseUrl, false));
+    // Native boolean verification: for vegetarian/vegan, prefer places where Google
+    // has explicitly tagged the field. Keep places without the field as fallback
+    // so we don't return zero results when Google hasn't populated the boolean.
+    if (dietary === 'vegetarian' || dietary === 'vegan') {
+      const key = dietary === 'vegan' ? 'servesVeganFood' : 'servesVegetarianFood';
+      const verified = places.filter(p => p[key] === true);
+      if (verified.length >= 3) places = verified;
+    }
     await setInCache(env, cacheKey, places, CONFIG.CACHE_TTL.DIETARY);
     return jsonResponse({ places, count: places.length, dietary, cached: false });
   } catch (error) {
@@ -633,7 +646,7 @@ async function handleCoffeeSearch(request, env) {
 async function handleRestaurantSearch(request, env) {
   try {
     const body = await request.json();
-    const { latitude, longitude, radiusMiles = 10, query = '', category = '', cuisineType = '', dietary = '', forceRefresh = false, openNow = false, minRating = 0, priceLevels = [] } = body;
+    const { latitude, longitude, radiusMiles = 10, query = '', category = '', cuisineType = '', dietary = '', forceRefresh = false, openNow = false, minRating = 0, priceLevels = [], includedType = '' } = body;
 
     if (!latitude || !longitude) {
       return jsonResponse({ error: 'Latitude and longitude required', restaurants: [] }, 400);
@@ -649,7 +662,7 @@ async function handleRestaurantSearch(request, env) {
     if (category && category !== 'all' && category !== 'All Food') searchQuery = `${category} restaurant`;
     if (dietary) searchQuery = `${dietary} ${searchQuery}`;
 
-    const filterSuffix = [openNow ? 'open' : '', minRating > 0 ? `r${minRating}` : '', priceLevels?.length ? priceLevels.join('-') : '', `rad${Math.round(radiusMiles)}`].filter(Boolean).join('_');
+    const filterSuffix = [openNow ? 'open' : '', minRating > 0 ? `r${minRating}` : '', priceLevels?.length ? priceLevels.join('-') : '', includedType ? `t-${includedType}` : '', `rad${Math.round(radiusMiles)}`].filter(Boolean).join('_');
     const cacheKey = generateCacheKey('restaurants', { latitude, longitude, radius: radiusMeters, textQuery: searchQuery }) + (filterSuffix ? `_${filterSuffix}` : '');
 
     if (!forceRefresh) {
@@ -661,6 +674,7 @@ async function handleRestaurantSearch(request, env) {
 
     const requestBody = {
       textQuery: searchQuery,
+      languageCode: "en",
       maxResultCount: 60,
       rankPreference: 'RELEVANCE',
       locationBias: { circle: { center: { latitude, longitude }, radius: radiusMeters } }
@@ -669,6 +683,7 @@ async function handleRestaurantSearch(request, env) {
     if (openNow) requestBody.openNow = true;
     if (minRating > 0) requestBody.minRating = minRating;
     if (priceLevels?.length) requestBody.priceLevels = priceLevels;
+    if (includedType) { requestBody.includedType = includedType; requestBody.strictTypeFiltering = false; }
 
     const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',

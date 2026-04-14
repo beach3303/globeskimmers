@@ -629,9 +629,17 @@ Deno.serve(async (req) => {
       })
     );
 
+    // Compute includedType for server-side narrowing at Google. Use it only when
+    // user hasn't typed a search query (their text intent should win) and the
+    // cuisine maps to exactly one Google Place type.
+    const cuisineTypeList = NEARBY_TYPES_CUISINE[cuisine];
+    const serverIncludedType = (!rawQuery && cuisine !== 'all' && cuisineTypeList?.length)
+      ? cuisineTypeList[0]
+      : '';
+
     for (const query of queries) {
       try {
-        console.log(`📡 POST /  query: "${query}" radiusMiles: ${radiusMiles.toFixed(1)}`);
+        console.log(`📡 POST /  query: "${query}" radiusMiles: ${radiusMiles.toFixed(1)}${serverIncludedType ? ` includedType: ${serverIncludedType}` : ''}`);
 
         const response = await fetch(`${API_BASE_URL}/`, {
           method: 'POST',
@@ -646,6 +654,8 @@ Deno.serve(async (req) => {
             openNow:     filterOpenNow  || false,
             minRating:   filterMinRating > 0 ? filterMinRating : 0,
             priceLevels: priceLevels.length ? priceLevels : [],
+            // v5.1: pass includedType so Google narrows by type (italian_restaurant etc.)
+            ...(serverIncludedType ? { includedType: serverIncludedType } : {}),
           }),
         });
 
