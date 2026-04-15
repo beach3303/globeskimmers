@@ -51,8 +51,6 @@ const ORANGE    = "#EA580C";
 // ─── CUISINE CATEGORIES ─────────────────────────────────────────────────────
 const CUISINES = [
   { id:'all',           label:'All Food',    icon:'🍽️', special:false },
-  { id:'fine',          label:'Fine Dining', icon:'🥂', special:true  },
-  { id:'budget',        label:'Budget',      icon:'💸', special:true  },
   { id:'latenight',     label:'Late Night',  icon:'🌙', special:true  },
   { id:'american',      label:'American',    icon:'🍔' },
   { id:'mexican',       label:'Mexican',     icon:'🌮' },
@@ -728,7 +726,7 @@ export default function PlacesToEat() {
   }, [selectedCuisines]);
 
   // Which cuisines need client-side type filtering (non-special, non-dietary, non-all)
-  const SPECIAL_CUISINES = new Set(['all','fine','budget','latenight','halal','kosher','vegan','vegetarian']);
+  const SPECIAL_CUISINES = new Set(['all','latenight','halal','kosher','vegan','vegetarian']);
   const cuisineTypeFilter = useMemo(() => {
     const active = [...selectedCuisines].filter(c => !SPECIAL_CUISINES.has(c));
     if (active.length === 0) return null;
