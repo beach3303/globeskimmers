@@ -888,52 +888,22 @@ export default function PlacesToEat() {
   }, [lat, lng, radius, primaryCuisine, searchText, filterDietary, filterBakery, filterVibes['sportsBar'], filterOpenNow, filterMinRating, filterMaxPrice, filterParking, filterOutdoor, filterDriveThru]);
 
   // ── FILTER + SORT ──────────────────────────────────────────────────────────
+  // v5.3: Backend Semantic Text Compiler now sends a single natural-language
+  // query to Google (e.g. "mexican restaurant with drive-thru and family
+  // friendly"). Google's AI pre-filters the results, so we DO NOT re-filter
+  // client-side for Seating/Parking/Drive-Thru/Bakery/Bars/Vibes/Dietary —
+  // doing so would strip valid matches whenever Google omits the corresponding
+  // boolean tag in the JSON response (which is common).
+  //
+  // Kept here: filters that use Google's native query params (openNow,
+  // minRating, maxPrice) — safe to reapply as a UI safety net — and the
+  // multi-select cuisine type filter (a different mechanism).
   const filtered = useMemo(() => {
     let r = [...restaurants];
-    // Bars logic: hidden by default; "Bars & Pubs" shows ONLY bars; "Sports Bar" vibe bypasses exclusion
-    if (filterBars) {
-      // Positive filter: show only bar-dominant places
-      r = r.filter(x => isBarDominant(x) || (x.types||[]).some(t => BAR_PRIMARY_TYPES.has(t)) || BAR_PRIMARY_TYPES.has(x.primaryType||''));
-    } else if (!filterVibes['sportsBar']) {
-      // Default: exclude bars unless Sports Bar vibe is active
-      r = r.filter(x => !isBarDominant(x));
-    }
-    if (filterOpenNow) r = r.filter(x => x.isOpen === true);
-    if (filterParking)   r = r.filter(x => x.parking && !x.parking.noParking);
-    if (filterOutdoor)   r = r.filter(x => x.hasOutdoorSeating === true);
-    if (filterIndoor)    r = r.filter(x => x.hasIndoorSeating  === true);
-    if (filterDriveThru) r = r.filter(x => x.hasDriveThru === true);
-    if (filterBakery) r = r.filter(x => {
-      const types = x.types || [];
-      const pt = (x.primaryType || '').toLowerCase();
-
-      // Hard exclude non-bakery junk Google sneaks in (book stores, malls, etc.)
-      const JUNK_TYPES = ['book_store','library','shopping_mall','furniture_store','clothing_store',
-        'electronics_store','hardware_store','department_store','shoe_store','pet_store'];
-      if (JUNK_TYPES.some(t => types.includes(t) || pt === t)) return false;
-
-      // 1. Types-first (language-agnostic — catches Chinese, Korean, Spanish bakeries)
-      const bakeryTypes = ['bakery', 'pastry_shop', 'dessert_shop', 'donut_shop', 'bagel_shop', 'bakery_cafe'];
-      if (types.some(t => bakeryTypes.includes(t))) return true;
-      if (bakeryTypes.includes(pt)) return true;
-
-      // 2. Name fallback — Google labels many real bakeries as 'cafe' or 'restaurant'
-      const name = (x.name || '').toLowerCase();
-      if (name.includes('bakery') || name.includes('pastry') || name.includes('patisserie')
-        || name.includes('boulangerie') || name.includes('donut') || name.includes('bagel')
-        || name.includes('cake shop') || name.includes('panaderia') || name.includes('bake shop')
-        || name.includes('bread') || name.includes('croissant') || name.includes('cupcake')
-        || name.includes('麵包') || name.includes('パン') || name.includes('빵')) return true;
-
-      // 3. Review fallback — catches places Google mistyped but reviewers confirm as bakery
-      const reviewText = (x.reviews || []).map(r => r.text || '').join(' ').toLowerCase();
-      const bakeryMentions = ['fresh bread','pastries','bakery','croissant','danish','muffin','scone','cinnamon roll']
-        .filter(kw => reviewText.includes(kw)).length;
-      return bakeryMentions >= 2; // need 2+ bakery signals from reviews to qualify
-    });
+    if (filterOpenNow)    r = r.filter(x => x.isOpen === true);
     if (filterMinRating>0) r = r.filter(x => (x.rating||0) >= filterMinRating);
-    if (filterMaxPrice>0) r = r.filter(x => !x.priceLevel || (parseInt(x.priceLevel)||0) <= filterMaxPrice);
-    // Client-side cuisine type filtering (multi-select)
+    if (filterMaxPrice>0)  r = r.filter(x => !x.priceLevel || (parseInt(x.priceLevel)||0) <= filterMaxPrice);
+    // Client-side cuisine type filtering (multi-select) — unchanged
     if (cuisineTypeFilter && cuisineTypeFilter.size > 0) {
       r = r.filter(x => {
         const types = x.types || [];
@@ -941,76 +911,6 @@ export default function PlacesToEat() {
         return types.some(t => cuisineTypeFilter.has(t)) || cuisineTypeFilter.has(pt);
       });
     }
-    // Vibes
-    const activeVibes = Object.entries(filterVibes).filter(([_,v])=>v).map(([k])=>k);
-    if (activeVibes.length > 0) {
-      r = r.filter(x => {
-        return activeVibes.some(v => {
-          if (v === 'sportsBar') {
-            const xname = (x.name||'').toLowerCase();
-            const xtypes = x.types || [];
-            const xpt = x.primaryType || '';
-
-            // ── Hard exclusions (noise that sneaks through bar/lounge types) ─
-            // NOTE: amusement_center intentionally NOT excluded — Dave & Buster's
-            // and ESPN Zone are tagged amusement_center but ARE legit sports bars.
-            // They have strong review sportsScore (TVs, screens, game day) → Tier 2.
-            // bowling_alley excluded because "game" in reviews = bowling, not sports.
-            const EXCL_TYPES = [
-              'bowling_alley', 'movie_theater', 'arcade_game_room',
-              'miniature_golf_course', 'go_kart_track',
-              'comedy_club',  // Astronaut City Comedy Club
-              'karaoke',      // karaoke bars tagged as karaoke type
-            ];
-            if (EXCL_TYPES.some(t => xtypes.includes(t) || xpt === t)) return false;
-            if (/karaoke|comedy\s*club|escape\s*room/i.test(xname)) return false;
-
-            // Exclude food-descriptor "bars" with NO bar DNA and low sportsScore:
-            // "The Dive Oyster Bar" (seafood_restaurant, no bar type, score≈0)
-            // "M Bar BBQ" (barbecue_restaurant, no bar type, score≈0)
-            // But NOT Yard House (has 'bar' type), BJ's (has 'brewery' type),
-            // or Dave & Buster's (high sportsScore from reviews).
-            const hasAnyBarDNA = xtypes.some(t =>
-              ['bar','sports_bar','pub','brewery','tapas_bar','wine_bar'].includes(t)
-            );
-            const isFoodDescriptorBar = !hasAnyBarDNA && (x.sportsScore || 0) < 15 && (
-              xpt === 'seafood_restaurant' || xpt === 'oyster_bar' ||
-              xpt === 'barbecue_restaurant' || xpt === 'sushi_restaurant' ||
-              xpt === 'chinese_restaurant' || xpt === 'korean_restaurant' ||
-              xpt === 'japanese_restaurant'
-            );
-            if (isFoodDescriptorBar) return false;
-
-            // ── Tier 1: Explicit sports bar identity ───────────────────────
-            if (xtypes.includes('sports_bar') || xpt === 'sports_bar') return true;
-            if (/sports?\s*(bar|grill|pub|lounge|tavern)/i.test(xname)) return true;
-
-            // ── Tier 2: Strong review/score signals ────────────────────────
-            // Dave & Buster's, ESPN Zone, Yard House all reach ≥ 25 from reviews
-            // (TVs, screens, game day, sports keywords in Google text search results).
-            if (x.vibes?.sportsBar) return true;
-            if ((x.sportsScore || 0) >= 25) return true;
-
-            // ── Tier 3: Actual bar/pub/tavern types (strict) ───────────────
-            // Intentionally excludes 'lounge' and 'night_club' — karaoke lounges,
-            // cocktail nightclubs are not sports bars even if they have 'bar' in name.
-            const STRICT_BAR_TYPES = new Set(['bar', 'pub', 'sports_bar', 'tapas_bar', 'brewery']);
-            const isActualBar = STRICT_BAR_TYPES.has(xpt)
-              || xtypes.some(t => STRICT_BAR_TYPES.has(t));
-            // Tavern/pub NAME hints — \bbar\b intentionally excluded (too broad:
-            // "M Bar BBQ", "Oyster Bar" both match but neither is a sports bar).
-            const nameHint = /(tavern|alehouse|taproom|roadhouse|biergarten|brewhouse|beerhouse|\bpub\b|sports\s*lounge)/i.test(xname);
-            if (isActualBar || nameHint) return true;
-
-            return false;
-          }
-          return x.vibes?.[v];
-        });
-      });
-    }
-    // Dietary
-    const activeDietary = Object.entries(filterDietary).filter(([_,v])=>v).map(([k])=>k);
-    if (activeDietary.length>0) r = r.filter(x => activeDietary.some(d => x.dietary?.[d]));
     // Sort — when Sports Bar vibe is active, rank by sportsScore descending (best match first)
     const hasActiveSearch = !!searchText?.trim();
     if (filterVibes['sportsBar']) {
