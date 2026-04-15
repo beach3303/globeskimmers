@@ -678,15 +678,23 @@ Deno.serve(async (req) => {
       sports_bar:    ['sports_bar', 'bar'],  // nearby fetch; text search queries above do the heavy lifting
     };
 
-    // Skip the generic Nearby Search whenever any Semantic Compiler input is
-    // active. Otherwise NEARBY_TYPES_ALL ('restaurant', 'fast_food_restaurant',
-    // 'meal_takeaway') pulls Subway/Wingstop/Domino's alongside real bakeries
-    // and the distance sort buries the actual matches.
-    const skipNearby =
-      !!searchQuery?.trim() ||
-      filterBakery || filterBars ||
-      features.length > 0 ||
-      activeDietaryKeys.length > 0;
+    // Master switch: detect ANY advanced UI filter. Generic Nearby Search
+    // can't natively filter for Drive-Thru, Live Music, Halal, Outdoor, etc.
+    // so even one active chip would let invalid restaurants pollute the
+    // Semantic Text results. Check every state explicitly.
+    const hasAdvancedFilters =
+      filterBakery ||
+      filterBars ||
+      filterDriveThru ||
+      filterOutdoor ||
+      filterIndoor ||
+      filterParking ||
+      Object.values(filterVibes || {}).some((v: any) => v) ||
+      Object.keys(filterDietary || {}).length > 0;
+
+    // Disable generic Nearby fetch whenever the user typed text OR clicked
+    // any advanced filter. Trust the Semantic Text Compiler exclusively.
+    const skipNearby = !!searchQuery?.trim() || hasAdvancedFilters;
 
     const nearbyTypeList = skipNearby
       ? []
