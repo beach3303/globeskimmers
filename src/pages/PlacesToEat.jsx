@@ -260,7 +260,14 @@ function processRest(place, userLat, userLng) {
   // detection, which can't reliably see Google's 'halal_restaurant' type
   // without a typed search.
   const dietary = { ...detectDietary(place), ...(place.dietary || {}) };
-  const photos  = place.photos||(place.photoUrl?[place.photoUrl]:[]);
+  // Photos may arrive as URL strings (main restaurant path) OR as objects
+  // {name, url, thumbnail, full} (dietary shortcut path, straight from worker).
+  // Normalize to URL strings so the carousel renders instead of falling back
+  // to the emoji placeholder.
+  const photos  = ((place.photos && place.photos.length)
+    ? place.photos.map(p => (typeof p === 'string' ? p : (p?.url || p?.full || p?.thumbnail)))
+    : (place.photoUrl ? [place.photoUrl] : [])
+  ).filter(Boolean);
 
   // If a café is actually a bakery/pastry shop, relabel it so it doesn't show as "Café"
   // (Café is reserved for the separate Coffee Finder feature)
