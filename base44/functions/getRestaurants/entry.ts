@@ -465,6 +465,10 @@ Deno.serve(async (req) => {
       filterOpenNow  = false,
       filterMinRating = 0,
       filterMaxPrice  = 0,   // 0=any, 1=$, 2=$$, 3=$$$, 4=$$$$
+      // v5.2: user's active dietary chip. Passed alongside searchQuery so we
+      // can still filter+tag results even when the dietary shortcut is skipped
+      // (which happens whenever searchQuery is non-empty).
+      activeDietary = null,
     } = body;
 
     // Map filterMaxPrice → Google priceLevels array
@@ -875,14 +879,29 @@ Deno.serve(async (req) => {
     }
 
     const DIETARY_FILTER_TYPES = ['halal', 'kosher', 'vegan', 'vegetarian', 'glutenFree'];
+    // Resolve the "effective" dietary for this request. Priority:
+    //   1. cuisine itself (filter-only path, cuisine='kosher', no search)
+    //   2. explicit activeDietary param (user typed a search + has dietary chip active)
+    const effectiveDietary = DIETARY_FILTER_TYPES.includes(cuisine)
+      ? cuisine
+      : (activeDietary && DIETARY_FILTER_TYPES.includes(activeDietary) ? activeDietary : null);
+
     let finalPlaces = processedPlaces;
 
-    if (!searchQuery?.trim() && DIETARY_FILTER_TYPES.includes(cuisine)) {
-      finalPlaces = processedPlaces.filter(p => hasStrongDietaryMatch(p, cuisine));
-      finalPlaces.sort((a, b) => dietaryScore(b, cuisine) - dietaryScore(a, cuisine));
-      // Backend authoritatively matched these to the dietary filter — tag so
-      // the frontend trusts them instead of re-filtering with stricter client logic.
-      finalPlaces.forEach((p: any) => { p.dietary = { ...(p.dietary || {}), [cuisine]: true }; });
+    if (effectiveDietary) {
+      // Filter to places that strongly match the dietary. Fall back to the
+      // full set if filtering is too aggressive (<3 matches) so the user
+      // still sees something useful instead of a blank page.
+      const matched = processedPlaces.filter(p => hasStrongDietaryMatch(p, effectiveDietary));
+      finalPlaces = matched.length >= 3 ? matched : processedPlaces;
+      finalPlaces.sort((a, b) => dietaryScore(b, effectiveDietary) - dietaryScore(a, effectiveDietary));
+      // Backend authoritatively matched these — tag so the frontend trusts
+      // them instead of re-filtering with stricter client logic.
+      finalPlaces.forEach((p: any) => {
+        if (hasStrongDietaryMatch(p, effectiveDietary)) {
+          p.dietary = { ...(p.dietary || {}), [effectiveDietary]: true };
+        }
+      });
     } else if (intent.kind !== 'GENERAL' && searchQuery?.trim()) {
       // "pasta"      → user is hungry, wants nearby → tier first, then DISTANCE
       // "best pasta" → user will drive for quality  → tier first, then QUALITY

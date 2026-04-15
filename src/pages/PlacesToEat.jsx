@@ -789,6 +789,9 @@ export default function PlacesToEat() {
               filterOpenNow,
               filterMinRating,
               filterMaxPrice,
+              // v5.2: pass the user's active dietary so backend can tag matches
+              // even when searchQuery is set (e.g. "kosher foods" + Kosher chip).
+              activeDietary: firstDietary || null,
             })
           : null;
 
