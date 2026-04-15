@@ -726,7 +726,7 @@ export default function PlacesToEat() {
   }, [selectedCuisines]);
 
   // Which cuisines need client-side type filtering (non-special, non-dietary, non-all)
-  const SPECIAL_CUISINES = new Set(['all','latenight','halal','kosher','vegan','vegetarian']);
+  const SPECIAL_CUISINES = new Set(['all','fine','budget','latenight','halal','kosher','vegan','vegetarian']);
   const cuisineTypeFilter = useMemo(() => {
     const active = [...selectedCuisines].filter(c => !SPECIAL_CUISINES.has(c));
     if (active.length === 0) return null;
@@ -799,14 +799,18 @@ export default function PlacesToEat() {
         if (places.length > 0) {
           setRestaurants(places.map(p => processRest(p, lat, lng)));
           setDisplayCount(20);
+          setError(null); // Clear any old errors on success
         } else {
+          setRestaurants([]); // Clear stale results so the UI doesn't show "67 results" from a prior fetch
           setError(data?.error || "No results found. Try expanding your radius.");
         }
       } catch(e) { setError(`Failed to load: ${e.message}`); }
       finally { setLoading(false); }
     })();
-  // filterOpenNow/filterMinRating/filterMaxPrice added: they now go server-side so a change requires a new fetch
-  }, [lat, lng, radius, primaryCuisine, searchText, filterDietary, filterBakery, filterVibes['sportsBar'], filterOpenNow, filterMinRating, filterMaxPrice, filterParking, filterOutdoor, filterDriveThru]);
+  // Every filter is now part of the backend's Semantic Text Compiler payload,
+  // so every change must trigger a re-fetch. Using JSON.stringify for the
+  // object states (filterVibes, filterDietary) so React sees deep changes.
+  }, [lat, lng, radius, primaryCuisine, searchText, filterBakery, filterBars, filterOpenNow, filterMinRating, filterMaxPrice, filterParking, filterOutdoor, filterIndoor, filterDriveThru, JSON.stringify(filterVibes), JSON.stringify(filterDietary)]);
 
   // ── FILTER + SORT ──────────────────────────────────────────────────────────
   // v5.3: Backend Semantic Text Compiler now sends a single natural-language

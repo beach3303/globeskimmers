@@ -490,9 +490,18 @@ Deno.serve(async (req) => {
       'PRICE_LEVEL_EXPENSIVE',
       'PRICE_LEVEL_VERY_EXPENSIVE',
     ];
-    const priceLevels: string[] = filterMaxPrice > 0
+    let priceLevels: string[] = filterMaxPrice > 0
       ? PRICE_LEVEL_NAMES.slice(0, filterMaxPrice + 1)
       : [];
+
+    // Fine Dining / Budget cuisines map to explicit priceLevels (native Google
+    // filter), not to a semantic query modifier. Overrides the user's Max
+    // Price chip since these cuisines *are* price-bracketed.
+    if (cuisine === 'fine') {
+      priceLevels = ['PRICE_LEVEL_EXPENSIVE', 'PRICE_LEVEL_VERY_EXPENSIVE'];
+    } else if (cuisine === 'budget') {
+      priceLevels = ['PRICE_LEVEL_INEXPENSIVE'];
+    }
 
     if (!latitude || !longitude) {
       return Response.json({ error: "Latitude and longitude required", places: [] }, { status: 400 });
@@ -745,6 +754,11 @@ Deno.serve(async (req) => {
             openNow:     filterOpenNow  || false,
             minRating:   filterMinRating > 0 ? filterMinRating : 0,
             priceLevels: priceLevels.length ? priceLevels : [],
+            // v5.4: force bypass the poisoned 0-result Cloudflare cache from
+            // older buggy split-fetch requests. NOTE: this disables the 12hr
+            // KV cache on every request and increases Google API cost. Revisit
+            // once all areas have been re-queried with the new unified fetch.
+            forceRefresh: true,
             // v5.1: pass includedType so Google narrows by type (italian_restaurant etc.)
             ...(serverIncludedType ? { includedType: serverIncludedType } : {}),
           }),
