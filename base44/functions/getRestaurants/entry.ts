@@ -754,11 +754,11 @@ Deno.serve(async (req) => {
             openNow:     filterOpenNow  || false,
             minRating:   filterMinRating > 0 ? filterMinRating : 0,
             priceLevels: priceLevels.length ? priceLevels : [],
-            // v5.4: force bypass the poisoned 0-result Cloudflare cache from
-            // older buggy split-fetch requests. NOTE: this disables the 12hr
-            // KV cache on every request and increases Google API cost. Revisit
-            // once all areas have been re-queried with the new unified fetch.
-            forceRefresh: true,
+            // v5.4: honor caller's forceRefresh flag. Was temporarily hardcoded
+            // to true to purge the poisoned 0-result KV cache — now that the
+            // cache is healthy, revert to normal caching behavior so we stop
+            // paying for duplicate Google calls on repeat searches.
+            forceRefresh,
             // v5.1: pass includedType so Google narrows by type (italian_restaurant etc.)
             ...(serverIncludedType ? { includedType: serverIncludedType } : {}),
           }),
