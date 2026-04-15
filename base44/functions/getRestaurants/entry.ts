@@ -494,16 +494,17 @@ Deno.serve(async (req) => {
     console.log(`🧠 Intent: ${intent.kind}${intent.kind !== 'GENERAL' ? ` (${(intent as any).label})` : ''}`);
 
     // ── DIETARY SHORTCUT ──────────────────────────────────────────────────────
-    const DIETARY_TYPES = ['halal', 'kosher', 'vegan', 'vegetarian'];
+    // Note: glutenFree included so the text-search shortcut fires for it too.
+    const DIETARY_TYPES = ['halal', 'kosher', 'vegan', 'vegetarian', 'glutenFree'];
     if (!searchQuery?.trim() && DIETARY_TYPES.includes(cuisine)) {
-      console.log(`🥗 Dietary shortcut: calling /places/dietary?dietType=${cuisine}`);
+      console.log(`🥗 Dietary shortcut: calling /places/dietary?dietary=${cuisine}`);
       try {
         const params = new URLSearchParams({
           latitude:   String(latitude),
           longitude:  String(longitude),
           radius:     String(radius),
           maxResults: String(maxResults),
-          dietary:    cuisine,           // ✅ FIX: Worker reads 'dietary' not 'dietType'
+          dietary:    cuisine,
         });
         const res = await fetch(`${API_BASE_URL}/places/dietary?${params}`);
         if (res.ok) {
@@ -511,7 +512,11 @@ Deno.serve(async (req) => {
           const places = data.places || [];
           console.log(`✅ /places/dietary returned ${places.length} places`);
           if (places.length > 0) {
-            return Response.json({ places, count: places.length, version: 'v4.3', dietary: cuisine });
+            // Tag each place with the dietary filter that matched so the
+            // frontend trusts backend's assertion and doesn't re-filter
+            // using its own (stricter) detection heuristics.
+            const tagged = places.map((p: any) => ({ ...p, dietary: { ...(p.dietary || {}), [cuisine]: true } }));
+            return Response.json({ places: tagged, count: tagged.length, version: 'v4.3', dietary: cuisine });
           }
           console.warn(`⚠️ /places/dietary returned 0 — falling back to text search`);
         }
@@ -840,6 +845,8 @@ Deno.serve(async (req) => {
         return types.includes('vegan_restaurant') || /\bvegan\b/.test(text);
       if (cuisine === 'vegetarian')
         return place.servesVegetarianFood === true || types.includes('vegetarian_restaurant') || /\bvegetarian\b/.test(text);
+      if (cuisine === 'glutenFree')
+        return /\bgluten[\s-]?free\b|\bceliac\b|\bgf\s+menu\b/.test(text);
       return true;
     }
 
@@ -867,12 +874,15 @@ Deno.serve(async (req) => {
       return score;
     }
 
-    const DIETARY_FILTER_TYPES = ['halal', 'kosher', 'vegan', 'vegetarian'];
+    const DIETARY_FILTER_TYPES = ['halal', 'kosher', 'vegan', 'vegetarian', 'glutenFree'];
     let finalPlaces = processedPlaces;
 
     if (!searchQuery?.trim() && DIETARY_FILTER_TYPES.includes(cuisine)) {
       finalPlaces = processedPlaces.filter(p => hasStrongDietaryMatch(p, cuisine));
       finalPlaces.sort((a, b) => dietaryScore(b, cuisine) - dietaryScore(a, cuisine));
+      // Backend authoritatively matched these to the dietary filter — tag so
+      // the frontend trusts them instead of re-filtering with stricter client logic.
+      finalPlaces.forEach((p: any) => { p.dietary = { ...(p.dietary || {}), [cuisine]: true }; });
     } else if (intent.kind !== 'GENERAL' && searchQuery?.trim()) {
       // "pasta"      → user is hungry, wants nearby → tier first, then DISTANCE
       // "best pasta" → user will drive for quality  → tier first, then QUALITY

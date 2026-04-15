@@ -255,7 +255,11 @@ function processRest(place, userLat, userLng) {
   }
 
   const vibes   = detectVibes(place);
-  const dietary = detectDietary(place);
+  // Backend may pre-tag a place when the user picked a dietary filter
+  // (e.g. halal/kosher). Trust backend's assertion over our client-side
+  // detection, which can't reliably see Google's 'halal_restaurant' type
+  // without a typed search.
+  const dietary = { ...detectDietary(place), ...(place.dietary || {}) };
   const photos  = place.photos||(place.photoUrl?[place.photoUrl]:[]);
 
   // If a café is actually a bakery/pastry shop, relabel it so it doesn't show as "Café"
@@ -1106,7 +1110,7 @@ export default function PlacesToEat() {
         </div>
 
         {/* Labeled starting location */}
-        <div style={{fontSize:"10px",fontWeight:"800",letterSpacing:"1px",color:"rgba(255,255,255,0.75)",marginBottom:"6px"}}>📍 STARTING POINT</div>
+        <div style={{fontSize:"10px",fontWeight:"800",letterSpacing:"1px",color:"rgba(255,255,255,0.75)",marginBottom:"6px"}}>📍 LOCATION</div>
         <div onClick={()=>setShowLocPicker(true)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",padding:"12px 14px",background:"#fff",borderRadius:"14px",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.12)"}}>
           <span style={{color:DARK,fontSize:"14px",fontWeight:"600",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{locationText}</span>
           <span style={{background:BLUE_LT,color:BLUE,padding:"4px 10px",borderRadius:"8px",fontWeight:"700",fontSize:"12px",flexShrink:0}}>Change</span>
