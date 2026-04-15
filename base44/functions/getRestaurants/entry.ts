@@ -678,8 +678,18 @@ Deno.serve(async (req) => {
       sports_bar:    ['sports_bar', 'bar'],  // nearby fetch; text search queries above do the heavy lifting
     };
 
-    const nearbyTypeList = searchQuery?.trim()
-      ? []  // skip nearby when user typed a search — text query IS the intent
+    // Skip the generic Nearby Search whenever any Semantic Compiler input is
+    // active. Otherwise NEARBY_TYPES_ALL ('restaurant', 'fast_food_restaurant',
+    // 'meal_takeaway') pulls Subway/Wingstop/Domino's alongside real bakeries
+    // and the distance sort buries the actual matches.
+    const skipNearby =
+      !!searchQuery?.trim() ||
+      filterBakery || filterBars ||
+      features.length > 0 ||
+      activeDietaryKeys.length > 0;
+
+    const nearbyTypeList = skipNearby
+      ? []
       : cuisine === 'all'
         ? NEARBY_TYPES_ALL
         : (NEARBY_TYPES_CUISINE[cuisine] || ['restaurant']);
