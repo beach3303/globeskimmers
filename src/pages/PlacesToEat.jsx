@@ -750,134 +750,57 @@ export default function PlacesToEat() {
 
     (async () => {
       try {
-        // ── INTENT-DRIVEN FETCH STRATEGY ────────────────────────────────────
-        // Instead of always running the heavy "All Food" fetch (8 text queries +
-        // 6 nearby types = 14 API calls) and then filtering client-side, we only
-        // fetch what the user actually asked for. This:
-        //   • Eliminates noise (local bars/karaoke from "All Food" polluting Sports Bar)
-        //   • Prevents timeouts (18 concurrent calls → 4 targeted calls)
-        //   • Returns better results (dedicated fetch = purpose-built queries)
+        // ── UNIFIED FETCH (v5.4) ─────────────────────────────────────────────
+        // Previously we had split fetches (bakeryFetch, sportsBarFetch,
+        // dietaryFetches) that bypassed mainFetch entirely — which meant
+        // radius, Open Now, Drive-Thru, and every other chip were silently
+        // dropped whenever Bakery/Sports Bar/Dietary was the only active filter.
         //
-        // Modes:
-        //   Sports Bar active  → ONLY sportsBarFetch  (skip mainFetch entirely)
-        //   Bakery active      → ONLY bakeryFetch      (skip mainFetch entirely)
-        //   Dietary active     → ONLY dietaryFetches   (skip mainFetch entirely)
-        //   Search text        → mainFetch always runs (user typed something specific)
-        //   Everything else    → mainFetch (general restaurant browsing)
+        // Now every fetch flows through mainFetch. The backend's Semantic
+        // Text Compiler assembles every chip into one natural-language query
+        // ("bakery with drive-thru", "sports bar with family friendly",
+        // "halal tacos restaurant") so any combination works.
 
-        const hasSearchText    = !!searchText?.trim();
-        const isSportsBarMode  = filterVibes['sportsBar'] && !hasSearchText;
-        const isBakeryMode     = filterBakery && primaryCuisine === 'all' && !hasSearchText;
         const activeDietaryKeys = Object.entries(filterDietary).filter(([_,v]) => v).map(([k]) => k);
-        const isDietaryMode    = activeDietaryKeys.length > 0 && !hasSearchText;
-
-        // Query appending: when user searches "tacos" with halal filter → send "halal tacos"
-        // This lets Google's semantic engine understand combined intent at the API level.
         const firstDietary = activeDietaryKeys[0] || '';
+
+        // Keep enhancedSearchQuery as-is — backend dedups repeated words so
+        // prepending firstDietary is safe even when the user typed it.
         const enhancedSearchQuery = searchText
           ? [firstDietary, searchText, filterParking ? 'with parking' : ''].filter(Boolean).join(' ')
           : searchText;
 
-        // Main "All Food" fetch — skipped when user has a specific intent.
-        // Client-side filters (seating/parking/drive-thru) have no Google API
-        // equivalent, so fetch a larger pool when any are active.
+        // Bump the candidate pool when client-side filters will trim results.
         const clientFilterActive = filterOutdoor || filterParking || filterDriveThru;
-        const runMainFetch = !isSportsBarMode && !isBakeryMode && !isDietaryMode;
-        const mainFetch = runMainFetch
-          ? base44.functions.invoke('getRestaurants', {
-              latitude: lat, longitude: lng,
-              radius: radius * 1609,
-              maxResults: clientFilterActive ? 60 : 40,
-              cuisine: primaryCuisine,
-              searchQuery: enhancedSearchQuery,
-              // v5.0: server-side filters — Google applies these before returning results
-              filterOpenNow,
-              filterMinRating,
-              filterMaxPrice,
-              // v5.2: pass the user's active dietary so backend can tag matches
-              // even when searchQuery is set (e.g. "kosher foods" + Kosher chip).
-              activeDietary: firstDietary || null,
-              // v5.3: full filter state for the Semantic Text Compiler.
-              // Backend weaves these into a single natural-language query
-              // ("mexican restaurant with drive-thru and family friendly").
-              filterDriveThru, filterOutdoor, filterIndoor, filterParking,
-              filterBakery, filterBars,
-              filterVibes, filterDietary,
-            })
-          : null;
 
-        // Sports Bar fetch — runs ONLY when Sports Bar vibe is active
-        // cuisine:'sports_bar' → text queries ['sports bar','bar'] + nearby POPULARITY ranking
-        const sportsBarFetch = filterVibes['sportsBar']
-          ? base44.functions.invoke('getRestaurants', {
-              latitude: lat, longitude: lng,
-              radius: radius * 1609,
-              maxResults: 40,
-              cuisine: 'sports_bar',
-              searchQuery: '',
-            })
-          : null;
+        const { data } = await base44.functions.invoke('getRestaurants', {
+          latitude: lat, longitude: lng,
+          radius: radius * 1609,
+          maxResults: clientFilterActive ? 60 : 40,
+          cuisine: primaryCuisine,
+          searchQuery: enhancedSearchQuery,
+          // Server-side native Google filters
+          filterOpenNow,
+          filterMinRating,
+          filterMaxPrice,
+          // Pass the active dietary chip so backend can tag matches even when
+          // searchQuery is set.
+          activeDietary: firstDietary || null,
+          // Full filter state — backend's Semantic Text Compiler turns these
+          // into the query sent to Google.
+          filterDriveThru, filterOutdoor, filterIndoor, filterParking,
+          filterBakery, filterBars,
+          filterVibes, filterDietary,
+        });
 
-        // Bakery fetch — runs ONLY when Bakery filter is active
-        const bakeryFetch = filterBakery
-          ? base44.functions.invoke('getRestaurants', {
-              latitude: lat, longitude: lng,
-              radius: radius * 1609,
-              maxResults: 60,
-              cuisine: 'bakery',
-              searchQuery: '',
-            })
-          : null;
+        const places = data?.places || data?.restaurants || [];
+        if (data?.fallbackInfo) setFallbackInfo(data.fallbackInfo);
 
-        // Dietary fetches — one per active dietary filter
-        const dietaryFetches = activeDietaryKeys.map(key =>
-          base44.functions.invoke('getRestaurants', {
-            latitude: lat, longitude: lng,
-            radius: radius * 1609,
-            maxResults: 30,
-            cuisine: key,
-            searchQuery: '',
-          })
-        );
-
-        // Run all active fetches in parallel.
-        // allSettled prevents one timeout from wiping all results.
-        const allSettled = await Promise.allSettled([
-          mainFetch      || Promise.resolve(null),
-          sportsBarFetch || Promise.resolve(null),
-          bakeryFetch    || Promise.resolve(null),
-          ...dietaryFetches,
-        ]);
-
-        // Merge all fulfilled results, deduplicate by place id
-        const seenIds  = new Set();
-        const allPlaces = [];
-        for (const settled of allSettled) {
-          if (settled.status !== 'fulfilled' || !settled.value) continue;
-          const places = settled.value?.data?.places || settled.value?.data?.restaurants || [];
-          for (const p of places) {
-            const id = p.id || p.placeId;
-            if (id && !seenIds.has(id)) {
-              seenIds.add(id);
-              allPlaces.push(p);
-            }
-          }
-        }
-
-        // Collect fallbackInfo and intentSorted flag from whichever fetch returned it
-        for (const settled of allSettled) {
-          if (settled.status === 'fulfilled' && settled.value?.data?.fallbackInfo) {
-            setFallbackInfo(settled.value.data.fallbackInfo);
-            break;
-          }
-        }
-
-        if (allPlaces.length > 0) {
-          setRestaurants(allPlaces.map(p => processRest(p, lat, lng)));
+        if (places.length > 0) {
+          setRestaurants(places.map(p => processRest(p, lat, lng)));
           setDisplayCount(20);
         } else {
-          const firstResult = allSettled[0].status === 'fulfilled' ? allSettled[0].value : null;
-          setError(firstResult?.data?.error || "No results found. Try expanding your radius.");
+          setError(data?.error || "No results found. Try expanding your radius.");
         }
       } catch(e) { setError(`Failed to load: ${e.message}`); }
       finally { setLoading(false); }

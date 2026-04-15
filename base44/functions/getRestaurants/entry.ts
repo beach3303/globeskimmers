@@ -566,6 +566,10 @@ Deno.serve(async (req) => {
     }
     if (filterBakery) baseTypes.push('bakery');
     if (filterBars)   baseTypes.push('bar or pub');
+    // v5.4: Sports Bar vibe was previously handled by a dedicated frontend
+    // fetch with cuisine='sports_bar'. After unifying to mainFetch the
+    // compiler must weave the vibe into the query itself.
+    if ((filterVibes as any).sportsBar) baseTypes.push('sports bar');
 
     // Dietary adjectives go at the FRONT (English grammar: "vegan mexican restaurant")
     const DIETARY_READABLE: Record<string, string> = {
