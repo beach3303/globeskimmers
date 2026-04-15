@@ -469,6 +469,17 @@ Deno.serve(async (req) => {
       // can still filter+tag results even when the dietary shortcut is skipped
       // (which happens whenever searchQuery is non-empty).
       activeDietary = null,
+      // v5.3: full UI filter state for the Semantic Text Compiler. All chip
+      // state is translated into one natural-language query Google AI can
+      // match on, instead of being stripped client-side after the fetch.
+      filterDriveThru = false,
+      filterOutdoor   = false,
+      filterIndoor    = false,
+      filterParking   = false,
+      filterBakery    = false,
+      filterBars      = false,
+      filterVibes     = {},   // { family, liveMusic, groups, sportsBar, outdoor }
+      filterDietary   = {},   // { vegetarian, vegan, halal, kosher, glutenFree }
     } = body;
 
     // Map filterMaxPrice → Google priceLevels array
@@ -529,18 +540,85 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Append "restaurant" to ALL search queries so Google returns restaurants,
-    // not grocery stores or recipe sites. Works for dishes ("pasta restaurant"),
-    // dietary ("kosher restaurant", "halal restaurant"), and cuisines ("thai restaurant").
-    // Skip appending if user already typed a venue word.
+    // ── SEMANTIC TEXT COMPILER ─────────────────────────────────────────────
+    // Translate every UI chip + the user's typed text into a single natural-
+    // language query Google Places Text Search (AI-powered) can match on.
+    // Example: cuisine=mexican + Drive-Thru + Family + search="tacos"
+    //   →  "mexican restaurant tacos with drive-thru and family friendly"
+    // This avoids the old "0 results" trap where client-side filters stripped
+    // legitimate Google results because per-place booleans weren't populated.
     const rawQuery = searchQuery?.trim() || '';
-    const skipAppend = /restaurant|food|near me|cafe|bar|bakery|shop|grill|diner|bistro/i.test(rawQuery);
-    const enhancedQuery = rawQuery && !skipAppend
-      ? `${rawQuery} restaurant`
-      : rawQuery;
-    const queries: string[] = enhancedQuery
-      ? [enhancedQuery]
+    const baseTypes: string[] = [];
+    const features: string[] = [];
+
+    // Cuisine noun — friendly-name map so "fast_food" doesn't become "fast_food restaurant"
+    const cuisineReadable: Record<string, string> = {
+      fast_food: 'fast food',
+      fine: 'fine dining',
+      latenight: 'late night',
+      glutenFree: 'gluten-free',
+      sports_bar: 'sports bar',
+    };
+    const skipCuisineInSemantic = cuisine === 'all' || cuisine === 'sports_bar' || cuisine === 'bakery';
+    if (!skipCuisineInSemantic) {
+      const friendly = cuisineReadable[cuisine] ?? cuisine.replace(/_/g, ' ');
+      baseTypes.push(`${friendly} restaurant`);
+    }
+    if (filterBakery) baseTypes.push('bakery');
+    if (filterBars)   baseTypes.push('bar or pub');
+
+    // Dietary adjectives go at the FRONT (English grammar: "vegan mexican restaurant")
+    const DIETARY_READABLE: Record<string, string> = {
+      vegan: 'vegan', vegetarian: 'vegetarian',
+      halal: 'halal', kosher: 'kosher', glutenFree: 'gluten-free',
+    };
+    const activeDietaryKeys = Object.keys(filterDietary || {}).filter(k => (filterDietary as any)[k]);
+    activeDietaryKeys.forEach(k => {
+      const adj = DIETARY_READABLE[k];
+      if (adj) baseTypes.unshift(adj);
+    });
+
+    // Features — appended with "with X and Y"
+    if (filterDriveThru) features.push('drive-thru');
+    if (filterOutdoor)   features.push('outdoor seating');
+    if (filterIndoor)    features.push('indoor seating');
+    if (filterParking)   features.push('parking');
+    const vibes = filterVibes || {};
+    if ((vibes as any).family)    features.push('family friendly');
+    if ((vibes as any).liveMusic) features.push('live music');
+    if ((vibes as any).groups)    features.push('good for groups');
+
+    // Assemble the semantic query
+    let semanticQuery = rawQuery;
+    if (baseTypes.length) {
+      semanticQuery = semanticQuery
+        ? `${baseTypes.join(' ')} ${semanticQuery}`
+        : baseTypes.join(' ');
+    }
+    if (!semanticQuery.trim()) semanticQuery = 'restaurant';
+    if (features.length) {
+      semanticQuery = `${semanticQuery} with ${features.join(' and ')}`;
+    }
+    // Dedup repeated words (e.g. "halal halal restaurant" if both chip and text
+    // carry "halal"). Case-insensitive; preserves original first occurrence.
+    {
+      const seen = new Set<string>();
+      semanticQuery = semanticQuery.split(/\s+/).filter((w: string) => {
+        const lw = w.toLowerCase();
+        if (seen.has(lw)) return false;
+        seen.add(lw);
+        return true;
+      }).join(' ');
+    }
+
+    // When any filter or search text is active, route the single semantic
+    // query to Google. Otherwise keep the multi-query CUISINE_QUERIES path
+    // for general browsing breadth.
+    const anyFilterActive = baseTypes.length > 0 || features.length > 0 || !!rawQuery;
+    const queries: string[] = anyFilterActive
+      ? [semanticQuery]
       : (CUISINE_QUERIES[cuisine] || CUISINE_QUERIES.all);
+    console.log(`🧩 Semantic query: "${semanticQuery}" | anyFilterActive: ${anyFilterActive}`);
 
     const allPlaces: any[] = [];
     const seenPlaceIds = new Set<string>();

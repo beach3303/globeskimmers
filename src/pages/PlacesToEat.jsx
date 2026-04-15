@@ -799,6 +799,12 @@ export default function PlacesToEat() {
               // v5.2: pass the user's active dietary so backend can tag matches
               // even when searchQuery is set (e.g. "kosher foods" + Kosher chip).
               activeDietary: firstDietary || null,
+              // v5.3: full filter state for the Semantic Text Compiler.
+              // Backend weaves these into a single natural-language query
+              // ("mexican restaurant with drive-thru and family friendly").
+              filterDriveThru, filterOutdoor, filterIndoor, filterParking,
+              filterBakery, filterBars,
+              filterVibes, filterDietary,
             })
           : null;
 
