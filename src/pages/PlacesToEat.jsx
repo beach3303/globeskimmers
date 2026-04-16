@@ -136,17 +136,60 @@ function isBarDominant(place) {
   return hasBarType && !hasRestType;
 }
 
-// ─── OPEN STATUS ─────────────────────────────────────────────────────────────
+// ─── OPEN STATUS (With Live Clock Override) ──────────────────────────────────
+// Cloudflare caches Google's openNow boolean for 12 hours. A place tagged
+// "Open" at noon is still "Open" at 11 PM if the cache hasn't expired.
+// This function parses the actual hours string (e.g. "11:00 AM – 9:30 PM")
+// against the user's live local clock to give a mathematically correct answer.
 function computeOpenStatus(place) {
   const hours = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
   if (!hours.length) return { isOpen: place.isOpen ?? null, todayHours: null, is24Hours: false };
+
+  const now = new Date();
   const DAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const entry = hours.find(h => h?.startsWith(DAY[new Date().getDay()]));
+  const entry = hours.find(h => h?.startsWith(DAY[now.getDay()]));
+
   if (!entry) return { isOpen: place.isOpen ?? null, todayHours: null, is24Hours: false };
+
   const hoursText = entry.substring(entry.indexOf(':')+1).trim();
   if (hoursText.toLowerCase() === 'closed') return { isOpen: false, todayHours: 'Closed today', is24Hours: false };
   if (hoursText.toLowerCase().includes('24 hours')) return { isOpen: true, todayHours: 'Open 24 hours', is24Hours: true };
-  return { isOpen: place.isOpen ?? null, todayHours: hoursText, is24Hours: false };
+
+  let isLiveOpen = place.isOpen ?? null;
+  try {
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const shifts = hoursText.split(',');
+    let foundMatch = false;
+
+    for (const shift of shifts) {
+      const parts = shift.split(/[-–]| to /i).map(s => s.trim());
+      if (parts.length === 2) {
+        const parseTime = (ts) => {
+          const m = ts.match(/(\d+)(?::(\d+))?\s*(am|pm)/i);
+          if (!m) return null;
+          let h = parseInt(m[1], 10), min = parseInt(m[2] || 0, 10);
+          if (m[3].toLowerCase() === 'pm' && h !== 12) h += 12;
+          if (m[3].toLowerCase() === 'am' && h === 12) h = 0;
+          return h * 60 + min;
+        };
+
+        const start = parseTime(parts[0]);
+        let end = parseTime(parts[1]);
+
+        if (start !== null && end !== null) {
+          if (end < start) end += 1440; // overnight (e.g. 10 PM – 2 AM)
+          let checkMins = currentMins;
+          if (checkMins < start && end > 1440) checkMins += 1440;
+          if (checkMins >= start && checkMins <= end) foundMatch = true;
+        }
+      }
+    }
+    isLiveOpen = foundMatch;
+  } catch(e) {
+    // Fall back to cached boolean if parsing fails
+  }
+
+  return { isOpen: isLiveOpen, todayHours: hoursText, is24Hours: false };
 }
 
 // ─── PRICE DISPLAY ────────────────────────────────────────────────────────────
