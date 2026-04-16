@@ -604,17 +604,38 @@ Deno.serve(async (req) => {
 
     // Assemble the semantic query
     let semanticQuery = rawQuery;
+
+    // ── INTENT-AWARE SMART APPEND ──────────────────────────────────────
+    // If the user typed a raw food noun without any UI chips (baseTypes
+    // empty), Google gets confused ("Kare Kare" → 0 results). Use the
+    // parsed intent to append the correct venue type from DISH_MAP so
+    // Google knows what kind of place to search for.
+    const isRawFoodNoun = !baseTypes.length && semanticQuery &&
+      !/restaurant|food|near me|cafe|bar|bakery|shop|grill|diner|bistro|place/i.test(semanticQuery);
+
+    if (isRawFoodNoun) {
+      if (intent.kind === 'DISH' && (intent as any).tier1Types?.length > 0) {
+        const expertType = (intent as any).tier1Types[0].replace(/_/g, ' ');
+        semanticQuery = `${semanticQuery} ${expertType}`;
+      } else {
+        semanticQuery = `${semanticQuery} shop or restaurant`;
+      }
+    }
+
+    // Weave in the Base Types (e.g., "bakery", "vegan")
     if (baseTypes.length) {
       semanticQuery = semanticQuery
         ? `${baseTypes.join(' ')} ${semanticQuery}`
         : baseTypes.join(' ');
     }
     if (!semanticQuery.trim()) semanticQuery = 'restaurant';
+
+    // Weave in the Features (e.g., "with drive-thru")
     if (features.length) {
       semanticQuery = `${semanticQuery} with ${features.join(' and ')}`;
     }
-    // Dedup repeated words (e.g. "halal halal restaurant" if both chip and text
-    // carry "halal"). Case-insensitive; preserves original first occurrence.
+
+    // Dedup repeated words (e.g. "bagel bagel shop" → "bagel shop").
     {
       const seen = new Set<string>();
       semanticQuery = semanticQuery.split(/\s+/).filter((w: string) => {
