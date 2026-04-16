@@ -345,7 +345,7 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   { pattern: /\bburger(s)?\b|\bwhopper\b/,             tier1:['hamburger_restaurant'],                                    tier2:['american_restaurant','fast_food_restaurant'],     label:'burgers' },
   { pattern: /\bsteak\b/,                              tier1:['steak_house'],                                             tier2:['american_restaurant','brazilian_restaurant'],     label:'steak' },
   { pattern: /\bbbq\b|\bbarbeque\b|\bbarbecue\b/,      tier1:['barbecue_restaurant'],                                     tier2:['american_restaurant'],                            label:'BBQ' },
-  { pattern: /\bwings\b|\bchicken\s*wings\b|\bbuffalo\s*wings\b/, tier1:['chicken_restaurant'],                          tier2:['american_restaurant','sports_bar','bar','fast_food_restaurant'], label:'wings' },
+  { pattern: /\bwings\b|\bchicken\s*wings\b|\bbuffalo\s*wings\b/, tier1:['chicken_restaurant'],                          tier2:['pizza_restaurant','sports_bar','bar'],                          label:'wings' },
   { pattern: /\bfried\s*chicken\b|\bchicken\b/,        tier1:['chicken_restaurant'],                                     tier2:['fast_food_restaurant','american_restaurant'],     label:'fried chicken' },
   { pattern: /\blobster\s*roll\b|\bclam\s*chowder\b/,  tier1:['seafood_restaurant'],                                      tier2:['american_restaurant'],                            label:'seafood' },
   { pattern: /\bgumbo\b|\bpo[\s-]*boy\b/,              tier1:['cajun_restaurant','southern_restaurant'],                   tier2:['american_restaurant'],                            label:'Cajun' },
