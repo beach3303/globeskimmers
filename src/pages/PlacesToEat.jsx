@@ -868,6 +868,30 @@ export default function PlacesToEat() {
   // multi-select cuisine type filter (a different mechanism).
   const filtered = useMemo(() => {
     let r = [...restaurants];
+
+    // ── LATE NIGHT STRICT FRONTEND BOUNCER (MATH-BASED) ──
+    // Backend's Bouncer uses regex on the hours[] array. This frontend Bouncer
+    // converts todayHours into 24h math so literally zero restaurants closing
+    // before 10 PM survive, regardless of how Google formats the string.
+    if (selectedCuisines.has('latenight')) {
+      r = r.filter(x => {
+        if (x.is24Hours) return true;
+        if (!x.todayHours || x.todayHours.toLowerCase().includes('closed')) return false;
+        const parts = x.todayHours.split(/[-–]| to /i);
+        let closeStr = (parts.length > 1 ? parts[parts.length - 1] : x.todayHours).trim().toLowerCase();
+        if (closeStr.includes('midnight')) return true;
+        const match = closeStr.match(/(\d+)(?::(\d+))?\s*(am|pm)/);
+        if (!match) return false;
+        let hour = parseInt(match[1], 10);
+        const min = parseInt(match[2] || 0, 10);
+        const ampm = match[3];
+        if (ampm === 'pm' && hour !== 12) hour += 12;
+        if (ampm === 'am' && hour === 12) hour = 0;
+        const timeValue = hour + (min / 60);
+        return timeValue >= 22 || (timeValue >= 0 && timeValue <= 5);
+      });
+    }
+
     if (filterOpenNow)    r = r.filter(x => x.isOpen === true);
     if (filterMinRating>0) r = r.filter(x => (x.rating||0) >= filterMinRating);
     if (filterMaxPrice>0)  r = r.filter(x => !x.priceLevel || (parseInt(x.priceLevel)||0) <= filterMaxPrice);
