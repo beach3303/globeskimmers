@@ -1002,6 +1002,26 @@ Deno.serve(async (req) => {
 
     let finalPlaces = processedPlaces;
 
+    // ── LATE NIGHT HARD-FILTER (The "Bouncer") ──────────────────────────
+    // Google's semantic search gathers 60 late-night candidates, but some
+    // close at 8 PM. Use strict regex on the official Google hours strings
+    // to kick out anything that closes before 10 PM.
+    if (cuisine === 'latenight') {
+      finalPlaces = finalPlaces.filter((p: any) => {
+        if (!p.hours || p.hours.length === 0) return false;
+        return p.hours.some((dayStr: string) => {
+          const text = dayStr.toLowerCase();
+          if (text.includes('24 hours')) return true;
+          // Google formats: "Monday: 9:00 AM – 10:30 PM"
+          // Split by dash/hyphen to isolate the closing-time half.
+          const parts = text.split(/[-–to]/);
+          const closingPart = parts.length > 1 ? parts[parts.length - 1] : text;
+          // Match 10:xx PM, 11:xx PM, 12:xx AM, or 1–5:xx AM (genuinely late).
+          return /(10|11):\d{2}\s*pm|(12|1|2|3|4|5):\d{2}\s*am/i.test(closingPart);
+        });
+      });
+    }
+
     if (effectiveDietary) {
       // Filter to places that strongly match the dietary. Fall back to the
       // full set if filtering is too aggressive (<3 matches) so the user
