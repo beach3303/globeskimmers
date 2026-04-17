@@ -1116,16 +1116,6 @@ export default function PlacesToEat() {
                   </div>
                 </div>
 
-                <div>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"4px"}}>🪑 Seating & 🅿️ Parking</div>
-                  <div style={{fontSize:"11px",color:"#15803D",marginBottom:"8px",fontWeight:"600"}}>✅ Google-confirmed data only</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-                    <Chip label="Indoor Seating"  icon="🏠" active={filterIndoor}    onClick={()=>setFilterIndoor(!filterIndoor)}     color={TEAL}/>
-                    <Chip label="Outdoor/Patio"   icon="🌿" active={filterOutdoor}   onClick={()=>setFilterOutdoor(!filterOutdoor)}   color={TEAL}/>
-                    <Chip label="Has Parking"      icon="🅿️" active={filterParking}   onClick={()=>setFilterParking(!filterParking)}   color={TEAL}/>
-                    <Chip label="Drive-Thru"       icon="🚗" active={filterDriveThru} onClick={()=>setFilterDriveThru(!filterDriveThru)} color={TEAL}/>
-                  </div>
-                </div>
 
                 <div>
                   <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>⭐ Min Rating</div>
