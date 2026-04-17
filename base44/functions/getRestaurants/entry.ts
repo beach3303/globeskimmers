@@ -568,6 +568,7 @@ Deno.serve(async (req) => {
       latenight: 'late night',
       glutenFree: 'gluten-free',
       sports_bar: 'sports bar',
+      dessert: 'dessert shop',
     };
     const skipCuisineInSemantic = cuisine === 'all' || cuisine === 'sports_bar' || cuisine === 'bakery';
     if (!skipCuisineInSemantic) {

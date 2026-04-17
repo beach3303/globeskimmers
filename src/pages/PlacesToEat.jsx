@@ -769,7 +769,7 @@ export default function PlacesToEat() {
   }, [selectedCuisines]);
 
   // Which cuisines need client-side type filtering (non-special, non-dietary, non-all)
-  const SPECIAL_CUISINES = new Set(['all','fine','budget','latenight','halal','kosher','vegan','vegetarian']);
+  const SPECIAL_CUISINES = new Set(['all','fine','budget','latenight','halal','kosher','vegan','vegetarian','dessert']);
   const cuisineTypeFilter = useMemo(() => {
     const active = [...selectedCuisines].filter(c => !SPECIAL_CUISINES.has(c));
     if (active.length === 0) return null;
