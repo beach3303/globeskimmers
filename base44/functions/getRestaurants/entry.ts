@@ -573,9 +573,10 @@ Deno.serve(async (req) => {
     const skipCuisineInSemantic = cuisine === 'all' || cuisine === 'sports_bar' || cuisine === 'bakery';
     if (!skipCuisineInSemantic) {
       const friendly = cuisineReadable[cuisine] ?? cuisine.replace(/_/g, ' ');
-      baseTypes.push(`${friendly} restaurant`);
+      const needsVenue = !/(shop|dining|bar|restaurant)/i.test(friendly);
+      baseTypes.push(needsVenue ? `${friendly} restaurant` : friendly);
     }
-    if (filterBakery) baseTypes.push('bakery');
+    if (filterBakery) baseTypes.push('bakery or pastry shop');
     if (filterBars)   baseTypes.push('bar or pub');
     // v5.4: Sports Bar vibe was previously handled by a dedicated frontend
     // fetch with cuisine='sports_bar'. After unifying to mainFetch the
@@ -770,11 +771,13 @@ Deno.serve(async (req) => {
       })
     );
 
-    // Compute includedType for server-side narrowing at Google. Use it only when
-    // user hasn't typed a search query (their text intent should win) and the
-    // cuisine maps to exactly one Google Place type.
+    // Compute includedType for server-side narrowing at Google.
+    // DANGER: includedType strictly filters out everything else!
+    // Only use it when: no search text, no advanced filters, AND the cuisine
+    // maps to exactly 1 Google type. Dessert (4 types) / Bakery (3 types)
+    // would lock to just ice_cream_shop / bakery, filtering out all others.
     const cuisineTypeList = NEARBY_TYPES_CUISINE[cuisine];
-    const serverIncludedType = (!rawQuery && cuisine !== 'all' && cuisineTypeList?.length)
+    const serverIncludedType = (!rawQuery && !hasAdvancedFilters && cuisine !== 'all' && cuisineTypeList?.length === 1)
       ? cuisineTypeList[0]
       : '';
 
