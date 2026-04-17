@@ -780,7 +780,8 @@ export default function PlacesToEat() {
     filterOpenNow, Object.values(filterVibes).some(Boolean),
     Object.values(filterDietary).some(Boolean),
     filterMinRating>0, filterMaxPrice>0,
-    filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterBars
+    filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterBars,
+    !selectedCuisines.has('all') && selectedCuisines.size > 0,
   ].filter(Boolean).length;
 
   // ── FETCH ──────────────────────────────────────────────────────────────────
