@@ -1076,7 +1076,10 @@ export default function PlacesToEat() {
 
                 {/* All Foods — cuisine multi-select (dietary types excluded; they live in Dietary section) */}
                 <div>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>🍽️ All Foods</div>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
+                    <span style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px"}}>🍽️ All Foods</span>
+                    {activeFilterCount>0&&<button onClick={clearFilters} style={{background:"none",border:"none",padding:"0",color:CORAL,fontSize:"11px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit",opacity:0.8}}>Clear Filters</button>}
+                  </div>
                   <div ref={cuisineScrollRef} style={{display:"flex",gap:"6px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none",marginBottom:"8px"}}>
                     {CUISINES.filter(c=>!['vegetarian','vegan','halal','kosher'].includes(c.id)).map(c=>{
                       const active = selectedCuisines.has(c.id);
