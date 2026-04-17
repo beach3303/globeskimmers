@@ -1216,6 +1216,8 @@ export default function PlacesToEat() {
       {showAdvanced&&(
         <button onClick={()=>setShowAdvanced(false)} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9999,width:"40px",height:"40px",borderRadius:"50%",border:"none",background:BLUE,color:"#fff",fontWeight:"700",fontSize:"18px",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       )}
+      {/* Scroll-to-top — appears after scrolling down */}
+      {displayCount>20&&<button onClick={()=>window.scrollTo({top:0,behavior:'smooth'})} style={{position:"fixed",bottom:"90px",left:"16px",zIndex:9999,display:"flex",alignItems:"center",gap:"4px",padding:"8px 14px",borderRadius:"24px",border:"none",background:DARK,color:"#fff",fontWeight:"700",fontSize:"12px",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.3)",fontFamily:"inherit",opacity:0.85}}>↑ Top</button>}
       <LocationModePicker isOpen={showLocPicker} onClose={()=>setShowLocPicker(false)}/>
       <DirectionsPicker isOpen={dirModal.open} onClose={()=>setDirModal({open:false,lat:null,lng:null,name:''})} lat={dirModal.lat} lng={dirModal.lng} name={dirModal.name} userLat={lat} userLng={lng}/>
     </div>
