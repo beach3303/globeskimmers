@@ -568,16 +568,16 @@ Deno.serve(async (req) => {
       latenight: 'late night',
       glutenFree: 'gluten-free',
       sports_bar: 'sports bar',
-      dessert: 'dessert shop',
+      dessert: 'desserts',
     };
     const skipCuisineInSemantic = cuisine === 'all' || cuisine === 'sports_bar' || cuisine === 'bakery';
     if (!skipCuisineInSemantic) {
       const friendly = cuisineReadable[cuisine] ?? cuisine.replace(/_/g, ' ');
-      const needsVenue = !/(shop|dining|bar|restaurant)/i.test(friendly);
+      const needsVenue = !/(shop|dining|bar|restaurant|desserts?)/i.test(friendly);
       baseTypes.push(needsVenue ? `${friendly} restaurant` : friendly);
     }
-    if (filterBakery) baseTypes.push('bakery or pastry shop');
-    if (filterBars)   baseTypes.push('bar or pub');
+    if (filterBakery) baseTypes.push('bakery pastry');
+    if (filterBars)   baseTypes.push('bars pubs');
     // v5.4: Sports Bar vibe was previously handled by a dedicated frontend
     // fetch with cuisine='sports_bar'. After unifying to mainFetch the
     // compiler must weave the vibe into the query itself.
