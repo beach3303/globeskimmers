@@ -1054,7 +1054,7 @@ export default function PlacesToEat() {
           </div>
           <div style={{display:"flex",background:"#F1F5F9",borderRadius:"10px",padding:"3px"}}>
             {["list","map"].map(v=>(
-              <button key={v} onClick={()=>setViewMode(v)} style={{padding:"7px 14px",borderRadius:"8px",border:"none",background:viewMode===v?BLUE:"transparent",color:viewMode===v?"#fff":GRAY,fontWeight:"700",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{v==="list"?"📋":"🗺️"}</button>
+              <button key={v} onClick={()=>setViewMode(v)} style={{padding:"7px 14px",borderRadius:"8px",border:"none",background:viewMode===v?BLUE:"transparent",color:viewMode===v?"#fff":GRAY,fontWeight:"700",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{v==="list"?"List View":"Map View"}</button>
             ))}
           </div>
         </div>
