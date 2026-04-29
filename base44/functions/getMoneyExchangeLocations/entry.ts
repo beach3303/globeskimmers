@@ -45,7 +45,7 @@ async function fetchLiveLocations(args) {
         headers: {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': apiKey,
-            'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.location,places.currentOpeningHours,places.regularOpeningHours'
+            'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.location,places.currentOpeningHours,places.regularOpeningHours,places.websiteUri'
         },
         body: JSON.stringify({
             textQuery: "currency exchange OR money exchange OR bureau de change",
@@ -80,7 +80,7 @@ async function fetchLiveLocations(args) {
             headers: {
                 'Content-Type': 'application/json',
                 'X-Goog-Api-Key': apiKey,
-                'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.location,places.currentOpeningHours,places.regularOpeningHours,places.types'
+                'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.location,places.currentOpeningHours,places.regularOpeningHours,places.websiteUri,places.types'
             },
             body: JSON.stringify({
                 includedTypes: ["financial_institution"],
@@ -151,8 +151,10 @@ async function fetchLiveLocations(args) {
         }
 
         const isOpen = place.currentOpeningHours?.openNow || place.regularOpeningHours?.openNow || false;
-        const hoursToday = place.currentOpeningHours?.weekdayDescriptions?.[new Date().getDay()] || 
+        const hoursToday = place.currentOpeningHours?.weekdayDescriptions?.[new Date().getDay()] ||
                          place.regularOpeningHours?.weekdayDescriptions?.[new Date().getDay()] || null;
+        const weekdayDescriptions = place.currentOpeningHours?.weekdayDescriptions ||
+                                    place.regularOpeningHours?.weekdayDescriptions || [];
 
         const locationData = {
             name: place.displayName?.text || "Currency Exchange",
@@ -164,6 +166,8 @@ async function fetchLiveLocations(args) {
             exchange_rate: locationRate,
             type: "Currency Exchange",
             hours_today: hoursToday,
+            hours: weekdayDescriptions,
+            website: place.websiteUri || null,
             is_open: isOpen
         };
 

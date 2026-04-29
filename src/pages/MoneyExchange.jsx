@@ -254,6 +254,7 @@ export default function MoneyExchangePage() {
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [openOnly, setOpenOnly] = useState(false);
   const [converterCollapsed, setConverterCollapsed] = useState(false);
+  const [expandedStoreIndex, setExpandedStoreIndex] = useState(null);
 
   useEffect(() => {
     loadUserAndLocation();
@@ -1032,29 +1033,24 @@ export default function MoneyExchangePage() {
 
                           <p className="text-[11px] text-gray-600 mb-2">{store.address}</p>
 
-                          <div className="flex items-center gap-3 mb-2">
+                          <div className="flex items-center gap-3 mb-2 flex-wrap">
                             {store.is_open !== undefined && (
                               <span className={`text-[11px] font-semibold ${store.is_open ? 'text-green-600' : 'text-red-600'}`}>
                                 {store.is_open ? '● Open Now' : '● Closed'}
                               </span>
                             )}
+                            {store.hours_today && (
+                              <span className="text-[11px] text-gray-700">🕐 {store.hours_today.split(':').slice(1).join(':').trim()}</span>
+                            )}
                             {store.phone && (
-                              <span className="text-[11px] text-gray-600 flex items-center gap-1">
+                              <a href={`tel:${store.phone}`} className="text-[11px] text-gray-600 flex items-center gap-1 hover:text-[#667eea]">
                                 <Phone className="w-3 h-3" />
                                 {store.phone}
-                              </span>
+                              </a>
                             )}
                           </div>
 
                           <div className="flex gap-2 mt-2">
-                            <Button
-                              size="sm"
-                              className="flex-1 h-8 text-[11px] bg-[#667eea] hover:bg-[#5568d3]"
-                              onClick={() => handleShowOnMap(index)}
-                            >
-                              <Map className="w-3 h-3 mr-1" />
-                              Show on Map
-                            </Button>
                             <Button
                               size="sm"
                               variant="outline"
@@ -1064,7 +1060,60 @@ export default function MoneyExchangePage() {
                               <Navigation className="w-3 h-3 mr-1" />
                               Directions
                             </Button>
+                            <Button
+                              size="sm"
+                              className="flex-1 h-8 text-[11px] bg-[#667eea] hover:bg-[#5568d3]"
+                              onClick={() => handleShowOnMap(index)}
+                            >
+                              <Map className="w-3 h-3 mr-1" />
+                              Map
+                            </Button>
+                            {((store.hours && store.hours.length > 0) || store.website) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 h-8 text-[11px] border-gray-300 text-gray-700 hover:bg-gray-100"
+                                onClick={() => setExpandedStoreIndex(expandedStoreIndex === index ? null : index)}
+                              >
+                                {expandedStoreIndex === index ? '▲ Less' : '▼ Details'}
+                              </Button>
+                            )}
                           </div>
+
+                          {expandedStoreIndex === index && ((store.hours && store.hours.length > 0) || store.website) && (
+                            <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-200">
+                              {store.hours && store.hours.length > 0 && (
+                                <>
+                                  <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">🕐 Weekly Hours</div>
+                                  {store.hours.map((h, di) => {
+                                    const today = new Date().getDay();
+                                    const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+                                    const dayIdx = dayNames.findIndex(d => h?.toLowerCase?.().startsWith(d.toLowerCase()));
+                                    const isToday = dayIdx === today;
+                                    const parts = (h || '').split(':');
+                                    const dayName = parts[0];
+                                    const hrs = parts.slice(1).join(':').trim();
+                                    return (
+                                      <div key={di} className={`flex justify-between text-[11px] py-0.5 ${isToday ? 'font-bold text-[#667eea]' : 'text-gray-700'}`}>
+                                        <span>{dayName}{isToday && ' (Today)'}</span>
+                                        <span className={hrs.toLowerCase() === 'closed' ? 'text-red-600' : ''}>{hrs}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </>
+                              )}
+                              {store.website && (
+                                <a
+                                  href={store.website}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`block text-[11px] text-[#667eea] font-semibold ${store.hours && store.hours.length > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}`}
+                                >
+                                  🌐 Visit Website
+                                </a>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
