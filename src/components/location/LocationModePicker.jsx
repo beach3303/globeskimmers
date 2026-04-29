@@ -142,7 +142,7 @@ export default function LocationModePicker({ isOpen, onClose }) {
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[9998] overflow-hidden">
+        <div className="fixed inset-0 z-[9998] overflow-hidden flex items-center justify-center px-3">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -150,13 +150,13 @@ export default function LocationModePicker({ isOpen, onClose }) {
             onClick={onClose}
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           />
-          
+
           <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[24px] shadow-2xl max-h-[95vh] overflow-hidden flex flex-col"
+            initial={{ y: 40, opacity: 0, scale: 0.96 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 40, opacity: 0, scale: 0.96 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+            className="relative w-full max-w-md bg-white rounded-[24px] shadow-2xl max-h-[85vh] overflow-hidden flex flex-col"
           >
             {/* Mode Selection */}
             {mode === 'select' && (
