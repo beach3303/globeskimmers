@@ -740,7 +740,7 @@ export default function RestroomFinderPage() {
           <div style={{ display: "flex", gap: "3px" }}>
             {["list", "map"].map(v => (
               <button key={v} onClick={() => setViewMode(v)} style={{ padding: "6px 10px", borderRadius: "8px", border: "none", background: viewMode === v ? TEAL : "#E2E8F0", color: viewMode === v ? "#fff" : GRAY, fontWeight: "700", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>
-                {v === "list" ? "📋" : "🗺️"}
+                {v === "list" ? "List View" : "Map View"}
               </button>
             ))}
           </div>

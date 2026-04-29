@@ -543,7 +543,7 @@ export default function CoffeeFinderPage() {
             {stats.withParking>0&&<span style={{color:GRAY}}>· {stats.withParking} 🅿️</span>}
           </div>
           <div style={{display:"flex",gap:"4px"}}>
-            {["list","map"].map(v=><button key={v} onClick={()=>setViewMode(v)} style={{padding:"6px 12px",borderRadius:"8px",border:"none",background:viewMode===v?BROWN:"#E2E8F0",color:viewMode===v?"#fff":GRAY,fontWeight:"700",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{v==="list"?"📋 List":"🗺️ Map"}</button>)}
+            {["list","map"].map(v=><button key={v} onClick={()=>setViewMode(v)} style={{padding:"6px 12px",borderRadius:"8px",border:"none",background:viewMode===v?BROWN:"#E2E8F0",color:viewMode===v?"#fff":GRAY,fontWeight:"700",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{v==="list"?"List View":"Map View"}</button>)}
           </div>
         </div>
       </div>

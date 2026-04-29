@@ -771,7 +771,7 @@ export default function ATMFinderPage() {
           <div style={{ display:"flex", gap:"4px" }}>
             {["list","map"].map(v => (
               <button key={v} onClick={() => setViewMode(v)} style={{ padding:"6px 12px", borderRadius:"8px", border:"none", background: viewMode===v ? TEAL : "#E2E8F0", color: viewMode===v ? "#fff" : GRAY, fontWeight:"700", fontSize:"12px", cursor:"pointer", fontFamily:"inherit" }}>
-                {v==="list" ? "📋" : "🗺️"} {v.charAt(0).toUpperCase()+v.slice(1)}
+                {v==="list" ? "List View" : "Map View"}
               </button>
             ))}
           </div>

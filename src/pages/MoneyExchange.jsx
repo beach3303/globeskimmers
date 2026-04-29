@@ -921,7 +921,7 @@ export default function MoneyExchangePage() {
                       : "text-gray-500"
                   }`}
                 >
-                  📍 List View
+                  List View
                 </button>
                 <button
                   onClick={() => setViewMode("map")}
@@ -931,7 +931,7 @@ export default function MoneyExchangePage() {
                       : "text-gray-500"
                   }`}
                 >
-                  🗺️ Map View
+                  Map View
                 </button>
               </div>
             </div>
