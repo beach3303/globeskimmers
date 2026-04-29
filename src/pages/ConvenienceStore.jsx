@@ -126,6 +126,23 @@ function formatDistance(miles) {
 }
 
 // ============================================================================
+// HELPER: Today's Hours (parses an entry like "Monday: 7:00 AM – 11:00 PM")
+// ============================================================================
+
+function getTodayHours(hoursArr, is24Hours) {
+  if (is24Hours) return 'Open 24 hours';
+  if (!Array.isArray(hoursArr) || hoursArr.length === 0) return null;
+  const DAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const today = DAY[new Date().getDay()];
+  const entry = hoursArr.find(h => typeof h === 'string' && h.toLowerCase().startsWith(today.toLowerCase()));
+  if (!entry) return null;
+  const txt = entry.substring(entry.indexOf(':') + 1).trim();
+  if (!txt) return null;
+  if (txt.toLowerCase() === 'closed') return 'Closed today';
+  return txt;
+}
+
+// ============================================================================
 // HELPER: Normalize Store Data (snake_case → camelCase)
 // ============================================================================
 
@@ -336,19 +353,20 @@ function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng })
 // COMPONENT: Store Card (Beautiful Design)
 // ============================================================================
 
-function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng }) {
+function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, onShowOnMap, index }) {
   const [showGallery, setShowGallery] = useState(false);
   const [photoError, setPhotoError] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [showDirs, setShowDirs] = useState(false);
   const [showHours, setShowHours] = useState(false);
   const touchStartX = useRef(0);
-  
+
   // Normalize the store data
   const store = normalizeStore(rawStore);
   const chainInfo = detectChain(store.name);
   const photos = store.photos || [];
   const mainPhotoUrl = photos.length > 0 && !photoError ? getPhotoUrl(photos[0], 600) : null;
+  const todayHrs = getTodayHours(store.hours, store.is24Hours);
   
   // Swipe handlers for inline photo carousel
   const handleTouchStart = (e) => {
@@ -599,7 +617,24 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng }) 
               </a>
             )}
           </div>
-          
+
+          {/* Today's Hours */}
+          {todayHrs && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 10px',
+              background: store.is24Hours ? '#E3F2FD' : store.isOpen ? '#F0FDF4' : '#FEF2F2',
+              borderRadius: '8px',
+              fontSize: '12px',
+              marginBottom: '10px'
+            }}>
+              <span style={{ fontWeight: '700', color: store.is24Hours ? '#1565C0' : store.isOpen ? '#15803D' : '#B91C1C' }}>🕐 Today</span>
+              <span style={{ color: COLORS.text }}>{todayHrs}</span>
+            </div>
+          )}
+
           {/* Features Row */}
           <div style={{
             display: 'flex',
@@ -653,17 +688,24 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng }) 
 
         {/* Action Buttons Row — always visible, outside clickable area */}
         <div style={{ display:'flex', gap:'8px', padding:'0 16px 12px' }} onClick={e=>e.stopPropagation()}>
-          <button onClick={()=>setShowDirs(true)} style={{ flex:2, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', padding:'10px', borderRadius:'10px', border:'none', background:COLORS.primary, color:'#fff', fontWeight:'700', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>🧭 Directions</button>
-          {store.lat&&store.lng&&<a href={`https://www.google.com/maps/search/?api=1&query=${store.lat},${store.lng}`} target="_blank" rel="noopener noreferrer" style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'5px', padding:'10px', borderRadius:'10px', background:'#EDE9FE', color:'#7C3AED', fontWeight:'700', fontSize:'13px', textDecoration:'none' }}>🗺️ Map</a>}
-          {store.hours?.length>0&&<button onClick={()=>setShowHours(h=>!h)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'10px', borderRadius:'10px', border:'none', background:showHours?COLORS.dark:'#F1F5F9', color:showHours?'#fff':COLORS.dark, fontWeight:'700', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>{showHours?'▲':'▼ Hrs'}</button>}
+          <button onClick={()=>setShowDirs(true)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', padding:'10px', borderRadius:'10px', border:'none', background:COLORS.primary, color:'#fff', fontWeight:'700', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>🧭 Directions</button>
+          {store.lat&&store.lng&&<button onClick={()=>onShowOnMap?.(index)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'5px', padding:'10px', borderRadius:'10px', border:'none', background:'#EDE9FE', color:'#7C3AED', fontWeight:'700', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>📍 Map</button>}
+          <button onClick={()=>setShowHours(h=>!h)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'10px', borderRadius:'10px', border:'none', background:showHours?COLORS.dark:'#F1F5F9', color:showHours?'#fff':COLORS.dark, fontWeight:'700', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>{showHours?'▲ Less':'▼ Details'}</button>
         </div>
 
-        {/* Inline Hours (toggle) */}
-        {showHours&&store.hours?.length>0&&(
+        {/* Inline Details (toggle): website + weekly hours */}
+        {showHours&&(
           <div style={{ padding:'0 16px 12px' }} onClick={e=>e.stopPropagation()}>
             <div style={{ background:'#F8FAFC', borderRadius:'10px', padding:'12px', border:`1px solid ${COLORS.border}` }}>
-              <div style={{ fontSize:'11px', color:COLORS.textLight, fontWeight:'700', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.5px' }}>🕐 Weekly Hours</div>
-              {store.hours.map((h,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(d=>h.toLowerCase().startsWith(d.toLowerCase()));const isT=di===today;const pts=h.split(':');const dn2=pts[0];const hrs=pts.slice(1).join(':').trim();return(<div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:'13px',color:isT?COLORS.primary:COLORS.text,fontWeight:isT?'700':'400',padding:isT?'6px 8px':'4px 0',background:isT?`${COLORS.primary}10`:'transparent',borderRadius:isT?'6px':'0',borderLeft:isT?`3px solid ${COLORS.primary}`:'3px solid transparent'}}><span>{dn2}{isT&&<span style={{fontSize:'10px',color:COLORS.primary,marginLeft:'5px',fontWeight:'800'}}>TODAY</span>}</span><span style={{color:hrs.toLowerCase()==='closed'?COLORS.error:isT?COLORS.primary:COLORS.textLight}}>{hrs}</span></div>);})}
+              {store.hours?.length>0&&(
+                <>
+                  <div style={{ fontSize:'11px', color:COLORS.textLight, fontWeight:'700', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.5px' }}>🕐 Weekly Hours</div>
+                  {store.hours.map((h,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(d=>h.toLowerCase().startsWith(d.toLowerCase()));const isT=di===today;const pts=h.split(':');const dn2=pts[0];const hrs=pts.slice(1).join(':').trim();return(<div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:'13px',color:isT?COLORS.primary:COLORS.text,fontWeight:isT?'700':'400',padding:isT?'6px 8px':'4px 0',background:isT?`${COLORS.primary}10`:'transparent',borderRadius:isT?'6px':'0',borderLeft:isT?`3px solid ${COLORS.primary}`:'3px solid transparent'}}><span>{dn2}{isT&&<span style={{fontSize:'10px',color:COLORS.primary,marginLeft:'5px',fontWeight:'800'}}>TODAY</span>}</span><span style={{color:hrs.toLowerCase()==='closed'?COLORS.error:isT?COLORS.primary:COLORS.textLight}}>{hrs}</span></div>);})}
+                </>
+              )}
+              {store.website&&(
+                <a href={store.website} target="_blank" rel="noopener noreferrer" style={{ display:'flex', alignItems:'center', gap:'8px', marginTop: store.hours?.length>0 ? '10px' : '0', padding:'8px 10px', background:'#fff', border:`1px solid ${COLORS.border}`, borderRadius:'8px', textDecoration:'none', color:COLORS.primary, fontSize:'13px', fontWeight:'600' }}>🌐 Visit Website</a>
+              )}
             </div>
           </div>
         )}
@@ -783,19 +825,61 @@ function FilterChip({ filter, isActive, onToggle }) {
 }
 
 // ============================================================================
+// MAP POPUP HTML
+// ============================================================================
+
+function buildStoreMapPopup(store, index) {
+  const name    = store.name || 'Store';
+  const address = store.address || store.shortAddress || '';
+  const phone   = store.phone || null;
+  const todayHrs = getTodayHours(store.hours, store.is24Hours);
+  const isOpen   = store.isOpen;
+  const is24     = store.is24Hours;
+  const dist     = (store.distance !== null && store.distance !== undefined) ? formatDistance(store.distance) : '';
+  const statusBg    = is24 ? '#E3F2FD' : isOpen === true ? '#E8F5E9' : isOpen === false ? '#FFEBEE' : '#F5F5F5';
+  const statusColor = is24 ? '#1565C0' : isOpen === true ? '#2E7D32' : isOpen === false ? '#D32F2F' : '#9E9E9E';
+  const statusLabel = is24 ? '🌙 Open 24/7' : isOpen === true ? '● Open' : isOpen === false ? '● Closed' : '● Hours N/A';
+  return `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:260px;position:relative;">
+      <div style="padding:12px;padding-top:14px;">
+        <div onclick="window.viewStoreDetails&&window.viewStoreDetails(${index})" style="font-weight:700;font-size:15px;color:#1A2332;margin-bottom:6px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding-right:26px;">${name}</div>
+        <div style="font-size:12px;color:#64748B;margin-bottom:6px;padding:6px 8px;background:#F8FAFC;border-radius:6px;">📍 ${address}${dist ? ` · ${dist}` : ''}</div>
+        <div style="font-size:12px;margin-bottom:6px;padding:6px 10px;border-radius:6px;background:${statusBg};">
+          <span style="font-weight:700;color:${statusColor};">${statusLabel}</span>
+          ${todayHrs && !is24 ? `<span style="color:#64748B;"> · ${todayHrs}</span>` : ''}
+        </div>
+        ${phone ? `<a href="tel:${phone}" style="display:flex;align-items:center;gap:8px;margin:8px 0;padding:7px 10px;background:#E3F2FD;border-radius:6px;text-decoration:none;color:#1565C0;font-size:12px;"><span>📞</span><span style="font-weight:600;">${phone}</span></a>` : ''}
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button onclick="window.openDirectionsFromStoreMap&&window.openDirectionsFromStoreMap(${index})" style="flex:1;padding:9px;border:none;border-radius:8px;background:#1E3A5F;color:#fff;font-weight:600;font-size:12px;cursor:pointer;">🧭 Directions</button>
+          <button onclick="window.viewStoreDetails&&window.viewStoreDetails(${index})" style="flex:1;padding:9px;border:none;border-radius:8px;background:#F1F5F9;color:#1A2332;font-weight:600;font-size:12px;cursor:pointer;">📋 Details</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================================
 // MAIN PAGE COMPONENT
 // ============================================================================
 
 export default function ConvenienceStorePage() {
   const navigate = useNavigate();
-  
+
   // State
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [location, setLocation] = useState(null);
   const [selectedStore, setSelectedStore] = useState(null);
-  
+  const [viewMode, setViewMode] = useState('list');
+  const [selectedMapIndex, setSelectedMapIndex] = useState(null);
+  const [directionsStore, setDirectionsStore] = useState(null);
+
+  // Refs
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const cardRefs = useRef({});
+
   // Filters
   const [activeFilters, setActiveFilters] = useState({});
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -876,7 +960,100 @@ export default function ConvenienceStorePage() {
   };
   
   const activeFilterCount = Object.values(activeFilters).filter(Boolean).length;
-  
+
+  // Pre-normalize for the map (so popup/markers match what cards display)
+  const normalizedStores = stores.map(normalizeStore);
+
+  const handleShowOnMap = (idx) => {
+    setSelectedMapIndex(idx);
+    setViewMode('map');
+    setTimeout(() => {
+      const s = normalizedStores[idx];
+      if (mapInstanceRef.current && s?.lat && s?.lng) mapInstanceRef.current.setView([s.lat, s.lng], 16);
+    }, 300);
+  };
+
+  // ============================================================================
+  // LEAFLET MAP
+  // ============================================================================
+
+  useEffect(() => {
+    if (viewMode !== 'map' || !mapRef.current || !location?.latitude || !location?.longitude) return;
+    const lat = location.latitude;
+    const lng = location.longitude;
+    const init = () => {
+      if (mapInstanceRef.current) mapInstanceRef.current.remove();
+      const map = window.L.map(mapRef.current).setView([lat, lng], 14);
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(map);
+      mapInstanceRef.current = map;
+
+      window.viewStoreDetails = (i) => {
+        setViewMode('list');
+        setTimeout(() => cardRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+      };
+      window.openDirectionsFromStoreMap = (i) => setDirectionsStore(normalizedStores[i]);
+
+      // User dot
+      window.L.marker([lat, lng], {
+        icon: window.L.divIcon({
+          html: '<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',
+          iconSize: [16, 16],
+          className: ''
+        })
+      }).addTo(map);
+
+      normalizedStores.forEach((s, i) => {
+        if (!s.lat || !s.lng) return;
+        const isSelected = i === selectedMapIndex;
+        const pinBg = isSelected ? '#FF6B35' : COLORS.primary;
+        const pinSize = isSelected ? 36 : 28;
+        const pinBorder = isSelected ? '3px solid #fff' : '2px solid #fff';
+        const pinShadow = isSelected
+          ? '0 0 0 3px rgba(255,107,53,0.4), 0 3px 10px rgba(255,107,53,0.5)'
+          : '0 2px 8px rgba(30,58,95,0.4)';
+        const marker = window.L.marker([s.lat, s.lng], {
+          icon: window.L.divIcon({
+            html: `<div style="width:${pinSize}px;height:${pinSize}px;background:${pinBg};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:${isSelected ? 14 : 12}px;box-shadow:${pinShadow};border:${pinBorder};">${i + 1}</div>`,
+            iconSize: [pinSize, pinSize],
+            className: ''
+          })
+        })
+          .addTo(map)
+          .bindPopup(buildStoreMapPopup(s, i), {
+            maxWidth: 270,
+            autoPan: true,
+            autoPanPaddingTopLeft: [0, 160],
+            autoPanPaddingBottomRight: [20, 20],
+            keepInView: true,
+            className: 'gs-popup'
+          });
+        if (isSelected) setTimeout(() => marker.openPopup(), 300);
+      });
+    };
+
+    if (!window.L) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = init;
+      document.head.appendChild(script);
+    } else {
+      init();
+    }
+
+    return () => {
+      delete window.viewStoreDetails;
+      delete window.openDirectionsFromStoreMap;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [viewMode, stores, location, selectedMapIndex]);
+
   // ============================================================================
   // RENDER
   // ============================================================================
@@ -1179,7 +1356,7 @@ export default function ConvenienceStorePage() {
               borderRadius: '50%',
               animation: 'spin 1s linear infinite'
             }} />
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } } .gs-popup .leaflet-popup-content-wrapper{border-radius:12px;padding:0;overflow:hidden}.gs-popup .leaflet-popup-content{margin:0}`}</style>
             <p style={{ fontSize: '15px' }}>Finding stores nearby...</p>
           </div>
         )}
@@ -1210,40 +1387,116 @@ export default function ConvenienceStorePage() {
           </div>
         )}
         
-        {/* Results Count */}
+        {/* Results Count + View Toggle */}
         {!loading && !error && stores.length > 0 && (
-          <p style={{
-            fontSize: '14px',
-            color: COLORS.textLight,
-            marginBottom: '16px',
+          <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '6px'
+            justifyContent: 'space-between',
+            marginBottom: '16px',
+            gap: '12px',
+            flexWrap: 'wrap'
           }}>
-            <span style={{
-              background: COLORS.primary,
-              color: '#fff',
-              padding: '2px 10px',
-              borderRadius: '10px',
-              fontWeight: '600'
+            <p style={{
+              fontSize: '14px',
+              color: COLORS.textLight,
+              margin: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
             }}>
-              {stores.length}
-            </span>
-            stores within {searchRadius} mi
-          </p>
+              <span style={{
+                background: COLORS.primary,
+                color: '#fff',
+                padding: '2px 10px',
+                borderRadius: '10px',
+                fontWeight: '600'
+              }}>
+                {stores.length}
+              </span>
+              stores within {searchRadius} mi
+            </p>
+            <div style={{ display: 'flex', gap: '4px', background: '#F1F5F9', borderRadius: '10px', padding: '3px' }}>
+              {['list', 'map'].map(v => (
+                <button
+                  key={v}
+                  onClick={() => setViewMode(v)}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: viewMode === v ? COLORS.primary : 'transparent',
+                    color: viewMode === v ? '#fff' : COLORS.textLight,
+                    fontWeight: '700',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit'
+                  }}
+                >
+                  {v === 'list' ? 'List View' : 'Map View'}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
-        
+
         {/* Store Cards */}
-        {!loading && !error && stores.map((store, idx) => (
-          <StoreCard
-            key={store.id || store.place_id || idx}
-            store={store}
-            onSelect={(s) => setSelectedStore(selectedStore?.id === s.id ? null : s)}
-            isExpanded={selectedStore?.id === (store.id || store.place_id)}
+        {!loading && !error && viewMode === 'list' && stores.map((store, idx) => (
+          <div key={store.id || store.place_id || idx} ref={el => cardRefs.current[idx] = el}>
+            <StoreCard
+              store={store}
+              index={idx}
+              onSelect={(s) => setSelectedStore(selectedStore?.id === s.id ? null : s)}
+              isExpanded={selectedStore?.id === (store.id || store.place_id)}
+              userLat={location?.latitude}
+              userLng={location?.longitude}
+              onShowOnMap={handleShowOnMap}
+            />
+          </div>
+        ))}
+
+        {/* Map View */}
+        {!loading && !error && viewMode === 'map' && stores.length > 0 && (
+          <div style={{ position: 'relative', margin: '0 -16px' }}>
+            <div ref={mapRef} style={{ height: 'calc(100vh - 280px)', width: '100%' }} />
+            <button
+              onClick={() => setViewMode('list')}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                zIndex: 1000,
+                background: '#fff',
+                borderRadius: '50%',
+                width: '40px',
+                height: '40px',
+                border: 'none',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '20px',
+                color: COLORS.dark
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Directions modal triggered from map popup */}
+        {directionsStore && (
+          <DirectionsPicker
+            isOpen={true}
+            onClose={() => setDirectionsStore(null)}
+            lat={directionsStore.lat}
+            lng={directionsStore.lng}
+            name={directionsStore.name}
             userLat={location?.latitude}
             userLng={location?.longitude}
           />
-        ))}
+        )}
         
         {/* No Results */}
         {!loading && !error && stores.length === 0 && (

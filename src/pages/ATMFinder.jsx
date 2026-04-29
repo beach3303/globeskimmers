@@ -368,42 +368,49 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
         <div style={{ display:"flex", gap:"8px", flexWrap:"wrap" }}>
           <button onClick={() => setShowDirs(true)} style={btn(TEAL, "#fff")}>🧭 Directions</button>
           <button onClick={() => onShowOnMap?.(index)} style={btn("#EDE7F6", PURPLE)}>📍 Map</button>
-          {atm.weekdayDescriptions?.length > 0 && (
+          {(atm.weekdayDescriptions?.length > 0 || atm.websiteUri || atm.website) && (
             <button onClick={() => { const n=!expanded; setExpanded(n); onExpandChange?.(n); }} style={btn(expanded ? DARK : "#F1F5F9", expanded ? "#fff" : DARK)}>
-              {expanded ? "▲ Less" : "▼ Hours"}
+              {expanded ? "▲ Less" : "▼ Details"}
             </button>
           )}
         </div>
 
-        {/* Expanded full week hours */}
+        {/* Expanded full week hours + website */}
         <AnimatePresence>
-          {expanded && atm.weekdayDescriptions?.length > 0 && (
+          {expanded && (atm.weekdayDescriptions?.length > 0 || atm.websiteUri || atm.website) && (
             <motion.div initial={{ height:0, opacity:0 }} animate={{ height:"auto", opacity:1 }} exit={{ height:0, opacity:0 }} style={{ overflow:"hidden" }}>
               <div style={{ marginTop:"12px", padding:"12px", background:"#F8FAFC", borderRadius:"10px" }}>
-                <div style={{ fontSize:"12px", color:GRAY, fontWeight:"600", marginBottom:"8px", textTransform:"uppercase" }}>🕐 Full Week Hours</div>
-                {atm.weekdayDescriptions.map((day, i) => {
-                  const today = new Date().getDay();
-                  const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-                  const dayIdx = dayNames.findIndex(d => day.toLowerCase().startsWith(d.toLowerCase()));
-                  const isToday = dayIdx === today;
-                  const parts = day.split(":");
-                  const dayName = parts[0];
-                  const hrs = parts.slice(1).join(":").trim();
-                  return (
-                    <div key={i} style={{
-                      display:"flex", justifyContent:"space-between",
-                      fontSize:"13px", color: isToday ? TEAL_DARK : DARK,
-                      fontWeight: isToday ? "700" : "400",
-                      padding: isToday ? "6px 8px" : "5px 0",
-                      background: isToday ? `${TEAL}15` : "transparent",
-                      margin: isToday ? "0 -4px" : "0",
-                      borderRadius: isToday ? "6px" : "0"
-                    }}>
-                      <span>{dayName}{isToday && " (Today)"}</span>
-                      <span>{hrs}</span>
-                    </div>
-                  );
-                })}
+                {atm.weekdayDescriptions?.length > 0 && (
+                  <>
+                    <div style={{ fontSize:"12px", color:GRAY, fontWeight:"600", marginBottom:"8px", textTransform:"uppercase" }}>🕐 Full Week Hours</div>
+                    {atm.weekdayDescriptions.map((day, i) => {
+                      const today = new Date().getDay();
+                      const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+                      const dayIdx = dayNames.findIndex(d => day.toLowerCase().startsWith(d.toLowerCase()));
+                      const isToday = dayIdx === today;
+                      const parts = day.split(":");
+                      const dayName = parts[0];
+                      const hrs = parts.slice(1).join(":").trim();
+                      return (
+                        <div key={i} style={{
+                          display:"flex", justifyContent:"space-between",
+                          fontSize:"13px", color: isToday ? TEAL_DARK : DARK,
+                          fontWeight: isToday ? "700" : "400",
+                          padding: isToday ? "6px 8px" : "5px 0",
+                          background: isToday ? `${TEAL}15` : "transparent",
+                          margin: isToday ? "0 -4px" : "0",
+                          borderRadius: isToday ? "6px" : "0"
+                        }}>
+                          <span>{dayName}{isToday && " (Today)"}</span>
+                          <span>{hrs}</span>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+                {(atm.websiteUri || atm.website) && (
+                  <a href={atm.websiteUri || atm.website} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", gap:"8px", marginTop: atm.weekdayDescriptions?.length > 0 ? "10px" : "0", padding:"8px 10px", background:"#fff", border:"1px solid #E2E8F0", borderRadius:"8px", textDecoration:"none", color:TEAL_DARK, fontSize:"13px", fontWeight:"600" }}>🌐 Visit Website</a>
+                )}
               </div>
             </motion.div>
           )}
