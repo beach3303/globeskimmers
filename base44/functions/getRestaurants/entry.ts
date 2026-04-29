@@ -607,6 +607,11 @@ Deno.serve(async (req) => {
     // Assemble the semantic query
     let semanticQuery = rawQuery;
 
+    // Optional bare-dish "Has-It" query — surfaces non-specialist restaurants
+    // (Cheesecake Factory, BJ's, CPK) that serve the dish but aren't typed as
+    // specialist. Set only on DISH intent for raw food nouns; null otherwise.
+    let dishHasItQuery: string | null = null;
+
     // ── INTENT-AWARE SMART APPEND ──────────────────────────────────────
     // If the user typed a raw food noun without any UI chips (baseTypes
     // empty), Google gets confused ("Kare Kare" → 0 results). Use the
@@ -617,8 +622,16 @@ Deno.serve(async (req) => {
 
     if (isRawFoodNoun) {
       if (intent.kind === 'DISH' && (intent as any).tier1Types?.length > 0) {
-        const expertType = (intent as any).tier1Types[0].replace(/_/g, ' ');
+        const tier1Type = (intent as any).tier1Types[0];
+        const expertType = tier1Type.replace(/_/g, ' ');
         semanticQuery = `${semanticQuery} ${expertType}`;
+
+        // Skip dual query when the dish IS the cuisine (pizza/sushi/ramen/bakery
+        // bare query would near-duplicate the specialist query).
+        const SKIP_DUAL = new Set(['pizza_restaurant','sushi_restaurant','ramen_restaurant','bakery']);
+        if (!SKIP_DUAL.has(tier1Type)) {
+          dishHasItQuery = rawQuery.replace(/\bbest\b/i, '').trim();
+        }
       } else {
         semanticQuery = `${semanticQuery} shop or restaurant`;
       }
@@ -648,14 +661,37 @@ Deno.serve(async (req) => {
       }).join(' ');
     }
 
+    // Mirror prefix/suffix/dedup on the bare-dish query so dietary requirements
+    // and feature filters apply identically (otherwise non-specialists would
+    // come back without dietary filtering and get hard-rejected later).
+    if (dishHasItQuery !== null) {
+      if (baseTypes.length) {
+        dishHasItQuery = dishHasItQuery
+          ? `${baseTypes.join(' ')} ${dishHasItQuery}`
+          : baseTypes.join(' ');
+      }
+      if (!dishHasItQuery.trim()) dishHasItQuery = 'restaurant';
+      if (features.length) {
+        dishHasItQuery = `${dishHasItQuery} with ${features.join(' and ')}`;
+      }
+      const seen = new Set<string>();
+      dishHasItQuery = dishHasItQuery.split(/\s+/).filter((w: string) => {
+        const lw = w.toLowerCase();
+        if (seen.has(lw)) return false;
+        seen.add(lw);
+        return true;
+      }).join(' ');
+      if (dishHasItQuery === semanticQuery) dishHasItQuery = null;
+    }
+
     // When any filter or search text is active, route the single semantic
     // query to Google. Otherwise keep the multi-query CUISINE_QUERIES path
     // for general browsing breadth.
     const anyFilterActive = baseTypes.length > 0 || features.length > 0 || !!rawQuery;
     const queries: string[] = anyFilterActive
-      ? [semanticQuery]
+      ? (dishHasItQuery ? [semanticQuery, dishHasItQuery] : [semanticQuery])
       : (CUISINE_QUERIES[cuisine] || CUISINE_QUERIES.all);
-    console.log(`🧩 Semantic query: "${semanticQuery}" | anyFilterActive: ${anyFilterActive}`);
+    console.log(`🧩 Semantic query: "${semanticQuery}"${dishHasItQuery ? ` | + Has-It: "${dishHasItQuery}"` : ''} | anyFilterActive: ${anyFilterActive}`);
 
     const allPlaces: any[] = [];
     const seenPlaceIds = new Set<string>();
