@@ -754,6 +754,12 @@ export default function PlacesToEat() {
 
   useEffect(() => {
     setRadius(activeLocation?.suggestedRadius ?? 10);
+    // For city-level locations, "Nearby" sort surfaces tiny obscure spots at the
+    // centroid (often without photos). Default to "Best" so well-rated, popular
+    // restaurants float to the top.
+    if (isCityLocation(activeLocation)) {
+      setSortBy('best');
+    }
   }, [activeLocation?.placeId]);
 
   // Multi-select cuisine helpers

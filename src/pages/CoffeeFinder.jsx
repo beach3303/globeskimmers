@@ -394,8 +394,13 @@ export default function CoffeeFinderPage() {
 
   // City-level locations get a wider default radius derived from Google's
   // viewport. Reset on every location change so non-city picks revert to 10mi.
+  // Also auto-flip sort to "Best" for cities so well-rated, photographed shops
+  // float over tiny obscure spots at the centroid.
   useEffect(() => {
     setRadius(activeLocation?.suggestedRadius ?? 10);
+    if (isCityLocation(activeLocation)) {
+      setSortBy('rating');
+    }
   }, [activeLocation?.placeId]);
 
   const activeFilterCount = [filterOpenNow,filterShopType!=="all",filterWifi].filter(Boolean).length;

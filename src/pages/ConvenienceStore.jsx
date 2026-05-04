@@ -15,6 +15,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLocation } from '@/components/location/LocationContext';
+import LocationModePicker from '@/components/location/LocationModePicker';
+import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from '@/components/location/locationLabel';
 import { base44 } from '@/api/base44Client';
 
 // ============================================================================
@@ -864,16 +867,26 @@ function buildStoreMapPopup(store, index) {
 
 export default function ConvenienceStorePage() {
   const navigate = useNavigate();
+  const { activeLocation } = useLocation();
+
+  // Coordinates pulled from the shared LocationContext (set via the Home location bar
+  // or the Change-location flow). Lets users explicitly pick a city/landmark, matching
+  // the pattern of CoffeeFinder, ATMFinder, etc.
+  const location = activeLocation?.coordinates
+    ? { latitude: activeLocation.coordinates.latitude, longitude: activeLocation.coordinates.longitude }
+    : null;
+  const locLabel = getLocationLabel(activeLocation);
+  const isCity = isCityLocation(activeLocation);
 
   // State
   const [stores, setStores] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [location, setLocation] = useState(null);
   const [selectedStore, setSelectedStore] = useState(null);
   const [viewMode, setViewMode] = useState('list');
   const [selectedMapIndex, setSelectedMapIndex] = useState(null);
   const [directionsStore, setDirectionsStore] = useState(null);
+  const [showLocPicker, setShowLocPicker] = useState(false);
 
   // Refs
   const mapRef = useRef(null);
@@ -884,27 +897,13 @@ export default function ConvenienceStorePage() {
   const [activeFilters, setActiveFilters] = useState({});
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [searchRadius, setSearchRadius] = useState(5);
-  
-  // ============================================================================
-  // GET LOCATION
-  // ============================================================================
-  
+
+  // Auto-size radius when user picks a city — wider default to cover the metro.
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setLocation({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude
-          });
-        },
-        (err) => {
-          console.error('Geolocation error:', err);
-          setLocation({ latitude: 34.1397, longitude: -118.0353 }); // Arcadia
-        }
-      );
+    if (activeLocation?.suggestedRadius) {
+      setSearchRadius(activeLocation.suggestedRadius);
     }
-  }, []);
+  }, [activeLocation?.placeId]);
   
   // ============================================================================
   // FETCH STORES
@@ -1105,9 +1104,38 @@ export default function ConvenienceStorePage() {
           }}>
             Snacks, essentials & more nearby
           </p>
+
+          {/* Location bar — same pattern as Coffee/ATM/Restroom finders */}
+          <div
+            onClick={() => setShowLocPicker(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 13px',
+              background: '#fff',
+              borderRadius: '12px',
+              marginTop: '14px',
+              cursor: 'pointer',
+              boxShadow: '0 2px 10px rgba(0,0,0,0.12)'
+            }}
+          >
+            <span style={{ color: COLORS.text, fontSize: '13px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+              {isCity ? '🏙️' : '📍'} {locLabel}
+            </span>
+            <span style={{ background: COLORS.accent, color: '#fff', padding: '4px 10px', borderRadius: '8px', fontWeight: '700', fontSize: '12px', flexShrink: 0, marginLeft: '10px' }}>
+              Change
+            </span>
+          </div>
+
+          {isCity && (
+            <div style={{ fontSize: '11px', color: '#fff', padding: '8px 10px', background: 'rgba(252,211,77,0.20)', border: '1px solid rgba(252,211,77,0.55)', borderRadius: '10px', marginTop: '10px', lineHeight: 1.4 }}>
+              💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
+            </div>
+          )}
         </div>
       </div>
-      
+
       {/* Quick Filters */}
       <div style={{
         background: '#fff',
@@ -1340,8 +1368,33 @@ export default function ConvenienceStorePage() {
       
       {/* Results */}
       <div style={{ padding: '16px' }}>
+        {/* No location set yet */}
+        {!location && !loading && (
+          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📍</div>
+            <p style={{ color: COLORS.textLight, marginBottom: '16px' }}>
+              Pick a location to find nearby convenience stores.
+            </p>
+            <button
+              onClick={() => setShowLocPicker(true)}
+              style={{
+                background: COLORS.primary,
+                color: '#fff',
+                border: 'none',
+                padding: '12px 24px',
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Set Location
+            </button>
+          </div>
+        )}
+
         {/* Loading */}
-        {loading && (
+        {loading && location && (
           <div style={{
             textAlign: 'center',
             padding: '60px 20px',
@@ -1526,6 +1579,8 @@ export default function ConvenienceStorePage() {
           </div>
         )}
       </div>
+
+      <LocationModePicker isOpen={showLocPicker} onClose={() => setShowLocPicker(false)} />
     </div>
   );
 }
