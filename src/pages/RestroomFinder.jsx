@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
+import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 
@@ -557,7 +558,12 @@ export default function RestroomFinderPage() {
   const { activeLocation } = useLocation();
   const lat = activeLocation?.coordinates?.latitude;
   const lng = activeLocation?.coordinates?.longitude;
-  const locLabel = activeLocation?.label || activeLocation?.address?.formatted || "Set your location";
+  const locLabel = getLocationLabel(activeLocation);
+  const isCity = isCityLocation(activeLocation);
+
+  useEffect(() => {
+    setRadius(activeLocation?.suggestedRadius ?? 5);
+  }, [activeLocation?.placeId]);
 
   // Fetch
   useEffect(() => {
@@ -701,10 +707,16 @@ export default function RestroomFinderPage() {
 
         {/* Location bar */}
         <div onClick={() => setShowLocPicker(true)} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", background: "rgba(255,255,255,0.1)", backdropFilter: "blur(10px)", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.15)", marginBottom: "12px", cursor: "pointer" }}>
-          <span style={{ fontSize: "16px" }}>📍</span>
+          <span style={{ fontSize: "16px" }}>{isCity ? '🏙️' : '📍'}</span>
           <span style={{ flex: 1, color: "rgba(255,255,255,0.9)", fontSize: "13px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{locLabel}</span>
           <span style={{ background: TEAL, color: "#fff", padding: "5px 12px", borderRadius: "8px", fontWeight: "700", fontSize: "12px" }}>Change</span>
         </div>
+
+        {isCity && (
+          <div style={{ fontSize: "11px", color: "#fff", padding: "8px 10px", background: "rgba(252,211,77,0.18)", border: "1px solid rgba(252,211,77,0.45)", borderRadius: "10px", marginBottom: "12px", lineHeight: 1.4 }}>
+            💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
+          </div>
+        )}
 
         {/* Radius */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>

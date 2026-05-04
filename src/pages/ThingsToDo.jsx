@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
+import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
@@ -281,7 +282,10 @@ export default function ThingsToDoFinder() {
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
   const {activeLocation}=useLocation();
   const lat=activeLocation?.coordinates?.latitude; const lng=activeLocation?.coordinates?.longitude;
-  const locLabel=activeLocation?.label||activeLocation?.address?.formatted||"Set your location";
+  const locLabel=getLocationLabel(activeLocation);
+  const isCity=isCityLocation(activeLocation);
+
+  useEffect(()=>{ setRadius(activeLocation?.suggestedRadius ?? 15); }, [activeLocation?.placeId]);
 
   const fallbackParts=(activeLocation?.label||activeLocation?.address?.formatted||'').split(',').map(s=>s.trim()).filter(Boolean);
   const country=activeLocation?.address?.country||fallbackParts[fallbackParts.length-1]||'the area';
@@ -356,9 +360,14 @@ export default function ThingsToDoFinder() {
           <div><div style={{fontWeight:"800",fontSize:"22px",color:"#fff",letterSpacing:"-0.3px"}}>Things To Do</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.65)",marginTop:"2px"}}>Landmarks · Museums · Parks · Outdoors · Worldwide</div></div>
         </div>
         <motion.div whileTap={{scale:0.99}} onClick={()=>setLocPicker(true)} style={{display:"flex",alignItems:"center",gap:"10px",padding:"12px 14px",background:"rgba(255,255,255,0.1)",backdropFilter:"blur(10px)",borderRadius:"14px",border:"1px solid rgba(255,255,255,0.15)",marginBottom:"14px",cursor:"pointer"}}>
-          <span style={{fontSize:"18px"}}>📍</span><span style={{flex:1,color:"rgba(255,255,255,0.9)",fontSize:"13px",fontWeight:"600",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{locLabel}</span>
+          <span style={{fontSize:"18px"}}>{isCity ? '🏙️' : '📍'}</span><span style={{flex:1,color:"rgba(255,255,255,0.9)",fontSize:"13px",fontWeight:"600",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{locLabel}</span>
           <span style={{background:T.accent,color:"#fff",padding:"5px 12px",borderRadius:"8px",fontWeight:"700",fontSize:"12px",flexShrink:0}}>Change</span>
         </motion.div>
+        {isCity && (
+          <div style={{fontSize:"11px",color:"#fff",padding:"8px 10px",background:"rgba(252,211,77,0.18)",border:"1px solid rgba(252,211,77,0.45)",borderRadius:"10px",marginBottom:"12px",lineHeight:1.4}}>
+            💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
+          </div>
+        )}
         <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:radius>25?"6px":"14px"}}>
           <span style={{fontSize:"12px",color:"rgba(255,255,255,0.6)",fontWeight:"600",flexShrink:0}}>Radius:</span>
           <div style={{display:"flex",gap:"5px"}}>{[5,10,15,25,50].map(r=><button key={r} onClick={()=>setRadius(r)} style={{padding:"6px 12px",borderRadius:"20px",border:radius===r?`2px solid ${T.accent}`:"1px solid rgba(255,255,255,0.2)",background:radius===r?T.accent:"rgba(255,255,255,0.1)",color:radius===r?"#fff":"rgba(255,255,255,0.7)",fontWeight:radius===r?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{r} mi</button>)}</div>

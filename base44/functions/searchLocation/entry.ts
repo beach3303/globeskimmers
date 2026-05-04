@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Goog-Api-Key': apiKey,
-                    'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents,places.types,places.primaryType'
+                    'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.viewport,places.addressComponents,places.types,places.primaryType'
                 },
                 body: JSON.stringify(requestBody)
             });
@@ -156,30 +156,42 @@ Deno.serve(async (req) => {
         
         // Process and validate results
         const results = [];
-        
+        let rejectedTooBroadCount = 0;
+
         for (const place of data.places.slice(0, 8)) {
-            // VALIDATION: Check if location is specific enough
             const types = place.types || [];
             const primaryType = place.primaryType || '';
-            
-            // Skip pure administrative areas
-            const isOnlyAdministrative = types.length > 0 && types.every(type => 
-                ['locality', 'administrative_area_level_1', 'administrative_area_level_2', 
-                 'country', 'political', 'sublocality'].includes(type)
-            );
-            
-            // Check if it has a specific location type
+
+            // Granularity classifier — determines how to label, search, and radius this result.
+            // - address: specific street address (most precise)
+            // - place: landmark, business, hotel, attraction, etc.
+            // - city: city / sublocality / postal town (allowed; needs special UX)
+            // - state / country: too broad — REJECTED with helpful message
             const hasSpecificType = types.some(type =>
                 ['street_address', 'premise', 'point_of_interest', 'establishment',
                  'airport', 'train_station', 'transit_station', 'bus_station', 'subway_station',
                  'tourist_attraction', 'lodging', 'restaurant', 'park', 'shopping_mall',
                  'store', 'museum', 'stadium', 'university', 'school', 'cafe'].includes(type)
-            ) || ['airport', 'lodging', 'tourist_attraction', 'shopping_mall', 'store', 
+            ) || ['airport', 'lodging', 'tourist_attraction', 'shopping_mall', 'store',
                   'restaurant', 'train_station', 'museum', 'park'].includes(primaryType);
-            
-            // Skip if it's ONLY administrative without specific location
-            if (isOnlyAdministrative && !hasSpecificType) {
-                console.log(`Skipping administrative area: ${place.displayName?.text}`);
+
+            const isStreetAddress = types.includes('street_address') || types.includes('premise');
+            const isCity = types.includes('locality') || types.includes('sublocality') || types.includes('postal_town');
+            const isState = types.includes('administrative_area_level_1') && !isCity;
+            const isCountry = types.includes('country') && !types.includes('administrative_area_level_1') && !isCity;
+
+            let granularity: 'address' | 'place' | 'city' | 'state' | 'country';
+            if (isStreetAddress) granularity = 'address';
+            else if (hasSpecificType) granularity = 'place';
+            else if (isCity) granularity = 'city';
+            else if (isState) granularity = 'state';
+            else if (isCountry) granularity = 'country';
+            else granularity = 'place'; // safe fallback
+
+            // Reject state / country — too broad for nearby search
+            if (granularity === 'state' || granularity === 'country') {
+                console.log(`Rejecting ${granularity}: ${place.displayName?.text}`);
+                rejectedTooBroadCount++;
                 continue;
             }
             
@@ -215,10 +227,29 @@ Deno.serve(async (req) => {
             else if (types.includes("tourist_attraction") || types.includes("museum") || primaryType === "tourist_attraction") placeType = "attraction";
             else if (types.includes("park") || primaryType === "park") placeType = "park";
             else if (types.includes("transit_station") || types.includes("train_station") || types.includes("bus_station") || primaryType === "train_station") placeType = "transit";
-            
+
+            // For city granularity, derive a sensible default search radius from
+            // Google's viewport (NE/SW corners). Half-diagonal in miles, capped 5–25.
+            // Falls back to 15mi when viewport is missing.
+            let suggestedRadius: number | null = null;
+            if (granularity === 'city') {
+                const vp = place.viewport;
+                if (vp?.high?.latitude && vp?.low?.latitude) {
+                    const halfDiagMi = haversineMiles(
+                        vp.high.latitude, vp.high.longitude,
+                        vp.low.latitude,  vp.low.longitude
+                    ) / 2;
+                    suggestedRadius = Math.max(5, Math.min(25, Math.round(halfDiagMi)));
+                } else {
+                    suggestedRadius = 15;
+                }
+            }
+
             results.push({
                 placeId: place.id,
                 placeName: place.displayName?.text || "",
+                granularity,
+                suggestedRadius,
                 address: {
                     formatted: place.formattedAddress || "",
                     street: street,
@@ -241,25 +272,38 @@ Deno.serve(async (req) => {
                 full_name: place.formattedAddress || ""
             });
         }
-        
+
         // If no valid results after filtering, return helpful message
         if (results.length === 0) {
-            return Response.json({ 
-                results: [],
-                message: "Please search for a specific address, landmark, or place (not just a city or country)"
-            });
+            const message = rejectedTooBroadCount > 0
+                ? "That's too broad — please add a city (e.g. \"Paris, France\") or pick a specific address or landmark."
+                : "No locations found. Try a different search term.";
+            return Response.json({ results: [], message });
         }
-        
+
         return Response.json({ results });
         
     } catch (error) {
         console.error("Search location error:", error);
         console.error("Error stack:", error.stack);
         
-        return Response.json({ 
+        return Response.json({
             error: 'Search failed',
             message: 'An unexpected error occurred. Please try again.',
-            results: [] 
+            results: []
         }, { status: 200 });
     }
 });
+
+// Haversine distance in miles between two lat/lng pairs.
+function haversineMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 3959;
+    const toRad = (d: number) => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 +
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+              Math.sin(dLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}

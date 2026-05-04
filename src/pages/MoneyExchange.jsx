@@ -541,7 +541,7 @@ export default function MoneyExchangePage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div className="text-2xl flex-shrink-0">
-                  {locationMode === 'current' ? '📍' : '🧭'}
+                  {activeLocation?.granularity === 'city' ? '🏙️' : (locationMode === 'current' ? '📍' : '🧭')}
                 </div>
                 <div className="flex-1 min-w-0">
                   {(() => {
@@ -581,6 +581,11 @@ export default function MoneyExchangePage() {
               </div>
             </div>
           </div>
+          {activeLocation?.granularity === 'city' && (
+            <div className="mt-2 p-2 bg-amber-50 border border-amber-300 rounded-lg text-[11px] text-amber-900 leading-snug">
+              💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — Enter a specific address or a well-known place, like your hotel, an airport, or a famous landmark for closer results.
+            </div>
+          )}
         </div>
 
         {/* Currency Converter */}

@@ -32,6 +32,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
+import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 
@@ -748,7 +749,12 @@ export default function PlacesToEat() {
   const { activeLocation } = useLocation();
   const lat = activeLocation?.coordinates?.latitude;
   const lng = activeLocation?.coordinates?.longitude;
-  const locationText = activeLocation?.label || activeLocation?.address?.formatted || "Set location";
+  const locationText = getLocationLabel(activeLocation);
+  const isCity = isCityLocation(activeLocation);
+
+  useEffect(() => {
+    setRadius(activeLocation?.suggestedRadius ?? 10);
+  }, [activeLocation?.placeId]);
 
   // Multi-select cuisine helpers
   const toggleCuisine = (id) => {
@@ -1019,11 +1025,16 @@ export default function PlacesToEat() {
         </div>
 
         {/* Labeled starting location */}
-        <div style={{fontSize:"10px",fontWeight:"800",letterSpacing:"1px",color:"rgba(255,255,255,0.75)",marginBottom:"6px"}}>📍 LOCATION</div>
+        <div style={{fontSize:"10px",fontWeight:"800",letterSpacing:"1px",color:"rgba(255,255,255,0.75)",marginBottom:"6px"}}>{isCity ? '🏙️' : '📍'} LOCATION</div>
         <div onClick={()=>setShowLocPicker(true)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",padding:"12px 14px",background:"#fff",borderRadius:"14px",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.12)"}}>
           <span style={{color:DARK,fontSize:"14px",fontWeight:"600",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{locationText}</span>
           <span style={{background:BLUE_LT,color:BLUE,padding:"4px 10px",borderRadius:"8px",fontWeight:"700",fontSize:"12px",flexShrink:0}}>Change</span>
         </div>
+        {isCity && (
+          <div style={{fontSize:"11px",color:"#fff",padding:"8px 10px",background:"rgba(252,211,77,0.20)",border:"1px solid rgba(252,211,77,0.55)",borderRadius:"10px",marginTop:"10px",lineHeight:1.4}}>
+            💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
+          </div>
+        )}
       </div>
 
       {/* ── WHITE PANEL: search, radius, sort/view, filter trigger ── */}

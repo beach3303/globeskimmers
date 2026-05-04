@@ -138,27 +138,35 @@ export default function AddLocationDialog({ isOpen, onAdd, onClose }) {
             <div>
               <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Search Results</p>
               <div className="space-y-2">
-                {searchResults.map((result, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleSelectLocation(result)}
-                    className="w-full text-left p-3 bg-gray-50 hover:bg-blue-50 rounded-lg transition-colors flex items-start gap-3 border-2 border-transparent hover:border-blue-300"
-                  >
-                    <span className="text-2xl flex-shrink-0">{PLACE_TYPE_ICONS[result.placeType] || '📍'}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">
-                        {result.placeName}
-                      </p>
-                      <p className="text-xs text-gray-600 mt-0.5">
-                        {result.address.formatted}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1 capitalize">
-                        {result.placeType.replace('_', ' ')}
-                      </p>
-                    </div>
-                    <div className="text-green-600 font-bold text-xl flex-shrink-0">+</div>
-                  </button>
-                ))}
+                {searchResults.map((result, index) => {
+                  const isCity = result.granularity === 'city';
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => handleSelectLocation(result)}
+                      className="w-full text-left p-3 bg-gray-50 hover:bg-blue-50 rounded-lg transition-colors flex items-start gap-3 border-2 border-transparent hover:border-blue-300"
+                    >
+                      <span className="text-2xl flex-shrink-0">{isCity ? '🏙️' : (PLACE_TYPE_ICONS[result.placeType] || '📍')}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-gray-900">
+                            {result.placeName}
+                          </p>
+                          {isCity && (
+                            <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">CITY</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-600 mt-0.5">
+                          {result.address.formatted}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1 capitalize">
+                          {isCity ? 'Search across the city' : result.placeType.replace('_', ' ')}
+                        </p>
+                      </div>
+                      <div className="text-green-600 font-bold text-xl flex-shrink-0">+</div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

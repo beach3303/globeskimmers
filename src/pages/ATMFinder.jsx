@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
+import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 
@@ -515,7 +516,12 @@ export default function ATMFinderPage() {
   const { activeLocation } = useLocation();
   const lat  = activeLocation?.coordinates?.latitude;
   const lng  = activeLocation?.coordinates?.longitude;
-  const locLabel = activeLocation?.label || activeLocation?.address?.formatted || "Set location";
+  const locLabel = getLocationLabel(activeLocation);
+  const isCity = isCityLocation(activeLocation);
+
+  useEffect(() => {
+    setRadius(activeLocation?.suggestedRadius ?? 10);
+  }, [activeLocation?.placeId]);
 
   // ── Fetch ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -696,9 +702,15 @@ export default function ATMFinderPage() {
 
         {/* Location bar */}
         <div onClick={() => setShowLocPicker(true)} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 13px", background:"#fff", borderRadius:"10px", border:"1px solid #E2E8F0", fontSize:"13px", marginBottom:"10px", cursor:"pointer" }}>
-          <span style={{ color:GRAY }}>📍 {locLabel}</span>
+          <span style={{ color:GRAY }}>{isCity ? '🏙️' : '📍'} {locLabel}</span>
           <span style={{ background:TEAL_LIGHT, color:TEAL_DARK, padding:"4px 10px", borderRadius:"6px", fontWeight:"600", fontSize:"12px" }}>Change</span>
         </div>
+
+        {isCity && (
+          <div style={{ fontSize:"11px", color:"#92400E", padding:"8px 10px", background:"#FFFBEB", border:"1px solid #FCD34D", borderRadius:"8px", marginBottom:"10px", lineHeight:1.4 }}>
+            💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
+          </div>
+        )}
 
         {/* Radius buttons */}
         <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"10px" }}>

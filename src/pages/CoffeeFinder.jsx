@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import LocationModePicker from "@/components/location/LocationModePicker";
+import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { base44 } from "@/api/base44Client";
 
 // ─── COLORS ────────────────────────────────────────────────────────────────
@@ -388,7 +389,14 @@ export default function CoffeeFinderPage() {
   const { activeLocation } = useLocation();
   const lat = activeLocation?.coordinates?.latitude;
   const lng = activeLocation?.coordinates?.longitude;
-  const locationText = activeLocation?.label || activeLocation?.address?.formatted || "Set location";
+  const locationText = getLocationLabel(activeLocation);
+  const isCity = isCityLocation(activeLocation);
+
+  // City-level locations get a wider default radius derived from Google's
+  // viewport. Reset on every location change so non-city picks revert to 10mi.
+  useEffect(() => {
+    setRadius(activeLocation?.suggestedRadius ?? 10);
+  }, [activeLocation?.placeId]);
 
   const activeFilterCount = [filterOpenNow,filterShopType!=="all",filterWifi].filter(Boolean).length;
 
@@ -464,9 +472,15 @@ export default function CoffeeFinderPage() {
         </div>
 
         <div onClick={()=>setShowLocPicker(true)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:"#fff",borderRadius:"10px",border:"1px solid #E2E8F0",fontSize:"13px",marginBottom:"10px",cursor:"pointer"}}>
-          <span style={{color:GRAY}}>📍 {locationText}</span>
+          <span style={{color:GRAY}}>{isCity ? '🏙️' : '📍'} {locationText}</span>
           <span style={{background:BROWN_LIGHT,color:BROWN_DARK,padding:"4px 10px",borderRadius:"6px",fontWeight:"600",fontSize:"12px"}}>Change</span>
         </div>
+
+        {isCity && (
+          <div style={{fontSize:"11px",color:"#92400E",padding:"8px 10px",background:"#FFFBEB",border:"1px solid #FCD34D",borderRadius:"8px",marginBottom:"10px",lineHeight:1.4}}>
+            💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
+          </div>
+        )}
 
         <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px"}}>
           <span style={{fontSize:"12px",color:GRAY,fontWeight:"600",flexShrink:0}}>📏 Radius:</span>
