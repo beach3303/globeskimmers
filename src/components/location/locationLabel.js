@@ -15,4 +15,4 @@ export function isCityLocation(loc) {
 }
 
 export const CITY_DISCLAIMER =
-  'Enter a specific address or a well-known place, like your hotel, an airport, or a famous landmark for closer results.';
+  'enter a specific address or well-known location to get more accurate nearby results.';

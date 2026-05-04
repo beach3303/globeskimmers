@@ -13,6 +13,7 @@ import MapAppSelector from "../components/MapAppSelector";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import DistanceUnitToggle from "../components/location/DistanceUnitToggle";
+import { CITY_DISCLAIMER } from "../components/location/locationLabel";
 
 // Helper function
 const createPageUrl = (pageName) => `/${pageName}`;
@@ -586,7 +587,7 @@ export default function MoneyExchangePage() {
           </div>
           {activeLocation?.granularity === 'city' && (
             <div className="mt-2 p-2 bg-amber-50 border border-amber-300 rounded-lg text-[11px] text-amber-900 leading-snug">
-              💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — Enter a specific address or a well-known place, like your hotel, an airport, or a famous landmark for closer results.
+              💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
             </div>
           )}
         </div>
