@@ -284,6 +284,7 @@ const TAXI_SERVICES = {
 // CONFIGURATION: BASE FARE RATES BY COUNTRY
 // ============================================================================
 const FARE_RATES = {
+  // Asia-Pacific
   PH: { base: 40, perKm: 13, currency: "PHP", symbol: "₱", name: "Philippine Peso" },
   SG: { base: 3.90, perKm: 0.75, currency: "SGD", symbol: "S$", name: "Singapore Dollar" },
   MY: { base: 3, perKm: 1.25, currency: "MYR", symbol: "RM", name: "Malaysian Ringgit" },
@@ -292,10 +293,45 @@ const FARE_RATES = {
   ID: { base: 8000, perKm: 4500, currency: "IDR", symbol: "Rp", name: "Indonesian Rupiah" },
   JP: { base: 500, perKm: 300, currency: "JPY", symbol: "¥", name: "Japanese Yen" },
   KR: { base: 4800, perKm: 1200, currency: "KRW", symbol: "₩", name: "South Korean Won" },
+  CN: { base: 13, perKm: 2.5, currency: "CNY", symbol: "¥", name: "Chinese Yuan" },
+  TW: { base: 85, perKm: 30, currency: "TWD", symbol: "NT$", name: "Taiwan Dollar" },
+  HK: { base: 27, perKm: 10, currency: "HKD", symbol: "HK$", name: "Hong Kong Dollar" },
+  IN: { base: 25, perKm: 18, currency: "INR", symbol: "₹", name: "Indian Rupee" },
+  // Eurozone
+  FR: { base: 2.60, perKm: 1.20, currency: "EUR", symbol: "€", name: "Euro" },
+  DE: { base: 3.50, perKm: 2.00, currency: "EUR", symbol: "€", name: "Euro" },
+  IT: { base: 3.50, perKm: 1.10, currency: "EUR", symbol: "€", name: "Euro" },
+  ES: { base: 2.50, perKm: 1.20, currency: "EUR", symbol: "€", name: "Euro" },
+  NL: { base: 3.40, perKm: 2.30, currency: "EUR", symbol: "€", name: "Euro" },
+  BE: { base: 2.40, perKm: 1.80, currency: "EUR", symbol: "€", name: "Euro" },
+  PT: { base: 3.25, perKm: 0.50, currency: "EUR", symbol: "€", name: "Euro" },
+  AT: { base: 3.80, perKm: 1.50, currency: "EUR", symbol: "€", name: "Euro" },
+  IE: { base: 4.10, perKm: 1.45, currency: "EUR", symbol: "€", name: "Euro" },
+  GR: { base: 1.50, perKm: 0.90, currency: "EUR", symbol: "€", name: "Euro" },
+  FI: { base: 5.90, perKm: 1.55, currency: "EUR", symbol: "€", name: "Euro" },
+  // Other Europe
+  GB: { base: 3.20, perKm: 2.00, currency: "GBP", symbol: "£", name: "British Pound" },
+  CH: { base: 6.00, perKm: 4.00, currency: "CHF", symbol: "CHF", name: "Swiss Franc" },
+  SE: { base: 50, perKm: 16, currency: "SEK", symbol: "kr", name: "Swedish Krona" },
+  NO: { base: 100, perKm: 25, currency: "NOK", symbol: "kr", name: "Norwegian Krone" },
+  DK: { base: 50, perKm: 14, currency: "DKK", symbol: "kr", name: "Danish Krone" },
+  PL: { base: 8, perKm: 3, currency: "PLN", symbol: "zł", name: "Polish Złoty" },
+  CZ: { base: 60, perKm: 30, currency: "CZK", symbol: "Kč", name: "Czech Koruna" },
+  TR: { base: 10, perKm: 4, currency: "TRY", symbol: "₺", name: "Turkish Lira" },
+  // Americas
   US: { base: 2.50, perKm: 1.50, currency: "USD", symbol: "$", name: "US Dollar" },
   CA: { base: 3.50, perKm: 1.80, currency: "CAD", symbol: "C$", name: "Canadian Dollar" },
-  GB: { base: 3.20, perKm: 2.00, currency: "GBP", symbol: "£", name: "British Pound" },
+  MX: { base: 30, perKm: 15, currency: "MXN", symbol: "Mex$", name: "Mexican Peso" },
+  BR: { base: 5, perKm: 2.5, currency: "BRL", symbol: "R$", name: "Brazilian Real" },
+  AR: { base: 200, perKm: 100, currency: "ARS", symbol: "$", name: "Argentine Peso" },
+  // Oceania
   AU: { base: 4.50, perKm: 2.20, currency: "AUD", symbol: "A$", name: "Australian Dollar" },
+  NZ: { base: 3.50, perKm: 2.50, currency: "NZD", symbol: "NZ$", name: "New Zealand Dollar" },
+  // Middle East / Africa
+  AE: { base: 12, perKm: 2.20, currency: "AED", symbol: "د.إ", name: "UAE Dirham" },
+  IL: { base: 12, perKm: 5, currency: "ILS", symbol: "₪", name: "Israeli Shekel" },
+  EG: { base: 10, perKm: 5, currency: "EGP", symbol: "E£", name: "Egyptian Pound" },
+  ZA: { base: 30, perKm: 12, currency: "ZAR", symbol: "R", name: "South African Rand" },
   default: { base: 2.50, perKm: 1.50, currency: "USD", symbol: "$", name: "US Dollar" }
 };
 
@@ -325,12 +361,26 @@ const getCountryCode = (location) => {
   if (!location?.address?.country) return "US";
   const country = location.address.country.toUpperCase();
   const countryMap = {
+    // Asia-Pacific
     "PHILIPPINES": "PH", "SINGAPORE": "SG", "MALAYSIA": "MY", "THAILAND": "TH",
     "VIETNAM": "VN", "INDONESIA": "ID", "JAPAN": "JP", "SOUTH KOREA": "KR",
     "KOREA": "KR", "CHINA": "CN", "TAIWAN": "TW", "HONG KONG": "HK",
-    "INDIA": "IN", "UNITED STATES": "US", "USA": "US", "CANADA": "CA",
-    "UNITED KINGDOM": "GB", "UK": "GB", "AUSTRALIA": "AU", "NEW ZEALAND": "NZ",
-    "UAE": "AE", "UNITED ARAB EMIRATES": "AE"
+    "INDIA": "IN",
+    // Europe — names that don't match the 2-letter ISO prefix
+    "FRANCE": "FR", "GERMANY": "DE", "ITALY": "IT", "SPAIN": "ES",
+    "NETHERLANDS": "NL", "BELGIUM": "BE", "PORTUGAL": "PT", "AUSTRIA": "AT",
+    "GREECE": "GR", "IRELAND": "IE", "FINLAND": "FI",
+    "UNITED KINGDOM": "GB", "UK": "GB", "ENGLAND": "GB", "SCOTLAND": "GB", "WALES": "GB",
+    "SWITZERLAND": "CH", "SWEDEN": "SE", "NORWAY": "NO", "DENMARK": "DK",
+    "POLAND": "PL", "CZECH REPUBLIC": "CZ", "CZECHIA": "CZ", "TURKEY": "TR", "TÜRKIYE": "TR",
+    // Americas
+    "UNITED STATES": "US", "USA": "US", "CANADA": "CA", "MEXICO": "MX",
+    "BRAZIL": "BR", "ARGENTINA": "AR",
+    // Oceania
+    "AUSTRALIA": "AU", "NEW ZEALAND": "NZ",
+    // Middle East / Africa
+    "UAE": "AE", "UNITED ARAB EMIRATES": "AE",
+    "ISRAEL": "IL", "EGYPT": "EG", "SOUTH AFRICA": "ZA"
   };
   return countryMap[country] || country.substring(0, 2);
 };
