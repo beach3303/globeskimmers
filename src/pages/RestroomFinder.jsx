@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
+import { useDistanceUnit } from "@/components/location/distanceUnit";
+import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 
@@ -195,7 +197,7 @@ function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng })
 }
 
 // ─── RESTROOM CARD (Cleaned up per ChatGPT #2) ─────────────────────────────
-function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng }) {
+function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng, formatDistance }) {
   const [showDirs, setShowDirs] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -258,9 +260,9 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
         {/* Row 1: Name + Distance */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "6px" }}>
           <div style={{ fontWeight: "800", fontSize: "18px", color: DARK, lineHeight: "1.25", flex: 1 }}>{name}</div>
-          {r.distanceMiles && (
+          {r.distanceMiles!=null && (
             <div style={{ background: `${TEAL}15`, color: TEAL_DARK, padding: "4px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: "700", flexShrink: 0 }}>
-              📍 {r.distanceMiles.toFixed(1)} mi
+              📍 {formatDistance(r.distanceMiles)}
             </div>
           )}
         </div>
@@ -399,7 +401,7 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
 }
 
 // ─── MAP BOTTOM SHEET (ChatGPT #5) ─────────────────────────────────────────
-function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections }) {
+function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections, formatDistance }) {
   if (!restroom) return null;
 
   const r = restroom;
@@ -443,7 +445,7 @@ function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections })
           <div>
             <div style={{ fontWeight: "800", fontSize: "20px", color: DARK, lineHeight: "1.2" }}>{name}</div>
             <div style={{ fontSize: "13px", color: GRAY, marginTop: "2px" }}>
-              📍 {r.distanceMiles?.toFixed(1)} mi
+              📍 {formatDistance(r.distanceMiles)}
               {r.venueLabel && <span> · {r.venueIcon} {r.venueLabel}</span>}
             </div>
           </div>
@@ -560,6 +562,7 @@ export default function RestroomFinderPage() {
   const lng = activeLocation?.coordinates?.longitude;
   const locLabel = getLocationLabel(activeLocation);
   const isCity = isCityLocation(activeLocation);
+  const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
 
   useEffect(() => {
     setRadius(activeLocation?.suggestedRadius ?? 5);
@@ -660,7 +663,7 @@ export default function RestroomFinderPage() {
               <div style="font-size:11px;padding:5px 8px;border-radius:6px;background:${openSt.is24H?'#E3F2FD':openSt.isOpen===true?'#F0FDF4':openSt.isOpen===false?'#FEF2F2':'#F5F5F5'};margin-bottom:6px;">
                 <span style="font-weight:700;color:${openSt.is24H?'#1565C0':openSt.isOpen===true?'#15803D':openSt.isOpen===false?'#DC2626':'#9E9E9E'};">${openSt.label}</span>
               </div>
-              ${r.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:6px;">★ <strong style="color:#1A2332;">${r.rating}</strong> <span style="color:#64748B;">(${r.userRatingCount||0})</span> · <span style="color:#0D9488;">📍 ${r.distanceMiles?.toFixed(1)||'?'} mi</span></div>`:''}
+              ${r.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:6px;">★ <strong style="color:#1A2332;">${r.rating}</strong> <span style="color:#64748B;">(${r.userRatingCount||0})</span> · <span style="color:#0D9488;">📍 ${formatDistance(r.distanceMiles)||'?'}</span></div>`:''}
               ${chips?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${chips}</div>`:''}
               ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#3B82F6;font-size:11px;font-weight:600;">📞 ${phone}</a>`:''}
               <div style="display:flex;gap:8px;">
@@ -686,7 +689,7 @@ export default function RestroomFinderPage() {
     return () => {
       if (mapInstRef.current) { mapInstRef.current.remove(); mapInstRef.current = null; }
     };
-  }, [viewMode, filtered, lat, lng, activeMapPin]);
+  }, [viewMode, filtered, lat, lng, activeMapPin, unit]);
 
   const stats = { total: filtered.length, free: filtered.filter(r => r.accessType === "free").length, open: filtered.filter(r => r.isOpen === true || r.properties?.is24Hours).length };
   const selectedRestroom = activeMapPin !== null ? filtered[activeMapPin] : null;
@@ -728,14 +731,15 @@ export default function RestroomFinderPage() {
         )}
 
         {/* Radius */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
           <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", fontWeight: "600" }}>Radius:</span>
           <div style={{ display: "flex", gap: "5px" }}>
             {RADIUS_OPTIONS.map(r => (
               <button key={r} onClick={() => setRadius(r)} style={{ padding: "6px 12px", borderRadius: "20px", border: radius === r ? `2px solid ${TEAL}` : "1px solid rgba(255,255,255,0.2)", background: radius === r ? TEAL : "rgba(255,255,255,0.1)", color: radius === r ? "#fff" : "rgba(255,255,255,0.7)", fontWeight: radius === r ? "700" : "500", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>{r} mi</button>
             ))}
           </div>
-          <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", marginLeft: "auto" }}>{loading ? "Searching…" : `${restrooms.length} found`}</span>
+          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="dark" style={{ marginLeft: "auto" }} />
+          <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>{loading ? "Searching…" : `${restrooms.length} found`}</span>
         </div>
 
         {/* Venue tabs */}
@@ -805,6 +809,7 @@ export default function RestroomFinderPage() {
               onExpandChange={exp => { if (!exp && expandedIdx === i) setExpandedIdx(null); }}
               userLat={lat}
               userLng={lng}
+              formatDistance={formatDistance}
             />
           ))}
         </div>
@@ -835,6 +840,7 @@ export default function RestroomFinderPage() {
                 onExpand={setSheetExpanded}
                 onClose={() => setActiveMapPin(null)}
                 onDirections={() => setDirectionsRR(selectedRestroom)}
+                formatDistance={formatDistance}
               />
             )}
           </AnimatePresence>

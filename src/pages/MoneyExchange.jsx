@@ -12,6 +12,7 @@ import MapRecenterButton from "../components/maps/MapRecenterButton";
 import MapAppSelector from "../components/MapAppSelector";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
+import DistanceUnitToggle from "../components/location/DistanceUnitToggle";
 
 // Helper function
 const createPageUrl = (pageName) => `/${pageName}`;
@@ -408,6 +409,8 @@ export default function MoneyExchangePage() {
     setSearchRadius(radiusArray[index]);
   };
 
+  // Local fallback retained for backward compat with the radius slider values.
+  // The card distance display now uses sharedFormatDistance from the hook.
   const formatDistance = (distanceMiles) => {
     if (usesMiles) {
       return `${distanceMiles?.toFixed(1) || '0.0'} mi`;
@@ -986,9 +989,24 @@ export default function MoneyExchangePage() {
 
             {/* Radius Slider */}
             <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
                 <p className="text-[12px] font-semibold text-gray-700">Search Radius</p>
-                <span className="text-[12px] font-bold text-[#667eea]">{searchRadius} {distanceUnit}</span>
+                <div className="flex items-center gap-2">
+                  <DistanceUnitToggle
+                    unit={usesMiles ? 'mi' : 'km'}
+                    setUnit={(u) => {
+                      const next = u === 'mi';
+                      setUsesMiles(next);
+                      const arr = next ? RADIUS_VALUES.mi : RADIUS_VALUES.km;
+                      const def = next ? DEFAULT_RADIUS.mi : DEFAULT_RADIUS.km;
+                      setSearchRadius(def);
+                      setRadiusIndex(arr.indexOf(def));
+                      setDistanceUnit(next ? 'mi' : 'km');
+                    }}
+                    variant="light"
+                  />
+                  <span className="text-[12px] font-bold text-[#667eea]">{searchRadius} {distanceUnit}</span>
+                </div>
               </div>
               <input
                 type="range"

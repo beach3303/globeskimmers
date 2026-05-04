@@ -33,6 +33,8 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
+import { useDistanceUnit } from "@/components/location/distanceUnit";
+import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 
@@ -472,7 +474,7 @@ function FallbackDisclaimer({ fallbackInfo, onExpandRadius }) {
 }
 
 // ─── RESTAURANT CARD ─────────────────────────────────────────────────────────
-function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap }) {
+function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDistance }) {
   const [expanded,setExpanded]=useState(false);
   const name    = restaurant.displayName?.text || restaurant.name || "Restaurant";
   const address = restaurant.shortFormattedAddress || restaurant.formattedAddress || "";
@@ -506,7 +508,7 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap }) {
         {/* Rating / distance / price */}
         <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:"8px",fontSize:"13px",marginBottom:"8px"}}>
           {restaurant.rating>0&&<span><span style={{color:GOLD}}>★</span> <span style={{fontWeight:"700",color:DARK}}>{restaurant.rating.toFixed(1)}</span><span style={{color:GRAY}}> ({(restaurant.userRatingCount||0).toLocaleString()})</span></span>}
-          {restaurant.distance&&<><span style={{color:"#CBD5E1"}}>·</span><span style={{fontWeight:"600",color:BLUE}}>📍 {restaurant.distance}</span></>}
+          {restaurant.distanceMiles!=null&&<><span style={{color:"#CBD5E1"}}>·</span><span style={{fontWeight:"600",color:BLUE}}>📍 {formatDistance(restaurant.distanceMiles)}</span></>}
           {restaurant.priceStr&&<><span style={{color:"#CBD5E1"}}>·</span><span style={{fontWeight:"600",color:GRAY}}>{restaurant.priceStr}</span></>}
         </div>
 
@@ -751,6 +753,7 @@ export default function PlacesToEat() {
   const lng = activeLocation?.coordinates?.longitude;
   const locationText = getLocationLabel(activeLocation);
   const isCity = isCityLocation(activeLocation);
+  const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
 
   useEffect(() => {
     setRadius(activeLocation?.suggestedRadius ?? 10);
@@ -1054,7 +1057,10 @@ export default function PlacesToEat() {
 
         {/* Radius: labeled segmented control (equal widths) */}
         <div style={{marginBottom:"14px"}}>
-          <div style={{fontSize:"10px",fontWeight:"800",letterSpacing:"1px",color:GRAY,marginBottom:"8px"}}>📏 RADIUS</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
+            <div style={{fontSize:"10px",fontWeight:"800",letterSpacing:"1px",color:GRAY}}>📏 RADIUS</div>
+            <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light"/>
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"6px",background:"#F1F5F9",padding:"4px",borderRadius:"12px"}}>
             {RADIUS_OPTIONS.map(o=>(
               <button key={o.v} onClick={()=>setRadius(o.v)} style={{padding:"10px 0",borderRadius:"9px",border:"none",background:radius===o.v?BLUE:"transparent",color:radius===o.v?"#fff":GRAY,fontWeight:radius===o.v?"800":"600",fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>{o.l}</button>
@@ -1200,6 +1206,7 @@ export default function PlacesToEat() {
                   restaurant={r} rank={i+1}
                   onDirections={()=>setDirModal({open:true,lat:r.lat,lng:r.lng,name:r.name})}
                   onShowOnMap={()=>handleShowOnMap(i)}
+                  formatDistance={formatDistance}
                 />
               </div>
             ))}

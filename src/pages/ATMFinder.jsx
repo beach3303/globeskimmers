@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
+import { useDistanceUnit } from "@/components/location/distanceUnit";
+import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 
@@ -234,7 +236,7 @@ function ATMPhotoStrip({ photos, fallbackIcon = "🏧" }) {
 }
 
 // ─── ATM CARD ──────────────────────────────────────────────────────────────
-function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng }) {
+function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng, formatDistance }) {
   const [showDirs, setShowDirs] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -318,7 +320,7 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
               {atm.userRatingCount > 0 && <span style={{ opacity:0.7 }}> ({atm.userRatingCount})</span>}
             </span>
           )}
-          {atm.distance && <span style={{ fontWeight:"600", color:TEAL_DARK }}>📍 {atm.distance}</span>}
+          {atm.distanceMiles!=null && <span style={{ fontWeight:"600", color:TEAL_DARK }}>📍 {formatDistance(atm.distanceMiles)}</span>}
         </div>
 
         {/* Badges */}
@@ -432,13 +434,13 @@ const btn = (bg, color) => ({
 
 // ─── MAP POPUP HTML ─────────────────────────────────────────────────────────
 // Requirements: clickable name, address, phone (call), type, rating, distance, hours, directions picker, X button, no photo
-function buildMapPopup(atm, index) {
+function buildMapPopup(atm, index, fmt) {
   const name    = atm.displayName?.text || atm.name || "ATM";
   const address = atm.formattedAddress || atm.shortFormattedAddress || "Address not available";
   const phone   = atm.nationalPhoneNumber || atm.internationalPhoneNumber || null;
   const rating  = atm.rating || null;
   const ratingCount = atm.userRatingCount || 0;
-  const distance = atm.distance || "";
+  const distance = (fmt && atm.distanceMiles!=null) ? fmt(atm.distanceMiles) : (atm.distance || "");
   const isOpen  = atm.isOpen;
   const todayHours = atm.todayHours || "";
   const is24H   = atm.is24Hours || false;
@@ -518,6 +520,7 @@ export default function ATMFinderPage() {
   const lng  = activeLocation?.coordinates?.longitude;
   const locLabel = getLocationLabel(activeLocation);
   const isCity = isCityLocation(activeLocation);
+  const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
 
   useEffect(() => {
     setRadius(activeLocation?.suggestedRadius ?? 10);
@@ -642,7 +645,7 @@ export default function ATMFinderPage() {
           })
         }).addTo(map);
 
-        marker.bindPopup(buildMapPopup(atm, i), { maxWidth:270, autoPan:true, autoPanPaddingTopLeft:[0,160], autoPanPaddingBottomRight:[20,20], keepInView:true, className:"gs-popup" });
+        marker.bindPopup(buildMapPopup(atm, i, formatDistance), { maxWidth:270, autoPan:true, autoPanPaddingTopLeft:[0,160], autoPanPaddingBottomRight:[20,20], keepInView:true, className:"gs-popup" });
 
         // Update active pin color on popup open
         marker.on("popupopen", () => {
@@ -682,7 +685,7 @@ export default function ATMFinderPage() {
       delete window._gsATMDirs;
       if (mapInstRef.current) { mapInstRef.current.remove(); mapInstRef.current = null; }
     };
-  }, [viewMode, filtered, lat, lng, activeMapPin]);
+  }, [viewMode, filtered, lat, lng, activeMapPin, unit]);
 
   const stats = {
     total: filtered.length,
@@ -719,14 +722,15 @@ export default function ATMFinderPage() {
         )}
 
         {/* Radius buttons */}
-        <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"10px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"10px", flexWrap:"wrap" }}>
           <span style={{ fontSize:"12px", color:GRAY, fontWeight:"600", flexShrink:0 }}>Radius:</span>
           <div style={{ display:"flex", gap:"4px" }}>
             {[5,10,15,25].map(r => (
               <button key={r} onClick={() => setRadius(r)} style={{ padding:"5px 10px", borderRadius:"8px", border: radius===r ? `2px solid ${TEAL}` : "1px solid #E2E8F0", background: radius===r ? `${TEAL}15` : "#fff", color: radius===r ? TEAL_DARK : GRAY, fontWeight: radius===r ? "700" : "500", fontSize:"12px", cursor:"pointer", fontFamily:"inherit" }}>{r} mi</button>
             ))}
           </div>
-          <span style={{ fontSize:"11px", color:GRAY, marginLeft:"auto", flexShrink:0 }}>{loading ? "Loading…" : `${atms.length} found`}</span>
+          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" style={{ marginLeft:"auto" }} />
+          <span style={{ fontSize:"11px", color:GRAY, flexShrink:0 }}>{loading ? "Loading…" : `${atms.length} found`}</span>
         </div>
 
         {/* Category filters (smart filters) */}
@@ -837,6 +841,7 @@ export default function ATMFinderPage() {
                 onExpandChange={(exp) => { if (!exp && expandedIdx === i) setExpandedIdx(null); }}
                 userLat={lat}
                 userLng={lng}
+                formatDistance={formatDistance}
               />
             ))
           )}

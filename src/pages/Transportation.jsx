@@ -8,6 +8,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
+import { isCityLocation } from "../components/location/locationLabel";
 
 // ============================================================================
 // FIX: CACHING CONFIGURATION - Saves ~$55-165/month
@@ -2355,11 +2356,18 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
           </motion.div>
         )}
 
+        {destination && isCityLocation(activeLocation) && (
+          <div className="mb-3 p-3 bg-amber-50 border border-amber-300 rounded-lg text-[13px] text-amber-900 leading-snug flex items-start gap-2">
+            <span>⚠️</span>
+            <span>For more accurate directions, use a full address or a well-known place (like a hotel or airport).</span>
+          </div>
+        )}
+
         {/* ============================================================ */}
         {/* RIDESHARE APPS SECTION */}
         {/* ============================================================ */}
         {destination && availableProviders.length > 0 && transportData && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} 
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             className="bg-white rounded-2xl p-5 shadow-lg">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-gray-900 flex items-center gap-2">
@@ -2454,7 +2462,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                         <span className="text-lg">🚌</span>
                         <p className="font-semibold text-gray-800">Bus</p>
                       </div>
-                      <p className="text-sm font-bold text-green-800">{busOption.fare.symbol}{busOption.fare.low}-{busOption.fare.high}</p>
+                      <p className="text-sm font-bold text-green-800">{busOption.fare.symbol}{busOption.fare.low}-{busOption.fare.high}{busOption.fare.currency !== 'USD' && busOption.usdFare && <span className="font-normal text-gray-500"> (~${busOption.usdFare.low}-${busOption.usdFare.high} USD)</span>}</p>
                       <p className="text-xs text-green-600">~{busOption.time.minutes} min</p>
                     </div>
                   )}
@@ -2464,7 +2472,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                         <span className="text-lg">🚇</span>
                         <p className="font-semibold text-gray-800">Train</p>
                       </div>
-                      <p className="text-sm font-bold text-blue-800">{trainOption.fare.symbol}{trainOption.fare.low}-{trainOption.fare.high}</p>
+                      <p className="text-sm font-bold text-blue-800">{trainOption.fare.symbol}{trainOption.fare.low}-{trainOption.fare.high}{trainOption.fare.currency !== 'USD' && trainOption.usdFare && <span className="font-normal text-gray-500"> (~${trainOption.usdFare.low}-${trainOption.usdFare.high} USD)</span>}</p>
                       <p className="text-xs text-blue-600">~{trainOption.time.minutes} min</p>
                     </div>
                   )}
@@ -2474,7 +2482,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                         <span className="text-lg">🚐</span>
                         <p className="font-semibold text-gray-800">Jeepney</p>
                       </div>
-                      <p className="text-sm font-bold text-orange-800">{jeepneyOption.fare.symbol}{jeepneyOption.fare.low}-{jeepneyOption.fare.high}</p>
+                      <p className="text-sm font-bold text-orange-800">{jeepneyOption.fare.symbol}{jeepneyOption.fare.low}-{jeepneyOption.fare.high}{jeepneyOption.fare.currency !== 'USD' && jeepneyOption.usdFare && <span className="font-normal text-gray-500"> (~${jeepneyOption.usdFare.low}-${jeepneyOption.usdFare.high} USD)</span>}</p>
                       <p className="text-xs text-orange-600">~{jeepneyOption.time.minutes} min</p>
                     </div>
                   )}

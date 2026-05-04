@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
+import { useDistanceUnit } from "@/components/location/distanceUnit";
+import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import { base44 } from "@/api/base44Client";
 
 // ─── COLORS ────────────────────────────────────────────────────────────────
@@ -166,7 +168,7 @@ function PhotoCarousel({ photos=[], height="180px" }) {
 }
 
 // ─── COFFEE CARD ───────────────────────────────────────────────────────────
-function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng }) {
+function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance }) {
   const [expanded,setExpanded]=useState(false);
   const [showDir,setShowDir]=useState(false);
   const name    = shop.displayName?.text || shop.name || "Coffee Shop";
@@ -192,7 +194,7 @@ function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng }) {
         {/* Meta */}
         <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:"8px",fontSize:"13px",color:GRAY,marginBottom:"8px"}}>
           {shop.rating>0&&<span><span style={{color:GOLD}}>★</span> <span style={{fontWeight:"700",color:DARK}}>{shop.rating}</span>{shop.userRatingCount>0&&<span> ({shop.userRatingCount.toLocaleString()})</span>}</span>}
-          {shop.distance&&<><span style={{color:"#CBD5E1"}}>·</span><span style={{fontWeight:"600"}}>📍 {shop.distance}</span></>}
+          {shop.distanceMiles!=null&&<><span style={{color:"#CBD5E1"}}>·</span><span style={{fontWeight:"600"}}>📍 {formatDistance(shop.distanceMiles)}</span></>}
           {shop.priceLevel&&<><span style={{color:"#CBD5E1"}}>·</span><span>{'$'.repeat(shop.priceLevel)}</span></>}
         </div>
 
@@ -391,6 +393,7 @@ export default function CoffeeFinderPage() {
   const lng = activeLocation?.coordinates?.longitude;
   const locationText = getLocationLabel(activeLocation);
   const isCity = isCityLocation(activeLocation);
+  const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
 
   // City-level locations get a wider default radius derived from Google's
   // viewport. Reset on every location change so non-city picks revert to 10mi.
@@ -498,8 +501,9 @@ export default function CoffeeFinderPage() {
           <div style={{display:"flex",gap:"4px"}}>
             {[5,10,15,25].map(r=><button key={r} onClick={()=>setRadius(r)} style={{padding:"5px 10px",borderRadius:"8px",border:radius===r?`2px solid ${BROWN}`:"1px solid #E2E8F0",background:radius===r?`${BROWN}15`:"#fff",color:radius===r?BROWN:GRAY,fontWeight:radius===r?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{r} mi</button>)}
           </div>
-          <span style={{fontSize:"11px",color:GRAY,marginLeft:"auto"}}>{loading?"Loading...":`${shops.length} found`}</span>
+          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" style={{marginLeft:"auto"}}/>
         </div>
+        <div style={{fontSize:"11px",color:GRAY,marginBottom:"10px",textAlign:"right"}}>{loading?"Loading...":`${shops.length} found`}</div>
 
         {/* Sort + quick filters */}
         <div style={{display:"flex",gap:"8px",overflowX:"auto",padding:"4px 0 8px",scrollbarWidth:"none",alignItems:"center"}}>
@@ -587,7 +591,7 @@ export default function CoffeeFinderPage() {
               {activeFilterCount>0&&<button onClick={clearFilters} style={{padding:"9px 18px",borderRadius:"8px",border:"none",background:BROWN,color:"#fff",fontWeight:"600",fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>Clear Filters</button>}
             </div>
           ):filtered.map((shop,i)=>(
-            <div key={shop.id||i} ref={el=>cardRefs.current[i]=el}><CoffeeCard shop={shop} index={i} onShowOnMap={handleShowOnMap} userLat={lat} userLng={lng}/></div>
+            <div key={shop.id||i} ref={el=>cardRefs.current[i]=el}><CoffeeCard shop={shop} index={i} onShowOnMap={handleShowOnMap} userLat={lat} userLng={lng} formatDistance={formatDistance}/></div>
           ))}
         </div>
       ):(

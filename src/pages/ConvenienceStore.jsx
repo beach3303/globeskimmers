@@ -18,6 +18,8 @@ import { useNavigate } from 'react-router-dom';
 import { useLocation } from '@/components/location/LocationContext';
 import LocationModePicker from '@/components/location/LocationModePicker';
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from '@/components/location/locationLabel';
+import { useDistanceUnit } from '@/components/location/distanceUnit';
+import DistanceUnitToggle from '@/components/location/DistanceUnitToggle';
 import { base44 } from '@/api/base44Client';
 
 // ============================================================================
@@ -119,10 +121,10 @@ function detectChain(storeName) {
 }
 
 // ============================================================================
-// HELPER: Format Distance
+// HELPER: Format Distance (legacy miles-only fallback)
 // ============================================================================
 
-function formatDistance(miles) {
+function formatDistanceMi(miles) {
   if (!miles && miles !== 0) return '';
   if (miles < 0.1) return `${Math.round(miles * 5280)} ft`;
   return `${miles.toFixed(1)} mi`;
@@ -356,7 +358,7 @@ function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng })
 // COMPONENT: Store Card (Beautiful Design)
 // ============================================================================
 
-function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, onShowOnMap, index }) {
+function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, onShowOnMap, index, formatDistance = formatDistanceMi }) {
   const [showGallery, setShowGallery] = useState(false);
   const [photoError, setPhotoError] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
@@ -831,14 +833,14 @@ function FilterChip({ filter, isActive, onToggle }) {
 // MAP POPUP HTML
 // ============================================================================
 
-function buildStoreMapPopup(store, index) {
+function buildStoreMapPopup(store, index, fmt = formatDistanceMi) {
   const name    = store.name || 'Store';
   const address = store.address || store.shortAddress || '';
   const phone   = store.phone || null;
   const todayHrs = getTodayHours(store.hours, store.is24Hours);
   const isOpen   = store.isOpen;
   const is24     = store.is24Hours;
-  const dist     = (store.distance !== null && store.distance !== undefined) ? formatDistance(store.distance) : '';
+  const dist     = (store.distance !== null && store.distance !== undefined) ? fmt(store.distance) : '';
   const statusBg    = is24 ? '#E3F2FD' : isOpen === true ? '#E8F5E9' : isOpen === false ? '#FFEBEE' : '#F5F5F5';
   const statusColor = is24 ? '#1565C0' : isOpen === true ? '#2E7D32' : isOpen === false ? '#D32F2F' : '#9E9E9E';
   const statusLabel = is24 ? '🌙 Open 24/7' : isOpen === true ? '● Open' : isOpen === false ? '● Closed' : '● Hours N/A';
@@ -877,6 +879,7 @@ export default function ConvenienceStorePage() {
     : null;
   const locLabel = getLocationLabel(activeLocation);
   const isCity = isCityLocation(activeLocation);
+  const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
 
   // State
   const [stores, setStores] = useState([]);
@@ -1028,7 +1031,7 @@ export default function ConvenienceStorePage() {
           })
         })
           .addTo(map)
-          .bindPopup(buildStoreMapPopup(s, i), {
+          .bindPopup(buildStoreMapPopup(s, i, formatDistance), {
             maxWidth: 270,
             autoPan: true,
             autoPanPaddingTopLeft: [0, 160],
@@ -1061,7 +1064,7 @@ export default function ConvenienceStorePage() {
         mapInstanceRef.current = null;
       }
     };
-  }, [viewMode, stores, location, selectedMapIndex]);
+  }, [viewMode, stores, location, selectedMapIndex, unit]);
 
   // ============================================================================
   // RENDER
@@ -1143,6 +1146,10 @@ export default function ConvenienceStorePage() {
               💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
             </div>
           )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+            <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="dark" />
+          </div>
         </div>
       </div>
 
@@ -1514,6 +1521,7 @@ export default function ConvenienceStorePage() {
               userLat={location?.latitude}
               userLng={location?.longitude}
               onShowOnMap={handleShowOnMap}
+              formatDistance={formatDistance}
             />
           </div>
         ))}
