@@ -432,7 +432,13 @@ export default function CoffeeFinderPage() {
     if(filterShopType==="chain")      r=r.filter(s=>s.isChain);
     if(filterShopType==="specialty")  r=r.filter(s=>s.isSpecialty);
     if(sortBy==="nearby")  r.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
-    else if(sortBy==="rating") r.sort((a,b)=>(b.rating||0)-(a.rating||0));
+    else if(sortBy==="rating") r.sort((a,b)=>{
+      // Weight rating by log(reviews) so a 5.0 with 1 review can't beat a 4.5
+      // with thousands. Surfaces well-known shops with photos and full data.
+      const sa=(a.rating||0)*Math.log10(Math.max(a.userRatingCount||1,1));
+      const sb=(b.rating||0)*Math.log10(Math.max(b.userRatingCount||1,1));
+      return sb-sa;
+    });
     return r;
   },[shops,quickFilter,sortBy,filterOpenNow,filterWifi,filterShopType]);
 

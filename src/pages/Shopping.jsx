@@ -214,8 +214,17 @@ export default function ShoppingFinder() {
     if(openOnly)  r=r.filter(p=>p.isOpen===true);
     if(luxOnly)   r=r.filter(p=>p.props?.isLuxury);
     if(foodOnly)  r=r.filter(p=>p.shoppingFamily==="food_shopping");
+    // City-mode: re-sort by rating × log(reviews) so well-known shops with
+    // photos and full data float over obscure spots at the centroid.
+    if(isCity){
+      r.sort((a,b)=>{
+        const sa=(a.rating||0)*Math.log10(Math.max(a.userRatingCount||1,1));
+        const sb=(b.rating||0)*Math.log10(Math.max(b.userRatingCount||1,1));
+        return sb-sa;
+      });
+    }
     return r;
-  },[places,openOnly,luxOnly,foodOnly]);
+  },[places,openOnly,luxOnly,foodOnly,isCity]);
 
   const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const p=filtered[i];if(mapInst.current&&p?.lat&&p?.lng){mapInst.current.setView([p.lat,p.lng],17);markers.current[i]?.openPopup();}},350);};
 

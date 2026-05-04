@@ -521,6 +521,11 @@ export default function ATMFinderPage() {
 
   useEffect(() => {
     setRadius(activeLocation?.suggestedRadius ?? 10);
+    // City centroids surface obscure ATMs first when sorting by distance.
+    // Switch to "Top Rated" so well-known bank branches float up.
+    if (isCityLocation(activeLocation)) {
+      setSortBy("rating");
+    }
   }, [activeLocation?.placeId]);
 
   // ── Fetch ──────────────────────────────────────────────────────────────
@@ -563,11 +568,12 @@ export default function ATMFinderPage() {
   const filtered = useMemo(() => {
     let result = [...atms];
     if (sortBy === "rating") {
+      // Weight by log(reviews) so a 5.0 with 1 review can't beat a 4.5 with
+      // thousands. Critical for city-mode where rating ties are common.
       result.sort((a, b) => {
-        const ra = a.rating || 0;
-        const rb = b.rating || 0;
-        if (rb !== ra) return rb - ra;
-        return (a.distanceMiles||999) - (b.distanceMiles||999);
+        const sa = (a.rating || 0) * Math.log10(Math.max(a.userRatingCount || 1, 1));
+        const sb = (b.rating || 0) * Math.log10(Math.max(b.userRatingCount || 1, 1));
+        return sb - sa;
       });
     }
     return result;

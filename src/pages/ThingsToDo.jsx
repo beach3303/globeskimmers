@@ -318,8 +318,17 @@ export default function ThingsToDoFinder() {
       const isHighlyRated=(a.userRatingCount||0)>=200&&(a.rating||0)>=4.0;
       return isIconic||isHighlyRated||a.props?.isBucketList;
     });
+    // City-mode: re-sort by rating × log(reviews) so iconic, well-photographed
+    // attractions float over obscure spots at the centroid.
+    if(isCity){
+      r.sort((a,b)=>{
+        const sa=(a.rating||0)*Math.log10(Math.max(a.userRatingCount||1,1));
+        const sb=(b.rating||0)*Math.log10(Math.max(b.userRatingCount||1,1));
+        return sb-sa;
+      });
+    }
     return r;
-  },[activities,radius,openOnly,outdoorOnly,popularOnly,category]);
+  },[activities,radius,openOnly,outdoorOnly,popularOnly,category,isCity]);
 
   const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const a=filtered[i];if(mapInst.current&&a?.lat&&a?.lng){mapInst.current.setView([a.lat,a.lng],17);markers.current[i]?.openPopup();}},350);};
 
