@@ -899,7 +899,7 @@ export default function ConvenienceStorePage() {
   // Filters
   const [activeFilters, setActiveFilters] = useState({});
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [searchRadius, setSearchRadius] = useState(5);
+  const [searchRadius, setSearchRadius] = useState(10);
 
   // Auto-size radius when user picks a city — wider default to cover the metro.
   useEffect(() => {
@@ -1147,8 +1147,33 @@ export default function ConvenienceStorePage() {
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
-            <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="dark" />
+          {/* Radius selector — same pattern as PlacesToEat header */}
+          <div style={{ marginTop: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ fontSize: '10px', fontWeight: '800', letterSpacing: '1px', color: 'rgba(255,255,255,0.75)' }}>📏 RADIUS</div>
+              <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="dark" />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '6px', background: 'rgba(255,255,255,0.12)', padding: '4px', borderRadius: '12px' }}>
+              {[5, 10, 15, 25].map(r => (
+                <button
+                  key={r}
+                  onClick={() => setSearchRadius(r)}
+                  style={{
+                    padding: '10px 0',
+                    borderRadius: '9px',
+                    border: 'none',
+                    background: searchRadius === r ? '#fff' : 'transparent',
+                    color: searchRadius === r ? COLORS.primary : 'rgba(255,255,255,0.85)',
+                    fontWeight: searchRadius === r ? '800' : '600',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit'
+                  }}
+                >
+                  {r} mi
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -1268,44 +1293,6 @@ export default function ConvenienceStorePage() {
             }}>
               Filters
             </h2>
-            
-            {/* Radius Slider */}
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                fontSize: '15px',
-                fontWeight: '600',
-                marginBottom: '12px',
-                color: COLORS.text
-              }}>
-                <span>📍 Search Radius</span>
-                <span style={{
-                  background: COLORS.primary,
-                  color: '#fff',
-                  padding: '4px 12px',
-                  borderRadius: '12px',
-                  fontSize: '14px'
-                }}>
-                  {searchRadius} mi
-                </span>
-              </label>
-              <input
-                type="range"
-                min="1"
-                max="25"
-                value={searchRadius}
-                onChange={(e) => setSearchRadius(parseInt(e.target.value))}
-                style={{
-                  width: '100%',
-                  height: '6px',
-                  borderRadius: '3px',
-                  appearance: 'none',
-                  background: `linear-gradient(to right, ${COLORS.primary} 0%, ${COLORS.primary} ${(searchRadius/25)*100}%, #E2E8F0 ${(searchRadius/25)*100}%, #E2E8F0 100%)`
-                }}
-              />
-            </div>
             
             {/* All Filter Options */}
             <div style={{

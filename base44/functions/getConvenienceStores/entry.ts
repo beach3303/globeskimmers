@@ -258,6 +258,7 @@ Deno.serve(async (req) => {
       openOnly = false, open24Hours = false, hasHotFood = false,
       hasATM = false, hasPharmacy = false, hasRestroom = false,
       hasCoffee = false, acceptsCards = false, acceptsMobilePay = false,
+      hasGas = false,
       locationType = "all", sortBy = "traveler_best",
       limit = 50, forceRefresh = false
     } = body;
@@ -336,6 +337,7 @@ Deno.serve(async (req) => {
     if (hasPharmacy) filtered = filtered.filter(s => s.has_pharmacy);
     if (hasRestroom) filtered = filtered.filter(s => s.has_restroom);
     if (hasCoffee) filtered = filtered.filter(s => s.has_coffee);
+    if (hasGas) filtered = filtered.filter(s => s.has_fuel);
     if (acceptsCards) filtered = filtered.filter(s => s.accepts_cards);
     if (acceptsMobilePay) filtered = filtered.filter(s => s.accepts_mobile_pay);
     if (locationType !== "all") filtered = filtered.filter(s => s.location_context === locationType);
