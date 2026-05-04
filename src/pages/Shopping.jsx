@@ -259,7 +259,7 @@ export default function ShoppingFinder() {
       if(activePin!==null) setTimeout(()=>markers.current[activePin]?.openPopup(),200);
     };
     if(!window.L){const lk=document.createElement("link");lk.rel="stylesheet";lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(lk);const sc=document.createElement("script");sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";sc.onload=init;document.head.appendChild(sc);}else init();
-    return()=>{deletewindow._gsSHMapInst;deletewindow._gsSHView;deletewindow._gsSHDirs;if(mapInst.current){mapInst.current.remove();mapInst.current=null;}};
+    return()=>{delete window._gsSHMapInst;delete window._gsSHView;delete window._gsSHDirs;if(mapInst.current){mapInst.current.remove();mapInst.current=null;}};
   },[viewMode,filtered,lat,lng,activePin]);
 
   return(
