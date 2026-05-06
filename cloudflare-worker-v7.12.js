@@ -721,6 +721,181 @@ async function handleCacheStats(request, env) {
   });
 }
 
+// ============================================================================
+// PRICE SCANNER — direct Anthropic Claude Sonnet 4.6 with prompt caching
+// Replaces Base44 InvokeLLM for the SmartPriceScanner. Set ANTHROPIC_API_KEY
+// as a Worker secret in the Cloudflare dashboard before deploying.
+// ============================================================================
+
+const PRICE_SCAN_SYSTEM_PROMPT = `You are a vision price-extraction engine for travelers using GlobeSkimmers, a travel app.
+
+ROLE
+Read the image and extract every visible price. Return strict JSON. Never include narrative text, markdown fences, or commentary outside the JSON object.
+
+OUTPUT SCHEMA
+{
+  "prices": [
+    {
+      "amount": <number>,        // numeric value only, no commas, no currency symbol
+      "currency": <string>,      // ISO 4217 code (3 letters), e.g. "USD", "EUR", "JPY", "PHP", "GBP"
+      "symbol": <string>,        // the symbol or short label as it appears on the tag (€, ¥, $, ₱, £, kr, Rp, ₩, ₹, R$, etc.)
+      "context": <string>        // brief label: what is being priced ("Main dish", "Latte", "T-shirt"). Empty string if unknown.
+    }
+  ]
+}
+
+If no prices are visible: {"prices": []}.
+Return only the JSON. No prose. No markdown.
+
+CURRENCY DETECTION RULES
+- Use the printed symbol AND surrounding context (country, language, store branding) to infer the ISO code.
+- $ alone is ambiguous. Disambiguate using context:
+  • "USD" if no other country signal is present and language is English-only.
+  • "CAD" if Canadian context (province/postal code, French-English bilingual).
+  • "AUD" if Australian context.
+  • "MXN" if Mexican context.
+  • "ARS", "CLP", "COP" for South American Spanish contexts.
+  • "HKD" if "HK$" or "HKD" appears, or Hong Kong context.
+  • "SGD" if "S$" or Singapore context.
+  • "NT$" → "TWD".
+- £ → "GBP" by default; "EGP" if Egyptian context (e.g. Arabic text, Cairo, "ج.م").
+- ¥ → "JPY" if Japanese context (kana, kanji); "CNY" if Chinese context (simplified Chinese, mainland brands).
+- € → "EUR".
+- ₱ → "PHP".
+- ₩ → "KRW".
+- ₹ → "INR".
+- ฿ → "THB".
+- ₫ → "VND".
+- Rp → "IDR".
+- RM → "MYR".
+- kr → "DKK"/"NOK"/"SEK" depending on context (Denmark/Norway/Sweden).
+- Fr or CHF → "CHF".
+- zł → "PLN".
+- Kč → "CZK".
+- Ft → "HUF".
+- ₺ → "TRY".
+- R$ → "BRL".
+- R alone (with South African context) → "ZAR".
+- AED, د.إ → "AED".
+- ₪ → "ILS".
+
+NUMBER PARSING
+- Strip currency symbols and thousands separators.
+- Both "1,500" and "1.500" can mean 1500 depending on locale. If decimals are clearly present (two digits after a separator typical for the inferred currency), treat them as decimals; otherwise treat as thousands.
+- For currencies with no minor unit (JPY, KRW, VND, IDR, CLP, HUF), expect integer amounts.
+- For currencies with major+minor units (USD, EUR, GBP, CAD, AUD, etc.), keep two decimals if shown.
+
+EDGE CASES
+- Price ranges ("$5–$8"): emit two entries, one per endpoint, using the same context.
+- Strikethrough / discounted: emit only the current/effective price (the one not crossed out). Skip the original price.
+- Buy-one-get-one or "2 for $X": emit a single entry with amount = X.
+- Per-unit pricing ("$3.99/lb"): emit amount = 3.99, append the unit to context (e.g. "Apples per lb").
+- Tax-inclusive vs exclusive: ignore the tax distinction; report the printed amount as-is.
+- Membership / loyalty prices: include only if there is no separate non-member price. If both are shown, return the regular (non-member) price.
+- Tip suggestions on receipts: skip — those are not item prices.
+- Subtotal, total, tax lines on receipts: skip individual line items if a clear total is shown; otherwise emit each visible item line.
+- Partially obscured or blurry numbers: skip entirely. Do NOT guess.
+- Multiple items on a menu/sign: emit one entry per visible price.
+
+CONTEXT FIELD
+- Extract a SHORT label (≤ 40 chars). Use the item name when visible.
+- If only a price tag is visible without an item name, set context to "" (empty string).
+- Keep context in the source language as printed; do not translate.
+
+QUALITY GATE
+- If the image is too dark, blurry, glare-blocked, or pointed at non-price content (faces, sky, floor), return {"prices": []}.
+- Better to return an empty array than to hallucinate.
+
+Return strict JSON only.`;
+
+async function handlePriceScan(request, env) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured', prices: [] }, 500);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (_e) {
+    return jsonResponse({ error: 'Invalid JSON body', prices: [] }, 400);
+  }
+
+  const imageBase64 = body.image;
+  if (!imageBase64 || typeof imageBase64 !== 'string') {
+    return jsonResponse({ error: 'image (base64 string) is required', prices: [] }, 400);
+  }
+  const mediaType = body.mediaType || 'image/jpeg';
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        // Cache the long stable system prompt — every scan re-uses it, so we
+        // pay full input price only on the first call per ~5 minutes; cache
+        // hits are ~90% cheaper.
+        system: [
+          {
+            type: 'text',
+            text: PRICE_SCAN_SYSTEM_PROMPT,
+            cache_control: { type: 'ephemeral' }
+          }
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: mediaType,
+                  data: imageBase64
+                }
+              },
+              {
+                type: 'text',
+                text: 'Extract every visible price from this image. Return strict JSON matching the schema.'
+              }
+            ]
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      return jsonResponse({ error: `Anthropic API error ${response.status}`, details: errText, prices: [] }, 200);
+    }
+
+    const data = await response.json();
+    const textBlock = (data.content || []).find(b => b.type === 'text');
+    const raw = textBlock?.text || '';
+
+    let parsed = { prices: [] };
+    try {
+      // Strip any accidental markdown fences before parsing.
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+      parsed = JSON.parse(cleaned);
+    } catch (_e) {
+      return jsonResponse({ error: 'Model returned non-JSON', raw, prices: [] }, 200);
+    }
+
+    return jsonResponse({
+      prices: Array.isArray(parsed.prices) ? parsed.prices : [],
+      usage: data.usage || null
+    });
+  } catch (error) {
+    return jsonResponse({ error: error.message, prices: [] }, 200);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -753,6 +928,7 @@ export default {
       if (pathname === '/cache/stats') return await handleCacheStats(request, env);
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
+      if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
 
       return jsonResponse({ error: 'Not found', path: pathname }, 404);
     } catch (error) {

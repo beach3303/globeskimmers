@@ -519,56 +519,43 @@ export default function SmartPriceScannerPage() {
     });
   };
 
+  // Direct call to our Cloudflare Worker → Anthropic Claude Sonnet 4.6 with
+  // prompt caching. Skips Base44's InvokeLLM wrapper for visibility into cost,
+  // model choice, and caching. No file upload step — image goes straight to
+  // the Worker as base64.
   const extractPricesFromImage = async (imageBlob) => {
     try {
-      const file = new File([imageBlob], "price-scan.jpg", { type: "image/jpeg" });
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `Analyze this image and extract ALL prices you can find.
-
-For each price, identify:
-1. The amount (numeric value)
-2. The currency symbol or code
-3. The context (what the price is for, if visible)
-
-Return a JSON object with this format:
-{
-  "prices": [
-    {
-      "amount": 1500,
-      "currency": "JPY",
-      "symbol": "¥",
-      "context": "Main dish"
-    }
-  ]
-}
-
-If you cannot detect any prices, return: {"prices": []}`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            prices: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  amount: { type: "number" },
-                  currency: { type: "string" },
-                  symbol: { type: "string" },
-                  context: { type: "string" }
-                }
-              }
-            }
-          }
-        },
-        file_urls: file_url,
-        add_context_from_internet: false
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = typeof reader.result === 'string' ? reader.result : '';
+          // Strip the `data:image/jpeg;base64,` prefix.
+          const comma = result.indexOf(',');
+          resolve(comma >= 0 ? result.slice(comma + 1) : result);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(imageBlob);
       });
-      
-      return result.prices || [];
+
+      const response = await fetch(`${WORKER_URL}/scan-prices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' })
+      });
+
+      if (!response.ok) {
+        console.error('Scanner worker error:', response.status);
+        return [];
+      }
+
+      const data = await response.json();
+      if (data.error) {
+        console.error('Scanner worker returned error:', data.error);
+        return [];
+      }
+      return data.prices || [];
     } catch (error) {
-      console.error("Price extraction failed:", error);
+      console.error('Price extraction failed:', error);
       return [];
     }
   };
