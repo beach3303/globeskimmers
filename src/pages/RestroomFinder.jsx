@@ -600,17 +600,8 @@ export default function RestroomFinderPage() {
     if (openOnly) r = r.filter(x => x.isOpen === true || x.properties?.is24Hours);
     if (freeOnly) r = r.filter(x => x.accessType === "free");
     if (accessOnly) r = r.filter(x => x.properties?.isAccessible);
-    // City-mode: re-sort by rating × log(reviews) so well-known venues with
-    // photos float over obscure spots at the centroid.
-    if (isCity) {
-      r.sort((a, b) => {
-        const sa = (a.rating || 0) * Math.log10(Math.max(a.userRatingCount || 1, 1));
-        const sb = (b.rating || 0) * Math.log10(Math.max(b.userRatingCount || 1, 1));
-        return sb - sa;
-      });
-    }
     return r;
-  }, [restrooms, openOnly, freeOnly, accessOnly, isCity]);
+  }, [restrooms, openOnly, freeOnly, accessOnly]);
 
   const handleShowOnMap = (index) => {
     setViewMode("map"); setActiveMapPin(index); setSheetExpanded(false);

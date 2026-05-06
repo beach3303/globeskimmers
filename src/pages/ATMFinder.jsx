@@ -524,11 +524,6 @@ export default function ATMFinderPage() {
 
   useEffect(() => {
     setRadius(activeLocation?.suggestedRadius ?? 10);
-    // City centroids surface obscure ATMs first when sorting by distance.
-    // Switch to "Top Rated" so well-known bank branches float up.
-    if (isCityLocation(activeLocation)) {
-      setSortBy("rating");
-    }
   }, [activeLocation?.placeId]);
 
   // ── Fetch ──────────────────────────────────────────────────────────────

@@ -964,17 +964,8 @@ export default function ConvenienceStorePage() {
   const activeFilterCount = Object.values(activeFilters).filter(Boolean).length;
 
   // Pre-normalize for the map (so popup/markers match what cards display).
-  // City-mode: re-sort by rating × log(review count) so well-known stores with
-  // photos/reviews float over obscure spots at the centroid.
-  const normalizedStores = (() => {
-    const list = stores.map(normalizeStore);
-    if (!isCity) return list;
-    return [...list].sort((a, b) => {
-      const sa = (a.rating || 0) * Math.log10(Math.max(a.reviewCount || 1, 1));
-      const sb = (b.rating || 0) * Math.log10(Math.max(b.reviewCount || 1, 1));
-      return sb - sa;
-    });
-  })();
+  // Default order is whatever the backend returned — typically by distance.
+  const normalizedStores = stores.map(normalizeStore);
 
   const handleShowOnMap = (idx) => {
     setSelectedMapIndex(idx);
