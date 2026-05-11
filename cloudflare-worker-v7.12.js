@@ -9,12 +9,19 @@
 
 const CONFIG = {
   CACHE_TTL: {
+    // Fresh windows — within this age, cache is returned as-is.
     TEXT_SEARCH: 12 * 60 * 60,
     NEARBY_SEARCH: 3 * 24 * 60 * 60,
     DETAILS: 90 * 24 * 60 * 60,
     PHOTO: 90 * 24 * 60 * 60,
     DIETARY: 12 * 60 * 60,
-    STALE_WHILE_REVALIDATE: 60 * 60
+    // Stale-while-revalidate windows — past the fresh window but within
+    // FRESH + SWR, we return the cached response immediately AND trigger
+    // a background refresh via ctx.waitUntil. KV expirationTtl is set to
+    // FRESH + SWR so entries survive long enough to be served stale.
+    TEXT_SEARCH_SWR: 12 * 60 * 60,      // 12hr fresh + 12hr stale = 24hr total
+    NEARBY_SEARCH_SWR: 4 * 24 * 60 * 60, // 3d fresh + 4d stale = 7d total
+    STALE_WHILE_REVALIDATE: 60 * 60      // legacy constant (unused)
   },
 
   // SEARCH - Advanced tier ($5/1K) - NO reviews
@@ -170,6 +177,32 @@ async function setInCache(env, key, data, ttl) {
   }
 }
 
+// Stale-while-revalidate cache check. Returns one of:
+//   { status: 'fresh', data, cacheAge }  — within fresh TTL; serve as-is.
+//   { status: 'stale', data, cacheAge }  — past fresh, within fresh+SWR;
+//                                          serve immediately AND schedule
+//                                          a background refresh.
+//   null                                 — miss, or beyond SWR window;
+//                                          caller must fetch upstream.
+// `refresher` is an async closure that re-fetches from upstream and re-caches.
+// Set `expirationTtl` on writes to (freshTtl + swrTtl) so entries persist
+// long enough to be served stale.
+async function tryCacheWithSWR(env, ctx, cacheKey, freshTtl, swrTtl, refresher) {
+  const cached = await getFromCache(env, cacheKey);
+  if (!cached) return null;
+  const ageSec = cached.age / 1000;
+  if (ageSec < freshTtl) {
+    return { status: 'fresh', data: cached.data, cacheAge: Math.round(ageSec) };
+  }
+  if (ageSec < freshTtl + swrTtl) {
+    if (ctx && typeof ctx.waitUntil === 'function') {
+      ctx.waitUntil(refresher().catch(e => console.error(`SWR refresh failed for ${cacheKey}:`, e)));
+    }
+    return { status: 'stale', data: cached.data, cacheAge: Math.round(ageSec) };
+  }
+  return null;
+}
+
 function normalizePlace(place, baseUrl = '', includeReviews = false) {
   const photos = (place.photos || []).map(photo => {
     const photoName = photo.name || '';
@@ -305,7 +338,7 @@ function extractCustomerFavorites(reviews) {
     }));
 }
 
-async function handleTextSearch(request, env) {
+async function handleTextSearch(request, env, ctx) {
   const url = new URL(request.url);
   const params = Object.fromEntries(url.searchParams);
   const textQuery = params.textQuery || params.query || '';
@@ -319,18 +352,13 @@ async function handleTextSearch(request, env) {
     return jsonResponse({ error: 'textQuery is required', places: [] }, 400);
   }
 
-  const cacheKey = generateCacheKey('text', params);
-  if (!forceRefresh) {
-    const cached = await getFromCache(env, cacheKey);
-    if (cached && cached.age < CONFIG.CACHE_TTL.TEXT_SEARCH * 1000) {
-      return jsonResponse({ places: cached.data, count: cached.data.length, cached: true, cacheAge: Math.round(cached.age / 1000) });
-    }
-  }
-
   const apiKey = env.GOOGLE_API_KEY;
   const baseUrl = url.origin;
+  const cacheKey = generateCacheKey('text', params);
+  const FRESH = CONFIG.CACHE_TTL.TEXT_SEARCH;
+  const SWR = CONFIG.CACHE_TTL.TEXT_SEARCH_SWR;
 
-  try {
+  const fetchAndCache = async () => {
     const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
       headers: {
@@ -346,22 +374,34 @@ async function handleTextSearch(request, env) {
         ...(params.includedType ? { includedType: params.includedType, strictTypeFiltering: false } : {})
       })
     });
-
     if (!response.ok) {
       const errorText = await response.text();
-      return jsonResponse({ error: 'Google Places API error', status: response.status, details: errorText, places: [] }, 200);
+      const err = new Error(errorText);
+      err.upstreamStatus = response.status;
+      throw err;
     }
-
     const data = await response.json();
     const places = (data.places || []).map(p => normalizePlace(p, baseUrl, false));
-    await setInCache(env, cacheKey, places, CONFIG.CACHE_TTL.TEXT_SEARCH);
-    return jsonResponse({ places, count: places.length, cached: false });
+    await setInCache(env, cacheKey, places, FRESH + SWR);
+    return places;
+  };
+
+  if (!forceRefresh) {
+    const hit = await tryCacheWithSWR(env, ctx, cacheKey, FRESH, SWR, fetchAndCache);
+    if (hit) {
+      return jsonResponse({ places: hit.data, count: hit.data.length, cached: true, stale: hit.status === 'stale', cacheAge: hit.cacheAge });
+    }
+  }
+
+  try {
+    const places = await fetchAndCache();
+    return jsonResponse({ places, count: places.length, cached: false, stale: false });
   } catch (error) {
-    return jsonResponse({ error: error.message, places: [] }, 200);
+    return jsonResponse({ error: 'Google Places API error', status: error.upstreamStatus, details: error.message, places: [] }, 200);
   }
 }
 
-async function handleNearbySearch(request, env) {
+async function handleNearbySearch(request, env, ctx) {
   const url = new URL(request.url);
   const params = Object.fromEntries(url.searchParams);
   const latitude = parseFloat(params.latitude) || 0;
@@ -377,15 +417,10 @@ async function handleNearbySearch(request, env) {
   const filterSuffix = [openNow ? 'open' : '', minRating > 0 ? `r${minRating}` : '', priceLevels.length ? priceLevels.join('-') : ''].filter(Boolean).join('_');
   const cacheKey = generateCacheKey('nearby', { ...params, types }) + (filterSuffix ? `_${filterSuffix}` : '');
 
-  if (!forceRefresh) {
-    const cached = await getFromCache(env, cacheKey);
-    if (cached && cached.age < CONFIG.CACHE_TTL.NEARBY_SEARCH * 1000) {
-      return jsonResponse({ places: cached.data, count: cached.data.length, cached: true, cacheAge: Math.round(cached.age / 1000) });
-    }
-  }
-
   const apiKey = env.GOOGLE_API_KEY;
   const baseUrl = url.origin;
+  const FRESH = CONFIG.CACHE_TTL.NEARBY_SEARCH;
+  const SWR = CONFIG.CACHE_TTL.NEARBY_SEARCH_SWR;
 
   const requestBody = {
     includedTypes: types.split(',').map(t => t.trim()),
@@ -399,7 +434,7 @@ async function handleNearbySearch(request, env) {
   if (minRating > 0) requestBody.minRating = minRating;
   if (priceLevels.length) requestBody.priceLevels = priceLevels;
 
-  try {
+  const fetchAndCache = async () => {
     const response = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
       method: 'POST',
       headers: {
@@ -409,18 +444,30 @@ async function handleNearbySearch(request, env) {
       },
       body: JSON.stringify(requestBody)
     });
-
     if (!response.ok) {
       const errorText = await response.text();
-      return jsonResponse({ error: 'Google Places API error', status: response.status, details: errorText, places: [] }, 200);
+      const err = new Error(errorText);
+      err.upstreamStatus = response.status;
+      throw err;
     }
-
     const data = await response.json();
     const places = (data.places || []).map(p => normalizePlace(p, baseUrl, false));
-    await setInCache(env, cacheKey, places, CONFIG.CACHE_TTL.NEARBY_SEARCH);
-    return jsonResponse({ places, count: places.length, cached: false });
+    await setInCache(env, cacheKey, places, FRESH + SWR);
+    return places;
+  };
+
+  if (!forceRefresh) {
+    const hit = await tryCacheWithSWR(env, ctx, cacheKey, FRESH, SWR, fetchAndCache);
+    if (hit) {
+      return jsonResponse({ places: hit.data, count: hit.data.length, cached: true, stale: hit.status === 'stale', cacheAge: hit.cacheAge });
+    }
+  }
+
+  try {
+    const places = await fetchAndCache();
+    return jsonResponse({ places, count: places.length, cached: false, stale: false });
   } catch (error) {
-    return jsonResponse({ error: error.message, places: [] }, 200);
+    return jsonResponse({ error: 'Google Places API error', status: error.upstreamStatus, details: error.message, places: [] }, 200);
   }
 }
 
@@ -643,7 +690,7 @@ async function handleCoffeeSearch(request, env) {
   }
 }
 
-async function handleRestaurantSearch(request, env) {
+async function handleRestaurantSearch(request, env, ctx) {
   try {
     const body = await request.json();
     const { latitude, longitude, radiusMiles = 10, query = '', category = '', cuisineType = '', dietary = '', forceRefresh = false, openNow = false, minRating = 0, priceLevels = [], includedType = '' } = body;
@@ -664,13 +711,8 @@ async function handleRestaurantSearch(request, env) {
 
     const filterSuffix = [openNow ? 'open' : '', minRating > 0 ? `r${minRating}` : '', priceLevels?.length ? priceLevels.join('-') : '', includedType ? `t-${includedType}` : '', `rad${Math.round(radiusMiles)}`].filter(Boolean).join('_');
     const cacheKey = generateCacheKey('restaurants', { latitude, longitude, radius: radiusMeters, textQuery: searchQuery }) + (filterSuffix ? `_${filterSuffix}` : '');
-
-    if (!forceRefresh) {
-      const cached = await getFromCache(env, cacheKey);
-      if (cached && cached.age < CONFIG.CACHE_TTL.TEXT_SEARCH * 1000) {
-        return jsonResponse({ restaurants: cached.data, count: cached.data.length, cached: true, cacheAge: Math.round(cached.age / 1000) });
-      }
-    }
+    const FRESH = CONFIG.CACHE_TTL.TEXT_SEARCH;
+    const SWR = CONFIG.CACHE_TTL.TEXT_SEARCH_SWR;
 
     const requestBody = {
       textQuery: searchQuery,
@@ -685,29 +727,40 @@ async function handleRestaurantSearch(request, env) {
     if (priceLevels?.length) requestBody.priceLevels = priceLevels;
     if (includedType) { requestBody.includedType = includedType; requestBody.strictTypeFiltering = false; }
 
-    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': CONFIG.SEARCH_FIELD_MASK
-      },
-      body: JSON.stringify(requestBody)
-    });
+    const fetchAndCache = async () => {
+      const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': CONFIG.SEARCH_FIELD_MASK
+        },
+        body: JSON.stringify(requestBody)
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        const err = new Error(errorText);
+        err.upstreamStatus = response.status;
+        throw err;
+      }
+      const data = await response.json();
+      const restaurants = (data.places || []).map(p => {
+        const normalized = normalizePlace(p, baseUrl, false);
+        return { ...normalized, customer_favorites: [], top_reviews: [], needsDetailsFetch: true };
+      });
+      await setInCache(env, cacheKey, restaurants, FRESH + SWR);
+      return restaurants;
+    };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      return jsonResponse({ error: 'Search failed', details: errorText, restaurants: [] }, 200);
+    if (!forceRefresh) {
+      const hit = await tryCacheWithSWR(env, ctx, cacheKey, FRESH, SWR, fetchAndCache);
+      if (hit) {
+        return jsonResponse({ restaurants: hit.data, places: hit.data, count: hit.data.length, cached: true, stale: hit.status === 'stale', cacheAge: hit.cacheAge });
+      }
     }
 
-    const data = await response.json();
-    const restaurants = (data.places || []).map(p => {
-      const normalized = normalizePlace(p, baseUrl, false);
-      return { ...normalized, customer_favorites: [], top_reviews: [], needsDetailsFetch: true };
-    });
-
-    await setInCache(env, cacheKey, restaurants, CONFIG.CACHE_TTL.TEXT_SEARCH);
-    return jsonResponse({ restaurants, places: restaurants, count: restaurants.length, cached: false, note: 'Reviews available via /places/details/{id}' });
+    const restaurants = await fetchAndCache();
+    return jsonResponse({ restaurants, places: restaurants, count: restaurants.length, cached: false, stale: false, note: 'Reviews available via /places/details/{id}' });
   } catch (error) {
     return jsonResponse({ error: error.message, restaurants: [], places: [] }, 200);
   }
@@ -719,7 +772,13 @@ async function handleCacheStats(request, env) {
     version: '7.12-optimized',
     kvBound: !!env.GLOBESKIMMERS_KV,
     costOptimization: { search: 'Advanced tier ($5/1K)', details: 'Preferred tier ($20/1K) - cached 90 days' },
-    cacheTTLs: { textSearch: '12 hours', nearbySearch: '3 days', dietary: '12 hours', details: '90 days', photo: '90 days' },
+    cacheTTLs: {
+      textSearch: '12 hours fresh + 12 hours SWR (24 hours total)',
+      nearbySearch: '3 days fresh + 4 days SWR (7 days total)',
+      dietary: '12 hours',
+      details: '90 days',
+      photo: '90 days'
+    },
     timestamp: new Date().toISOString()
   });
 }
@@ -908,7 +967,7 @@ export default {
 
     try {
       if (pathname === '/' || pathname === '') {
-        if (request.method === 'POST') return await handleRestaurantSearch(request, env);
+        if (request.method === 'POST') return await handleRestaurantSearch(request, env, ctx);
         return new Response('Globeskimmers API v7.12 - Cost Optimized! 💰🍽️☕', { headers: CORS_HEADERS });
       }
 
@@ -923,8 +982,8 @@ export default {
         });
       }
 
-      if (pathname === '/places/text-search') return await handleTextSearch(request, env);
-      if (pathname === '/places/nearby' || pathname === '/places/search') return await handleNearbySearch(request, env);
+      if (pathname === '/places/text-search') return await handleTextSearch(request, env, ctx);
+      if (pathname === '/places/nearby' || pathname === '/places/search') return await handleNearbySearch(request, env, ctx);
       if (pathname.startsWith('/places/details/')) return await handlePlaceDetails(request, env);
       if (pathname === '/places/photo') return await handlePhotoProxy(request, env);
       if (pathname === '/places/dietary') return await handleDietarySearch(request, env);
