@@ -146,7 +146,8 @@ Deno.serve(async (req)=>{
   try {
     const base44=createClientFromRequest(req);
     if(!await base44.auth.me()) return Response.json({error:'Unauthorized'},{status:401});
-    const {latitude,longitude,radius=24140,maxResults=30,category='all',smartRadius=false,countryName='',regionName='',cityName=''}=await req.json();
+    const {latitude,longitude,radius=24140,maxResults=30,category='all',smartRadius=false,countryName='',regionName='',cityName='',forceRefresh=false}=await req.json();
+    const frParam: Record<string,string> = forceRefresh ? { forceRefresh: 'true' } : {};
     if(!latitude||!longitude) return Response.json({error:'Location required'},{status:400});
 
     const INNER_RADIUS=40234; // 25 miles in meters
@@ -171,7 +172,7 @@ Deno.serve(async (req)=>{
     for(let i=0;i<queries.length;i+=3){
       await Promise.all(queries.slice(i,i+3).map(async q=>{
         try{
-          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:String(searchRadius),maxResults:'20',cacheTtl:String(TTL)});
+          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:String(searchRadius),maxResults:'20',cacheTtl:String(TTL),...frParam});
           const r=await fetch(`${WORKER}/places/text-search?${p}`);
           if(!r.ok) return;
           for(const pl of (await r.json()).places||[]){const id=pl.id;if(id&&!seen.has(id)){seen.add(id);places.push(pl);}}
@@ -184,7 +185,7 @@ Deno.serve(async (req)=>{
       const nearbyTypes=(CATEGORY_NEARBY[category]||NEARBY_TYPES).slice(0,8);
       await Promise.all(nearbyTypes.map(async t=>{
         try{
-          const p=new URLSearchParams({type:t,latitude:String(latitude),longitude:String(longitude),radius:String(searchRadius),maxResults:'10',cacheTtl:String(TTL)});
+          const p=new URLSearchParams({type:t,latitude:String(latitude),longitude:String(longitude),radius:String(searchRadius),maxResults:'10',cacheTtl:String(TTL),...frParam});
           const r=await fetch(`${WORKER}/places/nearby?${p}`);
           if(!r.ok) return;
           for(const pl of (await r.json()).places||[]){const id=pl.id;if(id&&!seen.has(id)){seen.add(id);places.push(pl);}}
@@ -198,7 +199,7 @@ Deno.serve(async (req)=>{
       for(let i=0;i<iconicQueries.length;i+=3){
         await Promise.all(iconicQueries.slice(i,i+3).map(async q=>{
           try{
-            const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:String(radius),maxResults:'10',cacheTtl:String(TTL)});
+            const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:String(radius),maxResults:'10',cacheTtl:String(TTL),...frParam});
             const r=await fetch(`${WORKER}/places/text-search?${p}`);
             if(!r.ok) return;
             for(const pl of (await r.json()).places||[]){
@@ -218,7 +219,7 @@ Deno.serve(async (req)=>{
       const iconicNearby=['tourist_attraction','amusement_park','museum'];
       await Promise.all(iconicNearby.map(async t=>{
         try{
-          const p=new URLSearchParams({type:t,latitude:String(latitude),longitude:String(longitude),radius:String(radius),maxResults:'10',cacheTtl:String(TTL)});
+          const p=new URLSearchParams({type:t,latitude:String(latitude),longitude:String(longitude),radius:String(radius),maxResults:'10',cacheTtl:String(TTL),...frParam});
           const r=await fetch(`${WORKER}/places/nearby?${p}`);
           if(!r.ok) return;
           for(const pl of (await r.json()).places||[]){
@@ -322,7 +323,7 @@ Deno.serve(async (req)=>{
       const t1Queries=[`top tourist attractions in ${cn}`,`bucket list landmarks ${cn}`,`famous must see ${cn}`];
       await Promise.all(t1Queries.map(async q=>{
         try{
-          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:'500000',maxResults:'20',cacheTtl:String(TTL)});
+          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:'500000',maxResults:'20',cacheTtl:String(TTL),...frParam});
           const r=await fetch(`${WORKER}/places/text-search?${p}`);
           if(!r.ok) return;
           for(const pl of (await r.json()).places||[]){const id=pl.id;if(id&&!t1Seen.has(id)){t1Seen.add(id);t1Places.push(pl);}}
@@ -349,7 +350,7 @@ Deno.serve(async (req)=>{
       const t2Queries=[`top attractions in ${rn}`,`things to do in ${rn}`,`best places to visit ${rn}`];
       await Promise.all(t2Queries.map(async q=>{
         try{
-          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:'160934',maxResults:'20',cacheTtl:String(TTL)});
+          const p=new URLSearchParams({query:q,latitude:String(latitude),longitude:String(longitude),radius:'160934',maxResults:'20',cacheTtl:String(TTL),...frParam});
           const r=await fetch(`${WORKER}/places/text-search?${p}`);
           if(!r.ok) return;
           for(const pl of (await r.json()).places||[]){const id=pl.id;if(id&&!t2Seen.has(id)){t2Seen.add(id);t2Places.push(pl);}}

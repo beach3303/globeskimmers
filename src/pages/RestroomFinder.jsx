@@ -6,6 +6,7 @@ import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
+import RefreshButton from "@/components/RefreshButton";
 
 // ─── THEME ─────────────────────────────────────────────────────────────────
 const TEAL = "#00BCD4";
@@ -539,6 +540,9 @@ export default function RestroomFinderPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("list");
+  const [refreshTick, setRefreshTick] = useState(0);
+  const forceNextRef = useRef(false);
+  const handleRefresh = () => { forceNextRef.current = true; setRefreshTick(t => t + 1); };
   const [venueType, setVenueType] = useState("all");
   const [radius, setRadius] = useState(5);
   const [openOnly, setOpenOnly] = useState(false);
@@ -572,11 +576,13 @@ export default function RestroomFinderPage() {
   useEffect(() => {
     if (!lat || !lng) return;
     setLoading(true); setError(null);
+    const force = forceNextRef.current; forceNextRef.current = false;
     (async () => {
       try {
         const radiusMeters = radius * 1609.34;
         const { data } = await base44.functions.invoke("getRestroomLocations", {
           latitude: lat, longitude: lng, radius: radiusMeters, maxResults: 30, venueType,
+          forceRefresh: force,
         });
         const raw = data?.restrooms || [];
         if (raw.length > 0) {
@@ -593,7 +599,7 @@ export default function RestroomFinderPage() {
       } catch (e) { setError(`Failed to load: ${e.message}`); }
       finally { setLoading(false); }
     })();
-  }, [lat, lng, radius, venueType]);
+  }, [lat, lng, radius, venueType, refreshTick]);
 
   const filtered = useMemo(() => {
     let r = [...restrooms];
@@ -690,7 +696,10 @@ export default function RestroomFinderPage() {
 
       {/* Header */}
       <div style={{ background: `linear-gradient(160deg,${DARK} 0%,${DARK2} 40%,${TEAL_DARK} 100%)`, padding: "16px 16px 0" }}>
-        <button onClick={() => window.history.back()} style={{ display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none", padding: "0 0 12px", color: "rgba(255,255,255,0.75)", fontSize: "14px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>← Back to Home</button>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: "12px" }}>
+          <button onClick={() => window.history.back()} style={{ display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none", padding: "0", color: "rgba(255,255,255,0.75)", fontSize: "14px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>← Back to Home</button>
+          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh restrooms" />
+        </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "14px" }}>
           <div style={{ width: "50px", height: "50px", background: "rgba(255,255,255,0.12)", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px" }}>🚻</div>

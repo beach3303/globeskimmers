@@ -21,6 +21,7 @@ import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from '@/components/
 import { useDistanceUnit } from '@/components/location/distanceUnit';
 import DistanceUnitToggle from '@/components/location/DistanceUnitToggle';
 import { base44 } from '@/api/base44Client';
+import RefreshButton from '@/components/RefreshButton';
 
 // ============================================================================
 // THEME - Matching PlacesToEat warm brown aesthetic
@@ -885,6 +886,8 @@ export default function ConvenienceStorePage() {
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const forceNextRef = useRef(false);
+  const handleRefresh = () => { forceNextRef.current = true; fetchStores(); };
   const [selectedStore, setSelectedStore] = useState(null);
   const [viewMode, setViewMode] = useState('list');
   const [selectedMapIndex, setSelectedMapIndex] = useState(null);
@@ -917,7 +920,8 @@ export default function ConvenienceStorePage() {
     
     setLoading(true);
     setError(null);
-    
+    const force = forceNextRef.current; forceNextRef.current = false;
+
     try {
       const { data: result } = await base44.functions.invoke('getConvenienceStores', {
         latitude: location.latitude,
@@ -925,7 +929,8 @@ export default function ConvenienceStorePage() {
         radius: searchRadius,
         limit: 50,
         sortBy: 'traveler_best',
-        ...activeFilters
+        ...activeFilters,
+        forceRefresh: force,
       });
       
       console.log('📦 Store result:', result);
@@ -1074,7 +1079,7 @@ export default function ConvenienceStorePage() {
         paddingTop: '52px',
         color: '#fff'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
           <button
             onClick={() => navigate(-1)}
             style={{
@@ -1089,6 +1094,7 @@ export default function ConvenienceStorePage() {
           >
             ← Back
           </button>
+          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh stores" />
         </div>
         <div style={{ marginTop: '16px' }}>
           <h1 style={{

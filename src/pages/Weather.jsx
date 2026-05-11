@@ -6,6 +6,7 @@ import { ArrowLeft, Loader2, Cloud, MapPin, ChevronDown, ChevronUp, Clock } from
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
+import RefreshButton from "@/components/RefreshButton";
 
 // Weather icon mapping
 const getWeatherIcon = (condition, code) => {
@@ -30,6 +31,13 @@ export default function WeatherPage() {
   const navigate = useNavigate();
   const { activeLocation, locationMode, initialized } = useLocation();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    if (!activeLocation?.coordinates || refreshing) return;
+    setRefreshing(true);
+    try { await loadWeatherData(activeLocation, true); }
+    finally { setRefreshing(false); }
+  };
   const [user, setUser] = useState(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [weatherData, setWeatherData] = useState(null);
@@ -69,12 +77,13 @@ export default function WeatherPage() {
     }
   };
 
-  const loadWeatherData = async (location) => {
+  const loadWeatherData = async (location, forceRefresh = false) => {
     setError(null);
     try {
       const result = await base44.functions.invoke('getWeatherForecast', {
         latitude: location.coordinates.latitude,
-        longitude: location.coordinates.longitude
+        longitude: location.coordinates.longitude,
+        forceRefresh,
       });
 
       // Base44 wraps response in 'data' property
@@ -115,13 +124,16 @@ export default function WeatherPage() {
       {/* Header */}
       <div className="px-5 py-4">
         <div className="max-w-md mx-auto">
-          <button
-            onClick={() => navigate(createPageUrl("Home"))}
-            className="mb-4 flex items-center gap-2 hover:opacity-80 transition-opacity text-white"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm font-medium">Back to Home</span>
-          </button>
+          <div className="mb-4 flex items-center justify-between">
+            <button
+              onClick={() => navigate(createPageUrl("Home"))}
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity text-white"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="text-sm font-medium">Back to Home</span>
+            </button>
+            <RefreshButton onClick={handleRefresh} isRefreshing={refreshing} tone="light" title="Refresh weather" />
+          </div>
 
           <h1 className="text-xl font-bold text-white mb-4">Weather Forecast</h1>
 

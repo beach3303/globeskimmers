@@ -420,6 +420,7 @@ Deno.serve(async (req) => {
       radius = 8000,
       maxResults = 30,
       venueType = 'all',
+      forceRefresh = false,
     } = body;
 
     if (!latitude || !longitude) {
@@ -452,6 +453,7 @@ Deno.serve(async (req) => {
             radius: String(radius),
             maxResults: '15',
             cacheTtl: String(60 * 60 * 24 * 3),  // 3 days — restrooms are stable data
+            ...(forceRefresh ? { forceRefresh: 'true' } : {}),
           });
           const url = `${API_BASE_URL}/places/text-search?${params}`;
           const res = await fetch(url);

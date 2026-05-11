@@ -6,6 +6,7 @@ import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
+import RefreshButton from "@/components/RefreshButton";
 
 // ─── THEME ─────────────────────────────────────────────────────────────────
 const TEAL      = "#00BCD4";
@@ -496,6 +497,9 @@ export default function ATMFinderPage() {
   const [atms,           setATMs]           = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState(null);
+  const [refreshTick,    setRefreshTick]    = useState(0);
+  const forceNextRef                         = useRef(false);
+  const handleRefresh                        = () => { forceNextRef.current = true; setRefreshTick(t=>t+1); };
   const [viewMode,       setViewMode]       = useState("list");
   const [category,       setCategory]       = useState("all");
   const [bankFilter,     setBankFilter]     = useState("all");
@@ -531,6 +535,7 @@ export default function ATMFinderPage() {
     if (!lat || !lng) return;
     setLoading(true);
     setError(null);
+    const force = forceNextRef.current; forceNextRef.current = false;
 
     (async () => {
       try {
@@ -543,6 +548,7 @@ export default function ATMFinderPage() {
           category,
           bankFilter,
           openOnly,
+          forceRefresh: force,
         });
 
         const rawList = data?.atms || data?.places || [];
@@ -560,7 +566,7 @@ export default function ATMFinderPage() {
         setLoading(false);
       }
     })();
-  }, [lat, lng, radius, category, bankFilter, openOnly]);
+  }, [lat, lng, radius, category, bankFilter, openOnly, refreshTick]);
 
   // ── Client-side sort (distance is already sorted, but rating needs resort) ──
   const filtered = useMemo(() => {
@@ -693,7 +699,10 @@ export default function ATMFinderPage() {
 
       {/* ── Header ── */}
       <div style={{ padding:"16px 16px 10px" }}>
-        <button onClick={() => window.history.back()} style={{ display:"flex", alignItems:"center", gap:"6px", background:"none", border:"none", padding:"0", color:TEAL_DARK, fontSize:"14px", fontWeight:"600", cursor:"pointer", fontFamily:"inherit", marginBottom:"12px" }}>← Back to Home</button>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"12px" }}>
+          <button onClick={() => window.history.back()} style={{ display:"flex", alignItems:"center", gap:"6px", background:"none", border:"none", padding:"0", color:TEAL_DARK, fontSize:"14px", fontWeight:"600", cursor:"pointer", fontFamily:"inherit" }}>← Back to Home</button>
+          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="dark" title="Refresh ATMs" />
+        </div>
 
         {/* Title bar */}
         <div style={{ background:`linear-gradient(135deg, ${TEAL} 0%, ${TEAL_DARK} 100%)`, borderRadius:"16px", padding:"14px 16px", marginBottom:"12px", display:"flex", alignItems:"center", gap:"12px" }}>

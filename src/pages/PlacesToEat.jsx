@@ -37,6 +37,7 @@ import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
+import RefreshButton from "@/components/RefreshButton";
 
 // ─── THEME ──────────────────────────────────────────────────────────────────
 const BLUE      = "#3B82F6";
@@ -717,6 +718,18 @@ export default function PlacesToEat() {
   const [restaurants, setRestaurants]   = useState([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState(null);
+
+  // ── REFRESH BUTTON ──
+  // refreshTick changes when the user taps the header refresh button. It's a
+  // dep of the fetch effect, so a tap re-runs the existing fetch. forceNextRef
+  // is consumed once per fetch: it carries `forceRefresh: true` to Base44
+  // (which forwards to the Worker, which skips its KV cache for that request).
+  const [refreshTick, setRefreshTick]   = useState(0);
+  const forceNextRef                    = useRef(false);
+  const handleRefresh                   = () => {
+    forceNextRef.current = true;
+    setRefreshTick(t => t + 1);
+  };
   const [viewMode, setViewMode]         = useState("list");
   const [selectedCuisines, setSelectedCuisines] = useState(new Set(["all"]));
   const [sortBy, setSortBy]             = useState("nearby");
@@ -801,6 +814,11 @@ export default function PlacesToEat() {
     if (!lat || !lng) return;
     setLoading(true); setError(null); setFallbackInfo(null);
 
+    // Consume the force-refresh flag once. Subsequent fetches triggered by
+    // unrelated dep changes (radius, filters) won't pay for a forced refresh.
+    const force = forceNextRef.current;
+    forceNextRef.current = false;
+
     (async () => {
       try {
         // ── UNIFIED FETCH (v5.4) ─────────────────────────────────────────────
@@ -844,6 +862,7 @@ export default function PlacesToEat() {
           filterDriveThru, filterOutdoor, filterIndoor, filterParking,
           filterBakery, filterBars,
           filterVibes, filterDietary,
+          forceRefresh: force,
         });
 
         const places = data?.places || data?.restaurants || [];
@@ -863,7 +882,7 @@ export default function PlacesToEat() {
   // Every filter is now part of the backend's Semantic Text Compiler payload,
   // so every change must trigger a re-fetch. Using JSON.stringify for the
   // object states (filterVibes, filterDietary) so React sees deep changes.
-  }, [lat, lng, radius, primaryCuisine, searchText, filterBakery, filterBars, filterOpenNow, filterMinRating, filterMaxPrice, filterParking, filterOutdoor, filterIndoor, filterDriveThru, JSON.stringify(filterVibes), JSON.stringify(filterDietary)]);
+  }, [lat, lng, radius, primaryCuisine, searchText, filterBakery, filterBars, filterOpenNow, filterMinRating, filterMaxPrice, filterParking, filterOutdoor, filterIndoor, filterDriveThru, JSON.stringify(filterVibes), JSON.stringify(filterDietary), refreshTick]);
 
   // ── FILTER + SORT ──────────────────────────────────────────────────────────
   // v5.3: Backend Semantic Text Compiler now sends a single natural-language
@@ -1018,7 +1037,10 @@ export default function PlacesToEat() {
 
       {/* ── HERO: blue gradient with title + labeled starting location ── */}
       <div style={{background:`linear-gradient(135deg,${BLUE} 0%,${BLUE_DARK} 100%)`,padding:"20px 16px 20px"}}>
-        <button onClick={()=>window.history.back()} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"8px",padding:"6px 10px",color:"#fff",fontSize:"13px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit",marginBottom:"14px"}}>← Back</button>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
+          <button onClick={()=>window.history.back()} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"8px",padding:"6px 10px",color:"#fff",fontSize:"13px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh places" />
+        </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"18px"}}>
           <span style={{fontSize:"26px"}}>🍽️</span>
           <div style={{color:"#fff"}}>
