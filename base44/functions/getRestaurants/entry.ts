@@ -345,20 +345,31 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   { pattern: /\bburger(s)?\b|\bwhopper\b/,             tier1:['hamburger_restaurant'],                                    tier2:['american_restaurant','fast_food_restaurant'],     label:'burgers' },
   { pattern: /\bsteak\b/,                              tier1:['steak_house'],                                             tier2:['american_restaurant','brazilian_restaurant'],     label:'steak' },
   { pattern: /\bbbq\b|\bbarbeque\b|\bbarbecue\b/,      tier1:['barbecue_restaurant'],                                     tier2:['american_restaurant'],                            label:'BBQ' },
+  { pattern: /\bribs?\b|\bbrisket\b|\bpulled\s*pork\b/, tier1:['barbecue_restaurant'],                                    tier2:['american_restaurant','southern_restaurant'],      label:'ribs' },
   { pattern: /\bwings\b|\bchicken\s*wings\b|\bbuffalo\s*wings\b/, tier1:['chicken_restaurant'],                          tier2:['pizza_restaurant','sports_bar','bar'],                          label:'wings' },
   { pattern: /\bfried\s*chicken\b|\bchicken\b/,        tier1:['chicken_restaurant'],                                     tier2:['fast_food_restaurant','american_restaurant'],     label:'fried chicken' },
-  { pattern: /\blobster\s*roll\b|\bclam\s*chowder\b/,  tier1:['seafood_restaurant'],                                      tier2:['american_restaurant'],                            label:'seafood' },
+  { pattern: /\bseafood\b|\bshellfish\b|\boysters?\b|\bclams?\b|\blobster\s*roll\b|\bclam\s*chowder\b|\bfish\s*and\s*chips\b/, tier1:['seafood_restaurant'], tier2:['american_restaurant'], label:'seafood' },
   { pattern: /\bgumbo\b|\bpo[\s-]*boy\b/,              tier1:['cajun_restaurant','southern_restaurant'],                   tier2:['american_restaurant'],                            label:'Cajun' },
   { pattern: /\bpancakes?\b|\bwaffles?\b/,             tier1:['breakfast_restaurant'],                                    tier2:['american_restaurant','diner'],                    label:'pancakes' },
   { pattern: /\bbagels?\b/,                            tier1:['bagel_shop'],                                              tier2:['deli','bakery'],                                  label:'bagels' },
   { pattern: /\bdonuts?\b|\bdoughnuts?\b/,             tier1:['donut_shop'],                                              tier2:['bakery','dessert_shop','pastry_shop'],            label:'donuts' },
   { pattern: /\bmac\s*and\s*cheese\b|\bmac\s*n\s*cheese\b/, tier1:['american_restaurant'],                                tier2:['soul_food_restaurant'],                           label:'mac and cheese' },
   { pattern: /\bpoke\b|\bpoke\s*bowl\b/,               tier1:['hawaiian_restaurant'],                                     tier2:['japanese_restaurant'],                            label:'poke' },
+  // ── Bakery & Desserts (dishes whose "specialty" is a shop type, not a cuisine) ─────────
+  { pattern: /\bcakes?\b|\bcupcakes?\b/,               tier1:['cake_shop','bakery'],                                      tier2:['dessert_shop','pastry_shop','cafe'],              label:'cake' },
+  { pattern: /\bbread\b|\bsourdough\b|\bbaguette\b/,   tier1:['bakery'],                                                  tier2:['cafe','sandwich_shop'],                           label:'bread' },
+  { pattern: /\bpastr(y|ies)\b|\bdanish\b|\beclair\b|\bmacarons?\b/, tier1:['pastry_shop','bakery'],                       tier2:['french_restaurant','cafe','dessert_shop'],        label:'pastries' },
+  { pattern: /\bpies?\b|\bcobblers?\b/,                tier1:['bakery','dessert_shop'],                                   tier2:['american_restaurant','diner'],                    label:'pie' },
+  { pattern: /\bcookies?\b/,                           tier1:['bakery','dessert_shop'],                                   tier2:['cafe'],                                           label:'cookies' },
+  { pattern: /\bice\s*cream\b|\bgelato\b|\bsorbet\b/,  tier1:['ice_cream_shop','gelato_shop'],                            tier2:['dessert_shop','cafe'],                            label:'ice cream' },
+  { pattern: /\bcrepes?\b/,                            tier1:['creperie','french_restaurant'],                            tier2:['dessert_shop','cafe'],                            label:'crepes' },
+  { pattern: /\bboba\b|\bbubble\s*tea\b/,              tier1:['bubble_tea_shop','tea_house'],                             tier2:['cafe'],                                           label:'boba' },
+  { pattern: /\bcoffee\b|\bespresso\b|\blatte\b/,      tier1:['coffee_shop','cafe'],                                      tier2:['bakery'],                                         label:'coffee' },
 ];
 
 type ParsedIntent =
   | { kind: 'UMBRELLA'; cultureKey: string; label: string; types: Set<string>; keywords: string[] }
-  | { kind: 'DISH'; label: string; tier1Types: string[]; tier2Types: string[] }
+  | { kind: 'DISH'; label: string; tier1Types: string[]; tier2Types: string[]; rawWords: string[] }
   | { kind: 'GENERAL' };
 
 function parseSearchIntent(query: string): ParsedIntent {
@@ -369,9 +380,31 @@ function parseSearchIntent(query: string): ParsedIntent {
   if (/\blatin\b|\blatino\b/.test(q))  return { kind:'UMBRELLA', cultureKey:'latin',         ...CULTURAL_INTENTS.latin };
   if (/\bmediterranean\b/.test(q))     return { kind:'UMBRELLA', cultureKey:'mediterranean', ...CULTURAL_INTENTS.mediterranean };
   if (/\beuropean\b/.test(q))          return { kind:'UMBRELLA', cultureKey:'european',      ...CULTURAL_INTENTS.european };
+  // Single-word cuisine names → narrow umbrella to just that cuisine's type.
+  // Runs after the broad umbrellas so "Italian food" still hits italian_restaurant
+  // (no overlap with /\beuropean\b/), and "Mexican" lands here instead of GENERAL.
+  if (/\bitalian\b/.test(q))           return { kind:'UMBRELLA', cultureKey:'italian',       label:'Italian',       types:new Set(['italian_restaurant']),     keywords:['pasta','pizza','risotto','lasagna'] };
+  if (/\bmexican\b/.test(q))           return { kind:'UMBRELLA', cultureKey:'mexican',       label:'Mexican',       types:new Set(['mexican_restaurant']),     keywords:['taco','burrito','enchilada','quesadilla'] };
+  if (/\bchinese\b/.test(q))           return { kind:'UMBRELLA', cultureKey:'chinese',       label:'Chinese',       types:new Set(['chinese_restaurant']),     keywords:['dim sum','noodle','dumpling','chow mein'] };
+  if (/\bjapanese\b/.test(q))          return { kind:'UMBRELLA', cultureKey:'japanese',      label:'Japanese',      types:new Set(['japanese_restaurant']),    keywords:['sushi','ramen','tempura','udon'] };
+  if (/\bkorean\b/.test(q))            return { kind:'UMBRELLA', cultureKey:'korean',        label:'Korean',        types:new Set(['korean_restaurant']),      keywords:['bibimbap','kimchi','bulgogi','korean bbq'] };
+  if (/\bthai\b/.test(q))              return { kind:'UMBRELLA', cultureKey:'thai',          label:'Thai',          types:new Set(['thai_restaurant']),        keywords:['pad thai','tom yum','green curry'] };
+  if (/\bvietnamese\b/.test(q))        return { kind:'UMBRELLA', cultureKey:'vietnamese',    label:'Vietnamese',    types:new Set(['vietnamese_restaurant']),  keywords:['pho','banh mi','spring roll'] };
+  if (/\bfilipino\b/.test(q))          return { kind:'UMBRELLA', cultureKey:'filipino',      label:'Filipino',      types:new Set(['filipino_restaurant']),    keywords:['adobo','sinigang','lumpia','sisig'] };
+  if (/\bindian\b/.test(q))            return { kind:'UMBRELLA', cultureKey:'indian',        label:'Indian',        types:new Set(['indian_restaurant']),      keywords:['curry','biryani','naan','tikka masala'] };
+  if (/\bfrench\b/.test(q))            return { kind:'UMBRELLA', cultureKey:'french',        label:'French',        types:new Set(['french_restaurant']),      keywords:['croissant','baguette','crepe'] };
+  if (/\bgreek\b/.test(q))             return { kind:'UMBRELLA', cultureKey:'greek',         label:'Greek',         types:new Set(['greek_restaurant']),       keywords:['gyro','souvlaki','tzatziki'] };
   // Specific dishes
   for (const entry of DISH_MAP) {
-    if (entry.pattern.test(q)) return { kind:'DISH', label:entry.label, tier1Types:entry.tier1, tier2Types:entry.tier2 };
+    const m = q.match(entry.pattern);
+    if (m) {
+      // Capture the exact words the user typed that matched the pattern so the
+      // tier classifier can name-match on the literal term (e.g. "spaghetti")
+      // instead of just the canonical label ("pasta").
+      const matched = (m[0] || '').toLowerCase();
+      const rawWords = Array.from(new Set(matched.split(/\s+/).filter(w => w.length >= 3)));
+      return { kind:'DISH', label:entry.label, tier1Types:entry.tier1, tier2Types:entry.tier2, rawWords };
+    }
   }
   return { kind: 'GENERAL' };
 }
@@ -388,16 +421,23 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     return 4;
   }
   if (intent.kind === 'DISH') {
-    if (intent.tier1Types.some(t => types.has(t))) return 1;
-    if (intent.tier2Types.some(t => types.has(t))) return 2;
-    const dish = intent.label.toLowerCase();
-    if (name.includes(dish) || reviewText.includes(dish)) return 3;
+    // Words that count as a "namesake" match: the canonical label plus whatever
+    // the user actually typed. Lets "Old Spaghetti Factory" rank Tier 1 on a
+    // "spaghetti" search even though the canonical label is "pasta".
+    const dishWords = Array.from(new Set([
+      intent.label.toLowerCase(),
+      ...(intent.rawWords || [])
+    ].filter(Boolean)));
+    if (dishWords.some(w => name.includes(w))) return 1;          // namesake / specialty
+    if (intent.tier1Types.some(t => types.has(t))) return 2;      // cuisine specialist
+    if (intent.tier2Types.some(t => types.has(t))) return 3;      // secondary cuisine
+    if (dishWords.some(w => reviewText.includes(w))) return 3;    // serves it (review-mentioned)
     return 4;
   }
   return 1;
 }
 
-const TIER_LABELS: Record<number, string> = { 1:'Authentic', 2:'Good Match', 3:'Has It', 4:'Other' };
+const TIER_LABELS: Record<number, string> = { 1:'Specialty', 2:'Cuisine Match', 3:'Has It', 4:'Other' };
 
 const CUISINE_QUERIES: Record<string, string[]> = {
   // 'all': reduced from 8 to 3 queries (saves 5 API calls per page load)
