@@ -244,7 +244,7 @@ const CULTURAL_INTENTS: Record<string, { label: string; types: Set<string>; keyw
 // 80+ dishes mapped globally — covers Italian, Mexican, Japanese, Chinese, Korean,
 // Vietnamese, Thai, Indian, Filipino, Middle Eastern, European, South American,
 // Southeast Asian, African, and American dishes.
-const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label: string }> = [
+const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label: string; mealTime?: 'breakfast' | 'brunch' | 'lunch' | 'dinner' }> = [
   // ── Japanese ────────────────────────────────────────────────────────────────
   { pattern: /\bsushi\b/,                              tier1:['sushi_restaurant'],                                        tier2:['japanese_restaurant'],                            label:'sushi' },
   { pattern: /\bramen\b/,                              tier1:['ramen_restaurant'],                                        tier2:['japanese_restaurant'],                            label:'ramen' },
@@ -462,19 +462,19 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   { pattern: /\bonion\s*rings\b|\bfries?\b|\bfrench\s*fries\b|\bpoutine\b/, tier1:['american_restaurant','fast_food_restaurant'], tier2:['canadian_restaurant'],                          label:'fries' },
   { pattern: /\bchicken\s*pot\s*pie\b/,                tier1:['american_restaurant','southern_restaurant'],               tier2:['diner'],                                          label:'chicken pot pie' },
   { pattern: /\bbuffalo\s*chicken\b/,                  tier1:['chicken_restaurant','american_restaurant'],                tier2:['sports_bar'],                                     label:'buffalo' },
-  { pattern: /\bpancakes?\b|\bwaffles?\b/,             tier1:['breakfast_restaurant'],                                    tier2:['american_restaurant','diner'],                    label:'pancakes' },
+  { pattern: /\bpancakes?\b|\bwaffles?\b/,             tier1:['breakfast_restaurant'],                                    tier2:['american_restaurant','diner'],                    label:'pancakes',          mealTime:'breakfast' },
   { pattern: /\bbagels?\b/,                            tier1:['bagel_shop'],                                              tier2:['deli','bakery'],                                  label:'bagels' },
   { pattern: /\bdonuts?\b|\bdoughnuts?\b/,             tier1:['donut_shop'],                                              tier2:['bakery','dessert_shop','pastry_shop'],            label:'donuts' },
   { pattern: /\bmac\s*and\s*cheese\b|\bmac\s*n\s*cheese\b/, tier1:['american_restaurant'],                                tier2:['soul_food_restaurant'],                           label:'mac and cheese' },
   { pattern: /\bpoke\b|\bpoke\s*bowl\b/,               tier1:['hawaiian_restaurant'],                                     tier2:['japanese_restaurant'],                            label:'poke' },
   // ── Brunch / Breakfast ─────────────────────────────────────────────────────
-  { pattern: /\bbrunch\b/,                             tier1:['brunch_restaurant'],                                       tier2:['breakfast_restaurant','cafe'],                    label:'brunch' },
-  { pattern: /\bbreakfast\b/,                          tier1:['breakfast_restaurant'],                                    tier2:['diner','cafe'],                                   label:'breakfast' },
-  { pattern: /\beggs\s*benedict\b|\bbenedict\b/,       tier1:['brunch_restaurant','breakfast_restaurant'],                tier2:['cafe','diner'],                                   label:'eggs benedict' },
-  { pattern: /\bomelet(te)?\b|\bfrittata\b/,           tier1:['breakfast_restaurant','brunch_restaurant'],                tier2:['diner','cafe'],                                   label:'omelette' },
-  { pattern: /\bavocado\s*toast\b|\bacai\s*bowl\b|\baçaí\s*bowl\b/, tier1:['brunch_restaurant','cafe'],                    tier2:['juice_bar','vegan_restaurant'],                   label:'brunch bowl' },
-  { pattern: /\bfrench\s*toast\b/,                     tier1:['breakfast_restaurant','brunch_restaurant'],                tier2:['cafe','diner'],                                   label:'French toast' },
-  { pattern: /\bbreakfast\s*burrito\b/,                tier1:['mexican_restaurant','breakfast_restaurant'],               tier2:[],                                                 label:'breakfast burrito' },
+  { pattern: /\bbrunch\b/,                             tier1:['brunch_restaurant'],                                       tier2:['breakfast_restaurant','cafe'],                    label:'brunch',            mealTime:'brunch' },
+  { pattern: /\bbreakfast\b/,                          tier1:['breakfast_restaurant'],                                    tier2:['diner','cafe'],                                   label:'breakfast',         mealTime:'breakfast' },
+  { pattern: /\beggs\s*benedict\b|\bbenedict\b/,       tier1:['brunch_restaurant','breakfast_restaurant'],                tier2:['cafe','diner'],                                   label:'eggs benedict',     mealTime:'brunch' },
+  { pattern: /\bomelet(te)?\b|\bfrittata\b/,           tier1:['breakfast_restaurant','brunch_restaurant'],                tier2:['diner','cafe'],                                   label:'omelette',          mealTime:'breakfast' },
+  { pattern: /\bavocado\s*toast\b|\bacai\s*bowl\b|\baçaí\s*bowl\b/, tier1:['brunch_restaurant','cafe'],                    tier2:['juice_bar','vegan_restaurant'],                   label:'brunch bowl',       mealTime:'brunch' },
+  { pattern: /\bfrench\s*toast\b/,                     tier1:['breakfast_restaurant','brunch_restaurant'],                tier2:['cafe','diner'],                                   label:'French toast',      mealTime:'breakfast' },
+  { pattern: /\bbreakfast\s*burrito\b/,                tier1:['mexican_restaurant','breakfast_restaurant'],               tier2:[],                                                 label:'breakfast burrito', mealTime:'breakfast' },
   // ── Australian ────────────────────────────────────────────────────────────
   { pattern: /\bpavlova\b|\blamington\b/,              tier1:['australian_restaurant','dessert_shop'],                    tier2:['bakery'],                                         label:'Australian dessert' },
   { pattern: /\bchicken\s*parm(igiana)?\b/,            tier1:['italian_restaurant','australian_restaurant'],              tier2:['pub','american_restaurant'],                      label:'chicken parmigiana' },
@@ -524,7 +524,7 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
 
 type ParsedIntent =
   | { kind: 'UMBRELLA'; cultureKey: string; label: string; types: Set<string>; keywords: string[] }
-  | { kind: 'DISH'; label: string; tier1Types: string[]; tier2Types: string[]; rawWords: string[] }
+  | { kind: 'DISH'; label: string; tier1Types: string[]; tier2Types: string[]; rawWords: string[]; mealTime?: 'breakfast' | 'brunch' | 'lunch' | 'dinner' }
   | { kind: 'GENERAL' };
 
 function parseSearchIntent(query: string): ParsedIntent {
@@ -567,7 +567,7 @@ function parseSearchIntent(query: string): ParsedIntent {
       // instead of just the canonical label ("pasta").
       const matched = (m[0] || '').toLowerCase();
       const rawWords = Array.from(new Set(matched.split(/\s+/).filter(w => w.length >= 3)));
-      return { kind:'DISH', label:entry.label, tier1Types:entry.tier1, tier2Types:entry.tier2, rawWords };
+      return { kind:'DISH', label:entry.label, tier1Types:entry.tier1, tier2Types:entry.tier2, rawWords, mealTime:entry.mealTime };
     }
   }
   return { kind: 'GENERAL' };
@@ -595,7 +595,20 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     if (dishWords.some(w => name.includes(w))) return 1;          // namesake / specialty
     if (intent.tier1Types.some(t => types.has(t))) return 2;      // cuisine specialist
     if (intent.tier2Types.some(t => types.has(t))) return 3;      // secondary cuisine
-    if (dishWords.some(w => reviewText.includes(w))) return 3;    // serves it (review-mentioned)
+
+    // Has-It signals available on search results (no Details fetch needed)
+    const editorial = (place.editorialSummary?.text || place.editorialSummary || '').toString().toLowerCase();
+    if (editorial && dishWords.some(w => editorial.includes(w))) return 3;
+
+    // Meal-time signal: a chain/bakery that serves breakfast almost certainly has
+    // pancakes/waffles/etc. on the menu, even though its primaryType is
+    // fast_food_restaurant or bakery. Surfaces McDonald's, Corner Bakery, etc.
+    if (intent.mealTime === 'breakfast' && place.servesBreakfast === true) return 3;
+    if (intent.mealTime === 'brunch'    && (place.servesBrunch === true || place.servesBreakfast === true)) return 3;
+    if (intent.mealTime === 'lunch'     && place.servesLunch === true) return 3;
+    if (intent.mealTime === 'dinner'    && place.servesDinner === true) return 3;
+
+    if (dishWords.some(w => reviewText.includes(w))) return 3;    // serves it (review-mentioned, when Details was hydrated)
     return 4;
   }
   return 1;
@@ -964,15 +977,33 @@ Deno.serve(async (req) => {
       Object.values(filterVibes || {}).some((v: any) => v) ||
       Object.keys(filterDietary || {}).length > 0;
 
-    // Disable generic Nearby fetch whenever the user typed text OR clicked
-    // any advanced filter. Trust the Semantic Text Compiler exclusively.
-    const skipNearby = !!searchQuery?.trim() || hasAdvancedFilters;
+    // Disable generic Nearby fetch when advanced filters are active. For plain
+    // text searches we ALSO suppress nearby... UNLESS it's a DISH intent: text
+    // search alone misses chains/bakeries that serve the dish but aren't ranked
+    // for it (McDonald's pancakes, Corner Bakery pancakes). For DISH we run a
+    // small targeted broad-foodservice fan-out so "Has It" Tier 3 places enter
+    // the candidate pool.
+    const isDishSearch = intent.kind === 'DISH';
+    const skipNearby = hasAdvancedFilters || (!!searchQuery?.trim() && !isDishSearch);
+
+    // For DISH searches, broaden the pool with the dish's own tier types plus
+    // generic foodservice categories. Capped to control API cost (~4 calls).
+    const DISH_BROAD_TYPES = ['restaurant', 'fast_food_restaurant', 'meal_takeaway', 'bakery'];
+    const dishNearbyTypes = isDishSearch
+      ? Array.from(new Set([
+          ...((intent as any).tier1Types || []),
+          ...((intent as any).tier2Types || []),
+          ...DISH_BROAD_TYPES,
+        ])).slice(0, 4)
+      : [];
 
     const nearbyTypeList = skipNearby
       ? []
-      : cuisine === 'all'
-        ? NEARBY_TYPES_ALL
-        : (NEARBY_TYPES_CUISINE[cuisine] || ['restaurant']);
+      : isDishSearch
+        ? dishNearbyTypes
+        : cuisine === 'all'
+          ? NEARBY_TYPES_ALL
+          : (NEARBY_TYPES_CUISINE[cuisine] || ['restaurant']);
 
     // Sports bar nearby ranking strategy:
     // POPULARITY — surfaces well-known sports bars like Rocco's Tavern, Lucky Baldwin's,
