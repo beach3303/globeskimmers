@@ -986,16 +986,14 @@ Deno.serve(async (req) => {
     const isDishSearch = intent.kind === 'DISH';
     const skipNearby = hasAdvancedFilters || (!!searchQuery?.trim() && !isDishSearch);
 
-    // For DISH searches, broaden the pool with the dish's own tier types plus
-    // generic foodservice categories. Capped to control API cost (~4 calls).
+    // For DISH searches, broaden the pool with generic foodservice categories.
+    // The text-search query ("{dish} {tier1Type}") already targets specialists
+    // (e.g. "pancakes breakfast restaurant"), so nearby's job here is to surface
+    // chains/bakeries/takeout that Google's text-search ranks too low because
+    // the dish is only one of many menu items (McDonald's pancakes, Corner Bakery
+    // pancakes, IHOP, etc.). 4 nearby calls capped — controlled cost.
     const DISH_BROAD_TYPES = ['restaurant', 'fast_food_restaurant', 'meal_takeaway', 'bakery'];
-    const dishNearbyTypes = isDishSearch
-      ? Array.from(new Set([
-          ...((intent as any).tier1Types || []),
-          ...((intent as any).tier2Types || []),
-          ...DISH_BROAD_TYPES,
-        ])).slice(0, 4)
-      : [];
+    const dishNearbyTypes = isDishSearch ? DISH_BROAD_TYPES.slice() : [];
 
     const nearbyTypeList = skipNearby
       ? []
