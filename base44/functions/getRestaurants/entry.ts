@@ -363,10 +363,17 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   { pattern: /\bdolmas?\b|\bdolmadakia\b/,             tier1:['greek_restaurant','middle_eastern_restaurant','turkish_restaurant'], tier2:[],                                            label:'dolma' },
   { pattern: /\bpita\b/,                               tier1:['middle_eastern_restaurant','mediterranean_restaurant'],    tier2:['greek_restaurant'],                               label:'pita' },
   { pattern: /\bmansaf\b|\bkabsa\b|\bmaqluba\b/,       tier1:['middle_eastern_restaurant'],                               tier2:[],                                                 label:'Levantine' },
+  // ── Turkish ─────────────────────────────────────────────────────────────────
+  { pattern: /\bgozleme\b|\bgözleme\b/,                tier1:['turkish_restaurant'],                                      tier2:['middle_eastern_restaurant'],                      label:'gözleme' },
+  { pattern: /\blahmacun\b|\bpide\b/,                  tier1:['turkish_restaurant'],                                      tier2:['middle_eastern_restaurant'],                      label:'Turkish flatbread' },
+  { pattern: /\bborek\b|\bbörek\b/,                    tier1:['turkish_restaurant','bakery'],                             tier2:[],                                                 label:'börek' },
+  { pattern: /\bmeze\b|\bmezeler\b/,                   tier1:['turkish_restaurant','middle_eastern_restaurant'],          tier2:['mediterranean_restaurant'],                       label:'meze' },
   // ── European ────────────────────────────────────────────────────────────────
   { pattern: /\bpasta\b|\blasagna\b|\brigatoni\b|\bpenne\b|\bspaghetti\b|\bcarbonara\b|\bcacio\s*e\s*pepe\b/, tier1:['italian_restaurant'], tier2:['mediterranean_restaurant'],   label:'pasta' },
-  { pattern: /\bpizza\b/,                              tier1:['pizza_restaurant'],                                        tier2:['italian_restaurant'],                             label:'pizza' },
-  { pattern: /\bcroissant\b|\bpastries\b/,             tier1:['french_restaurant','bakery'],                              tier2:['cafe'],                                           label:'croissant' },
+  { pattern: /\bneapolitan\s*pizza\b|\bnew\s*york\s*style\s*pizza\b|\bdeep\s*dish\b|\bpizza\b/, tier1:['pizza_restaurant'], tier2:['italian_restaurant'],                       label:'pizza' },
+  { pattern: /\barancini\b|\bsupplì\b|\bsuppli\b/,     tier1:['italian_restaurant'],                                      tier2:[],                                                 label:'arancini' },
+  { pattern: /\baperitivo\b/,                          tier1:['italian_restaurant','wine_bar','cafe'],                    tier2:['bar'],                                            label:'aperitivo' },
+  { pattern: /\bcroissant\b|\bpain\s*au\s*chocolat\b|\bchocolatines?\b|\bpastries\b/, tier1:['french_restaurant','bakery','pastry_shop'], tier2:['cafe'],                          label:'pastries' },
   { pattern: /\bschnitzel\b/,                          tier1:['german_restaurant'],                                       tier2:[],                                                 label:'schnitzel' },
   { pattern: /\bpaella\b/,                             tier1:['spanish_restaurant'],                                      tier2:[],                                                 label:'paella' },
   { pattern: /\btapas\b/,                              tier1:['spanish_restaurant','tapas_bar'],                          tier2:[],                                                 label:'tapas' },
@@ -385,12 +392,15 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   // ── French beyond crepes ──
   { pattern: /\bfrench\s*onion\s*soup\b/,              tier1:['french_restaurant'],                                       tier2:['european_restaurant'],                            label:'French onion soup' },
   { pattern: /\bescargot\b|\bbouillabaisse\b|\bratatouille\b|\bcoq\s*au\s*vin\b/, tier1:['french_restaurant'],            tier2:[],                                                 label:'French classic' },
+  { pattern: /\bboeuf\s*bourguignon\b|\bbeef\s*bourguignon\b/, tier1:['french_restaurant'],                                tier2:[],                                                 label:'boeuf bourguignon' },
+  { pattern: /\bcassoulet\b/,                          tier1:['french_restaurant'],                                       tier2:[],                                                 label:'cassoulet' },
   { pattern: /\bquiche\b/,                             tier1:['french_restaurant','brunch_restaurant'],                   tier2:['cafe','bakery'],                                  label:'quiche' },
   { pattern: /\bfoie\s*gras\b/,                        tier1:['french_restaurant'],                                       tier2:[],                                                 label:'foie gras' },
   // ── Spanish beyond paella/tapas ──
   { pattern: /\bjamon\b|\bjamón\b|\bchorizo\b/,        tier1:['spanish_restaurant'],                                      tier2:[],                                                 label:'Spanish cured meat' },
   { pattern: /\bgazpacho\b/,                           tier1:['spanish_restaurant'],                                      tier2:[],                                                 label:'gazpacho' },
   { pattern: /\bpatatas\s*bravas\b|\bpintxos?\b|\btortilla\s*espanola\b/, tier1:['spanish_restaurant','tapas_bar'],         tier2:[],                                                 label:'Spanish tapas' },
+  { pattern: /\bvermut\b|\bvermouth\s*hour\b/,         tier1:['spanish_restaurant','wine_bar','bar'],                     tier2:['tapas_bar'],                                      label:'vermut' },
   // ── German / Austrian / Swiss ──
   { pattern: /\bbratwurst\b|\bsausages?\b|\bwurst\b/,  tier1:['german_restaurant'],                                       tier2:['american_restaurant'],                            label:'sausage' },
   { pattern: /\bpretzels?\b|\bbrezel\b/,               tier1:['german_restaurant','bakery'],                              tier2:[],                                                 label:'pretzel' },
@@ -525,6 +535,15 @@ function parseSearchIntent(query: string): ParsedIntent {
   if (/\blatin\b|\blatino\b/.test(q))  return { kind:'UMBRELLA', cultureKey:'latin',         ...CULTURAL_INTENTS.latin };
   if (/\bmediterranean\b/.test(q))     return { kind:'UMBRELLA', cultureKey:'mediterranean', ...CULTURAL_INTENTS.mediterranean };
   if (/\beuropean\b/.test(q))          return { kind:'UMBRELLA', cultureKey:'european',      ...CULTURAL_INTENTS.european };
+  // Regional casual-dining venue synonyms — route to that cuisine's type so
+  // a traveler searching "trattoria" in Florence sees Italian neighborhood
+  // places, not Olive Garden. Runs BEFORE bare-cuisine UMBRELLAs.
+  if (/\btrattoria\b|\bosteria\b/.test(q))     return { kind:'UMBRELLA', cultureKey:'italian',    label:'Trattoria', types:new Set(['italian_restaurant']),                        keywords:['trattoria','osteria','pasta','pizza','antipasto'] };
+  if (/\bbistro(t)?\b|\bbrasserie\b/.test(q))  return { kind:'UMBRELLA', cultureKey:'french',     label:'Bistro',    types:new Set(['french_restaurant']),                         keywords:['bistro','brasserie','croissant','crepe'] };
+  if (/\btaberna\b|\btapas\s*bar\b|\bbodega\b/.test(q)) return { kind:'UMBRELLA', cultureKey:'spanish', label:'Taberna', types:new Set(['spanish_restaurant','tapas_bar']),         keywords:['tapas','pintxos','jamon','wine','vermut'] };
+  if (/\bizakaya\b/.test(q))                   return { kind:'UMBRELLA', cultureKey:'japanese',   label:'Izakaya',   types:new Set(['japanese_restaurant','bar']),                 keywords:['sake','yakitori','small plates','japanese pub'] };
+  if (/\bcantina\b|\btaqueria\b/.test(q))      return { kind:'UMBRELLA', cultureKey:'mexican',    label:'Cantina',   types:new Set(['mexican_restaurant']),                        keywords:['tacos','tequila','margarita','tortas'] };
+  if (/\bfood\s*hall\b|\bfood\s*market\b|\bmercato\b|\bmercado\b|\bfood\s*court\b/.test(q)) return { kind:'UMBRELLA', cultureKey:'market', label:'Food Market', types:new Set(['food_court']), keywords:['market','hall','stall','street food'] };
   // Single-word cuisine names → narrow umbrella to just that cuisine's type.
   // Runs after the broad umbrellas so "Italian food" still hits italian_restaurant
   // (no overlap with /\beuropean\b/), and "Mexican" lands here instead of GENERAL.
@@ -788,6 +807,14 @@ Deno.serve(async (req) => {
     if ((vibes as any).family)    features.push('family friendly');
     if ((vibes as any).liveMusic) features.push('live music');
     if ((vibes as any).groups)    features.push('good for groups');
+
+    // Travel experience modifiers — bias Google text search toward the right
+    // kind of venue when the user uses these familiar travel phrases.
+    const wantsRooftop  = /\brooftop\b/i.test(rawQuery);
+    const wantsFarmToTable = /\bfarm[\s-]*to[\s-]*table\b/i.test(rawQuery);
+    const wantsHiddenGem = /\bhidden\s*gem(s)?\b/i.test(rawQuery);
+    if (wantsRooftop)     features.push('with view');
+    if (wantsFarmToTable) features.push('locally sourced');
 
     // Assemble the semantic query
     let semanticQuery = rawQuery;
@@ -1289,10 +1316,14 @@ Deno.serve(async (req) => {
       const wantsBest = /\bbest\b/i.test(searchQuery);
       finalPlaces.sort((a, b) => {
         if ((a.tier || 4) !== (b.tier || 4)) return (a.tier || 4) - (b.tier || 4);
-        if (wantsBest) {
-          // Quality: rating × log(reviewCount) — highest quality first
-          const qa = (a.rating || 0) * Math.log10(Math.max(a.userRatingCount || 1, 1));
-          const qb = (b.rating || 0) * Math.log10(Math.max(b.userRatingCount || 1, 1));
+        if (wantsBest || wantsHiddenGem) {
+          // Quality: rating × log(reviewCount) — highest quality first.
+          // For "hidden gem", penalize touristy/chain-volume places (>5000 reviews)
+          // by halving their score, so well-loved locals beat well-known chains.
+          const qa0 = (a.rating || 0) * Math.log10(Math.max(a.userRatingCount || 1, 1));
+          const qb0 = (b.rating || 0) * Math.log10(Math.max(b.userRatingCount || 1, 1));
+          const qa = wantsHiddenGem && (a.userRatingCount || 0) > 5000 ? qa0 * 0.5 : qa0;
+          const qb = wantsHiddenGem && (b.userRatingCount || 0) > 5000 ? qb0 * 0.5 : qb0;
           return qb - qa;
         }
         // Distance: nearest first — they're hungry
