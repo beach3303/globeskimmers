@@ -1396,6 +1396,19 @@ Deno.serve(async (req) => {
       finalPlaces.sort((a, b) => a.distanceKm - b.distanceKm);
     }
 
+    // ── DISH INTENT: drop Tier 4 noise ──────────────────────────────────────
+    // The broad DISH nearby fan-out (restaurant / fast_food_restaurant /
+    // meal_takeaway / bakery) intentionally pulls in generic foodservice
+    // candidates so chains and bakeries that quietly serve the dish can land
+    // as Tier 3 via servesBreakfast / editorialSummary signals. Anything left
+    // at Tier 4 carries no signal that it serves the dish — drop it so users
+    // only see specialists (1/2) and "Has It" (3) per the user's mental model.
+    if (intent.kind === 'DISH') {
+      const before = finalPlaces.length;
+      finalPlaces = finalPlaces.filter((p: any) => (p.tier || 4) < 4);
+      console.log(`🎯 DISH tier filter: ${before} → ${finalPlaces.length} (dropped ${before - finalPlaces.length} Tier 4 noise)`);
+    }
+
     // No slice — send ALL results to frontend so filters (bakery, sports bar, dietary)
     // have the full pool. Frontend already paginates with "Load More" (20 at a time).
 
