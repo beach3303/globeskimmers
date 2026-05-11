@@ -6,6 +6,7 @@ import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import { base44 } from "@/api/base44Client";
+import RefreshButton from "@/components/RefreshButton";
 
 // ─── COLORS ────────────────────────────────────────────────────────────────
 const BROWN      = "#6F4E37";
@@ -374,6 +375,9 @@ function buildMapPopup(shop, index) {
 export default function CoffeeFinderPage() {
   const [shops,setShops]         = useState([]);
   const [loading,setLoading]     = useState(true);
+  const [refreshTick,setRefreshTick] = useState(0);
+  const forceNextRef             = useRef(false);
+  const handleRefresh            = () => { forceNextRef.current = true; setRefreshTick(t=>t+1); };
   const [error,setError]         = useState(null);
   const [viewMode,setViewMode]   = useState("list");
   const [radius,setRadius]       = useState(10);
@@ -406,9 +410,10 @@ export default function CoffeeFinderPage() {
   useEffect(()=>{
     if(!lat||!lng)return;
     setLoading(true);setError(null);
+    const force = forceNextRef.current; forceNextRef.current = false;
     (async()=>{
       try {
-        const {data} = await base44.functions.invoke('getCoffeeShops',{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30});
+        const {data} = await base44.functions.invoke('getCoffeeShops',{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,forceRefresh:force});
         const places = data?.places||data?.shops||[];
         if(places.length>0){
           const processed=places.map(p=>processShop(p,lat,lng));
@@ -418,7 +423,7 @@ export default function CoffeeFinderPage() {
       } catch(e){setError(`Failed to load: ${e.message}`);}
       finally{setLoading(false);}
     })();
-  },[lat,lng,radius]);
+  },[lat,lng,radius,refreshTick]);
 
   const filtered = useMemo(()=>{
     let r=[...shops];
@@ -474,7 +479,10 @@ export default function CoffeeFinderPage() {
   return (
     <div style={{fontFamily:"'DM Sans',-apple-system,sans-serif",background:CREAM,minHeight:"100vh"}}>
       <div style={{padding:"16px 16px 0"}}>
-        <button onClick={()=>window.history.back()} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0",color:BROWN,fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit",marginBottom:"12px"}}>← Back to Home</button>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
+          <button onClick={()=>window.history.back()} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0",color:BROWN,fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back to Home</button>
+          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="dark" title="Refresh coffee shops" />
+        </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}>
           <span style={{fontSize:"28px"}}>☕</span>
           <div><div style={{fontWeight:"800",fontSize:"20px",color:DARK}}>Coffee Finder</div><div style={{fontSize:"13px",color:GRAY}}>WiFi · Parking · Seating · Specialty</div></div>

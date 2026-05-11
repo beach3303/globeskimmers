@@ -7,6 +7,7 @@ import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
+import RefreshButton from "@/components/RefreshButton";
 
 const T={teal:"#00BCD4",tealD:"#00838F",dark:"#1A2332",dark2:"#243447",gray:"#64748B",grayL:"#F1F5F9",green:"#4CAF50",blue:"#1565C0",blueL:"#E3F2FD",coral:"#FF6B6B",gold:"#FFB74D",
   accent:"#F59E0B",accentD:"#D97706",accentL:"#FFFBEB"};
@@ -267,6 +268,9 @@ export default function ThingsToDoFinder() {
   const [nationalIcons,setNationalIcons]=useState([]);
   const [regionalGems,setRegionalGems]=useState([]);
   const [loading,setLoading]=useState(true);
+  const [refreshTick,setRefreshTick]=useState(0);
+  const forceNextRef=useRef(false);
+  const handleRefresh=()=>{forceNextRef.current=true;setRefreshTick(t=>t+1);};
   const [error,setError]=useState(null);
   const [viewMode,setViewMode]=useState("list");
   const [category,setCategory]=useState("all");
@@ -297,10 +301,11 @@ export default function ThingsToDoFinder() {
 
   useEffect(()=>{
     if(!lat||!lng) return; setLoading(true); setError(null);
+    const force=forceNextRef.current; forceNextRef.current=false;
     (async()=>{
       try{
         const fetchRadius=Math.max(radius,25)*1609; // always fetch at least 25mi
-        const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:fetchRadius,maxResults:60,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city});
+        const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:fetchRadius,maxResults:60,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city,forceRefresh:force});
         const raw=data?.activities||[];
         setNationalIcons(data?.nationalIcons||[]);
         setRegionalGems(data?.regionalGems||[]);
@@ -309,7 +314,7 @@ export default function ThingsToDoFinder() {
       }catch(e){setError(`Failed: ${e.message}`);}
       finally{setLoading(false);}
     })();
-  },[lat,lng,country,region,category]);
+  },[lat,lng,country,region,category,refreshTick]);
 
   const filtered=useMemo(()=>{
     let r=[...activities];
@@ -357,7 +362,10 @@ export default function ThingsToDoFinder() {
   return(
     <div style={{fontFamily:"'DM Sans',-apple-system,sans-serif",background:"#F0F4F8",minHeight:"100vh"}}>
       <div style={{background:`linear-gradient(160deg,${T.dark} 0%,${T.dark2} 40%,${T.accentD} 100%)`,padding:"16px 16px 16px"}}>
-        <button onClick={()=>window.history.back()} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0 0 12px",color:"rgba(255,255,255,0.75)",fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingBottom:"12px"}}>
+          <button onClick={()=>window.history.back()} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0",color:"rgba(255,255,255,0.75)",fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh activities" />
+        </div>
         <div style={{display:"flex",alignItems:"center",gap:"14px",marginBottom:"16px"}}>
           <div style={{width:"52px",height:"52px",background:"rgba(255,255,255,0.12)",borderRadius:"16px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"28px",backdropFilter:"blur(10px)",border:"1px solid rgba(255,255,255,0.15)"}}>⭐</div>
           <div><div style={{fontWeight:"800",fontSize:"22px",color:"#fff",letterSpacing:"-0.3px"}}>Things To Do</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.65)",marginTop:"2px"}}>Landmarks · Museums · Parks · Outdoors · Worldwide</div></div>

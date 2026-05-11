@@ -322,6 +322,7 @@ Deno.serve(async (req) => {
       category = 'all',    // all | safe_lobbies | airport_transit | gas_stations | retail | small_retail | shopping | education | entertainment | hospitality | community
       bankFilter = 'all',  // 'all' or specific bank name
       openOnly = false,
+      forceRefresh = false,
     } = body;
 
     if (!latitude || !longitude) {
@@ -351,6 +352,7 @@ Deno.serve(async (req) => {
             radius: String(radius),
             maxResults: '20',
             cacheTtl: String(ttl),
+            ...(forceRefresh ? { forceRefresh: 'true' } : {}),
           });
 
           const url = `${API_BASE_URL}/places/text-search?${params.toString()}`;

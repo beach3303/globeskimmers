@@ -14,6 +14,7 @@ import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import DistanceUnitToggle from "../components/location/DistanceUnitToggle";
 import { CITY_DISCLAIMER } from "../components/location/locationLabel";
+import RefreshButton from "@/components/RefreshButton";
 
 // Helper function
 const createPageUrl = (pageName) => `/${pageName}`;
@@ -258,6 +259,11 @@ export default function MoneyExchangePage() {
   const [converterCollapsed, setConverterCollapsed] = useState(false);
   const [expandedStoreIndex, setExpandedStoreIndex] = useState(null);
 
+  const handleRefresh = () => {
+    convertCurrency(true);
+    loadExchangeStores(true);
+  };
+
   useEffect(() => {
     loadUserAndLocation();
   }, []);
@@ -336,7 +342,7 @@ export default function MoneyExchangePage() {
     }
   };
 
-  const convertCurrency = async () => {
+  const convertCurrency = async (forceRefresh = false) => {
     if (!fromAmount || parseFloat(fromAmount) <= 0) {
       setConvertedAmount("");
       setExchangeRate(null);
@@ -349,7 +355,8 @@ export default function MoneyExchangePage() {
       const response = await base44.functions.invoke('getExchangeRate', {
         from: fromCurrency,
         to: toCurrency,
-        amount: parseFloat(fromAmount)
+        amount: parseFloat(fromAmount),
+        forceRefresh
       });
 
       if (!response || !response.data || response.data.error) {
@@ -531,6 +538,7 @@ export default function MoneyExchangePage() {
               <ArrowLeft className="w-5 h-5" />
               <span className="font-medium">Back</span>
             </button>
+            <RefreshButton onClick={handleRefresh} isRefreshing={converting || loadingStores} tone="light" title="Refresh rates & stores" />
           </div>
 
           <h1 className="text-[24px] font-bold mb-1">Currency Exchange</h1>
