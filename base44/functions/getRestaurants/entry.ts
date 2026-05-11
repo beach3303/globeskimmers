@@ -1029,90 +1029,116 @@ Deno.serve(async (req) => {
       ? cuisineTypeList[0]
       : '';
 
-    for (const query of queries) {
-      try {
-        console.log(`📡 POST /  query: "${query}" radiusMiles: ${radiusMiles.toFixed(1)}${serverIncludedType ? ` includedType: ${serverIncludedType}` : ''}`);
+    // Inner helper so we can re-run the same query set at a wider radius if
+    // first-pass results are sparse (auto-expand-on-sparse).
+    const runQueryPass = async (passRadiusMiles: number) => {
+      const passRadiusMeters = Math.round(passRadiusMiles * 1609.34);
+      for (const query of queries) {
+        try {
+          console.log(`📡 POST /  query: "${query}" radiusMiles: ${passRadiusMiles.toFixed(1)}${serverIncludedType ? ` includedType: ${serverIncludedType}` : ''}`);
 
-        const response = await fetch(`${API_BASE_URL}/`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            latitude,
-            longitude,
-            query,
-            radiusMiles,
-            dietary: {},
-            // v5.0: server-side filters — Google filters at source, not client-side
-            openNow:     filterOpenNow  || false,
-            minRating:   filterMinRating > 0 ? filterMinRating : 0,
-            priceLevels: priceLevels.length ? priceLevels : [],
-            // v5.4: honor caller's forceRefresh flag. Was temporarily hardcoded
-            // to true to purge the poisoned 0-result KV cache — now that the
-            // cache is healthy, revert to normal caching behavior so we stop
-            // paying for duplicate Google calls on repeat searches.
-            forceRefresh,
-            // v5.1: pass includedType so Google narrows by type (italian_restaurant etc.)
-            ...(serverIncludedType ? { includedType: serverIncludedType } : {}),
-          }),
-        });
-
-        if (!response.ok) {
-          const errText = await response.text().catch(() => "");
-          console.error(`POST / HTTP ${response.status}: ${errText}`);
-          errors.push(`"${query}": HTTP ${response.status}`);
-
-          // Fallback to /places/text-search
-          try {
-            const params = new URLSearchParams({
+          const response = await fetch(`${API_BASE_URL}/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              latitude,
+              longitude,
               query,
-              latitude:   String(latitude),
-              longitude:  String(longitude),
-              radius:     String(radius),
-              maxResults: '20',
-              cacheTtl:   String(60 * 60 * 2), // 2hr fallback TTL
-              ...(forceRefresh ? { forceRefresh: 'true' } : {}),
-            });
-            const fbRes = await fetch(`${API_BASE_URL}/places/text-search?${params}`);
-            if (fbRes.ok) {
-              const fbData = await fbRes.json();
-              for (const place of fbData.places || []) {
-                const pid = place.id || place.placeId;
-                if (pid && !seenPlaceIds.has(pid)) { seenPlaceIds.add(pid); allPlaces.push(place); }
+              radiusMiles: passRadiusMiles,
+              dietary: {},
+              // v5.0: server-side filters — Google filters at source, not client-side
+              openNow:     filterOpenNow  || false,
+              minRating:   filterMinRating > 0 ? filterMinRating : 0,
+              priceLevels: priceLevels.length ? priceLevels : [],
+              // v5.4: honor caller's forceRefresh flag. Was temporarily hardcoded
+              // to true to purge the poisoned 0-result KV cache — now that the
+              // cache is healthy, revert to normal caching behavior so we stop
+              // paying for duplicate Google calls on repeat searches.
+              forceRefresh,
+              // v5.1: pass includedType so Google narrows by type (italian_restaurant etc.)
+              ...(serverIncludedType ? { includedType: serverIncludedType } : {}),
+            }),
+          });
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => "");
+            console.error(`POST / HTTP ${response.status}: ${errText}`);
+            errors.push(`"${query}": HTTP ${response.status}`);
+
+            // Fallback to /places/text-search
+            try {
+              const params = new URLSearchParams({
+                query,
+                latitude:   String(latitude),
+                longitude:  String(longitude),
+                radius:     String(passRadiusMeters),
+                maxResults: '20',
+                cacheTtl:   String(60 * 60 * 2), // 2hr fallback TTL
+                ...(forceRefresh ? { forceRefresh: 'true' } : {}),
+              });
+              const fbRes = await fetch(`${API_BASE_URL}/places/text-search?${params}`);
+              if (fbRes.ok) {
+                const fbData = await fbRes.json();
+                for (const place of fbData.places || []) {
+                  const pid = place.id || place.placeId;
+                  if (pid && !seenPlaceIds.has(pid)) { seenPlaceIds.add(pid); allPlaces.push(place); }
+                }
+                console.log(`   Fallback got ${fbData.places?.length || 0}`);
               }
-              console.log(`   Fallback got ${fbData.places?.length || 0}`);
-            }
-          } catch (_e) {}
-          continue;
-        }
-
-        const data = await response.json();
-        console.log(`   _cache:${data._cache||'none'} total:${data.totalFound||0}`);
-
-        if (data.error) errors.push(`"${query}": ${data.error}`);
-
-        // Worker v7.3 returns "restaurants" key from POST /
-        const places = data.restaurants || data.places || data.results || [];
-        console.log(`   ✅ ${places.length} places`);
-
-        for (const place of places) {
-          const pid = place.id || place.placeId;
-          if (pid && !seenPlaceIds.has(pid)) {
-            seenPlaceIds.add(pid);
-            allPlaces.push(place);
+            } catch (_e) {}
+            continue;
           }
-        }
 
-      } catch (err: any) {
-        console.error(`Error for "${query}":`, err.message);
-        errors.push(`"${query}": ${err.message}`);
+          const data = await response.json();
+          console.log(`   _cache:${data._cache||'none'} total:${data.totalFound||0}`);
+
+          if (data.error) errors.push(`"${query}": ${data.error}`);
+
+          // Worker v7.3 returns "restaurants" key from POST /
+          const places = data.restaurants || data.places || data.results || [];
+          console.log(`   ✅ ${places.length} places`);
+
+          for (const place of places) {
+            const pid = place.id || place.placeId;
+            if (pid && !seenPlaceIds.has(pid)) {
+              seenPlaceIds.add(pid);
+              allPlaces.push(place);
+            }
+          }
+
+        } catch (err: any) {
+          console.error(`Error for "${query}":`, err.message);
+          errors.push(`"${query}": ${err.message}`);
+        }
       }
-    }
+    };
+
+    await runQueryPass(radiusMiles);
 
     // Wait for all parallel nearby searches to finish
     await nearbyPromise;
 
     console.log(`📊 Total unique after all searches: ${allPlaces.length}`);
     if (errors.length) console.error("⚠️ Errors:", errors);
+
+    // ── AUTO-EXPAND ON SPARSE RESULTS ─────────────────────────────────────
+    // When a dish/cuisine search returns very few raw results, silently retry
+    // with a wider radius so the user isn't dumped into an empty state.
+    // Skips when there's no active intent (general browsing already has plenty
+    // of nearby spots) or when the user's already at max radius.
+    let autoExpandedFrom: number | null = null;
+    let effectiveRadiusMiles = radiusMiles;
+    const SPARSE_THRESHOLD = 15;       // raw places before filters
+    const MAX_EXPAND_RADIUS = 25;
+    const intentful = intent.kind !== 'GENERAL' || !!searchQuery?.trim() || cuisine !== 'all';
+    if (intentful && allPlaces.length < SPARSE_THRESHOLD && radiusMiles < MAX_EXPAND_RADIUS) {
+      const expandedRadius = Math.min(radiusMiles + 10, MAX_EXPAND_RADIUS);
+      console.log(`🔭 Auto-expanding radius: ${radiusMiles} → ${expandedRadius} mi (only ${allPlaces.length} raw results)`);
+      autoExpandedFrom = radiusMiles;
+      effectiveRadiusMiles = expandedRadius;
+      await runQueryPass(expandedRadius);
+      console.log(`🔭 After auto-expand: ${allPlaces.length} total`);
+    }
 
     if (allPlaces.length === 0) {
       return Response.json({
@@ -1218,7 +1244,7 @@ Deno.serve(async (req) => {
         tier:      getTierForPlace(place, intent),
         tierLabel: TIER_LABELS[getTierForPlace(place, intent)] || 'Match',
       };
-    }).filter(p => p.distanceMiles <= radiusMiles + 1); // +1 mi buffer for GPS inaccuracy
+    }).filter(p => p.distanceMiles <= effectiveRadiusMiles + 1); // +1 mi buffer for GPS inaccuracy (auto-expand bumps this)
 
     // ── DIETARY HARD-FILTER (client-side safety net) ──────────────────────────
     function hasStrongDietaryMatch(place: any, cuisine: string): boolean {
@@ -1378,6 +1404,12 @@ Deno.serve(async (req) => {
       version: 'v5.2',
       intentSorted,
       fallbackInfo,
+      // Auto-expand-on-sparse signal: lets the frontend display a small banner
+      // ("Expanded to 20 mi — only 3 results within 10 mi") when results were
+      // sparse and the backend widened the search.
+      autoExpanded: autoExpandedFrom !== null,
+      autoExpandedFrom,
+      effectiveRadiusMiles,
     });
 
   } catch (error: any) {

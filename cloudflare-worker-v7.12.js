@@ -58,7 +58,9 @@ const CONFIG = {
     'places.paymentOptions',
     'places.allowsDogs',
     'places.businessStatus',
-    'places.servesCocktails'
+    'places.servesCocktails',
+    'places.editorialSummary',
+    'places.menuForChildren'
   ].join(','),
 
   // DETAILS - Preferred tier ($20/1K) - WITH reviews
@@ -104,7 +106,8 @@ const CONFIG = {
     'paymentOptions',
     'allowsDogs',
     'businessStatus',
-    'servesCocktails'
+    'servesCocktails',
+    'menuForChildren'
   ].join(',')
 };
 
