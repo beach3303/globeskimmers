@@ -1,3 +1,4 @@
+//first deployed from mobile
 /**
  * GLOBESKIMMERS API WORKER v7.12 - Cost Optimized
  * 
