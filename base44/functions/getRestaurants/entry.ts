@@ -240,6 +240,19 @@ const CULTURAL_INTENTS: Record<string, { label: string; types: Set<string>; keyw
   },
 };
 
+// Known chains that reliably serve breakfast dishes (pancakes, waffles, eggs,
+// french toast, etc.) even when Google's servesBreakfast field is null. Used
+// by getTierForPlace() to promote them to Tier 3 "Has It" for breakfast/brunch
+// DISH searches. Lowercase substrings — matched via name.includes().
+// US-centric for now; add regional chains as they come up.
+const KNOWN_BREAKFAST_CHAINS: string[] = [
+  "mcdonald", "ihop", "denny", "waffle house", "cracker barrel", "bob evans",
+  "corner bakery", "panera", "first watch", "snooze", "black bear diner",
+  "mimi's cafe", "coco's", "marie callender", "bob's big boy", "perkins",
+  "village inn", "le pain quotidien", "einstein", "the original pancake",
+  "stack'd", "another broken egg", "wildflower",
+];
+
 // Dish → expected primaryTypes (Tier 1 = specialist, Tier 2 = close match)
 // 80+ dishes mapped globally — covers Italian, Mexican, Japanese, Chinese, Korean,
 // Vietnamese, Thai, Indian, Filipino, Middle Eastern, European, South American,
@@ -600,13 +613,21 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     const editorial = (place.editorialSummary?.text || place.editorialSummary || '').toString().toLowerCase();
     if (editorial && dishWords.some(w => editorial.includes(w))) return 3;
 
-    // Meal-time signal: a chain/bakery that serves breakfast almost certainly has
-    // pancakes/waffles/etc. on the menu, even though its primaryType is
-    // fast_food_restaurant or bakery. Surfaces McDonald's, Corner Bakery, etc.
-    if (intent.mealTime === 'breakfast' && place.servesBreakfast === true) return 3;
-    if (intent.mealTime === 'brunch'    && (place.servesBrunch === true || place.servesBreakfast === true)) return 3;
-    if (intent.mealTime === 'lunch'     && place.servesLunch === true) return 3;
-    if (intent.mealTime === 'dinner'    && place.servesDinner === true) return 3;
+    // Meal-time signals: chains/bakeries that serve breakfast almost certainly
+    // have pancakes/waffles/etc. on the menu. Google's serves* booleans are
+    // often null/undefined for chains even when they obviously serve breakfast,
+    // so we layer multiple signals: the explicit flag, primaryType=bakery
+    // (bakeries reliably stock pancakes/waffles/french toast), and a known
+    // breakfast-chain name match (McDonald's, IHOP, Denny's, Corner Bakery,
+    // Waffle House, etc.).
+    const isBreakfasty = intent.mealTime === 'breakfast' || intent.mealTime === 'brunch';
+    if (isBreakfasty) {
+      if (place.servesBreakfast === true || place.servesBrunch === true) return 3;
+      if (types.has('bakery') || place.primaryType === 'bakery') return 3;
+      if (KNOWN_BREAKFAST_CHAINS.some(c => name.includes(c))) return 3;
+    }
+    if (intent.mealTime === 'lunch'  && place.servesLunch  === true) return 3;
+    if (intent.mealTime === 'dinner' && place.servesDinner === true) return 3;
 
     if (dishWords.some(w => reviewText.includes(w))) return 3;    // serves it (review-mentioned, when Details was hydrated)
     return 4;
