@@ -1234,7 +1234,15 @@ Deno.serve(async (req) => {
         place.regularOpeningHours?.weekdayDescriptions ||
         place.hours || [];
 
-      const photos = (place.photos || []).map((p: any) => p.url || p).filter(Boolean);
+      // Keep both the renderable URL and Google's photo resource name. The
+      // name (e.g. "places/ABC/photos/XYZ") is what /label-photos needs to
+      // fetch the image bytes for Haiku 4.5 vision — losing it here broke
+      // dish-first photo reordering for every DISH search.
+      const photoObjs = (place.photos || []).filter(Boolean);
+      const photos = photoObjs.map((p: any) => p?.url || p).filter(Boolean);
+      const photoNames = photoObjs
+        .map((p: any) => (typeof p === 'string' ? null : (p?.name || null)))
+        .filter(Boolean);
       const customerFavorites = place.customerFavorites || place.customer_favorites || [];
 
       const reviews = (place.reviews || []).map((r: any) => ({
@@ -1272,6 +1280,7 @@ Deno.serve(async (req) => {
         hours: weekdayDescriptions,
         isOpen: place.isOpen ?? null,
         photos,
+        photoNames,   // Google photo resource names, parallel to `photos`; consumed by /label-photos
         photoUrl:  photos[0] || null,
         photoUrl2: photos[1] || null,
         types: place.types || [],
@@ -1455,68 +1464,90 @@ Deno.serve(async (req) => {
     finalPlaces.forEach((p: any, i: number) => { p.backendRank = i + 1; });
 
     // ── DISH-FIRST PHOTO ORDERING + MENU OCR FOR TIER 4 ─────────────────────
-    // For DISH queries, eager-label the first 20 visible cards' photos via the
+    // For DISH queries, eager-label the first 6 visible cards' photos via the
     // /label-photos worker endpoint (Haiku 4.5 vision, 180-day KV cache). Then:
     //  - Reorder each place's photos so dish-matching shots come first.
     //  - Capture any menu-extracted dishes (`menuDishes`) on the place object
     //    so a re-classification could later promote a Tier 5 → Tier 4 hit.
-    // Cards 21+ get labeled lazily by the frontend on Load More.
+    // Cards 7+ get labeled lazily by the frontend on Load More.
+    //
+    // Why 6 × 3 and not 20 × 5: cold cache means up to N×M concurrent Haiku
+    // calls, which used to blow past Anthropic rate limits and Base44's
+    // function timeout. Six visible cards × three top photos is enough to
+    // surface a dish shot above the fold while staying within budget.
     if (intent.kind === 'DISH') {
       const dishLabelLower = (intent as any).label?.toString().toLowerCase() || '';
       const dishRawWords: string[] = (intent as any).rawWords || [];
-      const matchers = [dishLabelLower, ...dishRawWords].filter(Boolean);
-      const EAGER_PLACES = 20;
-      const PHOTOS_PER_PLACE = 5;
+      // Add singular stems so "dish:pancake" (no s) still matches a "pancakes" search.
+      const stems = [dishLabelLower, ...dishRawWords]
+        .filter(Boolean)
+        .flatMap(w => w.endsWith('s') ? [w, w.slice(0, -1)] : [w]);
+      const matchers = Array.from(new Set(stems)).filter(w => w.length >= 3);
+      const EAGER_PLACES = 6;
+      const PHOTOS_PER_PLACE = 3;
+      const LABEL_TIMEOUT_MS = 12000;
+      let labeledCount = 0;
+      let reorderedCount = 0;
       const eagerTargets = finalPlaces.slice(0, EAGER_PLACES);
       await Promise.all(eagerTargets.map(async (place: any) => {
+        const photoNames: string[] = (place.photoNames || []).filter(Boolean);
+        if (photoNames.length === 0) return;
+        const photosToLabel = photoNames.slice(0, PHOTOS_PER_PLACE);
         try {
-          const allPhotos = place.photos || [];
-          const photosToLabel = allPhotos.slice(0, PHOTOS_PER_PLACE)
-            .filter((p: any) => (p?.name || typeof p === 'string'));
-          if (photosToLabel.length === 0) return;
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), LABEL_TIMEOUT_MS);
           const labelReq = await fetch(`${API_BASE_URL}/label-photos`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               placeId: place.id || place.placeId,
-              photos: photosToLabel.map((p: any) => ({ name: p?.name || p }))
+              photos: photosToLabel.map(name => ({ name })),
             }),
-          });
-          if (!labelReq.ok) return;
+            signal: ctrl.signal,
+          }).finally(() => clearTimeout(timer));
+          if (!labelReq.ok) {
+            console.warn(`📷 label-photos non-OK for ${place.name}: ${labelReq.status}`);
+            return;
+          }
+          labeledCount++;
           const { labels, dishes } = await labelReq.json();
-          // Store menu-extracted dishes on the place so Tier 4 reclassification
-          // can use them. The frontend can also surface "menu mentions: ..." if needed.
           if (Array.isArray(dishes) && dishes.length) {
             place.menuDishes = dishes;
-            // Upgrade Tier 5 → Tier 4 if any menu-extracted dish matches the search.
             if ((place.tier === 5 || place.tier == null) &&
                 matchers.some(w => dishes.some((md: string) => md.includes(w)))) {
               place.tier = 4;
               place.tierLabel = TIER_LABELS[4];
             }
           }
-          // Reorder ENTIRE photo array. Labeled photos matching the dish move
-          // to front; unlabeled photos and non-matching labeled photos keep
-          // their original relative order behind them.
-          if (labels && Object.keys(labels).length) {
-            const isMatch = (photoName: string) => {
-              const tag = (labels[photoName] || '').toString().toLowerCase();
-              return matchers.some(w => tag.includes(w));
-            };
-            const matchedFront: any[] = [];
-            const rest: any[] = [];
-            for (const ph of allPhotos) {
-              const phName = ph?.name || ph;
-              if (typeof phName === 'string' && isMatch(phName)) matchedFront.push(ph);
-              else rest.push(ph);
-            }
-            if (matchedFront.length) place.photos = [...matchedFront, ...rest];
-          }
+          if (!labels || !Object.keys(labels).length) return;
+          // Build a reordered index permutation. Names parallel to photos[].
+          const isMatch = (photoName: string) => {
+            const tag = (labels[photoName] || '').toString().toLowerCase();
+            return matchers.some(w => tag.includes(w));
+          };
+          const matchedIdx: number[] = [];
+          const restIdx: number[] = [];
+          photoNames.forEach((name, i) => {
+            if (isMatch(name)) matchedIdx.push(i);
+            else restIdx.push(i);
+          });
+          if (matchedIdx.length === 0) return;
+          const order = [...matchedIdx, ...restIdx];
+          place.photos     = order.map(i => place.photos[i]).filter(Boolean);
+          place.photoNames = order.map(i => photoNames[i]).filter(Boolean);
+          place.photoUrl   = place.photos[0] || null;
+          place.photoUrl2  = place.photos[1] || null;
           place.photosLabeled = true;
-        } catch (_e) {
-          // Best-effort — failure to label doesn't fail the whole search
+          reorderedCount++;
+        } catch (e: any) {
+          if (e?.name === 'AbortError') {
+            console.warn(`📷 label-photos timed out for ${place.name}`);
+          } else {
+            console.warn(`📷 label-photos error for ${place.name}: ${e?.message || e}`);
+          }
         }
       }));
+      console.log(`📷 Eager photo labels: ${labeledCount}/${eagerTargets.length} labeled, ${reorderedCount} reordered (matchers: ${matchers.join(', ')})`);
     }
 
     // ── HONEST FALLBACK INFO ────────────────────────────────────────────────

@@ -315,6 +315,14 @@ function processRest(place, userLat, userLng) {
     ? place.photos.map(p => (typeof p === 'string' ? p : (p?.url || p?.full || p?.thumbnail)))
     : (place.photoUrl ? [place.photoUrl] : [])
   ).filter(Boolean);
+  // Parallel array of Google photo resource names (e.g. "places/ABC/photos/XYZ").
+  // Kept separate from `photos` (which are renderable proxy URLs) so the lazy
+  // /label-photos call on Load More can fetch the underlying image bytes.
+  const photoNames = Array.isArray(place.photoNames)
+    ? place.photoNames.filter(Boolean)
+    : (place.photos || [])
+        .map(p => (p && typeof p === 'object' ? p.name : null))
+        .filter(Boolean);
 
   // If a café is actually a bakery/pastry shop, relabel it so it doesn't show as "Café"
   // (Café is reserved for the separate Coffee Finder feature)
@@ -351,6 +359,7 @@ function processRest(place, userLat, userLng) {
     is24Hours: open.is24Hours,
     priceStr: price,
     photos,
+    photoNames,
     photoUrl: photos[0] || null,
     vibes, dietary,
     badges,
@@ -1008,19 +1017,23 @@ export default function PlacesToEat() {
     const targets = filtered.slice(startIdx, endIdx).filter(p => !p.photosLabeled);
     if (targets.length === 0) return;
 
-    const queryWords = query.split(/\s+/).filter(w => w.length >= 3);
-    if (queryWords.length === 0) return;
+    const rawWords = query.split(/\s+/).filter(w => w.length >= 3);
+    if (rawWords.length === 0) return;
+    // Singular stems so "dish:pancake" still matches a "pancakes" search.
+    const queryWords = Array.from(new Set(
+      rawWords.flatMap(w => w.endsWith('s') ? [w, w.slice(0, -1)] : [w])
+    )).filter(w => w.length >= 3);
 
     await Promise.all(targets.map(async (place) => {
       try {
-        const photos = (place.photos || []).slice(0, 5).filter(p => p?.name || typeof p === 'string');
-        if (!photos.length) return;
+        const photoNames = (place.photoNames || []).slice(0, 5).filter(Boolean);
+        if (!photoNames.length) return;
         const res = await fetch(`${WORKER_URL}/label-photos`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             placeId: place.id || place.placeId,
-            photos: photos.map(p => ({ name: p?.name || p }))
+            photos: photoNames.map(name => ({ name })),
           })
         });
         if (!res.ok) return;
@@ -1031,15 +1044,22 @@ export default function PlacesToEat() {
           const tag = (labels[name] || '').toString().toLowerCase();
           return queryWords.some(w => tag.includes(w));
         };
+        const allNames = place.photoNames || [];
         const allPhotos = place.photos || [];
-        const matched = allPhotos.filter(ph => isMatch(ph?.name || ph));
-        if (matched.length === 0) return;
-        const rest = allPhotos.filter(ph => !matched.includes(ph));
+        const matchedIdx = [];
+        const restIdx = [];
+        allNames.forEach((name, i) => {
+          if (isMatch(name)) matchedIdx.push(i);
+          else restIdx.push(i);
+        });
+        if (matchedIdx.length === 0) return;
+        const order = [...matchedIdx, ...restIdx];
+        const reorderedPhotos = order.map(i => allPhotos[i]).filter(Boolean);
+        const reorderedNames  = order.map(i => allNames[i]).filter(Boolean);
 
-        // Update the underlying restaurants array so derived `filtered` re-renders
         setRestaurants(prev => prev.map(p =>
           (p.id === place.id || p.placeId === place.placeId)
-            ? { ...p, photos: [...matched, ...rest], photosLabeled: true }
+            ? { ...p, photos: reorderedPhotos, photoNames: reorderedNames, photoUrl: reorderedPhotos[0] || null, photosLabeled: true }
             : p
         ));
       } catch (_e) {

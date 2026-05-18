@@ -837,12 +837,20 @@ async function handleLabelPhotos(request, env) {
   }
 
   // Fetch image → base64 → Haiku 4.5 vision per photo, in parallel.
+  // Each call gets its own AbortController so a hung Anthropic request can't
+  // stall the whole batch (and by extension the parent getRestaurants call).
+  const LABEL_ONE_TIMEOUT_MS = 10000;
   const labelOne = async (photo) => {
     const photoName = photo?.name || photo;
     if (!photoName || typeof photoName !== 'string') return [photoName, null];
+    // Reject anything that doesn't look like a Google photo resource name
+    // (e.g. proxy URLs) — they'd otherwise produce a malformed media URL.
+    if (!/^places\/[^/]+\/photos\//.test(photoName)) return [photoName, null];
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), LABEL_ONE_TIMEOUT_MS);
     try {
       const photoUrl = `https://places.googleapis.com/v1/${photoName}/media?key=${env.GOOGLE_API_KEY}&maxWidthPx=400`;
-      const imgRes = await fetch(photoUrl);
+      const imgRes = await fetch(photoUrl, { signal: ctrl.signal });
       if (!imgRes.ok) return [photoName, null];
       const buf = await imgRes.arrayBuffer();
       // Convert to base64 in chunks to avoid call-stack overflow on large images.
@@ -872,7 +880,8 @@ async function handleLabelPhotos(request, env) {
               { type: 'text', text: 'Classify this photo.' }
             ]
           }]
-        })
+        }),
+        signal: ctrl.signal,
       });
       if (!apiRes.ok) return [photoName, null];
       const data = await apiRes.json();
@@ -887,6 +896,8 @@ async function handleLabelPhotos(request, env) {
       }
     } catch (_e) {
       return [photoName, null];
+    } finally {
+      clearTimeout(timer);
     }
   };
 
