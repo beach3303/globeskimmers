@@ -784,6 +784,141 @@ async function handleCacheStats(request, env) {
 }
 
 // ============================================================================
+// PHOTO LABELER + MENU OCR — Haiku 4.5 vision, 180-day KV cache
+// Powers dish-first photo ordering on PlacesToEat AND Tier 4 "Serves It"
+// detection. One Haiku call per photo: classifies as exterior/interior/menu/
+// dish, and for menu photos also extracts the visible dish list.
+// ============================================================================
+
+const PHOTO_LABEL_TTL_SECONDS = 180 * 24 * 60 * 60;  // 6 months
+
+const PHOTO_LABEL_PROMPT = `Classify the photo and extract menu items if it is a menu.
+
+Return STRICT JSON, no markdown, no prose:
+{
+  "label": "exterior" | "interior" | "menu" | "dish:<short name>" | "other",
+  "dishes": [ "<dish 1>", "<dish 2>", ... ]
+}
+
+Rules:
+- "label":
+  - "exterior" — building exterior, signage, storefront, parking
+  - "interior" — dining room, seating area, counter, bar
+  - "menu" — printed menu board, paper menu, sandwich board with dishes
+  - "dish:<name>" — close-up of a specific food/drink. Replace <name> with the dish (e.g., "dish:pancakes", "dish:pizza", "dish:ramen", "dish:burger", "dish:salad", "dish:latte"). One short dish name only.
+  - "other" — staff, customers, abstract, unclear
+- "dishes":
+  - Empty array unless "label" is "menu"
+  - For menu photos: list each visible dish name (just the name, no price), lowercase, deduped
+  - Examples: ["pancakes", "french toast", "bacon and eggs", "avocado toast"]
+  - If unreadable, return []
+
+Output JSON only.`;
+
+async function handleLabelPhotos(request, env) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured', labels: {}, dishes: [] }, 500);
+  }
+  let body;
+  try { body = await request.json(); } catch (_e) {
+    return jsonResponse({ error: 'Invalid JSON body', labels: {}, dishes: [] }, 400);
+  }
+  if (!body?.placeId || !Array.isArray(body.photos)) {
+    return jsonResponse({ error: 'placeId + photos[] required', labels: {}, dishes: [] }, 400);
+  }
+
+  // Cache key includes version so format changes invalidate cleanly.
+  const cacheKey = `place:${body.placeId}:photo_labels_v2`;
+  if (env.GLOBESKIMMERS_KV) {
+    const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+    if (cached) {
+      return jsonResponse({ labels: cached.labels || {}, dishes: cached.dishes || [], _cache: 'hit' });
+    }
+  }
+
+  // Fetch image → base64 → Haiku 4.5 vision per photo, in parallel.
+  const labelOne = async (photo) => {
+    const photoName = photo?.name || photo;
+    if (!photoName || typeof photoName !== 'string') return [photoName, null];
+    try {
+      const photoUrl = `https://places.googleapis.com/v1/${photoName}/media?key=${env.GOOGLE_API_KEY}&maxWidthPx=400`;
+      const imgRes = await fetch(photoUrl);
+      if (!imgRes.ok) return [photoName, null];
+      const buf = await imgRes.arrayBuffer();
+      // Convert to base64 in chunks to avoid call-stack overflow on large images.
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      const CHUNK = 0x8000;
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+      }
+      const base64 = btoa(binary);
+
+      const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 300,
+          system: PHOTO_LABEL_PROMPT,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+              { type: 'text', text: 'Classify this photo.' }
+            ]
+          }]
+        })
+      });
+      if (!apiRes.ok) return [photoName, null];
+      const data = await apiRes.json();
+      const raw = data?.content?.[0]?.text?.trim() || '';
+      // Strip any accidental markdown fences before parsing.
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+      try {
+        const parsed = JSON.parse(cleaned);
+        return [photoName, parsed];
+      } catch (_e) {
+        return [photoName, null];
+      }
+    } catch (_e) {
+      return [photoName, null];
+    }
+  };
+
+  const results = await Promise.all((body.photos || []).slice(0, 10).map(labelOne));
+
+  // Roll up: labels map (per-photo) + global dishes list (deduped across all menu photos).
+  const labels = {};
+  const dishSet = new Set();
+  for (const [photoName, parsed] of results) {
+    if (!photoName) continue;
+    const label = (parsed?.label || 'unknown').toString().toLowerCase();
+    labels[photoName] = label;
+    if (Array.isArray(parsed?.dishes)) {
+      for (const d of parsed.dishes) {
+        if (typeof d === 'string' && d.trim()) dishSet.add(d.trim().toLowerCase());
+      }
+    }
+  }
+  const dishes = Array.from(dishSet);
+
+  // Cache 180 days.
+  if (env.GLOBESKIMMERS_KV) {
+    await env.GLOBESKIMMERS_KV.put(
+      cacheKey,
+      JSON.stringify({ labels, dishes }),
+      { expirationTtl: PHOTO_LABEL_TTL_SECONDS }
+    ).catch(() => {});
+  }
+  return jsonResponse({ labels, dishes, _cache: 'miss' });
+}
+
+// ============================================================================
 // PRICE SCANNER — direct Anthropic Claude Sonnet 4.6 with prompt caching
 // Replaces Base44 InvokeLLM for the SmartPriceScanner. Set ANTHROPIC_API_KEY
 // as a Worker secret in the Cloudflare dashboard before deploying.
@@ -991,6 +1126,7 @@ export default {
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
+      if (pathname === '/label-photos' && request.method === 'POST') return await handleLabelPhotos(request, env);
 
       return jsonResponse({ error: 'Not found', path: pathname }, 404);
     } catch (error) {

@@ -608,12 +608,13 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     if (dishWords.some(w => name.includes(w))) return 1;          // namesake / specialty
     if (intent.tier1Types.some(t => types.has(t))) return 2;      // cuisine specialist
     if (intent.tier2Types.some(t => types.has(t))) return 3;      // secondary cuisine
+    // Tier 4 ("Serves It") — multiple positive signals that the place serves
+    // the dish without being a name/type/cuisine specialist.
+    // 1. editorialSummary text mentions the dish (free, in search response)
+    const editorial = ((place.editorialSummary?.text || place.editorialSummary || '') as string).toString().toLowerCase();
+    if (editorial && dishWords.some(w => editorial.includes(w))) return 4;
 
-    // Has-It signals available on search results (no Details fetch needed)
-    const editorial = (place.editorialSummary?.text || place.editorialSummary || '').toString().toLowerCase();
-    if (editorial && dishWords.some(w => editorial.includes(w))) return 3;
-
-    // Meal-time signals: chains/bakeries that serve breakfast almost certainly
+    // 2. Meal-time signals: chains/bakeries that serve breakfast almost certainly
     // have pancakes/waffles/etc. on the menu. Google's serves* booleans are
     // often null/undefined for chains even when they obviously serve breakfast,
     // so we layer multiple signals: the explicit flag, primaryType=bakery
@@ -622,20 +623,32 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     // Waffle House, etc.).
     const isBreakfasty = intent.mealTime === 'breakfast' || intent.mealTime === 'brunch';
     if (isBreakfasty) {
-      if (place.servesBreakfast === true || place.servesBrunch === true) return 3;
-      if (types.has('bakery') || place.primaryType === 'bakery') return 3;
-      if (KNOWN_BREAKFAST_CHAINS.some(c => name.includes(c))) return 3;
+      if (place.servesBreakfast === true || place.servesBrunch === true) return 4;
+      if (types.has('bakery') || place.primaryType === 'bakery') return 4;
+      if (KNOWN_BREAKFAST_CHAINS.some(c => name.includes(c))) return 4;
     }
-    if (intent.mealTime === 'lunch'  && place.servesLunch  === true) return 3;
-    if (intent.mealTime === 'dinner' && place.servesDinner === true) return 3;
+    if (intent.mealTime === 'lunch'  && place.servesLunch  === true) return 4;
+    if (intent.mealTime === 'dinner' && place.servesDinner === true) return 4;
 
-    if (dishWords.some(w => reviewText.includes(w))) return 3;    // serves it (review-mentioned, when Details was hydrated)
-    return 4;
+    // 3. Review-text mention (only fires if Details was hydrated for this place)
+    if (dishWords.some(w => reviewText.includes(w))) return 4;
+
+    // 4. Menu OCR dish list (populated by /label-photos worker endpoint, 180d cache)
+    const menuDishes = (place.menuDishes || []) as string[];
+    if (menuDishes.length && dishWords.some(w => menuDishes.some(md => md.includes(w)))) return 4;
+
+    return 5;  // true noise — filtered out before returning to frontend
   }
   return 1;
 }
 
-const TIER_LABELS: Record<number, string> = { 1:'Specialty', 2:'Cuisine Match', 3:'Has It', 4:'Other' };
+const TIER_LABELS: Record<number, string> = {
+  1:'Specialty',      // name match — place name contains the dish word
+  2:'Cuisine Match',  // place type matches the dish's primary cuisine type
+  3:'Cultural',       // place type matches secondary cultural cuisine
+  4:'Serves It',      // editorialSummary / cached reviews / menu OCR mention the dish
+  // 5 = noise (not in TIER_LABELS by design — filtered out before reaching the frontend)
+};
 
 const CUISINE_QUERIES: Record<string, string[]> = {
   // 'all': reduced from 8 to 3 queries (saves 5 API calls per page load)
@@ -1421,22 +1434,90 @@ Deno.serve(async (req) => {
     // The broad DISH nearby fan-out (restaurant / fast_food_restaurant /
     // meal_takeaway / bakery) intentionally pulls in generic foodservice
     // candidates so chains and bakeries that quietly serve the dish can land
-    // as Tier 3 via servesBreakfast / editorialSummary signals. Anything left
-    // at Tier 4 carries no signal that it serves the dish — drop it so users
-    // only see specialists (1/2) and "Has It" (3) per the user's mental model.
-    if (intent.kind === 'DISH') {
-      const before = finalPlaces.length;
-      finalPlaces = finalPlaces.filter((p: any) => (p.tier || 4) < 4);
-      console.log(`🎯 DISH tier filter: ${before} → ${finalPlaces.length} (dropped ${before - finalPlaces.length} Tier 4 noise)`);
-    }
+    // as Tier 4 ("Serves It") via servesBreakfast / editorialSummary / menu OCR.
+    // Anything left at Tier 5 carries no signal — drop it as true noise.
 
     // No slice — send ALL results to frontend so filters (bakery, sports bar, dietary)
     // have the full pool. Frontend already paginates with "Load More" (20 at a time).
+
+    // Drop tier-5 "noise" only — keep tiers 1 ("Specialty"), 2 ("Cuisine Match"),
+    // 3 ("Cultural"), and 4 ("Serves It") in results.
+    if (intent.kind === 'DISH') {
+      const before = finalPlaces.length;
+      finalPlaces = finalPlaces.filter((p: any) => (p.tier || 5) <= 4);
+      const dropped = before - finalPlaces.length;
+      if (dropped > 0) console.log(`🚮 Dropped ${dropped} tier-5 noise places`);
+    }
 
     // Stamp each result with its backend-computed rank so the frontend
     // can preserve the intent-aware order even if it re-sorts.
     const intentSorted = intent.kind !== 'GENERAL' && !!searchQuery?.trim();
     finalPlaces.forEach((p: any, i: number) => { p.backendRank = i + 1; });
+
+    // ── DISH-FIRST PHOTO ORDERING + MENU OCR FOR TIER 4 ─────────────────────
+    // For DISH queries, eager-label the first 20 visible cards' photos via the
+    // /label-photos worker endpoint (Haiku 4.5 vision, 180-day KV cache). Then:
+    //  - Reorder each place's photos so dish-matching shots come first.
+    //  - Capture any menu-extracted dishes (`menuDishes`) on the place object
+    //    so a re-classification could later promote a Tier 5 → Tier 4 hit.
+    // Cards 21+ get labeled lazily by the frontend on Load More.
+    if (intent.kind === 'DISH') {
+      const dishLabelLower = (intent as any).label?.toString().toLowerCase() || '';
+      const dishRawWords: string[] = (intent as any).rawWords || [];
+      const matchers = [dishLabelLower, ...dishRawWords].filter(Boolean);
+      const EAGER_PLACES = 20;
+      const PHOTOS_PER_PLACE = 5;
+      const eagerTargets = finalPlaces.slice(0, EAGER_PLACES);
+      await Promise.all(eagerTargets.map(async (place: any) => {
+        try {
+          const allPhotos = place.photos || [];
+          const photosToLabel = allPhotos.slice(0, PHOTOS_PER_PLACE)
+            .filter((p: any) => (p?.name || typeof p === 'string'));
+          if (photosToLabel.length === 0) return;
+          const labelReq = await fetch(`${API_BASE_URL}/label-photos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              placeId: place.id || place.placeId,
+              photos: photosToLabel.map((p: any) => ({ name: p?.name || p }))
+            }),
+          });
+          if (!labelReq.ok) return;
+          const { labels, dishes } = await labelReq.json();
+          // Store menu-extracted dishes on the place so Tier 4 reclassification
+          // can use them. The frontend can also surface "menu mentions: ..." if needed.
+          if (Array.isArray(dishes) && dishes.length) {
+            place.menuDishes = dishes;
+            // Upgrade Tier 5 → Tier 4 if any menu-extracted dish matches the search.
+            if ((place.tier === 5 || place.tier == null) &&
+                matchers.some(w => dishes.some((md: string) => md.includes(w)))) {
+              place.tier = 4;
+              place.tierLabel = TIER_LABELS[4];
+            }
+          }
+          // Reorder ENTIRE photo array. Labeled photos matching the dish move
+          // to front; unlabeled photos and non-matching labeled photos keep
+          // their original relative order behind them.
+          if (labels && Object.keys(labels).length) {
+            const isMatch = (photoName: string) => {
+              const tag = (labels[photoName] || '').toString().toLowerCase();
+              return matchers.some(w => tag.includes(w));
+            };
+            const matchedFront: any[] = [];
+            const rest: any[] = [];
+            for (const ph of allPhotos) {
+              const phName = ph?.name || ph;
+              if (typeof phName === 'string' && isMatch(phName)) matchedFront.push(ph);
+              else rest.push(ph);
+            }
+            if (matchedFront.length) place.photos = [...matchedFront, ...rest];
+          }
+          place.photosLabeled = true;
+        } catch (_e) {
+          // Best-effort — failure to label doesn't fail the whole search
+        }
+      }));
+    }
 
     // ── HONEST FALLBACK INFO ────────────────────────────────────────────────
     // Count how many authentic (Tier 1/2) results we have.

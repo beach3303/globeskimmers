@@ -39,6 +39,8 @@ import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
 
+const WORKER_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
+
 // ─── THEME ──────────────────────────────────────────────────────────────────
 const BLUE      = "#3B82F6";
 const BLUE_DARK = "#1E40AF";
@@ -987,6 +989,65 @@ export default function PlacesToEat() {
 
   const handleSearch = () => setSearchText(searchInput.trim());
 
+  // ── LAZY PHOTO LABELING ON LOAD MORE ────────────────────────────────────
+  // Backend eager-labels the top 20 cards. When the user taps "Load More"
+  // the first time (reveals cards 21-40), we fire /label-photos for those
+  // 20 places so their first photo matches the search dish. Cards 41+ stay
+  // in Google's original photo order to keep the cost ceiling firm.
+  const handleLoadMore = async () => {
+    const nextCount = Math.min(displayCount + 20, filtered.length);
+    setDisplayCount(nextCount);  // Reveal immediately — labeling runs in background
+
+    // Only lazy-label when crossing into the 21-40 range AND a search is active.
+    const query = (searchText || '').toLowerCase().trim();
+    if (!query) return;
+    if (displayCount >= 40) return;  // 41+ batch — skip labeling
+
+    const startIdx = displayCount;
+    const endIdx = Math.min(40, nextCount);
+    const targets = filtered.slice(startIdx, endIdx).filter(p => !p.photosLabeled);
+    if (targets.length === 0) return;
+
+    const queryWords = query.split(/\s+/).filter(w => w.length >= 3);
+    if (queryWords.length === 0) return;
+
+    await Promise.all(targets.map(async (place) => {
+      try {
+        const photos = (place.photos || []).slice(0, 5).filter(p => p?.name || typeof p === 'string');
+        if (!photos.length) return;
+        const res = await fetch(`${WORKER_URL}/label-photos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            placeId: place.id || place.placeId,
+            photos: photos.map(p => ({ name: p?.name || p }))
+          })
+        });
+        if (!res.ok) return;
+        const { labels } = await res.json();
+        if (!labels) return;
+
+        const isMatch = (name) => {
+          const tag = (labels[name] || '').toString().toLowerCase();
+          return queryWords.some(w => tag.includes(w));
+        };
+        const allPhotos = place.photos || [];
+        const matched = allPhotos.filter(ph => isMatch(ph?.name || ph));
+        if (matched.length === 0) return;
+        const rest = allPhotos.filter(ph => !matched.includes(ph));
+
+        // Update the underlying restaurants array so derived `filtered` re-renders
+        setRestaurants(prev => prev.map(p =>
+          (p.id === place.id || p.placeId === place.placeId)
+            ? { ...p, photos: [...matched, ...rest], photosLabeled: true }
+            : p
+        ));
+      } catch (_e) {
+        // Best-effort — label failure shouldn't block the user
+      }
+    }));
+  };
+
   const handleShowOnMap = (idx) => {
     setSelectedMapIndex(idx);
     setViewMode("map");
@@ -1227,7 +1288,7 @@ export default function PlacesToEat() {
               </div>
             ))}
             {displayCount<filtered.length&&(
-              <button onClick={()=>setDisplayCount(c=>c+20)} style={{padding:"14px",borderRadius:"12px",border:`2px solid ${BLUE}`,background:"#fff",color:BLUE,fontWeight:"700",fontSize:"14px",cursor:"pointer",fontFamily:"inherit",marginTop:"4px"}}>
+              <button onClick={handleLoadMore} style={{padding:"14px",borderRadius:"12px",border:`2px solid ${BLUE}`,background:"#fff",color:BLUE,fontWeight:"700",fontSize:"14px",cursor:"pointer",fontFamily:"inherit",marginTop:"4px"}}>
                 Load More · {filtered.length-displayCount} remaining
               </button>
             )}
