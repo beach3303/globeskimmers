@@ -382,7 +382,10 @@ async function handleTextSearch(request, env, ctx) {
     }
     const data = await response.json();
     const places = (data.places || []).map(p => normalizePlace(p, baseUrl, false));
-    await setInCache(env, cacheKey, places, FRESH + SWR);
+    // Don't poison KV with a one-off 0-result response.
+    if (places.length > 0) {
+      await setInCache(env, cacheKey, places, FRESH + SWR);
+    }
     return places;
   };
 
@@ -452,7 +455,10 @@ async function handleNearbySearch(request, env, ctx) {
     }
     const data = await response.json();
     const places = (data.places || []).map(p => normalizePlace(p, baseUrl, false));
-    await setInCache(env, cacheKey, places, FRESH + SWR);
+    // Don't poison KV with a one-off 0-result response.
+    if (places.length > 0) {
+      await setInCache(env, cacheKey, places, FRESH + SWR);
+    }
     return places;
   };
 
@@ -631,7 +637,10 @@ async function handleDietarySearch(request, env) {
       const verified = places.filter(p => p.servesVegetarianFood === true);
       if (verified.length >= 3) places = verified;
     }
-    await setInCache(env, cacheKey, places, CONFIG.CACHE_TTL.DIETARY);
+    // Don't poison KV with a one-off 0-result response.
+    if (places.length > 0) {
+      await setInCache(env, cacheKey, places, CONFIG.CACHE_TTL.DIETARY);
+    }
     return jsonResponse({ places, count: places.length, dietary, cached: false });
   } catch (error) {
     return jsonResponse({ error: error.message, places: [] }, 200);
@@ -683,7 +692,10 @@ async function handleCoffeeSearch(request, env) {
 
     const data = await response.json();
     const places = (data.places || []).map(p => normalizePlace(p, baseUrl, false));
-    await setInCache(env, cacheKey, places, CONFIG.CACHE_TTL.TEXT_SEARCH);
+    // Don't poison KV with a one-off 0-result response.
+    if (places.length > 0) {
+      await setInCache(env, cacheKey, places, CONFIG.CACHE_TTL.TEXT_SEARCH);
+    }
     return jsonResponse({ places, count: places.length, cached: false });
   } catch (error) {
     return jsonResponse({ error: error.message, places: [] }, 200);
@@ -748,7 +760,13 @@ async function handleRestaurantSearch(request, env, ctx) {
         const normalized = normalizePlace(p, baseUrl, false);
         return { ...normalized, customer_favorites: [], top_reviews: [], needsDetailsFetch: true };
       });
-      await setInCache(env, cacheKey, restaurants, FRESH + SWR);
+      // Don't write empty responses into KV — a one-off Google glitch or rate
+      // limit would otherwise poison the cache with 0 results for the next
+      // 24h (FRESH + SWR), starving searches like "frozen yogurt" that have
+      // real matches nearby.
+      if (restaurants.length > 0) {
+        await setInCache(env, cacheKey, restaurants, FRESH + SWR);
+      }
       return restaurants;
     };
 

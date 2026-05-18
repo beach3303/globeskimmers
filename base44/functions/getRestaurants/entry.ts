@@ -542,7 +542,7 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   { pattern: /\bcheesecake\b/,                         tier1:['dessert_shop','bakery','cake_shop'],                       tier2:['cafe','american_restaurant'],                     label:'cheesecake' },
   { pattern: /\bchocolate\b|\bcacao\b|\btruffles?\b/,  tier1:['chocolatier','dessert_shop','candy_store'],                tier2:['bakery'],                                         label:'chocolate' },
   { pattern: /\bbrownies?\b/,                          tier1:['bakery','dessert_shop'],                                   tier2:['cafe'],                                           label:'brownies' },
-  { pattern: /\bfrozen\s*yogurt\b|\bfroyo\b/,          tier1:['ice_cream_shop'],                                          tier2:['dessert_shop'],                                   label:'frozen yogurt' },
+  { pattern: /\bfrozen\s*yogurt\b|\bfro[\s-]*yo\b/,    tier1:['ice_cream_shop'],                                          tier2:['dessert_shop'],                                   label:'frozen yogurt' },
   { pattern: /\bshaved\s*ice\b|\bsno[\s-]*cone\b|\bhalo[\s-]*halo\b/, tier1:['ice_cream_shop','dessert_shop'],              tier2:[],                                                 label:'shaved ice' },
   { pattern: /\bcr[eè]me\s*br[uû]l[eé]e\b|\bsouffl[eé]\b/, tier1:['french_restaurant','dessert_shop'],                     tier2:['bakery'],                                         label:'French dessert' },
   { pattern: /\bcandy\b|\bsweets?\b|\bfudge\b/,        tier1:['candy_store','dessert_shop'],                              tier2:['bakery'],                                         label:'candy' },
@@ -1035,14 +1035,19 @@ Deno.serve(async (req) => {
     const isDishSearch = intent.kind === 'DISH';
     const skipNearby = hasAdvancedFilters || (!!searchQuery?.trim() && !isDishSearch);
 
-    // For DISH searches, broaden the pool with generic foodservice categories.
-    // The text-search query ("{dish} {tier1Type}") already targets specialists
-    // (e.g. "pancakes breakfast restaurant"), so nearby's job here is to surface
-    // chains/bakeries/takeout that Google's text-search ranks too low because
-    // the dish is only one of many menu items (McDonald's pancakes, Corner Bakery
-    // pancakes, IHOP, etc.). 4 nearby calls capped — controlled cost.
+    // For DISH searches, broaden the pool with generic foodservice categories
+    // PLUS the dish's own tier-1 specialist types. The text-search query
+    // ("{dish} {tier1Type}") usually finds specialists, but Google occasionally
+    // returns nothing for tighter dish queries (e.g. "Frozen yogurt ice cream
+    // shop" → zero hits) and we'd be stranded with no fallback. Adding tier-1
+    // types to the nearby fan-out guarantees an ice_cream_shop fan-out for
+    // froyo, a breakfast_restaurant fan-out for pancakes, a sushi_restaurant
+    // fan-out for sushi, etc. — cached just like every other nearby call.
     const DISH_BROAD_TYPES = ['restaurant', 'fast_food_restaurant', 'meal_takeaway', 'bakery'];
-    const dishNearbyTypes = isDishSearch ? DISH_BROAD_TYPES.slice() : [];
+    const dishTier1Types = isDishSearch ? ((intent as any).tier1Types || []) : [];
+    const dishNearbyTypes = isDishSearch
+      ? Array.from(new Set([...DISH_BROAD_TYPES, ...dishTier1Types]))
+      : [];
 
     const nearbyTypeList = skipNearby
       ? []
