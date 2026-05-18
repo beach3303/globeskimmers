@@ -253,6 +253,19 @@ const KNOWN_BREAKFAST_CHAINS: string[] = [
   "stack'd", "another broken egg", "wildflower",
 ];
 
+// Place types that plausibly serve American-style breakfast/brunch dishes
+// (pancakes, waffles, eggs benedict, French toast, etc.). Used to gate the
+// servesBreakfast/servesBrunch Tier-4 trigger so fast-food joints (KFC, Taco
+// Bell) don't promote on Google's broad serves* flag just because they sell
+// breakfast biscuits. Anything not on this list needs explicit dish evidence
+// (editorial, reviews, or menu OCR) to land in Tier 4.
+const BREAKFAST_FRIENDLY_TYPES: Set<string> = new Set([
+  'breakfast_restaurant', 'brunch_restaurant',
+  'american_restaurant', 'diner',
+  'cafe', 'coffee_shop',
+  'bakery',
+]);
+
 // Dish → expected primaryTypes (Tier 1 = specialist, Tier 2 = close match)
 // 80+ dishes mapped globally — covers Italian, Mexican, Japanese, Chinese, Korean,
 // Vietnamese, Thai, Indian, Filipino, Middle Eastern, European, South American,
@@ -599,12 +612,13 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
   }
   if (intent.kind === 'DISH') {
     // Words that count as a "namesake" match: the canonical label plus whatever
-    // the user actually typed. Lets "Old Spaghetti Factory" rank Tier 1 on a
-    // "spaghetti" search even though the canonical label is "pasta".
-    const dishWords = Array.from(new Set([
-      intent.label.toLowerCase(),
-      ...(intent.rawWords || [])
-    ].filter(Boolean)));
+    // the user actually typed, plus singular stems so "Pancake House" still
+    // hits on a "pancakes" search. Min length 3 keeps "ice/rice" style noise out.
+    const dishWords = Array.from(new Set(
+      [intent.label.toLowerCase(), ...(intent.rawWords || [])]
+        .filter(Boolean)
+        .flatMap(w => w.endsWith('s') ? [w, w.slice(0, -1)] : [w])
+    )).filter(w => w.length >= 3);
     if (dishWords.some(w => name.includes(w))) return 1;          // namesake / specialty
     if (intent.tier1Types.some(t => types.has(t))) return 2;      // cuisine specialist
     if (intent.tier2Types.some(t => types.has(t))) return 3;      // secondary cuisine
@@ -614,21 +628,22 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     const editorial = ((place.editorialSummary?.text || place.editorialSummary || '') as string).toString().toLowerCase();
     if (editorial && dishWords.some(w => editorial.includes(w))) return 4;
 
-    // 2. Meal-time signals: chains/bakeries that serve breakfast almost certainly
-    // have pancakes/waffles/etc. on the menu. Google's serves* booleans are
-    // often null/undefined for chains even when they obviously serve breakfast,
-    // so we layer multiple signals: the explicit flag, primaryType=bakery
-    // (bakeries reliably stock pancakes/waffles/french toast), and a known
-    // breakfast-chain name match (McDonald's, IHOP, Denny's, Corner Bakery,
-    // Waffle House, etc.).
+    // 2. Meal-time signals — tightened. Google's serves* booleans are noisy on
+    // fast-food chains (KFC and Taco Bell both flag servesBreakfast=true in
+    // some markets without serving pancakes/French toast/etc.), so we now
+    // require either a curated chain match OR pairing servesBreakfast with a
+    // type that plausibly serves these dishes. Bare serves* flags no longer
+    // promote on their own. Generic lunch/dinner triggers removed — they'd
+    // promote nearly every restaurant to Tier 4 the moment a lunch/dinner
+    // mealTime entry got added to DISH_MAP.
     const isBreakfasty = intent.mealTime === 'breakfast' || intent.mealTime === 'brunch';
     if (isBreakfasty) {
-      if (place.servesBreakfast === true || place.servesBrunch === true) return 4;
-      if (types.has('bakery') || place.primaryType === 'bakery') return 4;
       if (KNOWN_BREAKFAST_CHAINS.some(c => name.includes(c))) return 4;
+      const hasBreakfastFriendlyType = [...types].some((t: string) => BREAKFAST_FRIENDLY_TYPES.has(t));
+      if (hasBreakfastFriendlyType && (place.servesBreakfast === true || place.servesBrunch === true)) {
+        return 4;
+      }
     }
-    if (intent.mealTime === 'lunch'  && place.servesLunch  === true) return 4;
-    if (intent.mealTime === 'dinner' && place.servesDinner === true) return 4;
 
     // 3. Review-text mention (only fires if Details was hydrated for this place)
     if (dishWords.some(w => reviewText.includes(w))) return 4;
