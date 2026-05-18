@@ -801,6 +801,77 @@ async function handleCacheStats(request, env) {
   });
 }
 
+// One-shot scanner that deletes search-result KV entries whose .data array is
+// empty. Was used to purge the poisoned 0-result entries left behind before
+// the "don't cache empty responses" guard was added. Safe to re-run anytime —
+// only targets keys with the search prefixes (text_, nearby_, dietary_,
+// coffee_, restaurants_) and only removes entries that decode to {data:[]}.
+// Place details, photo bytes, and Haiku photo labels are not touched.
+//
+// Usage: POST /admin/purge-empty-cache?token=<ADMIN_PURGE_TOKEN>[&dryRun=1]
+// Set the token first: `wrangler secret put ADMIN_PURGE_TOKEN`
+async function handlePurgeEmptyCache(request, env) {
+  if (!env.GLOBESKIMMERS_KV) {
+    return jsonResponse({ error: 'KV not bound' }, 503);
+  }
+  const expected = env.ADMIN_PURGE_TOKEN;
+  if (!expected) {
+    return jsonResponse({ error: 'ADMIN_PURGE_TOKEN not configured — run `wrangler secret put ADMIN_PURGE_TOKEN` first' }, 503);
+  }
+  const url = new URL(request.url);
+  const token = request.headers.get('X-Admin-Token') || url.searchParams.get('token') || '';
+  if (token !== expected) {
+    return jsonResponse({ error: 'unauthorized' }, 401);
+  }
+  const dryRun = url.searchParams.get('dryRun') === '1' || url.searchParams.get('dryRun') === 'true';
+  const SEARCH_PREFIXES = ['text_', 'nearby_', 'dietary_', 'coffee_', 'restaurants_'];
+
+  let cursor;
+  let scanned = 0;
+  let candidates = 0;
+  let deleted = 0;
+  const sampleKeys = [];
+  // Cap iterations so a runaway cache scan can't blow the 30s worker budget.
+  const MAX_PAGES = 20;  // up to 20k keys at the default page size
+  let pages = 0;
+  while (pages < MAX_PAGES) {
+    const list = await env.GLOBESKIMMERS_KV.list({ cursor, limit: 1000 });
+    pages++;
+    for (const key of list.keys) {
+      scanned++;
+      if (!SEARCH_PREFIXES.some(p => key.name.startsWith(p))) continue;
+      candidates++;
+      try {
+        const val = await env.GLOBESKIMMERS_KV.get(key.name, { type: 'json' });
+        const arr = val?.data;
+        if (Array.isArray(arr) && arr.length === 0) {
+          if (sampleKeys.length < 50) sampleKeys.push(key.name);
+          if (!dryRun) {
+            await env.GLOBESKIMMERS_KV.delete(key.name);
+          }
+          deleted++;
+        }
+      } catch (_e) {
+        // Skip unreadable entries.
+      }
+    }
+    if (list.list_complete) {
+      cursor = undefined;
+      break;
+    }
+    cursor = list.cursor;
+  }
+
+  return jsonResponse({
+    dryRun,
+    scanned,
+    candidates,
+    deleted,
+    truncated: cursor ? true : false,
+    sampleKeys,
+  });
+}
+
 // ============================================================================
 // PHOTO LABELER + MENU OCR — Haiku 4.5 vision, 180-day KV cache
 // Powers dish-first photo ordering on PlacesToEat AND Tier 4 "Serves It"
@@ -1156,6 +1227,7 @@ export default {
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
       if (pathname === '/label-photos' && request.method === 'POST') return await handleLabelPhotos(request, env);
+      if (pathname === '/admin/purge-empty-cache' && request.method === 'POST') return await handlePurgeEmptyCache(request, env);
 
       return jsonResponse({ error: 'Not found', path: pathname }, 404);
     } catch (error) {
