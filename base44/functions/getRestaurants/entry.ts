@@ -775,6 +775,25 @@ function fuzzyNormalizeQuery(query: string): string {
   return out.join(' ');
 }
 
+// Detect a dietary modifier word inside the search query when it sits next to
+// a dish intent ("halal taco", "vegan ramen", "gluten-free pizza"). Returns
+// null when the dish label is itself a dietary term, to avoid double-filtering
+// (e.g. a "vegan" search already routes to the vegan_restaurant tier1 type via
+// DISH_MAP — applying the vegan hard-filter on top would empty the result set).
+function detectDietaryModifier(query: string, dishLabel: string | null): string | null {
+  const q = (query || '').toLowerCase();
+  if (dishLabel) {
+    const dl = dishLabel.toLowerCase();
+    if (['halal','kosher','vegan','vegetarian','gluten free'].includes(dl)) return null;
+  }
+  if (/\bhalal\b/.test(q)) return 'halal';
+  if (/\bkosher\b/.test(q)) return 'kosher';
+  if (/\bvegan\b/.test(q)) return 'vegan';
+  if (/\bvegetarian\b/.test(q)) return 'vegetarian';
+  if (/\bgluten[\s-]?free\b/.test(q)) return 'glutenFree';
+  return null;
+}
+
 type ParsedIntent =
   | { kind: 'UMBRELLA'; cultureKey: string; label: string; types: Set<string>; keywords: string[] }
   | { kind: 'DISH'; label: string; tier1Types: string[]; tier2Types: string[]; rawWords: string[]; mealTime?: 'breakfast' | 'brunch' | 'lunch' | 'dinner' }
