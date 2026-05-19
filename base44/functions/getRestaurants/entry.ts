@@ -1041,17 +1041,27 @@ Deno.serve(async (req) => {
     console.log(`🧠 Intent: ${intent.kind}${intent.kind !== 'GENERAL' ? ` (${(intent as any).label})` : ''}`);
 
     // ── DIETARY SHORTCUT ──────────────────────────────────────────────────────
-    // Note: glutenFree included so the text-search shortcut fires for it too.
+    // Fires when:
+    //   - cuisine is itself a dietary key (legacy path, cuisine='kosher')
+    //   - OR cuisine='all' + activeDietary chip set (the common path from the
+    //     Advanced Filters drawer — frontend always sends cuisine='all' there)
+    // Routes through the Worker's /places/dietary endpoint, which uses a
+    // targeted text query ("kosher restaurant") and a dedicated 3-day cache.
+    // Skipped entirely when the user typed a search — that path goes through
+    // the semantic compiler so the dietary word + dish word combine cleanly.
     const DIETARY_TYPES = ['halal', 'kosher', 'vegan', 'vegetarian', 'glutenFree'];
-    if (!searchQuery?.trim() && DIETARY_TYPES.includes(cuisine)) {
-      console.log(`🥗 Dietary shortcut: calling /places/dietary?dietary=${cuisine}`);
+    const dietaryShortcutKey = DIETARY_TYPES.includes(cuisine)
+      ? cuisine
+      : (activeDietary && DIETARY_TYPES.includes(activeDietary) ? activeDietary : null);
+    if (!searchQuery?.trim() && dietaryShortcutKey) {
+      console.log(`🥗 Dietary shortcut: calling /places/dietary?dietary=${dietaryShortcutKey}`);
       try {
         const params = new URLSearchParams({
           latitude:   String(latitude),
           longitude:  String(longitude),
           radius:     String(radius),
           maxResults: String(maxResults),
-          dietary:    cuisine,
+          dietary:    dietaryShortcutKey,
         });
         const res = await fetch(`${API_BASE_URL}/places/dietary?${params}`);
         if (res.ok) {
@@ -1062,8 +1072,8 @@ Deno.serve(async (req) => {
             // Tag each place with the dietary filter that matched so the
             // frontend trusts backend's assertion and doesn't re-filter
             // using its own (stricter) detection heuristics.
-            const tagged = places.map((p: any) => ({ ...p, dietary: { ...(p.dietary || {}), [cuisine]: true } }));
-            return Response.json({ places: tagged, count: tagged.length, version: 'v4.3', dietary: cuisine });
+            const tagged = places.map((p: any) => ({ ...p, dietary: { ...(p.dietary || {}), [dietaryShortcutKey]: true } }));
+            return Response.json({ places: tagged, count: tagged.length, version: 'v4.3', dietary: dietaryShortcutKey });
           }
           console.warn(`⚠️ /places/dietary returned 0 — falling back to text search`);
         }
@@ -1593,9 +1603,14 @@ Deno.serve(async (req) => {
       if (cuisine === 'halal')
         return types.includes('halal_restaurant') || /\bhalal\b/.test(text) || /\bzabiha\b/.test(text);
       if (cuisine === 'kosher')
-        return types.includes('kosher_restaurant') || /\bkosher\b/.test(text);
+        return types.includes('kosher_restaurant')
+          || /\bkosher\b/.test(text)
+          || /\bhechsher\b|\bmashgiach\b|\bglatt\b|\bparve\b|\bshomer\s*shabbat\b/.test(text)
+          || /\b(?:ou|star-k|kof-k|crc|orb)[\s-]?(?:kosher|certified|approved)\b/.test(text);
       if (cuisine === 'vegan')
-        return types.includes('vegan_restaurant') || /\bvegan\b/.test(text);
+        return types.includes('vegan_restaurant')
+          || /\bvegan\b/.test(text)
+          || /\bplant[\s-]?based\b/.test(text);
       if (cuisine === 'vegetarian')
         return place.servesVegetarianFood === true || types.includes('vegetarian_restaurant') || /\bvegetarian\b/.test(text);
       if (cuisine === 'glutenFree')
@@ -1619,7 +1634,13 @@ Deno.serve(async (req) => {
       if (cuisine === 'kosher') {
         if (types.includes('kosher_restaurant')) score += 100;
         if (/\bkosher\b/.test(text)) score += 20;
-        if (/\bhechsher\b|\bmashgiach\b/.test(text)) score += 10;
+        if (/\bhechsher\b|\bmashgiach\b|\bglatt\b|\bparve\b|\bshomer\s*shabbat\b/.test(text)) score += 10;
+        if (/\b(?:ou|star-k|kof-k|crc|orb)[\s-]?(?:kosher|certified|approved)\b/.test(text)) score += 10;
+      }
+      if (cuisine === 'vegan') {
+        if (types.includes('vegan_restaurant')) score += 100;
+        if (/\bvegan\b/.test(text)) score += 20;
+        if (/\bplant[\s-]?based\b/.test(text)) score += 10;
       }
       score += (place.rating || 0) * 5;
       score += Math.min(place.userRatingCount || 0, 500) / 25;
@@ -1682,11 +1703,13 @@ Deno.serve(async (req) => {
     }
 
     if (effectiveDietary) {
-      // Filter to places that strongly match the dietary. Fall back to the
-      // full set if filtering is too aggressive (<3 matches) so the user
-      // still sees something useful instead of a blank page.
-      const matched = processedPlaces.filter(p => hasStrongDietaryMatch(p, effectiveDietary));
-      finalPlaces = matched.length >= 3 ? matched : processedPlaces;
+      // Strict: only return places that pass hasStrongDietaryMatch for the
+      // requested dietary. Previously we fell back to the unfiltered pool
+      // when matches < 3, which silently broke the user's filter intent
+      // (clicking Kosher would surface 60 random non-kosher restaurants).
+      // Now show only matches; the frontend's empty-state message handles
+      // the zero-match case honestly.
+      finalPlaces = processedPlaces.filter(p => hasStrongDietaryMatch(p, effectiveDietary));
       finalPlaces.sort((a, b) => dietaryScore(b, effectiveDietary) - dietaryScore(a, effectiveDietary));
       // Backend authoritatively matched these — tag so the frontend trusts
       // them instead of re-filtering with stricter client logic.
