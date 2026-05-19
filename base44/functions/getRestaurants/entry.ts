@@ -1311,13 +1311,21 @@ Deno.serve(async (req) => {
       ? Array.from(new Set([...dishSpecialistTypes, ...DISH_BROAD_TYPES]))
       : [];
 
+    // When the Bakery & Pastry chip is active, ensure bakery types enter the
+    // candidate pool even though hasAdvancedFilters suppresses generic nearby.
+    // The text search "bakery pastry" alone returns max ~20 candidates and
+    // often empties to 0 after client-side filters (Open Now, Min Rating,
+    // etc.). A targeted 3-type nearby fan-out adds up to 60 more candidates,
+    // all KV-cached for 3 days so steady-state cost is ~$0.
+    const bakeryNearbyTypes = filterBakery ? ['bakery', 'pastry_shop', 'dessert_shop'] : [];
+
     const nearbyTypeList = skipNearby
-      ? []
+      ? bakeryNearbyTypes
       : isDishSearch
-        ? dishNearbyTypes
+        ? Array.from(new Set([...dishNearbyTypes, ...bakeryNearbyTypes]))
         : cuisine === 'all'
-          ? NEARBY_TYPES_ALL
-          : (NEARBY_TYPES_CUISINE[cuisine] || ['restaurant']);
+          ? Array.from(new Set([...NEARBY_TYPES_ALL, ...bakeryNearbyTypes]))
+          : Array.from(new Set([...(NEARBY_TYPES_CUISINE[cuisine] || ['restaurant']), ...bakeryNearbyTypes]));
 
     // Sports bar nearby ranking strategy:
     // POPULARITY — surfaces well-known sports bars like Rocco's Tavern, Lucky Baldwin's,
