@@ -516,6 +516,8 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   { pattern: /\bdiner\b/,                              tier1:['diner'],                                                   tier2:['american_restaurant','breakfast_restaurant'],     label:'diner' },
   { pattern: /\bpub\b|\bgastropub\b/,                  tier1:['pub','gastropub'],                                         tier2:['british_restaurant','bar'],                       label:'pub' },
   { pattern: /\bfast\s*food\b/,                        tier1:['fast_food_restaurant'],                                    tier2:[],                                                 label:'fast food' },
+  { pattern: /\bsnacks?\b|\bfinger\s*food\b/,          tier1:['snack_bar','convenience_store'],                           tier2:['fast_food_restaurant','cafe'],                    label:'snacks' },
+  { pattern: /\bcomfort\s*food\b|\bhome\s*cooking\b/,  tier1:['diner','american_restaurant'],                             tier2:['southern_restaurant','soul_food_restaurant'],     label:'comfort food' },
   // ── Bakery & Desserts (dishes whose "specialty" is a shop type, not a cuisine) ─────────
   { pattern: /\bcakes?\b|\bcupcakes?\b/,               tier1:['cake_shop','bakery'],                                      tier2:['dessert_shop','pastry_shop','cafe'],              label:'cake' },
   { pattern: /\bbread\b|\bsourdough\b|\bbaguette\b/,   tier1:['bakery'],                                                  tier2:['cafe','sandwich_shop'],                           label:'bread' },
@@ -529,11 +531,249 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   { pattern: /\bcheesecake\b/,                         tier1:['dessert_shop','bakery','cake_shop'],                       tier2:['cafe','american_restaurant'],                     label:'cheesecake' },
   { pattern: /\bchocolate\b|\bcacao\b|\btruffles?\b/,  tier1:['chocolatier','dessert_shop','candy_store'],                tier2:['bakery'],                                         label:'chocolate' },
   { pattern: /\bbrownies?\b/,                          tier1:['bakery','dessert_shop'],                                   tier2:['cafe'],                                           label:'brownies' },
-  { pattern: /\bfrozen\s*yogurt\b|\bfroyo\b/,          tier1:['ice_cream_shop'],                                          tier2:['dessert_shop'],                                   label:'frozen yogurt' },
+  { pattern: /\bfrozen\s*yogurt\b|\bfro[\s-]?yo\b/,    tier1:['ice_cream_shop'],                                          tier2:['dessert_shop'],                                   label:'frozen yogurt' },
   { pattern: /\bshaved\s*ice\b|\bsno[\s-]*cone\b|\bhalo[\s-]*halo\b/, tier1:['ice_cream_shop','dessert_shop'],              tier2:[],                                                 label:'shaved ice' },
   { pattern: /\bcr[eè]me\s*br[uû]l[eé]e\b|\bsouffl[eé]\b/, tier1:['french_restaurant','dessert_shop'],                     tier2:['bakery'],                                         label:'French dessert' },
   { pattern: /\bcandy\b|\bsweets?\b|\bfudge\b/,        tier1:['candy_store','dessert_shop'],                              tier2:['bakery'],                                         label:'candy' },
 ];
+
+// ─── FUZZY NORMALIZATION ─────────────────────────────────────────────────────
+// Forgiving misspellings in the search bar: "sushii" → "sushi", "itallian"
+// → "italian", "glutten free" → "gluten free", "vegen" → "vegan". Runs only
+// when the raw query produced no intent match, so brand names and queries
+// that already worked are untouched.
+
+function levenshtein(a: string, b: string, maxDist: number): number {
+  if (a === b) return 0;
+  const aLen = a.length, bLen = b.length;
+  if (Math.abs(aLen - bLen) > maxDist) return maxDist + 1;
+  if (aLen === 0) return bLen;
+  if (bLen === 0) return aLen;
+  let prev = new Array(bLen + 1);
+  let curr = new Array(bLen + 1);
+  for (let j = 0; j <= bLen; j++) prev[j] = j;
+  for (let i = 1; i <= aLen; i++) {
+    curr[0] = i;
+    let rowMin = i;
+    for (let j = 1; j <= bLen; j++) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+      if (curr[j] < rowMin) rowMin = curr[j];
+    }
+    if (rowMin > maxDist) return maxDist + 1;
+    const tmp = prev; prev = curr; curr = tmp;
+  }
+  return prev[bLen];
+}
+
+// Single-token vocabulary: cuisines, venue types, dietary terms, common dishes.
+// Both singular and plural forms are listed so we don't have to stem at lookup
+// time. Any token that exact-matches this set passes through fuzz untouched.
+const FUZZY_VOCAB_SINGLE: Set<string> = new Set([
+  // Cuisines
+  'italian','mexican','chinese','japanese','korean','thai','vietnamese',
+  'filipino','indian','french','greek','spanish','german','british','irish',
+  'mediterranean','european','asian','latin','latino','american','brazilian',
+  'peruvian','ethiopian','moroccan','turkish','israeli','polish','russian',
+  'hawaiian','cantonese','venezuelan','indonesian','malaysian','singaporean',
+  'swiss','hungarian','ukrainian','nigerian','australian','canadian',
+  // Venue types
+  'trattoria','osteria','bistro','bistrot','brasserie','taberna','bodega',
+  'izakaya','cantina','taqueria','creperie','gastropub','pub','diner','cafe',
+  'bakery','grill','restaurant','buffet','deli',
+  // Dietary
+  'vegan','vegetarian','halal','kosher',
+  // Dishes — Japanese
+  'sushi','ramen','udon','tempura','okonomiyaki','tonkatsu','yakitori',
+  'shabu','katsu','gyoza','takoyaki','yakiniku','yakisoba','soba','onigiri',
+  'omurice','bento','mochi','daifuku',
+  // Dishes — Chinese
+  'dumplings','potstickers','congee','jook','wonton','dimsum','bao','baozi',
+  'shumai',
+  // Dishes — Korean
+  'bibimbap','bulgogi','kbbq','jjigae','bossam','samgyeopsal','tteokbokki',
+  'kimchi','jajangmyeon','jjajangmyeon','mandu','japchae','gimbap','kimbap',
+  'soondubu','sundubu','bingsu','bingsoo','patbingsu',
+  // Dishes — Vietnamese / Thai
+  'pho','cuon','larb',
+  // Dishes — Indian
+  'curry','biryani','dosa','tandoori','samosa','vindaloo','korma','naan',
+  'chaat','vada','pakora','thali','chai','lassi','jalebi','rasmalai','kulfi',
+  'saag','paneer',
+  // Dishes — Filipino
+  'adobo','sinigang','lechon','sisig','lumpia','pancit','bulalo','laing',
+  'tapsilog','silog','longganisa','caldereta','pinakbet','ube','bibingka',
+  'ensaymada','turon',
+  // Dishes — SE Asian
+  'laksa','satay','rendang',
+  // Dishes — Middle Eastern / Turkish
+  'shawarma','kebab','doner','falafel','hummus','shakshuka','tabbouleh',
+  'tabouleh','baba','mezze','meze','baklava','dolma','pita','mansaf','kabsa',
+  'maqluba','gozleme','lahmacun','pide','borek',
+  // Dishes — Italian
+  'pasta','lasagna','rigatoni','penne','spaghetti','carbonara','pizza',
+  'arancini','suppli','aperitivo','risotto','ravioli','tortellini','gnocchi',
+  'bruschetta','antipasto','caprese','panini','focaccia','calzone','stromboli',
+  'meatballs','minestrone','tiramisu','cannoli','affogato',
+  // Dishes — French
+  'croissant','baguette','escargot','bouillabaisse','ratatouille','cassoulet',
+  'quiche',
+  // Dishes — Spanish
+  'paella','tapas','jamon','chorizo','gazpacho','pintxos','vermut','vermouth',
+  // Dishes — German / Swiss
+  'schnitzel','bratwurst','wurst','pretzel','pretzels','brezel','sauerkraut',
+  'spaetzle','fondue','raclette',
+  // Dishes — Eastern European
+  'pierogi','pierogies','perogi','perogies','borscht','goulash','stroganoff',
+  'blini','pelmeni',
+  // Dishes — South American
+  'ceviche','empanada','empanadas','arepa','arepas','churrasco','feijoada',
+  'picanha','moqueca','coxinha','pastel','caipirinha',
+  // Dishes — African
+  'injera','jollof','tagine',
+  // Dishes — Mexican
+  'taco','tacos','burrito','burritos','quesadilla','enchilada','enchiladas',
+  'tamale','tamales','chilaquiles','tostada','tostadas','chimichanga','mole',
+  'pozole','birria','carnitas','barbacoa','fajita','fajitas','elote','elotes',
+  'esquites','horchata','churros','flan',
+  // Dishes — American
+  'burger','burgers','whopper','steak','bbq','barbeque','barbecue','ribs',
+  'brisket','wings','seafood','shellfish','oysters','clams','lobster','gumbo',
+  'jambalaya','crawfish','crayfish','cheesesteak','reuben','blt','sandwich',
+  'sandwiches','submarine','sub','subs','hoagie','grinder','nachos','chili',
+  'meatloaf','sliders','poutine','poke',
+  // Dishes — Brunch
+  'brunch','breakfast','benedict','omelet','omelette','frittata','acai',
+  // Australian
+  'pavlova','lamington','parmigiana',
+  // Drinks
+  'matcha','tea','teahouse','juice','smoothie','smoothies','milkshake',
+  'cocktails','martini','mojito','wine','winery','beer','brewery','brewpub',
+  'whiskey','whisky','scotch','bourbon','sake','coffee','espresso','latte',
+  // Generic
+  'salad','salads','soup','soups','noodles','dessert','desserts','snacks',
+  'snack',
+  // Bakery / Sweets
+  'cake','cakes','cupcakes','bread','sourdough','pastries','pastry','danish',
+  'eclair','macaron','macarons','pie','pies','cobblers','cookies','gelato',
+  'sorbet','crepe','crepes','boba','cheesecake','chocolate','cacao','truffles',
+  'brownies','froyo','candy','sweets','fudge','bagel','bagels','donut','donuts',
+  'doughnut','doughnuts',
+]);
+
+// Multi-word phrases. Both canonical and common variant spellings live here
+// so a fuzzed token pair can find its target. Token-count buckets keep
+// distance comparisons cheap.
+const FUZZY_VOCAB_PHRASES: string[] = [
+  'gluten free','gluten-free',
+  'pad thai','pad see ew','pad kee mao','pad kra pao','tom yum','tom kha',
+  'green curry','red curry','khao soi','massaman curry',
+  'banh mi','bun cha','bun bo hue','com tam','spring rolls','spring roll',
+  'dim sum','peking duck','dan dan','char siu','chow mein','lo mein',
+  'fried rice','kung pao','steamed buns','siu mai','har gow','hong kong',
+  'soup dumplings','soup dumpling','xiao long bao','xiaolong bao',
+  'korean bbq','korean fried chicken','kimchi stew','kare kare','halo halo',
+  'butter chicken','murgh makhani','tikka masala','palak paneer',
+  'chana masala','rogan josh','garlic naan','pani puri','golgappa','bhel puri',
+  'vada pav','pav bhaji','aloo gobi','mango lassi','masala chai','masala dosa',
+  'gulab jamun','leche flan','bicol express','crispy pata','lechon kawali',
+  'nasi goreng',
+  'baba ganoush','sticky rice','thai tea','thai iced tea','mango sticky rice',
+  'papaya salad','drunken noodles','som tam',
+  'cacio e pepe','french onion','french onion soup','coq au vin',
+  'beef bourguignon','boeuf bourguignon','foie gras','pao de queijo',
+  'jollof rice','brazilian bbq','brazilian steak',
+  'fish and chips','shepherds pie','bangers and mash','full english',
+  'english breakfast','meat pie','mince pie','yorkshire pudding',
+  'fried chicken','pulled pork','chicken wings','buffalo wings','clam chowder',
+  'lobster roll','po boy','poor boy','poboy','shrimp and grits',
+  'biscuits and gravy','chicken and waffles','philly cheesesteak',
+  'club sandwich','grilled cheese','hot dog','corn dog','onion rings',
+  'french fries','chicken tenders','chicken strips','chicken nuggets',
+  'chicken parm','chicken parmesan','chicken parmigiana','chicken pot pie',
+  'buffalo chicken','mac and cheese','mac n cheese','poke bowl','rice bowl',
+  'grain bowl','eggs benedict','avocado toast','acai bowl','french toast',
+  'breakfast burrito','frozen yogurt','shaved ice','sno cone','creme brulee',
+  'fast food','finger food','comfort food','home cooking','all you can eat',
+  'soul food','tres leches','agua fresca','aguas frescas','orange chicken',
+  'general tso','tapas bar','food hall','food court','food market',
+  'wine bar','sports bar','cocktail bar','sushi bar','juice bar','noodle bar',
+];
+
+let _phrasesByLen: Map<number, string[]> | null = null;
+function phrasesByTokenCount(): Map<number, string[]> {
+  if (_phrasesByLen) return _phrasesByLen;
+  const m = new Map<number, string[]>();
+  for (const p of FUZZY_VOCAB_PHRASES) {
+    const n = p.split(/\s+/).length;
+    if (!m.has(n)) m.set(n, []);
+    m.get(n)!.push(p);
+  }
+  _phrasesByLen = m;
+  return m;
+}
+const FUZZY_VOCAB_PHRASES_SET = new Set(FUZZY_VOCAB_PHRASES);
+
+function fuzzyMatchSingle(token: string): string | null {
+  if (FUZZY_VOCAB_SINGLE.has(token)) return token;
+  // ≤3 chars: exact only. 4–5: distance 1. 6+: distance 2.
+  let maxDist: number;
+  if (token.length <= 3) return null;
+  else if (token.length <= 5) maxDist = 1;
+  else maxDist = 2;
+  let best: { word: string; dist: number } | null = null;
+  let tied = false;
+  for (const vocab of FUZZY_VOCAB_SINGLE) {
+    if (Math.abs(vocab.length - token.length) > maxDist) continue;
+    const d = levenshtein(token, vocab, maxDist);
+    if (d > maxDist) continue;
+    if (!best || d < best.dist) { best = { word: vocab, dist: d }; tied = false; }
+    else if (d === best.dist && vocab !== best.word) tied = true;
+  }
+  return best && !tied ? best.word : null;
+}
+
+function fuzzyMatchPhrase(phrase: string): string | null {
+  if (FUZZY_VOCAB_PHRASES_SET.has(phrase)) return phrase;
+  const tokenCount = phrase.split(/\s+/).length;
+  const candidates = phrasesByTokenCount().get(tokenCount);
+  if (!candidates) return null;
+  const maxDist = 2;
+  let best: { word: string; dist: number } | null = null;
+  let tied = false;
+  for (const vocab of candidates) {
+    if (Math.abs(vocab.length - phrase.length) > maxDist) continue;
+    const d = levenshtein(phrase, vocab, maxDist);
+    if (d > maxDist) continue;
+    if (!best || d < best.dist) { best = { word: vocab, dist: d }; tied = false; }
+    else if (d === best.dist && vocab !== best.word) tied = true;
+  }
+  return best && !tied ? best.word : null;
+}
+
+function fuzzyNormalizeQuery(query: string): string {
+  const trimmed = query?.trim();
+  if (!trimmed) return query;
+  const tokens = trimmed.toLowerCase().split(/\s+/);
+  const out: string[] = [];
+  let i = 0;
+  while (i < tokens.length) {
+    // Try 2-word phrase first (greedy left-to-right).
+    if (i + 1 < tokens.length) {
+      const pair = `${tokens[i]} ${tokens[i + 1]}`;
+      const phraseHit = fuzzyMatchPhrase(pair);
+      if (phraseHit) { out.push(phraseHit); i += 2; continue; }
+    }
+    const tok = tokens[i];
+    if (/^[a-z]+$/.test(tok)) {
+      out.push(fuzzyMatchSingle(tok) ?? tok);
+    } else {
+      out.push(tok);
+    }
+    i += 1;
+  }
+  return out.join(' ');
+}
 
 type ParsedIntent =
   | { kind: 'UMBRELLA'; cultureKey: string; label: string; types: Set<string>; keywords: string[] }
@@ -542,7 +782,19 @@ type ParsedIntent =
 
 function parseSearchIntent(query: string): ParsedIntent {
   if (!query?.trim()) return { kind: 'GENERAL' };
-  const q = query.toLowerCase();
+  // Pass 1: try the raw query — preserves brand names and exact matches.
+  const direct = parseSearchIntentInner(query.toLowerCase());
+  if (direct.kind !== 'GENERAL') return direct;
+  // Pass 2: fuzz-correct unknown tokens, retry. Only runs when pass 1 missed,
+  // so brand names like "Yogurtland" never get rewritten.
+  const fuzzed = fuzzyNormalizeQuery(query);
+  if (fuzzed && fuzzed !== query.toLowerCase()) {
+    return parseSearchIntentInner(fuzzed);
+  }
+  return { kind: 'GENERAL' };
+}
+
+function parseSearchIntentInner(q: string): ParsedIntent {
   // Cultural umbrella terms (user culturally expects East/SE Asian, NOT Indian)
   if (/\basian\b/.test(q))             return { kind:'UMBRELLA', cultureKey:'asian',         ...CULTURAL_INTENTS.asian };
   if (/\blatin\b|\blatino\b/.test(q))  return { kind:'UMBRELLA', cultureKey:'latin',         ...CULTURAL_INTENTS.latin };
@@ -879,22 +1131,21 @@ Deno.serve(async (req) => {
     const isRawFoodNoun = !baseTypes.length && semanticQuery &&
       !/restaurant|food|near me|cafe|bar|bakery|shop|grill|diner|bistro|place/i.test(semanticQuery);
 
-    if (isRawFoodNoun) {
-      if (intent.kind === 'DISH' && (intent as any).tier1Types?.length > 0) {
-        const tier1Type = (intent as any).tier1Types[0];
-        const expertType = tier1Type.replace(/_/g, ' ');
-        semanticQuery = `${semanticQuery} ${expertType}`;
+    if (isRawFoodNoun && intent.kind === 'DISH' && (intent as any).tier1Types?.length > 0) {
+      const tier1Type = (intent as any).tier1Types[0];
+      const expertType = tier1Type.replace(/_/g, ' ');
+      semanticQuery = `${semanticQuery} ${expertType}`;
 
-        // Skip dual query when the dish IS the cuisine (pizza/sushi/ramen/bakery
-        // bare query would near-duplicate the specialist query).
-        const SKIP_DUAL = new Set(['pizza_restaurant','sushi_restaurant','ramen_restaurant','bakery']);
-        if (!SKIP_DUAL.has(tier1Type)) {
-          dishHasItQuery = rawQuery.replace(/\bbest\b/i, '').trim();
-        }
-      } else {
-        semanticQuery = `${semanticQuery} shop or restaurant`;
+      // Skip dual query when the dish IS the cuisine (pizza/sushi/ramen/bakery
+      // bare query would near-duplicate the specialist query).
+      const SKIP_DUAL = new Set(['pizza_restaurant','sushi_restaurant','ramen_restaurant','bakery']);
+      if (!SKIP_DUAL.has(tier1Type)) {
+        dishHasItQuery = rawQuery.replace(/\bbest\b/i, '').trim();
       }
     }
+    // GENERAL + raw query falls through unchanged. Google's text search is
+    // brand-aware ("Yogurtland") and category-aware ("snacks", "outdoor seating")
+    // — appending "shop or restaurant" only mangled the signal.
 
     // Weave in the Base Types (e.g., "bakery", "vegan")
     if (baseTypes.length) {
@@ -1020,14 +1271,16 @@ Deno.serve(async (req) => {
     const isDishSearch = intent.kind === 'DISH';
     const skipNearby = hasAdvancedFilters || (!!searchQuery?.trim() && !isDishSearch);
 
-    // For DISH searches, broaden the pool with generic foodservice categories.
-    // The text-search query ("{dish} {tier1Type}") already targets specialists
-    // (e.g. "pancakes breakfast restaurant"), so nearby's job here is to surface
-    // chains/bakeries/takeout that Google's text-search ranks too low because
-    // the dish is only one of many menu items (McDonald's pancakes, Corner Bakery
-    // pancakes, IHOP, etc.). 4 nearby calls capped — controlled cost.
+    // For DISH searches, broaden the pool with generic foodservice categories
+    // PLUS the dish's own specialist types. Without specialist types, narrow
+    // venues like ice_cream_shop / dessert_shop / juice_bar / boba_tea_shop /
+    // donut_shop never enter the candidate pool (text-search alone misses them).
+    // Worker's nearby KV cache is 3 days, so steady-state cost is unchanged.
     const DISH_BROAD_TYPES = ['restaurant', 'fast_food_restaurant', 'meal_takeaway', 'bakery'];
-    const dishNearbyTypes = isDishSearch ? DISH_BROAD_TYPES.slice() : [];
+    const dishSpecialistTypes: string[] = isDishSearch ? ((intent as any).tier1Types || []) : [];
+    const dishNearbyTypes = isDishSearch
+      ? Array.from(new Set([...dishSpecialistTypes, ...DISH_BROAD_TYPES]))
+      : [];
 
     const nearbyTypeList = skipNearby
       ? []
@@ -1356,12 +1609,36 @@ Deno.serve(async (req) => {
     }
 
     const DIETARY_FILTER_TYPES = ['halal', 'kosher', 'vegan', 'vegetarian', 'glutenFree'];
+    // Map DISH_MAP labels (and a few common synonyms) to dietary-filter keys
+    // so typing "halal"/"vegan"/"kosher"/"gluten free" in the search bar
+    // triggers the same strict filter as the dietary chip.
+    const DIETARY_INTENT_LABEL_TO_KEY: Record<string, string> = {
+      'halal': 'halal',
+      'kosher': 'kosher',
+      'vegan': 'vegan',
+      'vegetarian': 'vegetarian',
+      'gluten free': 'glutenFree',
+    };
+    const intentDietary = intent.kind === 'DISH'
+      ? (DIETARY_INTENT_LABEL_TO_KEY[((intent as any).label || '').toLowerCase()] || null)
+      : null;
+    // Compound modifier: dish intent + dietary word elsewhere in the query
+    // ("halal taco", "vegan ramen", "gluten-free pizza"). Detected here to
+    // avoid a circular dep with the fuzzy matcher.
+    const compoundDietary = detectDietaryModifier(
+      searchQuery || '',
+      intent.kind === 'DISH' ? (intent as any).label : null
+    );
+
     // Resolve the "effective" dietary for this request. Priority:
     //   1. cuisine itself (filter-only path, cuisine='kosher', no search)
     //   2. explicit activeDietary param (user typed a search + has dietary chip active)
+    //   3. compound dietary detected within the search text
+    //   4. dietary intent label from search text
     const effectiveDietary = DIETARY_FILTER_TYPES.includes(cuisine)
       ? cuisine
-      : (activeDietary && DIETARY_FILTER_TYPES.includes(activeDietary) ? activeDietary : null);
+      : (activeDietary && DIETARY_FILTER_TYPES.includes(activeDietary) ? activeDietary
+        : (compoundDietary || intentDietary));
 
     let finalPlaces = processedPlaces;
 
