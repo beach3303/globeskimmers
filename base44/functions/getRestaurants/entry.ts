@@ -1614,7 +1614,12 @@ Deno.serve(async (req) => {
       if (cuisine === 'vegetarian')
         return place.servesVegetarianFood === true || types.includes('vegetarian_restaurant') || /\bvegetarian\b/.test(text);
       if (cuisine === 'glutenFree')
-        return /\bgluten[\s-]?free\b|\bceliac\b|\bgf\s+menu\b/.test(text);
+        return /\bgluten[\s-]?free\b/.test(text)
+          || /\bceliac\b|\bcoeliac\b/.test(text)
+          || /\bgf\s*(?:menu|bakery|bread|pizza|pasta|options?|friendly)\b/.test(text)
+          || /\bdedicated\s+gluten[\s-]?free\b/.test(text)
+          || /\bwheat[\s-]?free\b/.test(text)
+          || /\bgfco\b|\bgluten[\s-]?free\s+certified\b/.test(text);
       return true;
     }
 
