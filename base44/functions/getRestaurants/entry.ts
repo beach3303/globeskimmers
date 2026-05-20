@@ -1314,15 +1314,29 @@ Deno.serve(async (req) => {
       ? Array.from(new Set([...dishSpecialistTypes, ...DISH_BROAD_TYPES]))
       : [];
 
-    // Venue-type chips inject their own nearby type list so the candidate
-    // pool stays populated even when hasAdvancedFilters forces skipNearby.
-    // - Bakery: 'bakery' only (pastry_shop / dessert_shop are uncertain
-    //   Google Places API New types — silent empty cache risk).
-    // - Bars & Pubs: bar + pub nearby.
-    // - Sports Bar (VIBE): sports_bar + bar nearby, POPULARITY-ranked so
+    // ── HYBRID SEARCH STRATEGY for venue-type chips ──────────────────────────
+    // When a venue-defining chip is active (Bakery & Pastry, Bars & Pubs,
+    // Sports Bar VIBE), the search runs in two parallel branches:
+    //
+    //   1. PRIMARY  — semantic text-search (the "bakeries and pastries" /
+    //      "bars pubs" / "sports bar" string assembled by the compiler
+    //      above), one call to Google's :searchText endpoint.
+    //   2. FALLBACK — type-based Nearby calls listed here, one call per
+    //      type to Google's :searchNearby endpoint, Promise.allSettled so
+    //      one failure (invalid type, timeout) doesn't kill the others.
+    //
+    // Results from both branches merge into allPlaces, deduped by placeId
+    // via seenPlaceIds Set, and every place — text or nearby — goes through
+    // isActuallyARestaurant before being added to the candidate pool.
+    //
+    // - Bakery: 5 types — 'bakery' is the canonical match; 'pastry_shop',
+    //   'dessert_shop', 'donut_shop', 'bagel_shop' broaden coverage so we
+    //   still surface results in areas where any single type is sparse.
+    // - Bars & Pubs: 2 types — bar + pub.
+    // - Sports Bar (VIBE): 2 types — sports_bar + bar, POPULARITY-ranked so
     //   famous spots like Rocco's, Barney's, Lucky Baldwin's (often 10-15mi
     //   away) surface instead of being crowded out by closer dive bars.
-    const bakeryNearbyTypes    = filterBakery ? ['bakery'] : [];
+    const bakeryNearbyTypes    = filterBakery ? ['bakery', 'pastry_shop', 'dessert_shop', 'donut_shop', 'bagel_shop'] : [];
     const barsNearbyTypes      = filterBars   ? ['bar', 'pub'] : [];
     const sportsBarVibeActive  = !!(filterVibes as any)?.sportsBar;
     const sportsBarNearbyTypes = sportsBarVibeActive ? ['sports_bar', 'bar'] : [];
@@ -1340,13 +1354,28 @@ Deno.serve(async (req) => {
           ? Array.from(new Set([...NEARBY_TYPES_ALL, ...venueChipTypes]))
           : Array.from(new Set([...(NEARBY_TYPES_CUISINE[cuisine] || ['restaurant']), ...venueChipTypes]));
 
-    // Nearby ranking strategy:
-    // POPULARITY — for sports bars only. Surfaces well-known spots like
-    //   Rocco's Tavern, Lucky Baldwin's, Barney's Beanery even when 10-15mi
-    //   away. DISTANCE would fill all 20 slots with the closest dive bars
-    //   first and miss the famous game-day venues.
-    // DISTANCE — every other case (food, bakery, bars). Nearest first.
-    const nearbyRankBy = (cuisine === 'sports_bar' || sportsBarVibeActive) ? 'POPULARITY' : 'DISTANCE';
+    // Per-type ranking strategy. Each type in the fan-out picks its own
+    // rankBy so we don't bleed POPULARITY into unrelated cuisines (e.g.
+    // when filterBakery + cuisine='italian' both active, italian_restaurant
+    // calls stay DISTANCE).
+    //
+    // - Bakery types: radius-aware hybrid. ≤5mi → DISTANCE (convenience-
+    //   first: the user wants the closest croissant). >5mi → POPULARITY
+    //   (quality-first: they're willing to travel for a famous bakery).
+    // - Sports bar types: always POPULARITY when the chip is active.
+    //   Surfaces Rocco's Tavern, Lucky Baldwin's, Barney's Beanery from
+    //   10-15mi away. DISTANCE would fill 20 slots with the closest dive
+    //   bars and miss the famous game-day venues.
+    // - Everything else: DISTANCE.
+    const BAKERY_TYPES_SET = new Set(['bakery','pastry_shop','dessert_shop','donut_shop','bagel_shop']);
+    const SPORTS_TYPES_SET = new Set(['sports_bar','bar']);
+    const BAKERY_RANK_BY: 'POPULARITY' | 'DISTANCE' = radiusMiles > 5 ? 'POPULARITY' : 'DISTANCE';
+    const SPORTS_BAR_ACTIVE = sportsBarVibeActive || cuisine === 'sports_bar';
+    const rankByForType = (type: string): 'POPULARITY' | 'DISTANCE' => {
+      if (filterBakery && BAKERY_TYPES_SET.has(type)) return BAKERY_RANK_BY;
+      if (SPORTS_BAR_ACTIVE && SPORTS_TYPES_SET.has(type)) return 'POPULARITY';
+      return 'DISTANCE';
+    };
 
     const nearbyPromise = Promise.allSettled(
       nearbyTypeList.map(async (type) => {
@@ -1357,7 +1386,7 @@ Deno.serve(async (req) => {
             longitude:  String(longitude),
             radius:     String(Math.min(radius, 50000)),
             maxResults: '20',
-            rankBy:     nearbyRankBy,
+            rankBy:     rankByForType(type),
             // v5.0: pass server-side filters to nearby search too
             ...(filterOpenNow               ? { openNow: 'true' }                : {}),
             ...(filterMinRating > 0         ? { minRating: String(filterMinRating) } : {}),
@@ -1443,7 +1472,10 @@ Deno.serve(async (req) => {
                 const fbData = await fbRes.json();
                 for (const place of fbData.places || []) {
                   const pid = place.id || place.placeId;
-                  if (pid && !seenPlaceIds.has(pid)) { seenPlaceIds.add(pid); allPlaces.push(place); }
+                  if (pid && !seenPlaceIds.has(pid) && isActuallyARestaurant(place)) {
+                    seenPlaceIds.add(pid);
+                    allPlaces.push(place);
+                  }
                 }
                 console.log(`   Fallback got ${fbData.places?.length || 0}`);
               }
@@ -1462,7 +1494,7 @@ Deno.serve(async (req) => {
 
           for (const place of places) {
             const pid = place.id || place.placeId;
-            if (pid && !seenPlaceIds.has(pid)) {
+            if (pid && !seenPlaceIds.has(pid) && isActuallyARestaurant(place)) {
               seenPlaceIds.add(pid);
               allPlaces.push(place);
             }
