@@ -1108,7 +1108,10 @@ Deno.serve(async (req) => {
       const needsVenue = !/(shop|dining|bar|restaurant|desserts?)/i.test(friendly);
       baseTypes.push(needsVenue ? `${friendly} restaurant` : friendly);
     }
-    if (filterBakery) baseTypes.push('bakery pastry');
+    // Bakery text query: "bakeries and pastries" (vs the older "bakery pastry")
+    // — natural-language phrasing Google text-search ranks better, AND a fresh
+    // cache key so we don't hit any stale-empty entries from the prior phrasing.
+    if (filterBakery) baseTypes.push('bakeries and pastries');
     if (filterBars)   baseTypes.push('bars pubs');
     // v5.4: Sports Bar vibe was previously handled by a dedicated frontend
     // fetch with cuisine='sports_bar'. After unifying to mainFetch the
@@ -1311,33 +1314,39 @@ Deno.serve(async (req) => {
       ? Array.from(new Set([...dishSpecialistTypes, ...DISH_BROAD_TYPES]))
       : [];
 
-    // When the Bakery & Pastry chip is active, ensure bakery types enter the
-    // candidate pool even though hasAdvancedFilters suppresses generic nearby.
-    // The text search "bakery pastry" alone returns max ~20 candidates and
-    // often empties to 0 after client-side filters (Open Now, Min Rating,
-    // etc.). A targeted 3-type nearby fan-out adds up to 60 more candidates,
-    // all KV-cached for 3 days so steady-state cost is ~$0.
-    const bakeryNearbyTypes = filterBakery ? ['bakery', 'pastry_shop', 'dessert_shop'] : [];
+    // Venue-type chips inject their own nearby type list so the candidate
+    // pool stays populated even when hasAdvancedFilters forces skipNearby.
+    // - Bakery: 'bakery' only (pastry_shop / dessert_shop are uncertain
+    //   Google Places API New types — silent empty cache risk).
+    // - Bars & Pubs: bar + pub nearby.
+    // - Sports Bar (VIBE): sports_bar + bar nearby, POPULARITY-ranked so
+    //   famous spots like Rocco's, Barney's, Lucky Baldwin's (often 10-15mi
+    //   away) surface instead of being crowded out by closer dive bars.
+    const bakeryNearbyTypes    = filterBakery ? ['bakery'] : [];
+    const barsNearbyTypes      = filterBars   ? ['bar', 'pub'] : [];
+    const sportsBarVibeActive  = !!(filterVibes as any)?.sportsBar;
+    const sportsBarNearbyTypes = sportsBarVibeActive ? ['sports_bar', 'bar'] : [];
+    const venueChipTypes = Array.from(new Set([
+      ...bakeryNearbyTypes,
+      ...barsNearbyTypes,
+      ...sportsBarNearbyTypes,
+    ]));
 
     const nearbyTypeList = skipNearby
-      ? bakeryNearbyTypes
+      ? venueChipTypes
       : isDishSearch
-        ? Array.from(new Set([...dishNearbyTypes, ...bakeryNearbyTypes]))
+        ? Array.from(new Set([...dishNearbyTypes, ...venueChipTypes]))
         : cuisine === 'all'
-          ? Array.from(new Set([...NEARBY_TYPES_ALL, ...bakeryNearbyTypes]))
-          : Array.from(new Set([...(NEARBY_TYPES_CUISINE[cuisine] || ['restaurant']), ...bakeryNearbyTypes]));
+          ? Array.from(new Set([...NEARBY_TYPES_ALL, ...venueChipTypes]))
+          : Array.from(new Set([...(NEARBY_TYPES_CUISINE[cuisine] || ['restaurant']), ...venueChipTypes]));
 
-    // Sports bar nearby ranking strategy:
-    // POPULARITY — surfaces well-known sports bars like Rocco's Tavern, Lucky Baldwin's,
-    //   Barney's Beanery even when they're 10-15mi away (Pasadena, not Arcadia local).
-    //   Without POPULARITY, DISTANCE fills all 20 slots with the closest dive bars first,
-    //   leaving out the famous game-day spots in Pasadena that users actually want.
-    // DISTANCE — correct for all food cuisines: nearest restaurants always most useful.
-    // POPULARITY for sports_bar and bakery — DISTANCE fills 20 slots with closest,
-    // missing famous/popular spots further away. POPULARITY surfaces the best ones
-    // across the full radius. All other cuisines use DISTANCE (nearest first).
-    // Bakery uses DISTANCE (nearest outward) like normal food — POPULARITY was starving close results
-    const nearbyRankBy = cuisine === 'sports_bar' ? 'POPULARITY' : 'DISTANCE';
+    // Nearby ranking strategy:
+    // POPULARITY — for sports bars only. Surfaces well-known spots like
+    //   Rocco's Tavern, Lucky Baldwin's, Barney's Beanery even when 10-15mi
+    //   away. DISTANCE would fill all 20 slots with the closest dive bars
+    //   first and miss the famous game-day venues.
+    // DISTANCE — every other case (food, bakery, bars). Nearest first.
+    const nearbyRankBy = (cuisine === 'sports_bar' || sportsBarVibeActive) ? 'POPULARITY' : 'DISTANCE';
 
     const nearbyPromise = Promise.allSettled(
       nearbyTypeList.map(async (type) => {
@@ -1750,8 +1759,10 @@ Deno.serve(async (req) => {
         // Distance: nearest first — they're hungry
         return (a.distanceKm || 999) - (b.distanceKm || 999);
       });
-    } else if (cuisine === 'sports_bar') {
-      // Sort by quality so amazing spots further away don't get sliced off at the 40-item cutoff
+    } else if (cuisine === 'sports_bar' || sportsBarVibeActive) {
+      // Sort by quality so amazing spots further away don't get sliced off
+      // at the 40-item cutoff. Also fires on the Sports Bar VIBE chip so
+      // famous Pasadena spots (Rocco's, Barney's, Lucky Baldwin's) survive.
       finalPlaces.sort((a, b) => {
         const qa = (a.rating || 0) * Math.log10(Math.max(a.userRatingCount || 1, 1));
         const qb = (b.rating || 0) * Math.log10(Math.max(b.userRatingCount || 1, 1));
