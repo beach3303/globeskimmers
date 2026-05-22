@@ -908,6 +908,24 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     const menuDishes = (place.menuDishes || []) as string[];
     if (menuDishes.length && dishWords.some(w => menuDishes.some(md => md.includes(w)))) return 4;
 
+    // 5. Native Google Places API (New) AI fields — additive signal layer,
+    // returned on text-search when TEXT_SEARCH_AI_FIELDS is in the mask.
+    // generativeSummary is a Gemini-generated overview of the place; if
+    // it mentions the dish, the place serves it.
+    const aiSummary = ((place.generativeSummary?.overview?.text) || '').toString().toLowerCase();
+    if (aiSummary && dishWords.some(w => aiSummary.includes(w))) return 4;
+
+    // 6. Native Google query-aware review snippets. Google pre-matches
+    // review text to the user's query and returns just the relevant
+    // excerpts here. Mention = strong "Serves It" signal.
+    // r.text shape is { text: string, languageCode: string } per Google's
+    // schema, but defensive-handle the plain-string shape too.
+    const contextualReviewText = ((place.contextualContents?.reviews) || [])
+      .map((r: any) => (r?.text?.text || r?.text || '').toString())
+      .join(' ')
+      .toLowerCase();
+    if (contextualReviewText && dishWords.some(w => contextualReviewText.includes(w))) return 4;
+
     return 5;  // true noise — filtered out before returning to frontend
   }
   return 1;
