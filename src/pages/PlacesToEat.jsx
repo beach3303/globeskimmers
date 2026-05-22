@@ -340,6 +340,44 @@ function processRest(place, userLat, userLng) {
   if (open.is24Hours||vibes.lateNight)badges.push({ icon:'🌙', label:'Late Night',  color:'#1565C0', bg:'#E3F2FD' });
   if ((place.rating||0)>=4.7&&(place.userRatingCount||0)>500) badges.push({ icon:'⭐', label:'Top Rated', color:'#B45309', bg:'#FEF3C7' });
 
+  // ── REVIEW MERGE + DEDUP (Text Content Fingerprint) ─────────────────────
+  // Google's contextualContents.reviews are query-aware snippets (the
+  // reviews Google's index pre-matched to the user's search). Bubble those
+  // to the top of the displayed reviews stack; dedup any review that also
+  // appears in the standard place.reviews array using trimmed-text as the
+  // fingerprint key so we never render the same review twice.
+  const rawGenericReviews = /** @type {any[]} */ (place.reviews || []);
+  const rawContextualReviews = /** @type {any[]} */ (place.contextualContents?.reviews || []);
+  const normalizeReview = (/** @type {any} */ r) => ({
+    author: r.author || r.authorDisplayName || r.authorAttribution?.displayName || 'Anonymous',
+    rating: r.rating || 0,
+    text: r.text?.text || r.text || '',
+    time: r.time || r.relativePublishTimeDescription || '',
+    profilePhoto: r.profilePhoto || r.authorAttribution?.photoUri || null,
+  });
+  const genericReviews = rawGenericReviews.map(normalizeReview);
+  const contextualReviews = rawContextualReviews.map(normalizeReview);
+  /** @type {Set<string>} */
+  const seenReviewTexts = new Set();
+  /** @type {any[]} */
+  const deduplicatedReviews = [];
+  // 1. Push query-focused contextual reviews first
+  contextualReviews.forEach((/** @type {any} */ r) => {
+    const cleanText = r.text.trim();
+    if (cleanText && !seenReviewTexts.has(cleanText)) {
+      seenReviewTexts.add(cleanText);
+      deduplicatedReviews.push(r);
+    }
+  });
+  // 2. Append generic reviews only if their text footprint hasn't been seen yet
+  genericReviews.forEach((/** @type {any} */ r) => {
+    const cleanText = r.text.trim();
+    if (cleanText && !seenReviewTexts.has(cleanText)) {
+      seenReviewTexts.add(cleanText);
+      deduplicatedReviews.push(r);
+    }
+  });
+
   return {
     ...place,
     lat, lng, name,
@@ -357,13 +395,12 @@ function processRest(place, userLat, userLng) {
     customerFavorites: (place.customerFavorites || place.customer_favorites || [])
       .map(f => ({ ...f, dish: f.dish || f.name || '', name: f.name || f.dish || '' }))
       .filter(f => f.dish),
-    reviews: (place.reviews || []).map((r) => ({
-      rating: r.rating || 0,
-      text:   r.text?.text || r.text || '',
-      author: r.author || r.authorDisplayName || r.authorAttribution?.displayName || 'Anonymous',
-      time:   r.time || r.relativePublishTimeDescription || '',
-      profilePhoto: r.profilePhoto || r.authorAttribution?.photoUri || null,
-    })),
+    reviews: deduplicatedReviews,
+    // Native Google Places API (New) AI fields — passthrough for the
+    // expanded-card AI Summary panel. Already covered by ...place spread
+    // but listed explicitly so it's discoverable when reading processRest.
+    generativeSummary: place.generativeSummary || null,
+    contextualContents: place.contextualContents || null,
     parking: buildParking(place.parkingOptions) || place.parking || null,
     seating: place.seating || null,
     hasIndoorSeating:  place.hasIndoorSeating  ?? (place.dineIn===true)         ?? null,
@@ -629,6 +666,18 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
                   <div style={{padding:"12px",background:"#F0F9FF",borderRadius:"10px",border:"1px solid #BAE6FD"}}>
                     <div style={{fontSize:"11px",fontWeight:"700",color:"#0369A1",letterSpacing:"0.5px",marginBottom:"6px"}}>📖 ABOUT THIS PLACE</div>
                     <p style={{fontSize:"13px",lineHeight:"1.6",color:"#0C4A6E",margin:0}}>{restaurant.editorialSummary}</p>
+                  </div>
+                )}
+
+                {/* AI Venue Summary — Gemini-generated overview from Google Places (New) */}
+                {restaurant.generativeSummary?.overview?.text && (
+                  <div style={{padding:"12px",background:"#EFF6FF",borderRadius:"10px",border:"1px solid #BFDBFE"}}>
+                    <div style={{fontSize:"11px",fontWeight:"700",color:"#1E40AF",letterSpacing:"0.5px",marginBottom:"6px"}}>
+                      ✨ AI VENUE SUMMARY ({restaurant.generativeSummary.disclosureText?.text || "Summarized with Gemini"})
+                    </div>
+                    <p style={{fontSize:"13px",lineHeight:"1.6",color:"#1E3A8A",margin:0}}>
+                      {restaurant.generativeSummary.overview.text}
+                    </p>
                   </div>
                 )}
 
