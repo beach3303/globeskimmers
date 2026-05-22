@@ -7,15 +7,21 @@
  * - Estimated savings: ~75% on search API costs
  */
 
-// Text Search ONLY uses the standard SEARCH mask PLUS Google's native AI fields
-// (generativeSummary, contextualContents). Both fields are in the same
-// Pro/Enterprise SKU tier as our existing editorialSummary/dineIn/delivery/
-// outdoorSeating fields — adding them does NOT change per-call pricing. Scoped
-// to handleTextSearch only so we can isolate billing impact in the Google Cloud
-// Console before rolling out to other endpoints (handleNearbySearch,
-// handlePlaceDetails, handleDietarySearch, handleCoffeeSearch,
-// handleRestaurantSearch all stay on the standard SEARCH_FIELD_MASK).
-const TEXT_SEARCH_AI_FIELDS = 'places.generativeSummary,places.contextualContents';
+// Text Search ONLY uses the standard SEARCH mask PLUS Google's native
+// generativeSummary AI field (Gemini-powered place overview, Pro/Enterprise
+// SKU tier — same as our existing editorialSummary, so no per-call cost
+// change). Scoped to handleTextSearch only so we can isolate billing
+// impact in the Google Cloud Console before rolling out elsewhere.
+//
+// NOTE: 'places.contextualContents' is NOT a valid Google Places API (New)
+// field — verified empirically on 2026-05-22 when Google returned
+//   400 INVALID_ARGUMENT: Cannot find matching fields for path
+//   'places.contextualContents'.
+// Removed from the mask. The backend/frontend code that reads
+// place.contextualContents stays as a null-safe forward-compat path —
+// if/when we identify the real field name (or Google ships the field
+// later), we just add it back here.
+const TEXT_SEARCH_AI_FIELDS = 'places.generativeSummary';
 
 const CONFIG = {
   CACHE_TTL: {
