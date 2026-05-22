@@ -7,6 +7,16 @@
  * - Estimated savings: ~75% on search API costs
  */
 
+// Text Search ONLY uses the standard SEARCH mask PLUS Google's native AI fields
+// (generativeSummary, contextualContents). Both fields are in the same
+// Pro/Enterprise SKU tier as our existing editorialSummary/dineIn/delivery/
+// outdoorSeating fields — adding them does NOT change per-call pricing. Scoped
+// to handleTextSearch only so we can isolate billing impact in the Google Cloud
+// Console before rolling out to other endpoints (handleNearbySearch,
+// handlePlaceDetails, handleDietarySearch, handleCoffeeSearch,
+// handleRestaurantSearch all stay on the standard SEARCH_FIELD_MASK).
+const TEXT_SEARCH_AI_FIELDS = 'places.generativeSummary,places.contextualContents';
+
 const CONFIG = {
   CACHE_TTL: {
     // Fresh windows — within this age, cache is returned as-is.
@@ -281,7 +291,12 @@ function normalizePlace(place, baseUrl = '', includeReviews = false) {
     paymentOptions: place.paymentOptions || null,
     accessibilityOptions: place.accessibilityOptions || null,
     businessStatus: place.businessStatus || null,
-    servesCocktails: place.servesCocktails || false
+    servesCocktails: place.servesCocktails || false,
+    // Native Google Places API (New) AI fields. Only populated for places
+    // Google has analyzed AND only returned when requested via field mask
+    // (currently scoped to handleTextSearch via TEXT_SEARCH_AI_FIELDS).
+    generativeSummary: place.generativeSummary || null,
+    contextualContents: place.contextualContents || null
   };
 
   if (includeReviews) {
@@ -364,7 +379,7 @@ async function handleTextSearch(request, env, ctx) {
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': CONFIG.SEARCH_FIELD_MASK
+        'X-Goog-FieldMask': CONFIG.SEARCH_FIELD_MASK + ',' + TEXT_SEARCH_AI_FIELDS
       },
       body: JSON.stringify({
         textQuery,
