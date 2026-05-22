@@ -7,21 +7,30 @@
  * - Estimated savings: ~75% on search API costs
  */
 
-// Text Search ONLY uses the standard SEARCH mask PLUS Google's native
-// generativeSummary AI field (Gemini-powered place overview, Pro/Enterprise
-// SKU tier — same as our existing editorialSummary, so no per-call cost
-// change). Scoped to handleTextSearch only so we can isolate billing
-// impact in the Google Cloud Console before rolling out elsewhere.
+// Text Search ONLY uses the standard SEARCH mask PLUS Google's native AI
+// fields. Pro/Enterprise SKU tier — same as our existing editorialSummary,
+// so no per-call cost change. Scoped to handleTextSearch only so cost
+// impact is isolated to text-search calls.
 //
-// NOTE: 'places.contextualContents' is NOT a valid Google Places API (New)
-// field — verified empirically on 2026-05-22 when Google returned
-//   400 INVALID_ARGUMENT: Cannot find matching fields for path
-//   'places.contextualContents'.
-// Removed from the mask. The backend/frontend code that reads
-// place.contextualContents stays as a null-safe forward-compat path —
-// if/when we identify the real field name (or Google ships the field
-// later), we just add it back here.
-const TEXT_SEARCH_AI_FIELDS = 'places.generativeSummary';
+//   places.generativeSummary          — Gemini-powered place overview, lives
+//                                       INSIDE each Place object.
+//   contextualContents.reviews        — query-aware review snippets, lives
+//                                       at the TOP LEVEL of the response as
+//                                       a sibling to places[], index-aligned.
+//   contextualContents.photos         — query-aware photo subset, same shape.
+//
+// EXPERIMENTAL — Google explicitly marks contextualContents experimental
+// (per https://developers.google.com/maps/documentation/places/web-service/
+//  experimental/places-generative). Field may change/disappear; integration
+// is null-safe end-to-end so worst case we silently lose the feature.
+//
+// HISTORY: 'places.contextualContents' was tried on 2026-05-22 — Google
+// returned 400 INVALID_ARGUMENT because contextualContents is NOT under
+// places[]. The correct path (verified against Google's official searchText
+// reference) uses no 'places.' prefix. handleTextSearch below merges the
+// top-level array into each place by position before normalizePlace runs.
+const TEXT_SEARCH_AI_FIELDS =
+  'places.generativeSummary,contextualContents.reviews,contextualContents.photos';
 
 const CONFIG = {
   CACHE_TTL: {
@@ -402,7 +411,14 @@ async function handleTextSearch(request, env, ctx) {
       throw err;
     }
     const data = await response.json();
-    const places = (data.places || []).map(p => normalizePlace(p, baseUrl, false));
+    // contextualContents is a top-level array, index-aligned with places[].
+    // Inject each entry onto its place so normalizePlace's existing
+    // passthrough (line ~295) surfaces it on the normalized object.
+    const contextualContents = data.contextualContents || [];
+    const places = (data.places || []).map((p, i) => {
+      p.contextualContents = contextualContents[i] || null;
+      return normalizePlace(p, baseUrl, false);
+    });
     await setInCache(env, cacheKey, places, FRESH + SWR);
     return places;
   };
