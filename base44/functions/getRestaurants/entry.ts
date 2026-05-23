@@ -65,18 +65,35 @@ const FOOD_TYPES = new Set([
 function isActuallyARestaurant(place: any): boolean {
   const types: string[] = place.types || [];
   const primaryType: string = place.primaryType || '';
-  // Exclude permanently or temporarily closed places (ghost restaurants)
+  // Always reject permanently/temporarily closed places (ghost restaurants).
   const status = (place.businessStatus || '').toUpperCase();
   if (status === 'CLOSED_PERMANENTLY' || status === 'CLOSED_TEMPORARILY') return false;
-  // Exclude grocery stores, retail, pharmacies, etc.
+
+  // Positive food signal first — these WIN over generic non-food/store tags.
+  // Google sometimes tags a clear food venue (ice_cream_shop / dessert_shop /
+  // bakery / pastry_shop / donut_shop / bagel_shop / *_restaurant) alongside
+  // a generic 'food_store' or 'convenience_store'. The old logic rejected on
+  // ANY non-food match, which silently stripped Yogurtland-style places that
+  // Google tags as both dessert_shop AND food_store. Now: if the place has a
+  // valid food/dining signal, it passes regardless of the generic non-food tag.
+  const hasFoodSignal =
+    FOOD_TYPES.has(primaryType) ||
+    primaryType.includes('restaurant') ||
+    primaryType.includes('cafe') ||
+    primaryType.includes('bar') ||
+    types.some(t =>
+      FOOD_TYPES.has(t) ||
+      t.includes('restaurant') ||
+      t.includes('cafe') ||
+      t.includes('bar') ||
+      t.includes('bakery')
+    );
+  if (hasFoodSignal) return true;
+
+  // No food signal → original rejection logic applies (non-food types removed).
   if (NON_FOOD_TYPES.has(primaryType)) return false;
   if (types.some(t => NON_FOOD_TYPES.has(t))) return false;
-  // Must have at least one food/dining type
-  return types.some(t => FOOD_TYPES.has(t) || t.includes('restaurant') || t.includes('cafe') || t.includes('bar') || t.includes('bakery')) ||
-         FOOD_TYPES.has(primaryType) ||
-         primaryType.includes('restaurant') ||
-         primaryType.includes('cafe') ||
-         primaryType.includes('bar');
+  return false;
 }
 
 // ─── SPORTS VIBE SCORE ────────────────────────────────────────────────────────
@@ -1327,7 +1344,14 @@ Deno.serve(async (req) => {
     // donut_shop never enter the candidate pool (text-search alone misses them).
     // Worker's nearby KV cache is 3 days, so steady-state cost is unchanged.
     const DISH_BROAD_TYPES = ['restaurant', 'fast_food_restaurant', 'meal_takeaway', 'bakery'];
-    const dishSpecialistTypes: string[] = isDishSearch ? ((intent as any).tier1Types || []) : [];
+    // Include BOTH tier1 and tier2 types so DISH searches like 'froyo' (tier1
+    // ice_cream_shop, tier2 dessert_shop) get nearby fan-out to both. Without
+    // tier2 here, Yogurtland-style places that Google primarily tags as
+    // dessert_shop (NOT ice_cream_shop) never enter the candidate pool from
+    // the nearby branch.
+    const dishSpecialistTypes: string[] = isDishSearch
+      ? [...((intent as any).tier1Types || []), ...((intent as any).tier2Types || [])]
+      : [];
     const dishNearbyTypes = isDishSearch
       ? Array.from(new Set([...dishSpecialistTypes, ...DISH_BROAD_TYPES]))
       : [];
@@ -1354,7 +1378,14 @@ Deno.serve(async (req) => {
     // - Sports Bar (VIBE): 2 types — sports_bar + bar, POPULARITY-ranked so
     //   famous spots like Rocco's, Barney's, Lucky Baldwin's (often 10-15mi
     //   away) surface instead of being crowded out by closer dive bars.
-    const bakeryNearbyTypes    = filterBakery ? ['bakery', 'pastry_shop', 'dessert_shop', 'donut_shop', 'bagel_shop'] : [];
+    // Typed-bakery detection: when the user types 'bakery' / 'bakeries' /
+    // 'pastry' / 'pastries' / 'patisserie' / 'boulangerie' / 'donut(s)' /
+    // 'doughnut(s)' / 'bagel(s)' in the search bar, trigger the same 5-type
+    // nearby fan-out as the Bakery & Pastry chip. The chip path was already
+    // covered; this extends symmetric coverage to typed queries.
+    const TYPED_BAKERY_PATTERN = /\b(?:bakery|bakeries|pastr(?:y|ies)|patisserie|boulangerie|donuts?|doughnuts?|bagels?)\b/i;
+    const typedBakeryActive = !!searchQuery?.trim() && TYPED_BAKERY_PATTERN.test(searchQuery);
+    const bakeryNearbyTypes    = (filterBakery || typedBakeryActive) ? ['bakery', 'pastry_shop', 'dessert_shop', 'donut_shop', 'bagel_shop'] : [];
     const barsNearbyTypes      = filterBars   ? ['bar', 'pub'] : [];
     const sportsBarVibeActive  = !!(filterVibes as any)?.sportsBar;
     const sportsBarNearbyTypes = sportsBarVibeActive ? ['sports_bar', 'bar'] : [];
