@@ -329,7 +329,11 @@ const KNOWN_BREAKFAST_CHAINS: string[] = [
 const BREAKFAST_PLAUSIBLE_TYPES = new Set([
   'breakfast_restaurant', 'brunch_restaurant',
   'diner',
-  'american_restaurant',
+  // 'american_restaurant' intentionally NOT included — Google tags
+  // Chick-fil-A, KFC, Applebee's, and similar fast-food chains with this
+  // type, so admitting it as a breakfast signal lets them tier 3/4 on
+  // pancakes searches even though they don't actually serve breakfast.
+  // McDonald's stays via KNOWN_BREAKFAST_CHAINS (chain list is trustworthy).
   'bakery', 'pastry_shop', 'donut_shop', 'bagel_shop',
 ]);
 
@@ -960,21 +964,17 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
       ...(intent.rawWords || []),
       ...(intent.nameKeywords || [])
     ].filter(Boolean)));
-    if (dishWords.some(w => name.includes(w))) return 1;          // namesake / specialty
-    if (intent.tier1Types.some(t => types.has(t))) return 2;      // cuisine specialist
-    if (intent.tier2Types.some(t => types.has(t))) return 3;      // secondary cuisine
 
-    // ── Tier 4 ("Serves It") gating ─────────────────────────────────────────
-    // For breakfasty queries (mealTime=breakfast/brunch), the broad text-match
-    // Tier 4 paths below (editorialSummary, reviewText, menuDishes,
-    // generativeSummary, contextualContents.reviews) are too eager and pull
-    // in fast-food chains (Taco Bell, Chick-fil-A, Burger King), coffee
-    // chains (Starbucks), and cross-cuisine venues (Auntie Qui Kitchen's
-    // Chinese scallion pancakes) whose reviews/summaries merely MENTION
-    // "pancake" in some context. Require the place to have a plausible
-    // breakfast venue type before the text-match paths can fire. Exempt
-    // paths (bakery type, KNOWN_BREAKFAST_CHAINS chain list, McDonald's via
-    // chain list) are unchanged — they're trustworthy on their own.
+    // ── Tier 2/3/4 gating for breakfasty queries ────────────────────────────
+    // For breakfasty queries (mealTime=breakfast/brunch), every type-match
+    // and text-match Tier path below is gated by hasBreakfastPlausibleType.
+    // Without this gate, fast-food chains tagged `american_restaurant`
+    // (Chick-fil-A, KFC) tier 3 via tier2Types, and chains whose reviews
+    // mention "pancake" tier 4 (Starbucks, Burger King, Taco Bell). The
+    // tag set deliberately excludes `american_restaurant` for this reason.
+    // EXEMPT paths (Tier 1 namesake name match, bakery type, McDonald's
+    // via KNOWN_BREAKFAST_CHAINS chain list) are unchanged — they're
+    // trustworthy on their own.
     // For non-breakfasty DISH searches, hasBreakfastPlausibleType=true so
     // this gate is a no-op (sushi/pho/tacos/etc. unaffected).
     const isBreakfasty = intent.mealTime === 'breakfast' || intent.mealTime === 'brunch';
@@ -982,6 +982,10 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
       BREAKFAST_PLAUSIBLE_TYPES.has(place.primaryType || '') ||
       [...types].some((t: string) => BREAKFAST_PLAUSIBLE_TYPES.has(t))
     );
+
+    if (dishWords.some(w => name.includes(w))) return 1;          // namesake / specialty (ungated — name match is trustworthy)
+    if (intent.tier1Types.some(t => types.has(t)) && hasBreakfastPlausibleType) return 2;  // cuisine specialist
+    if (intent.tier2Types.some(t => types.has(t)) && hasBreakfastPlausibleType) return 3;  // secondary cuisine
 
     // 1. editorialSummary text mentions the dish (free, in search response)
     const editorial = ((place.editorialSummary?.text || place.editorialSummary || '') as string).toString().toLowerCase();
