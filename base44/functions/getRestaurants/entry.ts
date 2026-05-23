@@ -314,6 +314,25 @@ const KNOWN_BREAKFAST_CHAINS: string[] = [
   "stack pancake",       // UK — pancake specialty
 ];
 
+// Breakfast-plausible venue types. Used by getTierForPlace to gate the
+// broad Tier 4 text-match paths (editorialSummary / reviewText / menuDishes /
+// generativeSummary / contextualContents.reviews) when the user searches a
+// breakfasty dish like pancakes/waffles. Without this gate, ANY place whose
+// reviews mention "pancake" tiers 4 — including Starbucks (review references
+// to pancake-flavored Frappuccinos), Burger King (historical breakfast menu),
+// Taco Bell, Chick-fil-A, and Chinese restaurants serving scallion pancakes.
+// Gating by plausible type filters those out while preserving legit Tier 4
+// for places that ARE breakfast venues per Google's type tagging.
+// NOTE: McDonald's primaryType=fast_food_restaurant is NOT in this set —
+// it stays via the KNOWN_BREAKFAST_CHAINS chain-list path, which is unrelated
+// to this gate (chain list is trustworthy on its own).
+const BREAKFAST_PLAUSIBLE_TYPES = new Set([
+  'breakfast_restaurant', 'brunch_restaurant',
+  'diner',
+  'american_restaurant',
+  'bakery', 'pastry_shop', 'donut_shop', 'bagel_shop',
+]);
+
 // Dish → expected primaryTypes (Tier 1 = specialist, Tier 2 = close match)
 // 80+ dishes mapped globally — covers Italian, Mexican, Japanese, Chinese, Korean,
 // Vietnamese, Thai, Indian, Filipino, Middle Eastern, European, South American,
@@ -944,11 +963,29 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     if (dishWords.some(w => name.includes(w))) return 1;          // namesake / specialty
     if (intent.tier1Types.some(t => types.has(t))) return 2;      // cuisine specialist
     if (intent.tier2Types.some(t => types.has(t))) return 3;      // secondary cuisine
-    // Tier 4 ("Serves It") — multiple positive signals that the place serves
-    // the dish without being a name/type/cuisine specialist.
+
+    // ── Tier 4 ("Serves It") gating ─────────────────────────────────────────
+    // For breakfasty queries (mealTime=breakfast/brunch), the broad text-match
+    // Tier 4 paths below (editorialSummary, reviewText, menuDishes,
+    // generativeSummary, contextualContents.reviews) are too eager and pull
+    // in fast-food chains (Taco Bell, Chick-fil-A, Burger King), coffee
+    // chains (Starbucks), and cross-cuisine venues (Auntie Qui Kitchen's
+    // Chinese scallion pancakes) whose reviews/summaries merely MENTION
+    // "pancake" in some context. Require the place to have a plausible
+    // breakfast venue type before the text-match paths can fire. Exempt
+    // paths (bakery type, KNOWN_BREAKFAST_CHAINS chain list, McDonald's via
+    // chain list) are unchanged — they're trustworthy on their own.
+    // For non-breakfasty DISH searches, hasBreakfastPlausibleType=true so
+    // this gate is a no-op (sushi/pho/tacos/etc. unaffected).
+    const isBreakfasty = intent.mealTime === 'breakfast' || intent.mealTime === 'brunch';
+    const hasBreakfastPlausibleType = !isBreakfasty || (
+      BREAKFAST_PLAUSIBLE_TYPES.has(place.primaryType || '') ||
+      [...types].some((t: string) => BREAKFAST_PLAUSIBLE_TYPES.has(t))
+    );
+
     // 1. editorialSummary text mentions the dish (free, in search response)
     const editorial = ((place.editorialSummary?.text || place.editorialSummary || '') as string).toString().toLowerCase();
-    if (editorial && dishWords.some(w => editorial.includes(w))) return 4;
+    if (hasBreakfastPlausibleType && editorial && dishWords.some(w => editorial.includes(w))) return 4;
 
     // 2. Meal-time signals: chains/bakeries that serve breakfast almost certainly
     // have pancakes/waffles/etc. on the menu. We INTENTIONALLY do NOT trust
@@ -960,7 +997,9 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     // (bakeries reliably stock breakfast pastries/pancakes/waffles) and a
     // curated KNOWN_BREAKFAST_CHAINS name match (IHOP, Denny's, Original
     // Pancake House, Black Bear Diner, Corner Bakery, Waffle House, etc.).
-    const isBreakfasty = intent.mealTime === 'breakfast' || intent.mealTime === 'brunch';
+    // These two paths are UNGATED — they're trustworthy on their own and
+    // are the reason McDonald's (fast_food_restaurant primaryType, not in
+    // BREAKFAST_PLAUSIBLE_TYPES) still appears in pancake results.
     if (isBreakfasty) {
       if (types.has('bakery') || place.primaryType === 'bakery') return 4;
       if (KNOWN_BREAKFAST_CHAINS.some(c => name.includes(c))) return 4;
@@ -972,18 +1011,18 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     if (intent.mealTime === 'dinner' && place.servesDinner === true) return 4;
 
     // 3. Review-text mention (only fires if Details was hydrated for this place)
-    if (dishWords.some(w => reviewText.includes(w))) return 4;
+    if (hasBreakfastPlausibleType && dishWords.some(w => reviewText.includes(w))) return 4;
 
     // 4. Menu OCR dish list (populated by /label-photos worker endpoint, 180d cache)
     const menuDishes = (place.menuDishes || []) as string[];
-    if (menuDishes.length && dishWords.some(w => menuDishes.some(md => md.includes(w)))) return 4;
+    if (hasBreakfastPlausibleType && menuDishes.length && dishWords.some(w => menuDishes.some(md => md.includes(w)))) return 4;
 
     // 5. Native Google Places API (New) AI fields — additive signal layer,
     // returned on text-search when TEXT_SEARCH_AI_FIELDS is in the mask.
     // generativeSummary is a Gemini-generated overview of the place; if
     // it mentions the dish, the place serves it.
     const aiSummary = ((place.generativeSummary?.overview?.text) || '').toString().toLowerCase();
-    if (aiSummary && dishWords.some(w => aiSummary.includes(w))) return 4;
+    if (hasBreakfastPlausibleType && aiSummary && dishWords.some(w => aiSummary.includes(w))) return 4;
 
     // 6. Native Google query-aware review snippets. Google pre-matches
     // review text to the user's query and returns just the relevant
@@ -994,7 +1033,7 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
       .map((r: any) => (r?.text?.text || r?.text || '').toString())
       .join(' ')
       .toLowerCase();
-    if (contextualReviewText && dishWords.some(w => contextualReviewText.includes(w))) return 4;
+    if (hasBreakfastPlausibleType && contextualReviewText && dishWords.some(w => contextualReviewText.includes(w))) return 4;
 
     return 5;  // true noise — filtered out before returning to frontend
   }
