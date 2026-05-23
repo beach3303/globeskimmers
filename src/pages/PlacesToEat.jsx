@@ -129,7 +129,11 @@ const CUISINE_TYPE_MAP = {
   halal:         ['halal_restaurant'],
   kosher:        ['kosher_restaurant'],
   dessert:       ['dessert_shop','ice_cream_shop','donut_shop'],
-  bakery:        ['bakery', 'pastry_shop', 'dessert_shop', 'donut_shop', 'bagel_shop'],
+  // 'bakery_cafe' is a custom synthetic primaryType assigned by processRest
+  // when a place tagged 'cafe' is actually a bakery (name contains "bakery",
+  // "pastry", "patisserie", etc.). Without this, cuisineTypeFilter strips
+  // every bakery-cafe off the screen when a non-'all' cuisine is selected.
+  bakery:        ['bakery', 'pastry_shop', 'dessert_shop', 'donut_shop', 'bagel_shop', 'bakery_cafe'],
 };
 
 // ─── BAR-DOMINANT DETECTION ──────────────────────────────────────────────────
@@ -863,6 +867,13 @@ export default function PlacesToEat() {
   // then MERGES them with the main results so filtering actually finds something.
   useEffect(() => {
     if (!lat || !lng) return;
+    // Race-condition cleanup flag. The useEffect re-fires on every filter /
+    // radius / search change. If an older slow fetch resolves AFTER a newer
+    // fast fetch, the older empty/wrong result could overwrite the newer
+    // correct result and leave the UI stuck on stale data. Setting `ignore`
+    // to true in the cleanup function makes any in-flight fetch from the
+    // previous render no-op when it eventually resolves.
+    let ignore = false;
     setLoading(true); setError(null); setFallbackInfo(null);
 
     // Consume the force-refresh flag once. Subsequent fetches triggered by
@@ -915,6 +926,7 @@ export default function PlacesToEat() {
           filterVibes, filterDietary,
           forceRefresh: force,
         });
+        if (ignore) return; // a newer fetch already resolved — drop this one
 
         const places = data?.places || data?.restaurants || [];
         if (data?.fallbackInfo) setFallbackInfo(data.fallbackInfo);
@@ -927,9 +939,16 @@ export default function PlacesToEat() {
           setRestaurants([]); // Clear stale results so the UI doesn't show "67 results" from a prior fetch
           setError(data?.error || "No results found. Try expanding your radius.");
         }
-      } catch(e) { setError(`Failed to load: ${e.message}`); }
-      finally { setLoading(false); }
+      } catch(e) {
+        if (ignore) return; // ignore stale-fetch errors too
+        setError(`Failed to load: ${e.message}`);
+      }
+      finally {
+        if (!ignore) setLoading(false);
+      }
     })();
+
+    return () => { ignore = true; };
   // Every filter is now part of the backend's Semantic Text Compiler payload,
   // so every change must trigger a re-fetch. Using JSON.stringify for the
   // object states (filterVibes, filterDietary) so React sees deep changes.
