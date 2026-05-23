@@ -1599,6 +1599,13 @@ Deno.serve(async (req) => {
     // ── FILTER OUT NON-RESTAURANTS (retail stores, etc.) ─────────────────────
     const foodPlaces = allPlaces.filter(isActuallyARestaurant);
     console.log(`🍔 After restaurant filter: ${foodPlaces.length} (removed ${allPlaces.length - foodPlaces.length} non-food)`);
+    // ─── TEMP DIAGNOSTIC (Step 0.13) ─────────────────────────────────────
+    // Log the first few rejected places so we can see WHY isActuallyARestaurant
+    // dropped them. Remove this once 0-results bug is verified fixed.
+    if (allPlaces.length > foodPlaces.length) {
+      const rejected = allPlaces.filter(p => !isActuallyARestaurant(p)).slice(0, 5);
+      console.log(`🔍 DIAG rejected sample: ${rejected.map((p: any) => `${(p.displayName?.text || p.name || '?').slice(0,30)} [primary=${p.primaryType} types=${(p.types||[]).slice(0,4).join('/')}]`).join(' | ')}`);
+    }
 
     // ── NORMALIZE ALL places first (need distance to sort correctly) ──────────
     // NOTE: slice happens AFTER sort — so we return the 40 CLOSEST, not the
@@ -1877,6 +1884,17 @@ Deno.serve(async (req) => {
     // can preserve the intent-aware order even if it re-sorts.
     const intentSorted = intent.kind !== 'GENERAL' && !!searchQuery?.trim();
     finalPlaces.forEach((p: any, i: number) => { p.backendRank = i + 1; });
+
+    // ─── TEMP DIAGNOSTIC (Step 0.13) ─────────────────────────────────────
+    // Log per-stage drop counts + tier distribution + final names to expose
+    // exactly where results get stripped. Remove once 0-results bug is fixed.
+    const tierCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    processedPlaces.forEach((p: any) => { const t = p.tier || 5; if (tierCounts[t] !== undefined) tierCounts[t]++; });
+    console.log(`📊 DIAG tiers: 1=${tierCounts[1]} 2=${tierCounts[2]} 3=${tierCounts[3]} 4=${tierCounts[4]} 5=${tierCounts[5]}`);
+    console.log(`🎯 DIAG FINAL: ${finalPlaces.length} places. First 5: ${finalPlaces.slice(0,5).map((p: any) => p.name || p.displayName?.text || '?').join(', ')}`);
+    if (finalPlaces.length === 0 && allPlaces.length > 0) {
+      console.warn(`⚠️  DIAG ZERO RESULTS but Worker returned ${allPlaces.length}. Drops: food=${allPlaces.length - foodPlaces.length} (rejected by isActuallyARestaurant), proc=${foodPlaces.length - processedPlaces.length} (distance/normalize), final=${processedPlaces.length - finalPlaces.length} (dietary/tier-5/sort)`);
+    }
 
     // ── DISH-FIRST PHOTO ORDERING + MENU OCR FOR TIER 4 ─────────────────────
     // For DISH queries, eager-label the first 20 visible cards' photos via the
