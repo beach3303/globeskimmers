@@ -984,6 +984,33 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     );
 
     if (dishWords.some(w => name.includes(w))) return 1;          // namesake / specialty (ungated — name match is trustworthy)
+
+    // ── Step 4.9 belt-and-suspenders reject ────────────────────────────────
+    // For breakfasty queries, hard-reject coffee chains and fast-food chains
+    // UNLESS in KNOWN_BREAKFAST_CHAINS. Tighter than the BREAKFAST_PLAUSIBLE_
+    // TYPES gate: Starbucks (cafe / coffee_shop), KFC / BK / Taco Bell / CFA
+    // (fast_food_restaurant) carry no breakfast plausible type so they should
+    // already tier 5 — but this is a backstop in case another code path or
+    // a Google type retagging leaks them past the gate. McDonald's stays via
+    // KNOWN_BREAKFAST_CHAINS (fast_food_restaurant + chain list match).
+    // SCOPE: breakfasty mealTime only — sushi / pho / tacos / ramen / burgers
+    // searches all unaffected.
+    if (isBreakfasty) {
+      const inChainList = KNOWN_BREAKFAST_CHAINS.some(c => name.includes(c));
+      if (!inChainList) {
+        const primary = place.primaryType || '';
+        const isFastFood   = primary === 'fast_food_restaurant' || types.has('fast_food_restaurant');
+        const isCoffeeShop = primary === 'coffee_shop'          || types.has('coffee_shop');
+        if (isFastFood || isCoffeeShop) {
+          // TEMP DIAG (revert after Step 4.9 verified in prod): log every
+          // chain caught here so Base44 execution logs prove the deploy
+          // is live and show what types each chain carries.
+          console.log(`🍳 Step4.9 reject: name="${name}" primaryType="${primary}" types=[${[...types].slice(0, 6).join(',')}]`);
+          return 5;
+        }
+      }
+    }
+
     if (intent.tier1Types.some(t => types.has(t)) && hasBreakfastPlausibleType) return 2;  // cuisine specialist
     if (intent.tier2Types.some(t => types.has(t)) && hasBreakfastPlausibleType) return 3;  // secondary cuisine
 
