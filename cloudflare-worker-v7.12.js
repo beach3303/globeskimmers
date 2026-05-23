@@ -770,7 +770,11 @@ async function handleRestaurantSearch(request, env, ctx) {
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask': CONFIG.SEARCH_FIELD_MASK
+          // POST / is the main search endpoint the Base44 orchestration layer
+          // calls. Include the AI fields here (same as handleTextSearch above)
+          // so generativeSummary + contextualContents flow on every search,
+          // not just the fallback path.
+          'X-Goog-FieldMask': CONFIG.SEARCH_FIELD_MASK + ',' + TEXT_SEARCH_AI_FIELDS
         },
         body: JSON.stringify(requestBody)
       });
@@ -781,7 +785,12 @@ async function handleRestaurantSearch(request, env, ctx) {
         throw err;
       }
       const data = await response.json();
-      const restaurants = (data.places || []).map(p => {
+      // contextualContents is a top-level array, index-aligned with places[].
+      // Inject each entry onto its place so normalizePlace's existing
+      // passthrough surfaces it on the normalized object.
+      const contextualContents = data.contextualContents || [];
+      const restaurants = (data.places || []).map((p, i) => {
+        p.contextualContents = contextualContents[i] || null;
         const normalized = normalizePlace(p, baseUrl, false);
         return { ...normalized, customer_favorites: [], top_reviews: [], needsDetailsFetch: true };
       });
