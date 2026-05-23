@@ -297,6 +297,8 @@ const KNOWN_BREAKFAST_CHAINS: string[] = [
   "mimi's cafe", "coco's", "marie callender", "bob's big boy", "perkins",
   "village inn", "le pain quotidien", "einstein", "the original pancake",
   "stack'd", "another broken egg", "wildflower",
+  "norms",               // SoCal 24hr family chain — pancakes, French toast, breakfast platters
+
   // International expansion (Step 4.6, 2026-05-22)
   "tim hortons",         // Canada / US / Mexico / global
   "cora's",              // Canada — pancake-specialty breakfast chain
@@ -1480,8 +1482,26 @@ Deno.serve(async (req) => {
     const dishSpecialistTypes: string[] = isDishSearch
       ? [...((intent as any).tier1Types || []), ...((intent as any).tier2Types || [])]
       : [];
+    // Breakfasty DISH searches (pancakes / waffles / french toast / omelette /
+    // brunch / breakfast burrito / etc.) also fan out to bakery types so chains
+    // whose primaryType is `bakery` (Corner Bakery Cafe, Porto's, Panera, La
+    // Brea, Einstein Bros) reach the candidate pool. Without this, the dish
+    // nearby fan-out only covers [breakfast_restaurant, american_restaurant,
+    // diner] and bakery-typed chains never get queried even when they're in
+    // the radius. Once in the pool the existing tier logic handles them:
+    // Corner Bakery + Panera tier 4 via KNOWN_BREAKFAST_CHAINS, generic
+    // bakeries tier 4 via the primaryType=bakery ungated path at line ~1004.
+    // dessert_shop deliberately omitted — pancakes ≠ frozen yogurt / ice
+    // cream / candy shops.
+    const isBreakfastyDish = isDishSearch && (
+      (intent as any).mealTime === 'breakfast' ||
+      (intent as any).mealTime === 'brunch'
+    );
+    const breakfastyBakeryTypes = isBreakfastyDish
+      ? ['bakery', 'pastry_shop', 'donut_shop', 'bagel_shop']
+      : [];
     const dishNearbyTypes = isDishSearch
-      ? Array.from(new Set([...dishSpecialistTypes, ...DISH_BROAD_TYPES]))
+      ? Array.from(new Set([...dishSpecialistTypes, ...DISH_BROAD_TYPES, ...breakfastyBakeryTypes]))
       : [];
 
     // ── HYBRID SEARCH STRATEGY for venue-type chips ──────────────────────────
