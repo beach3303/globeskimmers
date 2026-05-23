@@ -43,6 +43,22 @@ const NON_FOOD_TYPES = new Set([
   'electronics_store', 'pet_store', 'shoe_store', 'jewelry_store',
 ]);
 
+// Strict non-food primaryTypes — places with these as their CANONICAL primary
+// type are real-world non-restaurants regardless of what auxiliary types they
+// carry. 7-Eleven (primaryType convenience_store) often has meal_takeaway in
+// its types because it sells hot food, which would let it pass the food-signal
+// check in isActuallyARestaurant. We veto via primaryType regardless. Real
+// food venues with these tags as siblings (e.g. a bakery that's also tagged
+// food_store) are unaffected — their primaryType is 'bakery', not 'food_store'.
+const STRICT_NON_FOOD_PRIMARY = new Set([
+  'convenience_store', 'gas_station', 'pharmacy', 'drug_store', 'car_wash',
+  'laundry', 'beauty_salon', 'hair_care', 'bank', 'atm',
+  'school', 'church', 'hospital', 'doctor',
+  'book_store', 'library', 'shopping_mall', 'furniture_store', 'home_goods_store',
+  'electronics_store', 'pet_store', 'shoe_store', 'jewelry_store',
+  'clothing_store', 'hardware_store', 'department_store',
+]);
+
 // Types that indicate a place is actually a food/dining venue
 const FOOD_TYPES = new Set([
   'restaurant', 'meal_delivery', 'meal_takeaway', 'cafe', 'bakery',
@@ -69,11 +85,21 @@ function isActuallyARestaurant(place: any): boolean {
   const status = (place.businessStatus || '').toUpperCase();
   if (status === 'CLOSED_PERMANENTLY' || status === 'CLOSED_TEMPORARILY') return false;
 
-  // Positive food signal first — these WIN over generic non-food/store tags.
+  // Strict primaryType veto BEFORE the food-signal check. Real-world non-
+  // restaurants (7-Eleven, gas stations, pharmacies) often have meal_takeaway
+  // or other food signals in their type list because they sell hot food /
+  // snacks — but their CANONICAL identity is the non-food primaryType. Reject
+  // them up front so they don't slip through. Step 0.13's food-signal-wins
+  // behavior is preserved for places where the non-food tag is a generic
+  // SIBLING (e.g. a bakery that's also tagged food_store has primaryType=bakery
+  // not primaryType=convenience_store, so this check doesn't fire).
+  if (STRICT_NON_FOOD_PRIMARY.has(primaryType)) return false;
+
+  // Positive food signal — wins over generic non-food/store SIBLING tags.
   // Google sometimes tags a clear food venue (ice_cream_shop / dessert_shop /
   // bakery / pastry_shop / donut_shop / bagel_shop / *_restaurant) alongside
-  // a generic 'food_store' or 'convenience_store'. The old logic rejected on
-  // ANY non-food match, which silently stripped Yogurtland-style places that
+  // a generic 'food_store' in its types array. The old logic rejected on ANY
+  // non-food match, which silently stripped Yogurtland-style places that
   // Google tags as both dessert_shop AND food_store. Now: if the place has a
   // valid food/dining signal, it passes regardless of the generic non-food tag.
   const hasFoodSignal =
@@ -1310,7 +1336,12 @@ Deno.serve(async (req) => {
       indian:        ['indian_restaurant'],
       mexican:       ['mexican_restaurant'],
       american:      ['american_restaurant', 'hamburger_restaurant'],
-      italian:       ['italian_restaurant', 'pizza_restaurant'],
+      // 'pizza_restaurant' INTENTIONALLY excluded from Italian nearby fan-out.
+      // Pizza chains (Domino's, Papa Johns, Little Caesars, Pizza Hut, Sbarro)
+      // were drowning the Italian chip's results in stuff that's pizza-only,
+      // not authentically Italian. They still appear under the Pizza chip
+      // (which has its own pizza_restaurant nearby fan-out below).
+      italian:       ['italian_restaurant'],
       pizza:         ['pizza_restaurant'],
       seafood:       ['seafood_restaurant'],
       mediterranean: ['mediterranean_restaurant', 'greek_restaurant'],
