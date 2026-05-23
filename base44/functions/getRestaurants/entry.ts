@@ -274,7 +274,7 @@ const KNOWN_BREAKFAST_CHAINS: string[] = [
 // 80+ dishes mapped globally — covers Italian, Mexican, Japanese, Chinese, Korean,
 // Vietnamese, Thai, Indian, Filipino, Middle Eastern, European, South American,
 // Southeast Asian, African, and American dishes.
-const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label: string; mealTime?: 'breakfast' | 'brunch' | 'lunch' | 'dinner' }> = [
+const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label: string; nameKeywords?: string[]; mealTime?: 'breakfast' | 'brunch' | 'lunch' | 'dinner' }> = [
   // ── Japanese ────────────────────────────────────────────────────────────────
   { pattern: /\bsushi\b/,                              tier1:['sushi_restaurant'],                                        tier2:['japanese_restaurant'],                            label:'sushi' },
   { pattern: /\bramen\b/,                              tier1:['ramen_restaurant'],                                        tier2:['japanese_restaurant'],                            label:'ramen' },
@@ -813,7 +813,7 @@ function detectDietaryModifier(query: string, dishLabel: string | null): string 
 
 type ParsedIntent =
   | { kind: 'UMBRELLA'; cultureKey: string; label: string; types: Set<string>; keywords: string[] }
-  | { kind: 'DISH'; label: string; tier1Types: string[]; tier2Types: string[]; rawWords: string[]; mealTime?: 'breakfast' | 'brunch' | 'lunch' | 'dinner' }
+  | { kind: 'DISH'; label: string; tier1Types: string[]; tier2Types: string[]; rawWords: string[]; nameKeywords: string[]; mealTime?: 'breakfast' | 'brunch' | 'lunch' | 'dinner' }
   | { kind: 'GENERAL' };
 
 function parseSearchIntent(query: string): ParsedIntent {
@@ -868,7 +868,7 @@ function parseSearchIntentInner(q: string): ParsedIntent {
       // instead of just the canonical label ("pasta").
       const matched = (m[0] || '').toLowerCase();
       const rawWords = Array.from(new Set(matched.split(/\s+/).filter(w => w.length >= 3)));
-      return { kind:'DISH', label:entry.label, tier1Types:entry.tier1, tier2Types:entry.tier2, rawWords, mealTime:entry.mealTime };
+      return { kind:'DISH', label:entry.label, tier1Types:entry.tier1, tier2Types:entry.tier2, rawWords, nameKeywords: entry.nameKeywords || [], mealTime:entry.mealTime };
     }
   }
   return { kind: 'GENERAL' };
@@ -886,12 +886,16 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     return 4;
   }
   if (intent.kind === 'DISH') {
-    // Words that count as a "namesake" match: the canonical label plus whatever
-    // the user actually typed. Lets "Old Spaghetti Factory" rank Tier 1 on a
-    // "spaghetti" search even though the canonical label is "pasta".
+    // Words that count as a "namesake" match: the canonical label, what the
+    // user actually typed, AND the curated nameKeywords for this dish. Lets
+    // "Old Spaghetti Factory" rank Tier 1 on a "spaghetti" search (rawWords)
+    // AND lets "Yogurtland" rank Tier 1 on a "froyo" search (nameKeywords).
+    // Without nameKeywords, namesake matching only catches places that
+    // happen to contain the literal user-typed word.
     const dishWords = Array.from(new Set([
       intent.label.toLowerCase(),
-      ...(intent.rawWords || [])
+      ...(intent.rawWords || []),
+      ...(intent.nameKeywords || [])
     ].filter(Boolean)));
     if (dishWords.some(w => name.includes(w))) return 1;          // namesake / specialty
     if (intent.tier1Types.some(t => types.has(t))) return 2;      // cuisine specialist
