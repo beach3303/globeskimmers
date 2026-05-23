@@ -907,18 +907,23 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     if (editorial && dishWords.some(w => editorial.includes(w))) return 4;
 
     // 2. Meal-time signals: chains/bakeries that serve breakfast almost certainly
-    // have pancakes/waffles/etc. on the menu. Google's serves* booleans are
-    // often null/undefined for chains even when they obviously serve breakfast,
-    // so we layer multiple signals: the explicit flag, primaryType=bakery
-    // (bakeries reliably stock pancakes/waffles/french toast), and a known
-    // breakfast-chain name match (McDonald's, IHOP, Denny's, Corner Bakery,
-    // Waffle House, etc.).
+    // have pancakes/waffles/etc. on the menu. We INTENTIONALLY do NOT trust
+    // Google's place.servesBreakfast / place.servesBrunch booleans — they are
+    // stale for many chains (Taco Bell, KFC, Chick-fil-A, McDonald's, Burger
+    // King, Starbucks all came back as Tier 4 for "pancakes" in Arcadia, all
+    // via servesBreakfast=true from menus that haven't been updated since
+    // ~2014-2020). Instead we layer two reliable signals: primaryType=bakery
+    // (bakeries reliably stock breakfast pastries/pancakes/waffles) and a
+    // curated KNOWN_BREAKFAST_CHAINS name match (IHOP, Denny's, Original
+    // Pancake House, Black Bear Diner, Corner Bakery, Waffle House, etc.).
     const isBreakfasty = intent.mealTime === 'breakfast' || intent.mealTime === 'brunch';
     if (isBreakfasty) {
-      if (place.servesBreakfast === true || place.servesBrunch === true) return 4;
       if (types.has('bakery') || place.primaryType === 'bakery') return 4;
       if (KNOWN_BREAKFAST_CHAINS.some(c => name.includes(c))) return 4;
     }
+    // Lunch/dinner: Google's serves* booleans are less stale for these meals
+    // (every restaurant either does or doesn't serve lunch, no menu-rotation
+    // confusion like with breakfast). Keep for now; revisit if regressions appear.
     if (intent.mealTime === 'lunch'  && place.servesLunch  === true) return 4;
     if (intent.mealTime === 'dinner' && place.servesDinner === true) return 4;
 
