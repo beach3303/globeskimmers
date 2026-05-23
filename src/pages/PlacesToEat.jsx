@@ -768,6 +768,20 @@ function buildPopup(r, idx) {
     </div>`;
 }
 
+// ─── SESSION CACHE ────────────────────────────────────────────────────────────
+// Module-level cache of the most recent successful fetch. Survives navigation
+// away from PlacesToEat and back (component unmount/remount cycle), so we
+// don't re-hit the Google Places API just because the user navigated to a
+// different page and came back. Each unique (location + filters + search)
+// combination is its own cache key; if the user changes any filter the key
+// changes and we fetch fresh. The explicit refresh button (forceNextRef)
+// always bypasses this cache and forces a fresh fetch.
+// Lost on full page reload (intentional — page reload is the user's explicit
+// signal to reset state). Sized to one entry; toggling between two views
+// will still re-fetch on each toggle since only the most recent is cached.
+/** @type {{ paramsKey: string, restaurants: any[], fallbackInfo: any | null, displayCount: number } | null} */
+let placesToEatSessionCache = null;
+
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function PlacesToEat() {
   const [restaurants, setRestaurants]   = useState([]);
@@ -874,12 +888,34 @@ export default function PlacesToEat() {
     // to true in the cleanup function makes any in-flight fetch from the
     // previous render no-op when it eventually resolves.
     let ignore = false;
-    setLoading(true); setError(null); setFallbackInfo(null);
 
     // Consume the force-refresh flag once. Subsequent fetches triggered by
     // unrelated dep changes (radius, filters) won't pay for a forced refresh.
     const force = forceNextRef.current;
     forceNextRef.current = false;
+
+    // ── SESSION-CACHE HYDRATE ──────────────────────────────────────────────
+    // Cost-saving: skip the fetch entirely on plain page re-entry when the
+    // user's filter/location params exactly match the most recent successful
+    // fetch from earlier in this session. Filter/radius/search changes
+    // produce a different paramsKey → cache miss → fetch as before. Explicit
+    // refresh button (force=true) bypasses cache.
+    const paramsKey = JSON.stringify({
+      lat, lng, radius, primaryCuisine, searchText,
+      filterBakery, filterBars, filterOpenNow, filterMinRating, filterMaxPrice,
+      filterParking, filterOutdoor, filterIndoor, filterDriveThru,
+      filterVibes, filterDietary,
+    });
+    if (!force && placesToEatSessionCache && placesToEatSessionCache.paramsKey === paramsKey) {
+      setRestaurants(/** @type {any} */ (placesToEatSessionCache.restaurants));
+      setFallbackInfo(placesToEatSessionCache.fallbackInfo);
+      setDisplayCount(placesToEatSessionCache.displayCount || 20);
+      setLoading(false);
+      setError(null);
+      return () => { ignore = true; };
+    }
+
+    setLoading(true); setError(null); setFallbackInfo(null);
 
     (async () => {
       try {
@@ -932,9 +968,18 @@ export default function PlacesToEat() {
         if (data?.fallbackInfo) setFallbackInfo(data.fallbackInfo);
 
         if (places.length > 0) {
-          setRestaurants(places.map(p => processRest(p, lat, lng)));
+          const processed = places.map((/** @type {any} */ p) => processRest(p, lat, lng));
+          setRestaurants(processed);
           setDisplayCount(20);
           setError(null); // Clear any old errors on success
+          // Populate the session cache so a later re-entry with the same
+          // params hydrates instantly without re-hitting the API.
+          placesToEatSessionCache = {
+            paramsKey,
+            restaurants: processed,
+            fallbackInfo: data?.fallbackInfo || null,
+            displayCount: 20,
+          };
         } else {
           setRestaurants([]); // Clear stale results so the UI doesn't show "67 results" from a prior fetch
           setError(data?.error || "No results found. Try expanding your radius.");
