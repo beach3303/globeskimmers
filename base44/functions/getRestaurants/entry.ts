@@ -285,15 +285,33 @@ const CULTURAL_INTENTS: Record<string, { label: string; types: Set<string>; keyw
 
 // Known chains that reliably serve breakfast dishes (pancakes, waffles, eggs,
 // french toast, etc.) even when Google's servesBreakfast field is null. Used
-// by getTierForPlace() to promote them to Tier 3 "Has It" for breakfast/brunch
+// by getTierForPlace() to promote them to Tier 4 "Serves It" for breakfast/brunch
 // DISH searches. Lowercase substrings — matched via name.includes().
-// US-centric for now; add regional chains as they come up.
+// Each pattern must be long enough to avoid false positives (e.g. 'cora' alone
+// would match 'Aurora' — use 'cora's' instead). US-centric historically;
+// 2026-05-22 added international expansion (Step 4.6).
 const KNOWN_BREAKFAST_CHAINS: string[] = [
+  // US
   "mcdonald", "ihop", "denny", "waffle house", "cracker barrel", "bob evans",
   "corner bakery", "panera", "first watch", "snooze", "black bear diner",
   "mimi's cafe", "coco's", "marie callender", "bob's big boy", "perkins",
   "village inn", "le pain quotidien", "einstein", "the original pancake",
   "stack'd", "another broken egg", "wildflower",
+  // International expansion (Step 4.6, 2026-05-22)
+  "tim hortons",         // Canada / US / Mexico / global
+  "cora's",              // Canada — pancake-specialty breakfast chain
+  "sunset grill",        // Canada — breakfast specialty
+  "eggsmart",            // Canada — breakfast chain
+  "the breakfast club",  // UK — modern brunch / pancakes
+  "granger",             // UK / Australia — Bill Granger's fluffy pancakes
+  "pret a manger",       // UK / US — breakfast staples
+  "komeda",              // Japan — morning-set breakfast chain
+  "doutor",              // Japan — breakfast / coffee chain
+  "café du monde",       // US / Japan — beignets / pastries
+  "cafe du monde",       //   (no-accent fallback for Google name variants)
+  "egg slut",            // US / global — egg-focused breakfast spot
+  "eggslut",             //   (concatenated variant)
+  "stack pancake",       // UK — pancake specialty
 ];
 
 // Dish → expected primaryTypes (Tier 1 = specialist, Tier 2 = close match)
