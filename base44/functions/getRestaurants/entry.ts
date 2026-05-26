@@ -1068,10 +1068,10 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
 }
 
 const TIER_LABELS: Record<number, string> = {
-  1:'Specialty',      // name match — place name contains the dish word
-  2:'Cuisine Match',  // place type matches the dish's primary cuisine type
-  3:'Cultural',       // place type matches secondary cultural cuisine
-  4:'Serves It',      // editorialSummary / cached reviews / menu OCR mention the dish
+  1:'Namesake',         // name match — place name contains the dish word
+  2:'Specialist',       // place type matches the dish's primary cuisine type
+  3:'Related Cuisine',  // place type matches secondary cultural cuisine
+  4:'Serves It',        // editorialSummary / cached reviews / menu OCR mention the dish
   // 5 = noise (not in TIER_LABELS by design — filtered out before reaching the frontend)
 };
 
@@ -2006,8 +2006,8 @@ Deno.serve(async (req) => {
     // No slice — send ALL results to frontend so filters (bakery, sports bar, dietary)
     // have the full pool. Frontend already paginates with "Load More" (20 at a time).
 
-    // Drop tier-5 "noise" only — keep tiers 1 ("Specialty"), 2 ("Cuisine Match"),
-    // 3 ("Cultural"), and 4 ("Serves It") in results.
+    // Drop tier-5 "noise" only — keep tiers 1 ("Namesake"), 2 ("Specialist"),
+    // 3 ("Related Cuisine"), and 4 ("Serves It") in results.
     if (intent.kind === 'DISH') {
       const before = finalPlaces.length;
       finalPlaces = finalPlaces.filter((p: any) => (p.tier || 5) <= 4);
