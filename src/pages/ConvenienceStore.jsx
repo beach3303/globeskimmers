@@ -13,7 +13,7 @@
  * - Sticky X on advanced filters
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocation } from '@/components/location/LocationContext';
 import LocationModePicker from '@/components/location/LocationModePicker';
@@ -875,9 +875,17 @@ export default function ConvenienceStorePage() {
   // Coordinates pulled from the shared LocationContext (set via the Home location bar
   // or the Change-location flow). Lets users explicitly pick a city/landmark, matching
   // the pattern of CoffeeFinder, ATMFinder, etc.
-  const location = activeLocation?.coordinates
-    ? { latitude: activeLocation.coordinates.latitude, longitude: activeLocation.coordinates.longitude }
-    : null;
+  //
+  // Memoized on the primitive lat/lng — without memoization, a new object reference
+  // is created every render, which makes fetchStores re-create every render, which
+  // makes the fetch useEffect re-fire infinitely → endless loading spinner with no
+  // results ever rendered.
+  const location = useMemo(
+    () => activeLocation?.coordinates
+      ? { latitude: activeLocation.coordinates.latitude, longitude: activeLocation.coordinates.longitude }
+      : null,
+    [activeLocation?.coordinates?.latitude, activeLocation?.coordinates?.longitude]
+  );
   const locLabel = getLocationLabel(activeLocation);
   const isCity = isCityLocation(activeLocation);
   const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
