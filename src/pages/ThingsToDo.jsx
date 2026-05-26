@@ -220,28 +220,57 @@ const TRAVEL_COLORS={'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC26
 function TierCard({a,userLat,userLng}){
   const [dirs,setDirs]=useState(false);
   const [gallery,setGallery]=useState({open:false,idx:0});
+  // Tapping the compact card body opens a fullscreen modal rendering the
+  // full ActivityCard (the same component used under "Near You"). Inner
+  // buttons (Directions / Website / photo) stopPropagation so they don't
+  // also open the modal.
+  const [expanded,setExpanded]=useState(false);
   const name=a.displayName?.text||a.name||"Activity";
   const tc=TRAVEL_COLORS[a.travelType]||{bg:'#F1F5F9',color:'#64748B'};
   const photo=a.photos?.[0]||null;
+  // Inline distance formatter for the expanded modal — TierSection isn't
+  // wired to the parent's useDistanceUnit hook, so use a simple miles
+  // formatter (matches the compact card's "X.X mi" rendering).
+  const fmtDist=(d)=>`${d.toFixed(1)} mi`;
   return(
-    <div style={{flexShrink:0,width:"220px",background:"#fff",borderRadius:"16px",boxShadow:"0 2px 12px rgba(0,0,0,0.08)",overflow:"hidden",border:"1px solid #E8EDF2"}}>
-      <div style={{position:"relative",height:"130px",background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
-        {photo?<img src={photo} alt="" onClick={()=>setGallery({open:true,idx:0})} style={{width:"100%",height:"130px",objectFit:"cover",cursor:"pointer"}}/>:<div style={{height:"130px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"40px"}}>{a.activityIcon||"⭐"}</div>}
-      </div>
-      <div style={{padding:"10px 12px"}}>
-        <div style={{fontWeight:"700",fontSize:"13px",color:T.dark,lineHeight:"1.3",marginBottom:"6px",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
-        {a.travelType&&<div style={{marginBottom:"6px"}}><span style={{background:tc.bg,color:tc.color,padding:"3px 8px",borderRadius:"12px",fontSize:"10px",fontWeight:"700",display:"inline-block"}}>{a.travelType} · {a.distance}</span></div>}
-        {a.rating&&<div style={{display:"flex",alignItems:"center",gap:"4px",marginBottom:"6px"}}><span style={{color:T.gold,fontSize:"12px"}}>★</span><span style={{fontWeight:"700",color:T.dark,fontSize:"12px"}}>{a.rating}</span><span style={{color:T.gray,fontSize:"11px"}}>({(a.userRatingCount||0).toLocaleString()})</span></div>}
-        {a.activityLabel&&<div style={{fontSize:"10px",fontWeight:"600",color:a.activityColor||T.accent,marginBottom:"4px"}}>{a.activityIcon} {a.activityLabel}</div>}
-        {a.formattedAddress&&<div style={{fontSize:"10px",color:T.gray,marginBottom:"6px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress.split(',').slice(-3,-1).join(',').trim()}</div>}
-        <div style={{display:"flex",gap:"6px"}}>
-          <button onClick={()=>setDirs(true)} style={{flex:1,padding:"8px",borderRadius:"8px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"11px",cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
-          {a.websiteUri&&<button onClick={()=>window.open(a.websiteUri,'_blank')} style={{flex:1,padding:"8px",borderRadius:"8px",border:"1px solid #E8EDF2",background:"#F8FAFC",color:T.dark,fontWeight:"700",fontSize:"11px",cursor:"pointer",fontFamily:"inherit"}}>🌐 Website</button>}
+    <>
+      <div onClick={()=>setExpanded(true)} style={{flexShrink:0,width:"220px",background:"#fff",borderRadius:"16px",boxShadow:"0 2px 12px rgba(0,0,0,0.08)",overflow:"hidden",border:"1px solid #E8EDF2",cursor:"pointer"}}>
+        <div style={{position:"relative",height:"130px",background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
+          {photo?<img src={photo} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"130px",objectFit:"cover",cursor:"pointer"}}/>:<div style={{height:"130px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"40px"}}>{a.activityIcon||"⭐"}</div>}
+        </div>
+        <div style={{padding:"10px 12px"}}>
+          <div style={{fontWeight:"700",fontSize:"13px",color:T.dark,lineHeight:"1.3",marginBottom:"6px",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
+          {a.travelType&&<div style={{marginBottom:"6px"}}><span style={{background:tc.bg,color:tc.color,padding:"3px 8px",borderRadius:"12px",fontSize:"10px",fontWeight:"700",display:"inline-block"}}>{a.travelType} · {a.distance}</span></div>}
+          {a.rating&&<div style={{display:"flex",alignItems:"center",gap:"4px",marginBottom:"6px"}}><span style={{color:T.gold,fontSize:"12px"}}>★</span><span style={{fontWeight:"700",color:T.dark,fontSize:"12px"}}>{a.rating}</span><span style={{color:T.gray,fontSize:"11px"}}>({(a.userRatingCount||0).toLocaleString()})</span></div>}
+          {a.activityLabel&&<div style={{fontSize:"10px",fontWeight:"600",color:a.activityColor||T.accent,marginBottom:"4px"}}>{a.activityIcon} {a.activityLabel}</div>}
+          {a.formattedAddress&&<div style={{fontSize:"10px",color:T.gray,marginBottom:"6px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress.split(',').slice(-3,-1).join(',').trim()}</div>}
+          <div style={{display:"flex",gap:"6px"}}>
+            <button onClick={(e)=>{e.stopPropagation();setDirs(true);}} style={{flex:1,padding:"8px",borderRadius:"8px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"11px",cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
+            {a.websiteUri&&<button onClick={(e)=>{e.stopPropagation();window.open(a.websiteUri,'_blank');}} style={{flex:1,padding:"8px",borderRadius:"8px",border:"1px solid #E8EDF2",background:"#F8FAFC",color:T.dark,fontWeight:"700",fontSize:"11px",cursor:"pointer",fontFamily:"inherit"}}>🌐 Website</button>}
+          </div>
         </div>
       </div>
       <Directions isOpen={dirs} onClose={()=>setDirs(false)} lat={a.lat} lng={a.lng} name={name} userLat={userLat} userLng={userLng}/>
       <PhotoGalleryModal photos={a.photos||[]} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
-    </div>
+      <AnimatePresence>
+        {expanded&&(
+          <motion.div
+            initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            onClick={()=>setExpanded(false)}
+            style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",backdropFilter:"blur(4px)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px",overflowY:"auto"}}
+          >
+            <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxWidth:"480px",position:"relative",marginTop:"20px",marginBottom:"40px"}}>
+              <button
+                onClick={()=>setExpanded(false)}
+                aria-label="Close"
+                style={{position:"absolute",top:"12px",right:"12px",zIndex:10000,width:"36px",height:"36px",borderRadius:"50%",border:"none",background:"rgba(255,255,255,0.95)",color:T.dark,fontSize:"18px",fontWeight:"800",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}
+              >✕</button>
+              <ActivityCard a={a} index={0} onMap={null} isHighlighted={false} cardRef={null} forceExpanded={false} userLat={userLat} userLng={userLng} formatDistance={fmtDist}/>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
