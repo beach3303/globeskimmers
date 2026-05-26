@@ -217,7 +217,7 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
 
 const TRAVEL_COLORS={'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'},'📍 Nearby':{bg:'#D1FAE5',color:'#059669'}};
 
-function TierCard({a,userLat,userLng}){
+function TierCard({a,userLat,userLng,onMap}){
   const [dirs,setDirs]=useState(false);
   const [gallery,setGallery]=useState({open:false,idx:0});
   // Tapping the compact card body opens a fullscreen modal rendering the
@@ -227,7 +227,8 @@ function TierCard({a,userLat,userLng}){
   const [expanded,setExpanded]=useState(false);
   const name=a.displayName?.text||a.name||"Activity";
   const tc=TRAVEL_COLORS[a.travelType]||{bg:'#F1F5F9',color:'#64748B'};
-  const photo=a.photos?.[0]||null;
+  const photo1=a.photos?.[0]||null;
+  const photo2=a.photos?.[1]||null;
   // Inline distance formatter for the expanded modal — TierSection isn't
   // wired to the parent's useDistanceUnit hook, so use a simple miles
   // formatter (matches the compact card's "X.X mi" rendering).
@@ -236,7 +237,16 @@ function TierCard({a,userLat,userLng}){
     <>
       <div onClick={()=>setExpanded(true)} style={{flexShrink:0,width:"220px",background:"#fff",borderRadius:"16px",boxShadow:"0 2px 12px rgba(0,0,0,0.08)",overflow:"hidden",border:"1px solid #E8EDF2",cursor:"pointer"}}>
         <div style={{position:"relative",height:"130px",background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
-          {photo?<img src={photo} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"130px",objectFit:"cover",cursor:"pointer"}}/>:<div style={{height:"130px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"40px"}}>{a.activityIcon||"⭐"}</div>}
+          {photo1&&photo2?(
+            <div style={{display:"flex",height:"130px"}}>
+              <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{flex:1,height:"130px",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
+              <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{flex:1,height:"130px",objectFit:"cover",cursor:"pointer",borderLeft:"2px solid #fff",minWidth:0}}/>
+            </div>
+          ):photo1?(
+            <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"130px",objectFit:"cover",cursor:"pointer"}}/>
+          ):(
+            <div style={{height:"130px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"40px"}}>{a.activityIcon||"⭐"}</div>
+          )}
         </div>
         <div style={{padding:"10px 12px"}}>
           <div style={{fontWeight:"700",fontSize:"13px",color:T.dark,lineHeight:"1.3",marginBottom:"6px",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
@@ -265,7 +275,7 @@ function TierCard({a,userLat,userLng}){
                 aria-label="Close"
                 style={{position:"absolute",top:"12px",right:"12px",zIndex:10000,width:"36px",height:"36px",borderRadius:"50%",border:"none",background:"rgba(255,255,255,0.95)",color:T.dark,fontSize:"18px",fontWeight:"800",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}
               >✕</button>
-              <ActivityCard a={a} index={0} onMap={null} isHighlighted={false} cardRef={null} forceExpanded={false} userLat={userLat} userLng={userLng} formatDistance={fmtDist}/>
+              <ActivityCard a={a} index={0} onMap={onMap?()=>{setExpanded(false);onMap(a);}:null} isHighlighted={false} cardRef={null} forceExpanded={false} userLat={userLat} userLng={userLng} formatDistance={fmtDist}/>
             </div>
           </motion.div>
         )}
@@ -274,7 +284,7 @@ function TierCard({a,userLat,userLng}){
   );
 }
 
-function TierSection({title,icon,items,userLat,userLng}){
+function TierSection({title,icon,items,userLat,userLng,onMap}){
   const [collapsed,setCollapsed]=useState(false);
   if(!items?.length) return null;
   return(
@@ -285,7 +295,7 @@ function TierSection({title,icon,items,userLat,userLng}){
       </div>
       <AnimatePresence>{!collapsed&&(
         <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-          <div style={{display:"flex",gap:"12px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none"}}>{items.map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng}/>)}</div>
+          <div style={{display:"flex",gap:"12px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none"}}>{items.map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} onMap={onMap}/>)}</div>
         </motion.div>
       )}</AnimatePresence>
     </div>
@@ -313,6 +323,12 @@ export default function ThingsToDoFinder() {
   const [highlight,setHighlight]=useState(null);
   const [expandedIdx,setExpandedIdx]=useState(null);
   const [activePin,setActivePin]=useState(null);
+  // When the user taps Map from a National Icons / Regional Must-See card,
+  // the activity isn't in `filtered` (Near You) so it has no pre-built marker.
+  // Stash the activity here; the map effect renders a marker for it and
+  // centers the view on it, with the user's "you are here" blue dot still
+  // visible. Cleared when viewMode returns to "list".
+  const [extraMapPin,setExtraMapPin]=useState(null);
   const cardRefs=useRef({});
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
   const {activeLocation}=useLocation();
@@ -360,6 +376,18 @@ export default function ThingsToDoFinder() {
 
   const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const a=filtered[i];if(mapInst.current&&a?.lat&&a?.lng){mapInst.current.setView([a.lat,a.lng],17);markers.current[i]?.openPopup();}},350);};
 
+  // Map handler for TierCard (National Icons / Regional Must-See). Stashes
+  // the activity in extraMapPin so the map effect can render a marker for it,
+  // then switches to map view. The destination may be far from the user's
+  // current location (e.g. Rockefeller Center vs Arcadia) — the map shows
+  // both the blue "you are here" dot and the destination's icon pin; user
+  // can zoom out to see both, or zoom in on the destination popup.
+  const handleMapForActivity=(a)=>{setExtraMapPin(a);setViewMode("map");setActivePin(null);};
+
+  // Clear the extraMapPin when the user returns to list view so subsequent
+  // map opens (from Near You activities) don't keep the stale TierCard pin.
+  useEffect(()=>{if(viewMode==="list")setExtraMapPin(null);},[viewMode]);
+
   useEffect(()=>{
     if(viewMode!=="map"||!mapRef.current||!lat||!lng) return;
     const init=()=>{
@@ -379,10 +407,23 @@ export default function ThingsToDoFinder() {
         mk.on("popupopen",()=>setActivePin(i)); markers.current[i]=mk;
       });
       if(activePin!==null) setTimeout(()=>markers.current[activePin]?.openPopup(),200);
+      // Render the extra TierCard pin on top of the standard Near You markers.
+      // Drawn AFTER the user "you are here" blue dot + filtered[] markers so
+      // its popup auto-opens cleanly and is on the topmost z-layer.
+      if(extraMapPin?.lat&&extraMapPin?.lng){
+        const a=extraMapPin;
+        const color=a.activityColor||T.accent;
+        const sz=40;
+        const mk=window.L.marker([a.lat,a.lng],{icon:window.L.divIcon({html:`<div style="width:${sz}px;height:${sz}px;background:${color};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 4px 16px ${color}90;border:3px solid #fff;">${a.activityIcon||"⭐"}</div>`,iconSize:[sz,sz],className:""})}).addTo(map);
+        const st=openStatus(a);
+        mk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:260px;position:relative;"><button onclick="window._gsTDMapInst?.closePopup()" style="position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#64748B;font-size:13px;z-index:10;">✕</button><div style="padding:12px 14px;"><div style="font-weight:700;font-size:15px;color:#1A2332;margin-bottom:5px;padding-right:26px;line-height:1.3;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:12px;padding:6px 9px;border-radius:7px;background:${st.isOpen===true?"#F0FDF4":st.isOpen===false?"#FEF2F2":"#F5F5F5"};margin-bottom:0;"><span style="font-weight:700;color:${st.isOpen===true?"#15803D":st.isOpen===false?"#DC2626":"#9E9E9E"};">${st.label}</span></div></div></div>`,{maxWidth:280,className:"gs-popup",keepInView:true});
+        map.setView([a.lat,a.lng],13);
+        setTimeout(()=>mk.openPopup(),400);
+      }
     };
     if(!window.L){const lk=document.createElement("link");lk.rel="stylesheet";lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(lk);const sc=document.createElement("script");sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";sc.onload=init;document.head.appendChild(sc);}else init();
     return()=>{delete window._gsTDMapInst;delete window._gsTDView;delete window._gsTDDirs;if(mapInst.current){mapInst.current.remove();mapInst.current=null;}};
-  },[viewMode,filtered,lat,lng,activePin]);
+  },[viewMode,filtered,lat,lng,activePin,extraMapPin]);
 
   const stats={total:filtered.length};
   const advFilterCount=[openOnly,outdoorOnly,popularOnly,category!=='all'].filter(Boolean).length;
@@ -458,8 +499,8 @@ export default function ThingsToDoFinder() {
       {loading&&activities.length===0&&nationalIcons.length===0?(<div style={{textAlign:"center",padding:"70px 24px"}}><motion.div animate={{scale:[1,1.1,1],rotate:[0,5,-5,0]}} transition={{repeat:Infinity,duration:1.8}} style={{fontSize:"52px",marginBottom:"16px",display:"inline-block"}}>⭐</motion.div><div style={{color:T.dark,fontWeight:"700",fontSize:"16px",marginBottom:"6px"}}>Discovering things to do…</div><div style={{color:T.gray,fontSize:"13px"}}>Landmarks · Museums · Parks · Outdoors</div><div style={{display:"flex",justifyContent:"center",gap:"6px",marginTop:"18px"}}>{[0,1,2].map(i=><motion.div key={i} animate={{opacity:[0.3,1,0.3]}} transition={{repeat:Infinity,duration:1.2,delay:i*0.2}} style={{width:"8px",height:"8px",borderRadius:"50%",background:T.accent}}/>)}</div></div>)
       :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"48px",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"16px"}}>{error}</div><button onClick={()=>setRadius(r=>Math.min(r+5,25))} style={{marginTop:"14px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"14px",cursor:"pointer",fontFamily:"inherit"}}>Expand Radius</button></div>)
       :viewMode==="list"?(<div style={{padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"4px"}}>
-        <TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng}/>
-        <TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng}/>
+        <TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} onMap={handleMapForActivity}/>
+        <TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} onMap={handleMapForActivity}/>
         {(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"18px"}}>📍</span><span style={{fontWeight:"800",fontSize:"15px",color:T.dark}}>Near You</span><span style={{fontSize:"12px",color:T.gray}}>({filtered.length})</span></div>}
         {filtered.length===0&&nationalIcons.length===0&&regionalGems.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"52px",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"18px",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"13px",marginTop:"6px"}}>Try a different category or expand your radius</div></div>:null}
         <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>{filtered.map((a,i)=><ActivityCard key={a.id||i} a={a} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance}/>)}</div>
