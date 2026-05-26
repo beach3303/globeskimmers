@@ -989,15 +989,35 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     return 4;
   }
   if (intent.kind === 'DISH') {
-    // Words that count as a "namesake" match: the canonical label, what the
-    // user actually typed, AND the curated nameKeywords for this dish. Lets
-    // "Old Spaghetti Factory" rank Tier 1 on a "spaghetti" search (rawWords)
-    // AND lets "Yogurtland" rank Tier 1 on a "froyo" search (nameKeywords).
-    // Without nameKeywords, namesake matching only catches places that
-    // happen to contain the literal user-typed word.
+    // Words that count as a "namesake" match (Tier 1 name check): the canonical
+    // label, what the user actually typed (rawWords), AND the curated nameKeywords
+    // for this dish. Lets "Old Spaghetti Factory" rank Tier 1 on a "spaghetti"
+    // search (via rawWords) AND lets "Yogurtland" rank Tier 1 on a "froyo" search
+    // (via nameKeywords).
     const dishWords = Array.from(new Set([
       intent.label.toLowerCase(),
       ...(intent.rawWords || []),
+      ...(intent.nameKeywords || [])
+    ].filter(Boolean)));
+
+    // Stricter subset for Tier 4 text-match (review/AI/contextualReviews scan).
+    // Excludes rawWords because they're built from splitting the user's literal
+    // query, so multi-word queries like "frozen yogurt" produce single-word raw
+    // matches like 'yogurt' / 'frozen' that hit cross-cuisine contexts:
+    //   - Indian places mentioning 'yogurt' in raita/lassi reviews
+    //   - Bakeries mentioning 'yogurt' fillings
+    //   - Coffee shops with 'yogurt' parfaits
+    //   - Donut shops with 'yogurt' cream donuts
+    // All of those tier 4 "Has It" via review-text match even though they don't
+    // serve frozen yogurt. Same noise vector hits 'chicken' (Korean fried
+    // chicken), 'rice' (mango sticky rice), 'cream' (ice cream), etc.
+    // Tier 4 text-match only fires when the dish's full canonical label or a
+    // curated brand/storefront keyword appears in the place's text. Tier 1 name
+    // match still uses the broad set above — a place literally named after a
+    // raw word in the user's query is a trustworthy signal even when the word
+    // is generic.
+    const strictDishWords = Array.from(new Set([
+      intent.label.toLowerCase(),
       ...(intent.nameKeywords || [])
     ].filter(Boolean)));
 
@@ -1046,7 +1066,7 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
 
     // 1. editorialSummary text mentions the dish (free, in search response)
     const editorial = ((place.editorialSummary?.text || place.editorialSummary || '') as string).toString().toLowerCase();
-    if (hasBreakfastPlausibleType && editorial && dishWords.some(w => editorial.includes(w))) return 4;
+    if (hasBreakfastPlausibleType && editorial && strictDishWords.some(w => editorial.includes(w))) return 4;
 
     // 2. Meal-time signals: chains/bakeries that serve breakfast almost certainly
     // have pancakes/waffles/etc. on the menu. We INTENTIONALLY do NOT trust
@@ -1072,18 +1092,18 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     if (intent.mealTime === 'dinner' && place.servesDinner === true) return 4;
 
     // 3. Review-text mention (only fires if Details was hydrated for this place)
-    if (hasBreakfastPlausibleType && dishWords.some(w => reviewText.includes(w))) return 4;
+    if (hasBreakfastPlausibleType && strictDishWords.some(w => reviewText.includes(w))) return 4;
 
     // 4. Menu OCR dish list (populated by /label-photos worker endpoint, 180d cache)
     const menuDishes = (place.menuDishes || []) as string[];
-    if (hasBreakfastPlausibleType && menuDishes.length && dishWords.some(w => menuDishes.some(md => md.includes(w)))) return 4;
+    if (hasBreakfastPlausibleType && menuDishes.length && strictDishWords.some(w => menuDishes.some(md => md.includes(w)))) return 4;
 
     // 5. Native Google Places API (New) AI fields — additive signal layer,
     // returned on text-search when TEXT_SEARCH_AI_FIELDS is in the mask.
     // generativeSummary is a Gemini-generated overview of the place; if
     // it mentions the dish, the place serves it.
     const aiSummary = ((place.generativeSummary?.overview?.text) || '').toString().toLowerCase();
-    if (hasBreakfastPlausibleType && aiSummary && dishWords.some(w => aiSummary.includes(w))) return 4;
+    if (hasBreakfastPlausibleType && aiSummary && strictDishWords.some(w => aiSummary.includes(w))) return 4;
 
     // 6. Native Google query-aware review snippets. Google pre-matches
     // review text to the user's query and returns just the relevant
@@ -1094,7 +1114,7 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
       .map((r: any) => (r?.text?.text || r?.text || '').toString())
       .join(' ')
       .toLowerCase();
-    if (hasBreakfastPlausibleType && contextualReviewText && dishWords.some(w => contextualReviewText.includes(w))) return 4;
+    if (hasBreakfastPlausibleType && contextualReviewText && strictDishWords.some(w => contextualReviewText.includes(w))) return 4;
 
     return 5;  // true noise — filtered out before returning to frontend
   }
