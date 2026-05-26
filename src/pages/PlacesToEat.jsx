@@ -1076,23 +1076,12 @@ export default function PlacesToEat() {
     if (filterVibes['sportsBar']) {
       r.sort((a,b) => (b.sportsScore||0) - (a.sportsScore||0));
     } else if (sortBy==="nearby") {
-      if (hasActiveSearch && r[0]?.backendRank) {
-        // Backend v5.2+ pre-sorted by tier then quality. Use backendRank as the
-        // authoritative order, but allow re-sorting within each tier by distance.
-        r.sort((a,b) => {
-          const ta = a.tier || 4, tb = b.tier || 4;
-          if (ta !== tb) return ta - tb;
-          return (a.distanceMiles||999) - (b.distanceMiles||999);
-        });
-      } else if (hasActiveSearch) {
-        r.sort((a,b) => {
-          const ta = a.tier || 4, tb = b.tier || 4;
-          if (ta !== tb) return ta - tb;
-          return (a.distanceMiles||999) - (b.distanceMiles||999);
-        });
-      } else {
-        r.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
-      }
+      // Pure distance, no tier weighting. The tier classification is still
+      // computed and shown via badges on each card (Authentic / Specialist /
+      // Serves It / Related Cuisine), but it does not affect ordering — a
+      // closer non-namesake place ranks above a farther Tier 1 namesake.
+      // Use sortBy="best" when you want tier-then-quality ranking.
+      r.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
     } else if (sortBy==="best") {
       if (hasActiveSearch && r[0]?.backendRank) {
         // Backend already sorted by tier then quality — trust it directly.
