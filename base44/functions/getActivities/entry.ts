@@ -129,18 +129,6 @@ function activityType(name:string,types:string[]){
   return {icon:'⭐',label:'Attraction',color:'#F59E0B',category:'attraction'};
 }
 
-async function fetchWiki(name:string):Promise<{wikiSummary:string,wikiExtract:string}|null>{
-  try{
-    const r=await fetch(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`,
-      {headers:{'User-Agent':'Globeskimmers/3.0 (travel app)'}}
-    );
-    if(!r.ok) return null;
-    const d=await r.json();
-    if(d.type==='disambiguation'||!d.extract) return null;
-    return {wikiSummary:d.description||'',wikiExtract:d.extract.slice(0,400)};
-  }catch{return null;}
-}
 
 Deno.serve(async (req)=>{
   try {
@@ -195,7 +183,12 @@ Deno.serve(async (req)=>{
       const isWilderness=placeTypes.some((t:string)=>['national_park','hiking_area','state_park','natural_feature'].includes(t));
       const isInsideManagedPark=placeTypes.some((t:string)=>['botanical_garden','amusement_park','zoo'].includes(t));
       const outdoorContext=isSmallFeature&&!isWilderness?'Walk-through inside a park':isSmallFeature&&isInsideManagedPark?'Managed Park / Walk-through':null;
-      const photos=(p.photos||[]).map((ph:any)=>ph.url||ph).filter(Boolean).slice(0,2);
+      // 3 photos per activity card (was 2). Photo references in the search
+      // response are free; the actual image fetch via Worker proxy is billed
+      // ~$0.005-0.01 each but cached 90 days, and is only loaded when the
+      // card is rendered. The user explicitly chose 3 (over 5) for the
+      // cost-quality tradeoff (~$54/month at 10K searches vs ~$108).
+      const photos=(p.photos||[]).map((ph:any)=>ph.url||ph).filter(Boolean).slice(0,3);
       const hours=p.currentOpeningHours?.weekdayDescriptions||p.regularOpeningHours?.weekdayDescriptions||p.hours||[];
       const editorialSummary=p.editorialSummary?.text||p.editorialSummary||'';
       const highlights=SIG.highlights.filter(w=>rev.includes(w)).slice(0,5);
@@ -272,7 +265,7 @@ Deno.serve(async (req)=>{
       t1Processed.forEach((a:any)=>{
         const mi=a.distanceMiles;
         a.travelType=mi>200?'✈️ Flight / Ferry Required':mi>100?'🚗 Long Drive':mi>50?'🚗 Drive':'🚗 Short Drive';
-        if(a.photos?.length>0) a.photos=[a.photos[0]];
+        // Keep all 3 photos (was previously culled to 1 for Tier 1).
       });
       const nationalIcons=t1Processed;
 
@@ -297,7 +290,7 @@ Deno.serve(async (req)=>{
       t2Processed.forEach((a:any)=>{
         const mi=a.distanceMiles;
         a.travelType=mi>50?'🚗 Drive':mi>15?'🚗 Short Drive':'📍 Nearby';
-        if(a.photos?.length>0) a.photos=[a.photos[0]];
+        // Keep all 3 photos (was previously culled to 1 for Tier 2).
       });
       return {nationalIcons,regionalGems:t2Processed};
     })();
@@ -384,39 +377,30 @@ Deno.serve(async (req)=>{
     const iconIds=new Set([...nationalIcons.map((a:any)=>a.id),...regionalGems.map((a:any)=>a.id)]);
     const dedupedNearby=nearby.filter((a:any)=>!iconIds.has(a.id));
 
-    // ── Wikipedia hydration with 2-second cap ────────────────────────────
-    // Wikipedia's API is slow (some queries take 1-2s each, the slowest
-    // determines total wait when Promise.all'd). Cap the whole batch at
-    // 2s via a timeout race — if Wikipedia responds in time, the real
-    // summaries are used; otherwise we proceed without them. Either way,
-    // the synthetic fallback below populates wikiExtract for any place
-    // that didn't get a real wiki hit, so the UI always has a description.
-    const allForWiki=[...dedupedNearby,...nationalIcons,...regionalGems];
-    const wikiBatch=Promise.all(allForWiki.map(async (a:any)=>{
-      const wiki=await fetchWiki(a.name);
-      if(wiki){a.wikiSummary=wiki.wikiSummary;a.wikiExtract=wiki.wikiExtract;}
-    }));
-    await Promise.race([wikiBatch, new Promise(r=>setTimeout(r,2000))]);
-
-    // Synthetic fallback (no network, instant) — runs for every activity
-    // that didn't get a real wiki hit, including those whose Wikipedia
-    // fetch was still in flight when the 2s cap fired.
-    for(const a of allForWiki){
-      if(!a.wikiExtract){
-        const city=(a.formattedAddress||'').split(',').slice(-3,-1).join(',').trim();
-        const cat=a.activityLabel||'attraction';
-        const parts:string[]=[`A popular ${cat.toLowerCase()}${city?` in ${city}`:''}.`];
-        const tags:string[]=[];
-        if(a.props?.isFamilyFriendly) tags.push('Family friendly');
-        if(a.props?.isOutdoor) tags.push('Outdoor');
-        if(a.props?.isFree) tags.push('Free entry');
-        if(a.props?.isAdventure) tags.push('Adventure');
-        if(a.props?.isGoodForCouples) tags.push('Great for couples');
-        if(tags.length) parts.push(tags.join(' · ')+'.');
-        if(a.highlights?.length>0) parts.push(`Visitors love: ${a.highlights.slice(0,3).join(', ')}.`);
-        if(a.rating&&a.userRatingCount>0) parts.push(`Rated ${a.rating} by ${a.userRatingCount.toLocaleString()} reviewers.`);
-        a.wikiExtract=parts.join(' ');
-      }
+    // ── "About this place" synthesis ─────────────────────────────────────
+    // Wikipedia fetch was removed entirely (slow + uneven hit-rate; user
+    // direction 2026-05-26). Each activity gets a synthetic aboutText
+    // built from already-fetched data (no extra network calls, instant).
+    // The frontend reads in this precedence:
+    //   1. place.editorialSummary  (Google curated, best quality when present)
+    //   2. place.generativeSummary?.overview?.text  (Gemini AI overview,
+    //      good for famous places — includes historical context)
+    //   3. aboutText  (synthetic fallback, always populated below)
+    const allForAbout=[...dedupedNearby,...nationalIcons,...regionalGems];
+    for(const a of allForAbout){
+      const city=(a.formattedAddress||'').split(',').slice(-3,-1).join(',').trim();
+      const cat=a.activityLabel||'attraction';
+      const parts:string[]=[`A popular ${cat.toLowerCase()}${city?` in ${city}`:''}.`];
+      const tags:string[]=[];
+      if(a.props?.isFamilyFriendly) tags.push('Family friendly');
+      if(a.props?.isOutdoor) tags.push('Outdoor');
+      if(a.props?.isFree) tags.push('Free entry');
+      if(a.props?.isAdventure) tags.push('Adventure');
+      if(a.props?.isGoodForCouples) tags.push('Great for couples');
+      if(tags.length) parts.push(tags.join(' · ')+'.');
+      if(a.highlights?.length>0) parts.push(`Visitors love: ${a.highlights.slice(0,3).join(', ')}.`);
+      if(a.rating&&a.userRatingCount>0) parts.push(`Rated ${a.rating} by ${a.userRatingCount.toLocaleString()} reviewers.`);
+      a.aboutText=parts.join(' ');
     }
 
     const total=dedupedNearby.length+nationalIcons.length+regionalGems.length;

@@ -477,7 +477,11 @@ async function handleNearbySearch(request, env, ctx) {
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': CONFIG.SEARCH_FIELD_MASK
+        // Include generativeSummary (Gemini AI overview) so ThingsToDo nearby
+        // results carry historical/contextual content for the "About This Place"
+        // panel, same as the text-search and restaurant-search endpoints.
+        // Same Pro/Enterprise SKU, no per-call cost change.
+        'X-Goog-FieldMask': CONFIG.SEARCH_FIELD_MASK + ',places.generativeSummary'
       },
       body: JSON.stringify(requestBody)
     });

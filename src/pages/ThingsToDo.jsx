@@ -93,13 +93,101 @@ function Directions({isOpen,onClose,lat,lng,name,userLat,userLng}){
   );
 }
 
+// TierMapOverlay — fullscreen modal map for the National Icons / Regional
+// Must-See "Map" button. Renders ON TOP of the TierCard's expanded modal
+// (which stays mounted underneath), so the X here closes the overlay and
+// returns the user to the same expanded card they were viewing. Shows two
+// pins: the user's "you are here" blue dot + the destination's activity-icon
+// pin. fitBounds zooms the map to fit both even when they're across the
+// globe (Manila → Arcadia, etc.). Destination popup auto-opens with the
+// travel-distance label ("✈️ Flight / Ferry Required · 7,000 mi" etc.).
+function TierMapOverlay({activity:a,userLat,userLng,onClose}){
+  const mapRef=useRef(null);
+  const mapInst=useRef(null);
+  useEffect(()=>{
+    if(!mapRef.current||!a?.lat||!a?.lng||userLat==null||userLng==null) return;
+    const init=()=>{
+      if(mapInst.current) mapInst.current.remove();
+      const map=window.L.map(mapRef.current);
+      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OSM"}).addTo(map);
+      mapInst.current=map;
+      // User "you are here" blue dot
+      const userMk=window.L.marker([userLat,userLng],{icon:window.L.divIcon({html:`<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>`,iconSize:[16,16],className:""})}).addTo(map);
+      userMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;padding:6px 10px;font-weight:700;color:#1A2332;font-size:13px;">📍 You are here</div>`,{maxWidth:160,closeButton:false});
+      // Destination pin with activity icon + travel-distance popup
+      const color=a.activityColor||T.accent;
+      const sz=40;
+      const destMk=window.L.marker([a.lat,a.lng],{icon:window.L.divIcon({html:`<div style="width:${sz}px;height:${sz}px;background:${color};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 4px 16px ${color}90;border:3px solid #fff;">${a.activityIcon||"⭐"}</div>`,iconSize:[sz,sz],className:""})}).addTo(map);
+      const distMi=a.distanceMiles||0;
+      const travelTxt=a.travelType||(distMi>200?'✈️ Flight / Ferry Required':distMi>100?'🚗 Long Drive':distMi>50?'🚗 Drive':distMi>15?'🚗 Short Drive':'📍 Nearby');
+      const distStr=`${distMi.toFixed(1)} mi`;
+      const st=openStatus(a);
+      const stColor=st.isOpen===true?"#15803D":st.isOpen===false?"#DC2626":"#9E9E9E";
+      const stBg=st.isOpen===true?"#F0FDF4":st.isOpen===false?"#FEF2F2":"#F5F5F5";
+      // Single close button INSIDE the popup is removed — the overlay's
+      // top-right X is the only close affordance (user spec: only ONE X).
+      destMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:250px;padding:12px 14px;"><div style="font-weight:700;font-size:15px;color:#1A2332;margin-bottom:5px;line-height:1.3;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:12px;padding:6px 9px;border-radius:7px;background:${stBg};margin-bottom:8px;"><span style="font-weight:700;color:${stColor};">${st.label}</span></div><div style="font-size:12px;padding:7px 10px;border-radius:7px;background:#FEF3C7;color:#92400E;font-weight:700;">${travelTxt} · ${distStr}</div></div>`,{maxWidth:270,closeButton:false});
+      // Fit both pins into view. Padding gives a comfortable border.
+      // Works for any distance — across town, country, or globe.
+      map.fitBounds([[userLat,userLng],[a.lat,a.lng]],{padding:[60,80],maxZoom:14});
+      setTimeout(()=>destMk.openPopup(),300);
+    };
+    if(!window.L){
+      const lk=document.createElement("link"); lk.rel="stylesheet"; lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"; document.head.appendChild(lk);
+      const sc=document.createElement("script"); sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; sc.onload=init; document.head.appendChild(sc);
+    } else init();
+    return()=>{ if(mapInst.current){mapInst.current.remove();mapInst.current=null;} };
+  },[a,userLat,userLng]);
+  return(
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+      style={{position:"fixed",inset:0,background:"#000",zIndex:10001,display:"flex",flexDirection:"column"}}>
+      <button onClick={onClose} aria-label="Close map" style={{position:"absolute",top:"16px",right:"16px",zIndex:10002,width:"38px",height:"38px",borderRadius:"50%",border:"none",background:"rgba(255,255,255,0.95)",color:T.dark,fontSize:"18px",fontWeight:"800",cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>✕</button>
+      <div ref={mapRef} style={{flex:1,width:"100%"}}/>
+    </motion.div>
+  );
+}
+
+// "About This Place" panel with expand/collapse. Picks the best text in
+// this precedence: Google editorialSummary > generativeSummary (Gemini AI
+// overview, has historical context for famous places) > synthetic aboutText.
+// Truncates at 200 chars with a "Read more" link; expands fully on tap.
+function AboutPanel({a}){
+  const [open,setOpen]=useState(false);
+  const editorial=(typeof a.editorialSummary==='string'?a.editorialSummary:a.editorialSummary?.text)||'';
+  const generative=a.generativeSummary?.overview?.text||'';
+  const synthetic=a.aboutText||'';
+  const text=editorial||generative||synthetic;
+  if(!text) return null;
+  const LIMIT=200;
+  const needsToggle=text.length>LIMIT;
+  const shown=open||!needsToggle?text:text.slice(0,LIMIT).replace(/\s+\S*$/,'')+'…';
+  return(
+    <div style={{marginBottom:"12px",padding:"12px 14px",background:"linear-gradient(135deg,#EDE9FE,#F5F3FF)",borderRadius:"12px",border:"1px solid #DDD6FE"}}>
+      <div style={{fontSize:"11px",fontWeight:"800",color:"#7C3AED",marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.5px"}}>📖 About This Place</div>
+      <div style={{fontSize:"13px",color:"#374151",lineHeight:"1.6"}}>{shown}</div>
+      {needsToggle&&(
+        <button onClick={(e)=>{e.stopPropagation();setOpen(o=>!o);}} style={{marginTop:"6px",background:"transparent",border:"none",color:"#7C3AED",fontWeight:"700",fontSize:"12px",cursor:"pointer",padding:0,fontFamily:"inherit"}}>
+          {open?'Show less':'Read more →'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function PhotoStrip({photos,fallback="⭐",bg,onPhotoClick}){
-  const [err,setErr]=useState({}); const [ld,setLd]=useState({0:true,1:true});
+  const [err,setErr]=useState({}); const [ld,setLd]=useState({0:true,1:true,2:true});
   const valid=(photos||[]).filter((_,i)=>_&&!err[i]);
   const fbBg=bg||`linear-gradient(135deg,${T.accentL},#FDE68A)`;
   if(!valid.length) return <div style={{height:"130px",background:fbBg,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:"52px",filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.15))"}}>{fallback}</span></div>;
   if(valid.length===1) return(<div style={{position:"relative",height:"170px",overflow:"hidden",cursor:"pointer"}} onClick={()=>onPhotoClick?.(0)}>{ld[0]&&<div style={{position:"absolute",inset:0,background:fbBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"40px"}}>{fallback}</div>}<img src={valid[0]} alt="" onError={()=>setErr((p)=>({...p,0:true}))} onLoad={()=>setLd((p)=>({...p,0:false}))} style={{width:"100%",height:"170px",objectFit:"cover",opacity:ld[0]?0:1,transition:"opacity 0.4s"}}/></div>);
-  return(<div style={{display:"grid",gridTemplateColumns:"60% 40%",height:"150px",overflow:"hidden"}}>{valid.slice(0,2).map((url,i)=>(<div key={i} style={{position:"relative",overflow:"hidden",borderRight:i===0?"2px solid #fff":"none",cursor:"pointer"}} onClick={()=>onPhotoClick?.(i)}>{ld[i]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"30px"}}>{fallback}</div>}<img src={url} alt="" onError={()=>setErr((p)=>({...p,[i]:true}))} onLoad={()=>setLd((p)=>({...p,[i]:false}))} style={{width:"100%",height:"150px",objectFit:"cover",opacity:ld[i]?0:1,transition:"opacity 0.4s"}}/></div>))}</div>);
+  if(valid.length===2) return(<div style={{display:"grid",gridTemplateColumns:"60% 40%",height:"150px",overflow:"hidden"}}>{valid.slice(0,2).map((url,i)=>(<div key={i} style={{position:"relative",overflow:"hidden",borderRight:i===0?"2px solid #fff":"none",cursor:"pointer"}} onClick={()=>onPhotoClick?.(i)}>{ld[i]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"30px"}}>{fallback}</div>}<img src={url} alt="" onError={()=>setErr((p)=>({...p,[i]:true}))} onLoad={()=>setLd((p)=>({...p,[i]:false}))} style={{width:"100%",height:"150px",objectFit:"cover",opacity:ld[i]?0:1,transition:"opacity 0.4s"}}/></div>))}</div>);
+  // 3+ photos: 50/25/25 grid (large left photo, two smaller stacked right).
+  // Slices to exactly 3 (rest go through the PhotoGalleryModal on tap).
+  return(<div style={{display:"grid",gridTemplateColumns:"50% 50%",gridTemplateRows:"75px 75px",height:"150px",overflow:"hidden",gap:"2px",background:"#fff"}}>
+    <div onClick={()=>onPhotoClick?.(0)} style={{position:"relative",overflow:"hidden",gridRow:"span 2",cursor:"pointer"}}>{ld[0]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"30px"}}>{fallback}</div>}<img src={valid[0]} alt="" onError={()=>setErr((p)=>({...p,0:true}))} onLoad={()=>setLd((p)=>({...p,0:false}))} style={{width:"100%",height:"100%",objectFit:"cover",opacity:ld[0]?0:1,transition:"opacity 0.4s"}}/></div>
+    <div onClick={()=>onPhotoClick?.(1)} style={{position:"relative",overflow:"hidden",cursor:"pointer"}}>{ld[1]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"24px"}}>{fallback}</div>}<img src={valid[1]} alt="" onError={()=>setErr((p)=>({...p,1:true}))} onLoad={()=>setLd((p)=>({...p,1:false}))} style={{width:"100%",height:"100%",objectFit:"cover",opacity:ld[1]?0:1,transition:"opacity 0.4s"}}/></div>
+    <div onClick={()=>onPhotoClick?.(2)} style={{position:"relative",overflow:"hidden",cursor:"pointer"}}>{ld[2]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"24px"}}>{fallback}</div>}<img src={valid[2]} alt="" onError={()=>setErr((p)=>({...p,2:true}))} onLoad={()=>setLd((p)=>({...p,2:false}))} style={{width:"100%",height:"100%",objectFit:"cover",opacity:ld[2]?0:1,transition:"opacity 0.4s"}}/>{valid.length>3&&<div style={{position:"absolute",bottom:"4px",right:"4px",background:"rgba(0,0,0,0.7)",color:"#fff",padding:"2px 8px",borderRadius:"12px",fontSize:"11px",fontWeight:"700"}}>+{valid.length-3}</div>}</div>
+  </div>);
 }
 
 function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance}){
@@ -151,14 +239,9 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
           </div>
         )}
 
-        {/* About This Place */}
-        {(a.wikiExtract||a.editorialSummary)&&(
-          <div style={{marginBottom:"12px",padding:"12px 14px",background:"linear-gradient(135deg,#EDE9FE,#F5F3FF)",borderRadius:"12px",border:"1px solid #DDD6FE"}}>
-            <div style={{fontSize:"11px",fontWeight:"800",color:"#7C3AED",marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.5px"}}>📖 About This Place</div>
-            {a.wikiSummary&&<div style={{fontSize:"11px",color:"#7C3AED",fontWeight:"600",marginBottom:"4px"}}>{a.wikiSummary}</div>}
-            <div style={{fontSize:"13px",color:"#374151",lineHeight:"1.6"}}>{a.wikiExtract||a.editorialSummary}</div>
-          </div>
-        )}
+        {/* About This Place — expand/collapse panel, picks best of
+            editorialSummary / generativeSummary / synthetic aboutText */}
+        <AboutPanel a={a}/>
         {/* What People Love */}
         {a.highlights?.length>0&&(
           <div style={{marginBottom:"10px",padding:"10px 12px",background:"#F0FDF4",borderRadius:"12px",border:"1px solid #BBF7D0"}}>
@@ -217,7 +300,7 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
 
 const TRAVEL_COLORS={'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'},'📍 Nearby':{bg:'#D1FAE5',color:'#059669'}};
 
-function TierCard({a,userLat,userLng,onMap}){
+function TierCard({a,userLat,userLng}){
   const [dirs,setDirs]=useState(false);
   const [gallery,setGallery]=useState({open:false,idx:0});
   // Tapping the compact card body opens a fullscreen modal rendering the
@@ -225,6 +308,12 @@ function TierCard({a,userLat,userLng,onMap}){
   // buttons (Directions / Website / photo) stopPropagation so they don't
   // also open the modal.
   const [expanded,setExpanded]=useState(false);
+  // The Map button inside the expanded modal opens a fullscreen TierMapOverlay
+  // ON TOP of the modal — the modal stays mounted so when the overlay's X is
+  // tapped, the modal is visible again. This avoids the previous broken UX
+  // where Map closed the modal AND swapped the page to viewMode='map', and
+  // double-X buttons appeared (one inside the popup, one outside).
+  const [mapOpen,setMapOpen]=useState(false);
   const name=a.displayName?.text||a.name||"Activity";
   const tc=TRAVEL_COLORS[a.travelType]||{bg:'#F1F5F9',color:'#64748B'};
   const photo1=a.photos?.[0]||null;
@@ -275,16 +364,19 @@ function TierCard({a,userLat,userLng,onMap}){
                 aria-label="Close"
                 style={{position:"absolute",top:"12px",right:"12px",zIndex:10000,width:"36px",height:"36px",borderRadius:"50%",border:"none",background:"rgba(255,255,255,0.95)",color:T.dark,fontSize:"18px",fontWeight:"800",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}
               >✕</button>
-              <ActivityCard a={a} index={0} onMap={onMap?()=>{setExpanded(false);onMap(a);}:null} isHighlighted={false} cardRef={null} forceExpanded={false} userLat={userLat} userLng={userLng} formatDistance={fmtDist}/>
+              <ActivityCard a={a} index={0} onMap={()=>setMapOpen(true)} isHighlighted={false} cardRef={null} forceExpanded={false} userLat={userLat} userLng={userLng} formatDistance={fmtDist}/>
             </div>
           </motion.div>
         )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {mapOpen&&(<TierMapOverlay activity={a} userLat={userLat} userLng={userLng} onClose={()=>setMapOpen(false)}/>)}
       </AnimatePresence>
     </>
   );
 }
 
-function TierSection({title,icon,items,userLat,userLng,onMap}){
+function TierSection({title,icon,items,userLat,userLng}){
   const [collapsed,setCollapsed]=useState(false);
   if(!items?.length) return null;
   return(
@@ -295,7 +387,7 @@ function TierSection({title,icon,items,userLat,userLng,onMap}){
       </div>
       <AnimatePresence>{!collapsed&&(
         <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-          <div style={{display:"flex",gap:"12px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none"}}>{items.map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} onMap={onMap}/>)}</div>
+          <div style={{display:"flex",gap:"12px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none"}}>{items.map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng}/>)}</div>
         </motion.div>
       )}</AnimatePresence>
     </div>
@@ -323,12 +415,6 @@ export default function ThingsToDoFinder() {
   const [highlight,setHighlight]=useState(null);
   const [expandedIdx,setExpandedIdx]=useState(null);
   const [activePin,setActivePin]=useState(null);
-  // When the user taps Map from a National Icons / Regional Must-See card,
-  // the activity isn't in `filtered` (Near You) so it has no pre-built marker.
-  // Stash the activity here; the map effect renders a marker for it and
-  // centers the view on it, with the user's "you are here" blue dot still
-  // visible. Cleared when viewMode returns to "list".
-  const [extraMapPin,setExtraMapPin]=useState(null);
   const cardRefs=useRef({});
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
   const {activeLocation}=useLocation();
@@ -376,18 +462,6 @@ export default function ThingsToDoFinder() {
 
   const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const a=filtered[i];if(mapInst.current&&a?.lat&&a?.lng){mapInst.current.setView([a.lat,a.lng],17);markers.current[i]?.openPopup();}},350);};
 
-  // Map handler for TierCard (National Icons / Regional Must-See). Stashes
-  // the activity in extraMapPin so the map effect can render a marker for it,
-  // then switches to map view. The destination may be far from the user's
-  // current location (e.g. Rockefeller Center vs Arcadia) — the map shows
-  // both the blue "you are here" dot and the destination's icon pin; user
-  // can zoom out to see both, or zoom in on the destination popup.
-  const handleMapForActivity=(a)=>{setExtraMapPin(a);setViewMode("map");setActivePin(null);};
-
-  // Clear the extraMapPin when the user returns to list view so subsequent
-  // map opens (from Near You activities) don't keep the stale TierCard pin.
-  useEffect(()=>{if(viewMode==="list")setExtraMapPin(null);},[viewMode]);
-
   useEffect(()=>{
     if(viewMode!=="map"||!mapRef.current||!lat||!lng) return;
     const init=()=>{
@@ -407,23 +481,10 @@ export default function ThingsToDoFinder() {
         mk.on("popupopen",()=>setActivePin(i)); markers.current[i]=mk;
       });
       if(activePin!==null) setTimeout(()=>markers.current[activePin]?.openPopup(),200);
-      // Render the extra TierCard pin on top of the standard Near You markers.
-      // Drawn AFTER the user "you are here" blue dot + filtered[] markers so
-      // its popup auto-opens cleanly and is on the topmost z-layer.
-      if(extraMapPin?.lat&&extraMapPin?.lng){
-        const a=extraMapPin;
-        const color=a.activityColor||T.accent;
-        const sz=40;
-        const mk=window.L.marker([a.lat,a.lng],{icon:window.L.divIcon({html:`<div style="width:${sz}px;height:${sz}px;background:${color};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 4px 16px ${color}90;border:3px solid #fff;">${a.activityIcon||"⭐"}</div>`,iconSize:[sz,sz],className:""})}).addTo(map);
-        const st=openStatus(a);
-        mk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:260px;position:relative;"><button onclick="window._gsTDMapInst?.closePopup()" style="position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#64748B;font-size:13px;z-index:10;">✕</button><div style="padding:12px 14px;"><div style="font-weight:700;font-size:15px;color:#1A2332;margin-bottom:5px;padding-right:26px;line-height:1.3;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:12px;padding:6px 9px;border-radius:7px;background:${st.isOpen===true?"#F0FDF4":st.isOpen===false?"#FEF2F2":"#F5F5F5"};margin-bottom:0;"><span style="font-weight:700;color:${st.isOpen===true?"#15803D":st.isOpen===false?"#DC2626":"#9E9E9E"};">${st.label}</span></div></div></div>`,{maxWidth:280,className:"gs-popup",keepInView:true});
-        map.setView([a.lat,a.lng],13);
-        setTimeout(()=>mk.openPopup(),400);
-      }
     };
     if(!window.L){const lk=document.createElement("link");lk.rel="stylesheet";lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(lk);const sc=document.createElement("script");sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";sc.onload=init;document.head.appendChild(sc);}else init();
     return()=>{delete window._gsTDMapInst;delete window._gsTDView;delete window._gsTDDirs;if(mapInst.current){mapInst.current.remove();mapInst.current=null;}};
-  },[viewMode,filtered,lat,lng,activePin,extraMapPin]);
+  },[viewMode,filtered,lat,lng,activePin]);
 
   const stats={total:filtered.length};
   const advFilterCount=[openOnly,outdoorOnly,popularOnly,category!=='all'].filter(Boolean).length;
@@ -499,8 +560,8 @@ export default function ThingsToDoFinder() {
       {loading&&activities.length===0&&nationalIcons.length===0?(<div style={{textAlign:"center",padding:"70px 24px"}}><motion.div animate={{scale:[1,1.1,1],rotate:[0,5,-5,0]}} transition={{repeat:Infinity,duration:1.8}} style={{fontSize:"52px",marginBottom:"16px",display:"inline-block"}}>⭐</motion.div><div style={{color:T.dark,fontWeight:"700",fontSize:"16px",marginBottom:"6px"}}>Discovering things to do…</div><div style={{color:T.gray,fontSize:"13px"}}>Landmarks · Museums · Parks · Outdoors</div><div style={{display:"flex",justifyContent:"center",gap:"6px",marginTop:"18px"}}>{[0,1,2].map(i=><motion.div key={i} animate={{opacity:[0.3,1,0.3]}} transition={{repeat:Infinity,duration:1.2,delay:i*0.2}} style={{width:"8px",height:"8px",borderRadius:"50%",background:T.accent}}/>)}</div></div>)
       :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"48px",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"16px"}}>{error}</div><button onClick={()=>setRadius(r=>Math.min(r+5,25))} style={{marginTop:"14px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"14px",cursor:"pointer",fontFamily:"inherit"}}>Expand Radius</button></div>)
       :viewMode==="list"?(<div style={{padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"4px"}}>
-        <TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} onMap={handleMapForActivity}/>
-        <TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} onMap={handleMapForActivity}/>
+        <TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng}/>
+        <TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng}/>
         {(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"18px"}}>📍</span><span style={{fontWeight:"800",fontSize:"15px",color:T.dark}}>Near You</span><span style={{fontSize:"12px",color:T.gray}}>({filtered.length})</span></div>}
         {filtered.length===0&&nationalIcons.length===0&&regionalGems.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"52px",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"18px",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"13px",marginTop:"6px"}}>Try a different category or expand your radius</div></div>:null}
         <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>{filtered.map((a,i)=><ActivityCard key={a.id||i} a={a} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance}/>)}</div>
