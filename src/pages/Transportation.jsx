@@ -2837,23 +2837,6 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
           </motion.div>
         )}
 
-        {/* Travel Tips */}
-        <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4">
-          <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-green-900">Travel Tips</p>
-              <ul className="text-sm text-green-800 mt-1 space-y-1">
-                <li>• Always confirm fare before starting your journey</li>
-                <li>• Keep small bills/change handy for local transport</li>
-                <li>• Screenshot your route in case you lose signal</li>
-                {getCountryCode(activeLocation) === 'PH' && (
-                  <li>• Use only official taxi stands or Grab app</li>
-                )}
-              </ul>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* ============================================================ */}

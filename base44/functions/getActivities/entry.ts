@@ -410,7 +410,12 @@ Deno.serve(async (req)=>{
     }
 
     const total=dedupedNearby.length+nationalIcons.length+regionalGems.length;
-    return Response.json({activities:dedupedNearby,nationalIcons,regionalGems,count:total,version:'v5.0'});
+    // DIAG: photo counts per tier (so user can verify Base44 deploy state in
+    // Base44 execution logs). If this line is missing in logs, the deploy
+    // hasn't synced and photos will reflect old slice(0,2) + Tier1/2 culling.
+    const photoCounts=(arr:any[])=>arr.slice(0,5).map((a:any)=>a.photos?.length||0).join(',');
+    console.log(`📷 v6 photos | T1(icons):[${photoCounts(nationalIcons)}] T2(regional):[${photoCounts(regionalGems)}] T3(nearby):[${photoCounts(dedupedNearby)}]`);
+    return Response.json({activities:dedupedNearby,nationalIcons,regionalGems,count:total,version:'v6.0'});
   } catch(e:any){
     return Response.json({error:e.message,activities:[]},{status:200});
   }

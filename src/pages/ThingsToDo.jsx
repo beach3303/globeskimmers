@@ -113,11 +113,19 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
   const {activeLocation}=useLocation();
   const userLocLabel=getLocationLabel(activeLocation);
   const userLocMode=activeLocation?.mode==='navigate'?'Selected location':'Current location';
+  // Track whether the "you are here" popup is expanded (default) or
+  // collapsed to a small pill. Mutated by the popup's inline toggle
+  // button via the window function exposed below.
+  const [userExpanded,setUserExpanded]=useState(true);
   useEffect(()=>{
-    // Expose onClose to the popup's inline-HTML close button. Cleared on
-    // unmount so it doesn't leak between activity changes.
+    // Expose onClose + the user-pin expand/collapse toggle to popup
+    // inline-HTML buttons. Cleared on unmount to avoid leaks.
     window._gsTDCloseTierMap=onClose;
-    return()=>{ delete window._gsTDCloseTierMap; };
+    window._gsTDToggleUserPin=()=>setUserExpanded(e=>!e);
+    return()=>{
+      delete window._gsTDCloseTierMap;
+      delete window._gsTDToggleUserPin;
+    };
   },[onClose]);
   useEffect(()=>{
     if(!mapRef.current||!a?.lat||!a?.lng||userLat==null||userLng==null) return;
@@ -136,7 +144,14 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       // stay open at the same time so the user always sees their location
       // context alongside the destination card.
       const userMk=window.L.marker([userLat,userLng],{icon:window.L.divIcon({html:`<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>`,iconSize:[16,16],className:""})}).addTo(map);
-      userMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;padding:10px 12px;min-width:180px;"><div style="font-weight:800;color:#1A2332;font-size:14px;margin-bottom:4px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:12px;margin-bottom:3px;">${userLocMode}</div><div style="color:#64748B;font-size:11px;line-height:1.4;">${userLocLabel||''}</div></div>`,{maxWidth:220,closeButton:false,autoClose:false,closeOnClick:false});
+      // Two-state popup: expanded (full card with title + mode + label) vs
+      // collapsed (compact pill: "📍 You are here ⌃"). The toggle button at
+      // the bottom-right of each variant flips userExpanded via the window
+      // function — re-runs this whole effect so the popup HTML rebuilds.
+      const userPopupHtml=userExpanded
+        ? `<div style="font-family:-apple-system,sans-serif;padding:10px 12px;min-width:180px;position:relative;"><button onclick="window._gsTDToggleUserPin&&window._gsTDToggleUserPin()" aria-label="Collapse" style="position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:14px;margin-bottom:4px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:12px;margin-bottom:3px;">${userLocMode}</div><div style="color:#64748B;font-size:11px;line-height:1.4;">${userLocLabel||''}</div></div>`
+        : `<div style="font-family:-apple-system,sans-serif;padding:6px 10px;display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="window._gsTDToggleUserPin&&window._gsTDToggleUserPin()"><span style="font-weight:700;color:#1A2332;font-size:12px;">📍 You are here</span><span style="color:#64748B;font-size:11px;font-weight:700;">⌄</span></div>`;
+      userMk.bindPopup(userPopupHtml,{maxWidth:220,closeButton:false,autoClose:false,closeOnClick:false});
       // Destination pin with activity icon + travel-distance popup
       const color=a.activityColor||T.accent;
       const sz=40;
@@ -172,7 +187,7 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       const sc=document.createElement("script"); sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; sc.onload=init; document.head.appendChild(sc);
     } else init();
     return()=>{ if(mapInst.current){mapInst.current.remove();mapInst.current=null;} };
-  },[a,userLat,userLng,userLocLabel,userLocMode]);
+  },[a,userLat,userLng,userLocLabel,userLocMode,userExpanded]);
   return(
     <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
       style={{position:"fixed",inset:0,background:"#000",zIndex:10001,display:"flex",flexDirection:"column"}}>
@@ -352,6 +367,7 @@ function TierCard({a,userLat,userLng}){
   const tc=TRAVEL_COLORS[a.travelType]||{bg:'#F1F5F9',color:'#64748B'};
   const photo1=a.photos?.[0]||null;
   const photo2=a.photos?.[1]||null;
+  const photo3=a.photos?.[2]||null;
   // Inline distance formatter for the expanded modal — TierSection isn't
   // wired to the parent's useDistanceUnit hook, so use a simple miles
   // formatter (matches the compact card's "X.X mi" rendering).
@@ -360,7 +376,14 @@ function TierCard({a,userLat,userLng}){
     <>
       <div onClick={()=>setExpanded(true)} style={{flexShrink:0,width:"220px",background:"#fff",borderRadius:"16px",boxShadow:"0 2px 12px rgba(0,0,0,0.08)",overflow:"hidden",border:"1px solid #E8EDF2",cursor:"pointer"}}>
         <div style={{position:"relative",height:"130px",background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
-          {photo1&&photo2?(
+          {/* 3 photos: 50/25/25 grid (large left, two stacked right). 2: 50/50. 1: full. */}
+          {photo1&&photo2&&photo3?(
+            <div style={{display:"grid",gridTemplateColumns:"50% 50%",gridTemplateRows:"65px 65px",height:"130px",gap:"2px",background:"#fff"}}>
+              <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",gridRow:"span 2",minWidth:0}}/>
+              <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
+              <img src={photo3} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:2});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
+            </div>
+          ):photo1&&photo2?(
             <div style={{display:"flex",height:"130px"}}>
               <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{flex:1,height:"130px",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
               <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{flex:1,height:"130px",objectFit:"cover",cursor:"pointer",borderLeft:"2px solid #fff",minWidth:0}}/>
