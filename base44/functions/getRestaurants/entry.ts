@@ -1003,13 +1003,7 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
         const primary = place.primaryType || '';
         const isFastFood   = primary === 'fast_food_restaurant' || types.has('fast_food_restaurant');
         const isCoffeeShop = primary === 'coffee_shop'          || types.has('coffee_shop');
-        if (isFastFood || isCoffeeShop) {
-          // TEMP DIAG (revert after Step 4.9 verified in prod): log every
-          // chain caught here so Base44 execution logs prove the deploy
-          // is live and show what types each chain carries.
-          console.log(`🍳 Step4.9 reject: name="${name}" primaryType="${primary}" types=[${[...types].slice(0, 6).join(',')}]`);
-          return 5;
-        }
+        if (isFastFood || isCoffeeShop) return 5;
       }
     }
 
