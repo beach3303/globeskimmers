@@ -259,6 +259,40 @@ const ASIAN_TYPES = new Set([
   'ramen_restaurant','sushi_restaurant',
 ]);
 
+// Single-cuisine chip → UMBRELLA intent synthesis. When the user has a
+// specific cuisine chip active but the search bar is empty, the request
+// handler synthesizes an UMBRELLA intent from this map so the tier
+// classifier has something to tier against. Without this, intent is
+// GENERAL → getTierForPlace returns 1 unconditionally → every result
+// gets the "Authentic" / "Namesake" badge regardless of how cuisine-true
+// it is. With this, italian_restaurant tiers 1, a place whose reviews
+// mention pasta tiers 2, anything else tiers 4.
+//
+// Skipped (handled elsewhere or ambiguous): 'all', dietary chips
+// (halal/kosher/vegan/vegetarian/glutenFree → dietary handler), venue
+// chips (bakery/sports_bar → venue handler), sort chips (latenight/fine/
+// budget), and broad cultural umbrellas (asian/latin/mediterranean/
+// european → covered by CULTURAL_INTENTS below + parseSearchIntentInner
+// regex paths).
+const CUISINE_CHIP_TO_UMBRELLA: Record<string, { label: string; types: Set<string>; keywords: string[] }> = {
+  italian:       { label: 'Italian',       types: new Set(['italian_restaurant']),                                  keywords: ['pasta','pizza','risotto','lasagna','antipasto'] },
+  mexican:       { label: 'Mexican',       types: new Set(['mexican_restaurant']),                                  keywords: ['taco','burrito','enchilada','quesadilla','tamale'] },
+  chinese:       { label: 'Chinese',       types: new Set(['chinese_restaurant']),                                  keywords: ['dim sum','noodle','dumpling','chow mein','kung pao'] },
+  japanese:      { label: 'Japanese',      types: new Set(['japanese_restaurant','ramen_restaurant']),              keywords: ['sushi','ramen','tempura','udon','teriyaki'] },
+  sushi:         { label: 'Sushi',         types: new Set(['sushi_restaurant','japanese_restaurant']),              keywords: ['sushi','sashimi','maki','nigiri','omakase'] },
+  korean:        { label: 'Korean',        types: new Set(['korean_restaurant']),                                   keywords: ['bibimbap','kimchi','bulgogi','korean bbq','tteokbokki'] },
+  thai:          { label: 'Thai',          types: new Set(['thai_restaurant']),                                     keywords: ['pad thai','tom yum','green curry','massaman','satay'] },
+  vietnamese:    { label: 'Vietnamese',    types: new Set(['vietnamese_restaurant']),                               keywords: ['pho','banh mi','spring roll','vermicelli','bun bo hue'] },
+  indian:        { label: 'Indian',        types: new Set(['indian_restaurant']),                                   keywords: ['curry','biryani','naan','tikka masala','tandoori'] },
+  filipino:      { label: 'Filipino',      types: new Set(['filipino_restaurant']),                                 keywords: ['adobo','sinigang','lumpia','sisig','halo halo'] },
+  french:        { label: 'French',        types: new Set(['french_restaurant']),                                   keywords: ['croissant','baguette','crepe','quiche','bouillabaisse'] },
+  pizza:         { label: 'Pizza',         types: new Set(['pizza_restaurant']),                                    keywords: ['pizza','slice','margherita','pepperoni','sicilian'] },
+  seafood:       { label: 'Seafood',       types: new Set(['seafood_restaurant']),                                  keywords: ['fish','shrimp','lobster','crab','clam','oyster'] },
+  mediterranean: { label: 'Mediterranean', types: new Set(['mediterranean_restaurant','greek_restaurant']),         keywords: ['gyro','hummus','falafel','shawarma','tzatziki'] },
+  american:      { label: 'American',      types: new Set(['american_restaurant','hamburger_restaurant']),          keywords: ['burger','fries','sandwich','wing','bbq'] },
+  breakfast:     { label: 'Breakfast',     types: new Set(['breakfast_restaurant','brunch_restaurant']),            keywords: ['pancake','waffle','egg','french toast','omelet'] },
+};
+
 const CULTURAL_INTENTS: Record<string, { label: string; types: Set<string>; keywords: string[] }> = {
   asian: {
     label: 'Asian',
@@ -1191,7 +1225,31 @@ Deno.serve(async (req) => {
     console.log("📋 Request:", { latitude, longitude, radius, radiusMiles: radiusMiles.toFixed(1), cuisine, searchQuery, forceRefresh });
 
     // Parse search intent for tiering + honest fallbacks
-    const intent = parseSearchIntent(searchQuery);
+    let intent = parseSearchIntent(searchQuery);
+
+    // ── UMBRELLA synthesis from cuisine chip (Step 4.5 Fix 3) ────────────────
+    // When the user has a specific cuisine chip active but the search bar is
+    // empty, parseSearchIntent returns GENERAL → getTierForPlace returns 1
+    // for every place → all results get an "Authentic" / "Namesake" badge.
+    // Synthesize an UMBRELLA intent from the cuisine chip so type-true
+    // restaurants tier 1, keyword-mentioning places tier 2, and the rest
+    // tier 4 — making the badges meaningful.
+    // Only synthesize when intent is GENERAL: a typed dish or cuisine word
+    // (which already parses to DISH or UMBRELLA) should win over the chip.
+    if (intent.kind === 'GENERAL' && cuisine && cuisine !== 'all') {
+      const chipUmbrella = CUISINE_CHIP_TO_UMBRELLA[cuisine];
+      if (chipUmbrella) {
+        intent = {
+          kind: 'UMBRELLA',
+          cultureKey: cuisine,
+          label: chipUmbrella.label,
+          types: chipUmbrella.types,
+          keywords: chipUmbrella.keywords,
+        };
+        console.log(`🧠 Intent synthesized from cuisine chip: ${cuisine} -> UMBRELLA(${chipUmbrella.label})`);
+      }
+    }
+
     console.log(`🧠 Intent: ${intent.kind}${intent.kind !== 'GENERAL' ? ` (${(intent as any).label})` : ''}`);
 
     // ── DIETARY SHORTCUT ──────────────────────────────────────────────────────
