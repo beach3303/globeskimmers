@@ -110,23 +110,24 @@ function Directions({isOpen,onClose,lat,lng,name,userLat,userLng}){
 function TierMapOverlay({activity:a,userLat,userLng,onClose}){
   const mapRef=useRef(null);
   const mapInst=useRef(null);
+  const destMkRef=useRef(null);
   const {activeLocation}=useLocation();
   const userLocLabel=getLocationLabel(activeLocation);
   const userLocMode=activeLocation?.mode==='navigate'?'Selected location':'Current location';
-  // Track whether the "you are here" popup is expanded (default) or
-  // collapsed to a small pill. Mutated by the popup's inline toggle
-  // button via the window function exposed below.
-  const [userExpanded,setUserExpanded]=useState(true);
   useEffect(()=>{
-    // Expose onClose + the user-pin expand/collapse toggle to popup
-    // inline-HTML buttons. Cleared on unmount to avoid leaks.
+    // Expose onClose to the popup's inline-HTML close button. Cleared on
+    // unmount so it doesn't leak between activity changes.
     window._gsTDCloseTierMap=onClose;
-    window._gsTDToggleUserPin=()=>setUserExpanded(e=>!e);
-    return()=>{
-      delete window._gsTDCloseTierMap;
-      delete window._gsTDToggleUserPin;
-    };
+    return()=>{ delete window._gsTDCloseTierMap; };
   },[onClose]);
+  // "Reset view" handler — re-fits bounds to both pins AND re-opens the
+  // destination popup. Used when the user pans/zooms away or closes the
+  // popup. The user-pin tooltip is permanent so always visible regardless.
+  const resetView=()=>{
+    if(!mapInst.current||!destMkRef.current) return;
+    mapInst.current.fitBounds([[userLat,userLng],[a.lat,a.lng]],{padding:[60,80],maxZoom:14});
+    setTimeout(()=>destMkRef.current.openPopup(),300);
+  };
   useEffect(()=>{
     if(!mapRef.current||!a?.lat||!a?.lng||userLat==null||userLng==null) return;
     const init=()=>{
@@ -134,64 +135,64 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       const map=window.L.map(mapRef.current);
       window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OSM"}).addTo(map);
       mapInst.current=map;
-      // User location pin (blue dot) with auto-opened popup showing the
-      // "You are here" header, the location mode ("Current location" or
-      // "Selected location" based on LocationContext mode), and the actual
-      // city/state/country from getLocationLabel. Internationally aware: a
-      // user in Kyoto sees "Kyoto, Japan"; one in Pensacola sees "Pensacola,
-      // FL, USA"; one in Manila sees "Manila, Philippines".
-      // autoClose:false + closeOnClick:false lets BOTH popups (user + dest)
-      // stay open at the same time so the user always sees their location
-      // context alongside the destination card.
+      // ── USER LOCATION PIN ────────────────────────────────────────────────
+      // Uses a Leaflet TOOLTIP (not popup) with permanent:true + direction:
+      // 'bottom'. This solves the popup-overlap bug: popups all default to
+      // anchor above their marker, so when the two pins are close on screen
+      // (e.g. Disneyland + Haneda) the popups stacked on top of each other.
+      // The tooltip is anchored BELOW the user pin, so it can never collide
+      // with the destination popup above its pin. Tooltip is compact and
+      // always visible — no collapse needed at this size.
+      // Internationally aware via getLocationLabel: shows "Pensacola, FL"
+      // for US, "Kyoto, Japan" for Japan, "Manila, Philippines" etc.
+      // **REUSE pattern**: when we wire overlay-style maps for PlacesToEat /
+      // CoffeeFinder / ATMFinder / Money / Restroom, the user pin should
+      // ALSO be a permanent tooltip with direction:'bottom' for the same
+      // anti-collision reason.
       const userMk=window.L.marker([userLat,userLng],{icon:window.L.divIcon({html:`<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>`,iconSize:[16,16],className:""})}).addTo(map);
-      // Two-state popup: expanded (full card with title + mode + label) vs
-      // collapsed (compact pill: "📍 You are here ⌃"). The toggle button at
-      // the bottom-right of each variant flips userExpanded via the window
-      // function — re-runs this whole effect so the popup HTML rebuilds.
-      const userPopupHtml=userExpanded
-        ? `<div style="font-family:-apple-system,sans-serif;padding:10px 12px;min-width:180px;position:relative;"><button onclick="window._gsTDToggleUserPin&&window._gsTDToggleUserPin()" aria-label="Collapse" style="position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:14px;margin-bottom:4px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:12px;margin-bottom:3px;">${userLocMode}</div><div style="color:#64748B;font-size:11px;line-height:1.4;">${userLocLabel||''}</div></div>`
-        : `<div style="font-family:-apple-system,sans-serif;padding:6px 10px;display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="window._gsTDToggleUserPin&&window._gsTDToggleUserPin()"><span style="font-weight:700;color:#1A2332;font-size:12px;">📍 You are here</span><span style="color:#64748B;font-size:11px;font-weight:700;">⌄</span></div>`;
-      userMk.bindPopup(userPopupHtml,{maxWidth:220,closeButton:false,autoClose:false,closeOnClick:false});
-      // Destination pin with activity icon + travel-distance popup
+      userMk.bindTooltip(`<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;"><div style="font-weight:800;color:#1A2332;font-size:12px;margin-bottom:2px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:11px;margin-bottom:2px;">${userLocMode}</div><div style="color:#64748B;font-size:10px;line-height:1.3;">${userLocLabel||''}</div></div>`,{permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip'});
+      // ── DESTINATION PIN ──────────────────────────────────────────────────
       const color=a.activityColor||T.accent;
       const sz=40;
       const destMk=window.L.marker([a.lat,a.lng],{icon:window.L.divIcon({html:`<div style="width:${sz}px;height:${sz}px;background:${color};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 4px 16px ${color}90;border:3px solid #fff;">${a.activityIcon||"⭐"}</div>`,iconSize:[sz,sz],className:""})}).addTo(map);
+      destMkRef.current=destMk;
       const distMi=a.distanceMiles||0;
       const travelTxt=a.travelType||(distMi>100?'✈️ Flights Required':distMi>50?'🚗 Drive':distMi>15?'🚗 Short Drive':'📍 Nearby');
       const distStr=`${distMi.toFixed(1)} mi`;
       const st=openStatus(a);
       const stColor=st.isOpen===true?"#15803D":st.isOpen===false?"#DC2626":"#9E9E9E";
       const stBg=st.isOpen===true?"#F0FDF4":st.isOpen===false?"#FEF2F2":"#F5F5F5";
-      // The popup card has its own close X in the top-right corner.
+      // Destination popup card with its own close X in the top-right corner.
+      // Default Leaflet anchor is ABOVE the marker. With the user-pin tooltip
+      // below its marker, the two never collide regardless of how close the
+      // pins are on screen.
       // closeButton:false disables Leaflet's default X (we use a custom-
       // styled one). autoClose:false + closeOnClick:false prevent the
       // popup from being accidentally dismissed by panning or clicking the
-      // map — the user must explicitly tap the X. The X calls
-      // window._gsTDCloseTierMap which closes the WHOLE overlay (not just
-      // the popup) and returns the user to the expanded card modal
-      // mounted underneath.
+      // map. The custom X calls window._gsTDCloseTierMap → closes the
+      // WHOLE overlay (returns to expanded card modal).
       destMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:250px;padding:12px 14px;position:relative;"><button onclick="window._gsTDCloseTierMap&&window._gsTDCloseTierMap()" aria-label="Close" style="position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:14px;font-weight:800;z-index:10;display:flex;align-items:center;justify-content:center;font-family:inherit;">✕</button><div style="font-weight:700;font-size:15px;color:#1A2332;margin-bottom:5px;line-height:1.3;padding-right:30px;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:12px;padding:6px 9px;border-radius:7px;background:${stBg};margin-bottom:8px;"><span style="font-weight:700;color:${stColor};">${st.label}</span></div><div style="font-size:12px;padding:7px 10px;border-radius:7px;background:#FEF3C7;color:#92400E;font-weight:700;">${travelTxt} · ${distStr}</div></div>`,{maxWidth:270,closeButton:false,autoClose:false,closeOnClick:false});
-      // Fit both pins into view. Padding gives a comfortable border.
-      // Works for any distance — across town, country, or globe.
+      // Fit both pins into view + auto-open destination popup. The user
+      // tooltip is permanent so it's already visible.
       map.fitBounds([[userLat,userLng],[a.lat,a.lng]],{padding:[60,80],maxZoom:14});
-      // Auto-open BOTH popups so the user sees their location card AND
-      // the destination card at the same time. Both have autoClose:false
-      // so neither closes the other when opened.
-      setTimeout(()=>{
-        destMk.openPopup();
-        userMk.openPopup();
-      },300);
+      setTimeout(()=>destMk.openPopup(),300);
     };
     if(!window.L){
       const lk=document.createElement("link"); lk.rel="stylesheet"; lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"; document.head.appendChild(lk);
       const sc=document.createElement("script"); sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; sc.onload=init; document.head.appendChild(sc);
     } else init();
     return()=>{ if(mapInst.current){mapInst.current.remove();mapInst.current=null;} };
-  },[a,userLat,userLng,userLocLabel,userLocMode,userExpanded]);
+  },[a,userLat,userLng,userLocLabel,userLocMode]);
   return(
     <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
       style={{position:"fixed",inset:0,background:"#000",zIndex:10001,display:"flex",flexDirection:"column"}}>
       <div ref={mapRef} style={{flex:1,width:"100%"}}/>
+      {/* Reset view — restores the default "both pins centered + destination
+          card open" state. Useful after user pans/zooms away or closes the
+          destination popup. User pin tooltip is permanent so always visible. */}
+      <button onClick={resetView} aria-label="Show both pins" style={{position:"absolute",bottom:"24px",left:"16px",zIndex:10003,padding:"10px 14px",borderRadius:"22px",border:"none",background:"rgba(255,255,255,0.96)",color:T.dark,fontSize:"13px",fontWeight:"700",cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:"6px",fontFamily:"inherit"}}>
+        <span style={{fontSize:"15px"}}>↺</span> Show both pins
+      </button>
     </motion.div>
   );
 }
