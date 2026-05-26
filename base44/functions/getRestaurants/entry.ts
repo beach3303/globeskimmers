@@ -651,7 +651,14 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   { pattern: /\bcheesecake\b/,                         tier1:['dessert_shop','bakery','cake_shop'],                       tier2:['cafe','american_restaurant'],                     label:'cheesecake',      nameKeywords:['cheesecake','cheesecake factory','junior\'s'] },
   { pattern: /\bchocolate\b|\bcacao\b|\btruffles?\b/,  tier1:['chocolatier','dessert_shop','candy_store'],                tier2:['bakery'],                                         label:'chocolate',       nameKeywords:['chocolate','cacao','truffle','godiva','lindt','see\'s','ghirardelli','vosges','jacques torres'] },
   { pattern: /\bbrownies?\b/,                          tier1:['bakery','dessert_shop'],                                   tier2:['cafe'],                                           label:'brownies',        nameKeywords:['brownie','brownies','fairytale brownies'] },
-  { pattern: /\bfrozen\s*yogurt\b|\bfro[\s-]?yo\b/,    tier1:['ice_cream_shop'],                                          tier2:['dessert_shop'],                                   label:'frozen yogurt',   nameKeywords:['frozen yogurt','froyo','yogurtland','menchie','pinkberry','tcby','sweetfrog','red mango','16 handles','tutti frutti'] },
+  // frozen yogurt: NO tier2 = dessert_shop. Google tags way too many places
+  // (Asian bakeries, donut shops, candy shops, dessert markets) as dessert_shop
+  // even when they don't sell frozen yogurt, so a tier2 match would tier 3
+  // "Has It" places that aren't actually froyo shops. Yogurtland / Pinkberry /
+  // Menchie's / TCBY / Sweetfrog / Red Mango / 16 Handles / Tutti Frutti all
+  // tier 1 via nameKeywords name match. Lesser-known froyo shops still surface
+  // via Tier 4 text-match (review/AI/menu mentions of "frozen yogurt" / "froyo").
+  { pattern: /\bfrozen\s*yogurt\b|\bfro[\s-]?yo\b/,    tier1:['ice_cream_shop'],                                          tier2:[],                                                 label:'frozen yogurt',   nameKeywords:['frozen yogurt','froyo','yogurtland','menchie','pinkberry','tcby','sweetfrog','red mango','16 handles','tutti frutti'] },
   { pattern: /\bshaved\s*ice\b|\bsno[\s-]*cone\b|\bhalo[\s-]*halo\b/, tier1:['ice_cream_shop','dessert_shop'],              tier2:[],                                                 label:'shaved ice',      nameKeywords:['shaved ice','sno cone','snow cone','snowflake','hawaiian shaved ice','class 302'] },
   { pattern: /\bcr[eè]me\s*br[uû]l[eé]e\b|\bsouffl[eé]\b/, tier1:['french_restaurant','dessert_shop'],                     tier2:['bakery'],                                         label:'French dessert',  nameKeywords:['creme brulee','crème brûlée','soufflé','souffle'] },
   { pattern: /\bcandy\b|\bsweets?\b|\bfudge\b/,        tier1:['candy_store','dessert_shop'],                              tier2:['bakery'],                                         label:'candy',           nameKeywords:['candy','sweets','fudge','see\'s','jelly belly','dylan\'s candy','sugarfina'] },

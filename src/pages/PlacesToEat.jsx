@@ -359,10 +359,14 @@ function processRest(place, userLat, userLng) {
   if (place.sportsBadge === 'Best Sports Bar')   badges.push({ icon:'🏆', label:'Best Sports Bar',   color:'#B45309', bg:'#FEF3C7' });
   if (place.sportsBadge === 'Sports-Friendly')   badges.push({ icon:'📺', label:'Sports-Friendly',    color:'#0277BD', bg:'#E1F5FE' });
   if (place.sportsBadge === 'Casual Watch Spot') badges.push({ icon:'🍺', label:'Casual Watch Spot',  color:'#64748B', bg:'#F1F5F9' });
-  // Intent tier badges — only show for Tier 3/4 (Tier 1/2 is the expected result, no label needed)
-  if (place.tier === 1) badges.push({ icon:'✓', label:'Authentic',   color:'#15803D', bg:'#DCFCE7' });
-  if (place.tier === 3) badges.push({ icon:'~', label:'Has It',       color:'#A16207', bg:'#FEF9C3' });
-  if (place.tier === 4) badges.push({ icon:'?', label:'Not Specialist', color:'#6B7280', bg:'#F3F4F6' });
+  // Intent tier badges — match backend TIER_LABELS (Step 5 rename, 2026-05-26):
+  //   1 = Namesake (place name contains the dish word)
+  //   2 = Specialist (place type matches the dish's primary cuisine type) — no badge, expected result
+  //   3 = Related Cuisine (place type matches secondary cultural cuisine)
+  //   4 = Serves It (editorialSummary / reviews / menu OCR mention the dish)
+  if (place.tier === 1) badges.push({ icon:'✓', label:'Namesake',        color:'#15803D', bg:'#DCFCE7' });
+  if (place.tier === 3) badges.push({ icon:'~', label:'Related Cuisine', color:'#A16207', bg:'#FEF9C3' });
+  if (place.tier === 4) badges.push({ icon:'?', label:'Serves It',       color:'#6B7280', bg:'#F3F4F6' });
   if (place.hasDriveThru)             badges.push({ icon:'🚗', label:'Drive-Thru',  color:'#0277BD', bg:'#E1F5FE' });
   if (place.isTakeoutOnly)            badges.push({ icon:'📦', label:'Takeout Only',color:'#E65100', bg:'#FFF3E0' });
   if (open.is24Hours||vibes.lateNight)badges.push({ icon:'🌙', label:'Late Night',  color:'#1565C0', bg:'#E3F2FD' });
