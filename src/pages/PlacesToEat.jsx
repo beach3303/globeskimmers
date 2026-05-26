@@ -245,16 +245,40 @@ function detectVibes(place) {
 function buildParking(opts) {
   if (!opts) return null;
   const details = [];
-  if (opts.freeParkingLot)     details.push({ icon:'🅿️', label:'Free parking lot',    free: true  });
-  if (opts.paidParkingLot)     details.push({ icon:'🅿️', label:'Paid parking lot',    free: false });
-  if (opts.freeStreetParking)  details.push({ icon:'🛣️', label:'Free street parking', free: true  });
-  if (opts.paidStreetParking)  details.push({ icon:'🛣️', label:'Paid street parking', free: false });
-  if (opts.valetParking)       details.push({ icon:'🎩', label:'Valet parking',        free: false });
-  if (opts.freeGarage)         details.push({ icon:'🏢', label:'Free garage',          free: true  });
-  if (opts.paidGarage)         details.push({ icon:'🏢', label:'Paid garage',          free: false });
+
+  // LOT PARKING — Free wins over Paid when Google returns both for the same
+  // category (which happens often: lots with mixed free/paid sections, or
+  // Google's data team flagged both at different times). Prioritize Free
+  // since the user wants to know about a free option if one exists.
+  if (opts.freeParkingLot) {
+    details.push({ icon:'🅿️', label:'Free parking lot' });
+  } else if (opts.paidParkingLot) {
+    details.push({ icon:'🅿️', label:'Paid parking lot' });
+  }
+
+  // STREET PARKING
+  if (opts.freeStreetParking) {
+    details.push({ icon:'🛣️', label:'Free street parking' });
+  } else if (opts.paidStreetParking) {
+    details.push({ icon:'🛣️', label:'Paid street parking' });
+  }
+
+  // GARAGE PARKING
+  if (opts.freeGarage) {
+    details.push({ icon:'🏢', label:'Free garage' });
+  } else if (opts.paidGarage) {
+    details.push({ icon:'🏢', label:'Paid garage' });
+  }
+
+  // VALET — additive (always show if available, separate from lot/street/garage)
+  if (opts.valetParking) {
+    details.push({ icon:'🎩', label:'Valet parking' });
+  }
+
   if (details.length === 0 && !opts.parkingAvailable) return null;
   if (details.length === 0 && opts.parkingAvailable)
-    details.push({ icon:'🅿️', label:'Parking available', free: null });
+    details.push({ icon:'🅿️', label:'Parking available' });
+
   return { source: 'api', noParking: false, details };
 }
 
@@ -635,7 +659,7 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
               ):(
                 <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
                   {parking.details?.length>0?parking.details.map((d,i)=>(
-                    <span key={i} style={{fontSize:"12px",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>{d.icon} {d.label}{d.free===true?' · Free':d.free===false&&!d.cost?' · Paid':''}</span>
+                    <span key={i} style={{fontSize:"12px",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>{d.icon} {d.label}</span>
                   )):<span style={{fontSize:"12px",color:GRAY}}>Parking available</span>}
                   {parking.valetCost&&<span style={{fontSize:"12px",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🎩 Valet {parking.valetCost}</span>}
                 </div>
