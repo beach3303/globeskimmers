@@ -96,14 +96,29 @@ function Directions({isOpen,onClose,lat,lng,name,userLat,userLng}){
 // TierMapOverlay — fullscreen modal map for the National Icons / Regional
 // Must-See "Map" button. Renders ON TOP of the TierCard's expanded modal
 // (which stays mounted underneath), so the X here closes the overlay and
-// returns the user to the same expanded card they were viewing. Shows two
-// pins: the user's "you are here" blue dot + the destination's activity-icon
-// pin. fitBounds zooms the map to fit both even when they're across the
-// globe (Manila → Arcadia, etc.). Destination popup auto-opens with the
-// travel-distance label ("✈️ Flight / Ferry Required · 7,000 mi" etc.).
+// returns the user to the same expanded card they were viewing.
+// Shows two pins:
+//   1. User location pin labeled "Current location" or "Selected location"
+//      with the city/state from getLocationLabel(activeLocation).
+//   2. Destination pin with activity icon + popup card containing name,
+//      address, rating, open status, and travel-distance label.
+// The popup card has its OWN X (top-right corner of the popup) which is
+// the single close affordance — no separate overlay X. Closing the popup
+// (via the in-popup X) also closes the overlay → returns to the expanded
+// modal underneath. Wired via window._gsTDCloseTierMap which the popup
+// HTML calls on click.
 function TierMapOverlay({activity:a,userLat,userLng,onClose}){
   const mapRef=useRef(null);
   const mapInst=useRef(null);
+  const {activeLocation}=useLocation();
+  const userLocLabel=getLocationLabel(activeLocation);
+  const userLocMode=activeLocation?.mode==='navigate'?'Selected location':'Current location';
+  useEffect(()=>{
+    // Expose onClose to the popup's inline-HTML close button. Cleared on
+    // unmount so it doesn't leak between activity changes.
+    window._gsTDCloseTierMap=onClose;
+    return()=>{ delete window._gsTDCloseTierMap; };
+  },[onClose]);
   useEffect(()=>{
     if(!mapRef.current||!a?.lat||!a?.lng||userLat==null||userLng==null) return;
     const init=()=>{
@@ -111,22 +126,31 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       const map=window.L.map(mapRef.current);
       window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OSM"}).addTo(map);
       mapInst.current=map;
-      // User "you are here" blue dot
+      // User location pin (blue dot) — "Current location" vs "Selected location"
+      // determined by the LocationContext mode; the line below the heading
+      // shows the actual city/state from getLocationLabel, so a user in
+      // Pensacola sees "Current location · Pensacola, FL".
       const userMk=window.L.marker([userLat,userLng],{icon:window.L.divIcon({html:`<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>`,iconSize:[16,16],className:""})}).addTo(map);
-      userMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;padding:6px 10px;font-weight:700;color:#1A2332;font-size:13px;">📍 You are here</div>`,{maxWidth:160,closeButton:false});
+      userMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;padding:8px 12px;min-width:160px;"><div style="font-weight:700;color:#1A2332;font-size:13px;margin-bottom:3px;">📍 ${userLocMode}</div><div style="color:#64748B;font-size:11px;line-height:1.4;">${userLocLabel||''}</div></div>`,{maxWidth:220,closeButton:false});
       // Destination pin with activity icon + travel-distance popup
       const color=a.activityColor||T.accent;
       const sz=40;
       const destMk=window.L.marker([a.lat,a.lng],{icon:window.L.divIcon({html:`<div style="width:${sz}px;height:${sz}px;background:${color};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 4px 16px ${color}90;border:3px solid #fff;">${a.activityIcon||"⭐"}</div>`,iconSize:[sz,sz],className:""})}).addTo(map);
       const distMi=a.distanceMiles||0;
-      const travelTxt=a.travelType||(distMi>200?'✈️ Flight / Ferry Required':distMi>100?'🚗 Long Drive':distMi>50?'🚗 Drive':distMi>15?'🚗 Short Drive':'📍 Nearby');
+      const travelTxt=a.travelType||(distMi>100?'✈️ Flights Required':distMi>50?'🚗 Drive':distMi>15?'🚗 Short Drive':'📍 Nearby');
       const distStr=`${distMi.toFixed(1)} mi`;
       const st=openStatus(a);
       const stColor=st.isOpen===true?"#15803D":st.isOpen===false?"#DC2626":"#9E9E9E";
       const stBg=st.isOpen===true?"#F0FDF4":st.isOpen===false?"#FEF2F2":"#F5F5F5";
-      // Single close button INSIDE the popup is removed — the overlay's
-      // top-right X is the only close affordance (user spec: only ONE X).
-      destMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:250px;padding:12px 14px;"><div style="font-weight:700;font-size:15px;color:#1A2332;margin-bottom:5px;line-height:1.3;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:12px;padding:6px 9px;border-radius:7px;background:${stBg};margin-bottom:8px;"><span style="font-weight:700;color:${stColor};">${st.label}</span></div><div style="font-size:12px;padding:7px 10px;border-radius:7px;background:#FEF3C7;color:#92400E;font-weight:700;">${travelTxt} · ${distStr}</div></div>`,{maxWidth:270,closeButton:false});
+      // The popup card has its own close X in the top-right corner.
+      // closeButton:false disables Leaflet's default X (we use a custom-
+      // styled one). autoClose:false + closeOnClick:false prevent the
+      // popup from being accidentally dismissed by panning or clicking the
+      // map — the user must explicitly tap the X. The X calls
+      // window._gsTDCloseTierMap which closes the WHOLE overlay (not just
+      // the popup) and returns the user to the expanded card modal
+      // mounted underneath.
+      destMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:250px;padding:12px 14px;position:relative;"><button onclick="window._gsTDCloseTierMap&&window._gsTDCloseTierMap()" aria-label="Close" style="position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:14px;font-weight:800;z-index:10;display:flex;align-items:center;justify-content:center;font-family:inherit;">✕</button><div style="font-weight:700;font-size:15px;color:#1A2332;margin-bottom:5px;line-height:1.3;padding-right:30px;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:12px;padding:6px 9px;border-radius:7px;background:${stBg};margin-bottom:8px;"><span style="font-weight:700;color:${stColor};">${st.label}</span></div><div style="font-size:12px;padding:7px 10px;border-radius:7px;background:#FEF3C7;color:#92400E;font-weight:700;">${travelTxt} · ${distStr}</div></div>`,{maxWidth:270,closeButton:false,autoClose:false,closeOnClick:false});
       // Fit both pins into view. Padding gives a comfortable border.
       // Works for any distance — across town, country, or globe.
       map.fitBounds([[userLat,userLng],[a.lat,a.lng]],{padding:[60,80],maxZoom:14});
@@ -137,11 +161,10 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       const sc=document.createElement("script"); sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; sc.onload=init; document.head.appendChild(sc);
     } else init();
     return()=>{ if(mapInst.current){mapInst.current.remove();mapInst.current=null;} };
-  },[a,userLat,userLng]);
+  },[a,userLat,userLng,userLocLabel,userLocMode]);
   return(
     <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
       style={{position:"fixed",inset:0,background:"#000",zIndex:10001,display:"flex",flexDirection:"column"}}>
-      <button onClick={onClose} aria-label="Close map" style={{position:"absolute",top:"16px",right:"16px",zIndex:10002,width:"38px",height:"38px",borderRadius:"50%",border:"none",background:"rgba(255,255,255,0.95)",color:T.dark,fontSize:"18px",fontWeight:"800",cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>✕</button>
       <div ref={mapRef} style={{flex:1,width:"100%"}}/>
     </motion.div>
   );

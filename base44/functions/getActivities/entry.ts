@@ -264,7 +264,11 @@ Deno.serve(async (req)=>{
         .slice(0,40);
       t1Processed.forEach((a:any)=>{
         const mi=a.distanceMiles;
-        a.travelType=mi>200?'✈️ Flight / Ferry Required':mi>100?'🚗 Long Drive':mi>50?'🚗 Drive':'🚗 Short Drive';
+        // >100 mi → "Flights Required" (drops the older "Flight / Ferry
+        // Required" wording per user direction; cleaner badge text and
+        // covers both the >200 case and the previously-"Long Drive" 100-200
+        // case where flights are still the practical option).
+        a.travelType=mi>100?'✈️ Flights Required':mi>50?'🚗 Drive':'🚗 Short Drive';
         // Keep all 3 photos (was previously culled to 1 for Tier 1).
       });
       const nationalIcons=t1Processed;
@@ -289,7 +293,9 @@ Deno.serve(async (req)=>{
         .sort((a:any,b:any)=>(a.distanceMiles||0)-(b.distanceMiles||0));
       t2Processed.forEach((a:any)=>{
         const mi=a.distanceMiles;
-        a.travelType=mi>50?'🚗 Drive':mi>15?'🚗 Short Drive':'📍 Nearby';
+        // Match National Icons wording: >100 mi → "Flights Required".
+        // Rare for Regional (radius cap ≈ 100mi) but covers the boundary.
+        a.travelType=mi>100?'✈️ Flights Required':mi>50?'🚗 Drive':mi>15?'🚗 Short Drive':'📍 Nearby';
         // Keep all 3 photos (was previously culled to 1 for Tier 2).
       });
       return {nationalIcons,regionalGems:t2Processed};
