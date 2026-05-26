@@ -126,12 +126,17 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       const map=window.L.map(mapRef.current);
       window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OSM"}).addTo(map);
       mapInst.current=map;
-      // User location pin (blue dot) — "Current location" vs "Selected location"
-      // determined by the LocationContext mode; the line below the heading
-      // shows the actual city/state from getLocationLabel, so a user in
-      // Pensacola sees "Current location · Pensacola, FL".
+      // User location pin (blue dot) with auto-opened popup showing the
+      // "You are here" header, the location mode ("Current location" or
+      // "Selected location" based on LocationContext mode), and the actual
+      // city/state/country from getLocationLabel. Internationally aware: a
+      // user in Kyoto sees "Kyoto, Japan"; one in Pensacola sees "Pensacola,
+      // FL, USA"; one in Manila sees "Manila, Philippines".
+      // autoClose:false + closeOnClick:false lets BOTH popups (user + dest)
+      // stay open at the same time so the user always sees their location
+      // context alongside the destination card.
       const userMk=window.L.marker([userLat,userLng],{icon:window.L.divIcon({html:`<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>`,iconSize:[16,16],className:""})}).addTo(map);
-      userMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;padding:8px 12px;min-width:160px;"><div style="font-weight:700;color:#1A2332;font-size:13px;margin-bottom:3px;">📍 ${userLocMode}</div><div style="color:#64748B;font-size:11px;line-height:1.4;">${userLocLabel||''}</div></div>`,{maxWidth:220,closeButton:false});
+      userMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;padding:10px 12px;min-width:180px;"><div style="font-weight:800;color:#1A2332;font-size:14px;margin-bottom:4px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:12px;margin-bottom:3px;">${userLocMode}</div><div style="color:#64748B;font-size:11px;line-height:1.4;">${userLocLabel||''}</div></div>`,{maxWidth:220,closeButton:false,autoClose:false,closeOnClick:false});
       // Destination pin with activity icon + travel-distance popup
       const color=a.activityColor||T.accent;
       const sz=40;
@@ -154,7 +159,13 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       // Fit both pins into view. Padding gives a comfortable border.
       // Works for any distance — across town, country, or globe.
       map.fitBounds([[userLat,userLng],[a.lat,a.lng]],{padding:[60,80],maxZoom:14});
-      setTimeout(()=>destMk.openPopup(),300);
+      // Auto-open BOTH popups so the user sees their location card AND
+      // the destination card at the same time. Both have autoClose:false
+      // so neither closes the other when opened.
+      setTimeout(()=>{
+        destMk.openPopup();
+        userMk.openPopup();
+      },300);
     };
     if(!window.L){
       const lk=document.createElement("link"); lk.rel="stylesheet"; lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"; document.head.appendChild(lk);

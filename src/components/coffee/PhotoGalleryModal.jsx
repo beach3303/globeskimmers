@@ -18,7 +18,7 @@ export default function PhotoGalleryModal({ photos, initialIndex = 0, isOpen, on
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+        <div className="fixed inset-0 z-[10005] flex items-center justify-center">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
