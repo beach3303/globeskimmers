@@ -131,9 +131,16 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
   // "Reset view" handler — re-fits bounds to both pins AND re-opens the
   // destination popup. Used when the user pans/zooms away or closes the
   // popup. The user-pin tooltip is permanent so always visible regardless.
+  // Padding is intentionally generous (~200px each side) so both popup
+  // CARDS — not just the pins — stay fully on-screen. The destination
+  // popup is ~270px wide × ~200px tall above its pin; the user tooltip
+  // is ~180px wide × ~80px tall below its pin. Without generous padding,
+  // cards near map edges get clipped. maxZoom:11 keeps the view zoomed
+  // out enough that the cards have breathing room.
+  const FIT_PADDING={padding:[200,180],maxZoom:11};
   const resetView=()=>{
     if(!mapInst.current||!destMkRef.current) return;
-    mapInst.current.fitBounds([[userLat,userLng],[a.lat,a.lng]],{padding:[60,80],maxZoom:14});
+    mapInst.current.fitBounds([[userLat,userLng],[a.lat,a.lng]],FIT_PADDING);
     setTimeout(()=>destMkRef.current.openPopup(),300);
   };
   useEffect(()=>{
@@ -194,9 +201,11 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
         ? `<span style="font-weight:700;color:${stColor};">${st.label}</span><span style="color:#64748B;margin-left:6px;">· ${st.today}</span>`
         : `<span style="font-weight:700;color:${stColor};">${st.label}</span>`;
       destMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:250px;padding:12px 14px;position:relative;"><button onclick="window._gsTDCloseTierMap&&window._gsTDCloseTierMap()" aria-label="Close" style="position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:14px;font-weight:800;z-index:10;display:flex;align-items:center;justify-content:center;font-family:inherit;">✕</button><div style="font-weight:700;font-size:15px;color:#1A2332;margin-bottom:5px;line-height:1.3;padding-right:30px;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:12px;padding:6px 9px;border-radius:7px;background:${stBg};margin-bottom:8px;">${statusHtml}</div><div style="font-size:12px;padding:7px 10px;border-radius:7px;background:#FEF3C7;color:#92400E;font-weight:700;">${travelTxt} · ${distStr}</div></div>`,{maxWidth:270,closeButton:false,autoClose:false,closeOnClick:false});
-      // Fit both pins into view + auto-open destination popup. The user
-      // tooltip is permanent so it's already visible.
-      map.fitBounds([[userLat,userLng],[a.lat,a.lng]],{padding:[60,80],maxZoom:14});
+      // Fit both pins into view + auto-open destination popup. Uses the
+      // shared FIT_PADDING (200px top/bottom, 180px left/right) so BOTH
+      // popup cards stay fully on-screen even when one pin is near the
+      // viewport edge. The user tooltip is permanent so it's always visible.
+      map.fitBounds([[userLat,userLng],[a.lat,a.lng]],FIT_PADDING);
       setTimeout(()=>destMk.openPopup(),300);
     };
     if(!window.L){
