@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
@@ -112,22 +113,45 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
   const mapInst=useRef(null);
   const destMkRef=useRef(null);
   const {activeLocation}=useLocation();
+  const navigate=useNavigate();
   const userLocLabel=getLocationLabel(activeLocation);
   const userLocMode=activeLocation?.mode==='navigate'?'Selected location':'Current location';
   // "You are here" tooltip can be collapsed to a small pill ("📍 You are
   // here ⌄") to give the map more breathing room. Tap the pill to expand
   // back to the full card. Wired via window._gsTDToggleUserPin.
   const [userExpanded,setUserExpanded]=useState(true);
+  // P1 — Directions modal opened from the destination popup. The modal
+  // shows Google Maps / Apple Maps / Waze buttons that deep-link out to
+  // the user's preferred maps app.
+  const [showDirs,setShowDirs]=useState(false);
   useEffect(()=>{
-    // Expose onClose + user-pin collapse toggle to popup inline-HTML buttons.
+    // Expose onClose + user-pin collapse toggle + directions opener +
+    // transportation-info navigation to popup inline-HTML buttons.
     // Cleared on unmount so they don't leak between activity changes.
-    window._gsTDCloseTierMap=onClose;
-    window._gsTDToggleUserPin=()=>setUserExpanded(e=>!e);
-    return()=>{
-      delete window._gsTDCloseTierMap;
-      delete window._gsTDToggleUserPin;
+    /** @type {any} */ (window)._gsTDCloseTierMap=onClose;
+    /** @type {any} */ (window)._gsTDToggleUserPin=()=>setUserExpanded(e=>!e);
+    /** @type {any} */ (window)._gsTDOpenDirs=()=>setShowDirs(true);
+    /** @type {any} */ (window)._gsTDOpenTransport=()=>{
+      // P2 — navigate to Transportation Info page with the destination
+      // pre-filled via URL params + a fromMap flag so the Back button
+      // can navigate(-1) back to the previous page instead of going home.
+      const params=new URLSearchParams({
+        fromMap:'true',
+        to_lat:String(a.lat),
+        to_lng:String(a.lng),
+        to_name:a.displayName?.text||a.name||'',
+        to_address:a.formattedAddress||'',
+      });
+      onClose();
+      navigate(`/Transportation?${params.toString()}`);
     };
-  },[onClose]);
+    return()=>{
+      delete /** @type {any} */ (window)._gsTDCloseTierMap;
+      delete /** @type {any} */ (window)._gsTDToggleUserPin;
+      delete /** @type {any} */ (window)._gsTDOpenDirs;
+      delete /** @type {any} */ (window)._gsTDOpenTransport;
+    };
+  },[onClose,a,navigate]);
   // "Reset view" handler — re-fits bounds to both pins AND re-opens the
   // destination popup. Used when the user pans/zooms away or closes the
   // popup. The user-pin tooltip is permanent so always visible regardless.
@@ -200,7 +224,18 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       const statusHtml=st.today
         ? `<span style="font-weight:700;color:${stColor};">${st.label}</span><span style="color:#64748B;margin-left:6px;">· ${st.today}</span>`
         : `<span style="font-weight:700;color:${stColor};">${st.label}</span>`;
-      destMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:250px;padding:12px 14px;position:relative;"><button onclick="window._gsTDCloseTierMap&&window._gsTDCloseTierMap()" aria-label="Close" style="position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:14px;font-weight:800;z-index:10;display:flex;align-items:center;justify-content:center;font-family:inherit;">✕</button><div style="font-weight:700;font-size:15px;color:#1A2332;margin-bottom:5px;line-height:1.3;padding-right:30px;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:12px;padding:6px 9px;border-radius:7px;background:${stBg};margin-bottom:8px;">${statusHtml}</div><div style="font-size:12px;padding:7px 10px;border-radius:7px;background:#FEF3C7;color:#92400E;font-weight:700;">${travelTxt} · ${distStr}</div></div>`,{maxWidth:270,closeButton:false,autoClose:false,closeOnClick:false});
+      // P1 — Directions button (always shown). P2 — Transportation Info
+      // button (only when distance < 100 mi, since flights are needed
+      // for longer distances and public transit lookups don't make
+      // sense). Buttons stack horizontally below the travel-distance
+      // strip. Directions opens the Google/Apple/Waze app-picker modal
+      // ON TOP of this overlay; Transportation navigates to the
+      // Transportation Info page with destination pre-filled.
+      const ctaButtonsHtml=`<div style="display:flex;gap:6px;margin-top:8px;">
+        <button onclick="window._gsTDOpenDirs&&window._gsTDOpenDirs()" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px;border:none;border-radius:8px;background:linear-gradient(135deg,#D97706,#F59E0B);color:#fff;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">🧭 Directions</button>
+        ${distMi<100?`<button onclick="window._gsTDOpenTransport&&window._gsTDOpenTransport()" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px;border:none;border-radius:8px;background:#EDE9FE;color:#7C3AED;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">🚌 Transit</button>`:''}
+      </div>`;
+      destMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:250px;padding:12px 14px;position:relative;"><button onclick="window._gsTDCloseTierMap&&window._gsTDCloseTierMap()" aria-label="Close" style="position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:14px;font-weight:800;z-index:10;display:flex;align-items:center;justify-content:center;font-family:inherit;">✕</button><div style="font-weight:700;font-size:15px;color:#1A2332;margin-bottom:5px;line-height:1.3;padding-right:30px;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:12px;padding:6px 9px;border-radius:7px;background:${stBg};margin-bottom:8px;">${statusHtml}</div><div style="font-size:12px;padding:7px 10px;border-radius:7px;background:#FEF3C7;color:#92400E;font-weight:700;">${travelTxt} · ${distStr}</div>${ctaButtonsHtml}</div>`,{maxWidth:270,closeButton:false,autoClose:false,closeOnClick:false});
       // Fit both pins into view + auto-open destination popup. Uses the
       // shared FIT_PADDING (200px top/bottom, 180px left/right) so BOTH
       // popup cards stay fully on-screen even when one pin is near the
@@ -224,6 +259,25 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       <button onClick={resetView} aria-label="Show both pins" style={{position:"absolute",bottom:"24px",left:"16px",zIndex:10003,padding:"10px 14px",borderRadius:"22px",border:"none",background:"rgba(255,255,255,0.96)",color:T.dark,fontSize:"13px",fontWeight:"700",cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:"6px",fontFamily:"inherit"}}>
         <span style={{fontSize:"15px"}}>↺</span> Show both pins
       </button>
+      {/* Directions modal (P1). Rendered inside the overlay so its
+          z-index (9999 from the Directions component) stacks correctly
+          relative to this overlay (10001) — wait, that's lower. Use
+          a wrapper that bumps the modal above the overlay backdrop. */}
+      <div style={{position:"fixed",inset:0,zIndex:10005,pointerEvents:showDirs?'auto':'none'}}>
+        <AnimatePresence>
+          {showDirs && (
+            <Directions
+              isOpen={true}
+              onClose={()=>setShowDirs(false)}
+              lat={a.lat}
+              lng={a.lng}
+              name={a.displayName?.text||a.name}
+              userLat={userLat}
+              userLng={userLng}
+            />
+          )}
+        </AnimatePresence>
+      </div>
     </motion.div>
   );
 }

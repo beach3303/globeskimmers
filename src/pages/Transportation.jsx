@@ -2247,7 +2247,21 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
     <div className="min-h-screen bg-gradient-to-b from-blue-500 to-blue-600">
       {/* Header */}
       <div className="px-4 py-6">
-        <button onClick={() => navigate(createPageUrl("Home"))} className="flex items-center gap-2 text-white/90 hover:text-white mb-4">
+        <button
+          onClick={() => {
+            // P2 — if user arrived here from the ThingsToDo map (`?fromMap=true`),
+            // navigate back one step to return to the previous page (the
+            // ThingsToDo list with the activity expanded). Otherwise default
+            // to Home.
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('fromMap') === 'true') {
+              navigate(-1);
+            } else {
+              navigate(createPageUrl("Home"));
+            }
+          }}
+          className="flex items-center gap-2 text-white/90 hover:text-white mb-4"
+        >
           <ArrowLeft className="w-5 h-5" />
           <span className="font-medium">Back</span>
         </button>
