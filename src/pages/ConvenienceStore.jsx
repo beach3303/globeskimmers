@@ -901,6 +901,11 @@ export default function ConvenienceStorePage() {
   const [selectedMapIndex, setSelectedMapIndex] = useState(null);
   const [directionsStore, setDirectionsStore] = useState(null);
   const [showLocPicker, setShowLocPicker] = useState(false);
+  const [userPinExpanded, setUserPinExpanded] = useState(true);
+  useEffect(() => {
+    /** @type {any} */ (window)._gsCSUserPin = () => setUserPinExpanded(e => !e);
+    return () => { delete /** @type {any} */ (window)._gsCSUserPin; };
+  }, []);
 
   // Refs
   const mapRef = useRef(null);
@@ -1009,14 +1014,21 @@ export default function ConvenienceStorePage() {
       };
       window.openDirectionsFromStoreMap = (i) => setDirectionsStore(normalizedStores[i]);
 
-      // User dot
+      // User pin with collapsible "📍 You are here" tooltip below
+      // (anti-overlap with store popups above). Same pattern as
+      // ThingsToDo / MoneyExchange / PlacesToEat / Coffee / ATM maps.
+      const userMode = activeLocation?.mode === 'navigate' ? 'Selected location' : 'Current location';
+      const userLabel = locLabel || '';
+      const userTooltipHtml = userPinExpanded
+        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsCSUserPin&&window._gsCSUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:12px;margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:11px;margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:10px;line-height:1.3;">${userLabel}</div></div>`
+        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsCSUserPin&&window._gsCSUserPin()"><span style="font-weight:700;color:#1A2332;font-size:11px;">📍 You are here</span><span style="color:#64748B;font-size:10px;font-weight:700;">⌄</span></div>`;
       window.L.marker([lat, lng], {
         icon: window.L.divIcon({
           html: '<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',
           iconSize: [16, 16],
           className: ''
         })
-      }).addTo(map);
+      }).addTo(map).bindTooltip(userTooltipHtml, {permanent: true, direction: 'bottom', opacity: 1, offset: [0, 12], className: 'gs-user-tooltip', interactive: true});
 
       normalizedStores.forEach((s, i) => {
         if (!s.lat || !s.lng) return;
@@ -1068,7 +1080,7 @@ export default function ConvenienceStorePage() {
         mapInstanceRef.current = null;
       }
     };
-  }, [viewMode, stores, location, selectedMapIndex, unit]);
+  }, [viewMode, stores, location, selectedMapIndex, unit, userPinExpanded, locLabel, activeLocation?.mode]);
 
   // ============================================================================
   // RENDER

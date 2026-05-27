@@ -837,6 +837,14 @@ export default function PlacesToEat() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedMapIndex, setSelectedMapIndex] = useState(null);
   const [showLocPicker, setShowLocPicker] = useState(false);
+  // Collapsible "You are here" tooltip on the map view. Expanded shows the
+  // full 3-line card (heading + Current/Selected + city/state); collapsed
+  // shrinks to a "📍 You are here ⌄" pill that taps to expand.
+  const [userPinExpanded, setUserPinExpanded] = useState(true);
+  useEffect(() => {
+    /** @type {any} */ (window)._gsPTEUserPin = () => setUserPinExpanded(e => !e);
+    return () => { delete /** @type {any} */ (window)._gsPTEUserPin; };
+  }, []);
   const [dirModal, setDirModal]         = useState({ open:false, lat:null, lng:null, name:'' });
   const [fallbackInfo, setFallbackInfo]  = useState(null);
 
@@ -1197,7 +1205,15 @@ export default function PlacesToEat() {
       mapInstanceRef.current=map; window.mapInstance=map;
       window.viewRestDetails=(i)=>{setViewMode("list");setTimeout(()=>cardRefs.current[i]?.scrollIntoView({behavior:"smooth",block:"center"}),150);};
       window.openDirFromMap=(i)=>{const r=filtered[i];r&&setDirModal({open:true,lat:r.lat,lng:r.lng,name:r.name});};
-      window.L.marker([lat,lng],{icon:window.L.divIcon({html:'<div style="width:14px;height:14px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',iconSize:[14,14],className:""})}).addTo(map);
+      // User-location pin with collapsible "📍 You are here" tooltip below
+      // (anti-overlap with restaurant popups above). Same pattern as
+      // ThingsToDo TierMapOverlay + MoneyExchange map.
+      const userMode = activeLocation?.mode === 'navigate' ? 'Selected location' : 'Current location';
+      const userLabel = locationText || '';
+      const userTooltipHtml = userPinExpanded
+        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsPTEUserPin&&window._gsPTEUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:12px;margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:11px;margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:10px;line-height:1.3;">${userLabel}</div></div>`
+        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsPTEUserPin&&window._gsPTEUserPin()"><span style="font-weight:700;color:#1A2332;font-size:11px;">📍 You are here</span><span style="color:#64748B;font-size:10px;font-weight:700;">⌄</span></div>`;
+      window.L.marker([lat,lng],{icon:window.L.divIcon({html:'<div style="width:14px;height:14px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',iconSize:[14,14],className:""})}).addTo(map).bindTooltip(userTooltipHtml,{permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip',interactive:true});
       filtered.slice(0,displayCount).forEach((r,i)=>{
         if(!r.lat||!r.lng)return;
         const isSelected = i === selectedMapIndex;
@@ -1215,7 +1231,7 @@ export default function PlacesToEat() {
       const script=document.createElement("script");script.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";script.onload=init;document.head.appendChild(script);
     } else { init(); }
     return()=>{delete window.mapInstance;delete window.viewRestDetails;delete window.openDirFromMap;if(mapInstanceRef.current){mapInstanceRef.current.remove();mapInstanceRef.current=null;}};
-  },[viewMode,filtered,lat,lng,displayCount,selectedMapIndex]);
+  },[viewMode,filtered,lat,lng,displayCount,selectedMapIndex,userPinExpanded,locationText,activeLocation?.mode]);
 
   const stats = {
     total: filtered.length,

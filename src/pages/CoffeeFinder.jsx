@@ -382,6 +382,11 @@ export default function CoffeeFinderPage() {
   const [viewMode,setViewMode]   = useState("list");
   const [radius,setRadius]       = useState(10);
   const [showLocPicker,setShowLocPicker] = useState(false);
+  const [userPinExpanded, setUserPinExpanded] = useState(true);
+  useEffect(() => {
+    /** @type {any} */ (window)._gsCFUserPin = () => setUserPinExpanded(e => !e);
+    return () => { delete /** @type {any} */ (window)._gsCFUserPin; };
+  }, []);
   const [directionsShop,setDirectionsShop] = useState(null);
   const [showAdvanced,setShowAdvanced] = useState(false);
   const [quickFilter,setQuickFilter]   = useState("all");
@@ -458,7 +463,12 @@ export default function CoffeeFinderPage() {
       mapInstanceRef.current=map;window.mapInstance=map;
       window.viewPlaceDetails=(i)=>{setViewMode("list");setTimeout(()=>cardRefs.current[i]?.scrollIntoView({behavior:"smooth",block:"center"}),150);};
       window.openDirectionsFromMap=(i)=>setDirectionsShop(filtered[i]);
-      window.L.marker([lat,lng],{icon:window.L.divIcon({html:'<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',iconSize:[16,16],className:""})}).addTo(map);
+      const userMode=activeLocation?.mode==='navigate'?'Selected location':'Current location';
+      const userLabel=locationText||'';
+      const userTooltipHtml=userPinExpanded
+        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsCFUserPin&&window._gsCFUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:12px;margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:11px;margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:10px;line-height:1.3;">${userLabel}</div></div>`
+        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsCFUserPin&&window._gsCFUserPin()"><span style="font-weight:700;color:#1A2332;font-size:11px;">📍 You are here</span><span style="color:#64748B;font-size:10px;font-weight:700;">⌄</span></div>`;
+      window.L.marker([lat,lng],{icon:window.L.divIcon({html:'<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',iconSize:[16,16],className:""})}).addTo(map).bindTooltip(userTooltipHtml,{permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip',interactive:true});
       filtered.forEach((s,i)=>{
         if(!s.lat||!s.lng)return;
         const isSelected = i === selectedMapIndex;
@@ -472,7 +482,7 @@ export default function CoffeeFinderPage() {
     };
     if(!window.L){const link=document.createElement("link");link.rel="stylesheet";link.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(link);const script=document.createElement("script");script.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";script.onload=init;document.head.appendChild(script);}else{init();}
     return()=>{delete window.mapInstance;delete window.viewPlaceDetails;delete window.openDirectionsFromMap;if(mapInstanceRef.current){mapInstanceRef.current.remove();mapInstanceRef.current=null;}};
-  },[viewMode,filtered,lat,lng,selectedMapIndex]);
+  },[viewMode,filtered,lat,lng,selectedMapIndex,userPinExpanded,locationText,activeLocation?.mode]);
 
   const stats={total:filtered.length,open:filtered.filter(s=>s.isOpen===true).length,specialty:filtered.filter(s=>s.tier===1).length,withParking:filtered.filter(s=>s.parking&&!s.parking.noParking).length};
 

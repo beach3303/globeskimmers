@@ -508,6 +508,11 @@ export default function ATMFinderPage() {
   const [sortBy,         setSortBy]         = useState("nearby");
   const [radius,         setRadius]         = useState(10);
   const [showLocPicker,  setShowLocPicker]  = useState(false);
+  const [userPinExpanded, setUserPinExpanded] = useState(true);
+  useEffect(() => {
+    /** @type {any} */ (window)._gsATMUserPin = () => setUserPinExpanded(e => !e);
+    return () => { delete /** @type {any} */ (window)._gsATMUserPin; };
+  }, []);
   const [showLegend,     setShowLegend]     = useState(true);
   const [directionsATM,  setDirectionsATM]  = useState(null);
   const [highlightIdx,   setHighlightIdx]   = useState(null);
@@ -622,13 +627,20 @@ export default function ATMFinderPage() {
 
       window._gsATMDirs = (i) => setDirectionsATM(filtered[i]);
 
-      // User location dot
+      // User location pin with collapsible "📍 You are here" tooltip below
+      // (anti-overlap with ATM popups above). Same pattern as ThingsToDo
+      // TierMapOverlay + MoneyExchange / PlacesToEat / CoffeeFinder maps.
+      const userMode=activeLocation?.mode==='navigate'?'Selected location':'Current location';
+      const userLabel=locLabel||'';
+      const userTooltipHtml=userPinExpanded
+        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsATMUserPin&&window._gsATMUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:12px;margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:11px;margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:10px;line-height:1.3;">${userLabel}</div></div>`
+        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsATMUserPin&&window._gsATMUserPin()"><span style="font-weight:700;color:#1A2332;font-size:11px;">📍 You are here</span><span style="color:#64748B;font-size:10px;font-weight:700;">⌄</span></div>`;
       window.L.marker([lat, lng], {
         icon: window.L.divIcon({
           html: `<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>`,
           iconSize:[16,16], className:"",
         })
-      }).addTo(map);
+      }).addTo(map).bindTooltip(userTooltipHtml,{permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip',interactive:true});
 
       // ATM markers
       filtered.forEach((atm, i) => {
@@ -686,7 +698,7 @@ export default function ATMFinderPage() {
       delete window._gsATMDirs;
       if (mapInstRef.current) { mapInstRef.current.remove(); mapInstRef.current = null; }
     };
-  }, [viewMode, filtered, lat, lng, activeMapPin, unit]);
+  }, [viewMode, filtered, lat, lng, activeMapPin, unit, userPinExpanded, locLabel, activeLocation?.mode]);
 
   const stats = {
     total: filtered.length,
