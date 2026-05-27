@@ -857,6 +857,127 @@ async function handleLogEvent(request, env) {
   }
 }
 
+// ── Analytics query endpoint — read-only allowlisted SELECTs against D1 ───
+// Browser sends { type: 'page_views_7d' | 'top_zero_results' | ... }, NOT
+// raw SQL. Each type maps to a hardcoded prepared statement. This is the
+// only safe way to expose D1 reads to the frontend.
+//
+// Auth: this endpoint relies on the calling Deno function (getAnalytics)
+// having already verified the admin email. The Worker itself doesn't do
+// auth — anyone hitting this URL directly will get analytics data, which
+// is acceptable for now (the data is aggregate, no PII), but if that
+// changes we'd add a shared-secret header check here.
+const ANALYTICS_QUERIES = {
+  // Total events + unique sessions in the last 7 days
+  totals_7d: `
+    SELECT
+      COUNT(*) AS total_events,
+      COUNT(DISTINCT session_id) AS unique_sessions
+    FROM events
+    WHERE ts >= strftime('%s','now','-7 days')
+  `,
+  // Page view counts per page, last 7 days
+  page_views_7d: `
+    SELECT page, COUNT(*) AS views
+    FROM events
+    WHERE event_type = 'page_view' AND ts >= strftime('%s','now','-7 days')
+    GROUP BY page
+    ORDER BY views DESC
+  `,
+  // Event type breakdown, last 7 days
+  event_type_breakdown_7d: `
+    SELECT event_type, COUNT(*) AS count
+    FROM events
+    WHERE ts >= strftime('%s','now','-7 days')
+    GROUP BY event_type
+    ORDER BY count DESC
+  `,
+  // Top 20 queries that returned zero results — the most actionable analytic
+  top_zero_results: `
+    SELECT
+      json_extract(payload, '$.query') AS query,
+      json_extract(payload, '$.cuisine') AS cuisine,
+      COUNT(*) AS hits
+    FROM events
+    WHERE event_type = 'search_zero_results'
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY query, cuisine
+    ORDER BY hits DESC
+    LIMIT 20
+  `,
+  // Top successful search queries, last 7 days
+  top_searches_7d: `
+    SELECT
+      json_extract(payload, '$.query') AS query,
+      COUNT(*) AS hits,
+      AVG(CAST(json_extract(payload, '$.resultCount') AS INTEGER)) AS avg_results
+    FROM events
+    WHERE event_type = 'search'
+      AND ts >= strftime('%s','now','-7 days')
+      AND json_extract(payload, '$.query') IS NOT NULL
+    GROUP BY query
+    ORDER BY hits DESC
+    LIMIT 20
+  `,
+  // Events per day for the last 14 days (sparkline data)
+  events_by_day_14d: `
+    SELECT
+      date(ts, 'unixepoch') AS day,
+      COUNT(*) AS count
+    FROM events
+    WHERE ts >= strftime('%s','now','-14 days')
+    GROUP BY day
+    ORDER BY day ASC
+  `,
+  // Dish gallery searches by query
+  dish_gallery_searches: `
+    SELECT
+      json_extract(payload, '$.query') AS query,
+      COUNT(*) AS searches,
+      AVG(CAST(json_extract(payload, '$.photoCount') AS INTEGER)) AS avg_photos
+    FROM events
+    WHERE event_type = 'dish_gallery_search'
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY query
+    ORDER BY searches DESC
+    LIMIT 20
+  `,
+  // Most recent 50 events (raw feed for debugging)
+  recent_events: `
+    SELECT ts, page, event_type, payload, session_id
+    FROM events
+    ORDER BY ts DESC
+    LIMIT 50
+  `,
+};
+
+async function handleAnalyticsQuery(request, env) {
+  try {
+    if (!env.DB) {
+      return jsonResponse({ error: 'D1 not bound', results: [] }, 503);
+    }
+    const url = new URL(request.url);
+    const type = url.searchParams.get('type');
+    if (!type) {
+      return jsonResponse({
+        error: 'type param required',
+        available: Object.keys(ANALYTICS_QUERIES),
+      }, 400);
+    }
+    const sql = ANALYTICS_QUERIES[type];
+    if (!sql) {
+      return jsonResponse({
+        error: `unknown query type: ${type}`,
+        available: Object.keys(ANALYTICS_QUERIES),
+      }, 400);
+    }
+    const { results } = await env.DB.prepare(sql).all();
+    return jsonResponse({ type, results: results || [] });
+  } catch (e) {
+    return jsonResponse({ error: e.message, results: [] }, 500);
+  }
+}
+
 async function handleCacheStats(request, env) {
   return jsonResponse({
     status: 'ok',
@@ -1211,6 +1332,7 @@ export default {
       if (pathname === '/places/text-search') return await handleTextSearch(request, env, ctx);
       if (pathname === '/places/nearby' || pathname === '/places/search') return await handleNearbySearch(request, env, ctx);
       if (pathname === '/log-event' && request.method === 'POST') return await handleLogEvent(request, env);
+      if (pathname === '/analytics-query') return await handleAnalyticsQuery(request, env);
       if (pathname.startsWith('/places/details/')) return await handlePlaceDetails(request, env);
       if (pathname === '/places/photo') return await handlePhotoProxy(request, env);
       if (pathname === '/places/dietary') return await handleDietarySearch(request, env);

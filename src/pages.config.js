@@ -49,11 +49,13 @@
  */
 import ATMFinder from './pages/ATMFinder';
 import ActivityDetail from './pages/ActivityDetail';
+import AdminAnalytics from './pages/AdminAnalytics';
 import AdminDashboard from './pages/AdminDashboard';
 import BasicPhrases from './pages/BasicPhrases';
 import CoffeeFinder from './pages/CoffeeFinder';
 import ConvenienceStore from './pages/ConvenienceStore';
 import CultureInformation from './pages/CultureInformation';
+import DishSearchGallery from './pages/DishSearchGallery';
 import GenerateIcon from './pages/GenerateIcon';
 import Home from './pages/Home';
 import Map from './pages/Map';
@@ -76,11 +78,13 @@ import __Layout from './Layout.jsx';
 export const PAGES = {
     "ATMFinder": ATMFinder,
     "ActivityDetail": ActivityDetail,
+    "AdminAnalytics": AdminAnalytics,
     "AdminDashboard": AdminDashboard,
     "BasicPhrases": BasicPhrases,
     "CoffeeFinder": CoffeeFinder,
     "ConvenienceStore": ConvenienceStore,
     "CultureInformation": CultureInformation,
+    "DishSearchGallery": DishSearchGallery,
     "GenerateIcon": GenerateIcon,
     "Home": Home,
     "Map": Map,
