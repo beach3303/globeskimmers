@@ -6,5 +6,20 @@ compatibility_date = "2024-01-01"
 binding = "GLOBESKIMMERS_KV"
 id = "68ae9c62099f4834a8c6f0ff3eb57e71"
 
+# ── D1 ANALYTICS BINDING (P3 scaffold — not yet provisioned) ─────────────
+# To activate analytics, run from this directory:
+#   1. wrangler d1 create globeskimmers-events
+#      Note the printed database_id, then uncomment the block below and
+#      replace `REPLACE_WITH_DATABASE_ID` with the printed id.
+#   2. wrangler d1 execute globeskimmers-events --file=analytics-schema.sql
+#      Applies the events table schema (see analytics-schema.sql at root).
+#   3. wrangler deploy
+#      Worker picks up the env.DB binding for the /log-event endpoint.
+#
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "globeskimmers-events"
+# database_id = "REPLACE_WITH_DATABASE_ID"
+
 # Your GOOGLE_API_KEY is already set as a secret in Cloudflare
 # If you need to update it: wrangler secret put GOOGLE_API_KEY

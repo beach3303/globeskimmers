@@ -816,6 +816,47 @@ async function handleRestaurantSearch(request, env, ctx) {
   }
 }
 
+// ── P3 — /log-event endpoint (Phase 2 analytics scaffold) ─────────────────
+// Accepts POST body { event_type, page, payload?, session_id?, user_id?,
+// ua_summary? } and inserts a row into the D1 events table.
+//
+// Until the D1 binding is provisioned (wrangler d1 create + uncomment
+// wrangler.toml block + run analytics-schema.sql), this endpoint NO-OPs
+// gracefully: returns 200 { logged: false, reason: 'no_db_binding' } so
+// the frontend can fire events without crashing.
+//
+// Once the binding is live, env.DB will be defined and the endpoint will
+// actually persist rows. ts is server-issued (don't trust client clocks).
+async function handleLogEvent(request, env) {
+  try {
+    const body = await request.json();
+    if (!body?.event_type) {
+      return jsonResponse({ logged: false, reason: 'missing_event_type' }, 400);
+    }
+    if (!env.DB) {
+      // D1 not bound yet — graceful no-op so the frontend can ship events
+      // before the analytics DB is provisioned.
+      return jsonResponse({ logged: false, reason: 'no_db_binding' });
+    }
+    const ts = Math.floor(Date.now() / 1000);
+    await env.DB.prepare(
+      `INSERT INTO events (ts, user_id, session_id, event_type, page, payload, ua_summary)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      ts,
+      body.user_id || null,
+      body.session_id || 'anon',
+      body.event_type,
+      body.page || null,
+      body.payload ? JSON.stringify(body.payload) : null,
+      body.ua_summary || null,
+    ).run();
+    return jsonResponse({ logged: true, ts });
+  } catch (e) {
+    return jsonResponse({ logged: false, error: e.message }, 500);
+  }
+}
+
 async function handleCacheStats(request, env) {
   return jsonResponse({
     status: 'ok',
@@ -1169,6 +1210,7 @@ export default {
 
       if (pathname === '/places/text-search') return await handleTextSearch(request, env, ctx);
       if (pathname === '/places/nearby' || pathname === '/places/search') return await handleNearbySearch(request, env, ctx);
+      if (pathname === '/log-event' && request.method === 'POST') return await handleLogEvent(request, env);
       if (pathname.startsWith('/places/details/')) return await handlePlaceDetails(request, env);
       if (pathname === '/places/photo') return await handlePhotoProxy(request, env);
       if (pathname === '/places/dietary') return await handleDietarySearch(request, env);
