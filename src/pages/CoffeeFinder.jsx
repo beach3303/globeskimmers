@@ -7,6 +7,7 @@ import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
+import { logEvent } from "@/lib/analytics";
 
 // ─── COLORS ────────────────────────────────────────────────────────────────
 const BROWN      = "#6F4E37";
@@ -387,6 +388,8 @@ export default function CoffeeFinderPage() {
     /** @type {any} */ (window)._gsCFUserPin = () => setUserPinExpanded(e => !e);
     return () => { delete /** @type {any} */ (window)._gsCFUserPin; };
   }, []);
+  // Analytics: log a page_view once on mount.
+  useEffect(() => { logEvent('page_view', {}, 'CoffeeFinder'); }, []);
   const [directionsShop,setDirectionsShop] = useState(null);
   const [showAdvanced,setShowAdvanced] = useState(false);
   const [quickFilter,setQuickFilter]   = useState("all");

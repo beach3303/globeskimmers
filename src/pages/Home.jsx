@@ -77,6 +77,8 @@ const MORE_BUTTONS = [
     colors: { light: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)', dark: 'linear-gradient(135deg, #4338CA 0%, #3730A3 100%)', space: 'linear-gradient(135deg, #818CF8 0%, #6366F1 100%)', executive: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)' }},
   { id: 'text-scanner', emoji: '📝', label: 'Text Scanner', action: 'Smart Text Scanner',
     colors: { light: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', dark: 'linear-gradient(135deg, #047857 0%, #065F46 100%)', space: 'linear-gradient(135deg, #34D399 0%, #10B981 100%)', executive: 'linear-gradient(135deg, #059669 0%, #047857 100%)' }},
+  { id: 'dish-gallery', emoji: '📸', label: 'Dish Gallery', action: 'Dish Gallery',
+    colors: { light: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', dark: 'linear-gradient(135deg, #B45309 0%, #92400E 100%)', space: 'linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)', executive: 'linear-gradient(135deg, #D97706 0%, #B45309 100%)' }},
 ];
 
 export default function HomePage() {
@@ -301,7 +303,8 @@ export default function HomePage() {
       "Places to Eat": "PlacesToEat",
       "Transportation": "Transportation",
       "Shopping": "Shopping",
-      "Smart Text Scanner": "SmartTextScanner"
+      "Smart Text Scanner": "SmartTextScanner",
+      "Dish Gallery": "DishSearchGallery"
     };
     if (routes[actionLabel]) navigate(createPageUrl(routes[actionLabel]));
   };

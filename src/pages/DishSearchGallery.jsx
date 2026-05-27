@@ -29,11 +29,13 @@
  *   3. Photo tap → open expanded place modal (reuse PlacesToEat's
  *      RestaurantCard component).
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocation } from '@/components/location/LocationContext';
 import { getLocationLabel } from '@/components/location/locationLabel';
 import { ArrowLeft } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
+import { logEvent } from '@/lib/analytics';
 
 const SUGGESTED_DISHES = [
   { emoji: '🥞', label: 'Pancakes' },
@@ -53,25 +55,41 @@ export default function DishSearchGallery() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => { logEvent('page_view', {}, 'DishSearchGallery'); }, []);
 
   const handleSearch = async (dishQuery) => {
     if (!dishQuery?.trim()) return;
+    const lat = activeLocation?.coordinates?.latitude;
+    const lng = activeLocation?.coordinates?.longitude;
+    if (lat == null || lng == null) {
+      setError('Pick a location first to browse nearby dishes.');
+      return;
+    }
     setQuery(dishQuery);
     setLoading(true);
+    setError(null);
     setResults([]);
-    // TODO: when getDishGallery backend is live:
-    //   const { data } = await base44.functions.invoke('getDishGallery', {
-    //     query: dishQuery,
-    //     latitude: activeLocation?.coordinates?.latitude,
-    //     longitude: activeLocation?.coordinates?.longitude,
-    //     radius: 10,
-    //   });
-    //   setResults(data?.photos || []);
-    // For now, surface a placeholder so the UI is testable.
-    setTimeout(() => {
-      setResults([]); // backend not wired yet
+    try {
+      const { data } = await base44.functions.invoke('getDishGallery', {
+        query: dishQuery,
+        latitude: lat,
+        longitude: lng,
+        radius: 10,
+      });
+      const photos = data?.photos || [];
+      setResults(photos);
+      logEvent('dish_gallery_search', {
+        query: dishQuery,
+        photoCount: photos.length,
+        placeCount: data?.placeCount ?? null,
+      }, 'DishSearchGallery');
+    } catch (e) {
+      setError(e?.message || 'Failed to load dish photos.');
+    } finally {
       setLoading(false);
-    }, 600);
+    }
   };
 
   return (
@@ -126,27 +144,55 @@ export default function DishSearchGallery() {
           </div>
         )}
 
-        {!loading && query && results.length === 0 && (
+        {error && (
+          <div style={{ padding: '14px', background: '#FEF2F2', color: '#B91C1C', borderRadius: '12px', marginTop: '12px', fontSize: '13px', fontWeight: 600 }}>
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && query && results.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px 16px', color: '#64748B', background: '#fff', borderRadius: '14px', marginTop: '16px' }}>
             <div style={{ fontSize: '40px', marginBottom: '8px' }}>🍽️</div>
-            <div style={{ fontWeight: 700, fontSize: '15px', color: '#1A2332', marginBottom: '6px' }}>Dish Gallery is in development</div>
+            <div style={{ fontWeight: 700, fontSize: '15px', color: '#1A2332', marginBottom: '6px' }}>No dish photos found</div>
             <div style={{ fontSize: '13px', lineHeight: 1.5 }}>
-              The backend that aggregates photos for "{query}" across nearby
-              places isn't live yet. The frontend and routing are ready —
-              wire <code>getDishGallery</code> in the next session to populate
-              this view.
+              We couldn't find photos of "{query}" near {locationLabel || 'this area'}.
+              Try a different dish or widen the area.
             </div>
           </div>
         )}
 
         {!loading && results.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '16px' }}>
-            {results.map((photo, i) => (
-              <div key={i} style={{ aspectRatio: '1', background: '#E2E8F0', borderRadius: '12px', overflow: 'hidden' }}>
-                {/* TODO: render photo + place attribution */}
-              </div>
-            ))}
-          </div>
+          <>
+            <div style={{ fontSize: '12px', color: '#64748B', marginTop: '16px', marginBottom: '10px', fontWeight: 600 }}>
+              {results.length} photo{results.length === 1 ? '' : 's'} of "{query}"
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              {results.map((photo, i) => (
+                <button
+                  key={`${photo.placeId}-${i}`}
+                  onClick={() => photo.placeId && navigate(`/PlacesToEat?placeId=${encodeURIComponent(photo.placeId)}`)}
+                  style={{ aspectRatio: '1', background: '#E2E8F0', borderRadius: '12px', overflow: 'hidden', border: 'none', padding: 0, cursor: 'pointer', position: 'relative', textAlign: 'left' }}
+                >
+                  {photo.photoUrl && (
+                    <img
+                      src={photo.photoUrl}
+                      alt={photo.placeName || 'dish'}
+                      loading="lazy"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
+                  )}
+                  <div style={{ position: 'absolute', inset: 'auto 0 0 0', background: 'linear-gradient(180deg,transparent 0%,rgba(0,0,0,0.75) 100%)', padding: '10px 10px 8px', color: '#fff' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {photo.placeName || 'Unknown'}
+                    </div>
+                    <div style={{ fontSize: '11px', opacity: 0.85, marginTop: '2px' }}>
+                      {photo.rating ? `★ ${photo.rating}` : ''}{photo.distanceMiles != null ? ` · ${photo.distanceMiles.toFixed(1)} mi` : ''}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

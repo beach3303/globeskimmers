@@ -38,6 +38,8 @@ import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
+import { logEvent } from "@/lib/analytics";
+import { hydratePlaceDetails } from "@/lib/placeDetailsHydrator";
 
 const WORKER_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
 
@@ -845,6 +847,8 @@ export default function PlacesToEat() {
     /** @type {any} */ (window)._gsPTEUserPin = () => setUserPinExpanded(e => !e);
     return () => { delete /** @type {any} */ (window)._gsPTEUserPin; };
   }, []);
+  // Analytics: log a page_view once on mount.
+  useEffect(() => { logEvent('page_view', {}, 'PlacesToEat'); }, []);
   const [dirModal, setDirModal]         = useState({ open:false, lat:null, lng:null, name:'' });
   const [fallbackInfo, setFallbackInfo]  = useState(null);
 
@@ -1016,9 +1020,39 @@ export default function PlacesToEat() {
             fallbackInfo: data?.fallbackInfo || null,
             displayCount: 20,
           };
+          // Analytics: log a search event so we can measure tier accuracy,
+          // result counts, and which queries return zero results.
+          logEvent('search', {
+            query: searchText || null,
+            cuisine: primaryCuisine,
+            radius,
+            resultCount: processed.length,
+            firstTier: processed[0]?.tier ?? null,
+          }, 'PlacesToEat');
+
+          // Hydrate Place Details for the top 5 results so we can show
+          // current opening hours, phone, website on tap-to-expand without
+          // a fresh request. Capped + cached in the hydrator.
+          const topIds = processed.slice(0, 5).map((/** @type {any} */ r) => r.placeId).filter(Boolean);
+          if (topIds.length > 0) {
+            hydratePlaceDetails(topIds, { maxCalls: 5 }).then((detailsMap) => {
+              if (ignore) return;
+              setRestaurants(prev => (/** @type {any[]} */ (prev)).map((/** @type {any} */ r) => {
+                const d = detailsMap.get(r.placeId);
+                return d ? { ...r, hydratedDetails: d } : r;
+              }));
+            }).catch(() => {/* silent — hydration is best-effort */});
+          }
         } else {
           setRestaurants([]); // Clear stale results so the UI doesn't show "67 results" from a prior fetch
           setError(data?.error || "No results found. Try expanding your radius.");
+          // Analytics: zero-result searches are the most valuable to track —
+          // every empty result is a search-quality bug or a coverage gap.
+          logEvent('search_zero_results', {
+            query: searchText || null,
+            cuisine: primaryCuisine,
+            radius,
+          }, 'PlacesToEat');
         }
       } catch(e) {
         if (ignore) return; // ignore stale-fetch errors too

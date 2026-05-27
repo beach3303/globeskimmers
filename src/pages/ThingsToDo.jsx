@@ -9,6 +9,7 @@ import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import RefreshButton from "@/components/RefreshButton";
+import { logEvent } from "@/lib/analytics";
 
 const T={teal:"#00BCD4",tealD:"#00838F",dark:"#1A2332",dark2:"#243447",gray:"#64748B",grayL:"#F1F5F9",green:"#4CAF50",blue:"#1565C0",blueL:"#E3F2FD",coral:"#FF6B6B",gold:"#FFB74D",
   accent:"#F59E0B",accentD:"#D97706",accentL:"#FFFBEB"};
@@ -538,6 +539,8 @@ function TierSection({title,icon,items,userLat,userLng}){
 }
 
 export default function ThingsToDoFinder() {
+  // Analytics: log a page_view once on mount.
+  useEffect(() => { logEvent('page_view', {}, 'ThingsToDo'); }, []);
   const [activities,setActivities]=useState([]);
   const [nationalIcons,setNationalIcons]=useState([]);
   const [regionalGems,setRegionalGems]=useState([]);
