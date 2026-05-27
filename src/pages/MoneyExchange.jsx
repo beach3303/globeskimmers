@@ -5,7 +5,7 @@ import { ArrowLeft, MapPin, Loader2, Phone, Search, TrendingUp, ChevronDown, Arr
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import MapRecenterButton from "../components/maps/MapRecenterButton";
@@ -13,7 +13,7 @@ import MapAppSelector from "../components/MapAppSelector";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import DistanceUnitToggle from "../components/location/DistanceUnitToggle";
-import { CITY_DISCLAIMER } from "../components/location/locationLabel";
+import { CITY_DISCLAIMER, getLocationLabel } from "../components/location/locationLabel";
 import RefreshButton from "@/components/RefreshButton";
 
 // Helper function
@@ -258,6 +258,11 @@ export default function MoneyExchangePage() {
   const [openOnly, setOpenOnly] = useState(false);
   const [converterCollapsed, setConverterCollapsed] = useState(false);
   const [expandedStoreIndex, setExpandedStoreIndex] = useState(null);
+  // "You are here" map tooltip can be collapsed to a small "📍 You are
+  // here ⌄" pill (saves map real estate) or expanded back to the full
+  // 3-line card (heading + Current/Selected location + city/state).
+  // Same pattern as ThingsToDo's TierMapOverlay.
+  const [userPinExpanded, setUserPinExpanded] = useState(true);
 
   const handleRefresh = () => {
     convertCurrency(true);
@@ -1177,7 +1182,50 @@ export default function MoneyExchangePage() {
                   >
                     <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                     <MapCenterController center={mapCenter} zoom={selectedStore ? 15 : 12} />
-                    
+
+                    {/* "You are here" user-location marker with collapsible
+                        tooltip BELOW the pin (mirrors the ThingsToDo
+                        TierMapOverlay pattern for anti-overlap + city/state
+                        context). The tooltip can be collapsed via the ⌃
+                        button to a compact "📍 You are here ⌄" pill, then
+                        re-expanded by tapping the pill. Tooltip is rendered
+                        below to avoid colliding with store popups above
+                        their markers. */}
+                    {activeLocation?.coordinates && (
+                      <Marker
+                        position={[activeLocation.coordinates.latitude, activeLocation.coordinates.longitude]}
+                        icon={L.divIcon({
+                          className: 'gs-user-loc-icon',
+                          html: `<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>`,
+                          iconSize: [16, 16],
+                          iconAnchor: [8, 8]
+                        })}
+                      >
+                        <Tooltip permanent direction="bottom" offset={[0, 12]} opacity={1} interactive className="gs-user-tooltip">
+                          {userPinExpanded ? (
+                            <div style={{fontFamily:"-apple-system,sans-serif",padding:"4px 6px",minWidth:"150px",position:"relative"}}>
+                              <button
+                                onClick={(e)=>{e.stopPropagation();setUserPinExpanded(false);}}
+                                aria-label="Collapse"
+                                style={{position:"absolute",top:"0",right:"0",width:"22px",height:"22px",borderRadius:"50%",background:"rgba(0,0,0,0.08)",border:"none",cursor:"pointer",color:"#1A2332",fontSize:"10px",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}
+                              >⌃</button>
+                              <div style={{fontWeight:800,color:"#1A2332",fontSize:"12px",marginBottom:"2px",paddingRight:"22px"}}>📍 You are here</div>
+                              <div style={{fontWeight:700,color:"#4285F4",fontSize:"11px",marginBottom:"2px"}}>{activeLocation.mode === 'navigate' ? 'Selected location' : 'Current location'}</div>
+                              <div style={{color:"#64748B",fontSize:"10px",lineHeight:1.3}}>{getLocationLabel(activeLocation) || ''}</div>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={(e)=>{e.stopPropagation();setUserPinExpanded(true);}}
+                              style={{fontFamily:"-apple-system,sans-serif",padding:"3px 7px",display:"flex",alignItems:"center",gap:"6px",cursor:"pointer"}}
+                            >
+                              <span style={{fontWeight:700,color:"#1A2332",fontSize:"11px"}}>📍 You are here</span>
+                              <span style={{color:"#64748B",fontSize:"10px",fontWeight:700}}>⌄</span>
+                            </div>
+                          )}
+                        </Tooltip>
+                      </Marker>
+                    )}
+
                     {exchangeStores.map((store, index) => (
                       <Marker
                         key={index}
@@ -1209,6 +1257,11 @@ export default function MoneyExchangePage() {
                             {store.is_open !== undefined && (
                               <p className={`text-xs font-semibold mb-2 ${store.is_open ? 'text-green-600' : 'text-red-600'}`}>
                                 {store.is_open ? '● Open Now' : '● Closed'}
+                                {store.hours_today && (
+                                  <span className="text-gray-600 font-normal ml-1">
+                                    · {store.hours_today.includes(':') ? store.hours_today.split(':').slice(1).join(':').trim() : store.hours_today}
+                                  </span>
+                                )}
                               </p>
                             )}
                             <button
