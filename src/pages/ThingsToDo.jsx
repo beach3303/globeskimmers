@@ -114,11 +114,19 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
   const {activeLocation}=useLocation();
   const userLocLabel=getLocationLabel(activeLocation);
   const userLocMode=activeLocation?.mode==='navigate'?'Selected location':'Current location';
+  // "You are here" tooltip can be collapsed to a small pill ("📍 You are
+  // here ⌄") to give the map more breathing room. Tap the pill to expand
+  // back to the full card. Wired via window._gsTDToggleUserPin.
+  const [userExpanded,setUserExpanded]=useState(true);
   useEffect(()=>{
-    // Expose onClose to the popup's inline-HTML close button. Cleared on
-    // unmount so it doesn't leak between activity changes.
+    // Expose onClose + user-pin collapse toggle to popup inline-HTML buttons.
+    // Cleared on unmount so they don't leak between activity changes.
     window._gsTDCloseTierMap=onClose;
-    return()=>{ delete window._gsTDCloseTierMap; };
+    window._gsTDToggleUserPin=()=>setUserExpanded(e=>!e);
+    return()=>{
+      delete window._gsTDCloseTierMap;
+      delete window._gsTDToggleUserPin;
+    };
   },[onClose]);
   // "Reset view" handler — re-fits bounds to both pins AND re-opens the
   // destination popup. Used when the user pans/zooms away or closes the
@@ -150,7 +158,14 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       // ALSO be a permanent tooltip with direction:'bottom' for the same
       // anti-collision reason.
       const userMk=window.L.marker([userLat,userLng],{icon:window.L.divIcon({html:`<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>`,iconSize:[16,16],className:""})}).addTo(map);
-      userMk.bindTooltip(`<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;"><div style="font-weight:800;color:#1A2332;font-size:12px;margin-bottom:2px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:11px;margin-bottom:2px;">${userLocMode}</div><div style="color:#64748B;font-size:10px;line-height:1.3;">${userLocLabel||''}</div></div>`,{permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip'});
+      // Collapsible tooltip: expanded = full card with title/mode/label and
+      // a ⌃ collapse button top-right; collapsed = compact "📍 You are
+      // here ⌄" pill that taps to expand. interactive:true so the inline
+      // toggle button receives clicks instead of passing through to the map.
+      const userTooltipHtml=userExpanded
+        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsTDToggleUserPin&&window._gsTDToggleUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:12px;margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:11px;margin-bottom:2px;">${userLocMode}</div><div style="color:#64748B;font-size:10px;line-height:1.3;">${userLocLabel||''}</div></div>`
+        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsTDToggleUserPin&&window._gsTDToggleUserPin()"><span style="font-weight:700;color:#1A2332;font-size:11px;">📍 You are here</span><span style="color:#64748B;font-size:10px;font-weight:700;">⌄</span></div>`;
+      userMk.bindTooltip(userTooltipHtml,{permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip',interactive:true});
       // ── DESTINATION PIN ──────────────────────────────────────────────────
       const color=a.activityColor||T.accent;
       const sz=40;
@@ -171,7 +186,14 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       // popup from being accidentally dismissed by panning or clicking the
       // map. The custom X calls window._gsTDCloseTierMap → closes the
       // WHOLE overlay (returns to expanded card modal).
-      destMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:250px;padding:12px 14px;position:relative;"><button onclick="window._gsTDCloseTierMap&&window._gsTDCloseTierMap()" aria-label="Close" style="position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:14px;font-weight:800;z-index:10;display:flex;align-items:center;justify-content:center;font-family:inherit;">✕</button><div style="font-weight:700;font-size:15px;color:#1A2332;margin-bottom:5px;line-height:1.3;padding-right:30px;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:12px;padding:6px 9px;border-radius:7px;background:${stBg};margin-bottom:8px;"><span style="font-weight:700;color:${stColor};">${st.label}</span></div><div style="font-size:12px;padding:7px 10px;border-radius:7px;background:#FEF3C7;color:#92400E;font-weight:700;">${travelTxt} · ${distStr}</div></div>`,{maxWidth:270,closeButton:false,autoClose:false,closeOnClick:false});
+      // Status row now includes today's open/close hours when available
+      // (st.today is the parsed "9:00 AM – 10:00 PM" string from openStatus).
+      // Format: "Closed Now · 9:00 AM – 10:00 PM" so user sees BOTH whether
+      // it's open right now AND the actual hours for today.
+      const statusHtml=st.today
+        ? `<span style="font-weight:700;color:${stColor};">${st.label}</span><span style="color:#64748B;margin-left:6px;">· ${st.today}</span>`
+        : `<span style="font-weight:700;color:${stColor};">${st.label}</span>`;
+      destMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:250px;padding:12px 14px;position:relative;"><button onclick="window._gsTDCloseTierMap&&window._gsTDCloseTierMap()" aria-label="Close" style="position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:14px;font-weight:800;z-index:10;display:flex;align-items:center;justify-content:center;font-family:inherit;">✕</button><div style="font-weight:700;font-size:15px;color:#1A2332;margin-bottom:5px;line-height:1.3;padding-right:30px;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:12px;padding:6px 9px;border-radius:7px;background:${stBg};margin-bottom:8px;">${statusHtml}</div><div style="font-size:12px;padding:7px 10px;border-radius:7px;background:#FEF3C7;color:#92400E;font-weight:700;">${travelTxt} · ${distStr}</div></div>`,{maxWidth:270,closeButton:false,autoClose:false,closeOnClick:false});
       // Fit both pins into view + auto-open destination popup. The user
       // tooltip is permanent so it's already visible.
       map.fitBounds([[userLat,userLng],[a.lat,a.lng]],{padding:[60,80],maxZoom:14});
@@ -182,7 +204,7 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       const sc=document.createElement("script"); sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; sc.onload=init; document.head.appendChild(sc);
     } else init();
     return()=>{ if(mapInst.current){mapInst.current.remove();mapInst.current=null;} };
-  },[a,userLat,userLng,userLocLabel,userLocMode]);
+  },[a,userLat,userLng,userLocLabel,userLocMode,userExpanded]);
   return(
     <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
       style={{position:"fixed",inset:0,background:"#000",zIndex:10001,display:"flex",flexDirection:"column"}}>
