@@ -640,11 +640,11 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   // places). Allowlist: snack_bar, convenience_store, fast_food_restaurant,
   // food_court. Drops pizza restaurants / sit-down restaurants / coffee
   // shops / sandwich shops that previously leaked in via Tier 4 review-text.
-  { pattern: /\bsnacks?\b|\bfinger\s*food\b/,          tier1:['snack_bar','convenience_store'],                           tier2:['fast_food_restaurant'],                           label:'snacks',          nameKeywords:['snacks','finger food'], strict:true, strictPrimaryTypes:['snack_bar','convenience_store','fast_food_restaurant','food_court'] },
+  { pattern: /\bsnacks?\b|\bfinger\s*food\b/,          tier1:['snack_bar','convenience_store'],                           tier2:['fast_food_restaurant','food_court'],              label:'snacks',          nameKeywords:['snacks','finger food'], strict:true, strictPrimaryTypes:['snack_bar','convenience_store','fast_food_restaurant','food_court'] },
   // comfort food: STRICT. Allowlist American comfort categories only.
   // Drops Asian/Mexican/Italian sit-down restaurants that previously
   // leaked in via Tier 4 review-text mention of "comfort food".
-  { pattern: /\bcomfort\s*food\b|\bhome\s*cooking\b/,  tier1:['diner','american_restaurant'],                             tier2:['southern_restaurant','soul_food_restaurant'],     label:'comfort food',    nameKeywords:['comfort food','home cooking','soul food'], strict:true, strictPrimaryTypes:['diner','american_restaurant','southern_restaurant','soul_food_restaurant','bbq_restaurant'] },
+  { pattern: /\bcomfort\s*food\b|\bhome\s*cooking\b/,  tier1:['diner','american_restaurant'],                             tier2:['southern_restaurant','soul_food_restaurant','bbq_restaurant'], label:'comfort food',    nameKeywords:['comfort food','home cooking','soul food'], strict:true, strictPrimaryTypes:['diner','american_restaurant','southern_restaurant','soul_food_restaurant','bbq_restaurant'] },
   // ── Bakery & Desserts (dishes whose "specialty" is a shop type, not a cuisine) ─────────
   { pattern: /\bcakes?\b|\bcupcakes?\b/,               tier1:['cake_shop','bakery'],                                      tier2:['dessert_shop','pastry_shop','cafe'],              label:'cake',            nameKeywords:['cake','cakes','cupcake','sprinkles','crumbs','magnolia bakery'] },
   { pattern: /\bbread\b|\bsourdough\b|\bbaguette\b/,   tier1:['bakery'],                                                  tier2:['cafe','sandwich_shop'],                           label:'bread',           nameKeywords:['bread','sourdough','baguette','breadworks','le pain quotidien','la brea bakery'] },
@@ -656,29 +656,34 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   { pattern: /\bboba\b|\bbubble\s*tea\b/,              tier1:['bubble_tea_shop','tea_house'],                             tier2:['cafe'],                                           label:'boba',            nameKeywords:['boba','bubble tea','tpumps','7 leaves','sharetea','kung fu tea','85c','happy lemon','tiger sugar','yi fang','coco fresh'] },
   // coffee: STRICT. Coffee/espresso/latte restricted to actual coffee
   // venues. Drops restaurants that happen to mention coffee in reviews.
-  { pattern: /\bcoffee\b|\bespresso\b|\blatte\b/,      tier1:['coffee_shop','cafe'],                                      tier2:['bakery'],                                         label:'coffee',          nameKeywords:['coffee','espresso','latte','starbucks','peet','blue bottle','dutch bros','dunkin','la colombe','intelligentsia','philz','stumptown','caribou','tim hortons','coffee bean','verve'], strict:true, strictPrimaryTypes:['coffee_shop','cafe','bakery','bakery_cafe','tea_house'] },
+  { pattern: /\bcoffee\b|\bespresso\b|\blatte\b/,      tier1:['coffee_shop','cafe'],                                      tier2:['bakery','bakery_cafe','tea_house'],               label:'coffee',          nameKeywords:['coffee','espresso','latte','starbucks','peet','blue bottle','dutch bros','dunkin','la colombe','intelligentsia','philz','stumptown','caribou','tim hortons','coffee bean','verve'], strict:true, strictPrimaryTypes:['coffee_shop','cafe','bakery','bakery_cafe','tea_house'] },
   // cheesecake: STRICT. Drops random restaurants that mention cheesecake
   // in reviews (sushi places with "cheesecake roll", etc.). Cheesecake
   // Factory is american_restaurant — kept via allowlist + nameKeyword.
-  { pattern: /\bcheesecake\b/,                         tier1:['dessert_shop','bakery','cake_shop'],                       tier2:['cafe','american_restaurant'],                     label:'cheesecake',      nameKeywords:['cheesecake','cheesecake factory','junior\'s'], strict:true, strictPrimaryTypes:['dessert_shop','bakery','cake_shop','bakery_cafe','cafe','american_restaurant'] },
+  { pattern: /\bcheesecake\b/,                         tier1:['dessert_shop','bakery','cake_shop'],                       tier2:['cafe','american_restaurant','bakery_cafe'],       label:'cheesecake',      nameKeywords:['cheesecake','cheesecake factory','junior\'s'], strict:true, strictPrimaryTypes:['dessert_shop','bakery','cake_shop','bakery_cafe','cafe','american_restaurant'] },
   // chocolate: STRICT. Real chocolate venues only. Drops bakeries that
   // happen to have chocolate-cake reviews, etc.
-  { pattern: /\bchocolate\b|\bcacao\b|\btruffles?\b/,  tier1:['chocolatier','dessert_shop','candy_store'],                tier2:['bakery'],                                         label:'chocolate',       nameKeywords:['chocolate','cacao','truffle','godiva','lindt','see\'s','ghirardelli','vosges','jacques torres'], strict:true, strictPrimaryTypes:['chocolatier','dessert_shop','candy_store','bakery','bakery_cafe'] },
+  { pattern: /\bchocolate\b|\bcacao\b|\btruffles?\b/,  tier1:['chocolatier','dessert_shop','candy_store'],                tier2:['bakery','bakery_cafe'],                           label:'chocolate',       nameKeywords:['chocolate','cacao','truffle','godiva','lindt','see\'s','ghirardelli','vosges','jacques torres'], strict:true, strictPrimaryTypes:['chocolatier','dessert_shop','candy_store','bakery','bakery_cafe'] },
   { pattern: /\bbrownies?\b/,                          tier1:['bakery','dessert_shop'],                                   tier2:['cafe'],                                           label:'brownies',        nameKeywords:['brownie','brownies','fairytale brownies'] },
-  // frozen yogurt: STRICT mode. Allowlist primaryType to ice_cream_shop /
-  // gelato_shop / dessert_shop only. Anything else (bakery, bakery_cafe,
-  // donut_shop, coffee_shop, cafe, restaurant types) is dropped before
-  // Tier 4 review-text fallback can pull them in. Prior behavior leaked
-  // 85°C / JJ Bakery / Tous Les Jours / Donut King / Cheesecake Factory /
-  // Bhanu Indian Market into froyo results via incidental review mentions
-  // of "frozen yogurt"; strict allowlist eliminates that noise.
+  // frozen yogurt: STRICT mode. Allowlist is real frozen-dessert types
+  // ONLY (ice_cream_shop / gelato_shop / frozen_yogurt_shop). dessert_shop
+  // is intentionally EXCLUDED because Google over-tags Asian bakeries,
+  // donut shops, candy stores, and Indian markets with that tag — including
+  // it leaked 85°C / JJ Bakery / Tous Les Jours / Donut King / Bhanu Indian
+  // into results. Tier 4 review-text fallback is also skipped (see
+  // `if (isStrict) return 5;` in computeTier above) so AI summaries or
+  // contextual reviews that mention "frozen yogurt" can't promote
+  // unrelated places.
   // Named brands (Yogurtland, Menchie's, Pinkberry, etc.) still hit Tier 1
-  // via nameKeywords, even if their Google primaryType is dessert_shop.
-  { pattern: /\bfrozen\s*yogurt\b|\bfro[\s-]?yo\b/,    tier1:['ice_cream_shop','gelato_shop'],                            tier2:['dessert_shop'],                                   label:'frozen yogurt',   nameKeywords:['frozen yogurt','froyo','yogurtland','menchie','pinkberry','tcby','sweetfrog','red mango','16 handles','tutti frutti'], strict:true, strictPrimaryTypes:['ice_cream_shop','gelato_shop','dessert_shop','frozen_yogurt_shop'] },
+  // via nameKeywords regardless of their Google primaryType.
+  // Tradeoff: small independent froyo shops Google tags as dessert_shop
+  // will not appear unless they match a brand keyword. Acceptable per
+  // 2026-05-26 design call.
+  { pattern: /\bfrozen\s*yogurt\b|\bfro[\s-]?yo\b/,    tier1:['ice_cream_shop','gelato_shop','frozen_yogurt_shop'],       tier2:[],                                                 label:'frozen yogurt',   nameKeywords:['frozen yogurt','froyo','yogurtland','menchie','pinkberry','tcby','sweetfrog','red mango','16 handles','tutti frutti'], strict:true, strictPrimaryTypes:['ice_cream_shop','gelato_shop','frozen_yogurt_shop'] },
   { pattern: /\bshaved\s*ice\b|\bsno[\s-]*cone\b|\bhalo[\s-]*halo\b/, tier1:['ice_cream_shop','dessert_shop'],              tier2:[],                                                 label:'shaved ice',      nameKeywords:['shaved ice','sno cone','snow cone','snowflake','hawaiian shaved ice','class 302'] },
   { pattern: /\bcr[eè]me\s*br[uû]l[eé]e\b|\bsouffl[eé]\b/, tier1:['french_restaurant','dessert_shop'],                     tier2:['bakery'],                                         label:'French dessert',  nameKeywords:['creme brulee','crème brûlée','soufflé','souffle'] },
   // candy: STRICT. Drops restaurants/cafes that mention candy in reviews.
-  { pattern: /\bcandy\b|\bsweets?\b|\bfudge\b/,        tier1:['candy_store','dessert_shop'],                              tier2:['bakery'],                                         label:'candy',           nameKeywords:['candy','sweets','fudge','see\'s','jelly belly','dylan\'s candy','sugarfina'], strict:true, strictPrimaryTypes:['candy_store','dessert_shop','bakery','chocolatier'] },
+  { pattern: /\bcandy\b|\bsweets?\b|\bfudge\b/,        tier1:['candy_store','dessert_shop'],                              tier2:['bakery','chocolatier'],                           label:'candy',           nameKeywords:['candy','sweets','fudge','see\'s','jelly belly','dylan\'s candy','sugarfina'], strict:true, strictPrimaryTypes:['candy_store','dessert_shop','bakery','chocolatier'] },
 ];
 
 // ─── FUZZY NORMALIZATION ─────────────────────────────────────────────────────
@@ -1103,6 +1108,16 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
 
     if (intent.tier1Types.some(t => types.has(t)) && hasBreakfastPlausibleType) return 2;  // cuisine specialist
     if (intent.tier2Types.some(t => types.has(t)) && hasBreakfastPlausibleType) return 3;  // secondary cuisine
+
+    // ── STRICT mode skips the entire Tier 4 review-text fallback ────────────
+    // For strict DISH entries (froyo, snacks, coffee, comfort food, etc.),
+    // a place that hasn't matched Tier 1 (namesake), Tier 2 (specialist
+    // type), or Tier 3 (related type) is treated as noise — even if its
+    // Google reviews / generativeSummary / contextualReviews / menu OCR
+    // happens to mention the dish. This is exactly the path that was
+    // leaking Asian bakeries / donut shops / coffee shops into froyo
+    // results via incidental review/AI-summary mentions of "frozen yogurt".
+    if (isStrict) return 5;
 
     // 1. editorialSummary text mentions the dish (free, in search response)
     const editorial = ((place.editorialSummary?.text || place.editorialSummary || '') as string).toString().toLowerCase();
