@@ -949,6 +949,87 @@ const ANALYTICS_QUERIES = {
     ORDER BY ts DESC
     LIMIT 50
   `,
+  // AI Details opens per day across all users (14-day sparkline)
+  ai_details_opens_by_day_14d: `
+    SELECT
+      date(ts, 'unixepoch') AS day,
+      COUNT(*) AS opens
+    FROM events
+    WHERE event_type = 'ai_details_opened'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day
+    ORDER BY day ASC
+  `,
+  // Per-session: how many distinct restaurants did each user open AI
+  // Details for, plus their total opens. Top 20 sessions in last 7 days.
+  // Each session_id ≈ one user visit (per-browser-tab, sessionStorage).
+  ai_details_per_session_7d: `
+    SELECT
+      session_id,
+      COUNT(DISTINCT json_extract(payload, '$.placeId')) AS distinct_places_opened,
+      COUNT(*) AS total_opens
+    FROM events
+    WHERE event_type = 'ai_details_opened'
+      AND ts >= strftime('%s','now','-7 days')
+      AND json_extract(payload, '$.placeId') IS NOT NULL
+    GROUP BY session_id
+    ORDER BY distinct_places_opened DESC
+    LIMIT 20
+  `,
+  // PAID AI Details fetches per day (cache MISS only). Each row = $0.025
+  // of Claude+Place-Details spend. Total cost = COUNT × $0.025.
+  ai_details_paid_by_day_14d: `
+    SELECT
+      date(ts, 'unixepoch') AS day,
+      COUNT(*) AS paid_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.cache') != 'hit'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day
+    ORDER BY day ASC
+  `,
+  // FREE AI Details fetches per day (cache HIT). Each one is value
+  // delivered at $0 cost — the cache earning its keep.
+  ai_details_free_by_day_14d: `
+    SELECT
+      date(ts, 'unixepoch') AS day,
+      COUNT(*) AS free_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.cache') = 'hit'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day
+    ORDER BY day ASC
+  `,
+  // Per-session breakdown of paid vs cached. Top 20 sessions by paid
+  // count — these are the most expensive users for the AI Details
+  // feature. Useful for understanding which user behavior drives cost.
+  ai_details_cost_per_session_7d: `
+    SELECT
+      session_id,
+      SUM(CASE WHEN json_extract(payload, '$.cache') != 'hit' THEN 1 ELSE 0 END) AS paid_opens,
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'hit' THEN 1 ELSE 0 END) AS free_opens,
+      COUNT(DISTINCT CASE WHEN json_extract(payload, '$.cache') != 'hit' THEN json_extract(payload, '$.placeId') END) AS distinct_paid_places,
+      COUNT(DISTINCT CASE WHEN json_extract(payload, '$.cache') = 'hit' THEN json_extract(payload, '$.placeId') END) AS distinct_free_places
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND ts >= strftime('%s','now','-7 days')
+    GROUP BY session_id
+    ORDER BY paid_opens DESC
+    LIMIT 20
+  `,
+  // Cache hit rate over last 7 days — % of fetches served from cache
+  // (no Google or Claude call needed). Single-row summary metric.
+  ai_details_cache_rate_7d: `
+    SELECT
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'hit' THEN 1 ELSE 0 END) AS hits,
+      SUM(CASE WHEN json_extract(payload, '$.cache') != 'hit' THEN 1 ELSE 0 END) AS misses,
+      COUNT(*) AS total_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND ts >= strftime('%s','now','-7 days')
+  `,
 };
 
 async function handleAnalyticsQuery(request, env) {

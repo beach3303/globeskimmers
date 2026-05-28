@@ -33,6 +33,12 @@ const DEFAULT_QUERIES = [
   "top_searches_7d",
   "events_by_day_14d",
   "dish_gallery_searches",
+  "ai_details_opens_by_day_14d",
+  "ai_details_per_session_7d",
+  "ai_details_paid_by_day_14d",
+  "ai_details_free_by_day_14d",
+  "ai_details_cost_per_session_7d",
+  "ai_details_cache_rate_7d",
 ];
 
 Deno.serve(async (req) => {

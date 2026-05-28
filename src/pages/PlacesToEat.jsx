@@ -555,8 +555,7 @@ function FallbackDisclaimer({ fallbackInfo, onExpandRadius }) {
 function AIDetailsPanel(/** @type {{ loading: boolean, error: string|null, details: any }} */ { loading, error, details }) {
   if (loading) {
     return (
-      <div style={{padding:"14px",background:"#F5F3FF",borderRadius:"10px",border:"1px solid #DDD6FE"}}>
-        <div style={{fontSize:"11px",fontWeight:"700",color:"#6D28D9",letterSpacing:"0.5px",marginBottom:"10px"}}>🤖 AI DETAILS</div>
+      <div>
         <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
           {[88,72,80,66,75].map((w,i)=>(
             <div key={i} style={{
@@ -575,7 +574,7 @@ function AIDetailsPanel(/** @type {{ loading: boolean, error: string|null, detai
   }
   if (error) {
     return (
-      <div style={{padding:"12px",background:"#FEF2F2",borderRadius:"10px",fontSize:"12px",color:"#B91C1C"}}>
+      <div style={{fontSize:"12px",color:"#B91C1C"}}>
         AI Details unavailable right now. {error}
       </div>
     );
@@ -594,9 +593,7 @@ function AIDetailsPanel(/** @type {{ loading: boolean, error: string|null, detai
     : null;
 
   return (
-    <div style={{padding:"14px",background:"#F5F3FF",borderRadius:"10px",border:"1px solid #DDD6FE"}}>
-      <div style={{fontSize:"11px",fontWeight:"700",color:"#6D28D9",letterSpacing:"0.5px",marginBottom:"10px"}}>🤖 AI DETAILS</div>
-
+    <div>
       {row('🥘', 'BEST DISH', bestDishText)}
       {details.alsoRecommended?.length > 0 && row('👍', 'ALSO RECOMMENDED', details.alsoRecommended.join(', '))}
       {row('👥', 'CROWD', details.crowd)}
@@ -642,17 +639,32 @@ function AIDetailsPanel(/** @type {{ loading: boolean, error: string|null, detai
 function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDistance }) {
   const [expanded,setExpanded]=useState(false);
   const [hoursExpanded,setHoursExpanded]=useState(false);
-  // AI Details lazy-loaded on first expand. Fires getAIDetails → Worker
-  // → Place Details + Claude synthesis → cached 30 days globally.
+  // AI Details collapsed by default — fetch only fires when user explicitly
+  // opens the panel. Saves ~$0.025/expand when user only wanted to check
+  // weekly hours or website without reading AI Details.
+  const [aiDetailsOpen,setAIDetailsOpen]=useState(false);
   const [aiDetails,setAIDetails]=useState(/** @type {any} */(null));
   const [aiLoading,setAILoading]=useState(false);
   const [aiError,setAIError]=useState(/** @type {string|null} */(null));
 
+  const onToggleAIDetails = () => {
+    const next = !aiDetailsOpen;
+    setAIDetailsOpen(next);
+    if (next) {
+      // Analytics — log every open (cache-hit or fresh fetch). Lets us
+      // measure engagement separately from cost.
+      const pid = restaurant.placeId || restaurant.id;
+      const pname = restaurant.displayName?.text || restaurant.name || '';
+      logEvent('ai_details_opened', { placeId: pid, placeName: pname }, 'PlacesToEat');
+    }
+  };
+
   useEffect(() => {
-    if (!expanded) return;
+    if (!aiDetailsOpen) return;
     if (aiDetails || aiLoading) return;
     const pid = restaurant.placeId || restaurant.id;
     if (!pid) return;
+    const pname = restaurant.displayName?.text || restaurant.name || '';
     setAILoading(true);
     setAIError(null);
     base44.functions.invoke('getAIDetails', { placeId: pid })
@@ -664,10 +676,21 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
         } else {
           setAIError('No AI details returned');
         }
+        // Cost-tracking event — fires AFTER the Worker responds with the
+        // cache status. `_cache: 'hit'` = $0 (cached), `'miss'` or
+        // `'miss-stub'` = $0.025 paid. Separate from ai_details_opened
+        // (engagement) because engagement fires before we know cache state.
+        const cache = data?._cache || 'unknown';
+        logEvent('ai_details_fetched', {
+          placeId: pid,
+          placeName: pname,
+          cache,
+          paid: cache !== 'hit',
+        }, 'PlacesToEat');
       })
       .catch((e) => setAIError(e?.message || 'Failed to load AI details'))
       .finally(() => setAILoading(false));
-  }, [expanded, restaurant.placeId, restaurant.id, aiDetails, aiLoading]);
+  }, [aiDetailsOpen, restaurant.placeId, restaurant.id, aiDetails, aiLoading, restaurant.displayName, restaurant.name]);
 
   const name    = restaurant.displayName?.text || restaurant.name || "Restaurant";
   const address = restaurant.shortFormattedAddress || restaurant.formattedAddress || "";
@@ -858,12 +881,27 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
                   </div>
                 )}
 
-                {/* AI Details — lazy-loaded on first expand, cached 30 days */}
-                <AIDetailsPanel
-                  loading={aiLoading}
-                  error={aiError}
-                  details={aiDetails}
-                />
+                {/* AI Details — collapsed by default. Tap the header to open
+                    and trigger the lazy fetch (~$0.025 first time per place,
+                    cached 30 days globally). Free re-opens after that. */}
+                <div style={{padding:"12px 14px",background:"#F5F3FF",borderRadius:"10px",border:"1px solid #DDD6FE"}}>
+                  <button
+                    onClick={onToggleAIDetails}
+                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}
+                  >
+                    <span style={{fontSize:"11px",fontWeight:"700",color:"#6D28D9",letterSpacing:"0.5px"}}>🤖 AI DETAILS</span>
+                    <span style={{fontSize:"11px",color:"#6D28D9"}}>{aiDetailsOpen?'▲':'▼'}</span>
+                  </button>
+                  {aiDetailsOpen && (
+                    <div style={{marginTop:"10px"}}>
+                      <AIDetailsPanel
+                        loading={aiLoading}
+                        error={aiError}
+                        details={aiDetails}
+                      />
+                    </div>
+                  )}
+                </div>
 
                 {/* Small subtle link out to Google Maps for the full review thread */}
                 {restaurant.googleMapsUri&&(
