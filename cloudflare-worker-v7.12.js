@@ -1131,6 +1131,188 @@ async function handleLabelPhotos(request, env) {
 }
 
 // ============================================================================
+// AI DETAILS — Haiku 4.5 synthesizes a structured "AI Details" panel from
+// the place's 5 Google reviews + metadata. Replaces the raw 5-review block
+// on PlacesToEat's expanded restaurant card with curated insights:
+// best dish, crowd, best time, vibe, value, good-to-know, traveler notes,
+// GS Verdict. Cached 30 days per place.
+//
+// Voice rules (enforced in prompt):
+// - Hedge subjective claims ("can", "may", "some say")
+// - Attribute observations to reviewers
+// - Pair negatives with positive context when one exists in the reviews
+// - Never use "avoid", "skip", "don't go", "you should"
+// - Be honest about facts; state them, don't warn about them
+// ============================================================================
+
+const AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days
+
+const AI_DETAILS_SYSTEM_PROMPT = `You are GlobeSkimmers' restaurant insight engine. Given Google review snippets and place metadata, synthesize practical insights for a traveler.
+
+VOICE RULES (strict):
+- Hedge subjective claims with "can", "may", "some say", "reported"
+- Attribute observations to reviewers ("per reviewer notes", "reported by diners", "X of 5 reviewers said")
+- When mentioning a negative (long waits, no A/C, cramped space), pair it with a balancing positive from the reviews IF one genuinely exists ("still enjoy the food", "worth it for the value"). Do NOT fabricate balance if none exists in the reviews — just state the fact neutrally.
+- NEVER use commanding/judgmental language: do not write "avoid", "skip", "don't go", "you should", "stay away"
+- State facts factually (crowded times, cash-only, no A/C), not as warnings
+
+OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
+{
+  "bestDish": { "name": "<dish name>", "context": "<one-line context citing reviewer mentions>" } | null,
+  "alsoRecommended": ["<dish 1>", ...] (up to 4 strings, can be empty),
+  "crowd": "<one short sentence describing who eats here>" | null,
+  "bestTime": "<recommended time + busiest times factually>" | null,
+  "vibe": "<one short sentence on atmosphere>" | null,
+  "value": "<one short sentence on value, include price range if mentioned>" | null,
+  "goodToKnow": ["<honest fact 1>", ...] (up to 3 strings, can be empty),
+  "travelerNotes": "<practical tip for travelers — language, ordering, payment>" | null,
+  "gsScore": <number 1-10, factor rating × review depth × consistency>,
+  "gsVerdict": "<one short sentence summary>"
+}
+
+If reviews are too sparse to fill a field, set it to null or empty array. Do NOT fabricate.
+
+Return JSON only.`;
+
+async function handleAIDetails(request, env) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
+  }
+  let body;
+  try { body = await request.json(); } catch (_e) {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400);
+  }
+  const placeId = body?.placeId;
+  if (!placeId) {
+    return jsonResponse({ error: 'placeId required' }, 400);
+  }
+
+  // 1) Check AI Details cache (30-day TTL). Versioned so prompt changes
+  //    invalidate cleanly. Most calls will hit this after warm-up.
+  const aiCacheKey = `place:${placeId}:ai_details_v1`;
+  if (env.GLOBESKIMMERS_KV) {
+    const cached = await env.GLOBESKIMMERS_KV.get(aiCacheKey, { type: 'json' }).catch(() => null);
+    if (cached) {
+      return jsonResponse({ aiDetails: cached, _cache: 'hit' });
+    }
+  }
+
+  // 2) Load Place Details — prefer the existing details_{placeId} cache (90d)
+  //    so a popular place doesn't pay the $0.02 Google call here again.
+  const detailsCacheKey = `details_${placeId}`;
+  let place;
+  const cachedDetails = await getFromCache(env, detailsCacheKey);
+  if (cachedDetails && cachedDetails.data) {
+    place = cachedDetails.data;
+  } else {
+    // Fresh fetch from Google. Cache the normalized result for 90 days
+    // so any later handlePlaceDetails call benefits too.
+    try {
+      const apiKey = env.GOOGLE_API_KEY;
+      const detailsRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=en`, {
+        method: 'GET',
+        headers: {
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': CONFIG.DETAILS_FIELD_MASK
+        }
+      });
+      if (!detailsRes.ok) {
+        return jsonResponse({ error: 'Place details fetch failed', status: detailsRes.status }, 502);
+      }
+      const raw = await detailsRes.json();
+      place = normalizePlace(raw, new URL(request.url).origin, true);
+      await setInCache(env, detailsCacheKey, place, CONFIG.CACHE_TTL.DETAILS);
+    } catch (e) {
+      return jsonResponse({ error: 'Place details error: ' + e.message }, 502);
+    }
+  }
+
+  // 3) Build Claude input — reviews + key metadata only
+  const reviewSnippets = (place.reviews || []).slice(0, 5).map(r => ({
+    text: r.text || '',
+    rating: r.rating,
+    when: r.time || '',
+  })).filter(r => r.text);
+
+  const placeMeta = {
+    name: place.name || place.displayName?.text,
+    address: place.address || place.formattedAddress,
+    rating: place.rating,
+    reviewCount: place.userRatingCount,
+    priceLevel: place.priceLevel,
+    primaryType: place.primaryTypeDisplay || place.primaryType,
+    editorialSummary: place.editorialSummary,
+    websiteUri: place.websiteUri,
+  };
+
+  if (reviewSnippets.length === 0 && !placeMeta.editorialSummary) {
+    // Nothing to synthesize from. Return a minimal stub.
+    const stub = {
+      bestDish: null,
+      alsoRecommended: [],
+      crowd: null,
+      bestTime: null,
+      vibe: null,
+      value: null,
+      goodToKnow: [],
+      travelerNotes: null,
+      gsScore: place.rating || null,
+      gsVerdict: 'Not enough review data to synthesize details yet.',
+      websiteUri: placeMeta.websiteUri || null,
+      placeName: placeMeta.name || null,
+    };
+    if (env.GLOBESKIMMERS_KV) {
+      await env.GLOBESKIMMERS_KV.put(aiCacheKey, JSON.stringify(stub), { expirationTtl: AI_DETAILS_TTL_SECONDS }).catch(() => {});
+    }
+    return jsonResponse({ aiDetails: stub, _cache: 'miss-stub' });
+  }
+
+  const userContent = `PLACE METADATA:\n${JSON.stringify(placeMeta, null, 2)}\n\nREVIEW SNIPPETS (up to 5 from Google):\n${JSON.stringify(reviewSnippets, null, 2)}\n\nGenerate the AI Details JSON for this restaurant per the voice rules.`;
+
+  // 4) Call Claude Haiku 4.5
+  let aiDetails;
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1500,
+        system: AI_DETAILS_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userContent }]
+      })
+    });
+    if (!apiRes.ok) {
+      const errText = await apiRes.text();
+      return jsonResponse({ error: 'Claude API error', status: apiRes.status, details: errText }, 502);
+    }
+    const data = await apiRes.json();
+    const raw = data?.content?.[0]?.text?.trim() || '';
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    aiDetails = JSON.parse(cleaned);
+    aiDetails.websiteUri = placeMeta.websiteUri || null;
+    aiDetails.placeName = placeMeta.name || null;
+  } catch (e) {
+    return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
+  }
+
+  // 5) Cache the AI Details JSON for 30 days
+  if (env.GLOBESKIMMERS_KV) {
+    await env.GLOBESKIMMERS_KV.put(
+      aiCacheKey,
+      JSON.stringify(aiDetails),
+      { expirationTtl: AI_DETAILS_TTL_SECONDS }
+    ).catch(() => {});
+  }
+
+  return jsonResponse({ aiDetails, _cache: 'miss' });
+}
+
+// ============================================================================
 // PRICE SCANNER — direct Anthropic Claude Sonnet 4.6 with prompt caching
 // Replaces Base44 InvokeLLM for the SmartPriceScanner. Set ANTHROPIC_API_KEY
 // as a Worker secret in the Cloudflare dashboard before deploying.
@@ -1341,6 +1523,7 @@ export default {
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
       if (pathname === '/label-photos' && request.method === 'POST') return await handleLabelPhotos(request, env);
+      if (pathname === '/ai-details' && request.method === 'POST') return await handleAIDetails(request, env);
 
       return jsonResponse({ error: 'Not found', path: pathname }, 404);
     } catch (error) {

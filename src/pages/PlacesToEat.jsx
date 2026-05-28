@@ -39,7 +39,6 @@ import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
-import { hydratePlaceDetails } from "@/lib/placeDetailsHydrator";
 
 const WORKER_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
 
@@ -547,9 +546,129 @@ function FallbackDisclaimer({ fallbackInfo, onExpandRadius }) {
   );
 }
 
+// ─── AI DETAILS PANEL ────────────────────────────────────────────────────────
+// Renders the Claude-synthesized restaurant insights. Loading state shows a
+// shimmer block while the lazy fetch is in flight. The synthesized data has
+// hedged language built into the Claude system prompt (no "avoid"/"skip"
+// language; attributes claims to reviewers; pairs negatives with positives
+// where they exist in the reviews).
+function AIDetailsPanel(/** @type {{ loading: boolean, error: string|null, details: any }} */ { loading, error, details }) {
+  if (loading) {
+    return (
+      <div style={{padding:"14px",background:"#F5F3FF",borderRadius:"10px",border:"1px solid #DDD6FE"}}>
+        <div style={{fontSize:"11px",fontWeight:"700",color:"#6D28D9",letterSpacing:"0.5px",marginBottom:"10px"}}>🤖 AI DETAILS</div>
+        <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+          {[88,72,80,66,75].map((w,i)=>(
+            <div key={i} style={{
+              height:"12px",
+              width:`${w}%`,
+              background:"linear-gradient(90deg,#EDE9FE 0%,#DDD6FE 50%,#EDE9FE 100%)",
+              backgroundSize:"200% 100%",
+              borderRadius:"4px",
+              animation:"gsShimmer 1.2s ease-in-out infinite",
+            }}/>
+          ))}
+        </div>
+        <style>{`@keyframes gsShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div style={{padding:"12px",background:"#FEF2F2",borderRadius:"10px",fontSize:"12px",color:"#B91C1C"}}>
+        AI Details unavailable right now. {error}
+      </div>
+    );
+  }
+  if (!details) return null;
+
+  const row = (/** @type {string} */ icon, /** @type {string} */ label, /** @type {any} */ value) => value ? (
+    <div style={{marginBottom:"8px"}}>
+      <div style={{fontSize:"11px",fontWeight:"700",color:"#6D28D9",letterSpacing:"0.4px",marginBottom:"3px"}}>{icon} {label}</div>
+      <div style={{fontSize:"13px",lineHeight:"1.5",color:DARK}}>{value}</div>
+    </div>
+  ) : null;
+
+  const bestDishText = details.bestDish?.name
+    ? `${details.bestDish.name}${details.bestDish.context ? ` — ${details.bestDish.context}` : ''}`
+    : null;
+
+  return (
+    <div style={{padding:"14px",background:"#F5F3FF",borderRadius:"10px",border:"1px solid #DDD6FE"}}>
+      <div style={{fontSize:"11px",fontWeight:"700",color:"#6D28D9",letterSpacing:"0.5px",marginBottom:"10px"}}>🤖 AI DETAILS</div>
+
+      {row('🥘', 'BEST DISH', bestDishText)}
+      {details.alsoRecommended?.length > 0 && row('👍', 'ALSO RECOMMENDED', details.alsoRecommended.join(', '))}
+      {row('👥', 'CROWD', details.crowd)}
+      {row('⏰', 'BEST TIME', details.bestTime)}
+      {row('🎭', 'VIBE', details.vibe)}
+      {row('💰', 'VALUE', details.value)}
+
+      {details.goodToKnow?.length > 0 && (
+        <div style={{marginBottom:"8px"}}>
+          <div style={{fontSize:"11px",fontWeight:"700",color:"#6D28D9",letterSpacing:"0.4px",marginBottom:"3px"}}>📌 GOOD TO KNOW</div>
+          <ul style={{margin:0,paddingLeft:"18px",fontSize:"13px",lineHeight:"1.5",color:DARK}}>
+            {details.goodToKnow.map((/** @type {string} */ g,/** @type {number} */ i)=>(<li key={i}>{g}</li>))}
+          </ul>
+        </div>
+      )}
+
+      {row('🌍', 'TRAVELER', details.travelerNotes)}
+
+      {(details.gsScore != null || details.gsVerdict) && (
+        <div style={{marginTop:"10px",paddingTop:"10px",borderTop:"1px solid #DDD6FE"}}>
+          <div style={{fontSize:"11px",fontWeight:"700",color:"#6D28D9",letterSpacing:"0.4px",marginBottom:"3px"}}>💯 GS VERDICT</div>
+          <div style={{fontSize:"13px",lineHeight:"1.5",color:DARK}}>
+            {details.gsScore != null && <strong>{Number(details.gsScore).toFixed(1)}/10</strong>}
+            {details.gsScore != null && details.gsVerdict && ' — '}
+            {details.gsVerdict}
+          </div>
+        </div>
+      )}
+
+      {details.websiteUri && (
+        <div style={{marginTop:"10px",fontSize:"12px",color:GRAY}}>
+          For more information, visit{' '}
+          <a href={details.websiteUri} target="_blank" rel="noopener noreferrer" style={{color:"#6D28D9",textDecoration:"underline"}}>
+            {details.websiteUri.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── RESTAURANT CARD ─────────────────────────────────────────────────────────
 function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDistance }) {
   const [expanded,setExpanded]=useState(false);
+  const [hoursExpanded,setHoursExpanded]=useState(false);
+  // AI Details lazy-loaded on first expand. Fires getAIDetails → Worker
+  // → Place Details + Claude synthesis → cached 30 days globally.
+  const [aiDetails,setAIDetails]=useState(/** @type {any} */(null));
+  const [aiLoading,setAILoading]=useState(false);
+  const [aiError,setAIError]=useState(/** @type {string|null} */(null));
+
+  useEffect(() => {
+    if (!expanded) return;
+    if (aiDetails || aiLoading) return;
+    const pid = restaurant.placeId || restaurant.id;
+    if (!pid) return;
+    setAILoading(true);
+    setAIError(null);
+    base44.functions.invoke('getAIDetails', { placeId: pid })
+      .then(({ data }) => {
+        if (data?.error) {
+          setAIError(data.error);
+        } else if (data?.aiDetails) {
+          setAIDetails(data.aiDetails);
+        } else {
+          setAIError('No AI details returned');
+        }
+      })
+      .catch((e) => setAIError(e?.message || 'Failed to load AI details'))
+      .finally(() => setAILoading(false));
+  }, [expanded, restaurant.placeId, restaurant.id, aiDetails, aiLoading]);
+
   const name    = restaurant.displayName?.text || restaurant.name || "Restaurant";
   const address = restaurant.shortFormattedAddress || restaurant.formattedAddress || "";
   const phone   = restaurant.nationalPhoneNumber || restaurant.internationalPhoneNumber || "";
@@ -715,40 +834,47 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
                   </div>
                 )}
 
-                {/* Full hours */}
+                {/* Weekly hours — collapsed by default, tap to expand */}
                 {restaurant.currentOpeningHours?.weekdayDescriptions?.length>0&&(
                   <div style={{padding:"12px",background:"#F8FAFC",borderRadius:"10px"}}>
-                    <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,letterSpacing:"0.5px",marginBottom:"8px"}}>🕐 HOURS</div>
-                    {restaurant.currentOpeningHours.weekdayDescriptions.map((day,i)=>{
-                      const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                      const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
-                      return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:"12px",fontWeight:isToday?"700":"400",color:isToday?BLUE:DARK,borderBottom:i<6?"1px solid #F1F5F9":"none"}}>
-                        <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
-                      </div>;
-                    })}
+                    <button
+                      onClick={()=>setHoursExpanded(h=>!h)}
+                      style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}
+                    >
+                      <span style={{fontSize:"11px",fontWeight:"700",color:GRAY,letterSpacing:"0.5px"}}>🕐 WEEKLY HOURS</span>
+                      <span style={{fontSize:"11px",color:GRAY}}>{hoursExpanded?'▲':'▼'}</span>
+                    </button>
+                    {hoursExpanded&&(
+                      <div style={{marginTop:"8px"}}>
+                        {restaurant.currentOpeningHours.weekdayDescriptions.map((/** @type {string} */ day,/** @type {number} */ i)=>{
+                          const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                          const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
+                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:"12px",fontWeight:isToday?"700":"400",color:isToday?BLUE:DARK,borderBottom:i<6?"1px solid #F1F5F9":"none"}}>
+                            <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
+                          </div>;
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* Google reviews */}
-                {restaurant.reviews?.length>0&&(
-                  <div style={{padding:"12px",background:"#F8FAFC",borderRadius:"10px"}}>
-                    <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,letterSpacing:"0.5px",marginBottom:"10px"}}>💬 REVIEWS ({restaurant.reviews.length})</div>
-                    {restaurant.reviews.slice(0,5).map((r,i)=>(
-                      <div key={i} style={{padding:"10px",background:"#fff",borderRadius:"9px",border:"1px solid #E2E8F0",marginBottom:i<restaurant.reviews.length-1?"8px":"0"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
-                            {r.profilePhoto?<img src={r.profilePhoto} alt="" style={{width:"24px",height:"24px",borderRadius:"50%",objectFit:"cover"}} onError={e=>e.target.style.display='none'}/>:<div style={{width:"24px",height:"24px",borderRadius:"50%",background:"#E2E8F0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:"700",color:GRAY}}>{r.author?.charAt(0)?.toUpperCase()||"?"}</div>}
-                            <span style={{fontSize:"12px",fontWeight:"600",color:DARK}}>{r.author||"Anonymous"}</span>
-                          </div>
-                          <div style={{display:"flex",alignItems:"center",gap:"3px"}}>
-                            {[1,2,3,4,5].map(s=><span key={s} style={{fontSize:"10px",color:s<=r.rating?GOLD:"#CBD5E1"}}>★</span>)}
-                            {r.time&&<span style={{fontSize:"10px",color:"#94A3B8",marginLeft:"4px"}}>· {r.time}</span>}
-                          </div>
-                        </div>
-                        {r.text&&<p style={{fontSize:"12px",lineHeight:"1.5",color:"#475569",margin:0,display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden"}}>"{r.text}"</p>}
-                      </div>
-                    ))}
-                  </div>
+                {/* AI Details — lazy-loaded on first expand, cached 30 days */}
+                <AIDetailsPanel
+                  loading={aiLoading}
+                  error={aiError}
+                  details={aiDetails}
+                />
+
+                {/* Small subtle link out to Google Maps for the full review thread */}
+                {restaurant.googleMapsUri&&(
+                  <a
+                    href={restaurant.googleMapsUri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{display:"block",fontSize:"11px",color:GRAY,textAlign:"center",textDecoration:"underline",padding:"4px"}}
+                  >
+                    view reviews on Google Maps →
+                  </a>
                 )}
 
                 {/* Website */}
@@ -1030,19 +1156,12 @@ export default function PlacesToEat() {
             firstTier: processed[0]?.tier ?? null,
           }, 'PlacesToEat');
 
-          // Hydrate Place Details for the top 5 results so we can show
-          // current opening hours, phone, website on tap-to-expand without
-          // a fresh request. Capped + cached in the hydrator.
-          const topIds = processed.slice(0, 5).map((/** @type {any} */ r) => r.placeId).filter(Boolean);
-          if (topIds.length > 0) {
-            hydratePlaceDetails(topIds, { maxCalls: 5 }).then((detailsMap) => {
-              if (ignore) return;
-              setRestaurants(prev => (/** @type {any[]} */ (prev)).map((/** @type {any} */ r) => {
-                const d = detailsMap.get(r.placeId);
-                return d ? { ...r, hydratedDetails: d } : r;
-              }));
-            }).catch(() => {/* silent — hydration is best-effort */});
-          }
+          // Note: eager top-5 hydratePlaceDetails was removed once the
+          // AI Details panel went live. The expanded card now fetches
+          // Place Details + Claude synthesis lazily on first expand via
+          // getAIDetails (cached 30 days globally). This eliminates the
+          // ~$0.10/search of wasted spend that was happening when the
+          // hydrated reviews weren't rendered anywhere.
         } else {
           setRestaurants([]); // Clear stale results so the UI doesn't show "67 results" from a prior fetch
           setError(data?.error || "No results found. Try expanding your radius.");
