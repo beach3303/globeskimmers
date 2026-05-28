@@ -377,7 +377,7 @@ const BREAKFAST_PLAUSIBLE_TYPES = new Set([
 // 80+ dishes mapped globally — covers Italian, Mexican, Japanese, Chinese, Korean,
 // Vietnamese, Thai, Indian, Filipino, Middle Eastern, European, South American,
 // Southeast Asian, African, and American dishes.
-const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label: string; nameKeywords?: string[]; mealTime?: 'breakfast' | 'brunch' | 'lunch' | 'dinner' }> = [
+const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label: string; nameKeywords?: string[]; mealTime?: 'breakfast' | 'brunch' | 'lunch' | 'dinner'; strict?: boolean; strictPrimaryTypes?: string[] }> = [
   // ── Japanese ────────────────────────────────────────────────────────────────
   { pattern: /\bsushi\b/,                              tier1:['sushi_restaurant'],                                        tier2:['japanese_restaurant'],                            label:'sushi',           nameKeywords:['sushi','sashimi','maki','nigiri','omakase'] },
   { pattern: /\bramen\b/,                              tier1:['ramen_restaurant'],                                        tier2:['japanese_restaurant'],                            label:'ramen',           nameKeywords:['ramen','ramenya','jinya','daikokuya','tsujita','tatsu'] },
@@ -651,14 +651,16 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   { pattern: /\bcheesecake\b/,                         tier1:['dessert_shop','bakery','cake_shop'],                       tier2:['cafe','american_restaurant'],                     label:'cheesecake',      nameKeywords:['cheesecake','cheesecake factory','junior\'s'] },
   { pattern: /\bchocolate\b|\bcacao\b|\btruffles?\b/,  tier1:['chocolatier','dessert_shop','candy_store'],                tier2:['bakery'],                                         label:'chocolate',       nameKeywords:['chocolate','cacao','truffle','godiva','lindt','see\'s','ghirardelli','vosges','jacques torres'] },
   { pattern: /\bbrownies?\b/,                          tier1:['bakery','dessert_shop'],                                   tier2:['cafe'],                                           label:'brownies',        nameKeywords:['brownie','brownies','fairytale brownies'] },
-  // frozen yogurt: NO tier2 = dessert_shop. Google tags way too many places
-  // (Asian bakeries, donut shops, candy shops, dessert markets) as dessert_shop
-  // even when they don't sell frozen yogurt, so a tier2 match would tier 3
-  // "Has It" places that aren't actually froyo shops. Yogurtland / Pinkberry /
-  // Menchie's / TCBY / Sweetfrog / Red Mango / 16 Handles / Tutti Frutti all
-  // tier 1 via nameKeywords name match. Lesser-known froyo shops still surface
-  // via Tier 4 text-match (review/AI/menu mentions of "frozen yogurt" / "froyo").
-  { pattern: /\bfrozen\s*yogurt\b|\bfro[\s-]?yo\b/,    tier1:['ice_cream_shop'],                                          tier2:[],                                                 label:'frozen yogurt',   nameKeywords:['frozen yogurt','froyo','yogurtland','menchie','pinkberry','tcby','sweetfrog','red mango','16 handles','tutti frutti'] },
+  // frozen yogurt: STRICT mode. Allowlist primaryType to ice_cream_shop /
+  // gelato_shop / dessert_shop only. Anything else (bakery, bakery_cafe,
+  // donut_shop, coffee_shop, cafe, restaurant types) is dropped before
+  // Tier 4 review-text fallback can pull them in. Prior behavior leaked
+  // 85°C / JJ Bakery / Tous Les Jours / Donut King / Cheesecake Factory /
+  // Bhanu Indian Market into froyo results via incidental review mentions
+  // of "frozen yogurt"; strict allowlist eliminates that noise.
+  // Named brands (Yogurtland, Menchie's, Pinkberry, etc.) still hit Tier 1
+  // via nameKeywords, even if their Google primaryType is dessert_shop.
+  { pattern: /\bfrozen\s*yogurt\b|\bfro[\s-]?yo\b/,    tier1:['ice_cream_shop','gelato_shop'],                            tier2:['dessert_shop'],                                   label:'frozen yogurt',   nameKeywords:['frozen yogurt','froyo','yogurtland','menchie','pinkberry','tcby','sweetfrog','red mango','16 handles','tutti frutti'], strict:true, strictPrimaryTypes:['ice_cream_shop','gelato_shop','dessert_shop','frozen_yogurt_shop'] },
   { pattern: /\bshaved\s*ice\b|\bsno[\s-]*cone\b|\bhalo[\s-]*halo\b/, tier1:['ice_cream_shop','dessert_shop'],              tier2:[],                                                 label:'shaved ice',      nameKeywords:['shaved ice','sno cone','snow cone','snowflake','hawaiian shaved ice','class 302'] },
   { pattern: /\bcr[eè]me\s*br[uû]l[eé]e\b|\bsouffl[eé]\b/, tier1:['french_restaurant','dessert_shop'],                     tier2:['bakery'],                                         label:'French dessert',  nameKeywords:['creme brulee','crème brûlée','soufflé','souffle'] },
   { pattern: /\bcandy\b|\bsweets?\b|\bfudge\b/,        tier1:['candy_store','dessert_shop'],                              tier2:['bakery'],                                         label:'candy',           nameKeywords:['candy','sweets','fudge','see\'s','jelly belly','dylan\'s candy','sugarfina'] },
@@ -923,7 +925,7 @@ function detectDietaryModifier(query: string, dishLabel: string | null): string 
 
 type ParsedIntent =
   | { kind: 'UMBRELLA'; cultureKey: string; label: string; types: Set<string>; keywords: string[] }
-  | { kind: 'DISH'; label: string; tier1Types: string[]; tier2Types: string[]; rawWords: string[]; nameKeywords: string[]; mealTime?: 'breakfast' | 'brunch' | 'lunch' | 'dinner' }
+  | { kind: 'DISH'; label: string; tier1Types: string[]; tier2Types: string[]; rawWords: string[]; nameKeywords: string[]; mealTime?: 'breakfast' | 'brunch' | 'lunch' | 'dinner'; strict?: boolean; strictPrimaryTypes?: string[] }
   | { kind: 'GENERAL' };
 
 function parseSearchIntent(query: string): ParsedIntent {
@@ -978,7 +980,7 @@ function parseSearchIntentInner(q: string): ParsedIntent {
       // instead of just the canonical label ("pasta").
       const matched = (m[0] || '').toLowerCase();
       const rawWords = Array.from(new Set(matched.split(/\s+/).filter(w => w.length >= 3)));
-      return { kind:'DISH', label:entry.label, tier1Types:entry.tier1, tier2Types:entry.tier2, rawWords, nameKeywords: entry.nameKeywords || [], mealTime:entry.mealTime };
+      return { kind:'DISH', label:entry.label, tier1Types:entry.tier1, tier2Types:entry.tier2, rawWords, nameKeywords: entry.nameKeywords || [], mealTime:entry.mealTime, strict: entry.strict, strictPrimaryTypes: entry.strictPrimaryTypes };
     }
   }
   return { kind: 'GENERAL' };
@@ -1047,6 +1049,22 @@ function getTierForPlace(place: any, intent: ParsedIntent): number {
     );
 
     if (dishWords.some(w => name.includes(w))) return 1;          // namesake / specialty (ungated — name match is trustworthy)
+
+    // ── STRICT mode: hard primaryType allowlist ────────────────────────────
+    // For DISH entries marked `strict: true` (currently: frozen yogurt),
+    // drop any place whose primaryType isn't in `strictPrimaryTypes`.
+    // This bypasses the Tier 4 text-match fallback that would otherwise
+    // pull bakeries / donut shops / coffee shops / restaurants into the
+    // results based on incidental review mentions of the dish.
+    // Named brands (Yogurtland, Pinkberry, etc.) already hit Tier 1 via
+    // the namesake check above, so they're unaffected by this gate.
+    const isStrict = (intent as any).strict === true && Array.isArray((intent as any).strictPrimaryTypes) && (intent as any).strictPrimaryTypes.length > 0;
+    if (isStrict) {
+      const primary = (place.primaryType || '').toString();
+      if (!(intent as any).strictPrimaryTypes.includes(primary)) {
+        return 5;
+      }
+    }
 
     // ── Step 4.9 belt-and-suspenders reject ────────────────────────────────
     // For breakfasty queries, hard-reject coffee chains and fast-food chains
