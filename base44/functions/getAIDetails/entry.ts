@@ -31,11 +31,15 @@ Deno.serve(async (req) => {
     if (!placeId) {
       return Response.json({ error: "placeId required" }, { status: 400 });
     }
+    // Kind drives per-kind voice rules + star scheme in the Worker.
+    // 'restaurant' | 'coffee' | 'attraction' | 'restroom'. Defaults to
+    // 'restaurant' if missing/unknown.
+    const kind = body?.kind;
 
     const r = await fetch(`${WORKER_URL}/ai-details`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ placeId }),
+      body: JSON.stringify({ placeId, kind }),
     });
 
     if (!r.ok) {

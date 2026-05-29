@@ -751,6 +751,7 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
                   placeId={restaurant.placeId || restaurant.id}
                   placeName={name}
                   page="PlacesToEat"
+                  kind="restaurant"
                 />
 
                 {/* Small subtle link out to Google Maps for the full review thread */}

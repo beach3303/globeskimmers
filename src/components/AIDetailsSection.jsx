@@ -18,6 +18,14 @@
  *   placeId   — Google Places ID (required)
  *   placeName — for logging context
  *   page      — analytics page label (e.g. 'PlacesToEat' / 'CoffeeFinder')
+ *   kind      — content category that drives the voice rules and star
+ *               scoring on the Worker:
+ *                 'restaurant' (default) — 1-5 stars, never 0, no red flag
+ *                 'coffee'                — same as restaurant
+ *                 'attraction'            — 1-5 stars, red flag if unsafe
+ *                 'restroom'              — 0-5 stars (0 = always dirty),
+ *                                           red flag if unsafe
+ *               Different kinds get separate cache entries on the Worker.
  */
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
@@ -30,7 +38,7 @@ const PURPLE_LIGHT = '#DDD6FE';
 const PURPLE_BG = '#F5F3FF';
 const PURPLE_SHIMMER = '#EDE9FE';
 
-export default function AIDetailsSection({ placeId, placeName, page }) {
+export default function AIDetailsSection({ placeId, placeName, page, kind }) {
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -40,7 +48,7 @@ export default function AIDetailsSection({ placeId, placeName, page }) {
     const next = !open;
     setOpen(next);
     if (next) {
-      logEvent('ai_details_opened', { placeId, placeName }, page || 'unknown');
+      logEvent('ai_details_opened', { placeId, placeName, kind: kind || 'restaurant' }, page || 'unknown');
     }
   };
 
@@ -50,7 +58,7 @@ export default function AIDetailsSection({ placeId, placeName, page }) {
     if (!placeId) return;
     setLoading(true);
     setError(null);
-    base44.functions.invoke('getAIDetails', { placeId })
+    base44.functions.invoke('getAIDetails', { placeId, kind: kind || 'restaurant' })
       .then(({ data }) => {
         if (data?.error) {
           setError(data.error);
@@ -63,6 +71,7 @@ export default function AIDetailsSection({ placeId, placeName, page }) {
         logEvent('ai_details_fetched', {
           placeId,
           placeName,
+          kind: kind || 'restaurant',
           cache,
           paid: cache !== 'hit',
         }, page || 'unknown');
@@ -70,7 +79,7 @@ export default function AIDetailsSection({ placeId, placeName, page }) {
       .catch((e) => setError(e?.message || 'Failed to load AI details'))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, placeId]);
+  }, [open, placeId, kind]);
 
   return (
     <div style={{ padding: '12px 14px', background: PURPLE_BG, borderRadius: '10px', border: `1px solid ${PURPLE_LIGHT}` }}>
@@ -154,12 +163,16 @@ function AIDetailsBody({ loading, error, details }) {
 
       {row('🌍', 'TRAVELER', details.travelerNotes)}
 
-      {(details.gsScore != null || details.gsVerdict) && (
+      {(details.gsStars != null || details.gsRedFlag || details.gsVerdict) && (
         <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${PURPLE_LIGHT}` }}>
           <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>💯 GS VERDICT</div>
           <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>
-            {details.gsScore != null && <strong>{Number(details.gsScore).toFixed(1)}/10</strong>}
-            {details.gsScore != null && details.gsVerdict && ' — '}
+            {details.gsRedFlag ? (
+              <strong>🚩</strong>
+            ) : details.gsStars != null && details.gsStars > 0 ? (
+              <strong style={{ letterSpacing: '1px' }}>{'⭐'.repeat(Math.min(5, Math.max(0, details.gsStars)))}</strong>
+            ) : null}
+            {((details.gsRedFlag) || (details.gsStars != null && details.gsStars > 0)) && details.gsVerdict && ' — '}
             {details.gsVerdict}
           </div>
         </div>

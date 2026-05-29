@@ -344,6 +344,7 @@ function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance
                   placeId={shop.placeId || shop.id}
                   placeName={name}
                   page="CoffeeFinder"
+                  kind="coffee"
                 />
                 {/* Website — full-width button matching PlacesToEat style */}
                 {(shop.websiteUri||shop.website)&&(

@@ -1213,47 +1213,117 @@ async function handleLabelPhotos(request, env) {
 
 // ============================================================================
 // AI DETAILS — Haiku 4.5 synthesizes a structured "AI Details" panel from
-// the place's 5 Google reviews + metadata. Replaces the raw 5-review block
-// on PlacesToEat's expanded restaurant card with curated insights:
-// best dish, crowd, best time, vibe, value, good-to-know, traveler notes,
-// GS Verdict. Cached 30 days per place.
+// the place's reviews + metadata. Used across PlacesToEat, CoffeeFinder,
+// (future) ThingsToDo, (future) RestroomFinder.
 //
-// Voice rules (enforced in prompt):
-// - Hedge subjective claims ("can", "may", "some say")
-// - Attribute observations to reviewers
-// - Pair negatives with positive context when one exists in the reviews
-// - Never use "avoid", "skip", "don't go", "you should"
-// - Be honest about facts; state them, don't warn about them
+// Voice rules (POSITIVE-ONLY policy, enforced in prompt):
+// - Do NOT write anything that would deter a customer from trying the place.
+// - Do NOT cite specific complaints from reviewers. Omit negatives entirely.
+// - DO mention factual planning info (busy hours, customer favorites,
+//   best time, what to order, language tips, payment notes).
+// - Always lead with what people love.
+//
+// GS Verdict scoring (stars, replaces old 1-10 number):
+// - restaurant/coffee: gsStars 1-5 (minimum 1, even for mixed reviews).
+//   gsRedFlag always false.
+// - attraction: gsStars 1-5. gsRedFlag=true ONLY if reviews flag genuine
+//   safety concerns (renders as red flag instead of stars).
+// - restroom: gsStars 0-5 (0 if consistently dirty/smelly). gsRedFlag=true
+//   if safety concerns. Restroom-specific fields favor toilet paper,
+//   soap, paid/free, squat/sit, etc.
+//
+// Cache key includes prompt version (v2) + kind so a prompt or schema
+// change invalidates cleanly and different kinds get separate cache lines.
 // ============================================================================
 
 const AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days
 
-const AI_DETAILS_SYSTEM_PROMPT = `You are GlobeSkimmers' restaurant insight engine. Given Google review snippets and place metadata, synthesize practical insights for a traveler.
+const AI_DETAILS_PROMPT_VERSION = 'v2';
 
-VOICE RULES (strict):
-- Hedge subjective claims with "can", "may", "some say", "reported"
-- Attribute observations to reviewers ("per reviewer notes", "reported by diners", "X of 5 reviewers said")
-- When mentioning a negative (long waits, no A/C, cramped space), pair it with a balancing positive from the reviews IF one genuinely exists ("still enjoy the food", "worth it for the value"). Do NOT fabricate balance if none exists in the reviews — just state the fact neutrally.
-- NEVER use commanding/judgmental language: do not write "avoid", "skip", "don't go", "you should", "stay away"
-- State facts factually (crowded times, cash-only, no A/C), not as warnings
+function buildAIDetailsSystemPrompt(kind) {
+  const safeKind = ['restaurant', 'coffee', 'attraction', 'restroom'].includes(kind) ? kind : 'restaurant';
+
+  const isFood = safeKind === 'restaurant' || safeKind === 'coffee';
+  const isAttraction = safeKind === 'attraction';
+  const isRestroom = safeKind === 'restroom';
+
+  const starRules = isFood
+    ? `- gsStars MUST be an integer 1-5. NEVER 0. Even places with mixed reviews get at least 1 star — every business gets the benefit of the doubt.
+- gsRedFlag MUST be false.`
+    : isAttraction
+      ? `- gsStars MUST be an integer 1-5 (minimum 1).
+- gsRedFlag = true ONLY if multiple reviews flag a GENUINE worldwide safety concern (e.g. crime in area, unsafe structures, recent incidents). Otherwise false.`
+      : isRestroom
+        ? `- gsStars MUST be an integer 0-5. Set gsStars = 0 ONLY if multiple recent reviews say the restroom is consistently dirty or smelly. Otherwise 1-5.
+- gsRedFlag = true if reviews flag safety concerns (unsafe area, unsanitary risk, etc.). Otherwise false.`
+        : '- gsStars 1-5, gsRedFlag false.';
+
+  const kindFieldGuidance = isFood
+    ? `- bestDish: the signature dish/drink. context cites why people love it.
+- alsoRecommended: up to 4 other popular items.
+- crowd: who eats here.
+- bestTime: recommended time + factual note on busy hours (e.g. "Weekday lunch is calmer; weekend dinner is the busiest stretch").
+- vibe: atmosphere (casual, group-friendly, romantic, etc.).
+- value: price range + value framing (positive only).
+- goodToKnow: positive/neutral factual tips (parking, language, payment, reservation tips). NOT complaints.
+- travelerNotes: practical tips for travelers (best dish to try first, ordering, language).`
+    : isAttraction
+      ? `- bestDish = null. alsoRecommended = list up to 4 must-see/must-do items.
+- crowd: who visits (families, photographers, history fans, etc.).
+- bestTime: recommended time + factual busy-hour note.
+- vibe: atmosphere of the attraction.
+- value: admission price + value framing (positive only).
+- goodToKnow: positive/neutral factual tips (what to bring, photo spots, accessibility, language).
+- travelerNotes: practical traveler tips to make the visit better.`
+      : isRestroom
+        ? `- bestDish = null. alsoRecommended = [].
+- crowd = null (typically not relevant).
+- bestTime: best time to use it (less busy windows).
+- vibe: cleanliness, comfort level (only describe positively or neutrally; if dirty, use gsStars=0 instead of writing it negatively).
+- value: paid vs free (e.g. "Free to use" or "Small fee, around X").
+- goodToKnow: presence of toilet paper, soap, hand dryer, squat vs sit toilet, accessibility, anything cool/unique.
+- travelerNotes: practical tips (carry tissue, bring small change, etc.).`
+        : '';
+
+  return `You are GlobeSkimmers' AI Details engine. Generate practical, helpful insights for a traveler about to visit a place.
+
+KIND: ${safeKind}
+
+VOICE RULES (ABSOLUTE — these are inviolable):
+- DO NOT write ANYTHING that would deter a customer from trying the business. The app shows these notes publicly; negative content creates legal/reputational risk.
+- FORBIDDEN words/phrases: "inconsistent", "complaints", "issues", "concerns", "problems", "poor", "rude", "disappointed", "frustrating", "unreliable", "complained", "service issues", "quality concerns", "questionable", "lacking", "subpar", "stay away", "avoid", "skip", "don't go".
+- DO NOT cite specific reviewer complaints. If reviewers said something negative, OMIT it entirely. Do not paraphrase a complaint as a "factual note".
+- DO mention factual planning info that helps the visit go better: busy hours (framed neutrally as "weekend dinner is the busiest window" not "long waits"), customer favorites, best time to visit, what to order, language tips, payment methods, parking notes (positive framing only).
+- ALWAYS lead with what people love.
+- If there is genuinely nothing positive to say about a field, set that field to null. Do NOT invent positives. Do NOT fall back to a complaint.
+- The goal: help travelers have a great visit AND protect the business from lost customers due to public negative content.
+
+PER-KIND FIELDS:
+${kindFieldGuidance}
+
+GS VERDICT SCORING:
+${starRules}
+- gsVerdict: one short positive/neutral summary line. NO negative wording. Examples for high score: "Locals' choice for authentic sisig". Examples for mixed-review minimum score (restaurants/coffee always ≥1 star): "Casual neighborhood spot worth checking out".
 
 OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
 {
-  "bestDish": { "name": "<dish name>", "context": "<one-line context citing reviewer mentions>" } | null,
-  "alsoRecommended": ["<dish 1>", ...] (up to 4 strings, can be empty),
-  "crowd": "<one short sentence describing who eats here>" | null,
-  "bestTime": "<recommended time + busiest times factually>" | null,
-  "vibe": "<one short sentence on atmosphere>" | null,
-  "value": "<one short sentence on value, include price range if mentioned>" | null,
-  "goodToKnow": ["<honest fact 1>", ...] (up to 3 strings, can be empty),
-  "travelerNotes": "<practical tip for travelers — language, ordering, payment>" | null,
-  "gsScore": <number 1-10, factor rating × review depth × consistency>,
-  "gsVerdict": "<one short sentence summary>"
+  "bestDish": { "name": "<name>", "context": "<one positive line>" } | null,
+  "alsoRecommended": ["<item 1>", ...] (up to 4 strings, can be empty),
+  "crowd": "<one short sentence>" | null,
+  "bestTime": "<recommended time + factual busy-window note>" | null,
+  "vibe": "<one short sentence>" | null,
+  "value": "<one short sentence with price range if known>" | null,
+  "goodToKnow": ["<positive/neutral fact 1>", ...] (up to 3 strings, can be empty),
+  "travelerNotes": "<practical tip>" | null,
+  "gsStars": <integer per per-kind rules above>,
+  "gsRedFlag": <boolean per per-kind rules above>,
+  "gsVerdict": "<one short positive/neutral summary, NO negative wording>"
 }
 
-If reviews are too sparse to fill a field, set it to null or empty array. Do NOT fabricate.
+If a field has no positive content to draw from, set it to null/empty. Do NOT fabricate.
 
 Return JSON only.`;
+}
 
 async function handleAIDetails(request, env) {
   if (!env.ANTHROPIC_API_KEY) {
@@ -1267,10 +1337,16 @@ async function handleAIDetails(request, env) {
   if (!placeId) {
     return jsonResponse({ error: 'placeId required' }, 400);
   }
+  // Kind drives the voice rules and star-scoring scheme. Allowlist + default
+  // to 'restaurant' so old callers (no kind param) still work.
+  const allowedKinds = ['restaurant', 'coffee', 'attraction', 'restroom'];
+  const kind = allowedKinds.includes(body?.kind) ? body.kind : 'restaurant';
 
-  // 1) Check AI Details cache (30-day TTL). Versioned so prompt changes
-  //    invalidate cleanly. Most calls will hit this after warm-up.
-  const aiCacheKey = `place:${placeId}:ai_details_v1`;
+  // 1) Check AI Details cache (30-day TTL). Key includes prompt version
+  //    (so prompt changes invalidate cleanly) and kind (so a place opened
+  //    from PlacesToEat vs RestroomFinder gets separate cached outputs
+  //    with kind-appropriate voice and star scheme).
+  const aiCacheKey = `place:${placeId}:ai_details_${AI_DETAILS_PROMPT_VERSION}:${kind}`;
   if (env.GLOBESKIMMERS_KV) {
     const cached = await env.GLOBESKIMMERS_KV.get(aiCacheKey, { type: 'json' }).catch(() => null);
     if (cached) {
@@ -1327,7 +1403,9 @@ async function handleAIDetails(request, env) {
   };
 
   if (reviewSnippets.length === 0 && !placeMeta.editorialSummary) {
-    // Nothing to synthesize from. Return a minimal stub.
+    // Nothing to synthesize from. Return a minimal stub. Stars default to
+    // 1 for restaurant/coffee/attraction (minimum allowed), 1 for restroom
+    // (we don't know if it's dirty without reviews, so give benefit of doubt).
     const stub = {
       bestDish: null,
       alsoRecommended: [],
@@ -1337,8 +1415,9 @@ async function handleAIDetails(request, env) {
       value: null,
       goodToKnow: [],
       travelerNotes: null,
-      gsScore: place.rating || null,
-      gsVerdict: 'Not enough review data to synthesize details yet.',
+      gsStars: 1,
+      gsRedFlag: false,
+      gsVerdict: 'Not enough review data yet — check back as more visitors share their experience.',
       websiteUri: placeMeta.websiteUri || null,
       placeName: placeMeta.name || null,
     };
@@ -1348,7 +1427,7 @@ async function handleAIDetails(request, env) {
     return jsonResponse({ aiDetails: stub, _cache: 'miss-stub' });
   }
 
-  const userContent = `PLACE METADATA:\n${JSON.stringify(placeMeta, null, 2)}\n\nREVIEW SNIPPETS (up to 5 from Google):\n${JSON.stringify(reviewSnippets, null, 2)}\n\nGenerate the AI Details JSON for this restaurant per the voice rules.`;
+  const userContent = `PLACE METADATA:\n${JSON.stringify(placeMeta, null, 2)}\n\nREVIEW SNIPPETS (up to 5 from Google):\n${JSON.stringify(reviewSnippets, null, 2)}\n\nGenerate the AI Details JSON per the voice rules above.`;
 
   // 4) Call Claude Haiku 4.5
   let aiDetails;
@@ -1363,7 +1442,7 @@ async function handleAIDetails(request, env) {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1500,
-        system: AI_DETAILS_SYSTEM_PROMPT,
+        system: buildAIDetailsSystemPrompt(kind),
         messages: [{ role: 'user', content: userContent }]
       })
     });
@@ -1377,6 +1456,21 @@ async function handleAIDetails(request, env) {
     aiDetails = JSON.parse(cleaned);
     aiDetails.websiteUri = placeMeta.websiteUri || null;
     aiDetails.placeName = placeMeta.name || null;
+
+    // Defensive clamping — enforce per-kind star rules even if Claude slips.
+    // Restaurants/coffee: 1-5 minimum. Restroom: 0-5. Attraction: 1-5.
+    // Red flag only allowed for restroom + attraction.
+    let stars = parseInt(aiDetails.gsStars, 10);
+    if (isNaN(stars)) stars = 1;
+    if (stars > 5) stars = 5;
+    if (kind === 'restroom') {
+      if (stars < 0) stars = 0;
+    } else {
+      if (stars < 1) stars = 1;
+    }
+    aiDetails.gsStars = stars;
+    const redFlagAllowed = (kind === 'restroom' || kind === 'attraction');
+    aiDetails.gsRedFlag = redFlagAllowed ? !!aiDetails.gsRedFlag : false;
   } catch (e) {
     return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
   }
