@@ -1614,6 +1614,16 @@ export default function PlacesToEat() {
               fallbackInfo={fallbackInfo}
               onExpandRadius={() => setRadius(r => Math.min(r + 5, 25))}
             />
+            {/* Subtle cross-promo: if the user typed a coffee query, point
+                them to the dedicated CoffeeFinder feature for more options.
+                Re-evaluates on every searchText change so a new (non-coffee)
+                search automatically removes the hint. */}
+            {/\b(coffee|espresso|latte|cappuccino|mocha)\b/i.test(searchText || '') && (
+              <div style={{padding:"8px 12px",background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:"8px",fontSize:"12px",color:"#92400E",display:"flex",alignItems:"center",gap:"6px"}}>
+                <span>☕</span>
+                <span>Looking for more coffee spots? Try the <a href="/CoffeeFinder" style={{color:"#92400E",fontWeight:"700",textDecoration:"underline"}}>Coffee Finder</a></span>
+              </div>
+            )}
             {filtered.slice(0,displayCount).map((r,i)=>(
               <div key={r.id||i} ref={el=>cardRefs.current[i]=el}>
                 <RestaurantCard
