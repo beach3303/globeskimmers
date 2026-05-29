@@ -719,14 +719,14 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
                   </div>
                 )}
 
-                {/* Weekly hours — collapsed by default, tap to expand */}
+                {/* Daily hours — collapsed by default, tap to expand */}
                 {restaurant.currentOpeningHours?.weekdayDescriptions?.length>0&&(
                   <div style={{padding:"12px",background:"#F8FAFC",borderRadius:"10px"}}>
                     <button
                       onClick={()=>setHoursExpanded(h=>!h)}
                       style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}
                     >
-                      <span style={{fontSize:"11px",fontWeight:"700",color:GRAY,letterSpacing:"0.5px"}}>🕐 WEEKLY HOURS</span>
+                      <span style={{fontSize:"11px",fontWeight:"700",color:GRAY,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
                       <span style={{fontSize:"11px",color:GRAY}}>{hoursExpanded?'▲':'▼'}</span>
                     </button>
                     {hoursExpanded&&(

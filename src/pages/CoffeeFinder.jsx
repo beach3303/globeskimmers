@@ -173,6 +173,7 @@ function PhotoCarousel({ photos=[], height="180px" }) {
 // ─── COFFEE CARD ───────────────────────────────────────────────────────────
 function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance }) {
   const [expanded,setExpanded]=useState(false);
+  const [hoursExpanded,setHoursExpanded]=useState(false);
   const [showDir,setShowDir]=useState(false);
   const name    = shop.displayName?.text || shop.name || "Coffee Shop";
   const address = shop.shortFormattedAddress || shop.formattedAddress || "";
@@ -306,36 +307,51 @@ function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance
           <button onClick={()=>setExpanded(!expanded)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"8px 14px",borderRadius:"10px",border:"none",fontSize:"13px",fontWeight:"600",cursor:"pointer",background:expanded?DARK:"#F1F5F9",color:expanded?"#fff":DARK,fontFamily:"inherit"}}>{expanded?"▲ Less":"▼ Details"}</button>
         </div>
 
-        {/* Expanded hours + website + AI Details */}
+        {/* Expanded view — matches PlacesToEat pattern:
+            1. Daily Hours (collapsible, collapsed by default)
+            2. AI Details (collapsible, collapsed by default, lazy fetch on open)
+            3. Visit Website button */}
         <AnimatePresence>
           {expanded&&(
             <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
               <div style={{marginTop:"12px",display:"flex",flexDirection:"column",gap:"10px"}}>
-                <div style={{padding:"12px",background:"#F8FAFC",borderRadius:"10px"}}>
-                  {shop.currentOpeningHours?.weekdayDescriptions?.length>0&&(
-                    <>
-                      <div style={{fontSize:"12px",color:GRAY,fontWeight:"600",marginBottom:"8px"}}>🕐 Hours</div>
-                      {shop.currentOpeningHours.weekdayDescriptions.map((day,i)=>{
-                        const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                        const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
-                        return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:"13px",color:isToday?BROWN_DARK:DARK,fontWeight:isToday?"700":"400"}}>
-                          <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
-                        </div>;
-                      })}
-                    </>
-                  )}
-                  {(shop.websiteUri||shop.website)&&(
-                    <a href={shop.websiteUri||shop.website} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:"8px",marginTop:"10px",padding:"8px",background:"#fff",borderRadius:"8px",textDecoration:"none",color:BROWN,fontSize:"13px",fontWeight:"600"}}>🌐 Visit Website</a>
-                  )}
-                </div>
-                {/* AI Details — same shared component as PlacesToEat. Lazy
-                    fetch fires only when this panel is opened (within the
-                    already-expanded card). */}
+                {/* Daily hours — collapsed by default, tap header to expand */}
+                {shop.currentOpeningHours?.weekdayDescriptions?.length>0&&(
+                  <div style={{padding:"12px",background:"#F8FAFC",borderRadius:"10px"}}>
+                    <button
+                      onClick={()=>setHoursExpanded(h=>!h)}
+                      style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}
+                    >
+                      <span style={{fontSize:"11px",fontWeight:"700",color:GRAY,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
+                      <span style={{fontSize:"11px",color:GRAY}}>{hoursExpanded?'▲':'▼'}</span>
+                    </button>
+                    {hoursExpanded&&(
+                      <div style={{marginTop:"8px"}}>
+                        {shop.currentOpeningHours.weekdayDescriptions.map((day,i)=>{
+                          const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                          const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
+                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:"13px",color:isToday?BROWN_DARK:DARK,fontWeight:isToday?"700":"400",borderBottom:i<6?"1px solid #F1F5F9":"none"}}>
+                            <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
+                          </div>;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* AI Details — shared component with PlacesToEat. Collapsed
+                    by default. Lazy fetch on first open of the panel. */}
                 <AIDetailsSection
                   placeId={shop.placeId || shop.id}
                   placeName={name}
                   page="CoffeeFinder"
                 />
+                {/* Website — full-width button matching PlacesToEat style */}
+                {(shop.websiteUri||shop.website)&&(
+                  <a href={shop.websiteUri||shop.website} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:"10px",padding:"12px",background:"#F3E8FF",borderRadius:"10px",textDecoration:"none",color:"#6D28D9"}}>
+                    <div style={{width:"36px",height:"36px",background:"#6D28D9",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px",flexShrink:0,color:"#fff"}}>🌐</div>
+                    <div><div style={{fontWeight:"600",fontSize:"13px"}}>Visit Website</div><div style={{fontSize:"11px",color:GRAY}}>Menu & info</div></div>
+                  </a>
+                )}
               </div>
             </motion.div>
           )}
