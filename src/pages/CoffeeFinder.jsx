@@ -498,7 +498,7 @@ export default function CoffeeFinderPage() {
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}>
           <span style={{fontSize:"28px"}}>☕</span>
-          <div><div style={{fontWeight:"800",fontSize:"20px",color:DARK}}>Coffee Finder</div><div style={{fontSize:"13px",color:GRAY}}>WiFi · Parking · Seating · Specialty</div></div>
+          <div><div style={{fontWeight:"800",fontSize:"20px",color:DARK}}>Coffee Finder</div><div style={{fontSize:"13px",color:GRAY}}>Find nearby coffee shops</div></div>
         </div>
 
         <div onClick={()=>setShowLocPicker(true)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:"#fff",borderRadius:"10px",border:"1px solid #E2E8F0",fontSize:"13px",marginBottom:"10px",cursor:"pointer"}}>
