@@ -41,6 +41,7 @@ import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
+import AIDetailsSection from "@/components/AIDetailsSection";
 
 const WORKER_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
 
@@ -548,151 +549,10 @@ function FallbackDisclaimer({ fallbackInfo, onExpandRadius }) {
   );
 }
 
-// ─── AI DETAILS PANEL ────────────────────────────────────────────────────────
-// Renders the Claude-synthesized restaurant insights. Loading state shows a
-// shimmer block while the lazy fetch is in flight. The synthesized data has
-// hedged language built into the Claude system prompt (no "avoid"/"skip"
-// language; attributes claims to reviewers; pairs negatives with positives
-// where they exist in the reviews).
-function AIDetailsPanel(/** @type {{ loading: boolean, error: string|null, details: any }} */ { loading, error, details }) {
-  if (loading) {
-    return (
-      <div>
-        <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-          {[88,72,80,66,75].map((w,i)=>(
-            <div key={i} style={{
-              height:"12px",
-              width:`${w}%`,
-              background:"linear-gradient(90deg,#EDE9FE 0%,#DDD6FE 50%,#EDE9FE 100%)",
-              backgroundSize:"200% 100%",
-              borderRadius:"4px",
-              animation:"gsShimmer 1.2s ease-in-out infinite",
-            }}/>
-          ))}
-        </div>
-        <style>{`@keyframes gsShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div style={{fontSize:"12px",color:"#B91C1C"}}>
-        AI Details unavailable right now. {error}
-      </div>
-    );
-  }
-  if (!details) return null;
-
-  const row = (/** @type {string} */ icon, /** @type {string} */ label, /** @type {any} */ value) => value ? (
-    <div style={{marginBottom:"8px"}}>
-      <div style={{fontSize:"11px",fontWeight:"700",color:"#6D28D9",letterSpacing:"0.4px",marginBottom:"3px"}}>{icon} {label}</div>
-      <div style={{fontSize:"13px",lineHeight:"1.5",color:DARK}}>{value}</div>
-    </div>
-  ) : null;
-
-  const bestDishText = details.bestDish?.name
-    ? `${details.bestDish.name}${details.bestDish.context ? ` — ${details.bestDish.context}` : ''}`
-    : null;
-
-  return (
-    <div>
-      {row('🥘', 'BEST DISH', bestDishText)}
-      {details.alsoRecommended?.length > 0 && row('👍', 'ALSO RECOMMENDED', details.alsoRecommended.join(', '))}
-      {row('👥', 'CROWD', details.crowd)}
-      {row('⏰', 'BEST TIME', details.bestTime)}
-      {row('🎭', 'VIBE', details.vibe)}
-      {row('💰', 'VALUE', details.value)}
-
-      {details.goodToKnow?.length > 0 && (
-        <div style={{marginBottom:"8px"}}>
-          <div style={{fontSize:"11px",fontWeight:"700",color:"#6D28D9",letterSpacing:"0.4px",marginBottom:"3px"}}>📌 GOOD TO KNOW</div>
-          <ul style={{margin:0,paddingLeft:"18px",fontSize:"13px",lineHeight:"1.5",color:DARK}}>
-            {details.goodToKnow.map((/** @type {string} */ g,/** @type {number} */ i)=>(<li key={i}>{g}</li>))}
-          </ul>
-        </div>
-      )}
-
-      {row('🌍', 'TRAVELER', details.travelerNotes)}
-
-      {(details.gsScore != null || details.gsVerdict) && (
-        <div style={{marginTop:"10px",paddingTop:"10px",borderTop:"1px solid #DDD6FE"}}>
-          <div style={{fontSize:"11px",fontWeight:"700",color:"#6D28D9",letterSpacing:"0.4px",marginBottom:"3px"}}>💯 GS VERDICT</div>
-          <div style={{fontSize:"13px",lineHeight:"1.5",color:DARK}}>
-            {details.gsScore != null && <strong>{Number(details.gsScore).toFixed(1)}/10</strong>}
-            {details.gsScore != null && details.gsVerdict && ' — '}
-            {details.gsVerdict}
-          </div>
-        </div>
-      )}
-
-      {details.websiteUri && (
-        <div style={{marginTop:"10px",fontSize:"12px",color:GRAY}}>
-          For more information, visit{' '}
-          <a href={details.websiteUri} target="_blank" rel="noopener noreferrer" style={{color:"#6D28D9",textDecoration:"underline"}}>
-            {details.websiteUri.replace(/^https?:\/\//, '').replace(/\/$/, '')}
-          </a>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── RESTAURANT CARD ─────────────────────────────────────────────────────────
 function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDistance }) {
   const [expanded,setExpanded]=useState(false);
   const [hoursExpanded,setHoursExpanded]=useState(false);
-  // AI Details collapsed by default — fetch only fires when user explicitly
-  // opens the panel. Saves ~$0.025/expand when user only wanted to check
-  // weekly hours or website without reading AI Details.
-  const [aiDetailsOpen,setAIDetailsOpen]=useState(false);
-  const [aiDetails,setAIDetails]=useState(/** @type {any} */(null));
-  const [aiLoading,setAILoading]=useState(false);
-  const [aiError,setAIError]=useState(/** @type {string|null} */(null));
-
-  const onToggleAIDetails = () => {
-    const next = !aiDetailsOpen;
-    setAIDetailsOpen(next);
-    if (next) {
-      // Analytics — log every open (cache-hit or fresh fetch). Lets us
-      // measure engagement separately from cost.
-      const pid = restaurant.placeId || restaurant.id;
-      const pname = restaurant.displayName?.text || restaurant.name || '';
-      logEvent('ai_details_opened', { placeId: pid, placeName: pname }, 'PlacesToEat');
-    }
-  };
-
-  useEffect(() => {
-    if (!aiDetailsOpen) return;
-    if (aiDetails || aiLoading) return;
-    const pid = restaurant.placeId || restaurant.id;
-    if (!pid) return;
-    const pname = restaurant.displayName?.text || restaurant.name || '';
-    setAILoading(true);
-    setAIError(null);
-    base44.functions.invoke('getAIDetails', { placeId: pid })
-      .then(({ data }) => {
-        if (data?.error) {
-          setAIError(data.error);
-        } else if (data?.aiDetails) {
-          setAIDetails(data.aiDetails);
-        } else {
-          setAIError('No AI details returned');
-        }
-        // Cost-tracking event — fires AFTER the Worker responds with the
-        // cache status. `_cache: 'hit'` = $0 (cached), `'miss'` or
-        // `'miss-stub'` = $0.025 paid. Separate from ai_details_opened
-        // (engagement) because engagement fires before we know cache state.
-        const cache = data?._cache || 'unknown';
-        logEvent('ai_details_fetched', {
-          placeId: pid,
-          placeName: pname,
-          cache,
-          paid: cache !== 'hit',
-        }, 'PlacesToEat');
-      })
-      .catch((e) => setAIError(e?.message || 'Failed to load AI details'))
-      .finally(() => setAILoading(false));
-  }, [aiDetailsOpen, restaurant.placeId, restaurant.id, aiDetails, aiLoading, restaurant.displayName, restaurant.name]);
 
   const name    = restaurant.displayName?.text || restaurant.name || "Restaurant";
   const address = restaurant.shortFormattedAddress || restaurant.formattedAddress || "";
@@ -883,27 +743,15 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
                   </div>
                 )}
 
-                {/* AI Details — collapsed by default. Tap the header to open
-                    and trigger the lazy fetch (~$0.025 first time per place,
-                    cached 30 days globally). Free re-opens after that. */}
-                <div style={{padding:"12px 14px",background:"#F5F3FF",borderRadius:"10px",border:"1px solid #DDD6FE"}}>
-                  <button
-                    onClick={onToggleAIDetails}
-                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}
-                  >
-                    <span style={{fontSize:"11px",fontWeight:"700",color:"#6D28D9",letterSpacing:"0.5px"}}>🤖 AI DETAILS</span>
-                    <span style={{fontSize:"11px",color:"#6D28D9"}}>{aiDetailsOpen?'▲':'▼'}</span>
-                  </button>
-                  {aiDetailsOpen && (
-                    <div style={{marginTop:"10px"}}>
-                      <AIDetailsPanel
-                        loading={aiLoading}
-                        error={aiError}
-                        details={aiDetails}
-                      />
-                    </div>
-                  )}
-                </div>
+                {/* AI Details — collapsed by default, lazy fetch on first
+                    open (~$0.025 first tap per place, cached 30 days). Free
+                    re-opens after that. Shared component used in CoffeeFinder
+                    too — see src/components/AIDetailsSection.jsx. */}
+                <AIDetailsSection
+                  placeId={restaurant.placeId || restaurant.id}
+                  placeName={name}
+                  page="PlacesToEat"
+                />
 
                 {/* Small subtle link out to Google Maps for the full review thread */}
                 {restaurant.googleMapsUri&&(

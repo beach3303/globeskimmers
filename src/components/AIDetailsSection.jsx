@@ -1,0 +1,178 @@
+/**
+ * AIDetailsSection — collapsible "🤖 AI DETAILS" panel used on per-place
+ * cards. Drops into PlacesToEat (RestaurantCard) and CoffeeFinder (CoffeeCard)
+ * as a single self-contained component.
+ *
+ * Behavior:
+ * - Collapsed by default. Tap header to open.
+ * - First open triggers lazy fetch via base44.functions.invoke('getAIDetails')
+ *   which routes through the Worker /ai-details endpoint:
+ *   • Worker checks 30-day KV cache → returns instantly if hit ($0)
+ *   • Cache miss → Place Details ($0.02, cached 90d) + Claude Haiku ($0.005)
+ * - Shimmer placeholders while loading.
+ * - Fires logEvent('ai_details_opened') on every open (engagement signal).
+ * - Fires logEvent('ai_details_fetched') with cache hit/miss flag after
+ *   response (cost signal).
+ *
+ * Caller passes:
+ *   placeId   — Google Places ID (required)
+ *   placeName — for logging context
+ *   page      — analytics page label (e.g. 'PlacesToEat' / 'CoffeeFinder')
+ */
+import React, { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { logEvent } from '@/lib/analytics';
+
+const DARK = '#1A2332';
+const GRAY = '#64748B';
+const PURPLE = '#6D28D9';
+const PURPLE_LIGHT = '#DDD6FE';
+const PURPLE_BG = '#F5F3FF';
+const PURPLE_SHIMMER = '#EDE9FE';
+
+export default function AIDetailsSection({ placeId, placeName, page }) {
+  const [open, setOpen] = useState(false);
+  const [details, setDetails] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const onToggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next) {
+      logEvent('ai_details_opened', { placeId, placeName }, page || 'unknown');
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    if (details || loading) return;
+    if (!placeId) return;
+    setLoading(true);
+    setError(null);
+    base44.functions.invoke('getAIDetails', { placeId })
+      .then(({ data }) => {
+        if (data?.error) {
+          setError(data.error);
+        } else if (data?.aiDetails) {
+          setDetails(data.aiDetails);
+        } else {
+          setError('No AI details returned');
+        }
+        const cache = data?._cache || 'unknown';
+        logEvent('ai_details_fetched', {
+          placeId,
+          placeName,
+          cache,
+          paid: cache !== 'hit',
+        }, page || 'unknown');
+      })
+      .catch((e) => setError(e?.message || 'Failed to load AI details'))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, placeId]);
+
+  return (
+    <div style={{ padding: '12px 14px', background: PURPLE_BG, borderRadius: '10px', border: `1px solid ${PURPLE_LIGHT}` }}>
+      <button
+        onClick={onToggle}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}
+      >
+        <span style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.5px' }}>🤖 AI DETAILS</span>
+        <span style={{ fontSize: '11px', color: PURPLE }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ marginTop: '10px' }}>
+          <AIDetailsBody loading={loading} error={error} details={details} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AIDetailsBody({ loading, error, details }) {
+  if (loading) {
+    return (
+      <div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {[88, 72, 80, 66, 75].map((w, i) => (
+            <div
+              key={i}
+              style={{
+                height: '12px',
+                width: `${w}%`,
+                background: `linear-gradient(90deg,${PURPLE_SHIMMER} 0%,${PURPLE_LIGHT} 50%,${PURPLE_SHIMMER} 100%)`,
+                backgroundSize: '200% 100%',
+                borderRadius: '4px',
+                animation: 'gsShimmer 1.2s ease-in-out infinite',
+              }}
+            />
+          ))}
+        </div>
+        <style>{`@keyframes gsShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
+      </div>
+    );
+  }
+  if (error) {
+    return <div style={{ fontSize: '12px', color: '#B91C1C' }}>AI Details unavailable right now. {error}</div>;
+  }
+  if (!details) return null;
+
+  const row = (icon, label, value) =>
+    value ? (
+      <div style={{ marginBottom: '8px' }}>
+        <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>
+          {icon} {label}
+        </div>
+        <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>{value}</div>
+      </div>
+    ) : null;
+
+  const bestDishText = details.bestDish?.name
+    ? `${details.bestDish.name}${details.bestDish.context ? ` — ${details.bestDish.context}` : ''}`
+    : null;
+
+  return (
+    <div>
+      {row('🥘', 'BEST DISH', bestDishText)}
+      {details.alsoRecommended?.length > 0 && row('👍', 'ALSO RECOMMENDED', details.alsoRecommended.join(', '))}
+      {row('👥', 'CROWD', details.crowd)}
+      {row('⏰', 'BEST TIME', details.bestTime)}
+      {row('🎭', 'VIBE', details.vibe)}
+      {row('💰', 'VALUE', details.value)}
+
+      {details.goodToKnow?.length > 0 && (
+        <div style={{ marginBottom: '8px' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>📌 GOOD TO KNOW</div>
+          <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+            {details.goodToKnow.map((g, i) => (
+              <li key={i}>{g}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {row('🌍', 'TRAVELER', details.travelerNotes)}
+
+      {(details.gsScore != null || details.gsVerdict) && (
+        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${PURPLE_LIGHT}` }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>💯 GS VERDICT</div>
+          <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+            {details.gsScore != null && <strong>{Number(details.gsScore).toFixed(1)}/10</strong>}
+            {details.gsScore != null && details.gsVerdict && ' — '}
+            {details.gsVerdict}
+          </div>
+        </div>
+      )}
+
+      {details.websiteUri && (
+        <div style={{ marginTop: '10px', fontSize: '12px', color: GRAY }}>
+          For more information, visit{' '}
+          <a href={details.websiteUri} target="_blank" rel="noopener noreferrer" style={{ color: PURPLE, textDecoration: 'underline' }}>
+            {details.websiteUri.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}

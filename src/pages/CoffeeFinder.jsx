@@ -8,6 +8,7 @@ import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
+import AIDetailsSection from "@/components/AIDetailsSection";
 
 // ─── COLORS ────────────────────────────────────────────────────────────────
 const BROWN      = "#6F4E37";
@@ -305,26 +306,36 @@ function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance
           <button onClick={()=>setExpanded(!expanded)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"8px 14px",borderRadius:"10px",border:"none",fontSize:"13px",fontWeight:"600",cursor:"pointer",background:expanded?DARK:"#F1F5F9",color:expanded?"#fff":DARK,fontFamily:"inherit"}}>{expanded?"▲ Less":"▼ Details"}</button>
         </div>
 
-        {/* Expanded hours + website */}
+        {/* Expanded hours + website + AI Details */}
         <AnimatePresence>
           {expanded&&(
             <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{marginTop:"12px",padding:"12px",background:"#F8FAFC",borderRadius:"10px"}}>
-                {shop.currentOpeningHours?.weekdayDescriptions?.length>0&&(
-                  <>
-                    <div style={{fontSize:"12px",color:GRAY,fontWeight:"600",marginBottom:"8px"}}>🕐 Hours</div>
-                    {shop.currentOpeningHours.weekdayDescriptions.map((day,i)=>{
-                      const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                      const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
-                      return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:"13px",color:isToday?BROWN_DARK:DARK,fontWeight:isToday?"700":"400"}}>
-                        <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
-                      </div>;
-                    })}
-                  </>
-                )}
-                {(shop.websiteUri||shop.website)&&(
-                  <a href={shop.websiteUri||shop.website} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:"8px",marginTop:"10px",padding:"8px",background:"#fff",borderRadius:"8px",textDecoration:"none",color:BROWN,fontSize:"13px",fontWeight:"600"}}>🌐 Visit Website</a>
-                )}
+              <div style={{marginTop:"12px",display:"flex",flexDirection:"column",gap:"10px"}}>
+                <div style={{padding:"12px",background:"#F8FAFC",borderRadius:"10px"}}>
+                  {shop.currentOpeningHours?.weekdayDescriptions?.length>0&&(
+                    <>
+                      <div style={{fontSize:"12px",color:GRAY,fontWeight:"600",marginBottom:"8px"}}>🕐 Hours</div>
+                      {shop.currentOpeningHours.weekdayDescriptions.map((day,i)=>{
+                        const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                        const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
+                        return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:"13px",color:isToday?BROWN_DARK:DARK,fontWeight:isToday?"700":"400"}}>
+                          <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
+                        </div>;
+                      })}
+                    </>
+                  )}
+                  {(shop.websiteUri||shop.website)&&(
+                    <a href={shop.websiteUri||shop.website} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:"8px",marginTop:"10px",padding:"8px",background:"#fff",borderRadius:"8px",textDecoration:"none",color:BROWN,fontSize:"13px",fontWeight:"600"}}>🌐 Visit Website</a>
+                  )}
+                </div>
+                {/* AI Details — same shared component as PlacesToEat. Lazy
+                    fetch fires only when this panel is opened (within the
+                    already-expanded card). */}
+                <AIDetailsSection
+                  placeId={shop.placeId || shop.id}
+                  placeName={name}
+                  page="CoffeeFinder"
+                />
               </div>
             </motion.div>
           )}
