@@ -72,12 +72,73 @@ export default function NameLanguageHelp({ placeId, name }) {
     setSayItPending(false);
   }, [sayItPending, data, name]);
 
-  const speak = (text, lang) => {
+  // Resolves with the device's voice list. iOS Safari returns an empty
+  // array on first call and fires `voiceschanged` once voices load —
+  // handle both cases here so we can match by language.
+  const ensureVoicesLoaded = () => new Promise((resolve) => {
+    if (!speechSupported) { resolve([]); return; }
+    let voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) { resolve(voices); return; }
+    const onChanged = () => {
+      voices = window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = null;
+      resolve(voices);
+    };
+    window.speechSynthesis.onvoiceschanged = onChanged;
+    // Fallback if voiceschanged never fires
+    setTimeout(() => resolve(window.speechSynthesis.getVoices() || []), 1200);
+  });
+
+  // Pick the best voice for the target lang. Scoring prefers exact
+  // region match, then same language different region, then bumps for
+  // higher-quality variants (enhanced/premium) and local-service voices
+  // (e.g. iOS Siri voices, which are on-device and native-sounding).
+  const pickBestVoice = (voices, lang) => {
+    if (!lang || !voices || voices.length === 0) return null;
+    const targetLower = lang.toLowerCase();
+    const targetPrefix = targetLower.split('-')[0];
+    const scored = [];
+    for (const v of voices) {
+      const vLang = (v.lang || '').toLowerCase();
+      if (!vLang) continue;
+      let score = 0;
+      if (vLang === targetLower) score += 100;
+      else if (vLang.split('-')[0] === targetPrefix) score += 50;
+      else continue; // language mismatch — skip entirely (avoid the
+                     // "English voice tries to pronounce Japanese
+                     // characters phonetically" failure mode)
+      const nameLower = (v.name || '').toLowerCase();
+      if (nameLower.includes('enhanced') || nameLower.includes('premium') || nameLower.includes('siri')) score += 15;
+      if (v.localService) score += 8;
+      // Avoid English-named voices that happen to have other lang variants
+      if (vLang.startsWith('en-')) score -= 20;
+      scored.push({ voice: v, score });
+    }
+    if (scored.length === 0) return null;
+    scored.sort((a, b) => b.score - a.score);
+    return scored[0].voice;
+  };
+
+  const speak = async (text, lang) => {
     if (!speechSupported || !text) return;
     try {
       window.speechSynthesis.cancel(); // stop any current playback
+      const voices = await ensureVoicesLoaded();
+      const voice = pickBestVoice(voices, lang);
       const u = new window.SpeechSynthesisUtterance(text);
-      if (lang) u.lang = lang;
+      if (voice) {
+        // Setting voice tells the engine WHICH voice to use, regardless
+        // of utterance.lang. This is the fix for the "phonetic English
+        // voice tries to read Japanese" issue — we explicitly pick the
+        // native voice instead.
+        u.voice = voice;
+        u.lang = voice.lang;
+      } else if (lang) {
+        // No matching local voice on this device — try the lang code
+        // anyway. Browser may fall back to a synthesizer that can
+        // produce something useful, or remain silent.
+        u.lang = lang;
+      }
       u.rate = 0.9;
       window.speechSynthesis.speak(u);
     } catch (_e) { /* graceful no-op */ }
