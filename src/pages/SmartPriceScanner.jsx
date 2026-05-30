@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { X, RefreshCw, ArrowLeft } from "lucide-react";
+import { X, RefreshCw, ArrowLeft, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -649,10 +649,20 @@ export default function SmartPriceScannerPage() {
 
   const handleClearPrices = () => {
     console.log("🔓 UNLOCKING prices - scanning will resume");
-    
+
     isPricesLockedRef.current = false;
     setDetectedPrices([]);
     setFrozenFrame(null);
+  };
+
+  // Exit the scanner entirely after a successful scan. Stops the camera,
+  // clears state, returns the user to Home.
+  const handleDone = () => {
+    isPricesLockedRef.current = false;
+    setDetectedPrices([]);
+    setFrozenFrame(null);
+    stopCamera();
+    navigate(createPageUrl("Home"));
   };
 
   if (step === 'currency') {
@@ -937,23 +947,15 @@ export default function SmartPriceScannerPage() {
               animate={{ opacity: 1, y: 0 }}
               className="bg-black/85 backdrop-blur-md rounded-2xl p-6 max-w-sm mx-4 pointer-events-auto"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white font-bold text-lg">✓ Prices Detected</h3>
-                <button
-                  onClick={handleClearPrices}
-                  className="text-white/70 hover:text-white text-sm font-semibold bg-white/10 px-3 py-1.5 rounded-lg hover:bg-white/20 transition-colors"
-                >
-                  Clear
-                </button>
-              </div>
-              
-              <div className="space-y-3 max-h-80 overflow-y-auto mb-4">
+              <h3 className="text-white font-bold text-lg mb-4">✓ Prices Detected</h3>
+
+              <div className="space-y-3 max-h-72 overflow-y-auto mb-4">
                 {detectedPrices.map((conversion, index) => (
                   <div key={index} className="bg-white/10 rounded-xl p-4">
                     {conversion.original.context && (
                       <p className="text-white/70 text-sm mb-2">{conversion.original.context}</p>
                     )}
-                    
+
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-white/80 text-sm">Original</p>
@@ -961,9 +963,9 @@ export default function SmartPriceScannerPage() {
                           {conversion.original.symbol}{conversion.original.amount.toLocaleString()} {conversion.original.currency}
                         </p>
                       </div>
-                      
+
                       <div className="text-green-400 text-xl mx-3">→</div>
-                      
+
                       <div className="text-right">
                         <p className="text-white/80 text-sm">Your Currency</p>
                         <p className="text-green-400 font-bold text-xl">
@@ -974,24 +976,40 @@ export default function SmartPriceScannerPage() {
                   </div>
                 ))}
               </div>
+
+              <div className="space-y-2">
+                <button
+                  onClick={handleClearPrices}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+                >
+                  <Camera className="w-4 h-4" />
+                  Scan another
+                </button>
+                <button
+                  onClick={handleDone}
+                  className="w-full text-white/70 hover:text-white text-sm font-medium py-2 transition-colors"
+                >
+                  ✕ Done
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/60 to-transparent p-4">
-        <div className="text-center">
-          <p className="text-white text-sm drop-shadow-md">
-            {isScanning 
-              ? '🔄 Scanning...' 
-              : detectedPrices.length > 0 
-                ? '✓ Prices locked - Tap Clear to scan again' 
-                : cameraReady 
+      {detectedPrices.length === 0 && (
+        <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/60 to-transparent p-4">
+          <div className="text-center">
+            <p className="text-white text-sm drop-shadow-md">
+              {isScanning
+                ? '🔄 Scanning...'
+                : cameraReady
                   ? '💡 Point at prices to scan'
                   : '📷 Starting rear camera...'}
-          </p>
+            </p>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
