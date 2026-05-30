@@ -22,21 +22,6 @@ const GREEN     = "#4CAF50";
 const BLUE      = "#1976D2";
 const PURPLE    = "#7C3AED";
 
-// ─── SMART CATEGORY FILTERS ────────────────────────────────────────────────
-const CATEGORIES = [
-  { id: "all",            label: "All ATMs",        icon: "🏧", desc: "Everywhere" },
-  { id: "safe_lobbies",   label: "Safe Lobbies",    icon: "🏦", desc: "Banks, Credit Unions, Hospitals" },
-  { id: "airport_transit",label: "Airport/Transit", icon: "✈️", desc: "Airports, Train, Subway, Ferry" },
-  { id: "gas_stations",   label: "Gas Stations",    icon: "⛽", desc: "Inside & outside forecourts" },
-  { id: "retail",         label: "Retail",          icon: "🏪", desc: "Supermarkets, Pharmacies, Big Box" },
-  { id: "small_retail",   label: "Corner Shops",    icon: "🍶", desc: "Liquor Stores, Bodegas, Delis" },
-  { id: "shopping",       label: "Shopping",        icon: "🛒", desc: "Malls, Markets, Bazaars" },
-  { id: "education",      label: "Schools",         icon: "🎓", desc: "Universities, Colleges, Campuses" },
-  { id: "entertainment",  label: "Entertainment",   icon: "🎰", desc: "Casinos, Stadiums, Theme Parks" },
-  { id: "hospitality",    label: "Hotels",          icon: "🏨", desc: "Hotels, Resorts, Cruise Terminals" },
-  { id: "community",      label: "Community",       icon: "🏛️", desc: "Post Offices, Libraries, Gov't" },
-];
-
 // ─── OPEN STATUS ───────────────────────────────────────────────────────────
 function computeOpenStatus(atm) {
   const hours =
@@ -527,11 +512,9 @@ export default function ATMFinderPage() {
   const forceNextRef                         = useRef(false);
   const handleRefresh                        = () => { forceNextRef.current = true; setRefreshTick(t=>t+1); };
   const [viewMode,       setViewMode]       = useState("list");
-  const [category,       setCategory]       = useState("all");
   const [bankFilter,     setBankFilter]     = useState("all");
   const [availableBanks, setAvailableBanks] = useState([]);
   const [openOnly,       setOpenOnly]       = useState(false);
-  const [sortBy,         setSortBy]         = useState("nearby");
   const [radius,         setRadius]         = useState(10);
   const [showLocPicker,  setShowLocPicker]  = useState(false);
   const [userPinExpanded, setUserPinExpanded] = useState(true);
@@ -570,13 +553,12 @@ export default function ATMFinderPage() {
 
     (async () => {
       try {
-        console.log("🏧 ATMFinder v6.0: fetching", { lat, lng, radius, category });
+        console.log("🏧 ATMFinder v6.0: fetching", { lat, lng, radius });
         const { data } = await base44.functions.invoke("getATMLocations", {
           latitude:  lat,
           longitude: lng,
           radius:    radius * 1609,
           maxResults: 40,
-          category,
           bankFilter,
           openOnly,
           forceRefresh: force,
@@ -597,22 +579,10 @@ export default function ATMFinderPage() {
         setLoading(false);
       }
     })();
-  }, [lat, lng, radius, category, bankFilter, openOnly, refreshTick]);
+  }, [lat, lng, radius, bankFilter, openOnly, refreshTick]);
 
-  // ── Client-side sort (distance is already sorted, but rating needs resort) ──
-  const filtered = useMemo(() => {
-    let result = [...atms];
-    if (sortBy === "rating") {
-      // Weight by log(reviews) so a 5.0 with 1 review can't beat a 4.5 with
-      // thousands. Critical for city-mode where rating ties are common.
-      result.sort((a, b) => {
-        const sa = (a.rating || 0) * Math.log10(Math.max(a.userRatingCount || 1, 1));
-        const sb = (b.rating || 0) * Math.log10(Math.max(b.userRatingCount || 1, 1));
-        return sb - sa;
-      });
-    }
-    return result;
-  }, [atms, sortBy]);
+  // Distance-sorted backend already returns results in nearest order.
+  const filtered = useMemo(() => atms, [atms]);
 
   const handleShowOnMap = (index) => {
     setViewMode("map");
@@ -747,7 +717,7 @@ export default function ATMFinderPage() {
           <span style={{ fontSize:"32px" }}>🏧</span>
           <div>
             <div style={{ fontWeight:"800", fontSize:"20px", color:"#fff" }}>ATM Finder</div>
-            <div style={{ fontSize:"12px", color:"rgba(255,255,255,0.8)" }}>Airports • Transit • Gas Stations • Malls • Hospitals • Banks • Worldwide</div>
+            <div style={{ fontSize:"12px", color:"rgba(255,255,255,0.8)" }}>Find nearby ATMs</div>
           </div>
         </div>
 
@@ -775,35 +745,8 @@ export default function ATMFinderPage() {
           <span style={{ fontSize:"11px", color:GRAY, flexShrink:0 }}>{loading ? "Loading…" : `${atms.length} found`}</span>
         </div>
 
-        {/* Category filters (smart filters) */}
-        <div style={{ overflowX:"auto", scrollbarWidth:"none", marginBottom:"8px" }}>
-          <div style={{ display:"flex", gap:"6px", paddingBottom:"4px" }}>
-            {CATEGORIES.map(cat => (
-              <button key={cat.id} onClick={() => setCategory(cat.id)} style={{
-                display:"flex", alignItems:"center", gap:"5px",
-                padding:"7px 13px", borderRadius:"20px", flexShrink:0,
-                border: category===cat.id ? `2px solid ${TEAL}` : "1.5px solid #E2E8F0",
-                background: category===cat.id ? TEAL_LIGHT : "#fff",
-                color: category===cat.id ? TEAL_DARK : GRAY,
-                fontWeight: category===cat.id ? "700" : "500",
-                fontSize:"12px", cursor:"pointer", fontFamily:"inherit",
-              }}>
-                <span>{cat.icon}</span><span>{cat.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Quick filters row */}
         <div style={{ display:"flex", gap:"8px", alignItems:"center", overflowX:"auto", scrollbarWidth:"none", marginBottom:"8px" }}>
-          {/* Sort */}
-          <div style={{ display:"flex", background:"#F1F5F9", borderRadius:"10px", padding:"2px", flexShrink:0 }}>
-            <button onClick={() => setSortBy("nearby")} style={{ padding:"6px 10px", borderRadius:"8px", border:"none", background: sortBy==="nearby" ? TEAL : "transparent", color: sortBy==="nearby" ? "#fff" : GRAY, fontWeight:"600", fontSize:"12px", cursor:"pointer", fontFamily:"inherit" }}>📍 Nearest</button>
-            <button onClick={() => setSortBy("rating")} style={{ padding:"6px 10px", borderRadius:"8px", border:"none", background: sortBy==="rating" ? TEAL : "transparent", color: sortBy==="rating" ? "#fff" : GRAY, fontWeight:"600", fontSize:"12px", cursor:"pointer", fontFamily:"inherit" }}>⭐ Top Rated</button>
-          </div>
-
-          <div style={{ width:"1px", height:"20px", background:"#E2E8F0", flexShrink:0 }} />
-
           {/* Open only pill */}
           <button onClick={() => setOpenOnly(o => !o)} style={{
             padding:"7px 13px", borderRadius:"20px", flexShrink:0,
@@ -868,7 +811,7 @@ export default function ATMFinderPage() {
             <div style={{ textAlign:"center", padding:"40px 20px", background:"#fff", borderRadius:"12px" }}>
               <div style={{ fontSize:"32px", marginBottom:"10px" }}>🔍</div>
               <div style={{ fontWeight:"600", color:DARK }}>No matches for this filter</div>
-              <div style={{ color:GRAY, fontSize:"13px", marginTop:"4px" }}>Try switching category or clearing filters</div>
+              <div style={{ color:GRAY, fontSize:"13px", marginTop:"4px" }}>Try expanding your radius or clearing filters</div>
             </div>
           ) : (
             filtered.map((atm, i) => (
