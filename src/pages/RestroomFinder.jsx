@@ -537,7 +537,6 @@ export default function RestroomFinderPage() {
   const [highlightIdx, setHighlightIdx] = useState(null);
   const [expandedIdx, setExpandedIdx] = useState(null);
   const [activeMapPin, setActiveMapPin] = useState(null);
-  const [countryTip, setCountryTip] = useState("");
   const [sheetExpanded, setSheetExpanded] = useState(false);
 
   const cardRefs = useRef({});
@@ -576,7 +575,6 @@ export default function RestroomFinderPage() {
             lng: r.location?.longitude || r.lng || 0,
           }));
           setRestrooms(enriched);
-          if (data?.countryTip) setCountryTip(data.countryTip);
         } else {
           setError(data?.error || "No restrooms found. Try expanding radius.");
         }
@@ -696,17 +694,10 @@ export default function RestroomFinderPage() {
           <div style={{ width: "50px", height: "50px", background: "rgba(255,255,255,0.12)", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px" }}>🚻</div>
           <div>
             <div style={{ fontWeight: "800", fontSize: "20px", color: "#fff" }}>Restroom Finder</div>
-            <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", marginTop: "2px" }}>Coffee · Malls · Transit · Parks · Hospitals · Worldwide</div>
+            <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", marginTop: "2px" }}>Find nearby restrooms</div>
           </div>
         </div>
 
-        {/* Country tip banner (ONCE, not per card) */}
-        {countryTip && (
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "10px 12px", background: "rgba(255,251,235,0.15)", backdropFilter: "blur(8px)", borderRadius: "12px", border: "1px solid rgba(255,217,0,0.25)", marginBottom: "12px" }}>
-            <span style={{ fontSize: "14px" }}>💡</span>
-            <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.9)", lineHeight: "1.4" }}>{countryTip}</span>
-          </div>
-        )}
 
         {/* Location bar */}
         <div onClick={() => setShowLocPicker(true)} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", background: "rgba(255,255,255,0.1)", backdropFilter: "blur(10px)", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.15)", marginBottom: "12px", cursor: "pointer" }}>
