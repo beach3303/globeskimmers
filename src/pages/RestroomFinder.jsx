@@ -114,23 +114,6 @@ function toM(s) {
   return h * 60 + mins;
 }
 
-// ─── QUALITY METER ─────────────────────────────────────────────────────────
-function QualityMeter({ score }) {
-  const pct = Math.max(0, Math.min(100, score));
-  const color = pct >= 70 ? GREEN : pct >= 45 ? GOLD : CORAL;
-  const label = pct >= 70 ? "Good" : pct >= 45 ? "Fair" : "Poor";
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
-      <span style={{ fontSize: "12px", color: GRAY, fontWeight: "600" }}>Quality</span>
-      <div style={{ flex: 1, height: "6px", background: "#E2E8F0", borderRadius: "3px", overflow: "hidden" }}>
-        <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ delay: 0.2, duration: 0.5 }}
-          style={{ height: "100%", background: color, borderRadius: "3px" }} />
-      </div>
-      <span style={{ fontSize: "12px", fontWeight: "700", color }}>{label}</span>
-    </div>
-  );
-}
-
 // ─── PHOTO STRIP ───────────────────────────────────────────────────────────
 function PhotoStrip({ photos, fallbackIcon = "🚻" }) {
   const [errors, setErrors] = useState({});
@@ -209,7 +192,6 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
   const address = r.formattedAddress || "";
   const phone = r.nationalPhoneNumber || r.internationalPhoneNumber || "";
   const openSt = computeOpenStatus(r);
-  const accessCfg = ACCESS_CONFIG[r.accessType] || ACCESS_CONFIG.unknown;
   const chips = getFeatureChips(r);
   const weekdayDesc = r.weekdayDescriptions || [];
 
@@ -278,22 +260,7 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
           </div>
         )}
 
-        {/* Row 3: Access badge (BIG) */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: "8px",
-          padding: "12px 14px", borderRadius: "14px",
-          background: accessCfg.bg, marginBottom: "10px"
-        }}>
-          <span style={{ fontSize: "18px" }}>{accessCfg.icon}</span>
-          <span style={{ fontWeight: "700", fontSize: "14px", color: accessCfg.color }}>{accessCfg.label}</span>
-          {r.confidence && (
-            <span style={{ marginLeft: "auto", fontSize: "11px", fontWeight: "600", color: CONFIDENCE_CONFIG[r.confidence]?.color || GRAY }}>
-              {CONFIDENCE_CONFIG[r.confidence]?.label}
-            </span>
-          )}
-        </div>
-
-        {/* Row 4: Feature chips */}
+        {/* Feature chips */}
         {chips.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "10px" }}>
             {chips.map(chip => (
@@ -303,9 +270,6 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
             ))}
           </div>
         )}
-
-        {/* Quality meter */}
-        {r.qualityScore !== undefined && <QualityMeter score={r.qualityScore} />}
 
         {/* Row 5: Address */}
         {address && (
@@ -419,7 +383,6 @@ function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections, f
   const r = restroom;
   const name = r.name || "Restroom";
   const openSt = computeOpenStatus(r);
-  const accessCfg = ACCESS_CONFIG[r.accessType] || ACCESS_CONFIG.unknown;
   const chips = getFeatureChips(r).slice(0, 4); // Limit chips in sheet
 
   return (
@@ -468,12 +431,6 @@ function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections, f
           }}>
             {openSt.label}
           </div>
-        </div>
-
-        {/* Access badge */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 12px", borderRadius: "12px", background: accessCfg.bg, marginBottom: "10px" }}>
-          <span style={{ fontSize: "16px" }}>{accessCfg.icon}</span>
-          <span style={{ fontWeight: "700", fontSize: "14px", color: accessCfg.color }}>{accessCfg.label}</span>
         </div>
 
         {/* Feature chips */}

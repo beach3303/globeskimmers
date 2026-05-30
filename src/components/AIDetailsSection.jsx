@@ -38,6 +38,74 @@ const PURPLE_LIGHT = '#DDD6FE';
 const PURPLE_BG = '#F5F3FF';
 const PURPLE_SHIMMER = '#EDE9FE';
 
+// Per-kind text highlight rules. Each rule = { pattern: regex, bg, color }.
+// Applied to all AI Details body text (best dish/crowd/vibe/value/good to
+// know/traveler/verdict) via the highlightText() helper below.
+//
+// Restroom highlights are designed to help travelers scan fast:
+//   green = positive (clean, free, accessible)
+//   orange = friction (paid, customer-only, stairs)
+//   yellow = attention (location callouts)
+// "free" is scoped to /free to use|free of charge|free for use|free$/i to
+// avoid false positives on "free wifi", "stress-free", etc.
+const HIGHLIGHT_RULES = {
+  restroom: [
+    // GREEN — positives
+    { pattern: /\b(clean|spotless|well[- ]maintained|tidy)\b/gi, bg: '#D1FAE5', color: '#065F46' },
+    { pattern: /\b(free to use|free of charge|free for use|no fee|no charge)\b/gi, bg: '#D1FAE5', color: '#065F46' },
+    { pattern: /\b(accessible|barrier[- ]free|wheelchair[- ]accessible|ADA[- ]compliant)\b/gi, bg: '#D1FAE5', color: '#065F46' },
+    // ORANGE — friction
+    { pattern: /\b(need to (?:order|buy|purchase|pay)|purchase required|customers? only|for customers?|paying customers?|requires purchase|small fee|fee required|paid|coin[- ]operated|requires payment)\b/gi, bg: '#FED7AA', color: '#9A3412' },
+    { pattern: /\b(stairs?|staircase|steps?(?:\s+up)?|no elevator|walk up)\b/gi, bg: '#FED7AA', color: '#9A3412' },
+    // YELLOW — attention/location callouts
+    { pattern: /\b(located[^.]*?(?=[.,;\n]|$))/gi, bg: '#FEF08A', color: '#713F12' },
+  ],
+};
+
+// Render a string with per-kind highlights as React nodes. Returns the
+// original string if no rules match or no kind-specific rules exist.
+function highlightText(text, kind) {
+  if (!text || typeof text !== 'string') return text;
+  const rules = HIGHLIGHT_RULES[kind];
+  if (!rules || rules.length === 0) return text;
+
+  // Collect all matches across all rules, then merge into a non-overlapping
+  // sequence of spans. First-rule-wins on overlap (greens checked before oranges).
+  const matches = [];
+  for (const rule of rules) {
+    rule.pattern.lastIndex = 0;
+    let m;
+    while ((m = rule.pattern.exec(text)) !== null) {
+      matches.push({ start: m.index, end: m.index + m[0].length, bg: rule.bg, color: rule.color });
+      if (m[0].length === 0) rule.pattern.lastIndex++; // safety against zero-width loop
+    }
+  }
+  if (matches.length === 0) return text;
+  // Sort by start, drop overlaps (keep earlier)
+  matches.sort((a, b) => a.start - b.start);
+  const merged = [];
+  let cursor = 0;
+  for (const m of matches) {
+    if (m.start < cursor) continue; // overlap — skip
+    merged.push(m);
+    cursor = m.end;
+  }
+
+  const nodes = [];
+  let pos = 0;
+  merged.forEach((m, i) => {
+    if (m.start > pos) nodes.push(text.slice(pos, m.start));
+    nodes.push(
+      <span key={i} style={{ background: m.bg, color: m.color, padding: '0 4px', borderRadius: '3px', fontWeight: '600' }}>
+        {text.slice(m.start, m.end)}
+      </span>
+    );
+    pos = m.end;
+  });
+  if (pos < text.length) nodes.push(text.slice(pos));
+  return nodes;
+}
+
 export default function AIDetailsSection({ placeId, placeName, page, kind }) {
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(null);
@@ -92,14 +160,14 @@ export default function AIDetailsSection({ placeId, placeName, page, kind }) {
       </button>
       {open && (
         <div style={{ marginTop: '10px' }}>
-          <AIDetailsBody loading={loading} error={error} details={details} />
+          <AIDetailsBody loading={loading} error={error} details={details} kind={kind} />
         </div>
       )}
     </div>
   );
 }
 
-function AIDetailsBody({ loading, error, details }) {
+function AIDetailsBody({ loading, error, details, kind }) {
   if (loading) {
     return (
       <div>
@@ -127,13 +195,18 @@ function AIDetailsBody({ loading, error, details }) {
   }
   if (!details) return null;
 
+  // Highlight text per kind-specific rules. For restaurant/coffee/attraction
+  // this is a no-op (no rules defined). For restroom, highlights clean/free/
+  // accessible (green) / paid/stairs (orange) / located (yellow).
+  const h = (text) => highlightText(text, kind);
+
   const row = (icon, label, value) =>
     value ? (
       <div style={{ marginBottom: '8px' }}>
         <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>
           {icon} {label}
         </div>
-        <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>{value}</div>
+        <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>{h(value)}</div>
       </div>
     ) : null;
 
@@ -155,7 +228,7 @@ function AIDetailsBody({ loading, error, details }) {
           <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>📌 GOOD TO KNOW</div>
           <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', lineHeight: '1.5', color: DARK }}>
             {details.goodToKnow.map((g, i) => (
-              <li key={i}>{g}</li>
+              <li key={i}>{h(g)}</li>
             ))}
           </ul>
         </div>
@@ -173,7 +246,7 @@ function AIDetailsBody({ loading, error, details }) {
               <strong style={{ letterSpacing: '1px' }}>{'⭐'.repeat(Math.min(5, Math.max(0, details.gsStars)))}</strong>
             ) : null}
             {((details.gsRedFlag) || (details.gsStars != null && details.gsStars > 0)) && details.gsVerdict && ' — '}
-            {details.gsVerdict}
+            {h(details.gsVerdict)}
           </div>
         </div>
       )}
