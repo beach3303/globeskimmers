@@ -1225,7 +1225,7 @@ async function handleLabelPhotos(request, env) {
 
 const AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days
 
-const AI_DETAILS_PROMPT_VERSION = 'v2';
+const AI_DETAILS_PROMPT_VERSION = 'v4';  // v2 -> v3 added native voice fields; v3 -> v4 added whatYouSee/aboutAndHistory/ageFit + tightened top-3
 
 function buildAIDetailsSystemPrompt(kind) {
   const safeKind = ['restaurant', 'coffee', 'attraction', 'restroom', 'atm'].includes(kind) ? kind : 'restaurant';
@@ -1234,6 +1234,9 @@ function buildAIDetailsSystemPrompt(kind) {
   const isAttraction = safeKind === 'attraction';
   const isRestroom = safeKind === 'restroom';
   const isATM = safeKind === 'atm';
+  // Family / age-fit signals apply to restaurants, coffee shops, attractions.
+  // Not relevant for restrooms or ATMs.
+  const supportsAgeFit = isFood || isAttraction;
 
   const starRules = isFood
     ? `- gsStars MUST be an integer 1-5. NEVER 0. Even places with mixed reviews get at least 1 star — every business gets the benefit of the doubt.
@@ -1251,15 +1254,24 @@ function buildAIDetailsSystemPrompt(kind) {
 
   const kindFieldGuidance = isFood
     ? `- bestDish: the signature dish/drink. context cites why people love it.
-- alsoRecommended: up to 4 other popular items.
+- alsoRecommended: TOP 4 dishes/drinks beyond bestDish that reviewers mention. Aim for 4 — only return fewer if there genuinely aren't 4 distinct items mentioned.
+- photoWorthy: 1 short line naming any standout photo-worthy dish or drink (visually striking presentation, vibrant colors, unique vessel, frequently photographed). Include the dish name + WHY it's photo-worthy. Examples: "The rainbow milk tea — served in a clear hourglass jar with layered colors, frequently photographed", "Charcoal-black sushi roll plated on a bed of dry ice — a popular shot among visitors". NULL if no reviewer mentions visual / photo / shareable appeal.
+- awards: 1 short line listing notable awards, recognitions, or critical mentions. Examples: "★ 1 Michelin star (2024)", "Bib Gourmand listed (2023)", "James Beard Foundation Award winner — Best Chef Mid-Atlantic", "Top 50 Asia Restaurants 2024 #12", "Featured in Netflix's Chef's Table". NULL if no awards/recognitions are mentioned in reviews/editorialSummary/data.
 - crowd: who eats here.
 - bestTime: recommended time + factual note on busy hours (e.g. "Weekday lunch is calmer; weekend dinner is the busiest stretch").
 - vibe: atmosphere (casual, group-friendly, romantic, etc.).
 - value: price range + value framing (positive only).
 - goodToKnow: positive/neutral factual tips (parking, language, payment, reservation tips). NOT complaints.
-- travelerNotes: practical tips for travelers (best dish to try first, ordering, language).`
+- travelerNotes: practical tips for travelers (best dish to try first, ordering, language).
+- whatYouSee: null (restaurant doesn't use this).
+- aboutAndHistory: null (restaurant doesn't use this).`
     : isAttraction
-      ? `- bestDish = null. alsoRecommended = list up to 4 must-see/must-do items.
+      ? `- bestDish = null.
+- alsoRecommended: TOP 3 must-see/must-do items at this attraction. Aim for 3 — only fewer if reviews don't mention 3 distinct items.
+- photoWorthy: 1 short line naming a standout photo-worthy spot/exhibit/view at this attraction. Examples: "The cherry blossom canopy walkway at sunset — peak photo season early April", "The infinity-mirror room — most-photographed spot in the museum". NULL if no obvious photo-worthy feature is mentioned.
+- awards: 1 short line listing UNESCO status, top-tourist-attraction rankings, Michelin Green Guide stars, or notable recognitions. Examples: "UNESCO World Heritage Site (1996)", "Michelin Green Guide 3-star", "TripAdvisor Travelers' Choice 2024". NULL if no recognitions are mentioned.
+- whatYouSee: 1-2 short sentences describing what is physically present at the attraction (the buildings, exhibits, sculptures, rides, displays, scenery). Be concrete: "Three immersive haunted houses, a sculpture garden, an IMAX dome, a rooftop observation deck with city views." NULL if reviews/data don't describe what's there.
+- aboutAndHistory: 1-2 short sentences on the attraction's purpose / origin / brief history. Be factual and concise: "Built in 1872 as a Meiji-era symbol of modernization. Original wooden structure burned in the 1923 earthquake; current reconstruction completed 1957." NULL if data is silent.
 - crowd: who visits (families, photographers, history fans, etc.).
 - bestTime: recommended time + factual busy-hour note.
 - vibe: atmosphere of the attraction.
@@ -1307,19 +1319,45 @@ ${starRules}
 OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
 {
   "bestDish": { "name": "<name>", "context": "<one positive line>" } | null,
-  "alsoRecommended": ["<item 1>", ...] (up to 4 strings, can be empty),
+  "alsoRecommended": ["<item 1>", "<item 2>", "<item 3>", "<item 4>"] (aim for 4 for restaurants/coffee, 3 for attractions, fewer only if data truly doesn't support more),
+  "photoWorthy": "<one line: standout photo-worthy dish/spot + why>" | null,
+  "awards": "<one line: Michelin, James Beard, UNESCO, top-50 lists, etc.>" | null,
+  "whatYouSee": "<short concrete description of physical features (attraction only)>" | null,
+  "aboutAndHistory": "<short factual purpose / history (attraction only)>" | null,
   "crowd": "<one short sentence>" | null,
   "bestTime": "<recommended time + factual busy-window note>" | null,
   "vibe": "<one short sentence>" | null,
   "value": "<one short sentence with price range if known>" | null,
   "goodToKnow": ["<positive/neutral fact 1>", ...] (up to 3 strings, can be empty),
+  "ageFit": {
+    "toddlers": "<short string explaining why it works for toddlers + their parents>" | null,
+    "littleKids": "<short string for elementary-age kids ~5-12>" | null,
+    "teens": "<short string for teenagers ~13-18>" | null,
+    "adults": "<short string for adults>" | null,
+    "olderAdults": "<short string for seniors / older adults>" | null
+  } | null,
   "travelerNotes": "<practical tip>" | null,
   "gsStars": <integer per per-kind rules above>,
   "gsRedFlag": <boolean per per-kind rules above>,
   "gsVerdict": "<one short positive/neutral summary, NO negative wording>"
 }
 
-If a field has no positive content to draw from, set it to null/empty. Do NOT fabricate.
+AGE FIT RULES (CRITICAL):
+- The "ageFit" object only applies to ${supportsAgeFit ? 'this kind (restaurant/coffee/attraction)' : 'restaurant, coffee, and attraction kinds only — for THIS kind, set ageFit = null entirely'}.
+${supportsAgeFit ? `- Each age field (toddlers / littleKids / teens / adults / olderAdults) should be:
+  - A short positive/neutral 1-sentence explanation of WHY it works for that age group, OR
+  - null if reviews/data are silent about that age group, OR if the place genuinely doesn't suit them.
+- NEVER write anything negative ("not for kids", "boring for teens", "skip if you have toddlers") — just leave the field null instead.
+- Examples:
+  - toddlers: "Stroller-friendly paths and shaded benches for parent rest stops."
+  - littleKids: "Interactive hands-on exhibits at child height with engaging audio guides."
+  - teens: "Photography spots and an IMAX dome theater keep them engaged."
+  - adults: "Leisurely pace with cafe on site; rich historical context."
+  - olderAdults: "Accessible paths throughout, benches every 100m, low-stimulation atmosphere."
+- If the place has clear adult-only signals (a sports bar, romantic fine dining, a casino) — set the kid/teen fields to null but still fill the adult-relevant ones.
+- If nothing in reviews/data mentions any age suitability, set the whole ageFit field to null (not an empty object).` : '- Set ageFit = null for this kind.'}
+
+If any other field has no positive content to draw from, set it to null/empty. Do NOT fabricate.
 
 Return JSON only.`;
 }
@@ -1408,11 +1446,16 @@ async function handleAIDetails(request, env) {
     const stub = {
       bestDish: null,
       alsoRecommended: [],
+      photoWorthy: null,
+      awards: null,
+      whatYouSee: null,
+      aboutAndHistory: null,
       crowd: null,
       bestTime: null,
       vibe: null,
       value: null,
       goodToKnow: [],
+      ageFit: null,
       travelerNotes: null,
       gsStars: 1,
       gsRedFlag: false,
@@ -1440,11 +1483,11 @@ async function handleAIDetails(request, env) {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        // Lowered 1500 -> 800. Caps generation time (Haiku ~80 tok/sec, so
-        // 1500 tokens could be 18s output alone). The AI Details fields
-        // are short and structured; 800 is plenty. Most cards average
-        // ~400-500 output tokens in practice.
-        max_tokens: 800,
+        // Was 800 (down from 1500). Bumped to 1400 in v4 to make room
+        // for whatYouSee / aboutAndHistory / structured ageFit object /
+        // photoWorthy / awards + bumped alsoRecommended to 4 dishes.
+        // Most cards average ~700-900 tokens now.
+        max_tokens: 1400,
         system: buildAIDetailsSystemPrompt(kind),
         messages: [{ role: 'user', content: userContent }]
       })
@@ -1474,6 +1517,44 @@ async function handleAIDetails(request, env) {
     aiDetails.gsStars = stars;
     const redFlagAllowed = (kind === 'restroom' || kind === 'attraction' || kind === 'atm');
     aiDetails.gsRedFlag = redFlagAllowed ? !!aiDetails.gsRedFlag : false;
+
+    // New v4 fields — normalize shape so frontend doesn't get surprises.
+    // whatYouSee / aboutAndHistory only meaningful for attractions.
+    if (kind !== 'attraction') {
+      aiDetails.whatYouSee = null;
+      aiDetails.aboutAndHistory = null;
+    } else {
+      aiDetails.whatYouSee = typeof aiDetails.whatYouSee === 'string' && aiDetails.whatYouSee.trim() ? aiDetails.whatYouSee.trim() : null;
+      aiDetails.aboutAndHistory = typeof aiDetails.aboutAndHistory === 'string' && aiDetails.aboutAndHistory.trim() ? aiDetails.aboutAndHistory.trim() : null;
+    }
+    // photoWorthy + awards apply to restaurant/coffee/attraction only.
+    const photoAwardsAllowed = (kind === 'restaurant' || kind === 'coffee' || kind === 'attraction');
+    if (!photoAwardsAllowed) {
+      aiDetails.photoWorthy = null;
+      aiDetails.awards = null;
+    } else {
+      aiDetails.photoWorthy = typeof aiDetails.photoWorthy === 'string' && aiDetails.photoWorthy.trim() ? aiDetails.photoWorthy.trim() : null;
+      aiDetails.awards = typeof aiDetails.awards === 'string' && aiDetails.awards.trim() ? aiDetails.awards.trim() : null;
+    }
+    // ageFit only applies to restaurant / coffee / attraction. Validate
+    // the object shape and the 5 string|null fields.
+    const ageFitAllowed = (kind === 'restaurant' || kind === 'coffee' || kind === 'attraction');
+    if (!ageFitAllowed || !aiDetails.ageFit || typeof aiDetails.ageFit !== 'object') {
+      aiDetails.ageFit = null;
+    } else {
+      const af = aiDetails.ageFit;
+      const sanitize = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+      const cleaned = {
+        toddlers: sanitize(af.toddlers),
+        littleKids: sanitize(af.littleKids),
+        teens: sanitize(af.teens),
+        adults: sanitize(af.adults),
+        olderAdults: sanitize(af.olderAdults),
+      };
+      // If every field is null, collapse to null so the frontend can hide the row.
+      const anyPresent = Object.values(cleaned).some(v => v !== null);
+      aiDetails.ageFit = anyPresent ? cleaned : null;
+    }
   } catch (e) {
     return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
   }

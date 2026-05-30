@@ -216,8 +216,19 @@ function AIDetailsBody({ loading, error, details, kind }) {
 
   return (
     <div>
+      {/* Awards comes FIRST when present — Michelin / UNESCO / etc.
+          is the strongest single signal, deserves top placement. */}
+      {row('🏆', 'AWARDS', details.awards)}
       {row('🥘', 'BEST DISH', bestDishText)}
       {details.alsoRecommended?.length > 0 && row('👍', 'ALSO RECOMMENDED', details.alsoRecommended.join(', '))}
+      {row('📸', 'PHOTO-WORTHY', details.photoWorthy)}
+
+      {/* Attraction-only fields — render below the headline items so the
+          flow reads: awards → top items → photo spots → what you see →
+          history → who it suits. */}
+      {row('👀', 'WHAT YOU SEE', details.whatYouSee)}
+      {row('📜', 'ABOUT & HISTORY', details.aboutAndHistory)}
+
       {row('👥', 'CROWD', details.crowd)}
       {row('⏰', 'BEST TIME', details.bestTime)}
       {row('🎭', 'VIBE', details.vibe)}
@@ -233,6 +244,34 @@ function AIDetailsBody({ loading, error, details, kind }) {
           </ul>
         </div>
       )}
+
+      {/* GOOD FOR — structured per-age-group breakdown. Each line only
+          renders if its string is non-null (i.e., reviews/data say the
+          place actually suits that age group). All-null => entire
+          section hidden. */}
+      {details.ageFit && (() => {
+        const ageRows = [
+          { key: 'toddlers', icon: '👶', label: 'Toddlers (with parents)' },
+          { key: 'littleKids', icon: '🧒', label: 'Little Kids (5-12)' },
+          { key: 'teens', icon: '🧑', label: 'Teens (13-18)' },
+          { key: 'adults', icon: '👨', label: 'Adults' },
+          { key: 'olderAdults', icon: '👴', label: 'Older Adults' },
+        ].filter(r => details.ageFit[r.key]);
+        if (ageRows.length === 0) return null;
+        return (
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>👨‍👩‍👧‍👦 GOOD FOR</div>
+            <ul style={{ margin: 0, paddingLeft: '0', listStyle: 'none', fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+              {ageRows.map(r => (
+                <li key={r.key} style={{ marginBottom: '4px', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                  <span style={{ flexShrink: 0 }}>{r.icon}</span>
+                  <span><strong style={{ fontWeight: '600' }}>{r.label}:</strong> {h(details.ageFit[r.key])}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
 
       {row('🌍', 'TRAVELER', details.travelerNotes)}
 
