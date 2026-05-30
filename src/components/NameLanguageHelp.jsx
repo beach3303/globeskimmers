@@ -13,7 +13,7 @@
  * without a second fetch.
  *
  * Used by: PlacesToEat, CoffeeFinder, MoneyExchange, ThingsToDo,
- * Shopping, ConvenienceStore. (Excluded: RestroomFinder, ATMFinder.)
+ * Shopping, ConvenienceStore, RestroomFinder. (Excluded: ATMFinder.)
  */
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
@@ -28,7 +28,7 @@ export default function NameLanguageHelp({ placeId, name }) {
   // sayItPending: user tapped "🔊 Say it" but data hasn't loaded yet —
   // speak as soon as it arrives.
   const [sayItPending, setSayItPending] = useState(false);
-  const [data, setData] = useState(/** @type {{romanization: string|null, translation: string|null, lang: string|null}|null} */ (null));
+  const [data, setData] = useState(/** @type {{romanization: string|null, translation: string|null, lang: string|null, nativeScript: string|null}|null} */ (null));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -58,6 +58,7 @@ export default function NameLanguageHelp({ placeId, name }) {
             romanization: resp?.romanization ?? null,
             translation: resp?.translation ?? null,
             lang: resp?.lang ?? null,
+            nativeScript: resp?.nativeScript ?? null,
           });
         }
       })
@@ -66,9 +67,13 @@ export default function NameLanguageHelp({ placeId, name }) {
   }, [needFetch, placeId, name]);
 
   // Fires the audio once data lands after a deferred "Say it" tap.
+  // Prefer the native-script form (e.g., 大丸東京) over the displayed
+  // romanization ("Daimaru Tokyo") so the native voice can pronounce
+  // it authentically instead of spelling letters.
   useEffect(() => {
     if (!sayItPending || !data) return;
-    speak(name, data.lang);
+    const textToSpeak = data.nativeScript || name;
+    speak(textToSpeak, data.lang);
     setSayItPending(false);
   }, [sayItPending, data, name]);
 
@@ -147,7 +152,10 @@ export default function NameLanguageHelp({ placeId, name }) {
   const onSayIt = (e) => {
     e.stopPropagation();
     if (data) {
-      speak(name, data.lang);
+      // Prefer native script (e.g., 大丸東京) over romanized displayed
+      // name ("Daimaru Tokyo") for authentic local pronunciation.
+      const textToSpeak = data.nativeScript || name;
+      speak(textToSpeak, data.lang);
     } else {
       // Fetch first; useEffect will speak once data arrives.
       setSayItPending(true);

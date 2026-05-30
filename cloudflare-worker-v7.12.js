@@ -1489,45 +1489,61 @@ async function handleAIDetails(request, env) {
 // ============================================================================
 
 const NAME_INFO_TTL_SECONDS = 90 * 24 * 60 * 60;  // 90 days
-const NAME_INFO_PROMPT_VERSION = 'v2';  // bumped from v1 to invalidate cache when `lang` field was added
+const NAME_INFO_PROMPT_VERSION = 'v3';  // v2->v3: added `nativeScript` field
 
-const NAME_INFO_SYSTEM_PROMPT = `You translate and romanize business names for English-speaking travelers, and tag the language so the device can pronounce the name in the local voice.
+const NAME_INFO_SYSTEM_PROMPT = `You translate and romanize business names for English-speaking travelers, and provide the native script + language code so the device's Text-to-Speech can pronounce the name authentically.
 
-Given a business name, return STRICT JSON with three fields:
+Given a business name, return STRICT JSON with FOUR fields:
 {
-  "romanization": "<how to pronounce the name written in Latin alphabet, or null if the original is already pure Latin alphabet>",
-  "translation": "<what the name means in English, or null if it's already a recognizable English phrase / English person's name>",
-  "lang": "<BCP-47 language code of the original name, e.g. 'ja-JP', 'zh-CN', 'ko-KR', 'ar-SA', 'it-IT', 'fr-FR', 'es-MX', 'en-US'. Used by the browser's Text-to-Speech engine to select the right local voice.>"
+  "romanization": "<how to pronounce the name in Latin alphabet, or null if the original is already pure Latin>",
+  "translation": "<what the name means in English, or null if it's already a recognizable English phrase / person's name>",
+  "lang": "<BCP-47 language code: 'ja-JP', 'zh-CN', 'ko-KR', 'ar-SA', 'it-IT', 'fr-FR', 'es-MX', 'en-US', etc.>",
+  "nativeScript": "<the SAME name written in the original/native script, when the displayed name is a romanization of a non-Latin language (e.g. 'Daimaru Tokyo' -> '大丸東京', 'Tokyo Station' -> '東京駅'). Return null if the displayed name is already in its native script, OR if the language natively uses Latin alphabet (Italian/French/Spanish/etc.).>"
 }
+
+WHY nativeScript matters: iOS/Android TTS voices pronounce native-script text far more naturally than romanized text. Kyoko (Japanese voice) speaking "大丸東京" sounds like a native Japanese speaker. The same voice trying to read "Daimaru Tokyo" may spell letters out. So when the displayed name is a romanization of CJK/Arabic/etc., give us the original script.
 
 EXAMPLES:
 Input: "寿司"
-Output: {"romanization": "Sushi", "translation": "Sushi", "lang": "ja-JP"}
+Output: {"romanization": "Sushi", "translation": "Sushi", "lang": "ja-JP", "nativeScript": null}
+
+Input: "Daimaru Tokyo"
+Output: {"romanization": null, "translation": null, "lang": "ja-JP", "nativeScript": "大丸東京"}
+
+Input: "Tokyo Station"
+Output: {"romanization": null, "translation": null, "lang": "ja-JP", "nativeScript": "東京駅"}
+
+Input: "Mitsukoshi Ginza"
+Output: {"romanization": null, "translation": null, "lang": "ja-JP", "nativeScript": "三越銀座"}
+
+Input: "Lotte World"
+Output: {"romanization": null, "translation": null, "lang": "ko-KR", "nativeScript": "롯데월드"}
 
 Input: "イマーシブ脱出ゲーム（横浜店）"
-Output: {"romanization": "Imāshibu Dasshutsu Gēmu (Yokohama-ten)", "translation": "Immersive Escape Game (Yokohama Branch)", "lang": "ja-JP"}
+Output: {"romanization": "Imāshibu Dasshutsu Gēmu (Yokohama-ten)", "translation": "Immersive Escape Game (Yokohama Branch)", "lang": "ja-JP", "nativeScript": null}
 
 Input: "Trattoria della Nonna"
-Output: {"romanization": null, "translation": "Grandmother's Trattoria", "lang": "it-IT"}
+Output: {"romanization": null, "translation": "Grandmother's Trattoria", "lang": "it-IT", "nativeScript": null}
 
 Input: "Joe's Pizza"
-Output: {"romanization": null, "translation": null, "lang": "en-US"}
+Output: {"romanization": null, "translation": null, "lang": "en-US", "nativeScript": null}
 
 Input: "मसाला हाउस"
-Output: {"romanization": "Masala House", "translation": "Spice House", "lang": "hi-IN"}
+Output: {"romanization": "Masala House", "translation": "Spice House", "lang": "hi-IN", "nativeScript": null}
 
 Input: "Café du Monde"
-Output: {"romanization": null, "translation": "Café of the World", "lang": "fr-FR"}
+Output: {"romanization": null, "translation": "Café of the World", "lang": "fr-FR", "nativeScript": null}
 
 Input: "北京烤鸭店"
-Output: {"romanization": "Běijīng Kǎoyā Diàn", "translation": "Beijing Roast Duck Restaurant", "lang": "zh-CN"}
+Output: {"romanization": "Běijīng Kǎoyā Diàn", "translation": "Beijing Roast Duck Restaurant", "lang": "zh-CN", "nativeScript": null}
 
 RULES:
 - Romanization: ONLY include if the original has non-Latin characters. Use widely-accepted transliteration (Hepburn for Japanese, Pinyin for Chinese, etc.). Preserve original parentheses / punctuation structure.
-- Translation: ONLY include if the meaning is non-obvious to an English speaker. Leave null for plain English names ("Joe's Pizza", "Blue Bottle Coffee").
+- Translation: ONLY include if the meaning is non-obvious to an English speaker. Leave null for plain English names.
 - For partial-translation cases (e.g., "Sushi Sato"): translate only the non-English parts in context.
-- Person's names: leave translation null (e.g., "Mario's", "Hiroshi Sato" don't need translation).
-- Lang: ALWAYS return a BCP-47 language code (region-tagged). For Chinese, prefer 'zh-CN' for simplified, 'zh-TW' for traditional. For Spanish, infer regional variant if possible ('es-MX', 'es-ES') else 'es-419'. When uncertain, default to the most common local variant.
+- Person's names: leave translation null.
+- Lang: ALWAYS return a BCP-47 language code (region-tagged). For Chinese: 'zh-CN' simplified, 'zh-TW' traditional. For Spanish: infer regional ('es-MX', 'es-ES') else 'es-419'. Default to the most common local variant when uncertain.
+- NativeScript: ONLY for romanized non-Latin-script languages (Japanese, Chinese, Korean, Russian, Arabic, Hebrew, Thai, Hindi, Greek, etc.). Don't fabricate — only include if you're confident in the native form (well-known brands / common terms / geographic names). For languages that natively use Latin alphabet, this is always null.
 - Return JSON only. No markdown, no commentary.`;
 
 async function handleNameInfo(request, env) {
@@ -1586,6 +1602,7 @@ async function handleNameInfo(request, env) {
       romanization: typeof nameInfo.romanization === 'string' && nameInfo.romanization.trim() ? nameInfo.romanization.trim() : null,
       translation: typeof nameInfo.translation === 'string' && nameInfo.translation.trim() ? nameInfo.translation.trim() : null,
       lang: validLang,
+      nativeScript: typeof nameInfo.nativeScript === 'string' && nameInfo.nativeScript.trim() ? nameInfo.nativeScript.trim() : null,
     };
   } catch (e) {
     return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);

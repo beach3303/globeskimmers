@@ -9,6 +9,7 @@ import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
+import NameLanguageHelp from "@/components/NameLanguageHelp";
 
 // ─── THEME ─────────────────────────────────────────────────────────────────
 const TEAL = "#00BCD4";
@@ -250,7 +251,7 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
       <div style={{ padding: "16px" }}>
 
         {/* Row 1: Name + Distance */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "6px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "2px" }}>
           <div style={{ fontWeight: "800", fontSize: "18px", color: DARK, lineHeight: "1.25", flex: 1 }}>{name}</div>
           {r.distanceMiles!=null && (
             <div style={{ background: `${TEAL}15`, color: TEAL_DARK, padding: "4px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: "700", flexShrink: 0 }}>
@@ -258,6 +259,7 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
             </div>
           )}
         </div>
+        <NameLanguageHelp placeId={r.placeId || r.id} name={name} />
 
         {/* Row 2: Rating */}
         {r.rating && (
