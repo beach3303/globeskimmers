@@ -25,7 +25,10 @@ const GRAY_DARK = '#475569';
 export default function NameLanguageHelp({ placeId, name }) {
   const [pronounceOpen, setPronounceOpen] = useState(false);
   const [translateOpen, setTranslateOpen] = useState(false);
-  const [data, setData] = useState(/** @type {{romanization: string|null, translation: string|null}|null} */ (null));
+  // sayItPending: user tapped "🔊 Say it" but data hasn't loaded yet —
+  // speak as soon as it arrives.
+  const [sayItPending, setSayItPending] = useState(false);
+  const [data, setData] = useState(/** @type {{romanization: string|null, translation: string|null, lang: string|null}|null} */ (null));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -33,8 +36,13 @@ export default function NameLanguageHelp({ placeId, name }) {
   const english = looksEnglish(name);
   const showPronounce = nonLatin;
   const showTranslate = nonLatin || !english;
+  // Audio button appears whenever Translate would — i.e., any name that
+  // isn't plain English. Lets users hear "Trattoria della Nonna" in
+  // Italian even though it's already in Latin script.
+  const showSayIt = showTranslate;
+  const speechSupported = typeof window !== 'undefined' && typeof window.speechSynthesis !== 'undefined';
 
-  const needFetch = (pronounceOpen || translateOpen) && !data && !loading;
+  const needFetch = (pronounceOpen || translateOpen || sayItPending) && !data && !loading;
 
   useEffect(() => {
     if (!needFetch) return;
@@ -49,12 +57,41 @@ export default function NameLanguageHelp({ placeId, name }) {
           setData({
             romanization: resp?.romanization ?? null,
             translation: resp?.translation ?? null,
+            lang: resp?.lang ?? null,
           });
         }
       })
       .catch((e) => setError(e?.message || 'Failed to load'))
       .finally(() => setLoading(false));
   }, [needFetch, placeId, name]);
+
+  // Fires the audio once data lands after a deferred "Say it" tap.
+  useEffect(() => {
+    if (!sayItPending || !data) return;
+    speak(name, data.lang);
+    setSayItPending(false);
+  }, [sayItPending, data, name]);
+
+  const speak = (text, lang) => {
+    if (!speechSupported || !text) return;
+    try {
+      window.speechSynthesis.cancel(); // stop any current playback
+      const u = new window.SpeechSynthesisUtterance(text);
+      if (lang) u.lang = lang;
+      u.rate = 0.9;
+      window.speechSynthesis.speak(u);
+    } catch (_e) { /* graceful no-op */ }
+  };
+
+  const onSayIt = (e) => {
+    e.stopPropagation();
+    if (data) {
+      speak(name, data.lang);
+    } else {
+      // Fetch first; useEffect will speak once data arrives.
+      setSayItPending(true);
+    }
+  };
 
   if (!showPronounce && !showTranslate) return null;
 
@@ -90,7 +127,17 @@ export default function NameLanguageHelp({ placeId, name }) {
             style={buttonStyle}
             aria-label={pronounceOpen ? 'Hide pronunciation' : 'Show pronunciation'}
           >
-            🔤 {pronounceOpen ? 'Hide pronounce' : 'Pronounce'}
+            🔤 {pronounceOpen ? 'Hide pronunciation' : 'How to say it'}
+          </button>
+        )}
+        {showSayIt && speechSupported && (
+          <button
+            onClick={onSayIt}
+            style={buttonStyle}
+            aria-label="Play audio pronunciation in local language"
+            title="Hear it spoken in the local language"
+          >
+            🔊 Say it
           </button>
         )}
         {showTranslate && (

@@ -1502,40 +1502,45 @@ async function handleAIDetails(request, env) {
 // ============================================================================
 
 const NAME_INFO_TTL_SECONDS = 90 * 24 * 60 * 60;  // 90 days
-const NAME_INFO_PROMPT_VERSION = 'v1';
+const NAME_INFO_PROMPT_VERSION = 'v2';  // bumped from v1 to invalidate cache when `lang` field was added
 
-const NAME_INFO_SYSTEM_PROMPT = `You translate and romanize business names for English-speaking travelers.
+const NAME_INFO_SYSTEM_PROMPT = `You translate and romanize business names for English-speaking travelers, and tag the language so the device can pronounce the name in the local voice.
 
-Given a business name, return STRICT JSON with two fields:
+Given a business name, return STRICT JSON with three fields:
 {
   "romanization": "<how to pronounce the name written in Latin alphabet, or null if the original is already pure Latin alphabet>",
-  "translation": "<what the name means in English, or null if it's already a recognizable English phrase / English person's name>"
+  "translation": "<what the name means in English, or null if it's already a recognizable English phrase / English person's name>",
+  "lang": "<BCP-47 language code of the original name, e.g. 'ja-JP', 'zh-CN', 'ko-KR', 'ar-SA', 'it-IT', 'fr-FR', 'es-MX', 'en-US'. Used by the browser's Text-to-Speech engine to select the right local voice.>"
 }
 
 EXAMPLES:
 Input: "寿司"
-Output: {"romanization": "Sushi", "translation": "Sushi"}
+Output: {"romanization": "Sushi", "translation": "Sushi", "lang": "ja-JP"}
 
 Input: "イマーシブ脱出ゲーム（横浜店）"
-Output: {"romanization": "Imāshibu Dasshutsu Gēmu (Yokohama-ten)", "translation": "Immersive Escape Game (Yokohama Branch)"}
+Output: {"romanization": "Imāshibu Dasshutsu Gēmu (Yokohama-ten)", "translation": "Immersive Escape Game (Yokohama Branch)", "lang": "ja-JP"}
 
 Input: "Trattoria della Nonna"
-Output: {"romanization": null, "translation": "Grandmother's Trattoria"}
+Output: {"romanization": null, "translation": "Grandmother's Trattoria", "lang": "it-IT"}
 
 Input: "Joe's Pizza"
-Output: {"romanization": null, "translation": null}
+Output: {"romanization": null, "translation": null, "lang": "en-US"}
 
 Input: "मसाला हाउस"
-Output: {"romanization": "Masala House", "translation": "Spice House"}
+Output: {"romanization": "Masala House", "translation": "Spice House", "lang": "hi-IN"}
 
 Input: "Café du Monde"
-Output: {"romanization": null, "translation": "Café of the World"}
+Output: {"romanization": null, "translation": "Café of the World", "lang": "fr-FR"}
+
+Input: "北京烤鸭店"
+Output: {"romanization": "Běijīng Kǎoyā Diàn", "translation": "Beijing Roast Duck Restaurant", "lang": "zh-CN"}
 
 RULES:
 - Romanization: ONLY include if the original has non-Latin characters. Use widely-accepted transliteration (Hepburn for Japanese, Pinyin for Chinese, etc.). Preserve original parentheses / punctuation structure.
 - Translation: ONLY include if the meaning is non-obvious to an English speaker. Leave null for plain English names ("Joe's Pizza", "Blue Bottle Coffee").
 - For partial-translation cases (e.g., "Sushi Sato"): translate only the non-English parts in context.
 - Person's names: leave translation null (e.g., "Mario's", "Hiroshi Sato" don't need translation).
+- Lang: ALWAYS return a BCP-47 language code (region-tagged). For Chinese, prefer 'zh-CN' for simplified, 'zh-TW' for traditional. For Spanish, infer regional variant if possible ('es-MX', 'es-ES') else 'es-419'. When uncertain, default to the most common local variant.
 - Return JSON only. No markdown, no commentary.`;
 
 async function handleNameInfo(request, env) {
@@ -1585,10 +1590,15 @@ async function handleNameInfo(request, env) {
     const raw = data?.content?.[0]?.text?.trim() || '';
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
     nameInfo = JSON.parse(cleaned);
-    // Defensive normalization — guarantee both keys exist as string|null.
+    // Defensive normalization — guarantee keys exist as string|null.
+    // `lang` is BCP-47 (e.g. 'ja-JP'). Loose regex validation so the
+    // browser's speechSynthesis gets a usable code.
+    const rawLang = typeof nameInfo.lang === 'string' ? nameInfo.lang.trim() : '';
+    const validLang = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/i.test(rawLang) ? rawLang : null;
     nameInfo = {
       romanization: typeof nameInfo.romanization === 'string' && nameInfo.romanization.trim() ? nameInfo.romanization.trim() : null,
       translation: typeof nameInfo.translation === 'string' && nameInfo.translation.trim() ? nameInfo.translation.trim() : null,
+      lang: validLang,
     };
   } catch (e) {
     return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
