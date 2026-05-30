@@ -7,6 +7,7 @@ import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
+import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 
 const T={teal:"#00BCD4",tealD:"#00838F",dark:"#1A2332",dark2:"#243447",gray:"#64748B",grayL:"#F1F5F9",green:"#4CAF50",blue:"#1565C0",blueL:"#E3F2FD",coral:"#FF6B6B",gold:"#FFB74D",
   accent:"#7C3AED",accentD:"#6D28D9",accentL:"#EDE9FE"};
@@ -90,17 +91,20 @@ function Directions({isOpen,onClose,lat,lng,name,userLat,userLng}){
   );
 }
 
-function PhotoStrip({photos,fallback="🛍️",bg}){
+function PhotoStrip({photos,fallback="🛍️",bg,onPhotoClick}){
   const [err,setErr]=useState({}); const [ld,setLd]=useState({0:true,1:true});
   const valid=(photos||[]).filter((_,i)=>_&&!err[i]);
   const fbBg=bg||`linear-gradient(135deg,${T.accentL},#C4B5FD)`;
+  const clk=onPhotoClick?"pointer":"default";
   if(!valid.length) return <div style={{height:"130px",background:fbBg,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:"52px",filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.15))"}}>{fallback}</span></div>;
-  if(valid.length===1) return(<div style={{position:"relative",height:"170px",overflow:"hidden"}}>{ld[0]&&<div style={{position:"absolute",inset:0,background:fbBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"40px"}}>{fallback}</div>}<img src={valid[0]} alt="" onError={()=>setErr((p)=>({...p,0:true}))} onLoad={()=>setLd((p)=>({...p,0:false}))} style={{width:"100%",height:"170px",objectFit:"cover",opacity:ld[0]?0:1,transition:"opacity 0.4s"}}/></div>);
-  return(<div style={{display:"grid",gridTemplateColumns:"60% 40%",height:"150px",overflow:"hidden"}}>{valid.slice(0,2).map((url,i)=>(<div key={i} style={{position:"relative",overflow:"hidden",borderRight:i===0?"2px solid #fff":"none"}}>{ld[i]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"30px"}}>{fallback}</div>}<img src={url} alt="" onError={()=>setErr((p)=>({...p,[i]:true}))} onLoad={()=>setLd((p)=>({...p,[i]:false}))} style={{width:"100%",height:"150px",objectFit:"cover",opacity:ld[i]?0:1,transition:"opacity 0.4s"}}/></div>))}</div>);
+  if(valid.length===1) return(<div onClick={()=>onPhotoClick?.(0)} style={{position:"relative",height:"170px",overflow:"hidden",cursor:clk}}>{ld[0]&&<div style={{position:"absolute",inset:0,background:fbBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"40px"}}>{fallback}</div>}<img src={valid[0]} alt="" onError={()=>setErr((p)=>({...p,0:true}))} onLoad={()=>setLd((p)=>({...p,0:false}))} style={{width:"100%",height:"170px",objectFit:"cover",opacity:ld[0]?0:1,transition:"opacity 0.4s"}}/></div>);
+  return(<div style={{display:"grid",gridTemplateColumns:"60% 40%",height:"150px",overflow:"hidden"}}>{valid.slice(0,2).map((url,i)=>(<div key={i} onClick={()=>onPhotoClick?.(i)} style={{position:"relative",overflow:"hidden",borderRight:i===0?"2px solid #fff":"none",cursor:clk}}>{ld[i]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"30px"}}>{fallback}</div>}<img src={url} alt="" onError={()=>setErr((p)=>({...p,[i]:true}))} onLoad={()=>setLd((p)=>({...p,[i]:false}))} style={{width:"100%",height:"150px",objectFit:"cover",opacity:ld[i]?0:1,transition:"opacity 0.4s"}}/>{i===1&&valid.length>2&&<div style={{position:"absolute",bottom:"6px",right:"6px",background:"rgba(0,0,0,0.7)",color:"#fff",padding:"2px 8px",borderRadius:"12px",fontSize:"11px",fontWeight:"700",pointerEvents:"none"}}>+{valid.length-2}</div>}</div>))}</div>);
 }
 
 function ShopCard({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance}){
   const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false);
+  // Fullscreen photo gallery — tap a photo to enlarge, swipe/arrows to scroll, X to close.
+  const [gallery,setGallery]=useState({open:false,idx:0});
   useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
   const name=p.displayName?.text||p.name||"Shop"; const st=openStatus(p);
   const hBg=st.isOpen===true?"#E8F5E9":st.isOpen===false?"#FFEBEE":"#F5F5F5";
@@ -113,7 +117,7 @@ function ShopCard({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,use
     <motion.div ref={cardRef} initial={{opacity:0,y:24}} animate={{opacity:1,y:0}} transition={{delay:index*0.05,type:"spring",stiffness:260,damping:20}}
       style={{background:"#fff",borderRadius:"20px",boxShadow:isHighlighted?`0 0 0 3px ${T.accent},0 8px 32px rgba(124,58,237,0.22)`:"0 2px 16px rgba(0,0,0,0.07)",overflow:"hidden",border:isHighlighted?`2px solid ${T.accent}`:"1px solid #E8EDF2",transition:"box-shadow 0.3s,border 0.3s"}}>
       <div style={{position:"relative"}}>
-        <PhotoStrip photos={p.photos} fallback={p.venueIcon||"🛍️"} bg={`linear-gradient(135deg,${vColor}dd,${vColor}99)`}/>
+        <PhotoStrip photos={p.photos} fallback={p.venueIcon||"🛍️"} bg={`linear-gradient(135deg,${vColor}dd,${vColor}99)`} onPhotoClick={(i)=>setGallery({open:true,idx:i})}/>
         <div style={{position:"absolute",top:"12px",left:"12px",background:index===0?"linear-gradient(135deg,#FFD700,#FFA000)":index===1?"linear-gradient(135deg,#B0BEC5,#78909C)":index===2?"linear-gradient(135deg,#FFAB40,#F57C00)":T.accent,color:"#fff",width:"30px",height:"30px",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",fontSize:"13px",boxShadow:"0 2px 8px rgba(0,0,0,0.25)"}}>{index+1}</div>
         <div style={{position:"absolute",top:"12px",right:"12px",background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:"4px 10px",borderRadius:"20px",fontSize:"11px",fontWeight:"800",color:vColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{p.venueIcon} {p.venueLabel}</div>
         <div style={{position:"absolute",bottom:"12px",left:"12px",background:st.isOpen===true?"rgba(46,125,50,0.92)":st.isOpen===false?"rgba(211,47,47,0.92)":"rgba(100,116,139,0.85)",backdropFilter:"blur(6px)",color:"#fff",padding:"4px 10px",borderRadius:"20px",fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}>
@@ -173,6 +177,7 @@ function ShopCard({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,use
         </div></motion.div>)}</AnimatePresence>
       </div>
       <Directions isOpen={dirs} onClose={()=>setDirs(false)} lat={p.lat} lng={p.lng} name={name} userLat={userLat} userLng={userLng}/>
+      {gallery.open&&<PhotoGalleryModal key={gallery.idx} photos={(p.photos||[]).filter(Boolean)} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>}
     </motion.div>
   );
 }
