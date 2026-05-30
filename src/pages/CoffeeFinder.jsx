@@ -531,11 +531,11 @@ export default function CoffeeFinderPage() {
     <div style={{fontFamily:"'DM Sans',-apple-system,sans-serif",background:CREAM,minHeight:"100vh"}}>
       <div style={{padding:"16px 16px 0"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
-          <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:"4px"}}>
+            <button onClick={()=>navigate(createPageUrl("Home"))} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0",color:BROWN,fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back to Home</button>
             {fromPlacesToEat && (
               <button onClick={()=>navigate(-1)} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0",color:BROWN,fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back to Places to Eat</button>
             )}
-            <button onClick={()=>navigate(createPageUrl("Home"))} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0",color:BROWN,fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back to Home</button>
           </div>
           <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="dark" title="Refresh coffee shops" />
         </div>
