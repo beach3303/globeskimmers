@@ -11,6 +11,7 @@ import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 import AIDetailsSection from "@/components/AIDetailsSection";
+import NameLanguageHelp from "@/components/NameLanguageHelp";
 
 // ─── COLORS ────────────────────────────────────────────────────────────────
 const BROWN      = "#6F4E37";
@@ -195,7 +196,8 @@ function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance
 
       <div style={{padding:"14px 16px"}}>
         <div style={{fontWeight:"700",fontSize:"16px",color:DARK,marginBottom:"2px"}}>{name}</div>
-        <div style={{fontSize:"13px",color:GRAY,marginBottom:"6px"}}>{address}</div>
+        <NameLanguageHelp placeId={shop.placeId||shop.id} name={name}/>
+        <div style={{fontSize:"13px",color:GRAY,marginBottom:"6px",marginTop:"4px"}}>{address}</div>
 
         {/* Meta */}
         <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:"8px",fontSize:"13px",color:GRAY,marginBottom:"8px"}}>

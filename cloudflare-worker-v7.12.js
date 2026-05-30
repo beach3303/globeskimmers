@@ -1492,6 +1492,115 @@ async function handleAIDetails(request, env) {
 }
 
 // ============================================================================
+// NAME LANGUAGE HELP — Haiku 4.5 returns { romanization, translation } for
+// any place name. Used by the <NameLanguageHelp> frontend component which
+// renders "🔤 Pronounce" + "🌐 Translate" buttons under business names that
+// aren't plain English. Single call returns both so user can tap either
+// without a second round trip.
+//
+// Cached 90 days per placeId — names rarely change. ~$0.0002 per fresh call.
+// ============================================================================
+
+const NAME_INFO_TTL_SECONDS = 90 * 24 * 60 * 60;  // 90 days
+const NAME_INFO_PROMPT_VERSION = 'v1';
+
+const NAME_INFO_SYSTEM_PROMPT = `You translate and romanize business names for English-speaking travelers.
+
+Given a business name, return STRICT JSON with two fields:
+{
+  "romanization": "<how to pronounce the name written in Latin alphabet, or null if the original is already pure Latin alphabet>",
+  "translation": "<what the name means in English, or null if it's already a recognizable English phrase / English person's name>"
+}
+
+EXAMPLES:
+Input: "寿司"
+Output: {"romanization": "Sushi", "translation": "Sushi"}
+
+Input: "イマーシブ脱出ゲーム（横浜店）"
+Output: {"romanization": "Imāshibu Dasshutsu Gēmu (Yokohama-ten)", "translation": "Immersive Escape Game (Yokohama Branch)"}
+
+Input: "Trattoria della Nonna"
+Output: {"romanization": null, "translation": "Grandmother's Trattoria"}
+
+Input: "Joe's Pizza"
+Output: {"romanization": null, "translation": null}
+
+Input: "मसाला हाउस"
+Output: {"romanization": "Masala House", "translation": "Spice House"}
+
+Input: "Café du Monde"
+Output: {"romanization": null, "translation": "Café of the World"}
+
+RULES:
+- Romanization: ONLY include if the original has non-Latin characters. Use widely-accepted transliteration (Hepburn for Japanese, Pinyin for Chinese, etc.). Preserve original parentheses / punctuation structure.
+- Translation: ONLY include if the meaning is non-obvious to an English speaker. Leave null for plain English names ("Joe's Pizza", "Blue Bottle Coffee").
+- For partial-translation cases (e.g., "Sushi Sato"): translate only the non-English parts in context.
+- Person's names: leave translation null (e.g., "Mario's", "Hiroshi Sato" don't need translation).
+- Return JSON only. No markdown, no commentary.`;
+
+async function handleNameInfo(request, env) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
+  }
+  let body;
+  try { body = await request.json(); } catch (_e) {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400);
+  }
+  const placeId = body?.placeId;
+  const name = (body?.name || '').toString().trim();
+  if (!placeId || !name) {
+    return jsonResponse({ error: 'placeId + name required' }, 400);
+  }
+
+  // Cache key includes prompt version so changes invalidate cleanly.
+  const cacheKey = `name_info:${placeId}:${NAME_INFO_PROMPT_VERSION}`;
+  if (env.GLOBESKIMMERS_KV) {
+    const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+    if (cached) {
+      return jsonResponse({ ...cached, _cache: 'hit' });
+    }
+  }
+
+  let nameInfo;
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        system: NAME_INFO_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: `Business name: ${name}` }],
+      }),
+    });
+    if (!apiRes.ok) {
+      const errText = await apiRes.text();
+      return jsonResponse({ error: 'Claude API error', status: apiRes.status, details: errText }, 502);
+    }
+    const data = await apiRes.json();
+    const raw = data?.content?.[0]?.text?.trim() || '';
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    nameInfo = JSON.parse(cleaned);
+    // Defensive normalization — guarantee both keys exist as string|null.
+    nameInfo = {
+      romanization: typeof nameInfo.romanization === 'string' && nameInfo.romanization.trim() ? nameInfo.romanization.trim() : null,
+      translation: typeof nameInfo.translation === 'string' && nameInfo.translation.trim() ? nameInfo.translation.trim() : null,
+    };
+  } catch (e) {
+    return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
+  }
+
+  if (env.GLOBESKIMMERS_KV) {
+    await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(nameInfo), { expirationTtl: NAME_INFO_TTL_SECONDS }).catch(() => {});
+  }
+  return jsonResponse({ ...nameInfo, _cache: 'miss' });
+}
+
+// ============================================================================
 // PRICE SCANNER — direct Anthropic Claude Sonnet 4.6 with prompt caching
 // Replaces Base44 InvokeLLM for the SmartPriceScanner. Set ANTHROPIC_API_KEY
 // as a Worker secret in the Cloudflare dashboard before deploying.
@@ -1703,6 +1812,7 @@ export default {
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
       if (pathname === '/label-photos' && request.method === 'POST') return await handleLabelPhotos(request, env);
       if (pathname === '/ai-details' && request.method === 'POST') return await handleAIDetails(request, env);
+      if (pathname === '/name-info' && request.method === 'POST') return await handleNameInfo(request, env);
 
       return jsonResponse({ error: 'Not found', path: pathname }, 404);
     } catch (error) {

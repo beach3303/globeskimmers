@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapRecenterButton from "../components/maps/MapRecenterButton";
 import MapAppSelector from "../components/MapAppSelector";
 import { useLocation } from "../components/location/LocationContext";
@@ -1054,6 +1055,7 @@ export default function MoneyExchangePage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="font-bold text-[14px] text-gray-900 mb-1">{store.name}</h4>
+                          <NameLanguageHelp placeId={store.place_id || store.placeId || store.id} name={store.name} />
 
                           {store.exchange_rate && (
                             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-[13px] font-bold px-2 py-1 rounded inline-block mb-2">

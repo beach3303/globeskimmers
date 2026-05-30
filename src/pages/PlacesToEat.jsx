@@ -42,6 +42,7 @@ import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 import AIDetailsSection from "@/components/AIDetailsSection";
+import NameLanguageHelp from "@/components/NameLanguageHelp";
 
 const WORKER_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
 
@@ -578,6 +579,7 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
         <div style={{marginBottom:"4px"}}>
           {cuisineLabel&&<div style={{fontSize:"11px",fontWeight:"700",color:BLUE,letterSpacing:"0.5px",marginBottom:"2px"}}>{cuisineLabel}</div>}
           <div style={{fontWeight:"800",fontSize:"17px",color:DARK,lineHeight:"1.2"}}>{name}</div>
+          <NameLanguageHelp placeId={restaurant.placeId||restaurant.id} name={name}/>
         </div>
 
         {/* Address */}

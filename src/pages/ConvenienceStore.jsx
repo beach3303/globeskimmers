@@ -22,6 +22,7 @@ import { useDistanceUnit } from '@/components/location/distanceUnit';
 import DistanceUnitToggle from '@/components/location/DistanceUnitToggle';
 import { base44 } from '@/api/base44Client';
 import RefreshButton from '@/components/RefreshButton';
+import NameLanguageHelp from '@/components/NameLanguageHelp';
 
 // ============================================================================
 // THEME - Matching PlacesToEat warm brown aesthetic
@@ -548,7 +549,8 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
               }}>
                 {store.name}
               </h3>
-              
+              <NameLanguageHelp placeId={store.placeId || store.id} name={store.name} />
+
               {/* Address - Always visible */}
               <p style={{
                 fontSize: '13px',

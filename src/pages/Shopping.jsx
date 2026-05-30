@@ -6,6 +6,7 @@ import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
+import NameLanguageHelp from "@/components/NameLanguageHelp";
 
 const T={teal:"#00BCD4",tealD:"#00838F",dark:"#1A2332",dark2:"#243447",gray:"#64748B",grayL:"#F1F5F9",green:"#4CAF50",blue:"#1565C0",blueL:"#E3F2FD",coral:"#FF6B6B",gold:"#FFB74D",
   accent:"#7C3AED",accentD:"#6D28D9",accentL:"#EDE9FE"};
@@ -123,7 +124,8 @@ function ShopCard({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,use
       </div>
 
       <div style={{padding:"16px"}}>
-        <div style={{fontWeight:"800",fontSize:"17px",color:T.dark,marginBottom:"8px"}}>{name}</div>
+        <div style={{fontWeight:"800",fontSize:"17px",color:T.dark,marginBottom:"4px"}}>{name}</div>
+        <NameLanguageHelp placeId={p.placeId||p.id} name={name}/>
         {p.rating&&(<div style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:"10px"}}>{[1,2,3,4,5].map(n=><span key={n} style={{color:n<=Math.round(p.rating)?T.gold:"#E2E8F0",fontSize:"14px"}}>★</span>)}<span style={{fontWeight:"700",color:T.dark,fontSize:"13px"}}>{p.rating}</span>{p.userRatingCount>0&&<span style={{color:T.gray,fontSize:"12px"}}>({p.userRatingCount.toLocaleString()})</span>}</div>)}
 
         {/* Highlight badges */}

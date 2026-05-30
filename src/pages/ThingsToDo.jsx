@@ -9,6 +9,7 @@ import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import AIDetailsSection from "@/components/AIDetailsSection";
+import NameLanguageHelp from "@/components/NameLanguageHelp";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 
@@ -315,7 +316,8 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
       </div>
 
       <div style={{padding:"16px"}}>
-        <div style={{fontWeight:"800",fontSize:"17px",color:T.dark,marginBottom:"8px"}}>{name}</div>
+        <div style={{fontWeight:"800",fontSize:"17px",color:T.dark,marginBottom:"4px"}}>{name}</div>
+        <NameLanguageHelp placeId={a.placeId||a.id} name={name}/>
 
         {/* Rating */}
         {a.rating&&(<div style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:"10px"}}>{[1,2,3,4,5].map(n=><span key={n} style={{color:n<=Math.round(a.rating)?T.gold:"#E2E8F0",fontSize:"14px"}}>★</span>)}<span style={{fontWeight:"700",color:T.dark,fontSize:"13px"}}>{a.rating}</span>{a.userRatingCount>0&&<span style={{color:T.gray,fontSize:"12px"}}>({a.userRatingCount.toLocaleString()})</span>}</div>)}
