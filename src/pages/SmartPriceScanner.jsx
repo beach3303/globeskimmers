@@ -6,6 +6,8 @@ import { X, RefreshCw, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useLocation } from "@/components/location/LocationContext";
+import { logEvent } from "@/lib/analytics";
 
 // ============================================================================
 // CONFIGURATION
@@ -148,6 +150,7 @@ async function getCachedExchangeRate(fromCurrency, toCurrency) {
 
 export default function SmartPriceScannerPage() {
   const navigate = useNavigate();
+  const { activeLocation } = useLocation();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -473,12 +476,45 @@ export default function SmartPriceScannerPage() {
           const frozenImageUrl = canvas.toDataURL('image/jpeg', 0.95);
           
           isPricesLockedRef.current = true;
-          
+
           setFrozenFrame(frozenImageUrl);
           setDetectedPrices(filtered);
           setLastScanTime(new Date());
-          
+
           console.log("🔒 PRICES LOCKED - Will not scan again until user clears");
+
+          // Fire analytics event with USD-normalized amounts so the data is
+          // cross-comparable regardless of which target currency the user
+          // chose. Each getCachedExchangeRate hits localStorage cache after
+          // the first call -- essentially free. Fire-and-forget; never
+          // blocks or affects the scan UX.
+          try {
+            const usdAmounts = await Promise.all(
+              filtered.map(async (c) => {
+                if (c.original.currency === 'USD') return c.original.amount;
+                try {
+                  const rate = await getCachedExchangeRate(c.original.currency, 'USD');
+                  return c.original.amount * rate;
+                } catch {
+                  return null;
+                }
+              })
+            );
+            logEvent('price_scan', {
+              country: activeLocation?.address?.country || null,
+              city: activeLocation?.address?.city || null,
+              target_currency: selectedCurrency,
+              price_count: filtered.length,
+              prices: filtered.map((c, i) => ({
+                currency: c.original.currency,
+                amount: c.original.amount,
+                amount_usd: usdAmounts[i] != null ? Number(usdAmounts[i].toFixed(4)) : null,
+                context: c.original.context || null,
+              })),
+            }, 'SmartPriceScanner');
+          } catch (e) {
+            console.warn('Analytics fire failed (non-fatal):', e);
+          }
         }
       }
     } catch (error) {
