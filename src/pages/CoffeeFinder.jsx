@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import LocationModePicker from "@/components/location/LocationModePicker";
@@ -402,6 +404,14 @@ function buildMapPopup(shop, index) {
 
 // ─── MAIN ──────────────────────────────────────────────────────────────────
 export default function CoffeeFinderPage() {
+  const navigate = useNavigate();
+  // If user arrived via the "Try the Coffee Finder feature in this app"
+  // link from PlacesToEat, the router state carries { from: 'PlacesToEat' }.
+  // When that's present we render an extra "← Back to Places to Eat"
+  // button so the user can return to their restaurant search without
+  // bouncing through Home.
+  const routerLocation = useRouterLocation();
+  const fromPlacesToEat = routerLocation?.state?.from === 'PlacesToEat';
   const [shops,setShops]         = useState([]);
   const [loading,setLoading]     = useState(true);
   const [refreshTick,setRefreshTick] = useState(0);
@@ -521,7 +531,12 @@ export default function CoffeeFinderPage() {
     <div style={{fontFamily:"'DM Sans',-apple-system,sans-serif",background:CREAM,minHeight:"100vh"}}>
       <div style={{padding:"16px 16px 0"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
-          <button onClick={()=>window.history.back()} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0",color:BROWN,fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back to Home</button>
+          <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+            {fromPlacesToEat && (
+              <button onClick={()=>navigate(-1)} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0",color:BROWN,fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back to Places to Eat</button>
+            )}
+            <button onClick={()=>navigate(createPageUrl("Home"))} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0",color:BROWN,fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back to Home</button>
+          </div>
           <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="dark" title="Refresh coffee shops" />
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}>

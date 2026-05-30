@@ -1473,7 +1473,7 @@ export default function PlacesToEat() {
             {/\b(coffee|espresso|latte|cappuccino|mocha)\b/i.test(searchText || '') && (
               <div style={{padding:"8px 12px",background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:"8px",fontSize:"12px",color:"#92400E",display:"flex",alignItems:"center",gap:"6px"}}>
                 <span>☕</span>
-                <span>Looking for more coffee spots? <button onClick={() => navigate(createPageUrl("CoffeeFinder"))} style={{background:"transparent",border:"none",padding:0,color:"#92400E",fontWeight:"700",textDecoration:"underline",cursor:"pointer",fontFamily:"inherit",fontSize:"inherit"}}>Try the Coffee Finder feature in this app</button></span>
+                <span>Looking for more coffee spots? <button onClick={() => navigate(createPageUrl("CoffeeFinder"), { state: { from: 'PlacesToEat' } })} style={{background:"transparent",border:"none",padding:0,color:"#92400E",fontWeight:"700",textDecoration:"underline",cursor:"pointer",fontFamily:"inherit",fontSize:"inherit"}}>Try the Coffee Finder feature in this app</button></span>
               </div>
             )}
             {filtered.slice(0,displayCount).map((r,i)=>(
