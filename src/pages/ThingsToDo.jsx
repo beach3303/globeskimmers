@@ -62,21 +62,6 @@ function openStatus(p){
   return {isOpen:open,label:open?"Open Now":"Closed Now",is24H:false,today:txt};
 }
 
-function QualityMeter({score}){
-  const pct=Math.max(0,Math.min(100,score||0));
-  const color=pct>=70?T.green:pct>=45?T.gold:T.coral;
-  const label=pct>=70?"Great":pct>=45?"Good":"Fair";
-  return(
-    <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px"}}>
-      <span style={{fontSize:"12px",color:T.gray,fontWeight:"600",flexShrink:0}}>Score</span>
-      <div style={{flex:1,height:"6px",background:"#E2E8F0",borderRadius:"3px",overflow:"hidden"}}>
-        <motion.div initial={{width:0}} animate={{width:`${pct}%`}} transition={{delay:0.3,duration:0.6}} style={{height:"100%",background:color,borderRadius:"3px"}}/>
-      </div>
-      <span style={{fontSize:"12px",fontWeight:"700",color,flexShrink:0}}>{label}</span>
-    </div>
-  );
-}
-
 function Directions({isOpen,onClose,lat,lng,name,userLat,userLng}){
   if(!isOpen) return null;
   const origin=userLat&&userLng;
@@ -288,29 +273,6 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
 // this precedence: Google editorialSummary > generativeSummary (Gemini AI
 // overview, has historical context for famous places) > synthetic aboutText.
 // Truncates at 200 chars with a "Read more" link; expands fully on tap.
-function AboutPanel({a}){
-  const [open,setOpen]=useState(false);
-  const editorial=(typeof a.editorialSummary==='string'?a.editorialSummary:a.editorialSummary?.text)||'';
-  const generative=a.generativeSummary?.overview?.text||'';
-  const synthetic=a.aboutText||'';
-  const text=editorial||generative||synthetic;
-  if(!text) return null;
-  const LIMIT=200;
-  const needsToggle=text.length>LIMIT;
-  const shown=open||!needsToggle?text:text.slice(0,LIMIT).replace(/\s+\S*$/,'')+'…';
-  return(
-    <div style={{marginBottom:"12px",padding:"12px 14px",background:"linear-gradient(135deg,#EDE9FE,#F5F3FF)",borderRadius:"12px",border:"1px solid #DDD6FE"}}>
-      <div style={{fontSize:"11px",fontWeight:"800",color:"#7C3AED",marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.5px"}}>📖 About This Place</div>
-      <div style={{fontSize:"13px",color:"#374151",lineHeight:"1.6"}}>{shown}</div>
-      {needsToggle&&(
-        <button onClick={(e)=>{e.stopPropagation();setOpen(o=>!o);}} style={{marginTop:"6px",background:"transparent",border:"none",color:"#7C3AED",fontWeight:"700",fontSize:"12px",cursor:"pointer",padding:0,fontFamily:"inherit"}}>
-          {open?'Show less':'Read more →'}
-        </button>
-      )}
-    </div>
-  );
-}
-
 function PhotoStrip({photos,fallback="⭐",bg,onPhotoClick}){
   const [err,setErr]=useState({}); const [ld,setLd]=useState({0:true,1:true,2:true});
   const valid=(photos||[]).filter((_,i)=>_&&!err[i]);
@@ -328,7 +290,7 @@ function PhotoStrip({photos,fallback="⭐",bg,onPhotoClick}){
 }
 
 function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance}){
-  const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false); const [gallery,setGallery]=useState({open:false,idx:0});
+  const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false); const [hoursExp,setHoursExp]=useState(false); const [gallery,setGallery]=useState({open:false,idx:0});
   useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
   const name=a.displayName?.text||a.name||"Activity"; const st=openStatus(a);
   const hBg=st.isOpen===true?"#E8F5E9":st.isOpen===false?"#FFEBEE":"#F5F5F5";
@@ -358,9 +320,6 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
         {/* Rating */}
         {a.rating&&(<div style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:"10px"}}>{[1,2,3,4,5].map(n=><span key={n} style={{color:n<=Math.round(a.rating)?T.gold:"#E2E8F0",fontSize:"14px"}}>★</span>)}<span style={{fontWeight:"700",color:T.dark,fontSize:"13px"}}>{a.rating}</span>{a.userRatingCount>0&&<span style={{color:T.gray,fontSize:"12px"}}>({a.userRatingCount.toLocaleString()})</span>}</div>)}
 
-        {/* Quality meter */}
-        {a.qualityScore!==undefined&&<QualityMeter score={a.qualityScore}/>}
-
         {/* Traveler badges */}
         {a.badges?.length>0&&(
           <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"12px"}}>
@@ -376,9 +335,6 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
           </div>
         )}
 
-        {/* About This Place — expand/collapse panel, picks best of
-            editorialSummary / generativeSummary / synthetic aboutText */}
-        <AboutPanel a={a}/>
         {/* What People Love */}
         {a.highlights?.length>0&&(
           <div style={{marginBottom:"10px",padding:"10px 12px",background:"#F0FDF4",borderRadius:"12px",border:"1px solid #BBF7D0"}}>
@@ -428,10 +384,19 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
 
         <AnimatePresence>{exp&&(<motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
           <div style={{marginTop:"12px",display:"flex",flexDirection:"column",gap:"10px"}}>
+            {/* Daily hours — collapsed by default, tap header to expand
+                (matches PlacesToEat pattern). */}
             {a.hours?.length>0&&(
               <div style={{padding:"14px",background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2"}}>
-                <div style={{fontSize:"11px",color:T.gray,fontWeight:"700",marginBottom:"10px",textTransform:"uppercase",letterSpacing:"0.5px"}}>🕐 Daily Hours</div>
-                {a.hours.map((d,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(n=>d.toLowerCase().startsWith(n.toLowerCase()));const isT=di===today;const pts=d.split(":");const dn2=pts[0];const hrs=pts.slice(1).join(":").trim();return(<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:"13px",color:isT?T.accentD:T.dark,fontWeight:isT?"700":"400",padding:isT?"7px 10px":"5px 2px",background:isT?`${T.accent}12`:"transparent",margin:isT?"2px -2px":"0",borderRadius:isT?"8px":"0",borderLeft:isT?`3px solid ${T.accent}`:"3px solid transparent"}}><span>{dn2}{isT&&<span style={{fontSize:"10px",color:T.accent,marginLeft:"5px",fontWeight:"800"}}>TODAY</span>}</span><span style={{color:hrs.toLowerCase()==="closed"?T.coral:isT?T.accentD:T.gray}}>{hrs}</span></div>);})}
+                <button onClick={()=>setHoursExp(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
+                  <span style={{fontSize:"11px",color:T.gray,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>🕐 Daily Hours</span>
+                  <span style={{fontSize:"11px",color:T.gray}}>{hoursExp?"▲":"▼"}</span>
+                </button>
+                {hoursExp&&(
+                  <div style={{marginTop:"10px"}}>
+                    {a.hours.map((d,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(n=>d.toLowerCase().startsWith(n.toLowerCase()));const isT=di===today;const pts=d.split(":");const dn2=pts[0];const hrs=pts.slice(1).join(":").trim();return(<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:"13px",color:isT?T.accentD:T.dark,fontWeight:isT?"700":"400",padding:isT?"7px 10px":"5px 2px",background:isT?`${T.accent}12`:"transparent",margin:isT?"2px -2px":"0",borderRadius:isT?"8px":"0",borderLeft:isT?`3px solid ${T.accent}`:"3px solid transparent"}}><span>{dn2}{isT&&<span style={{fontSize:"10px",color:T.accent,marginLeft:"5px",fontWeight:"800"}}>TODAY</span>}</span><span style={{color:hrs.toLowerCase()==="closed"?T.coral:isT?T.accentD:T.gray}}>{hrs}</span></div>);})}
+                  </div>
+                )}
               </div>
             )}
             {/* AI Details — kind="attraction" so the Worker uses attraction-

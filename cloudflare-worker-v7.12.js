@@ -1441,7 +1441,11 @@ async function handleAIDetails(request, env) {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1500,
+        // Lowered 1500 -> 800. Caps generation time (Haiku ~80 tok/sec, so
+        // 1500 tokens could be 18s output alone). The AI Details fields
+        // are short and structured; 800 is plenty. Most cards average
+        // ~400-500 output tokens in practice.
+        max_tokens: 800,
         system: buildAIDetailsSystemPrompt(kind),
         messages: [{ role: 'user', content: userContent }]
       })
