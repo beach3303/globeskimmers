@@ -8,6 +8,7 @@ import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
 import AIDetailsSection from "@/components/AIDetailsSection";
+import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 
 // ─── THEME ─────────────────────────────────────────────────────────────────
 const TEAL = "#00BCD4";
@@ -115,7 +116,7 @@ function toM(s) {
 }
 
 // ─── PHOTO STRIP ───────────────────────────────────────────────────────────
-function PhotoStrip({ photos, fallbackIcon = "🚻" }) {
+function PhotoStrip({ photos, fallbackIcon = "🚻", onPhotoClick }) {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState({ 0: true, 1: true });
   const valid = (photos || []).filter((p, i) => p && !errors[i]);
@@ -126,7 +127,7 @@ function PhotoStrip({ photos, fallbackIcon = "🚻" }) {
     </div>
   );
   if (valid.length === 1) return (
-    <div style={{ position: "relative", height: "160px", overflow: "hidden" }}>
+    <div onClick={() => onPhotoClick?.(0)} style={{ position: "relative", height: "160px", overflow: "hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
       {loading[0] && <div style={{ position: "absolute", inset: 0, background: TEAL_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "36px" }}>{fallbackIcon}</div>}
       <img src={valid[0]} alt="" onError={() => setErrors(p => ({ ...p, 0: true }))} onLoad={() => setLoading(p => ({ ...p, 0: false }))}
         style={{ width: "100%", height: "160px", objectFit: "cover", opacity: loading[0] ? 0 : 1, transition: "opacity 0.4s" }} />
@@ -135,7 +136,7 @@ function PhotoStrip({ photos, fallbackIcon = "🚻" }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "60% 40%", height: "140px", overflow: "hidden" }}>
       {valid.slice(0, 2).map((url, i) => (
-        <div key={i} style={{ position: "relative", overflow: "hidden", borderRight: i === 0 ? "2px solid #fff" : "none" }}>
+        <div key={i} onClick={() => onPhotoClick?.(i)} style={{ position: "relative", overflow: "hidden", borderRight: i === 0 ? "2px solid #fff" : "none", cursor: onPhotoClick ? "pointer" : "default" }}>
           {loading[i] && <div style={{ position: "absolute", inset: 0, background: TEAL_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "28px" }}>{fallbackIcon}</div>}
           <img src={url} alt="" onError={() => setErrors(p => ({ ...p, [i]: true }))} onLoad={() => setLoading(p => ({ ...p, [i]: false }))}
             style={{ width: "100%", height: "140px", objectFit: "cover", opacity: loading[i] ? 0 : 1, transition: "opacity 0.4s" }} />
@@ -185,6 +186,9 @@ function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng })
 function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng, formatDistance }) {
   const [showDirs, setShowDirs] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // Fullscreen photo gallery — tap a photo on the card to enlarge.
+  // Swipe / arrow / dot indicator nav inside the modal, X to close.
+  const [gallery, setGallery] = useState({ open: false, idx: 0 });
 
   useEffect(() => { if (forceExpanded) setExpanded(true); }, [forceExpanded]);
 
@@ -210,7 +214,11 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
     >
       {/* Photo */}
       <div style={{ position: "relative" }}>
-        <PhotoStrip photos={r.photos} fallbackIcon={r.venueIcon || "🚻"} />
+        <PhotoStrip
+          photos={r.photos}
+          fallbackIcon={r.venueIcon || "🚻"}
+          onPhotoClick={(i) => setGallery({ open: true, idx: i })}
+        />
 
         {/* Rank */}
         <div style={{
@@ -372,6 +380,7 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
       </div>
 
       <DirectionsPicker isOpen={showDirs} onClose={() => setShowDirs(false)} lat={r.lat} lng={r.lng} name={name} userLat={userLat} userLng={userLng} />
+      <PhotoGalleryModal photos={r.photos || []} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
     </motion.div>
   );
 }
