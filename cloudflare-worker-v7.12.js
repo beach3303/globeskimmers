@@ -1017,6 +1017,245 @@ const ANALYTICS_QUERIES = {
     WHERE event_type = 'ai_details_fetched'
       AND ts >= strftime('%s','now','-7 days')
   `,
+  // ── PRICE SCANNER ANALYTICS ─────────────────────────────────────────────
+  // Each 'price_scan' event payload:
+  //   { country, city, target_currency, price_count, prices: [{currency, amount, amount_usd, context}, ...] }
+  // The dataset is the foundation for the monetizable "what do travelers
+  // buy / where / how much" intel.
+  price_scans_by_day_14d: `
+    SELECT
+      date(ts, 'unixepoch') AS day,
+      COUNT(*) AS scans,
+      COUNT(DISTINCT session_id) AS unique_sessions
+    FROM events
+    WHERE event_type = 'price_scan'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day
+    ORDER BY day ASC
+  `,
+  price_scans_by_country_30d: `
+    SELECT
+      json_extract(payload, '$.country') AS country,
+      COUNT(*) AS scans,
+      COUNT(DISTINCT session_id) AS unique_sessions
+    FROM events
+    WHERE event_type = 'price_scan'
+      AND json_extract(payload, '$.country') IS NOT NULL
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY country
+    ORDER BY scans DESC
+    LIMIT 30
+  `,
+  price_scans_by_city_30d: `
+    SELECT
+      json_extract(payload, '$.city') AS city,
+      json_extract(payload, '$.country') AS country,
+      COUNT(*) AS scans,
+      COUNT(DISTINCT session_id) AS unique_sessions
+    FROM events
+    WHERE event_type = 'price_scan'
+      AND json_extract(payload, '$.city') IS NOT NULL
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY city, country
+    ORDER BY scans DESC
+    LIMIT 50
+  `,
+  // Which source currencies are travelers most often photographing?
+  // Inferred from the FIRST detected price in each scan (good-enough proxy).
+  price_scans_by_currency_30d: `
+    SELECT
+      json_extract(payload, '$.prices[0].currency') AS currency,
+      COUNT(*) AS scans
+    FROM events
+    WHERE event_type = 'price_scan'
+      AND json_extract(payload, '$.prices[0].currency') IS NOT NULL
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY currency
+    ORDER BY scans DESC
+    LIMIT 30
+  `,
+  // What target currency are users converting INTO? (their home currency)
+  price_scans_target_currency_30d: `
+    SELECT
+      json_extract(payload, '$.target_currency') AS target_currency,
+      COUNT(*) AS scans,
+      COUNT(DISTINCT session_id) AS unique_sessions
+    FROM events
+    WHERE event_type = 'price_scan'
+      AND json_extract(payload, '$.target_currency') IS NOT NULL
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY target_currency
+    ORDER BY scans DESC
+  `,
+  // Single-row summary: total scans, unique sessions, avg prices per scan,
+  // avg USD-normalized spend per scan. Quick health-check metric.
+  price_scans_summary_30d: `
+    SELECT
+      COUNT(*) AS total_scans,
+      COUNT(DISTINCT session_id) AS unique_sessions,
+      AVG(CAST(json_extract(payload, '$.price_count') AS INTEGER)) AS avg_prices_per_scan,
+      AVG(CAST(json_extract(payload, '$.prices[0].amount_usd') AS REAL)) AS avg_first_price_usd
+    FROM events
+    WHERE event_type = 'price_scan'
+      AND ts >= strftime('%s','now','-30 days')
+  `,
+  // Most recent 50 price scans (raw feed for debugging / spot-check).
+  recent_price_scans: `
+    SELECT
+      ts,
+      session_id,
+      json_extract(payload, '$.country') AS country,
+      json_extract(payload, '$.city') AS city,
+      json_extract(payload, '$.target_currency') AS target_currency,
+      json_extract(payload, '$.price_count') AS price_count,
+      json_extract(payload, '$.prices[0].currency') AS first_currency,
+      json_extract(payload, '$.prices[0].amount') AS first_amount,
+      json_extract(payload, '$.prices[0].context') AS first_context
+    FROM events
+    WHERE event_type = 'price_scan'
+    ORDER BY ts DESC
+    LIMIT 50
+  `,
+  // ── PER-ITEM ROLLUPS (linked item x brand x location x price) ──────────
+  // The queries below use json_each to UNNEST the prices[] array so each
+  // detected item becomes its own analytic row. This is the core dataset
+  // for "what people are buying, what brand, where, how much."
+  //
+  // Phase 1 only populates item.context (item name from vision).
+  // Phase 2 will start populating item.brand and item.category as the
+  // multi-image capture flow lands -- these queries are forward-compatible
+  // and will start returning richer rows automatically once brand fills in.
+  //
+  // Top-scanned ITEMS across all geos -- "what travelers are pricing globally."
+  price_scan_top_items_30d: `
+    SELECT
+      LOWER(TRIM(json_extract(item.value, '$.context'))) AS item_name,
+      COUNT(*) AS sightings,
+      COUNT(DISTINCT json_extract(events.payload, '$.city')) AS cities_seen_in,
+      AVG(CAST(json_extract(item.value, '$.amount_usd') AS REAL)) AS avg_price_usd,
+      MIN(CAST(json_extract(item.value, '$.amount_usd') AS REAL)) AS min_price_usd,
+      MAX(CAST(json_extract(item.value, '$.amount_usd') AS REAL)) AS max_price_usd
+    FROM events, json_each(events.payload, '$.prices') AS item
+    WHERE events.event_type = 'price_scan'
+      AND json_extract(item.value, '$.context') IS NOT NULL
+      AND TRIM(json_extract(item.value, '$.context')) != ''
+      AND events.ts >= strftime('%s','now','-30 days')
+    GROUP BY item_name
+    ORDER BY sightings DESC
+    LIMIT 100
+  `,
+  // Top-scanned BRANDS across all geos -- Phase 2 will fill this in.
+  price_scan_top_brands_30d: `
+    SELECT
+      json_extract(item.value, '$.brand') AS brand,
+      COUNT(*) AS sightings,
+      COUNT(DISTINCT json_extract(events.payload, '$.city')) AS cities_seen_in,
+      AVG(CAST(json_extract(item.value, '$.amount_usd') AS REAL)) AS avg_price_usd
+    FROM events, json_each(events.payload, '$.prices') AS item
+    WHERE events.event_type = 'price_scan'
+      AND json_extract(item.value, '$.brand') IS NOT NULL
+      AND events.ts >= strftime('%s','now','-30 days')
+    GROUP BY brand
+    ORDER BY sightings DESC
+    LIMIT 50
+  `,
+  // FULL JOIN ROLLUP: item x brand x city x country x avg price.
+  // This is the saleable intel -- "Starbucks latte, Bangkok, avg THB 165
+  // across 23 scans". Phase 2 brand-detection makes this complete.
+  price_scan_item_brand_city_30d: `
+    SELECT
+      LOWER(TRIM(json_extract(item.value, '$.context'))) AS item_name,
+      json_extract(item.value, '$.brand') AS brand,
+      json_extract(events.payload, '$.city') AS city,
+      json_extract(events.payload, '$.country') AS country,
+      json_extract(item.value, '$.currency') AS local_currency,
+      AVG(CAST(json_extract(item.value, '$.amount') AS REAL)) AS avg_price_local,
+      AVG(CAST(json_extract(item.value, '$.amount_usd') AS REAL)) AS avg_price_usd,
+      COUNT(*) AS sightings
+    FROM events, json_each(events.payload, '$.prices') AS item
+    WHERE events.event_type = 'price_scan'
+      AND json_extract(item.value, '$.context') IS NOT NULL
+      AND json_extract(events.payload, '$.city') IS NOT NULL
+      AND events.ts >= strftime('%s','now','-30 days')
+    GROUP BY item_name, brand, city, country, local_currency
+    ORDER BY sightings DESC
+    LIMIT 200
+  `,
+  // ── DEAL-VERDICT BENCHMARKS (powers the user-facing "is this a good
+  // deal?" answer in Phase 3) ────────────────────────────────────────────
+  // The queries below answer the THREE questions a traveler is asking:
+  //   1. "Is this price typical FOR THIS CITY?"  -> _item_price_by_city
+  //   2. "Is this price typical FOR THIS BRAND GLOBALLY?" -> _brand_price_by_city
+  //   3. "Is this price typical FOR THIS ITEM GLOBALLY?" -> _item_global_range
+  //
+  // Each returns min / avg / max (and sightings count for confidence). The
+  // Phase 3 deal-verdict layer composes these into "Fair / Pricey /
+  // Overpriced" using the user-paid amount + these distributions.
+
+  // Q1 -- "Is this latte expensive for Bangkok?"
+  // Pass ?param=latte to filter to that item across all Bangkok scans.
+  // Used in the result card: "Avg local latte: THB 120-180. You paid THB 165."
+  price_scan_item_price_by_city_30d: `
+    SELECT
+      json_extract(events.payload, '$.city') AS city,
+      json_extract(events.payload, '$.country') AS country,
+      json_extract(item.value, '$.currency') AS local_currency,
+      COUNT(*) AS sightings,
+      MIN(CAST(json_extract(item.value, '$.amount') AS REAL)) AS min_local,
+      AVG(CAST(json_extract(item.value, '$.amount') AS REAL)) AS avg_local,
+      MAX(CAST(json_extract(item.value, '$.amount') AS REAL)) AS max_local,
+      AVG(CAST(json_extract(item.value, '$.amount_usd') AS REAL)) AS avg_usd
+    FROM events, json_each(events.payload, '$.prices') AS item
+    WHERE events.event_type = 'price_scan'
+      AND events.ts >= strftime('%s','now','-30 days')
+      AND LOWER(TRIM(json_extract(item.value, '$.context'))) LIKE LOWER(TRIM(COALESCE(?, '')))
+    GROUP BY city, country, local_currency
+    HAVING sightings >= 2
+    ORDER BY sightings DESC
+    LIMIT 100
+  `,
+  // Q2 -- "Is this Starbucks latte expensive vs. Starbucks lattes globally?"
+  // Pass ?param=starbucks. Phase 2 populates the brand field; until then
+  // this returns empty. Used in the result card: "Globally fair vs. brand
+  // avg $4.20. You paid $4.50."
+  price_scan_brand_price_by_city_30d: `
+    SELECT
+      json_extract(events.payload, '$.city') AS city,
+      json_extract(events.payload, '$.country') AS country,
+      json_extract(item.value, '$.currency') AS local_currency,
+      COUNT(*) AS sightings,
+      MIN(CAST(json_extract(item.value, '$.amount_usd') AS REAL)) AS min_usd,
+      AVG(CAST(json_extract(item.value, '$.amount_usd') AS REAL)) AS avg_usd,
+      MAX(CAST(json_extract(item.value, '$.amount_usd') AS REAL)) AS max_usd
+    FROM events, json_each(events.payload, '$.prices') AS item
+    WHERE events.event_type = 'price_scan'
+      AND events.ts >= strftime('%s','now','-30 days')
+      AND LOWER(TRIM(json_extract(item.value, '$.brand'))) LIKE LOWER(TRIM(COALESCE(?, '')))
+    GROUP BY city, country, local_currency
+    HAVING sightings >= 2
+    ORDER BY avg_usd DESC
+    LIMIT 100
+  `,
+  // Q3 -- "What's a typical latte price ANYWHERE in the world?"
+  // Pass ?param=latte. Returns global min/avg/max in USD-normalized terms.
+  // Used when no city-specific data yet -- still gives the user SOMETHING
+  // ("globally, lattes range $1.50 -- $6 USD; you paid $4.50 -- mid range").
+  price_scan_item_global_range_30d: `
+    SELECT
+      LOWER(TRIM(json_extract(item.value, '$.context'))) AS item_name,
+      COUNT(*) AS sightings,
+      COUNT(DISTINCT json_extract(events.payload, '$.city')) AS cities_seen_in,
+      MIN(CAST(json_extract(item.value, '$.amount_usd') AS REAL)) AS min_usd,
+      AVG(CAST(json_extract(item.value, '$.amount_usd') AS REAL)) AS avg_usd,
+      MAX(CAST(json_extract(item.value, '$.amount_usd') AS REAL)) AS max_usd
+    FROM events, json_each(events.payload, '$.prices') AS item
+    WHERE events.event_type = 'price_scan'
+      AND events.ts >= strftime('%s','now','-30 days')
+      AND LOWER(TRIM(json_extract(item.value, '$.context'))) LIKE LOWER(TRIM(COALESCE(?, '')))
+    GROUP BY item_name
+    HAVING sightings >= 3
+    LIMIT 10
+  `,
 };
 
 async function handleAnalyticsQuery(request, env) {
@@ -1039,7 +1278,12 @@ async function handleAnalyticsQuery(request, env) {
         available: Object.keys(ANALYTICS_QUERIES),
       }, 400);
     }
-    const { results } = await env.DB.prepare(sql).all();
+    // Optional ?param=... for parameterized queries (e.g. item-name filter
+    // on price_scan_item_price_by_city_30d). Wraps in % for LIKE matching.
+    const param = url.searchParams.get('param');
+    const stmt = env.DB.prepare(sql);
+    const bound = param ? stmt.bind(`%${param}%`) : stmt;
+    const { results } = await bound.all();
     return jsonResponse({ type, results: results || [] });
   } catch (e) {
     return jsonResponse({ error: e.message, results: [] }, 500);
