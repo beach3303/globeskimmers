@@ -8,6 +8,7 @@ import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
+import AIDetailsSection from "@/components/AIDetailsSection";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 
@@ -420,13 +421,31 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
         <div style={{display:"flex",gap:"8px"}}>
           <motion.button whileTap={{scale:0.96}} onClick={()=>setDirs(true)} style={{flex:2,display:"flex",alignItems:"center",justifyContent:"center",gap:"7px",padding:"12px",borderRadius:"12px",border:"none",fontSize:"14px",fontWeight:"700",cursor:"pointer",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontFamily:"inherit",boxShadow:`0 4px 14px ${T.accent}40`}}>🧭 Directions</motion.button>
           <motion.button whileTap={{scale:0.96}} onClick={()=>onMap?.(index)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",padding:"12px",borderRadius:"12px",border:"none",fontSize:"13px",fontWeight:"700",cursor:"pointer",background:"#EDE9FE",color:"#7C3AED",fontFamily:"inherit"}}>🗺️ Map</motion.button>
-          {a.hours?.length>0&&(<motion.button whileTap={{scale:0.96}} onClick={()=>setExp(e=>!e)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"12px",borderRadius:"12px",border:"none",fontSize:"13px",fontWeight:"700",cursor:"pointer",background:exp?T.dark:T.grayL,color:exp?"#fff":T.dark,fontFamily:"inherit"}}>{exp?"▲":"▼ Hrs"}</motion.button>)}
+          {/* Details button always renders so AI Details is reachable
+              even on activities without published hours. */}
+          <motion.button whileTap={{scale:0.96}} onClick={()=>setExp(e=>!e)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"12px",borderRadius:"12px",border:"none",fontSize:"13px",fontWeight:"700",cursor:"pointer",background:exp?T.dark:T.grayL,color:exp?"#fff":T.dark,fontFamily:"inherit"}}>{exp?"▲":"▼ Details"}</motion.button>
         </div>
 
-        <AnimatePresence>{exp&&a.hours?.length>0&&(<motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}><div style={{marginTop:"12px",padding:"14px",background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2"}}>
-          <div style={{fontSize:"11px",color:T.gray,fontWeight:"700",marginBottom:"10px",textTransform:"uppercase",letterSpacing:"0.5px"}}>🕐 Weekly Hours</div>
-          {a.hours.map((d,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(n=>d.toLowerCase().startsWith(n.toLowerCase()));const isT=di===today;const pts=d.split(":");const dn2=pts[0];const hrs=pts.slice(1).join(":").trim();return(<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:"13px",color:isT?T.accentD:T.dark,fontWeight:isT?"700":"400",padding:isT?"7px 10px":"5px 2px",background:isT?`${T.accent}12`:"transparent",margin:isT?"2px -2px":"0",borderRadius:isT?"8px":"0",borderLeft:isT?`3px solid ${T.accent}`:"3px solid transparent"}}><span>{dn2}{isT&&<span style={{fontSize:"10px",color:T.accent,marginLeft:"5px",fontWeight:"800"}}>TODAY</span>}</span><span style={{color:hrs.toLowerCase()==="closed"?T.coral:isT?T.accentD:T.gray}}>{hrs}</span></div>);})}
-        </div></motion.div>)}</AnimatePresence>
+        <AnimatePresence>{exp&&(<motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
+          <div style={{marginTop:"12px",display:"flex",flexDirection:"column",gap:"10px"}}>
+            {a.hours?.length>0&&(
+              <div style={{padding:"14px",background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2"}}>
+                <div style={{fontSize:"11px",color:T.gray,fontWeight:"700",marginBottom:"10px",textTransform:"uppercase",letterSpacing:"0.5px"}}>🕐 Daily Hours</div>
+                {a.hours.map((d,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(n=>d.toLowerCase().startsWith(n.toLowerCase()));const isT=di===today;const pts=d.split(":");const dn2=pts[0];const hrs=pts.slice(1).join(":").trim();return(<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:"13px",color:isT?T.accentD:T.dark,fontWeight:isT?"700":"400",padding:isT?"7px 10px":"5px 2px",background:isT?`${T.accent}12`:"transparent",margin:isT?"2px -2px":"0",borderRadius:isT?"8px":"0",borderLeft:isT?`3px solid ${T.accent}`:"3px solid transparent"}}><span>{dn2}{isT&&<span style={{fontSize:"10px",color:T.accent,marginLeft:"5px",fontWeight:"800"}}>TODAY</span>}</span><span style={{color:hrs.toLowerCase()==="closed"?T.coral:isT?T.accentD:T.gray}}>{hrs}</span></div>);})}
+              </div>
+            )}
+            {/* AI Details — kind="attraction" so the Worker uses attraction-
+                specific voice (must-see, best time, photo spots, accessibility,
+                language tips). Returns red flag if reviews show genuine
+                worldwide safety concerns. */}
+            <AIDetailsSection
+              placeId={a.placeId || a.id}
+              placeName={name}
+              page="ThingsToDo"
+              kind="attraction"
+            />
+          </div>
+        </motion.div>)}</AnimatePresence>
       </div>
       <Directions isOpen={dirs} onClose={()=>setDirs(false)} lat={a.lat} lng={a.lng} name={name} userLat={userLat} userLng={userLng}/>
       <PhotoGalleryModal photos={a.photos||[]} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>

@@ -7,6 +7,7 @@ import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
+import AIDetailsSection from "@/components/AIDetailsSection";
 
 // ─── THEME ─────────────────────────────────────────────────────────────────
 const TEAL = "#00BCD4";
@@ -356,22 +357,22 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
             style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "12px", borderRadius: "12px", border: "none", fontSize: "13px", fontWeight: "700", cursor: "pointer", background: "#EDE7F6", color: PURPLE, fontFamily: "inherit" }}>
             🗺️ Map
           </button>
-          {(weekdayDesc.length > 0 || r.websiteUri || r.website) && (
-            <button onClick={() => { const n = !expanded; setExpanded(n); onExpandChange?.(n); }}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", borderRadius: "12px", border: "none", fontSize: "13px", fontWeight: "700", cursor: "pointer", background: expanded ? DARK : GRAY_LIGHT, color: expanded ? "#fff" : DARK, fontFamily: "inherit" }}>
-              {expanded ? "▲ Less" : "▼ Details"}
-            </button>
-          )}
+          {/* Details button always renders so AI Details is reachable
+              even on restrooms without hours or website. */}
+          <button onClick={() => { const n = !expanded; setExpanded(n); onExpandChange?.(n); }}
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", borderRadius: "12px", border: "none", fontSize: "13px", fontWeight: "700", cursor: "pointer", background: expanded ? DARK : GRAY_LIGHT, color: expanded ? "#fff" : DARK, fontFamily: "inherit" }}>
+            {expanded ? "▲ Less" : "▼ Details"}
+          </button>
         </div>
 
-        {/* Expanded hours + website */}
+        {/* Expanded view: Daily Hours + AI Details + Website */}
         <AnimatePresence>
-          {expanded && (weekdayDesc.length > 0 || r.websiteUri || r.website) && (
+          {expanded && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: "hidden" }}>
-              <div style={{ marginTop: "12px", padding: "12px", background: "#F8FAFC", borderRadius: "12px", border: "1px solid #E8EDF2" }}>
+              <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
                 {weekdayDesc.length > 0 && (
-                  <>
-                    <div style={{ fontSize: "11px", color: GRAY, fontWeight: "700", marginBottom: "8px", textTransform: "uppercase" }}>🕐 Weekly Hours</div>
+                  <div style={{ padding: "12px", background: "#F8FAFC", borderRadius: "12px", border: "1px solid #E8EDF2" }}>
+                    <div style={{ fontSize: "11px", color: GRAY, fontWeight: "700", marginBottom: "8px", textTransform: "uppercase" }}>🕐 Daily Hours</div>
                     {weekdayDesc.map((day, i) => {
                       const today = new Date().getDay();
                       const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -385,10 +386,20 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
                         </div>
                       );
                     })}
-                  </>
+                  </div>
                 )}
+                {/* AI Details — kind="restroom" so the Worker uses restroom-
+                    specific voice (toilet paper / soap / paid/free / squat
+                    vs sit / safety). Can return 0 stars if dirty, red flag
+                    if unsafe. */}
+                <AIDetailsSection
+                  placeId={r.placeId || r.id}
+                  placeName={name}
+                  page="RestroomFinder"
+                  kind="restroom"
+                />
                 {(r.websiteUri || r.website) && (
-                  <a href={r.websiteUri || r.website} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: weekdayDesc.length > 0 ? "10px" : "0", padding: "8px 10px", background: "#fff", border: "1px solid #E2E8F0", borderRadius: "8px", textDecoration: "none", color: TEAL_DARK, fontSize: "13px", fontWeight: "600" }}>🌐 Visit Website</a>
+                  <a href={r.websiteUri || r.website} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 10px", background: "#fff", border: "1px solid #E2E8F0", borderRadius: "8px", textDecoration: "none", color: TEAL_DARK, fontSize: "13px", fontWeight: "600" }}>🌐 Visit Website</a>
                 )}
               </div>
             </motion.div>
