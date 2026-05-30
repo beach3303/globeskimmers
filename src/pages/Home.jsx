@@ -451,7 +451,6 @@ export default function HomePage() {
               <span className="text-2xl">💱</span>
               <div className="text-left">
                 <span className="text-lg font-bold text-white block">Money Exchange</span>
-                <span className="text-xs text-white/80">Compare rates near you</span>
               </div>
             </div>
           </motion.button>
