@@ -192,11 +192,20 @@ function normalizeStore(store) {
 function PhotoGallery({ photos, storeName, onClose }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const touchStartX = useRef(0);
-  
+
+  const goToPrevious = (e) => {
+    if (e) e.stopPropagation();
+    setCurrentIndex((prev) => (prev === 0 ? photos.length - 1 : prev - 1));
+  };
+  const goToNext = (e) => {
+    if (e) e.stopPropagation();
+    setCurrentIndex((prev) => (prev === photos.length - 1 ? 0 : prev + 1));
+  };
+
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches[0].clientX;
   };
-  
+
   const handleTouchEnd = (e) => {
     const diff = touchStartX.current - e.changedTouches[0].clientX;
     if (Math.abs(diff) > 50) {
@@ -207,7 +216,7 @@ function PhotoGallery({ photos, storeName, onClose }) {
       }
     }
   };
-  
+
   if (!photos || photos.length === 0) return null;
   
   return (
@@ -248,7 +257,7 @@ function PhotoGallery({ photos, storeName, onClose }) {
         ✕
       </button>
       
-      {/* Photo */}
+      {/* Photo + side arrows (arrows only visible when >1 photo) */}
       <div
         style={{
           width: '100%',
@@ -256,12 +265,37 @@ function PhotoGallery({ photos, storeName, onClose }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '20px'
+          padding: '20px',
+          position: 'relative'
         }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         onClick={(e) => e.stopPropagation()}
       >
+        {photos.length > 1 && (
+          <button
+            onClick={goToPrevious}
+            aria-label="Previous photo"
+            style={{
+              position: 'absolute',
+              left: '16px',
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              border: 'none',
+              background: 'rgba(255,255,255,0.2)',
+              color: '#fff',
+              fontSize: '22px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 5
+            }}
+          >
+            ‹
+          </button>
+        )}
         <img
           src={getPhotoUrl(photos[currentIndex], 800)}
           alt={`${storeName} ${currentIndex + 1}`}
@@ -272,6 +306,30 @@ function PhotoGallery({ photos, storeName, onClose }) {
             borderRadius: '12px'
           }}
         />
+        {photos.length > 1 && (
+          <button
+            onClick={goToNext}
+            aria-label="Next photo"
+            style={{
+              position: 'absolute',
+              right: '16px',
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              border: 'none',
+              background: 'rgba(255,255,255,0.2)',
+              color: '#fff',
+              fontSize: '22px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 5
+            }}
+          >
+            ›
+          </button>
+        )}
       </div>
       
       {/* Dots Indicator */}
