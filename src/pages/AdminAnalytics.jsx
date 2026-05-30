@@ -14,7 +14,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
-import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Image, Sparkles, DollarSign, Zap } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap } from 'lucide-react';
 
 const ADMIN_EMAILS = ['maizasimeon@gmail.com', 'founder@globeskimmers.io'];
 
@@ -114,7 +114,6 @@ export default function AdminAnalytics() {
   const zeroResults = data?.top_zero_results?.results || [];
   const topSearches = data?.top_searches_7d?.results || [];
   const eventsByDay = data?.events_by_day_14d?.results || [];
-  const dishSearches = data?.dish_gallery_searches?.results || [];
   const aiOpensByDay = data?.ai_details_opens_by_day_14d?.results || [];
   const aiOpensPerSession = data?.ai_details_per_session_7d?.results || [];
   const totalAIOpens = aiOpensByDay.reduce((sum, d) => sum + (d.opens || 0), 0);
@@ -139,7 +138,6 @@ export default function AdminAnalytics() {
   const maxEventCount = Math.max(...eventBreakdown.map(e => e.count || 0), 1);
   const maxZero = Math.max(...zeroResults.map(z => z.hits || 0), 1);
   const maxSearches = Math.max(...topSearches.map(s => s.hits || 0), 1);
-  const maxDish = Math.max(...dishSearches.map(d => d.searches || 0), 1);
   const maxDay = Math.max(...eventsByDay.map(d => d.count || 0), 1);
   const maxAIOpensDay = Math.max(...aiOpensByDay.map(d => d.opens || 0), 1);
   const maxAIPerSession = Math.max(...aiOpensPerSession.map(s => s.distinct_places_opened || 0), 1);
@@ -371,17 +369,6 @@ export default function AdminAnalytics() {
               ))}
             </Section>
 
-            <Section title="Dish Gallery searches (30d)" icon={Image} empty={dishSearches.length === 0 ? 'No dish gallery usage yet.' : null}>
-              {dishSearches.map((d, i) => (
-                <BarRow
-                  key={i}
-                  label={`${d.query} · avg ${Math.round(d.avg_photos || 0)} photos`}
-                  count={d.searches}
-                  max={maxDish}
-                  color={COLORS.amber}
-                />
-              ))}
-            </Section>
           </>
         )}
       </div>

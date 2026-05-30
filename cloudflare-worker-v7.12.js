@@ -929,19 +929,6 @@ const ANALYTICS_QUERIES = {
     GROUP BY day
     ORDER BY day ASC
   `,
-  // Dish gallery searches by query
-  dish_gallery_searches: `
-    SELECT
-      json_extract(payload, '$.query') AS query,
-      COUNT(*) AS searches,
-      AVG(CAST(json_extract(payload, '$.photoCount') AS INTEGER)) AS avg_photos
-    FROM events
-    WHERE event_type = 'dish_gallery_search'
-      AND ts >= strftime('%s','now','-30 days')
-    GROUP BY query
-    ORDER BY searches DESC
-    LIMIT 20
-  `,
   // Most recent 50 events (raw feed for debugging)
   recent_events: `
     SELECT ts, page, event_type, payload, session_id

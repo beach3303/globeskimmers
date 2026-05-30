@@ -32,7 +32,6 @@ const DEFAULT_QUERIES = [
   "top_zero_results",
   "top_searches_7d",
   "events_by_day_14d",
-  "dish_gallery_searches",
   "ai_details_opens_by_day_14d",
   "ai_details_per_session_7d",
   "ai_details_paid_by_day_14d",
