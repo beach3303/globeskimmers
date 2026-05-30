@@ -79,13 +79,6 @@ const QUICK_FILTERS = [
   { id: 'food', label: 'Hot Food', icon: '🍔', key: 'hasHotFood' }
 ];
 
-const ADVANCED_FILTERS = [
-  { id: 'pharmacy', label: 'Pharmacy', icon: '💊', key: 'hasPharmacy' },
-  { id: 'gas', label: 'Gas Station', icon: '⛽', key: 'hasGas' },
-  { id: 'coffee', label: 'Coffee', icon: '☕', key: 'hasCoffee' },
-  { id: 'restroom', label: 'Restrooms', icon: '🚻', key: 'hasRestroom' },
-  { id: 'cards', label: 'Cards OK', icon: '💳', key: 'acceptsCards' }
-];
 
 // ============================================================================
 // WORKER CONFIG
@@ -916,7 +909,6 @@ export default function ConvenienceStorePage() {
 
   // Filters
   const [activeFilters, setActiveFilters] = useState({});
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [searchRadius, setSearchRadius] = useState(10);
 
   // Auto-size radius when user picks a city — wider default to cover the metro.
@@ -1223,171 +1215,8 @@ export default function ConvenienceStorePage() {
               onToggle={() => toggleFilter(filter.key)}
             />
           ))}
-          
-          {/* More Filters Button */}
-          <button
-            onClick={() => setShowAdvancedFilters(true)}
-            style={{
-              background: activeFilterCount > 0 ? COLORS.accent : '#fff',
-              color: activeFilterCount > 0 ? '#fff' : COLORS.text,
-              border: activeFilterCount > 0 ? 'none' : `1px solid ${COLORS.border}`,
-              padding: '10px 16px',
-              borderRadius: '24px',
-              fontSize: '14px',
-              fontWeight: '500',
-              whiteSpace: 'nowrap',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            ⚙️ More
-            {activeFilterCount > 0 && (
-              <span style={{
-                background: 'rgba(255,255,255,0.3)',
-                padding: '2px 8px',
-                borderRadius: '10px',
-                fontSize: '12px'
-              }}>
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
         </div>
       </div>
-      
-      {/* Advanced Filters Modal */}
-      {showAdvancedFilters && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.5)',
-          zIndex: 200,
-          display: 'flex',
-          alignItems: 'flex-end'
-        }}>
-          <div style={{
-            background: '#fff',
-            width: '100%',
-            maxHeight: '75vh',
-            borderRadius: '24px 24px 0 0',
-            overflow: 'auto',
-            padding: '24px 20px'
-          }}>
-            {/* Sticky Close Button */}
-            <button
-              onClick={() => setShowAdvancedFilters(false)}
-              style={{
-                position: 'sticky',
-                top: 0,
-                float: 'right',
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                border: 'none',
-                background: COLORS.dark,
-                color: '#fff',
-                fontSize: '18px',
-                fontWeight: '700',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 10,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-              }}
-            >
-              ✕
-            </button>
-            
-            <h2 style={{
-              fontSize: '20px',
-              fontWeight: '700',
-              marginBottom: '20px',
-              color: COLORS.text
-            }}>
-              Filters
-            </h2>
-            
-            {/* All Filter Options */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '12px',
-              marginBottom: '24px'
-            }}>
-              {[...QUICK_FILTERS, ...ADVANCED_FILTERS].map(filter => (
-                <button
-                  key={filter.id}
-                  onClick={() => toggleFilter(filter.key)}
-                  style={{
-                    background: activeFilters[filter.key] ? COLORS.primary : '#F8FAFC',
-                    color: activeFilters[filter.key] ? '#fff' : COLORS.text,
-                    border: activeFilters[filter.key] ? 'none' : `1px solid ${COLORS.border}`,
-                    padding: '14px 16px',
-                    borderRadius: '14px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <span style={{ fontSize: '18px' }}>{filter.icon}</span>
-                  <span>{filter.label}</span>
-                </button>
-              ))}
-            </div>
-            
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                onClick={clearFilters}
-                style={{
-                  flex: 1,
-                  background: '#F1F5F9',
-                  color: COLORS.text,
-                  border: 'none',
-                  padding: '16px',
-                  borderRadius: '14px',
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  cursor: 'pointer'
-                }}
-              >
-                Clear All
-              </button>
-              <button
-                onClick={() => {
-                  setShowAdvancedFilters(false);
-                  fetchStores();
-                }}
-                style={{
-                  flex: 2,
-                  background: COLORS.primary,
-                  color: '#fff',
-                  border: 'none',
-                  padding: '16px',
-                  borderRadius: '14px',
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(30,58,95,0.3)'
-                }}
-              >
-                Apply Filters
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       
       {/* Results */}
       <div style={{ padding: '16px' }}>
