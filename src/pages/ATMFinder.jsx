@@ -7,6 +7,8 @@ import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
+import AIDetailsSection from "@/components/AIDetailsSection";
+import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 
 // ─── THEME ─────────────────────────────────────────────────────────────────
 const TEAL      = "#00BCD4";
@@ -194,7 +196,7 @@ function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng })
 }
 
 // ─── PHOTO STRIP (up to 2 photos) ──────────────────────────────────────────
-function ATMPhotoStrip({ photos, fallbackIcon = "🏧" }) {
+function ATMPhotoStrip({ photos, fallbackIcon = "🏧", onPhotoClick }) {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState({ 0: true, 1: true });
 
@@ -210,7 +212,7 @@ function ATMPhotoStrip({ photos, fallbackIcon = "🏧" }) {
 
   if (validPhotos.length === 1) {
     return (
-      <div style={{ position:"relative", height:"160px", overflow:"hidden" }}>
+      <div onClick={() => onPhotoClick?.(0)} style={{ position:"relative", height:"160px", overflow:"hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
         {loading[0] && (
           <div style={{ position:"absolute", inset:0, background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"36px" }}>🏧</div>
         )}
@@ -224,7 +226,7 @@ function ATMPhotoStrip({ photos, fallbackIcon = "🏧" }) {
   return (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:"140px", overflow:"hidden", gap:"2px" }}>
       {validPhotos.slice(0,2).map((url, i) => (
-        <div key={i} style={{ position:"relative", overflow:"hidden" }}>
+        <div key={i} onClick={() => onPhotoClick?.(i)} style={{ position:"relative", overflow:"hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
           {loading[i] && (
             <div style={{ position:"absolute", inset:0, background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"28px" }}>🏧</div>
           )}
@@ -240,6 +242,9 @@ function ATMPhotoStrip({ photos, fallbackIcon = "🏧" }) {
 function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng, formatDistance }) {
   const [showDirs, setShowDirs] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [hoursExpanded, setHoursExpanded] = useState(false);
+  // Fullscreen photo gallery — tap a photo on the card to enlarge.
+  const [gallery, setGallery] = useState({ open: false, idx: 0 });
 
   useEffect(() => { if (forceExpanded) setExpanded(true); }, [forceExpanded]);
 
@@ -285,9 +290,13 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
         transition:"box-shadow 0.3s, border 0.3s",
       }}
     >
-      {/* Photo strip — up to 2 */}
+      {/* Photo strip — up to 2 (tappable to enlarge in fullscreen modal) */}
       <div style={{ position:"relative" }}>
-        <ATMPhotoStrip photos={atm.photos} fallbackIcon={atm.venueIcon || "🏧"} />
+        <ATMPhotoStrip
+          photos={atm.photos}
+          fallbackIcon={atm.venueIcon || "🏧"}
+          onPhotoClick={(i) => setGallery({ open: true, idx: i })}
+        />
         {/* Index badge */}
         <div style={{ position:"absolute", top:"10px", left:"10px", background:TEAL, color:"#fff", width:"28px", height:"28px", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:"800", fontSize:"13px" }}>{index+1}</div>
         {/* Network badge */}
@@ -368,52 +377,68 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
           </div>
         )}
 
-        {/* Action buttons */}
+        {/* Action buttons — Details always renders so AI Details is reachable
+            even on ATMs without hours/website. */}
         <div style={{ display:"flex", gap:"8px", flexWrap:"wrap" }}>
           <button onClick={() => setShowDirs(true)} style={btn(TEAL, "#fff")}>🧭 Directions</button>
           <button onClick={() => onShowOnMap?.(index)} style={btn("#EDE7F6", PURPLE)}>📍 Map</button>
-          {(atm.weekdayDescriptions?.length > 0 || atm.websiteUri || atm.website) && (
-            <button onClick={() => { const n=!expanded; setExpanded(n); onExpandChange?.(n); }} style={btn(expanded ? DARK : "#F1F5F9", expanded ? "#fff" : DARK)}>
-              {expanded ? "▲ Less" : "▼ Details"}
-            </button>
-          )}
+          <button onClick={() => { const n=!expanded; setExpanded(n); onExpandChange?.(n); }} style={btn(expanded ? DARK : "#F1F5F9", expanded ? "#fff" : DARK)}>
+            {expanded ? "▲ Less" : "▼ Details"}
+          </button>
         </div>
 
-        {/* Expanded full week hours + website */}
+        {/* Expanded view — Daily Hours (collapsible) + AI Details + Website.
+            Matches the pattern in PlacesToEat / CoffeeFinder / RestroomFinder. */}
         <AnimatePresence>
-          {expanded && (atm.weekdayDescriptions?.length > 0 || atm.websiteUri || atm.website) && (
+          {expanded && (
             <motion.div initial={{ height:0, opacity:0 }} animate={{ height:"auto", opacity:1 }} exit={{ height:0, opacity:0 }} style={{ overflow:"hidden" }}>
-              <div style={{ marginTop:"12px", padding:"12px", background:"#F8FAFC", borderRadius:"10px" }}>
+              <div style={{ marginTop:"12px", display:"flex", flexDirection:"column", gap:"10px" }}>
                 {atm.weekdayDescriptions?.length > 0 && (
-                  <>
-                    <div style={{ fontSize:"12px", color:GRAY, fontWeight:"600", marginBottom:"8px", textTransform:"uppercase" }}>🕐 Full Week Hours</div>
-                    {atm.weekdayDescriptions.map((day, i) => {
-                      const today = new Date().getDay();
-                      const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-                      const dayIdx = dayNames.findIndex(d => day.toLowerCase().startsWith(d.toLowerCase()));
-                      const isToday = dayIdx === today;
-                      const parts = day.split(":");
-                      const dayName = parts[0];
-                      const hrs = parts.slice(1).join(":").trim();
-                      return (
-                        <div key={i} style={{
-                          display:"flex", justifyContent:"space-between",
-                          fontSize:"13px", color: isToday ? TEAL_DARK : DARK,
-                          fontWeight: isToday ? "700" : "400",
-                          padding: isToday ? "6px 8px" : "5px 0",
-                          background: isToday ? `${TEAL}15` : "transparent",
-                          margin: isToday ? "0 -4px" : "0",
-                          borderRadius: isToday ? "6px" : "0"
-                        }}>
-                          <span>{dayName}{isToday && " (Today)"}</span>
-                          <span>{hrs}</span>
-                        </div>
-                      );
-                    })}
-                  </>
+                  <div style={{ padding:"12px", background:"#F8FAFC", borderRadius:"10px" }}>
+                    <button onClick={() => setHoursExpanded(h => !h)} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"transparent", border:"none", padding:0, cursor:"pointer", fontFamily:"inherit" }}>
+                      <span style={{ fontSize:"11px", color:GRAY, fontWeight:"700", letterSpacing:"0.5px" }}>🕐 DAILY HOURS</span>
+                      <span style={{ fontSize:"11px", color:GRAY }}>{hoursExpanded ? "▲" : "▼"}</span>
+                    </button>
+                    {hoursExpanded && (
+                      <div style={{ marginTop:"8px" }}>
+                        {atm.weekdayDescriptions.map((day, i) => {
+                          const today = new Date().getDay();
+                          const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+                          const dayIdx = dayNames.findIndex(d => day.toLowerCase().startsWith(d.toLowerCase()));
+                          const isToday = dayIdx === today;
+                          const parts = day.split(":");
+                          const dayName = parts[0];
+                          const hrs = parts.slice(1).join(":").trim();
+                          return (
+                            <div key={i} style={{
+                              display:"flex", justifyContent:"space-between",
+                              fontSize:"13px", color: isToday ? TEAL_DARK : DARK,
+                              fontWeight: isToday ? "700" : "400",
+                              padding: isToday ? "6px 8px" : "5px 0",
+                              background: isToday ? `${TEAL}15` : "transparent",
+                              margin: isToday ? "0 -4px" : "0",
+                              borderRadius: isToday ? "6px" : "0"
+                            }}>
+                              <span>{dayName}{isToday && " (Today)"}</span>
+                              <span>{hrs}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 )}
+                {/* AI Details — kind="atm" so the Worker uses ATM-specific
+                    voice (location specifics, foreign card support, fees,
+                    safety) and 1-5 stars with red flag for unsafe ATMs. */}
+                <AIDetailsSection
+                  placeId={atm.placeId || atm.id}
+                  placeName={name}
+                  page="ATMFinder"
+                  kind="atm"
+                />
                 {(atm.websiteUri || atm.website) && (
-                  <a href={atm.websiteUri || atm.website} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", gap:"8px", marginTop: atm.weekdayDescriptions?.length > 0 ? "10px" : "0", padding:"8px 10px", background:"#fff", border:"1px solid #E2E8F0", borderRadius:"8px", textDecoration:"none", color:TEAL_DARK, fontSize:"13px", fontWeight:"600" }}>🌐 Visit Website</a>
+                  <a href={atm.websiteUri || atm.website} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 12px", background:"#fff", border:"1px solid #E2E8F0", borderRadius:"10px", textDecoration:"none", color:TEAL_DARK, fontSize:"13px", fontWeight:"600" }}>🌐 Visit Website</a>
                 )}
               </div>
             </motion.div>
@@ -422,6 +447,7 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
       </div>
 
       <DirectionsPicker isOpen={showDirs} onClose={() => setShowDirs(false)} lat={atm.lat} lng={atm.lng} name={name} userLat={userLat} userLng={userLng} />
+      <PhotoGalleryModal photos={atm.photos || []} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
     </motion.div>
   );
 }

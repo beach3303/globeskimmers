@@ -1228,11 +1228,12 @@ const AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days
 const AI_DETAILS_PROMPT_VERSION = 'v2';
 
 function buildAIDetailsSystemPrompt(kind) {
-  const safeKind = ['restaurant', 'coffee', 'attraction', 'restroom'].includes(kind) ? kind : 'restaurant';
+  const safeKind = ['restaurant', 'coffee', 'attraction', 'restroom', 'atm'].includes(kind) ? kind : 'restaurant';
 
   const isFood = safeKind === 'restaurant' || safeKind === 'coffee';
   const isAttraction = safeKind === 'attraction';
   const isRestroom = safeKind === 'restroom';
+  const isATM = safeKind === 'atm';
 
   const starRules = isFood
     ? `- gsStars MUST be an integer 1-5. NEVER 0. Even places with mixed reviews get at least 1 star — every business gets the benefit of the doubt.
@@ -1243,7 +1244,10 @@ function buildAIDetailsSystemPrompt(kind) {
       : isRestroom
         ? `- gsStars MUST be an integer 0-5. Set gsStars = 0 ONLY if multiple recent reviews say the restroom is consistently dirty or smelly. Otherwise 1-5.
 - gsRedFlag = true if reviews flag safety concerns (unsafe area, unsanitary risk, etc.). Otherwise false.`
-        : '- gsStars 1-5, gsRedFlag false.';
+        : isATM
+          ? `- gsStars MUST be an integer 1-5 (minimum 1, even for ATMs with mixed reviews).
+- gsRedFlag = true ONLY if reviews show genuine safety concerns at this specific ATM location (e.g., past skimmer reports, multiple recent reviews mentioning unsafe area at night, robbery incidents). Otherwise false.`
+          : '- gsStars 1-5, gsRedFlag false.';
 
   const kindFieldGuidance = isFood
     ? `- bestDish: the signature dish/drink. context cites why people love it.
@@ -1270,7 +1274,15 @@ function buildAIDetailsSystemPrompt(kind) {
 - value: paid vs free (e.g. "Free to use" or "Small fee, around X").
 - goodToKnow: presence of toilet paper, soap, hand dryer, squat vs sit toilet, accessibility, anything cool/unique.
 - travelerNotes: practical tips (carry tissue, bring small change, etc.).`
-        : '';
+        : isATM
+          ? `- bestDish = null. alsoRecommended = [].
+- crowd = null (usually not relevant for ATMs).
+- bestTime: when access is best — lobby hours, drive-thru hours, when it's less busy or safer (e.g. "Lobby vestibule accessible 6 AM-11 PM. Drive-thru 24/7. Quietest before 8 AM"). Travelers care a lot about this.
+- vibe: where the ATM is PHYSICALLY located — this is the most important field. Be specific: inside lobby vestibule, outside on building wall, drive-thru, behind store counter, inside 7-Eleven by the entrance, etc. Reviewers consistently mention location specifics; extract them.
+- value: surcharge / fees (e.g. "Free for Chase customers. $3.50 surcharge for non-Chase cards") or "No surcharge".
+- goodToKnow: practical facts — foreign card acceptance (Visa/Mastercard/Maestro/Amex), max withdrawal per transaction, currency dispensed (large bills only?), lit at night, surveillance cameras, PIN length supported, languages on screen.
+- travelerNotes: practical tips for travelers — e.g. "Press 'English' before inserting card", "Accepts foreign chip cards; magstripe-only may be rejected", "Dispenses ¥10,000 notes only — bring smaller bills elsewhere".`
+          : '';
 
   return `You are GlobeSkimmers' AI Details engine. Generate practical, helpful insights for a traveler about to visit a place.
 
@@ -1326,7 +1338,7 @@ async function handleAIDetails(request, env) {
   }
   // Kind drives the voice rules and star-scoring scheme. Allowlist + default
   // to 'restaurant' so old callers (no kind param) still work.
-  const allowedKinds = ['restaurant', 'coffee', 'attraction', 'restroom'];
+  const allowedKinds = ['restaurant', 'coffee', 'attraction', 'restroom', 'atm'];
   const kind = allowedKinds.includes(body?.kind) ? body.kind : 'restaurant';
 
   // 1) Check AI Details cache (30-day TTL). Key includes prompt version
@@ -1460,7 +1472,7 @@ async function handleAIDetails(request, env) {
       if (stars < 1) stars = 1;
     }
     aiDetails.gsStars = stars;
-    const redFlagAllowed = (kind === 'restroom' || kind === 'attraction');
+    const redFlagAllowed = (kind === 'restroom' || kind === 'attraction' || kind === 'atm');
     aiDetails.gsRedFlag = redFlagAllowed ? !!aiDetails.gsRedFlag : false;
   } catch (e) {
     return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
