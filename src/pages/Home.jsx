@@ -7,7 +7,6 @@ import { createPageUrl } from "@/utils";
 import { trackEvent } from "../Layout";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
-import { useTheme } from "../components/theme/ThemeContext";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
 
 // Translation mapping for greetings — shown next to "Hello 👋"
@@ -30,7 +29,7 @@ const HELLO_TRANSLATIONS = {
   'India': { greeting: 'namaste', lang: 'Hindi' },
 };
 
-// Country name → ISO-2 code for flagcdn URLs + ThemeContext.setCountryCode.
+// Country name → ISO-2 code for flagcdn URLs.
 const COUNTRY_CODES = {
   'United States': 'US', 'Philippines': 'PH', 'Japan': 'JP', 'South Korea': 'KR',
   'Thailand': 'TH', 'Vietnam': 'VN', 'Singapore': 'SG', 'Malaysia': 'MY',
@@ -41,10 +40,6 @@ const COUNTRY_CODES = {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  // Keep useTheme even though we no longer consume theme.colors -- we still need
-  // setCountryCode + setHomeCountryCode so the flag overlay component stays in
-  // sync. Themes are deliberately dropped from rendering per Claude-design spec.
-  const { setCountryCode, setHomeCountryCode } = useTheme();
   const { locationMode, selectedLocation, currentGpsLocation, getActiveLocation, loading: locationLoading } = useLocation();
 
   const [user, setUser] = useState(null);
@@ -66,15 +61,13 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationLoading, locationMode, selectedLocation, currentGpsLocation]);
 
-  // Set current location country code (for greeting + the Layout's country
-  // pill, not the home flag — that's separate state).
+  // Drive the local greeting word (e.g. "Hola", "Bonjour") from the active
+  // location's country. Theme-system country-code sync was removed when the
+  // theme picker was dropped -- this effect now only feeds setLocalGreeting.
   useEffect(() => {
     const currentLocation = getActiveLocation();
     if (currentLocation?.address?.country) {
       const country = currentLocation.address.country;
-      const code = COUNTRY_CODES[country];
-      if (code) setCountryCode(code);
-
       const translation = HELLO_TRANSLATIONS[country];
       const englishPrimaryCountries = ['United States', 'United Kingdom', 'Australia', 'New Zealand', 'Ireland'];
       if (!englishPrimaryCountries.includes(country) && translation) {
@@ -83,7 +76,7 @@ export default function HomePage() {
         setLocalGreeting(null);
       }
     }
-  }, [locationMode, selectedLocation, currentGpsLocation, getActiveLocation, setCountryCode]);
+  }, [locationMode, selectedLocation, currentGpsLocation, getActiveLocation]);
 
   // Show home-country time chip only when the user is in a different country
   // than their stated home (the away-from-home traveler case).
@@ -120,11 +113,11 @@ export default function HomePage() {
       setTempUnit(preferredScale === 'celsius' ? 'C' : 'F');
 
       // Home-country flag overlay — uses HOME country, not current location.
+      // Theme-system setHomeCountryCode removed with the theme picker.
       if (userData.show_home_country_info && userData.home_country) {
         loadHomeCountryData(userData.home_country);
         const homeCode = COUNTRY_CODES[userData.home_country];
         if (homeCode) {
-          setHomeCountryCode(homeCode);
           setHomeFlagUrl(`https://flagcdn.com/w640/${homeCode.toLowerCase()}.png`);
           setShowHomeFlag(true);
         }
@@ -467,7 +460,8 @@ export default function HomePage() {
               gradient="linear-gradient(135deg, #6D28D9 0%, #8B5CF6 60%, #A78BFA 100%)"
               icon={MessageSquare}
               label="Text scanner"
-              sub="Coming soon"
+              sub="Menus · signs · labels"
+              badge="Soon"
               onClick={() => handleQuickAction('Smart Text Scanner')}
             />
           </div>
@@ -525,8 +519,9 @@ function SatTile({ cat, icon: Icon, label, onClick, small = false }) {
 
 // ── GradCard — vibrant gradient feature card (Explore More section) ────────
 // Per spec: gradient bg, 1.3:1 aspect, decorative shape + optional glyph,
-// icon chip top-left, two-line label bottom-left.
-function GradCard({ gradient, icon: Icon, label, sub, decoration, decorationSerif = false, onClick }) {
+// icon chip top-left, two-line label bottom-left. Optional `badge` pill
+// (top-right) for status callouts like "Soon".
+function GradCard({ gradient, icon: Icon, label, sub, decoration, decorationSerif = false, badge, onClick }) {
   return (
     <motion.button
       whileTap={{ scale: 0.97 }}
@@ -552,6 +547,14 @@ function GradCard({ gradient, icon: Icon, label, sub, decoration, decorationSeri
         >
           {decoration}
         </div>
+      )}
+      {badge && (
+        <span
+          className="absolute top-2.5 right-2.5 font-mono font-bold uppercase tracking-[0.12em] text-[9px] px-1.5 py-0.5 rounded-full"
+          style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', backdropFilter: 'blur(6px)' }}
+        >
+          {badge}
+        </span>
       )}
       <div
         className="flex items-center justify-center relative"
