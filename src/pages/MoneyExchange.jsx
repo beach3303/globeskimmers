@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, Loader2, Phone, Search, TrendingUp, ChevronDown, ArrowUpDown, Info, Map, Navigation, X } from "lucide-react";
+import { ArrowLeft, MapPin, Loader2, Phone, Search, TrendingUp, ChevronDown, ArrowUpDown, Info, Map, Navigation, X, ChevronLeft, DollarSign } from "lucide-react";
+import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -533,26 +534,30 @@ export default function MoneyExchangePage() {
     : null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#f5f7fa] to-[#e2e8f0]">
-      <div className="bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white px-5 py-4 rounded-b-[24px]">
-        <div className="max-w-md mx-auto">
-          <div className="flex items-center justify-between mb-3">
-            <button
-              onClick={() => navigate(createPageUrl("Home"))}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span className="font-medium">Back</span>
-            </button>
-            <RefreshButton onClick={handleRefresh} isRefreshing={converting || loadingStores} tone="light" title="Refresh rates & stores" />
+    <div className="min-h-screen font-sans" style={{background:IVORY}}>
+      {/* HEADER — chevron back + Currency Exchange pill (redesign) */}
+      <div className="px-4 pt-2 pb-3">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <button
+            onClick={() => navigate(createPageUrl("Home"))}
+            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]"
+            style={{background:'#FFFFFF',border:'1px solid #F0E9DC'}}
+            aria-label="Back"
+          >
+            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
+          </button>
+          <div
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]"
+            style={{background:CAT.money.bg,color:CAT.money.ink}}
+          >
+            <DollarSign size={13} color={CAT.money.ink} strokeWidth={2} />
+            Currency Exchange
           </div>
-
-          <h1 className="text-[24px] font-bold mb-1">Currency Exchange</h1>
-          <p className="text-[14px] opacity-90">Compare rates near you</p>
+          <RefreshButton onClick={handleRefresh} isRefreshing={converting || loadingStores} tone="light" title="Refresh rates & stores" />
         </div>
       </div>
 
-      <div className="max-w-md mx-auto px-5 -mt-3">
+      <div className="max-w-md mx-auto px-4">
         {/* Location Display */}
         <div className="mb-3">
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
