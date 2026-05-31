@@ -404,7 +404,7 @@ export default function HomePage() {
         <div className="max-w-md mx-auto grid grid-cols-4 gap-2.5">
           <SatTile small cat={CAT.atm} icon={CreditCard} label="ATM" onClick={() => handleQuickAction('ATM')} />
           <SatTile small cat={CAT.restroom} icon={Bath} label="Restroom" onClick={() => handleQuickAction('Restroom')} />
-          <SatTile small cat={CAT.convenience} icon={Store} label="24h store" onClick={() => handleQuickAction('Convenience Store')} />
+          <SatTile small cat={CAT.convenience} icon={Store} label="Convenience store" onClick={() => handleQuickAction('Convenience Store')} />
           <SatTile small cat={CAT.weather} icon={CloudSun} label="Weather" onClick={() => handleQuickAction('Weather')} />
         </div>
       </div>
