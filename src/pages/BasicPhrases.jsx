@@ -13,7 +13,8 @@ import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { ArrowLeft, ChevronDown, ChevronUp, Globe, Loader2, Navigation, Volume2, Languages, Search, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Globe, Loader2, Navigation, Volume2, Languages, Search, X, ChevronLeft, MapPin } from "lucide-react";
+import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
@@ -1583,43 +1584,38 @@ Return a JSON object with "phrases" array. Each phrase object needs:
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#D8F3FF] to-[#FFFFFF]">
-      <div className="bg-gradient-to-r from-[#00BCD4] to-[#088395] px-4 py-6">
-        <button
-          onClick={() => navigate(createPageUrl("Home"))}
-          className="mb-3 flex items-center gap-2 text-white/90 hover:text-white transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span className="text-sm font-medium">Back to Home</span>
-        </button>
-        <h1 className="text-2xl font-bold text-white mb-1">Basic Phrases</h1>
-        <p className="text-sm text-white/80">Essential phrases for your travels</p>
+    <div className="min-h-screen font-sans" style={{ background: IVORY }}>
+      {/* HEADER */}
+      <div className="px-4 pt-2 pb-3">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
+            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
+          </button>
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]" style={{ background: CAT.phrases.bg, color: CAT.phrases.ink }}>
+            <Languages size={13} color={CAT.phrases.ink} strokeWidth={2} />
+            Basic Phrases
+          </div>
+          <div className="w-10 h-10" />
+        </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-4">
-        <div className="bg-white rounded-xl p-4 mb-4 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-[#E0F7FA] flex items-center justify-center">
-                <Navigation className="w-6 h-6 text-[#088395]" />
-              </div>
-              <div>
-                <p className="font-bold text-gray-900">
-                  {activeLocation?.placeName || activeLocation?.address?.city}
-                </p>
-                <p className="text-sm text-gray-600">
-                  {activeLocation?.address?.city}, {activeLocation?.address?.country}
-                </p>
-              </div>
+      <div className="max-w-2xl mx-auto px-4 py-2">
+        {/* LOCATION CARD */}
+        <button onClick={() => setShowLocationPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left mb-4 transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
+          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
+          <div className="flex-1 min-w-0">
+            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>📍 Location</div>
+            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">
+              {activeLocation?.placeName || activeLocation?.address?.city}
             </div>
-            <button
-              onClick={() => setShowLocationPicker(true)}
-              className="text-sm font-semibold text-[#00BCD4] hover:text-[#088395] transition-colors px-4 py-2 rounded-lg border border-[#00BCD4]"
-            >
-              Change
-            </button>
+            <div className="text-[11px] text-[#6B7280] mt-0.5 truncate">
+              {activeLocation?.address?.city}, {activeLocation?.address?.country}
+            </div>
           </div>
-        </div>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{ background: CAT.phrases.bg, color: CAT.phrases.ink }}>
+            Change
+          </span>
+        </button>
 
         {languageInfo && (
           <div className="bg-white rounded-xl p-4 mb-4 shadow-sm border border-gray-100">
