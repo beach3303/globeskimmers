@@ -1000,7 +1000,19 @@ function parseSearchIntentInner(q: string): ParsedIntent {
       // instead of just the canonical label ("pasta").
       const matched = (m[0] || '').toLowerCase();
       const rawWords = Array.from(new Set(matched.split(/\s+/).filter(w => w.length >= 3)));
-      return { kind:'DISH', label:entry.label, tier1Types:entry.tier1, tier2Types:entry.tier2, rawWords, nameKeywords: entry.nameKeywords || [], mealTime:entry.mealTime, strict: entry.strict, strictPrimaryTypes: entry.strictPrimaryTypes };
+
+      // Detect meal-time keyword anywhere in the full query (not just the
+      // matched dish substring) so combos like "breakfast tacos" or "dinner
+      // pasta" get the meal-time context attached to the intent. User-typed
+      // meal word wins over whatever the dish entry has -- if they're being
+      // explicit about meal time, that's authoritative.
+      let mealTime: 'breakfast' | 'brunch' | 'lunch' | 'dinner' | undefined = entry.mealTime;
+      if (/\bbreakfast\b/.test(q))                       mealTime = 'breakfast';
+      else if (/\bbrunch\b/.test(q))                     mealTime = 'brunch';
+      else if (/\blunch\b/.test(q))                      mealTime = 'lunch';
+      else if (/\bdinner\b|\bsupper\b/.test(q))          mealTime = 'dinner';
+
+      return { kind:'DISH', label:entry.label, tier1Types:entry.tier1, tier2Types:entry.tier2, rawWords, nameKeywords: entry.nameKeywords || [], mealTime, strict: entry.strict, strictPrimaryTypes: entry.strictPrimaryTypes };
     }
   }
   return { kind: 'GENERAL' };
