@@ -43,6 +43,8 @@ import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
+import { ChevronLeft, MapPin, Utensils } from "lucide-react";
+import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 
 const WORKER_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
 
@@ -1333,78 +1335,116 @@ export default function PlacesToEat() {
   };
 
   return (
-    <div style={{fontFamily:"'DM Sans',-apple-system,sans-serif",background:"#F8FAFC",minHeight:"100vh"}}>
+    <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
 
-      {/* ── HERO: blue gradient with title + labeled starting location ── */}
-      <div style={{background:`linear-gradient(135deg,${BLUE} 0%,${BLUE_DARK} 100%)`,padding:"20px 16px 20px"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
-          <button onClick={()=>window.history.back()} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"8px",padding:"6px 10px",color:"#fff",fontSize:"13px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+      {/* ── HEADER — chevron back + Places to Eat pill (redesign) ── */}
+      <div className="px-4 pt-2 pb-3">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <button
+            onClick={()=>window.history.back()}
+            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]"
+            style={{background:'#FFFFFF',border:'1px solid #F0E9DC'}}
+            aria-label="Back"
+          >
+            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
+          </button>
+          <div
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]"
+            style={{background:CAT.food.bg,color:CAT.food.ink}}
+          >
+            <Utensils size={13} color={CAT.food.ink} strokeWidth={2} />
+            Places to Eat
+          </div>
           <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh places" />
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"18px"}}>
-          <span style={{fontSize:"26px"}}>🍽️</span>
-          <div style={{color:"#fff"}}>
-            <div style={{fontWeight:"800",fontSize:"22px"}}>Places to Eat</div>
-            <div style={{fontSize:"13px",opacity:0.85}}>Search nearby restaurants</div>
-          </div>
-        </div>
+      </div>
 
-        {/* Labeled starting location */}
-        <div style={{fontSize:"10px",fontWeight:"800",letterSpacing:"1px",color:"rgba(255,255,255,0.75)",marginBottom:"6px"}}>{isCity ? '🏙️' : '📍'} LOCATION</div>
-        <div onClick={()=>setShowLocPicker(true)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",padding:"12px 14px",background:"#fff",borderRadius:"14px",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.12)"}}>
-          <span style={{color:DARK,fontSize:"14px",fontWeight:"600",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{locationText}</span>
-          <span style={{background:BLUE_LT,color:BLUE,padding:"4px 10px",borderRadius:"8px",fontWeight:"700",fontSize:"12px",flexShrink:0}}>Change</span>
-        </div>
+      {/* ── LOCATION CARD ── */}
+      <div className="px-4 pb-3 max-w-md mx-auto">
+        <button
+          onClick={()=>setShowLocPicker(true)}
+          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]"
+          style={{background:'#FFFFFF',border:'1px solid #F0E9DC',boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)'}}
+        >
+          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
+          <div className="flex-1 min-w-0">
+            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{color:'#94A3B8'}}>
+              {isCity ? '🏙️ City' : '📍 Location'}
+            </div>
+            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">{locationText}</div>
+          </div>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{background:CAT.food.bg,color:CAT.food.ink}}>
+            Change
+          </span>
+        </button>
         {isCity && (
-          <div style={{fontSize:"11px",color:"#fff",padding:"8px 10px",background:"rgba(252,211,77,0.20)",border:"1px solid rgba(252,211,77,0.55)",borderRadius:"10px",marginTop:"10px",lineHeight:1.4}}>
-            💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
+          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[12px] leading-snug flex items-start gap-2" style={{background:CAT.weather.bg,color:CAT.weather.ink}}>
+            <span>💡</span>
+            <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
           </div>
         )}
       </div>
 
-      {/* ── WHITE PANEL: search, radius, sort/view, filter trigger ── */}
-      <div style={{padding:"16px"}}>
-        {/* Hero search bar with gold submit */}
+      {/* ── SEARCH + FILTERS PANEL ── */}
+      <div className="px-4 max-w-md mx-auto pb-2">
+        {/* Search bar — food-coral submit button */}
         <div style={{display:"flex",gap:"8px",marginBottom:"14px"}}>
-          <input value={searchInput} onChange={e=>setSearchInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleSearch()} placeholder="🔎  Search dish or restaurant..." style={{flex:1,padding:"14px 16px",borderRadius:"14px",border:"2px solid #E2E8F0",fontSize:"15px",fontFamily:"inherit",outline:"none",color:DARK,background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}/>
-          <button onClick={handleSearch} style={{padding:"14px 18px",borderRadius:"14px",border:"none",background:`linear-gradient(135deg,${GOLD},${ORANGE})`,color:"#fff",fontWeight:"800",fontSize:"16px",cursor:"pointer",fontFamily:"inherit",boxShadow:`0 3px 10px ${GOLD}55`}}>→</button>
-          {searchText&&<button onClick={()=>{setSearchInput("");setSearchText("");}} style={{padding:"14px 14px",borderRadius:"14px",border:"2px solid #E2E8F0",background:"#fff",color:GRAY,fontWeight:"700",fontSize:"14px",cursor:"pointer",fontFamily:"inherit"}}>✕</button>}
+          <input
+            value={searchInput}
+            onChange={e=>setSearchInput(e.target.value)}
+            onKeyDown={e=>e.key==='Enter'&&handleSearch()}
+            placeholder="🔎  Search dish or restaurant..."
+            className="font-sans"
+            style={{flex:1,padding:"14px 16px",borderRadius:"14px",border:"1px solid #F0E9DC",fontSize:"15px",outline:"none",color:"#0F1419",background:"#fff",boxShadow:"0 1px 3px rgba(15,20,25,0.04)"}}
+          />
+          <button
+            onClick={handleSearch}
+            className="font-sans"
+            style={{padding:"14px 18px",borderRadius:"14px",border:"none",background:CAT.food.ink,color:"#fff",fontWeight:"800",fontSize:"16px",cursor:"pointer",boxShadow:`0 6px 18px -6px ${CAT.food.ink}80`}}
+          >→</button>
+          {searchText && (
+            <button
+              onClick={()=>{setSearchInput("");setSearchText("");}}
+              className="font-sans"
+              style={{padding:"14px 14px",borderRadius:"14px",border:"1px solid #F0E9DC",background:"#fff",color:"#475569",fontWeight:"700",fontSize:"14px",cursor:"pointer"}}
+            >✕</button>
+          )}
         </div>
 
         {/* Radius: labeled segmented control (equal widths) */}
         <div style={{marginBottom:"14px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
-            <div style={{fontSize:"10px",fontWeight:"800",letterSpacing:"1px",color:GRAY}}>📏 RADIUS</div>
+            <div className="font-mono" style={{fontSize:"10px",fontWeight:600,letterSpacing:"0.14em",color:'#6B7280',textTransform:'uppercase'}}>📏 Radius</div>
             <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light"/>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"6px",background:"#F1F5F9",padding:"4px",borderRadius:"12px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"6px",background:"#F7F4EC",padding:"4px",borderRadius:"12px"}}>
             {RADIUS_OPTIONS.map(o=>(
-              <button key={o.v} onClick={()=>setRadius(o.v)} style={{padding:"10px 0",borderRadius:"9px",border:"none",background:radius===o.v?BLUE:"transparent",color:radius===o.v?"#fff":GRAY,fontWeight:radius===o.v?"800":"600",fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>{o.l}</button>
+              <button key={o.v} onClick={()=>setRadius(o.v)} className="font-sans" style={{padding:"10px 0",borderRadius:"9px",border:"none",background:radius===o.v?CAT.food.ink:"transparent",color:radius===o.v?"#fff":'#475569',fontWeight:radius===o.v?"800":"600",fontSize:"13px",cursor:"pointer"}}>{o.l}</button>
             ))}
           </div>
         </div>
 
         {/* Sort + view toggle — sibling pill groups */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"8px",marginBottom:"14px"}}>
-          <div style={{display:"flex",background:"#F1F5F9",borderRadius:"10px",padding:"3px"}}>
+          <div style={{display:"flex",background:"#F7F4EC",borderRadius:"10px",padding:"3px"}}>
             {[{v:"nearby",l:"📍 Nearby"},{v:"best",l:"⭐ Best"}].map(({v,l})=>(
-              <button key={v} onClick={()=>setSortBy(v)} style={{padding:"7px 14px",borderRadius:"8px",border:"none",background:sortBy===v?BLUE:"transparent",color:sortBy===v?"#fff":GRAY,fontWeight:"700",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{l}</button>
+              <button key={v} onClick={()=>setSortBy(v)} className="font-sans" style={{padding:"7px 14px",borderRadius:"8px",border:"none",background:sortBy===v?CAT.food.ink:"transparent",color:sortBy===v?"#fff":'#475569',fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>{l}</button>
             ))}
           </div>
-          <div style={{display:"flex",background:"#F1F5F9",borderRadius:"10px",padding:"3px"}}>
+          <div style={{display:"flex",background:"#F7F4EC",borderRadius:"10px",padding:"3px"}}>
             {["list","map"].map(v=>(
-              <button key={v} onClick={()=>setViewMode(v)} style={{padding:"7px 14px",borderRadius:"8px",border:"none",background:viewMode===v?BLUE:"transparent",color:viewMode===v?"#fff":GRAY,fontWeight:"700",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{v==="list"?"List View":"Map View"}</button>
+              <button key={v} onClick={()=>setViewMode(v)} className="font-sans" style={{padding:"7px 14px",borderRadius:"8px",border:"none",background:viewMode===v?CAT.food.ink:"transparent",color:viewMode===v?"#fff":'#475569',fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>{v==="list"?"List View":"Map View"}</button>
             ))}
           </div>
         </div>
 
         {/* Advanced Filters + result summary (single merged row) */}
-        <button onClick={()=>setShowAdvanced(!showAdvanced)} style={{display:"flex",alignItems:"center",gap:"10px",width:"100%",padding:"12px 14px",borderRadius:"12px",border:`1.5px solid ${showAdvanced||activeFilterCount>0?BLUE:"#E2E8F0"}`,background:showAdvanced||activeFilterCount>0?BLUE_LT:"#fff",color:showAdvanced||activeFilterCount>0?BLUE:DARK,fontWeight:"700",fontSize:"13px",cursor:"pointer",fontFamily:"inherit",marginBottom:"10px"}}>
+        <button onClick={()=>setShowAdvanced(!showAdvanced)} className="font-sans" style={{display:"flex",alignItems:"center",gap:"10px",width:"100%",padding:"12px 14px",borderRadius:"14px",border:`1px solid ${showAdvanced||activeFilterCount>0?CAT.food.ink:"#F0E9DC"}`,background:showAdvanced||activeFilterCount>0?CAT.food.bg:"#fff",color:showAdvanced||activeFilterCount>0?CAT.food.ink:'#0F1419',fontWeight:"700",fontSize:"13px",cursor:"pointer",marginBottom:"10px"}}>
           <span>⚙️ Advanced Filters</span>
-          {activeFilterCount>0&&<span style={{background:BLUE,color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"11px",fontWeight:"800"}}>{activeFilterCount}</span>}
-          <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"10px",color:GRAY,fontSize:"12px",fontWeight:"600"}}>
-            {loading?"Loading…":<><span>{stats.total} results</span>{stats.open>0&&<span style={{color:GREEN}}>· {stats.open} open</span>}</>}
-            <span style={{color:GRAY}}>{showAdvanced?"▲":"▼"}</span>
+          {activeFilterCount>0&&<span style={{background:CAT.food.ink,color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"11px",fontWeight:"800"}}>{activeFilterCount}</span>}
+          <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"10px",color:'#6B7280',fontSize:"12px",fontWeight:"600"}}>
+            {loading?"Loading…":<><span>{stats.total} results</span>{stats.open>0&&<span style={{color:CAT.convenience.ink}}>· {stats.open} open</span>}</>}
+            <span style={{color:'#94A3B8'}}>{showAdvanced?"▲":"▼"}</span>
           </span>
         </button>
 
