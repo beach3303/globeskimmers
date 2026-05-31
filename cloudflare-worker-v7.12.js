@@ -1256,6 +1256,88 @@ const ANALYTICS_QUERIES = {
     HAVING sightings >= 3
     LIMIT 10
   `,
+  // ── PHASE 2 INTENT FALLBACK ANALYTICS ───────────────────────────────────
+  // Track adoption + cache rate + cost of the /parse-intent LLM fallback.
+  // Each 'intent_llm_fallback' event:
+  //   { query, cache: 'hit'|'miss', success, dishLabel?, cuisine?, strict?,
+  //     confidence?, latencyMs, error? }
+  intent_llm_fallback_by_day_14d: `
+    SELECT
+      date(ts, 'unixepoch') AS day,
+      COUNT(*) AS calls,
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'hit' THEN 1 ELSE 0 END) AS cache_hits,
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'miss' THEN 1 ELSE 0 END) AS cache_misses,
+      SUM(CASE WHEN json_extract(payload, '$.success') = 1 THEN 0 ELSE 1 END) AS failures
+    FROM events
+    WHERE event_type = 'intent_llm_fallback'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day
+    ORDER BY day ASC
+  `,
+  // Cache hit rate summary -- single-row metric for the dashboard.
+  // Hits = $0 cost. Misses = ~$0.0009 each.
+  intent_llm_fallback_cache_rate_7d: `
+    SELECT
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'hit' THEN 1 ELSE 0 END) AS hits,
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'miss' THEN 1 ELSE 0 END) AS misses,
+      COUNT(*) AS total,
+      ROUND(AVG(CAST(json_extract(payload, '$.latencyMs') AS INTEGER))) AS avg_latency_ms
+    FROM events
+    WHERE event_type = 'intent_llm_fallback'
+      AND ts >= strftime('%s','now','-7 days')
+  `,
+  // Top queries that triggered the LLM fallback -- shows what dishes
+  // users are searching that the keyword parser doesn't recognize.
+  // Direct input for future DISH_MAP additions.
+  intent_llm_fallback_top_queries_30d: `
+    SELECT
+      json_extract(payload, '$.query') AS query,
+      COUNT(*) AS hits,
+      json_extract(payload, '$.cuisine') AS llm_cuisine,
+      json_extract(payload, '$.dishLabel') AS llm_dish,
+      AVG(CAST(json_extract(payload, '$.confidence') AS REAL)) AS avg_confidence
+    FROM events
+    WHERE event_type = 'intent_llm_fallback'
+      AND json_extract(payload, '$.success') = 1
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY query
+    ORDER BY hits DESC
+    LIMIT 50
+  `,
+  // Top cuisines the LLM assigned -- shows which cuisines are most often
+  // missing dedicated DISH_MAP entries.
+  intent_llm_fallback_top_cuisines_30d: `
+    SELECT
+      json_extract(payload, '$.cuisine') AS cuisine,
+      COUNT(*) AS hits,
+      AVG(CAST(json_extract(payload, '$.confidence') AS REAL)) AS avg_confidence
+    FROM events
+    WHERE event_type = 'intent_llm_fallback'
+      AND json_extract(payload, '$.success') = 1
+      AND json_extract(payload, '$.cuisine') IS NOT NULL
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY cuisine
+    ORDER BY hits DESC
+    LIMIT 30
+  `,
+  // Raw feed of last 50 fallback events -- spot-check what Claude returned.
+  intent_llm_fallback_recent_50: `
+    SELECT
+      ts,
+      json_extract(payload, '$.query') AS query,
+      json_extract(payload, '$.cache') AS cache,
+      json_extract(payload, '$.success') AS success,
+      json_extract(payload, '$.dishLabel') AS dish_label,
+      json_extract(payload, '$.cuisine') AS cuisine,
+      json_extract(payload, '$.strict') AS strict,
+      json_extract(payload, '$.confidence') AS confidence,
+      json_extract(payload, '$.latencyMs') AS latency_ms,
+      json_extract(payload, '$.error') AS error
+    FROM events
+    WHERE event_type = 'intent_llm_fallback'
+    ORDER BY ts DESC
+    LIMIT 50
+  `,
 };
 
 async function handleAnalyticsQuery(request, env) {
@@ -2049,6 +2131,22 @@ Output: {"dishLabel":"salad","cuisine":null,"tier1Types":["vegan_restaurant","ve
 Input: "asdfqwer"
 Output: {"dishLabel":null,"cuisine":null,"tier1Types":[],"tier2Types":[],"nameKeywords":[],"mealTime":null,"strict":false,"strictPrimaryTypes":[],"confidence":0.1}`;
 
+// Best-effort D1 logger for intent fallback events. Fire-and-forget,
+// never blocks the response. session_id is 'worker' since the Worker
+// doesn't know which user session triggered the call (would require
+// passing it through from Base44 -- not needed for the aggregate
+// analytics we care about: trigger volume, cache rate, top queries).
+async function writeIntentFallbackEvent(env, payload) {
+  if (!env.DB) return;
+  try {
+    const ts = Math.floor(Date.now() / 1000);
+    await env.DB.prepare(
+      `INSERT INTO events (ts, user_id, session_id, event_type, page, payload, ua_summary)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(ts, null, 'worker', 'intent_llm_fallback', null, JSON.stringify(payload), null).run();
+  } catch (_e) { /* swallow -- analytics never breaks the response */ }
+}
+
 async function handleParseIntent(request, env) {
   if (!env.ANTHROPIC_API_KEY) {
     return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
@@ -2062,6 +2160,8 @@ async function handleParseIntent(request, env) {
     return jsonResponse({ error: 'query required' }, 400);
   }
 
+  const startedAt = Date.now();
+
   // Normalize query for cache key: collapse whitespace, drop punctuation that
   // doesn't change meaning. "Chicken Inasal!" and "chicken  inasal" share a key.
   const normalizedQuery = query.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
@@ -2070,6 +2170,16 @@ async function handleParseIntent(request, env) {
   if (env.GLOBESKIMMERS_KV) {
     const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
     if (cached) {
+      writeIntentFallbackEvent(env, {
+        query: normalizedQuery,
+        cache: 'hit',
+        success: true,
+        dishLabel: cached.dishLabel,
+        cuisine: cached.cuisine,
+        strict: cached.strict,
+        confidence: cached.confidence,
+        latencyMs: Date.now() - startedAt,
+      });
       return jsonResponse({ ...cached, _cache: 'hit' });
     }
   }
@@ -2094,6 +2204,7 @@ async function handleParseIntent(request, env) {
     });
     if (!apiRes.ok) {
       const errText = await apiRes.text();
+      writeIntentFallbackEvent(env, { query: normalizedQuery, cache: 'miss', success: false, error: `claude_api_${apiRes.status}`, latencyMs: Date.now() - startedAt });
       return jsonResponse({ error: 'Claude API error', status: apiRes.status, details: errText }, 502);
     }
     const data = await apiRes.json();
@@ -2101,6 +2212,7 @@ async function handleParseIntent(request, env) {
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
     intent = JSON.parse(cleaned);
   } catch (e) {
+    writeIntentFallbackEvent(env, { query: normalizedQuery, cache: 'miss', success: false, error: 'parse_' + (e.message || 'unknown').slice(0, 80), latencyMs: Date.now() - startedAt });
     return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
   }
 
@@ -2135,6 +2247,16 @@ async function handleParseIntent(request, env) {
   if (env.GLOBESKIMMERS_KV) {
     await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(normalized), { expirationTtl: PARSE_INTENT_TTL_SECONDS }).catch(() => {});
   }
+  writeIntentFallbackEvent(env, {
+    query: normalizedQuery,
+    cache: 'miss',
+    success: true,
+    dishLabel: normalized.dishLabel,
+    cuisine: normalized.cuisine,
+    strict: normalized.strict,
+    confidence: normalized.confidence,
+    latencyMs: Date.now() - startedAt,
+  });
   return jsonResponse({ ...normalized, _cache: 'miss' });
 }
 
