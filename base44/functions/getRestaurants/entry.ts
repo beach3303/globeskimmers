@@ -1636,7 +1636,14 @@ Deno.serve(async (req) => {
       (intent as any).mealTime === 'breakfast' ||
       (intent as any).mealTime === 'brunch'
     );
-    const breakfastyBakeryTypes = isBreakfastyDish
+    // Skip the bakery fan-out for STRICT breakfast/brunch dishes -- the
+    // strict allowlist (strictPrimaryTypes on the DISH_MAP entry) deliberately
+    // excludes generic bakery/pastry/donut/bagel types, so fanning out the
+    // candidate pool to them just gives the tier classifier more places to
+    // demote to Tier 5 (noise). Saves a few unnecessary Google calls per
+    // search too. Non-strict breakfasty intents (legacy, or anything we
+    // haven't tightened) keep the fan-out for recall.
+    const breakfastyBakeryTypes = (isBreakfastyDish && !(intent as any).strict)
       ? ['bakery', 'pastry_shop', 'donut_shop', 'bagel_shop']
       : [];
     const dishNearbyTypes = isDishSearch
@@ -1747,14 +1754,30 @@ Deno.serve(async (req) => {
     );
 
     // Compute includedType for server-side narrowing at Google.
-    // DANGER: includedType strictly filters out everything else!
-    // Only use it when: no search text, no advanced filters, AND the cuisine
-    // maps to exactly 1 Google type. Dessert (4 types) / Bakery (3 types)
-    // would lock to just ice_cream_shop / bakery, filtering out all others.
+    // The Worker sends strictTypeFiltering: false alongside includedType
+    // (cloudflare-worker-v7.12.js:769), so this is a SOFT preference -- Google
+    // ranks the included type higher but still returns others. Not a hard filter.
+    //
+    // Trigger sources, in priority order:
+    //   1. Cuisine chip mapping to exactly 1 Google type (legacy v5.1 logic).
+    //      Only fires when no rawQuery + no advanced filters so we don't fight
+    //      the user's other intent.
+    //   2. Strict-mode DISH intent with breakfast/brunch mealTime. This is the
+    //      "breakfast pancakes returns bakeries" fix -- by sending
+    //      includedType: 'breakfast_restaurant' Google itself prefers actual
+    //      breakfast spots over generic restaurants/bakeries that incidentally
+    //      mention breakfast in reviews.
     const cuisineTypeList = NEARBY_TYPES_CUISINE[cuisine];
-    const serverIncludedType = (!rawQuery && !hasAdvancedFilters && cuisine !== 'all' && cuisineTypeList?.length === 1)
+    const cuisineIncludedType = (!rawQuery && !hasAdvancedFilters && cuisine !== 'all' && cuisineTypeList?.length === 1)
       ? cuisineTypeList[0]
       : '';
+    const isStrictBreakfasty = isDishSearch && (intent as any).strict && (
+      (intent as any).mealTime === 'breakfast' || (intent as any).mealTime === 'brunch'
+    );
+    const mealTimeIncludedType = isStrictBreakfasty
+      ? ((intent as any).mealTime === 'breakfast' ? 'breakfast_restaurant' : 'brunch_restaurant')
+      : '';
+    const serverIncludedType = cuisineIncludedType || mealTimeIncludedType;
 
     // Inner helper so we can re-run the same query set at a wider radius if
     // first-pass results are sparse (auto-expand-on-sparse).
