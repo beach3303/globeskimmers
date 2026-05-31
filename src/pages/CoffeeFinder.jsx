@@ -12,6 +12,8 @@ import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
+import { ChevronLeft, MapPin, Coffee as CoffeeIcon } from "lucide-react";
+import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 
 // ─── COLORS ────────────────────────────────────────────────────────────────
 const BROWN      = "#6F4E37";
@@ -530,26 +532,51 @@ export default function CoffeeFinderPage() {
   const stats={total:filtered.length,open:filtered.filter(s=>s.isOpen===true).length,specialty:filtered.filter(s=>s.tier===1).length,withParking:filtered.filter(s=>s.parking&&!s.parking.noParking).length};
 
   return (
-    <div style={{fontFamily:"'DM Sans',-apple-system,sans-serif",background:CREAM,minHeight:"100vh"}}>
-      <div style={{padding:"16px 16px 0"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:"4px"}}>
-            <button onClick={()=>navigate(createPageUrl("Home"))} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0",color:BROWN,fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back to Home</button>
-            {fromPlacesToEat && (
-              <button onClick={()=>navigate(-1)} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0",color:BROWN,fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back to Places to Eat</button>
-            )}
+    <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
+      {/* HEADER — redesign pattern (chevron back + Coffee pill + refresh) */}
+      <div className="px-4 pt-2 pb-3">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <button
+            onClick={()=>fromPlacesToEat ? navigate(-1) : navigate(createPageUrl("Home"))}
+            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]"
+            style={{background:'#FFFFFF',border:'1px solid #F0E9DC'}}
+            aria-label="Back"
+          >
+            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
+          </button>
+          <div
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]"
+            style={{background:CAT.coffee.bg,color:CAT.coffee.ink}}
+          >
+            <CoffeeIcon size={13} color={CAT.coffee.ink} strokeWidth={2} />
+            Coffee Finder
           </div>
-          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="dark" title="Refresh coffee shops" />
+          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh coffee shops" />
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}>
-          <span style={{fontSize:"28px"}}>☕</span>
-          <div><div style={{fontWeight:"800",fontSize:"20px",color:DARK}}>Coffee Finder</div><div style={{fontSize:"13px",color:GRAY}}>Find nearby coffee shops</div></div>
-        </div>
+      </div>
 
-        <div onClick={()=>setShowLocPicker(true)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:"#fff",borderRadius:"10px",border:"1px solid #E2E8F0",fontSize:"13px",marginBottom:"10px",cursor:"pointer"}}>
-          <span style={{color:GRAY}}>{isCity ? '🏙️' : '📍'} {locationText}</span>
-          <span style={{background:BROWN_LIGHT,color:BROWN_DARK,padding:"4px 10px",borderRadius:"6px",fontWeight:"600",fontSize:"12px"}}>Change</span>
-        </div>
+      {/* LOCATION CARD */}
+      <div className="px-4 max-w-md mx-auto pb-3">
+        <button
+          onClick={()=>setShowLocPicker(true)}
+          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]"
+          style={{background:'#FFFFFF',border:'1px solid #F0E9DC',boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)'}}
+        >
+          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
+          <div className="flex-1 min-w-0">
+            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{color:'#94A3B8'}}>
+              {isCity ? '🏙️ City' : '📍 Location'}
+            </div>
+            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">{locationText}</div>
+          </div>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{background:CAT.coffee.bg,color:CAT.coffee.ink}}>
+            Change
+          </span>
+        </button>
+      </div>
+
+      <div style={{padding:"0 16px"}}>
+        <div style={{display:"none"}}>{/* legacy spacer removed */}</div>
 
         {isCity && (
           <div style={{fontSize:"11px",color:"#92400E",padding:"8px 10px",background:"#FFFBEB",border:"1px solid #FCD34D",borderRadius:"8px",marginBottom:"10px",lineHeight:1.4}}>
