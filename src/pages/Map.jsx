@@ -95,21 +95,32 @@ export default function MapPage() {
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col pt-10">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-[#088395] to-[#05BFDB] text-white px-4 py-3 flex-shrink-0">
+    <div className="fixed inset-0 flex flex-col font-sans">
+      {/* Header — brand teal gradient per Claude-design BoldMap spec.
+          Sits above the global BrandBanner since the Map takes the full
+          viewport (fixed inset-0). */}
+      <div
+        className="text-white px-4 py-3 flex-shrink-0"
+        style={{
+          background: 'linear-gradient(90deg, #0E8077 0%, #14B5A6 60%, #06B6D4 100%)',
+          boxShadow: '0 2px 14px rgba(14,124,115,.25)',
+        }}
+      >
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold">{locationName}</h1>
-            <p className="text-xs opacity-90">
+            <h1 className="text-[18px] font-extrabold tracking-tight leading-tight">
+              <span className="font-serif italic font-normal">{locationName}</span>
+            </h1>
+            <p className="text-[11.5px] opacity-90 mt-0.5">
               {locationMode === 'current' ? 'Your current location' : 'Selected location'}
             </p>
           </div>
           <button
             onClick={() => navigate(createPageUrl("Home"))}
-            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+            className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+            aria-label="Close map"
           >
-            <X className="w-5 h-5" />
+            <X size={18} color="#fff" strokeWidth={2.2} />
           </button>
         </div>
       </div>
