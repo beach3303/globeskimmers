@@ -393,7 +393,7 @@ export default function HomePage() {
       {/* 3-COL FEATURE TIER (Transit / Food / Coffee) -------------------- */}
       <div className="px-4 pb-2.5">
         <div className="max-w-md mx-auto grid grid-cols-3 gap-2.5">
-          <SatTile cat={CAT.transit} icon={Bus} label="Transit" onClick={() => handleQuickAction('Transportation')} />
+          <SatTile cat={CAT.transit} icon={Bus} label="Transit Info" onClick={() => handleQuickAction('Transportation')} />
           <SatTile cat={CAT.food} icon={Utensils} label="Places to eat" onClick={() => handleQuickAction('Places to Eat')} />
           <SatTile cat={CAT.coffee} icon={CoffeeIcon} label="Coffee" onClick={() => handleQuickAction('Coffee')} />
         </div>
