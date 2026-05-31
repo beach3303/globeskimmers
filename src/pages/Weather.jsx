@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { ArrowLeft, Loader2, Cloud, MapPin, ChevronDown, ChevronUp, Clock } from "lucide-react";
+import { ArrowLeft, Loader2, Cloud, MapPin, ChevronDown, ChevronUp, Clock, ChevronLeft, CloudSun } from "lucide-react";
+import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
@@ -120,59 +121,45 @@ export default function WeatherPage() {
   const forecast = weatherData?.forecast || [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#FF9800] via-[#FF6F00] to-[#FF5722]">
-      {/* Header */}
-      <div className="px-5 py-4">
-        <div className="max-w-md mx-auto">
-          <div className="mb-4 flex items-center justify-between">
-            <button
-              onClick={() => navigate(createPageUrl("Home"))}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity text-white"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="text-sm font-medium">Back to Home</span>
-            </button>
-            <RefreshButton onClick={handleRefresh} isRefreshing={refreshing} tone="light" title="Refresh weather" />
+    <div className="min-h-screen font-sans" style={{ background: IVORY }}>
+      {/* HEADER — redesign pattern */}
+      <div className="px-4 pt-2 pb-3">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
+            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
+          </button>
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
+            <CloudSun size={13} color={CAT.weather.ink} strokeWidth={2} />
+            Weather
           </div>
+          <RefreshButton onClick={handleRefresh} isRefreshing={refreshing} tone="light" title="Refresh weather" />
+        </div>
+      </div>
 
-          <h1 className="text-xl font-bold text-white mb-4">Weather Forecast</h1>
-
-          {/* Location Selector */}
-          <div onClick={() => setShowLocationPicker(true)} style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "8px 12px", background: "#fff", borderRadius: "10px",
-            border: "1px solid #E2E8F0", fontSize: "13px", marginBottom: "12px", cursor: "pointer"
-          }}>
-            <span style={{ color: "#64748B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-              📍 {locationMode === 'current' 
+      <div className="max-w-md mx-auto px-4">
+        {/* LOCATION CARD */}
+        <button onClick={() => setShowLocationPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left mb-3 transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
+          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
+          <div className="flex-1 min-w-0">
+            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>
+              📍 Location
+            </div>
+            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">
+              {locationMode === 'current'
                 ? (activeLocation?.placeName || activeLocation?.address?.city || 'Current Location')
                 : (activeLocation?.placeName || activeLocation?.address?.formatted || 'Select Location')}
-            </span>
-            <span style={{ background: "#FFF8E1", color: "#F57F17", padding: "4px 10px", borderRadius: "6px", fontWeight: "600", fontSize: "12px" }}>
-              Change
-            </span>
-          </div>
-
-          {/* Temperature Scale Toggle */}
-          <div className="flex items-center justify-end mb-4">
-            <div className="flex items-center gap-1 bg-white rounded-full p-1">
-              <button
-                onClick={() => setDisplayScale('fahrenheit')}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${
-                  displayScale === 'fahrenheit' ? 'bg-blue-500 text-white' : 'text-gray-600'
-                }`}
-              >
-                °F
-              </button>
-              <button
-                onClick={() => setDisplayScale('celsius')}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${
-                  displayScale === 'celsius' ? 'bg-blue-500 text-white' : 'text-gray-600'
-                }`}
-              >
-                °C
-              </button>
             </div>
+          </div>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
+            Change
+          </span>
+        </button>
+
+        {/* Temperature Scale Toggle */}
+        <div className="flex items-center justify-end mb-3">
+          <div className="flex items-center gap-1 rounded-full p-1" style={{ background:'#F7F4EC' }}>
+            <button onClick={() => setDisplayScale('fahrenheit')} className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${displayScale === 'fahrenheit' ? 'text-white' : 'text-gray-600'}`} style={{ background: displayScale === 'fahrenheit' ? CAT.weather.ink : 'transparent' }}>°F</button>
+            <button onClick={() => setDisplayScale('celsius')} className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${displayScale === 'celsius' ? 'text-white' : 'text-gray-600'}`} style={{ background: displayScale === 'celsius' ? CAT.weather.ink : 'transparent' }}>°C</button>
           </div>
         </div>
       </div>
