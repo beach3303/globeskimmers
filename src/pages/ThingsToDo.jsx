@@ -12,6 +12,8 @@ import AIDetailsSection from "@/components/AIDetailsSection";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
+import { ChevronLeft, MapPin, Star } from "lucide-react";
+import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 
 const T={teal:"#00BCD4",tealD:"#00838F",dark:"#1A2332",dark2:"#243447",gray:"#64748B",grayL:"#F1F5F9",green:"#4CAF50",blue:"#1565C0",blueL:"#E3F2FD",coral:"#FF6B6B",gold:"#FFB74D",
   accent:"#F59E0B",accentD:"#D97706",accentL:"#FFFBEB"};
@@ -623,32 +625,52 @@ export default function ThingsToDoFinder() {
   const clearFilters=()=>{setOpenOnly(false);setOutdoorOnly(false);setPopularOnly(false);setCategory('all');};
 
   return(
-    <div style={{fontFamily:"'DM Sans',-apple-system,sans-serif",background:"#F0F4F8",minHeight:"100vh"}}>
-      <div style={{background:`linear-gradient(160deg,${T.dark} 0%,${T.dark2} 40%,${T.accentD} 100%)`,padding:"16px 16px 16px"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingBottom:"12px"}}>
-          <button onClick={()=>window.history.back()} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",padding:"0",color:"rgba(255,255,255,0.75)",fontSize:"14px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+    <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
+      {/* HEADER — redesign pattern */}
+      <div className="px-4 pt-2 pb-3">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <button onClick={()=>window.history.back()} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{background:'#FFFFFF',border:'1px solid #F0E9DC'}} aria-label="Back">
+            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
+          </button>
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]" style={{background:CAT.todo.bg,color:CAT.todo.ink}}>
+            <Star size={13} color={CAT.todo.ink} strokeWidth={2} />
+            Things To Do
+          </div>
           <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh activities" />
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:"14px",marginBottom:"16px"}}>
-          <div style={{width:"52px",height:"52px",background:"rgba(255,255,255,0.12)",borderRadius:"16px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"28px",backdropFilter:"blur(10px)",border:"1px solid rgba(255,255,255,0.15)"}}>⭐</div>
-          <div><div style={{fontWeight:"800",fontSize:"22px",color:"#fff",letterSpacing:"-0.3px"}}>Things To Do</div><div style={{fontSize:"12px",color:"rgba(255,255,255,0.65)",marginTop:"2px"}}>Landmarks · Museums · Parks · Outdoors · Worldwide</div></div>
-        </div>
-        <motion.div whileTap={{scale:0.99}} onClick={()=>setLocPicker(true)} style={{display:"flex",alignItems:"center",gap:"10px",padding:"12px 14px",background:"rgba(255,255,255,0.1)",backdropFilter:"blur(10px)",borderRadius:"14px",border:"1px solid rgba(255,255,255,0.15)",marginBottom:"14px",cursor:"pointer"}}>
-          <span style={{fontSize:"18px"}}>{isCity ? '🏙️' : '📍'}</span><span style={{flex:1,color:"rgba(255,255,255,0.9)",fontSize:"13px",fontWeight:"600",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{locLabel}</span>
-          <span style={{background:T.accent,color:"#fff",padding:"5px 12px",borderRadius:"8px",fontWeight:"700",fontSize:"12px",flexShrink:0}}>Change</span>
-        </motion.div>
+      </div>
+
+      {/* LOCATION CARD */}
+      <div className="px-4 max-w-md mx-auto pb-3">
+        <button onClick={()=>setLocPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{background:'#FFFFFF',border:'1px solid #F0E9DC',boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)'}}>
+          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
+          <div className="flex-1 min-w-0">
+            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{color:'#94A3B8'}}>
+              {isCity ? '🏙️ City' : '📍 Location'}
+            </div>
+            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
+          </div>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{background:CAT.todo.bg,color:CAT.todo.ink}}>
+            Change
+          </span>
+        </button>
         {isCity && (
-          <div style={{fontSize:"11px",color:"#fff",padding:"8px 10px",background:"rgba(252,211,77,0.18)",border:"1px solid rgba(252,211,77,0.45)",borderRadius:"10px",marginBottom:"12px",lineHeight:1.4}}>
-            💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
+          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[12px] leading-snug flex items-start gap-2" style={{background:CAT.weather.bg,color:CAT.weather.ink}}>
+            <span>💡</span>
+            <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
           </div>
         )}
-        <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:radius>25?"6px":"14px",flexWrap:"wrap"}}>
-          <span style={{fontSize:"12px",color:"rgba(255,255,255,0.6)",fontWeight:"600",flexShrink:0}}>Radius:</span>
-          <div style={{display:"flex",gap:"5px"}}>{[5,10,15,25,50].map(r=><button key={r} onClick={()=>setRadius(r)} style={{padding:"6px 12px",borderRadius:"20px",border:radius===r?`2px solid ${T.accent}`:"1px solid rgba(255,255,255,0.2)",background:radius===r?T.accent:"rgba(255,255,255,0.1)",color:radius===r?"#fff":"rgba(255,255,255,0.7)",fontWeight:radius===r?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit"}}>{r} mi</button>)}</div>
-          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="dark" style={{marginLeft:"auto"}}/>
-          <span style={{fontSize:"11px",color:"rgba(255,255,255,0.5)"}}>{loading?"Searching…":`${activities.length} found`}</span>
+      </div>
+
+      {/* Filters band */}
+      <div className="px-4 max-w-md mx-auto pb-2">
+        <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:radius>25?"6px":"10px",flexWrap:"wrap"}}>
+          <span className="font-mono" style={{fontSize:"10px",color:'#6B7280',fontWeight:600,letterSpacing:"0.14em",textTransform:'uppercase'}}>📏 Radius:</span>
+          <div style={{display:"flex",gap:"5px"}}>{[5,10,15,25,50].map(r=><button key={r} onClick={()=>setRadius(r)} className="font-sans" style={{padding:"6px 12px",borderRadius:"20px",border:radius===r?`2px solid ${CAT.todo.ink}`:"1px solid #F0E9DC",background:radius===r?CAT.todo.ink:"#fff",color:radius===r?"#fff":'#475569',fontWeight:radius===r?"700":"500",fontSize:"12px",cursor:"pointer"}}>{r} mi</button>)}</div>
+          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" style={{marginLeft:"auto"}}/>
+          <span style={{fontSize:"11px",color:'#94A3B8'}}>{loading?"Searching…":`${activities.length} found`}</span>
         </div>
-        {radius>25&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.55)",marginBottom:"14px",padding:"0 2px"}}>⭐ Beyond 25mi: showing iconic spots only (landmarks, theme parks, must-see attractions)</div>}
+        {radius>25 && <div style={{fontSize:"11px",color:'#6B7280',marginBottom:"10px"}}>⭐ Beyond 25mi: showing iconic spots only (landmarks, theme parks, must-see attractions)</div>}
       </div>
 
       <div style={{background:"#fff",padding:"10px 14px",borderBottom:"1px solid #E8EDF2"}}>
