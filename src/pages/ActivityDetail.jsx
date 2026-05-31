@@ -244,7 +244,7 @@ export default function ActivityDetailPage() {
   const reviews = activity.reviews || [];
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen pb-20 font-sans" style={{ background: '#FFFCF7' }}>
       {/* Floating Header - Over Photo */}
       <div className="fixed top-0 left-0 right-0 z-30">
         <div className="absolute inset-0 bg-gradient-to-b from-black/50 to-transparent pointer-events-none"></div>
