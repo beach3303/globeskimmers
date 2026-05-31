@@ -23,6 +23,8 @@ import DistanceUnitToggle from '@/components/location/DistanceUnitToggle';
 import { base44 } from '@/api/base44Client';
 import RefreshButton from '@/components/RefreshButton';
 import NameLanguageHelp from '@/components/NameLanguageHelp';
+import { ChevronLeft, MapPin, Store } from 'lucide-react';
+import { CAT, TEAL_DEEP, IVORY } from '@/components/redesign/constants';
 
 // ============================================================================
 // THEME - Matching PlacesToEat warm brown aesthetic
@@ -1139,111 +1141,53 @@ export default function ConvenienceStorePage() {
   // ============================================================================
   
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: COLORS.background,
-      paddingBottom: '100px'
-    }}>
-      {/* Header */}
-      <div style={{
-        background: `linear-gradient(135deg, ${COLORS.primary} 0%, #2D5A8A 100%)`,
-        padding: '20px',
-        paddingTop: '52px',
-        color: '#fff'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-          <button
-            onClick={() => navigate(-1)}
-            style={{
-              background: 'rgba(255,255,255,0.15)',
-              border: 'none',
-              color: '#fff',
-              fontSize: '18px',
-              cursor: 'pointer',
-              padding: '8px 12px',
-              borderRadius: '10px'
-            }}
-          >
-            ← Back
+    <div className="font-sans" style={{ minHeight: '100vh', background: IVORY, paddingBottom: '100px' }}>
+      {/* HEADER */}
+      <div className="px-4 pt-2 pb-3">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
+            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]" style={{ background: CAT.convenience.bg, color: CAT.convenience.ink }}>
+            <Store size={13} color={CAT.convenience.ink} strokeWidth={2} />
+            Convenience Stores
+          </div>
           <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh stores" />
         </div>
-        <div style={{ marginTop: '16px' }}>
-          <h1 style={{
-            fontSize: '24px',
-            fontWeight: '700',
-            margin: 0,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px'
-          }}>
-            🏪 Convenience Stores
-          </h1>
-          <p style={{
-            fontSize: '14px',
-            opacity: 0.85,
-            margin: '6px 0 0'
-          }}>
-            Snacks, essentials & more nearby
-          </p>
+      </div>
 
-          {/* Location bar — same pattern as Coffee/ATM/Restroom finders */}
-          <div
-            onClick={() => setShowLocPicker(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '10px 13px',
-              background: '#fff',
-              borderRadius: '12px',
-              marginTop: '14px',
-              cursor: 'pointer',
-              boxShadow: '0 2px 10px rgba(0,0,0,0.12)'
-            }}
-          >
-            <span style={{ color: COLORS.text, fontSize: '13px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-              {isCity ? '🏙️' : '📍'} {locLabel}
-            </span>
-            <span style={{ background: COLORS.accent, color: '#fff', padding: '4px 10px', borderRadius: '8px', fontWeight: '700', fontSize: '12px', flexShrink: 0, marginLeft: '10px' }}>
-              Change
-            </span>
+      {/* LOCATION CARD */}
+      <div className="px-4 max-w-md mx-auto pb-3">
+        <button onClick={() => setShowLocPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
+          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
+          <div className="flex-1 min-w-0">
+            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>
+              {isCity ? '🏙️ City' : '📍 Location'}
+            </div>
+            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
           </div>
-
-          {isCity && (
-            <div style={{ fontSize: '11px', color: '#fff', padding: '8px 10px', background: 'rgba(252,211,77,0.20)', border: '1px solid rgba(252,211,77,0.55)', borderRadius: '10px', marginTop: '10px', lineHeight: 1.4 }}>
-              💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
-            </div>
-          )}
-
-          {/* Radius selector — same pattern as PlacesToEat header */}
-          <div style={{ marginTop: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <div style={{ fontSize: '10px', fontWeight: '800', letterSpacing: '1px', color: 'rgba(255,255,255,0.75)' }}>📏 RADIUS</div>
-              <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="dark" />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '6px', background: 'rgba(255,255,255,0.12)', padding: '4px', borderRadius: '12px' }}>
-              {[5, 10, 15, 25].map(r => (
-                <button
-                  key={r}
-                  onClick={() => setSearchRadius(r)}
-                  style={{
-                    padding: '10px 0',
-                    borderRadius: '9px',
-                    border: 'none',
-                    background: searchRadius === r ? '#fff' : 'transparent',
-                    color: searchRadius === r ? COLORS.primary : 'rgba(255,255,255,0.85)',
-                    fontWeight: searchRadius === r ? '800' : '600',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit'
-                  }}
-                >
-                  {r} mi
-                </button>
-              ))}
-            </div>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{ background: CAT.convenience.bg, color: CAT.convenience.ink }}>
+            Change
+          </span>
+        </button>
+        {isCity && (
+          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[12px] leading-snug flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
+            <span>💡</span>
+            <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
           </div>
+        )}
+      </div>
+
+      {/* RADIUS */}
+      <div className="px-4 max-w-md mx-auto pb-2">
+        <div className="flex items-center justify-between mb-2">
+          <div className="font-mono" style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.14em', color: '#6B7280', textTransform: 'uppercase' }}>📏 Radius</div>
+          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" />
+        </div>
+        <div className="grid grid-cols-4 gap-1.5 rounded-[12px] p-1" style={{ background: '#F7F4EC' }}>
+          {[5, 10, 15, 25].map(r => (
+            <button key={r} onClick={() => setSearchRadius(r)} className="font-sans" style={{ padding: '10px 0', borderRadius: '9px', border: 'none', background: searchRadius === r ? CAT.convenience.ink : 'transparent', color: searchRadius === r ? '#fff' : '#475569', fontWeight: searchRadius === r ? '800' : '600', fontSize: '13px', cursor: 'pointer' }}>{r} mi</button>
+          ))}
         </div>
       </div>
 
