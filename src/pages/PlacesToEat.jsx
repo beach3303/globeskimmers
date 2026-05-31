@@ -550,6 +550,35 @@ function FallbackDisclaimer({ fallbackInfo, onExpandRadius }) {
   );
 }
 
+// ─── ALSO-SERVES BANNER ──────────────────────────────────────────────────────
+// Shown when a strict dish search returned 0 exact matches but the backend
+// found cuisine-umbrella restaurants in the existing pool (e.g. "Mang Inasal"
+// in Santa Clarita -> no Mang Inasal branches but 8 Filipino restaurants
+// nearby). Sets honest expectations before the user sees the alternative list.
+function AlsoServesBanner({ banner, onExpandRadius }) {
+  if (!banner?.cuisine) return null;
+  return (
+    <motion.div
+      initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }}
+      style={{ padding:"14px 16px", background:"#EFF6FF", borderRadius:"12px",
+               border:"1px solid #BFDBFE", marginBottom:"12px" }}
+    >
+      <div style={{ fontWeight:"800", color:"#1E40AF", fontSize:"14px", marginBottom:"6px" }}>
+        No exact {banner.queryLabel ? `"${banner.queryLabel}"` : 'match'} nearby
+      </div>
+      <div style={{ fontSize:"13px", color:"#1E3A8A", marginBottom:"10px", lineHeight:"1.5" }}>
+        Showing nearby <strong>{banner.cuisine}</strong> restaurants you might like instead.
+      </div>
+      <button onClick={onExpandRadius}
+        style={{ padding:"8px 14px", borderRadius:"8px", border:"none",
+                 background:"#2563EB", color:"#fff", fontWeight:"700",
+                 fontSize:"12px", cursor:"pointer", fontFamily:"inherit" }}>
+        📏 Expand Search Radius
+      </button>
+    </motion.div>
+  );
+}
+
 // ─── RESTAURANT CARD ─────────────────────────────────────────────────────────
 function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDistance }) {
   const [expanded,setExpanded]=useState(false);
@@ -869,6 +898,10 @@ export default function PlacesToEat() {
   useEffect(() => { logEvent('page_view', {}, 'PlacesToEat'); }, []);
   const [dirModal, setDirModal]         = useState({ open:false, lat:null, lng:null, name:'' });
   const [fallbackInfo, setFallbackInfo]  = useState(null);
+  // Phase 1.5 "Also serves X" banner state. Populated when the backend
+  // returns fallbackPlaces for a strict 0-result search (e.g. "Mang Inasal"
+  // -> "Filipino"). Shape: { cuisine: 'Filipino', queryLabel: 'chicken inasal' }.
+  const [fallbackBanner, setFallbackBanner] = useState(null);
 
   // Advanced filters
   const [filterOpenNow,   setFilterOpenNow]   = useState(false);
@@ -1025,11 +1058,22 @@ export default function PlacesToEat() {
         const places = data?.places || data?.restaurants || [];
         if (data?.fallbackInfo) setFallbackInfo(data.fallbackInfo);
 
-        if (places.length > 0) {
-          const processed = places.map((/** @type {any} */ p) => processRest(p, lat, lng));
+        // Phase 1.5 "Also serves X" — if strict dish search returned 0 exact
+        // matches but the backend found cuisine-umbrella restaurants in the
+        // candidate pool, use those as the displayed list + show a banner
+        // explaining what happened. Better than a dead-end "no results".
+        const fallbackPlaces = data?.fallbackPlaces || [];
+        const useFallback = places.length === 0 && fallbackPlaces.length > 0;
+
+        if (places.length > 0 || useFallback) {
+          const sourcePlaces = useFallback ? fallbackPlaces : places;
+          const processed = sourcePlaces.map((/** @type {any} */ p) => processRest(p, lat, lng));
           setRestaurants(processed);
           setDisplayCount(20);
           setError(null); // Clear any old errors on success
+          setFallbackBanner(useFallback
+            ? { cuisine: data.fallbackCuisine, queryLabel: data.fallbackQueryLabel }
+            : null);
           // Populate the session cache so a later re-entry with the same
           // params hydrates instantly without re-hitting the API.
           placesToEatSessionCache = {
@@ -1039,13 +1083,16 @@ export default function PlacesToEat() {
             displayCount: 20,
           };
           // Analytics: log a search event so we can measure tier accuracy,
-          // result counts, and which queries return zero results.
-          logEvent('search', {
+          // result counts, and which queries return zero results. Tag fallback
+          // events distinctly so we can monitor how often the cuisine-umbrella
+          // recovery kicks in.
+          logEvent(useFallback ? 'search_fallback' : 'search', {
             query: searchText || null,
             cuisine: primaryCuisine,
             radius,
             resultCount: processed.length,
             firstTier: processed[0]?.tier ?? null,
+            fallbackCuisine: useFallback ? data.fallbackCuisine : null,
           }, 'PlacesToEat');
 
           // Note: eager top-5 hydratePlaceDetails was removed once the
@@ -1056,6 +1103,7 @@ export default function PlacesToEat() {
           // hydrated reviews weren't rendered anywhere.
         } else {
           setRestaurants([]); // Clear stale results so the UI doesn't show "67 results" from a prior fetch
+          setFallbackBanner(null);
           setError(data?.error || "No results found. Try expanding your radius.");
           // Analytics: zero-result searches are the most valuable to track —
           // every empty result is a search-quality bug or a coverage gap.
@@ -1466,6 +1514,10 @@ export default function PlacesToEat() {
           ):(<>
             <FallbackDisclaimer
               fallbackInfo={fallbackInfo}
+              onExpandRadius={() => setRadius(r => Math.min(r + 5, 25))}
+            />
+            <AlsoServesBanner
+              banner={fallbackBanner}
               onExpandRadius={() => setRadius(r => Math.min(r + 5, 25))}
             />
             {/* Subtle cross-promo: if the user typed a coffee query, point
