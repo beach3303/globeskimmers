@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { MapPin, Cloud, Utensils, Coffee as CoffeeIcon, CreditCard, Bath, Store, CloudSun, Search, ShoppingBag, Compass, Landmark, Camera, MessageSquare, Car, Navigation, DollarSign } from "lucide-react";
+import { MapPin, Cloud, Utensils, Coffee as CoffeeIcon, CreditCard, Bath, Store, CloudSun, Bus, ChevronRight, Star, ShoppingBag, Compass, Languages, ScanLine, MessageSquare } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -8,8 +8,10 @@ import { trackEvent } from "../Layout";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import { useTheme } from "../components/theme/ThemeContext";
+import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
 
-// Translation mapping for greetings
+// Translation mapping for greetings — shown next to "Hello 👋"
+// when the active location's country has a non-English primary language.
 const HELLO_TRANSLATIONS = {
   'Spain': { greeting: 'hola', lang: 'Spanish' },
   'Mexico': { greeting: 'hola', lang: 'Spanish' },
@@ -28,7 +30,7 @@ const HELLO_TRANSLATIONS = {
   'India': { greeting: 'namaste', lang: 'Hindi' },
 };
 
-// Country code mapping
+// Country name → ISO-2 code for flagcdn URLs + ThemeContext.setCountryCode.
 const COUNTRY_CODES = {
   'United States': 'US', 'Philippines': 'PH', 'Japan': 'JP', 'South Korea': 'KR',
   'Thailand': 'TH', 'Vietnam': 'VN', 'Singapore': 'SG', 'Malaysia': 'MY',
@@ -37,53 +39,14 @@ const COUNTRY_CODES = {
   'India': 'IN', 'China': 'CN', 'Canada': 'CA',
 };
 
-// ============================================================================
-// BUTTON CONFIGURATIONS WITH EMOJIS
-// ============================================================================
-
-const TIER_1_BUTTONS = [
-  { id: 'transportation', emoji: '🚕', label: 'Transportation', action: 'Transportation',
-    colors: { light: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)', dark: 'linear-gradient(135deg, #1E40AF 0%, #1D4ED8 100%)', space: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)', executive: 'linear-gradient(135deg, #0891B2 0%, #0E7490 100%)' }},
-  { id: 'places-to-eat', emoji: '🍽️', label: 'Places to Eat', action: 'Places to Eat',
-    colors: { light: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)', dark: 'linear-gradient(135deg, #B91C1C 0%, #991B1B 100%)', space: 'linear-gradient(135deg, #F43F5E 0%, #E11D48 100%)', executive: 'linear-gradient(135deg, #EA580C 0%, #C2410C 100%)' }},
-  { id: 'coffee', emoji: '☕', label: 'Coffee Finder', action: 'Coffee',
-    colors: { light: 'linear-gradient(135deg, #92400E 0%, #78350F 100%)', dark: 'linear-gradient(135deg, #78350F 0%, #451A03 100%)', space: 'linear-gradient(135deg, #B45309 0%, #92400E 100%)', executive: 'linear-gradient(135deg, #A16207 0%, #854D0E 100%)' }},
-];
-
-const TIER_2_BUTTONS = [
-  { id: 'atm', emoji: '🏧', label: 'ATM Finder', action: 'ATM',
-    colors: { light: 'linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%)', dark: 'linear-gradient(135deg, #0369A1 0%, #075985 100%)', space: 'linear-gradient(135deg, #06B6D4 0%, #0891B2 100%)', executive: 'linear-gradient(135deg, #0891B2 0%, #0E7490 100%)' }},
-  { id: 'restroom', emoji: '🚻', label: 'Restroom Finder', action: 'Restroom',
-    colors: { light: 'linear-gradient(135deg, #64748B 0%, #475569 100%)', dark: 'linear-gradient(135deg, #475569 0%, #334155 100%)', space: 'linear-gradient(135deg, #6B7280 0%, #4B5563 100%)', executive: 'linear-gradient(135deg, #64748B 0%, #475569 100%)' }},
-  { id: 'convenience', emoji: '🏪', label: 'Convenience Store', action: 'Convenience Store',
-    colors: { light: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)', dark: 'linear-gradient(135deg, #C2410C 0%, #9A3412 100%)', space: 'linear-gradient(135deg, #FB923C 0%, #F97316 100%)', executive: 'linear-gradient(135deg, #EA580C 0%, #C2410C 100%)' }},
-  { id: 'weather', emoji: '🌤️', label: 'Weather', action: 'Weather',
-    colors: { light: 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)', dark: 'linear-gradient(135deg, #D97706 0%, #B45309 100%)', space: 'linear-gradient(135deg, #FCD34D 0%, #FBBF24 100%)', executive: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' }},
-];
-
-const TIER_3_BUTTONS = [
-  { id: 'phrases', emoji: '🗣️', label: 'Basic Phrases', action: 'Basic Phrases',
-    colors: { light: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)', dark: 'linear-gradient(135deg, #6D28D9 0%, #5B21B6 100%)', space: 'linear-gradient(135deg, #A78BFA 0%, #8B5CF6 100%)', executive: 'linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%)' }},
-  { id: 'price-scanner', emoji: '🧾', label: 'Price Scanner', action: 'Smart Price Scanner',
-    colors: { light: 'linear-gradient(135deg, #14B8A6 0%, #0D9488 100%)', dark: 'linear-gradient(135deg, #0F766E 0%, #115E59 100%)', space: 'linear-gradient(135deg, #2DD4BF 0%, #14B8A6 100%)', executive: 'linear-gradient(135deg, #0D9488 0%, #0F766E 100%)' }},
-  { id: 'shopping', emoji: '🛍️', label: 'Shopping', action: 'Shopping',
-    colors: { light: 'linear-gradient(135deg, #EC4899 0%, #DB2777 100%)', dark: 'linear-gradient(135deg, #BE185D 0%, #9D174D 100%)', space: 'linear-gradient(135deg, #F472B6 0%, #EC4899 100%)', executive: 'linear-gradient(135deg, #DB2777 0%, #BE185D 100%)' }},
-];
-
-const MORE_BUTTONS = [
-  { id: 'things-to-do', emoji: '🎯', label: 'Things to Do', action: 'Things to Do',
-    colors: { light: 'linear-gradient(135deg, #A855F7 0%, #9333EA 100%)', dark: 'linear-gradient(135deg, #7E22CE 0%, #6B21A8 100%)', space: 'linear-gradient(135deg, #C084FC 0%, #A855F7 100%)', executive: 'linear-gradient(135deg, #9333EA 0%, #7E22CE 100%)' }},
-  { id: 'culture', emoji: '🏛️', label: 'Culture Info', action: 'Culture Information',
-    colors: { light: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)', dark: 'linear-gradient(135deg, #4338CA 0%, #3730A3 100%)', space: 'linear-gradient(135deg, #818CF8 0%, #6366F1 100%)', executive: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)' }},
-  { id: 'text-scanner', emoji: '📝', label: 'Text Scanner', action: 'Smart Text Scanner',
-    colors: { light: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', dark: 'linear-gradient(135deg, #047857 0%, #065F46 100%)', space: 'linear-gradient(135deg, #34D399 0%, #10B981 100%)', executive: 'linear-gradient(135deg, #059669 0%, #047857 100%)' }},
-];
-
 export default function HomePage() {
   const navigate = useNavigate();
-  const { theme, setCountryCode, setHomeCountryCode } = useTheme();
+  // Keep useTheme even though we no longer consume theme.colors -- we still need
+  // setCountryCode + setHomeCountryCode so the flag overlay component stays in
+  // sync. Themes are deliberately dropped from rendering per Claude-design spec.
+  const { setCountryCode, setHomeCountryCode } = useTheme();
   const { locationMode, selectedLocation, currentGpsLocation, getActiveLocation, loading: locationLoading } = useLocation();
-  
+
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [localGreeting, setLocalGreeting] = useState(null);
@@ -95,24 +58,23 @@ export default function HomePage() {
   const [homeCountryInfo, setHomeCountryInfo] = useState(null);
   const [homeCountryTime, setHomeCountryTime] = useState(new Date());
   const [shouldShowHomeCountryTime, setShouldShowHomeCountryTime] = useState(false);
-  
-  // NEW: State for showing home flag
   const [showHomeFlag, setShowHomeFlag] = useState(false);
   const [homeFlagUrl, setHomeFlagUrl] = useState(null);
 
   useEffect(() => {
     if (!locationLoading) loadUserAndWeather();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationLoading, locationMode, selectedLocation, currentGpsLocation]);
 
-  // Set current location country code (for greeting only, not flag)
+  // Set current location country code (for greeting + the Layout's country
+  // pill, not the home flag — that's separate state).
   useEffect(() => {
     const currentLocation = getActiveLocation();
     if (currentLocation?.address?.country) {
       const country = currentLocation.address.country;
       const code = COUNTRY_CODES[country];
       if (code) setCountryCode(code);
-      
-      // Local greeting based on CURRENT location
+
       const translation = HELLO_TRANSLATIONS[country];
       const englishPrimaryCountries = ['United States', 'United Kingdom', 'Australia', 'New Zealand', 'Ireland'];
       if (!englishPrimaryCountries.includes(country) && translation) {
@@ -123,7 +85,8 @@ export default function HomePage() {
     }
   }, [locationMode, selectedLocation, currentGpsLocation, getActiveLocation, setCountryCode]);
 
-  // Check if we should show home country time
+  // Show home-country time chip only when the user is in a different country
+  // than their stated home (the away-from-home traveler case).
   useEffect(() => {
     const checkShowHomeCountryTime = () => {
       if (!user || !homeCountryInfo || !getActiveLocation()?.address) {
@@ -131,9 +94,7 @@ export default function HomePage() {
         return;
       }
       const activeLocation = getActiveLocation();
-      const currentCountry = activeLocation.address.country;
-      // Show home country time if in different country
-      setShouldShowHomeCountryTime(currentCountry !== user.home_country);
+      setShouldShowHomeCountryTime(activeLocation.address.country !== user.home_country);
     };
     checkShowHomeCountryTime();
   }, [user, homeCountryInfo, locationMode, selectedLocation, currentGpsLocation, getActiveLocation]);
@@ -157,18 +118,13 @@ export default function HomePage() {
       setUser(userData);
       const preferredScale = userData.preferred_temperature_scale || 'fahrenheit';
       setTempUnit(preferredScale === 'celsius' ? 'C' : 'F');
-      
-      // ============================================
-      // FIX: Set HOME COUNTRY flag, not current location
-      // ============================================
+
+      // Home-country flag overlay — uses HOME country, not current location.
       if (userData.show_home_country_info && userData.home_country) {
         loadHomeCountryData(userData.home_country);
-        
-        // Get HOME country code for flag
         const homeCode = COUNTRY_CODES[userData.home_country];
         if (homeCode) {
           setHomeCountryCode(homeCode);
-          // Set flag URL for HOME country
           setHomeFlagUrl(`https://flagcdn.com/w640/${homeCode.toLowerCase()}.png`);
           setShowHomeFlag(true);
         }
@@ -176,7 +132,7 @@ export default function HomePage() {
         setShowHomeFlag(false);
         setHomeFlagUrl(null);
       }
-      
+
       const activeLocation = getActiveLocation();
       if (activeLocation?.coordinates) {
         await loadWeatherData(
@@ -194,32 +150,18 @@ export default function HomePage() {
 
   const loadHomeCountryData = async (countryName) => {
     const fallbackTimezones = {
-      'United States': 'America/New_York',
-      'Philippines': 'Asia/Manila',
-      'Japan': 'Asia/Tokyo',
-      'United Kingdom': 'Europe/London',
-      'Australia': 'Australia/Sydney',
-      'Canada': 'America/Toronto',
-      'Germany': 'Europe/Berlin',
-      'France': 'Europe/Paris',
-      'Italy': 'Europe/Rome',
-      'Spain': 'Europe/Madrid',
-      'Brazil': 'America/Sao_Paulo',
-      'Mexico': 'America/Mexico_City',
-      'South Korea': 'Asia/Seoul',
-      'Thailand': 'Asia/Bangkok',
-      'Vietnam': 'Asia/Ho_Chi_Minh',
-      'Singapore': 'Asia/Singapore',
-      'Malaysia': 'Asia/Kuala_Lumpur',
-      'Indonesia': 'Asia/Jakarta',
-      'India': 'Asia/Kolkata',
-      'China': 'Asia/Shanghai',
+      'United States': 'America/New_York', 'Philippines': 'Asia/Manila', 'Japan': 'Asia/Tokyo',
+      'United Kingdom': 'Europe/London', 'Australia': 'Australia/Sydney', 'Canada': 'America/Toronto',
+      'Germany': 'Europe/Berlin', 'France': 'Europe/Paris', 'Italy': 'Europe/Rome',
+      'Spain': 'Europe/Madrid', 'Brazil': 'America/Sao_Paulo', 'Mexico': 'America/Mexico_City',
+      'South Korea': 'Asia/Seoul', 'Thailand': 'Asia/Bangkok', 'Vietnam': 'Asia/Ho_Chi_Minh',
+      'Singapore': 'Asia/Singapore', 'Malaysia': 'Asia/Kuala_Lumpur', 'Indonesia': 'Asia/Jakarta',
+      'India': 'Asia/Kolkata', 'China': 'Asia/Shanghai',
     };
-    const fallbackTz = fallbackTimezones[countryName] || 'UTC';
-    setHomeCountryInfo({ country: countryName, timezone: fallbackTz });
+    setHomeCountryInfo({ country: countryName, timezone: fallbackTimezones[countryName] || 'UTC' });
   };
 
-  const loadWeatherData = async (latitude, longitude, locationName) => {
+  const loadWeatherData = async (latitude, longitude) => {
     try {
       const promptText = `Based on coordinates ${latitude}, ${longitude}, provide current weather. Return ONLY valid JSON: {"timezone": "IANA timezone", "temperature_celsius": number, "temperature_fahrenheit": number, "condition": "brief condition"}`;
       const locationData = await base44.integrations.Core.InvokeLLM({
@@ -230,16 +172,16 @@ export default function HomePage() {
             timezone: { type: "string" },
             temperature_celsius: { type: "number" },
             temperature_fahrenheit: { type: "number" },
-            condition: { type: "string" }
-          }
+            condition: { type: "string" },
+          },
         },
-        add_context_from_internet: true
+        add_context_from_internet: true,
       });
       setTimezone(locationData.timezone);
       setWeatherInfo({
         celsius: Math.round(locationData.temperature_celsius),
         fahrenheit: Math.round(locationData.temperature_fahrenheit),
-        condition: locationData.condition
+        condition: locationData.condition,
       });
     } catch (error) {
       console.error("Error getting weather data:", error);
@@ -288,149 +230,137 @@ export default function HomePage() {
       "Places to Eat": "PlacesToEat",
       "Transportation": "Transportation",
       "Shopping": "Shopping",
-      "Smart Text Scanner": "SmartTextScanner"
+      "Smart Text Scanner": "SmartTextScanner",
     };
     if (routes[actionLabel]) navigate(createPageUrl(routes[actionLabel]));
   };
 
-  const toggleTempUnit = () => setTempUnit(prev => prev === 'C' ? 'F' : 'C');
+  const toggleTempUnit = () => setTempUnit((prev) => (prev === 'C' ? 'F' : 'C'));
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: theme.colors.background }}>
-        <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-16 h-16 border-4 rounded-full" style={{ borderColor: theme.colors.primary, borderTopColor: 'transparent' }} />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: IVORY }}>
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          className="w-16 h-16 border-4 rounded-full"
+          style={{ borderColor: TEAL_DEEP, borderTopColor: 'transparent' }}
+        />
       </div>
     );
   }
 
   const activeLocation = getActiveLocation();
+  const cityName = activeLocation?.placeName || activeLocation?.address?.city || '';
+  const placeText = activeLocation?.placeName || activeLocation?.address?.city || 'Set location';
 
-  // ── MODERN "BOLD BLOCKS" LAYOUT ─────────────────────────────────────────
-  const MODERN_TILES = [
-    { icon: Utensils,    label: 'Places to Eat',  action: 'Places to Eat',     bg: '#475569' },
-    { icon: CoffeeIcon,  label: 'Coffee',         action: 'Coffee',            bg: '#78716C' },
-    { icon: CreditCard,  label: 'ATM Finder',     action: 'ATM',               bg: '#0D9488' },
-    { icon: Bath,        label: 'Restroom',        action: 'Restroom',          bg: '#6366F1' },
-    { icon: Store,       label: 'Convenience',     action: 'Convenience Store', bg: '#EA580C' },
-    { icon: CloudSun,    label: 'Weather',         action: 'Weather',           bg: '#0284C7' },
-    { icon: MessageSquare, label: 'Phrases',       action: 'Basic Phrases',     bg: '#7C3AED' },
-    { icon: ShoppingBag, label: 'Shopping',        action: 'Shopping',          bg: '#DB2777' },
-    { icon: Compass,     label: 'Things to Do',    action: 'Things to Do',      bg: '#9333EA' },
-    { icon: Landmark,    label: 'Culture Info',    action: 'Culture Information',bg: '#4F46E5' },
-    { icon: Camera,      label: 'Text Scanner',   action: 'Smart Text Scanner', bg: '#059669' },
-    { icon: Search,      label: 'Price Scanner',  action: 'Smart Price Scanner',bg: '#0F766E' },
-  ];
-  const QUICK_ACTIONS = [
-    { icon: Navigation,  label: 'Directions', action: 'Transportation' },
-    { icon: MessageSquare, label: 'Translate', action: 'Basic Phrases' },
-    { icon: DollarSign,  label: 'Currency',   action: 'Money Exchange' },
-    { icon: Car,         label: 'Transport',  action: 'Transportation' },
-  ];
-
-  const locationText = activeLocation?.address
-    ? `${activeLocation.address.city || activeLocation.address.neighborhood || ''}, ${activeLocation.address.country || ''}`.replace(/^,\s*/, '')
-    : 'Set location';
-
-  const displayTemp = weatherInfo
-    ? (tempUnit === 'C' ? `${weatherInfo.tempC}°C` : `${weatherInfo.tempF}°F`)
-    : null;
-
-  // ── CLASSIC LAYOUT (original) ───────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen transition-colors duration-300" style={{ background: theme.colors.background }}>
-      
-      {/* Space background for space theme */}
-      {theme.id === 'space' && (
-        <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a1f] via-[#0f0f23] to-[#050510]" />
-          {[...Array(120)].map((_, i) => (
-            <div key={i} className="absolute bg-white rounded-full"
-              style={{ width: Math.random() > 0.85 ? '2px' : '1px', height: Math.random() > 0.85 ? '2px' : '1px',
-                left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`,
-                opacity: Math.random() * 0.7 + 0.3, animation: `twinkle ${Math.random() * 4 + 2}s ease-in-out infinite`,
-                animationDelay: `${Math.random() * 3}s` }} />
-          ))}
-        </div>
-      )}
-
-      {/* Hero Header Card with HOME COUNTRY Flag */}
-      <div className="px-4 pt-3 pb-4 relative z-10">
-        <div className="max-w-md mx-auto rounded-[20px] shadow-lg relative overflow-hidden"
-          style={{ background: theme.colors.cardBg, border: `1px solid ${theme.colors.cardBorder}` }}>
-          
-          {/* ============================================ */}
-          {/* FIX: Show HOME COUNTRY flag, bolder/brighter */}
-          {/* ============================================ */}
+    <div className="min-h-screen font-sans" style={{ background: IVORY }}>
+      {/* HERO GREETING CARD ----------------------------------------------- */}
+      <div className="px-4 pt-2 pb-4">
+        <div
+          className="max-w-md mx-auto rounded-[22px] relative overflow-hidden"
+          style={{
+            background: '#FFFFFF',
+            border: '1px solid #F0E9DC',
+            boxShadow: '0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)',
+          }}
+        >
+          {/* Home country flag overlay (when user has show_home_country_info on).
+              Soft-tinted so the foreground text + chips stay legible. The bolder
+              landscape-flag treatment from the Claude-design Medium variant is
+              still TBD -- intentionally keeping the existing soft look until
+              users see Phase 1 land. */}
           {showHomeFlag && homeFlagUrl && (
-            <div className="absolute inset-0 z-0"
-              style={{
-                backgroundImage: `url(${homeFlagUrl})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                opacity: theme.isDark ? 0.45 : 0.55,  // BOLDER - increased opacity
-                filter: 'saturate(1.3) contrast(1.1)',  // BRIGHTER - more vivid colors
-              }} />
+            <>
+              <div
+                className="absolute inset-0 z-0"
+                style={{
+                  backgroundImage: `url(${homeFlagUrl})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  opacity: 0.5,
+                  filter: 'saturate(1.3) contrast(1.05)',
+                }}
+              />
+              <div
+                className="absolute inset-0 z-[1]"
+                style={{
+                  background: 'linear-gradient(180deg, rgba(255,252,247,0.62) 0%, rgba(255,252,247,0.82) 100%)',
+                }}
+              />
+            </>
           )}
-          
-          {/* Gradient overlay - lighter to show flag more */}
-          <div className="absolute inset-0 z-1"
-            style={{
-              background: theme.isDark 
-                ? 'linear-gradient(180deg, rgba(30,41,59,0.55) 0%, rgba(30,41,59,0.75) 100%)'  // Lighter overlay
-                : 'linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.75) 100%)',
-            }} />
 
-          <div className="relative p-5 z-10">
-            {/* Greeting */}
-            <div className="mb-4">
-              <p className="text-sm mb-1" style={{ color: theme.colors.textSecondary }}>
-                Hello 👋 
-                {localGreeting && (
-                  <span className="italic font-serif ml-1">
-                    {localGreeting.charAt(0).toUpperCase() + localGreeting.slice(1)}
+          <div className="relative z-10 p-5">
+            {/* Hello row */}
+            <p className="text-[14px] text-[#475569] flex items-center gap-1.5 leading-none">
+              <span>Hello 👋</span>
+              {localGreeting && (
+                <span className="font-serif italic text-[#3A3128]">
+                  {localGreeting.charAt(0).toUpperCase() + localGreeting.slice(1)}
+                </span>
+              )}
+            </p>
+
+            {/* Name, in <City> */}
+            <h1 className="mt-2 text-[30px] font-extrabold tracking-tight leading-none text-[#0F1419]">
+              {getFirstName()}
+              {cityName && (
+                <>
+                  <span>, in </span>
+                  <span className="font-serif italic font-normal" style={{ color: TEAL_DEEP }}>
+                    {cityName}
                   </span>
-                )}
-              </p>
-              <h1 className="text-3xl font-extrabold" style={{ color: theme.colors.textPrimary }}>
-                {getFirstName()}
-              </h1>
-            </div>
+                </>
+              )}
+            </h1>
 
-            {/* Location */}
-            <div className="mb-4 rounded-xl px-3 py-2.5 backdrop-blur-sm"
-              style={{ background: theme.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)' }}>
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: theme.colors.primary }} />
-                <p className="text-sm font-bold leading-tight truncate flex-1" style={{ color: theme.colors.textPrimary }}>
-                  {activeLocation?.placeName || activeLocation?.address?.city || 'Loading...'}
+            {/* Location chip */}
+            <button
+              onClick={() => setShowLocationPicker(true)}
+              className="mt-4 w-full px-3.5 py-2.5 rounded-[14px] flex items-center gap-2.5 transition-colors hover:bg-[#EFE8D6]"
+              style={{ background: '#F7F4EC' }}
+            >
+              <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} />
+              <div className="flex-1 text-left">
+                <p className="text-[14.5px] font-semibold text-[#0F1419] leading-tight truncate">
+                  {placeText}
+                </p>
+                <p className="text-[11.5px] font-medium leading-none mt-1 underline underline-offset-2" style={{ color: TEAL_DEEP }}>
+                  Change location
                 </p>
               </div>
-              <button onClick={() => setShowLocationPicker(true)}
-                className="text-xs font-semibold mt-1 underline underline-offset-2 pl-6"
-                style={{ color: theme.colors.primary }}>
-                Change Location
-              </button>
-            </div>
+            </button>
 
-            {/* Date, Time, Weather Row */}
-            <div className="flex items-center justify-between text-sm rounded-xl px-3 py-2"
-              style={{ background: theme.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)' }}>
-              <span style={{ color: theme.colors.textPrimary }}>{formatLocalDate(currentTime, timezone)}</span>
-              <span className="font-bold" style={{ color: theme.colors.textPrimary }}>{formatLocalTime(currentTime, timezone)}</span>
-              {weatherInfo && (
-                <button onClick={toggleTempUnit} className="flex items-center gap-1 font-bold" style={{ color: theme.colors.textPrimary }}>
-                  <Cloud className="w-4 h-4" style={{ color: theme.colors.primary }} />
+            {/* Date / Time / Weather row */}
+            <div
+              className="mt-2.5 px-3.5 py-2.5 rounded-[14px] flex items-center justify-between text-[13.5px] font-semibold text-[#0F1419]"
+              style={{ background: '#F7F4EC' }}
+            >
+              <span>{formatLocalDate(currentTime, timezone)}</span>
+              <span>{formatLocalTime(currentTime, timezone)}</span>
+              {weatherInfo ? (
+                <button onClick={toggleTempUnit} className="flex items-center gap-1.5">
+                  <Cloud size={16} color={TEAL_DEEP} strokeWidth={2} />
                   <span>{tempUnit === 'C' ? `${weatherInfo.celsius}°C` : `${weatherInfo.fahrenheit}°F`}</span>
                 </button>
+              ) : (
+                <span className="opacity-50">—°</span>
               )}
             </div>
 
-            {/* Home Country Time */}
+            {/* Home country time chip (only when traveling) */}
             {shouldShowHomeCountryTime && homeCountryInfo && (
-              <div className="mt-3 rounded-lg px-3 py-2" style={{ background: theme.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}>
-                <p className="text-xs mb-0.5" style={{ color: theme.colors.textMuted }}>Home: {homeCountryInfo.country}</p>
-                <div className="flex items-center justify-between text-xs" style={{ color: theme.colors.textSecondary }}>
+              <div
+                className="mt-2.5 px-3.5 py-2 rounded-[12px] text-[12px] text-[#3A3128]"
+                style={{ background: 'rgba(15,124,115,0.08)' }}
+              >
+                <p className="font-mono text-[10px] tracking-[0.12em] uppercase opacity-70 mb-0.5">
+                  Home · {homeCountryInfo.country}
+                </p>
+                <div className="flex items-center justify-between font-semibold">
                   <span>{formatLocalDate(homeCountryTime, homeCountryInfo.timezone)}</span>
                   <span>{formatLocalTime(homeCountryTime, homeCountryInfo.timezone)}</span>
                 </div>
@@ -440,95 +370,199 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* 💱 MONEY EXCHANGE */}
-      <div className="px-4 pb-3 relative z-10">
+      {/* FEATURED MONEY EXCHANGE ----------------------------------------- */}
+      <div className="px-4 pb-3">
         <div className="max-w-md mx-auto">
-          <motion.button whileTap={{ scale: 0.98 }} onClick={() => handleQuickAction("Money Exchange")}
-            className="w-full rounded-2xl p-4 shadow-lg transition-all relative overflow-hidden"
-            style={{ background: theme.colors.moneyExchangeBg, boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)' }}>
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-shimmer" />
-            <div className="flex items-center justify-center gap-3 relative">
-              <span className="text-2xl">💱</span>
-              <div className="text-left">
-                <span className="text-lg font-bold text-white block">Money Exchange</span>
-              </div>
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={() => handleQuickAction('Money Exchange')}
+            className="w-full rounded-[22px] p-5 relative overflow-hidden flex items-center gap-4 text-left"
+            style={{
+              background: 'linear-gradient(135deg, #0F9A6B 0%, #0BB572 60%, #16E27A 100%)',
+              boxShadow: '0 14px 30px -14px rgba(15,154,107,.5)',
+            }}
+          >
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center flex-none font-serif italic text-[22px] text-white"
+              style={{ background: 'rgba(255,255,255,0.2)' }}
+            >
+              $€¥
             </div>
+            <div className="flex-1 text-white">
+              <div className="text-[21px] font-bold tracking-tight leading-tight">Money Exchange</div>
+              <div className="text-[13px] opacity-90 mt-1">Compare rates near you</div>
+            </div>
+            <ChevronRight size={22} color="#fff" strokeWidth={2.2} />
           </motion.button>
         </div>
       </div>
 
-      {/* 🥇 TIER 1 */}
-      <div className="px-4 py-2 relative z-10">
-        <div className="max-w-md mx-auto">
-          <div className="grid grid-cols-3 gap-2">
-            {TIER_1_BUTTONS.map((btn) => (
-              <EmojiButton key={btn.id} emoji={btn.emoji} label={btn.label}
-                gradient={btn.colors[theme.id] || btn.colors.light}
-                onClick={() => handleQuickAction(btn.action)} theme={theme} />
-            ))}
-          </div>
+      {/* 3-COL FEATURE TIER (Transit / Food / Coffee) -------------------- */}
+      <div className="px-4 pb-2.5">
+        <div className="max-w-md mx-auto grid grid-cols-3 gap-2.5">
+          <SatTile cat={CAT.transit} icon={Bus} label="Transit" onClick={() => handleQuickAction('Transportation')} />
+          <SatTile cat={CAT.food} icon={Utensils} label="Places to eat" onClick={() => handleQuickAction('Places to Eat')} />
+          <SatTile cat={CAT.coffee} icon={CoffeeIcon} label="Coffee" onClick={() => handleQuickAction('Coffee')} />
         </div>
       </div>
 
-      {/* 🥈 TIER 2 */}
-      <div className="px-4 py-2 relative z-10">
-        <div className="max-w-md mx-auto">
-          <div className="grid grid-cols-4 gap-2">
-            {TIER_2_BUTTONS.map((btn) => (
-              <EmojiButton key={btn.id} emoji={btn.emoji} label={btn.label}
-                gradient={btn.colors[theme.id] || btn.colors.light}
-                onClick={() => handleQuickAction(btn.action)} theme={theme} compact />
-            ))}
-          </div>
+      {/* 4-COL SECONDARY TIER (ATM / Restroom / 24h / Weather) ----------- */}
+      <div className="px-4 pb-4">
+        <div className="max-w-md mx-auto grid grid-cols-4 gap-2.5">
+          <SatTile small cat={CAT.atm} icon={CreditCard} label="ATM" onClick={() => handleQuickAction('ATM')} />
+          <SatTile small cat={CAT.restroom} icon={Bath} label="Restroom" onClick={() => handleQuickAction('Restroom')} />
+          <SatTile small cat={CAT.convenience} icon={Store} label="24h store" onClick={() => handleQuickAction('Convenience Store')} />
+          <SatTile small cat={CAT.weather} icon={CloudSun} label="Weather" onClick={() => handleQuickAction('Weather')} />
         </div>
       </div>
 
-      {/* 🥉 TIER 3 */}
-      <div className="px-4 py-2 relative z-10">
+      {/* EXPLORE MORE — vibrant gradient cards --------------------------- */}
+      <div className="px-4 pb-28">
         <div className="max-w-md mx-auto">
-          <p className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: theme.colors.textMuted }}>More Tools</p>
-          <div className="grid grid-cols-3 gap-2">
-            {TIER_3_BUTTONS.map((btn) => (
-              <EmojiButton key={btn.id} emoji={btn.emoji} label={btn.label}
-                gradient={btn.colors[theme.id] || btn.colors.light}
-                onClick={() => handleQuickAction(btn.action)} theme={theme} />
-            ))}
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="font-mono text-[10.5px] tracking-[0.16em] uppercase text-[#475569] font-semibold">
+              Explore more
+            </span>
           </div>
-        </div>
-      </div>
-
-      {/* Explore More */}
-      <div className="px-4 py-2 pb-28 relative z-10">
-        <div className="max-w-md mx-auto">
-          <p className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: theme.colors.textMuted }}>Explore</p>
-          <div className="grid grid-cols-3 gap-2">
-            {MORE_BUTTONS.map((btn) => (
-              <EmojiButton key={btn.id} emoji={btn.emoji} label={btn.label}
-                gradient={btn.colors[theme.id] || btn.colors.light}
-                onClick={() => handleQuickAction(btn.action)} theme={theme} />
-            ))}
+          <div className="grid grid-cols-2 gap-2.5">
+            <GradCard
+              gradient={`linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 60%, #FF7DB1 100%)`}
+              icon={Star}
+              label="Things to do"
+              sub="Curated picks"
+              decoration="✦"
+              onClick={() => handleQuickAction('Things to Do')}
+            />
+            <GradCard
+              gradient={`linear-gradient(135deg, ${CAT.shopping.ink} 0%, #A855F7 60%, #C084FC 100%)`}
+              icon={ShoppingBag}
+              label="Shopping"
+              sub="Markets · malls"
+              onClick={() => handleQuickAction('Shopping')}
+            />
+            <GradCard
+              gradient={`linear-gradient(135deg, ${CAT.culture.ink} 0%, #D97706 60%, #FBBF24 100%)`}
+              icon={Compass}
+              label="Culture"
+              sub="Museums · sights"
+              onClick={() => handleQuickAction('Culture Information')}
+            />
+            <GradCard
+              gradient={`linear-gradient(135deg, ${CAT.phrases.ink} 0%, #CA8A04 60%, #EAB308 100%)`}
+              icon={Languages}
+              label="Phrases"
+              sub="50 essentials"
+              decoration="あ"
+              decorationSerif
+              onClick={() => handleQuickAction('Basic Phrases')}
+            />
+            <GradCard
+              gradient="linear-gradient(135deg, #0F766E 0%, #14B8A6 60%, #2DD4BF 100%)"
+              icon={ScanLine}
+              label="Price scanner"
+              sub="Convert any price"
+              onClick={() => handleQuickAction('Smart Price Scanner')}
+            />
+            <GradCard
+              gradient="linear-gradient(135deg, #6D28D9 0%, #8B5CF6 60%, #A78BFA 100%)"
+              icon={MessageSquare}
+              label="Text scanner"
+              sub="Coming soon"
+              onClick={() => handleQuickAction('Smart Text Scanner')}
+            />
           </div>
         </div>
       </div>
 
       <LocationModePicker isOpen={showLocationPicker} onClose={() => setShowLocationPicker(false)} />
-      
-      <style>{`
-        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-        .animate-shimmer { animation: shimmer 2s infinite; }
-        @keyframes twinkle { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
-      `}</style>
     </div>
   );
 }
 
-function EmojiButton({ emoji, label, gradient, onClick, theme, compact = false }) {
+// ── SatTile — saturated category-color tile ────────────────────────────────
+// Per Claude-design spec: ink bg, white icon chip on rgba(255,255,255,.18),
+// label bottom-left, decorative white circle bleeding off top-right corner.
+function SatTile({ cat, icon: Icon, label, onClick, small = false }) {
   return (
-    <motion.button whileTap={{ scale: 0.95 }} onClick={onClick}
-      className={`rounded-xl flex flex-col items-center justify-center transition-all ${compact ? 'p-2.5' : 'p-3'}`}
-      style={{ background: gradient, boxShadow: theme.isDark ? '0 4px 15px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.15)' }}>
-      <span className={compact ? 'text-xl mb-0.5' : 'text-2xl mb-1'}>{emoji}</span>
-      <span className={`font-semibold text-white text-center leading-tight ${compact ? 'text-[10px]' : 'text-xs'}`}>{label}</span>
+    <motion.button
+      whileTap={{ scale: 0.96 }}
+      onClick={onClick}
+      className="relative overflow-hidden rounded-[18px] text-white text-left"
+      style={{
+        background: cat.ink,
+        aspectRatio: '1 / 1',
+        padding: small ? 11 : 14,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        boxShadow: `0 10px 22px -12px ${cat.ink}80`,
+      }}
+    >
+      <div
+        className="absolute -top-3 -right-3 rounded-full pointer-events-none"
+        style={{ width: 70, height: 70, background: 'rgba(255,255,255,0.12)' }}
+      />
+      <div
+        className="flex items-center justify-center relative"
+        style={{
+          width: small ? 30 : 38,
+          height: small ? 30 : 38,
+          borderRadius: small ? 10 : 12,
+          background: 'rgba(255,255,255,0.2)',
+        }}
+      >
+        <Icon size={small ? 16 : 20} color="#fff" strokeWidth={2} />
+      </div>
+      <div
+        className="font-bold tracking-tight relative leading-tight"
+        style={{ fontSize: small ? 11.5 : 14.5 }}
+      >
+        {label}
+      </div>
+    </motion.button>
+  );
+}
+
+// ── GradCard — vibrant gradient feature card (Explore More section) ────────
+// Per spec: gradient bg, 1.3:1 aspect, decorative shape + optional glyph,
+// icon chip top-left, two-line label bottom-left.
+function GradCard({ gradient, icon: Icon, label, sub, decoration, decorationSerif = false, onClick }) {
+  return (
+    <motion.button
+      whileTap={{ scale: 0.97 }}
+      onClick={onClick}
+      className="relative overflow-hidden rounded-[18px] text-white text-left p-3.5"
+      style={{
+        background: gradient,
+        aspectRatio: '1.3 / 1',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        boxShadow: '0 12px 26px -12px rgba(15,20,25,0.4)',
+      }}
+    >
+      <div
+        className="absolute -top-2.5 -right-2.5 rounded-full pointer-events-none"
+        style={{ width: 70, height: 70, background: 'rgba(255,255,255,0.14)' }}
+      />
+      {decoration && (
+        <div
+          className={`absolute pointer-events-none opacity-70 ${decorationSerif ? 'font-serif italic' : ''}`}
+          style={{ top: decorationSerif ? 12 : 22, right: decorationSerif ? 14 : 28, fontSize: decorationSerif ? 30 : 22, color: '#fff' }}
+        >
+          {decoration}
+        </div>
+      )}
+      <div
+        className="flex items-center justify-center relative"
+        style={{ width: 36, height: 36, borderRadius: 11, background: 'rgba(255,255,255,0.22)' }}
+      >
+        <Icon size={18} color="#fff" strokeWidth={2} />
+      </div>
+      <div className="relative">
+        <div className="font-extrabold text-[16px] tracking-tight leading-tight">{label}</div>
+        <div className="text-[11.5px] opacity-90 mt-0.5">{sub}</div>
+      </div>
     </motion.button>
   );
 }
