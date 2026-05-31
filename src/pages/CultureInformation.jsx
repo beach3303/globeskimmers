@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { ArrowLeft, Loader2, Navigation, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, Navigation, RefreshCw, ChevronLeft, Compass } from "lucide-react";
+import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { motion } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
@@ -484,37 +485,32 @@ export default function CultureInformationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
-      <div className="bg-gradient-to-br from-[#0d9488] to-[#14b8a6] text-white px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <button
-            onClick={() => navigate(createPageUrl("Home"))}
-            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm">Back to Home</span>
+    <div className="min-h-screen font-sans" style={{ background: IVORY }}>
+      {/* HEADER */}
+      <div className="px-4 pt-2 pb-3">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
+            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
-          
-          {/* Refresh button with cache indicator */}
-          <button
-            onClick={handleForceRefresh}
-            className="flex items-center gap-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
-            title={isFromCache ? "Data from cache - Click to refresh" : "Click to refresh data"}
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span className="text-xs font-medium">
-              {isFromCache ? '📦 Cached' : 'Refresh'}
-            </span>
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]" style={{ background: CAT.culture.bg, color: CAT.culture.ink }}>
+            <Compass size={13} color={CAT.culture.ink} strokeWidth={2} />
+            Culture
+          </div>
+          <button onClick={handleForceRefresh} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} title={isFromCache ? "Cached - Tap to refresh" : "Refresh"}>
+            <RefreshCw className="w-4 h-4" color="#0F1419" strokeWidth={2} />
           </button>
         </div>
+      </div>
 
-        <div className="text-center">
-          <h1 className="text-3xl font-bold mb-2">{cultureData?.country?.country_name || 'Loading...'}</h1>
-          <p className="text-base opacity-90">Country Information</p>
-          {isFromCache && (
-            <p className="text-xs opacity-70 mt-1">📦 Using cached data • Tap refresh for latest</p>
-          )}
-        </div>
+      {/* COUNTRY TITLE */}
+      <div className="px-4 max-w-md mx-auto pb-3 text-center">
+        <h1 className="text-[30px] font-extrabold tracking-tight text-[#0F1419]">
+          <span className="font-serif italic font-normal" style={{ color: CAT.culture.ink }}>{cultureData?.country?.country_name || 'Loading...'}</span>
+        </h1>
+        <p className="font-mono text-[10.5px] tracking-[0.16em] uppercase font-semibold mt-1" style={{ color: '#6B7280' }}>Country Information</p>
+        {isFromCache && (
+          <p className="text-[11px] text-[#94A3B8] mt-1">📦 Using cached data · tap refresh for latest</p>
+        )}
       </div>
 
       <div className="max-w-md mx-auto -mt-4">
