@@ -2267,7 +2267,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
             style={{ background: CAT.transit.bg, color: CAT.transit.ink }}
           >
             <Bus size={13} color={CAT.transit.ink} strokeWidth={2} />
-            Transportation
+            Transportation Information
           </div>
           <div className="w-10 h-10" />
         </div>
