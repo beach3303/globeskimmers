@@ -2262,10 +2262,48 @@ Deno.serve(async (req) => {
       if (dropped > 0) console.log(`🚮 Dropped ${dropped} tier-5 noise places`);
     }
 
+    // ── PHASE 1.5: "Also serves X" fallback ─────────────────────────────────
+    // When a strict DISH search returns 0 results (e.g. "Mang Inasal" in a
+    // city with no Mang Inasal branches), surface nearby restaurants of the
+    // same cuisine umbrella so the user has something useful instead of a
+    // dead-end "no results" page.
+    //
+    // ZERO extra Google API cost -- the candidate pool already contains
+    // generic restaurants from the DISH_BROAD_TYPES fan-out (line ~1616).
+    // We just re-filter the existing processedPlaces by primaryType for the
+    // umbrella's cuisine types and tag them with `fallback: true` so the
+    // frontend can render them under a "No exact match -- here are nearby
+    // [Cuisine] restaurants you might like" divider.
+    let fallbackPlaces: any[] = [];
+    let fallbackCuisine: string | null = null;
+    let fallbackQueryLabel: string | null = null;
+    if (finalPlaces.length === 0 && intent.kind === 'DISH' && (intent as any).strict) {
+      const tier1 = ((intent as any).tier1Types || [])[0] || '';
+      const cuisineKey = tier1.replace(/_restaurant$/, '');
+      const umbrella = CUISINE_CHIP_TO_UMBRELLA[cuisineKey];
+      if (umbrella) {
+        fallbackCuisine = umbrella.label;
+        fallbackQueryLabel = (intent as any).label || searchQuery;
+        fallbackPlaces = processedPlaces
+          .filter((p: any) => {
+            const types = new Set([
+              ...(p.types || []),
+              p.primaryType || '',
+            ].map((t: string) => t.toLowerCase()));
+            return [...types].some((t: string) => umbrella.types.has(t));
+          })
+          .map((p: any) => ({ ...p, fallback: true, fallbackCuisine: umbrella.label }))
+          .sort((a: any, b: any) => a.distanceKm - b.distanceKm)
+          .slice(0, 20);  // Cap fallback section at 20 places
+        console.log(`🔄 Fallback fired for "${fallbackQueryLabel}" -> ${fallbackPlaces.length} ${fallbackCuisine} restaurants from existing pool`);
+      }
+    }
+
     // Stamp each result with its backend-computed rank so the frontend
     // can preserve the intent-aware order even if it re-sorts.
     const intentSorted = intent.kind !== 'GENERAL' && !!searchQuery?.trim();
     finalPlaces.forEach((p: any, i: number) => { p.backendRank = i + 1; });
+    fallbackPlaces.forEach((p: any, i: number) => { p.backendRank = i + 1; });
 
     // ── DISH-FIRST PHOTO ORDERING + MENU OCR FOR TIER 4 ─────────────────────
     // For DISH queries, eager-label the first 20 visible cards' photos via the
@@ -2367,6 +2405,13 @@ Deno.serve(async (req) => {
       autoExpanded: autoExpandedFrom !== null,
       autoExpandedFrom,
       effectiveRadiusMiles,
+      // ── Phase 1.5 "Also serves X" fallback section ────────────────────
+      // Populated when strict DISH search returned 0 results AND we found
+      // umbrella-cuisine restaurants in the existing pool. Frontend renders
+      // these below a divider explaining no exact match was found.
+      fallbackPlaces,
+      fallbackCuisine,
+      fallbackQueryLabel,
     });
 
   } catch (error: any) {
