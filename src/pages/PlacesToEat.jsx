@@ -1345,7 +1345,7 @@ export default function PlacesToEat() {
           <span style={{fontSize:"26px"}}>🍽️</span>
           <div style={{color:"#fff"}}>
             <div style={{fontWeight:"800",fontSize:"22px"}}>Places to Eat</div>
-            <div style={{fontSize:"13px",opacity:0.85}}>Restaurants · Parking · Seating · Reviews</div>
+            <div style={{fontSize:"13px",opacity:0.85}}>Search nearby restaurants</div>
           </div>
         </div>
 
