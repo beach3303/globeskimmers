@@ -5,8 +5,8 @@ import { createPageUrl } from "@/utils";
 import PWASetup from "@/components/PWASetup";
 import { ToastContainer } from "@/components/Toast";
 import { LocationProvider } from "@/components/location/LocationContext";
-import BottomNav from "@/components/theme/BottomNav";
 import BrandBanner from "@/components/redesign/BrandBanner";
+import FloatingNav from "@/components/redesign/FloatingNav";
 import { IVORY, TEAL_DEEP } from "@/components/redesign/constants";
 
 // Generate or retrieve session ID
@@ -145,13 +145,14 @@ export default function Layout({ children, currentPageName }) {
             <BrandBanner />
           </div>
 
-          {/* App Content — offset by banner height (50) + nav clearance (64). */}
-          <div className="w-full min-h-screen pt-[50px] pb-16">
+          {/* App Content — offset by banner height (50px) + floating nav
+              clearance (96px ≈ pill height + bottom gap + safe area). */}
+          <div className="w-full min-h-screen pt-[50px] pb-24">
             {children}
           </div>
 
-          {/* Bottom Navigation */}
-          <BottomNav />
+          {/* Floating pill nav — 3 anchors (Home / Saved / Settings). */}
+          <FloatingNav />
         </div>
       </LocationProvider>
     </>

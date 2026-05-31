@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Home as HomeIcon, Bookmark, Settings as SettingsIcon } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 
@@ -7,16 +7,34 @@ import { createPageUrl } from '@/utils';
 // Per the Claude-design spec: 3 anchors only (Home, Saved, Settings).
 // NOT Search — that was explicitly removed.
 //
+// Active state is derived from useLocation().pathname so Layout can render
+// <FloatingNav /> without prop wiring. Pass `dark` over dark/map surfaces
+// for higher contrast.
+//
 // Props:
-//   active: 'home' | 'saved' | 'settings' — controls which item is highlighted.
 //   dark:   pass `true` over dark/map surfaces to lift contrast.
-export default function FloatingNav({ active = 'home', dark = false }) {
+//   active: optional explicit override; otherwise auto-detected from route.
+export default function FloatingNav({ active, dark = false }) {
   const navigate = useNavigate();
+  const location = useLocation();
+
   const items = [
     { id: 'home',     ico: HomeIcon,     route: 'Home' },
     { id: 'saved',    ico: Bookmark,     route: 'SavedLocations' },
     { id: 'settings', ico: SettingsIcon, route: 'Settings' },
   ];
+
+  // Auto-detect active tab from route. Mirrors the BottomNav logic so swapping
+  // BottomNav -> FloatingNav doesn't lose the highlight behavior.
+  const detectActive = () => {
+    if (active) return active;
+    const path = location.pathname.toLowerCase();
+    if (path.includes('savedlocations') || path.endsWith('/saved')) return 'saved';
+    if (path.includes('settings')) return 'settings';
+    if (path === '/' || path.includes('home')) return 'home';
+    return null;  // any other finder/page -> no tab highlighted
+  };
+  const activeTab = detectActive();
 
   const bg = dark ? 'rgba(20,20,20,0.78)' : 'rgba(22,17,13,0.92)';
   const fg = '#FAF7EE';
@@ -44,7 +62,7 @@ export default function FloatingNav({ active = 'home', dark = false }) {
     >
       {items.map((it) => {
         const Icon = it.ico;
-        const isActive = active === it.id;
+        const isActive = activeTab === it.id;
         return (
           <button
             key={it.id}
