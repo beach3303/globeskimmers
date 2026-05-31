@@ -9,6 +9,8 @@ import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
+import { ChevronLeft, MapPin, CreditCard } from "lucide-react";
+import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 
 // ─── THEME ─────────────────────────────────────────────────────────────────
 const TEAL      = "#00BCD4";
@@ -703,46 +705,57 @@ export default function ATMFinderPage() {
   };
 
   return (
-    <div style={{ fontFamily:"'DM Sans', -apple-system, sans-serif", background:"#F8FAFB", minHeight:"100vh" }}>
+    <div className="font-sans" style={{ background: IVORY, minHeight:"100vh" }}>
 
-      {/* ── Header ── */}
-      <div style={{ padding:"16px 16px 10px" }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"12px" }}>
-          <button onClick={() => window.history.back()} style={{ display:"flex", alignItems:"center", gap:"6px", background:"none", border:"none", padding:"0", color:TEAL_DARK, fontSize:"14px", fontWeight:"600", cursor:"pointer", fontFamily:"inherit" }}>← Back to Home</button>
-          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="dark" title="Refresh ATMs" />
-        </div>
-
-        {/* Title bar */}
-        <div style={{ background:`linear-gradient(135deg, ${TEAL} 0%, ${TEAL_DARK} 100%)`, borderRadius:"16px", padding:"14px 16px", marginBottom:"12px", display:"flex", alignItems:"center", gap:"12px" }}>
-          <span style={{ fontSize:"32px" }}>🏧</span>
-          <div>
-            <div style={{ fontWeight:"800", fontSize:"20px", color:"#fff" }}>ATM Finder</div>
-            <div style={{ fontSize:"12px", color:"rgba(255,255,255,0.8)" }}>Find nearby ATMs</div>
+      {/* HEADER — redesign pattern */}
+      <div className="px-4 pt-2 pb-3">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <button onClick={() => window.history.back()} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
+            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
+          </button>
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]" style={{ background: CAT.atm.bg, color: CAT.atm.ink }}>
+            <CreditCard size={13} color={CAT.atm.ink} strokeWidth={2} />
+            ATM Finder
           </div>
+          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh ATMs" />
         </div>
+      </div>
 
-        {/* Location bar */}
-        <div onClick={() => setShowLocPicker(true)} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 13px", background:"#fff", borderRadius:"10px", border:"1px solid #E2E8F0", fontSize:"13px", marginBottom:"10px", cursor:"pointer" }}>
-          <span style={{ color:GRAY }}>{isCity ? '🏙️' : '📍'} {locLabel}</span>
-          <span style={{ background:TEAL_LIGHT, color:TEAL_DARK, padding:"4px 10px", borderRadius:"6px", fontWeight:"600", fontSize:"12px" }}>Change</span>
-        </div>
-
+      {/* LOCATION CARD */}
+      <div className="px-4 max-w-md mx-auto pb-3">
+        <button onClick={() => setShowLocPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
+          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
+          <div className="flex-1 min-w-0">
+            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>
+              {isCity ? '🏙️ City' : '📍 Location'}
+            </div>
+            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
+          </div>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{ background: CAT.atm.bg, color: CAT.atm.ink }}>
+            Change
+          </span>
+        </button>
         {isCity && (
-          <div style={{ fontSize:"11px", color:"#92400E", padding:"8px 10px", background:"#FFFBEB", border:"1px solid #FCD34D", borderRadius:"8px", marginBottom:"10px", lineHeight:1.4 }}>
-            💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
+          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[12px] leading-snug flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
+            <span>💡</span>
+            <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
           </div>
         )}
+      </div>
+
+      {/* Filter band */}
+      <div className="px-4 max-w-md mx-auto">
 
         {/* Radius buttons */}
         <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"10px", flexWrap:"wrap" }}>
-          <span style={{ fontSize:"12px", color:GRAY, fontWeight:"600", flexShrink:0 }}>Radius:</span>
+          <span className="font-mono" style={{ fontSize:"10px", color:'#6B7280', fontWeight:600, letterSpacing:'0.14em', textTransform:'uppercase', flexShrink:0 }}>📏 Radius:</span>
           <div style={{ display:"flex", gap:"4px" }}>
             {[5,10,15,25].map(r => (
-              <button key={r} onClick={() => setRadius(r)} style={{ padding:"5px 10px", borderRadius:"8px", border: radius===r ? `2px solid ${TEAL}` : "1px solid #E2E8F0", background: radius===r ? `${TEAL}15` : "#fff", color: radius===r ? TEAL_DARK : GRAY, fontWeight: radius===r ? "700" : "500", fontSize:"12px", cursor:"pointer", fontFamily:"inherit" }}>{r} mi</button>
+              <button key={r} onClick={() => setRadius(r)} className="font-sans" style={{ padding:"5px 10px", borderRadius:"8px", border: radius===r ? `2px solid ${CAT.atm.ink}` : "1px solid #F0E9DC", background: radius===r ? CAT.atm.bg : "#fff", color: radius===r ? CAT.atm.ink : '#475569', fontWeight: radius===r ? "700" : "500", fontSize:"12px", cursor:"pointer" }}>{r} mi</button>
             ))}
           </div>
           <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" style={{ marginLeft:"auto" }} />
-          <span style={{ fontSize:"11px", color:GRAY, flexShrink:0 }}>{loading ? "Loading…" : `${atms.length} found`}</span>
+          <span style={{ fontSize:"11px", color:'#94A3B8', flexShrink:0 }}>{loading ? "Loading…" : `${atms.length} found`}</span>
         </div>
 
         {/* Quick filters row */}
