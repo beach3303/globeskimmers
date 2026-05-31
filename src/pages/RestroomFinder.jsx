@@ -10,6 +10,8 @@ import RefreshButton from "@/components/RefreshButton";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
+import { ChevronLeft, MapPin } from "lucide-react";
+import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 
 // ─── THEME ─────────────────────────────────────────────────────────────────
 const TEAL = "#00BCD4";
@@ -681,54 +683,73 @@ export default function RestroomFinderPage() {
   const selectedRestroom = activeMapPin !== null ? filtered[activeMapPin] : null;
 
   return (
-    <div style={{ fontFamily: "'DM Sans',-apple-system,sans-serif", background: "#F0F4F8", minHeight: "100vh" }}>
+    <div className="font-sans" style={{ background: IVORY, minHeight: "100vh" }}>
 
-      {/* Header */}
-      <div style={{ background: `linear-gradient(160deg,${DARK} 0%,${DARK2} 40%,${TEAL_DARK} 100%)`, padding: "16px 16px 0" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: "12px" }}>
-          <button onClick={() => window.history.back()} style={{ display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none", padding: "0", color: "rgba(255,255,255,0.75)", fontSize: "14px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>← Back to Home</button>
+      {/* HEADER — redesign pattern */}
+      <div className="px-4 pt-2 pb-3">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <button
+            onClick={() => window.history.back()}
+            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]"
+            style={{ background: '#FFFFFF', border: '1px solid #F0E9DC' }}
+            aria-label="Back"
+          >
+            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
+          </button>
+          <div
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]"
+            style={{ background: CAT.restroom.bg, color: CAT.restroom.ink }}
+          >
+            🚻 Restroom Finder
+          </div>
           <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh restrooms" />
         </div>
+      </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "14px" }}>
-          <div style={{ width: "50px", height: "50px", background: "rgba(255,255,255,0.12)", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px" }}>🚻</div>
-          <div>
-            <div style={{ fontWeight: "800", fontSize: "20px", color: "#fff" }}>Restroom Finder</div>
-            <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", marginTop: "2px" }}>Find nearby restrooms</div>
+      {/* LOCATION CARD */}
+      <div className="px-4 max-w-md mx-auto pb-3">
+        <button
+          onClick={() => setShowLocPicker(true)}
+          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]"
+          style={{ background: '#FFFFFF', border: '1px solid #F0E9DC', boxShadow: '0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}
+        >
+          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
+          <div className="flex-1 min-w-0">
+            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color: '#94A3B8' }}>
+              {isCity ? '🏙️ City' : '📍 Location'}
+            </div>
+            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
           </div>
-        </div>
-
-
-        {/* Location bar */}
-        <div onClick={() => setShowLocPicker(true)} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", background: "rgba(255,255,255,0.1)", backdropFilter: "blur(10px)", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.15)", marginBottom: "12px", cursor: "pointer" }}>
-          <span style={{ fontSize: "16px" }}>{isCity ? '🏙️' : '📍'}</span>
-          <span style={{ flex: 1, color: "rgba(255,255,255,0.9)", fontSize: "13px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{locLabel}</span>
-          <span style={{ background: TEAL, color: "#fff", padding: "5px 12px", borderRadius: "8px", fontWeight: "700", fontSize: "12px" }}>Change</span>
-        </div>
-
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{ background: CAT.restroom.bg, color: CAT.restroom.ink }}>
+            Change
+          </span>
+        </button>
         {isCity && (
-          <div style={{ fontSize: "11px", color: "#fff", padding: "8px 10px", background: "rgba(252,211,77,0.18)", border: "1px solid rgba(252,211,77,0.45)", borderRadius: "10px", marginBottom: "12px", lineHeight: 1.4 }}>
-            💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
+          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[12px] leading-snug flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
+            <span>💡</span>
+            <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
           </div>
         )}
+      </div>
 
-        {/* Radius */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", fontWeight: "600" }}>Radius:</span>
+      {/* Filters band — keeps existing radius/venue tabs structure, restyled to fit warm-ivory */}
+      <div className="px-4 max-w-md mx-auto pb-2">
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
+          <span className="font-mono" style={{ fontSize: "10px", color: '#6B7280', fontWeight: 600, letterSpacing: "0.14em", textTransform: 'uppercase' }}>📏 Radius:</span>
           <div style={{ display: "flex", gap: "5px" }}>
             {RADIUS_OPTIONS.map(r => (
-              <button key={r} onClick={() => setRadius(r)} style={{ padding: "6px 12px", borderRadius: "20px", border: radius === r ? `2px solid ${TEAL}` : "1px solid rgba(255,255,255,0.2)", background: radius === r ? TEAL : "rgba(255,255,255,0.1)", color: radius === r ? "#fff" : "rgba(255,255,255,0.7)", fontWeight: radius === r ? "700" : "500", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>{r} mi</button>
+              <button key={r} onClick={() => setRadius(r)} className="font-sans" style={{ padding: "6px 12px", borderRadius: "20px", border: radius === r ? `2px solid ${CAT.restroom.ink}` : "1px solid #F0E9DC", background: radius === r ? CAT.restroom.ink : "#fff", color: radius === r ? "#fff" : '#475569', fontWeight: radius === r ? "700" : "500", fontSize: "12px", cursor: "pointer" }}>{r} mi</button>
             ))}
           </div>
-          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="dark" style={{ marginLeft: "auto" }} />
-          <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>{loading ? "Searching…" : `${restrooms.length} found`}</span>
+          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" style={{ marginLeft: "auto" }} />
+          <span style={{ fontSize: "11px", color: '#94A3B8' }}>{loading ? "Searching…" : `${restrooms.length} found`}</span>
         </div>
 
         {/* Venue tabs */}
-        <div style={{ overflowX: "auto", scrollbarWidth: "none", paddingBottom: "2px" }}>
-          <div style={{ display: "flex", gap: "6px", paddingBottom: "14px" }}>
+        <div style={{ overflowX: "auto", scrollbarWidth: "none" }}>
+          <div style={{ display: "flex", gap: "6px", paddingBottom: "10px" }}>
             {VENUE_TYPES.map(vt => (
-              <button key={vt.id} onClick={() => setVenueType(vt.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", padding: "8px 12px", borderRadius: "12px", flexShrink: 0, border: venueType === vt.id ? `2px solid ${vt.color}` : "1px solid rgba(255,255,255,0.2)", background: venueType === vt.id ? `${vt.color}22` : "rgba(255,255,255,0.08)", color: venueType === vt.id ? vt.color : "rgba(255,255,255,0.75)", fontWeight: venueType === vt.id ? "700" : "500", fontSize: "10px", cursor: "pointer", fontFamily: "inherit", minWidth: "64px" }}>
+              <button key={vt.id} onClick={() => setVenueType(vt.id)} className="font-sans" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", padding: "8px 12px", borderRadius: "12px", flexShrink: 0, border: venueType === vt.id ? `2px solid ${vt.color}` : "1px solid #F0E9DC", background: venueType === vt.id ? `${vt.color}22` : "#fff", color: venueType === vt.id ? vt.color : '#475569', fontWeight: venueType === vt.id ? "700" : "500", fontSize: "10px", cursor: "pointer", minWidth: "64px" }}>
                 <span style={{ fontSize: "18px" }}>{vt.icon}</span>
                 <span>{vt.label}</span>
               </button>
