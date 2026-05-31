@@ -2,13 +2,14 @@ import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { 
-  ArrowLeft, MapPin, Hotel, Plane, Loader2, Info, ExternalLink, Search, X, Star, Navigation, DollarSign, Phone, ChevronRight
+import {
+  ArrowLeft, Hotel, Plane, Loader2, ExternalLink, Search, X, Star, Navigation, Phone, ChevronRight, Bus
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import { isCityLocation } from "../components/location/locationLabel";
+import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
 
 // ============================================================================
 // FIX: CACHING CONFIGURATION - Saves ~$55-165/month
@@ -2244,615 +2245,429 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-500 to-blue-600">
-      {/* Header */}
-      <div className="px-4 py-6">
-        <button
-          onClick={() => {
-            // P2 — if user arrived here from the ThingsToDo map (`?fromMap=true`),
-            // navigate back one step to return to the previous page (the
-            // ThingsToDo list with the activity expanded). Otherwise default
-            // to Home.
-            const params = new URLSearchParams(window.location.search);
-            if (params.get('fromMap') === 'true') {
-              navigate(-1);
-            } else {
-              navigate(createPageUrl("Home"));
-            }
-          }}
-          className="flex items-center gap-2 text-white/90 hover:text-white mb-4"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">Back</span>
-        </button>
-        
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
-            <span className="text-3xl">🚗</span>
+    <div className="min-h-screen font-sans pb-28" style={{ background: IVORY }}>
+      {/* HEADER — chevron back + Transportation pill (redesign) */}
+      <div className="px-4 pt-2 pb-4">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <button
+            onClick={() => {
+              // P2: if user arrived from ThingsToDo map (?fromMap=true), pop the stack.
+              const params = new URLSearchParams(window.location.search);
+              if (params.get('fromMap') === 'true') navigate(-1);
+              else navigate(createPageUrl("Home"));
+            }}
+            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]"
+            style={{ background: '#FFFFFF', border: '1px solid #F0E9DC' }}
+            aria-label="Back"
+          >
+            <ArrowLeft size={18} color="#0F1419" strokeWidth={2.2} />
+          </button>
+          <div
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px] font-sans"
+            style={{ background: CAT.transit.bg, color: CAT.transit.ink }}
+          >
+            <Bus size={13} color={CAT.transit.ink} strokeWidth={2} />
+            Transportation
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Transportation Info</h1>
-            <p className="text-white/80 text-sm">Quick & efficient travel</p>
-          </div>
+          <div className="w-10 h-10" />
         </div>
       </div>
 
-      <div className="px-4 pb-24 space-y-4">
-        {/* Origin Card */}
-        <div className="bg-white rounded-2xl p-4 shadow-lg">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0">
-              <MapPin className="w-5 h-5 text-purple-600" />
+      <div className="px-4 max-w-md mx-auto space-y-3">
+        {/* ROUTE CARD — From → To with timeline rail (redesign) */}
+        <div
+          className="rounded-[20px] p-4"
+          style={{
+            background: '#FFFFFF',
+            border: '1px solid #F0E9DC',
+            boxShadow: '0 8px 24px -14px rgba(15,20,25,.12)',
+          }}
+        >
+          <div className="flex gap-3">
+            {/* timeline rail */}
+            <div className="flex flex-col items-center pt-1">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ border: `3px solid ${CAT.money.ink}` }} />
+              <div className="w-0.5 flex-1 my-1" style={{ background: '#E5DDC8', minHeight: 26 }} />
+              <svg width="14" height="16" viewBox="0 0 24 24" fill={CAT.food.ink}>
+                <path d="M12 21s-7-7.5-7-12a7 7 0 1 1 14 0c0 4.5-7 12-7 12Z" />
+              </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-500">Starting from</p>
-              <p className="font-bold text-gray-900 break-words">{origin?.name || "Set your location"}</p>
-              {origin?.address && <p className="text-xs text-gray-500 break-words">{origin.address}</p>}
+              {/* FROM */}
+              <div className="pb-3 border-b border-dashed" style={{ borderColor: '#E5DDC8' }}>
+                <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color: '#94A3B8' }}>FROM</div>
+                <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">{origin?.name || 'Set your location'}</div>
+                {origin?.address && <div className="text-[11px] text-[#6B7280] mt-0.5 truncate">{origin.address}</div>}
+                <button onClick={() => setShowLocationPicker(true)} className="text-[11.5px] font-semibold mt-1 underline underline-offset-2" style={{ color: TEAL_DEEP }}>
+                  Change
+                </button>
+              </div>
+              {/* TO */}
+              <div className="pt-3">
+                <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color: '#94A3B8' }}>TO</div>
+                {destination ? (
+                  <>
+                    <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 flex items-center gap-1.5">
+                      {destination.type === 'airport' && <Plane size={13} color={CAT.atm.ink} />}
+                      {destination.type === 'hotel' && <Hotel size={13} color={CAT.food.ink} />}
+                      {destination.type === 'saved' && <Star size={13} color={CAT.todo.ink} />}
+                      {destination.type === 'search' && <Navigation size={13} color={TEAL_DEEP} />}
+                      <span className="truncate">{destination.name}</span>
+                    </div>
+                    {destination.address && <div className="text-[11px] text-[#6B7280] mt-0.5 truncate">{destination.address}</div>}
+                    <button onClick={() => { setDestination(null); setRouteInfo(null); }} className="text-[11.5px] font-semibold mt-1 underline underline-offset-2" style={{ color: TEAL_DEEP }}>
+                      Clear
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-[13px] text-[#94A3B8] mt-1">Pick a destination below</div>
+                )}
+              </div>
             </div>
-            <button 
-              onClick={() => setShowLocationPicker(true)}
-              className="text-blue-600 font-semibold text-sm flex-shrink-0 hover:text-blue-800"
-            >
-              Change
-            </button>
           </div>
-        </div>
 
-        {/* Destination Card */}
-        <div className="bg-white rounded-2xl p-4 shadow-lg">
-          {destination ? (
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                {destination.type === "airport" ? <Plane className="w-5 h-5 text-green-600" /> :
-                 destination.type === "hotel" ? <Hotel className="w-5 h-5 text-green-600" /> :
-                 destination.type === "saved" ? <Star className="w-5 h-5 text-green-600" /> :
-                 <Navigation className="w-5 h-5 text-green-600" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-500">Going to</p>
-                <p className="font-bold text-gray-900">{destination.name}</p>
-                <p className="text-sm text-gray-500 truncate">{destination.address}</p>
-              </div>
-              <button onClick={() => { setDestination(null); setRouteInfo(null); }} className="p-2 hover:bg-gray-100 rounded-lg">
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-          ) : (
-            <div>
-              <p className="text-sm text-gray-500 mb-3">Where to?</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={searchNearbyAirports} className="p-3 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors">
-                  <Plane className="w-6 h-6 text-blue-600 mx-auto mb-1" />
-                  <p className="text-xs font-semibold text-gray-700">Airport</p>
-                </button>
-                {user?.hotel && (
-                  <button onClick={selectHotel} className="p-3 bg-pink-50 rounded-xl hover:bg-pink-100 transition-colors">
-                    <Hotel className="w-6 h-6 text-pink-600 mx-auto mb-1" />
-                    <p className="text-xs font-semibold text-gray-700">My Hotel</p>
-                  </button>
-                )}
-                {savedLocations.length > 0 && (
-                  <button onClick={() => setShowSavedLocations(true)} className="p-3 bg-purple-50 rounded-xl hover:bg-purple-100 transition-colors">
-                    <Star className="w-6 h-6 text-purple-600 mx-auto mb-1" />
-                    <p className="text-xs font-semibold text-gray-700">Saved</p>
-                  </button>
-                )}
-                <button onClick={() => setShowDestinationSearch(true)} className="p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                  <Search className="w-6 h-6 text-gray-600 mx-auto mb-1" />
-                  <p className="text-xs font-semibold text-gray-700">Search</p>
-                </button>
-              </div>
+          {/* Meta chips when destination set: distance + traffic + local time */}
+          {destination && transportData && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-1 rounded-full text-[11.5px] font-semibold" style={{ background: '#F7F4EC', color: '#374151' }}>
+                📍 {transportData.distance.miles} mi · {transportData.distance.km} km
+              </span>
+              {trafficStatus && (
+                <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold ${trafficStatus.bg} ${trafficStatus.color}`}>
+                  {trafficStatus.icon} {trafficStatus.text}
+                </span>
+              )}
+              {(() => {
+                const countryCode = getCountryCode(activeLocation);
+                const timezone = getTimezone(countryCode, activeLocation);
+                const localTime = getLocalTimeForTimezone(timezone, activeLocation);
+                return (
+                  <span className="px-2.5 py-1 rounded-full text-[11.5px] font-semibold" style={{ background: '#F7F4EC', color: '#374151' }}>
+                    🕐 {localTime.time}
+                  </span>
+                );
+              })()}
             </div>
           )}
         </div>
 
-        {/* Trip Summary Card */}
-        {destination && transportData && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl p-5 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-sm text-gray-500">Distance</p>
-                <p className="text-2xl font-bold text-gray-900">{transportData.distance.miles} mi</p>
-                <p className="text-sm text-gray-500">({transportData.distance.km} km)</p>
-              </div>
-              <div className="text-right">
-                {(() => {
-                  const countryCode = getCountryCode(activeLocation);
-                  const timezone = getTimezone(countryCode, activeLocation);
-                  const localTime = getLocalTimeForTimezone(timezone, activeLocation);
-                  return (
-                    <>
-                      <p className="text-sm text-gray-500">Local Time ({localTime.cityName})</p>
-                      <p className="text-lg font-semibold text-gray-900">{localTime.time}</p>
-                      <p className="text-sm text-gray-500">{localTime.date}</p>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-
-            {trafficStatus && (
-              <div className={`${trafficStatus.bg} rounded-xl p-3 mb-4`}>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{trafficStatus.icon}</span>
-                  <span className={`font-semibold ${trafficStatus.color}`}>{trafficStatus.text}</span>
-                </div>
-              </div>
+        {/* QUICK DESTINATION SHORTCUTS (when no destination chosen) */}
+        {!destination && (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={searchNearbyAirports}
+              className="flex flex-col items-center gap-1.5 py-3.5 rounded-[14px] transition-transform active:scale-95"
+              style={{ background: CAT.atm.bg, color: CAT.atm.ink }}
+            >
+              <Plane size={20} color={CAT.atm.ink} strokeWidth={2} />
+              <span className="font-bold text-[12px]">Airport</span>
+            </button>
+            <button
+              onClick={() => setShowDestinationSearch(true)}
+              className="flex flex-col items-center gap-1.5 py-3.5 rounded-[14px] transition-transform active:scale-95"
+              style={{ background: CAT.todo.bg, color: CAT.todo.ink }}
+            >
+              <Search size={20} color={CAT.todo.ink} strokeWidth={2} />
+              <span className="font-bold text-[12px]">Search</span>
+            </button>
+            {user?.hotel && (
+              <button
+                onClick={selectHotel}
+                className="flex flex-col items-center gap-1.5 py-3.5 rounded-[14px] transition-transform active:scale-95"
+                style={{ background: CAT.food.bg, color: CAT.food.ink }}
+              >
+                <Hotel size={20} color={CAT.food.ink} strokeWidth={2} />
+                <span className="font-bold text-[12px]">My Hotel</span>
+              </button>
             )}
-
-            {/* Fare Summary Table */}
-            <div className="border-t pt-4">
-              <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-green-600" />
-                Estimated Fares & Times
-              </h3>
-              
-              <div className="space-y-2">
-                {transportData.options.map((option) => (
-                  <div key={option.mode} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xl">
-                        {option.mode === 'taxi' && '🚕'}
-                        {option.mode === 'bus' && '🚌'}
-                        {option.mode === 'train' && '🚇'}
-                        {option.mode === 'walk' && '🚶'}
-                        {option.mode === 'jeepney' && '🚐'}
-                      </span>
-                      <div>
-                        <p className="font-semibold text-gray-900 capitalize">{option.mode === 'taxi' ? 'Rideshare/Taxi' : option.mode}</p>
-                        <p className="text-sm text-gray-500">~{option.time.minutes} min</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      {option.mode !== 'walk' ? (
-                        <>
-                          <p className="font-bold text-gray-900">{option.fare.symbol}{option.fare.low}-{option.fare.high}</p>
-                          <p className="text-xs text-gray-500">${option.usdFare.low}-${option.usdFare.high} USD</p>
-                        </>
-                      ) : (
-                        <p className="font-bold text-green-600">FREE</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
+            {savedLocations.length > 0 && (
+              <button
+                onClick={() => setShowSavedLocations(true)}
+                className="flex flex-col items-center gap-1.5 py-3.5 rounded-[14px] transition-transform active:scale-95"
+                style={{ background: CAT.shopping.bg, color: CAT.shopping.ink }}
+              >
+                <Star size={20} color={CAT.shopping.ink} strokeWidth={2} />
+                <span className="font-bold text-[12px]">Saved</span>
+              </button>
+            )}
+          </div>
         )}
 
+        {/* CITY WARNING — when active location is a broad city pin, not an address */}
         {destination && isCityLocation(activeLocation) && (
-          <div className="mb-3 p-3 bg-amber-50 border border-amber-300 rounded-lg text-[13px] text-amber-900 leading-snug flex items-start gap-2">
+          <div className="px-3.5 py-3 rounded-[14px] text-[12.5px] font-medium flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
             <span>⚠️</span>
             <span>For more accurate directions, use a full address or a well-known place (like a hotel or airport).</span>
           </div>
         )}
 
-        {/* ============================================================ */}
-        {/* RIDESHARE APPS SECTION */}
-        {/* ============================================================ */}
-        {destination && availableProviders.length > 0 && transportData && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-            className="bg-white rounded-2xl p-5 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                <span className="text-xl">⚡</span>
-                Rideshare Apps
-              </h3>
+        {/* WAYS TO GET THERE — unified transit options list (replaces old Trip Summary + fare table) */}
+        {destination && transportData && (
+          <>
+            <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase font-semibold mt-2 mb-1" style={{ color: '#6B7280' }}>
+              Ways to get there
             </div>
-            
-            {/* Fare & Time for Rideshare */}
-            {(() => {
-              const taxiOption = transportData.options.find(o => o.mode === 'taxi');
-              return taxiOption && (
-                <div className="flex gap-3 mb-4">
-                  <div className="flex-1 bg-green-50 border-2 border-green-200 rounded-xl p-3 text-center">
-                    <p className="text-xs text-green-700 font-semibold">Est. Fare</p>
-                    <p className="text-lg font-bold text-green-800">{taxiOption.fare.symbol}{taxiOption.fare.low}-{taxiOption.fare.high}</p>
-                    <p className="text-xs text-green-600">${taxiOption.usdFare.low}-${taxiOption.usdFare.high} USD</p>
-                  </div>
-                  <div className="flex-1 bg-blue-50 border-2 border-blue-200 rounded-xl p-3 text-center">
-                    <p className="text-xs text-blue-700 font-semibold">Est. Time</p>
-                    <p className="text-lg font-bold text-blue-800">~{taxiOption.time.minutes} min</p>
-                    <p className="text-xs text-blue-600">{taxiOption.time.trafficLevel} traffic</p>
-                  </div>
-                </div>
-              );
-            })()}
-            
+            <div className="space-y-2.5">
+              {(() => {
+                const modeMap = {
+                  taxi:    { cat: CAT.weather,    icon: '🚕', label: 'Rideshare / Taxi', tag: 'Door to door' },
+                  bus:     { cat: CAT.transit,    icon: '🚌', label: 'Bus',               tag: 'Public transit' },
+                  train:   { cat: CAT.atm,        icon: '🚇', label: 'Metro / Train',     tag: 'Fastest' },
+                  walk:    { cat: CAT.convenience,icon: '🚶', label: 'Walk',              tag: 'Healthiest · Free' },
+                  jeepney: { cat: CAT.food,       icon: '🚐', label: 'Jeepney',           tag: 'Local · Cash' },
+                };
+                // Pick the "best" pick: prefer train when distance > 1km (typical urban),
+                // else taxi. Walk is excluded from best since it's free + slow.
+                const distKm = parseFloat(transportData.distance.km);
+                const hasTrain = transportData.options.find(o => o.mode === 'train');
+                const bestMode = (hasTrain && distKm > 1) ? 'train' : 'taxi';
+                return transportData.options.map(option => {
+                  const m = modeMap[option.mode] || modeMap.bus;
+                  const isBest = option.mode === bestMode;
+                  return (
+                    <motion.div
+                      key={option.mode}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-center gap-3 px-4 py-3 rounded-[16px]"
+                      style={{
+                        background: isBest ? m.cat.ink : '#FFFFFF',
+                        color: isBest ? '#fff' : '#0F1419',
+                        border: isBest ? '0' : '1px solid #F0E9DC',
+                        boxShadow: isBest ? `0 12px 26px -12px ${m.cat.ink}80` : '0 1px 0 rgba(15,20,25,.03)',
+                      }}
+                    >
+                      <div
+                        className="w-11 h-11 rounded-[12px] flex items-center justify-center text-xl flex-none"
+                        style={{ background: isBest ? 'rgba(255,255,255,0.2)' : m.cat.bg }}
+                      >
+                        <span>{m.icon}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="font-bold text-[16px]">{m.label}</span>
+                          {isBest && <span className="font-mono text-[10px] tracking-[0.12em] uppercase opacity-85">· best</span>}
+                        </div>
+                        <div className="text-[12.5px] mt-0.5" style={{ color: isBest ? 'rgba(255,255,255,0.85)' : '#6B7280' }}>
+                          {m.tag} · {option.time.trafficLevel} traffic
+                        </div>
+                      </div>
+                      <div className="text-right flex-none">
+                        <div className="font-serif italic text-[22px] leading-none">
+                          {option.mode === 'walk' ? 'Free' : `${option.fare.symbol}${option.fare.low}-${option.fare.high}`}
+                        </div>
+                        <div className="mt-1 text-[12px] font-semibold" style={{ color: isBest ? 'rgba(255,255,255,0.9)' : CAT.money.ink }}>
+                          ~{option.time.minutes} min
+                        </div>
+                        {option.mode !== 'walk' && option.fare.currency !== 'USD' && option.usdFare && (
+                          <div className="text-[10px] font-medium mt-0.5 opacity-70">
+                            ~${option.usdFare.low}-${option.usdFare.high} USD
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                });
+              })()}
+            </div>
+          </>
+        )}
+
+        {/* BOOK A RIDE — rideshare providers (region-aware) */}
+        {destination && transportData && availableProviders.length > 0 && (
+          <>
+            <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase font-semibold mt-3 mb-1" style={{ color: '#6B7280' }}>
+              Book a ride
+            </div>
             {routeInfo?.rideshare?.pickup_instructions && (
-              <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-3 mb-4">
-                <p className="text-sm text-purple-800">
-                  <span className="font-semibold">📍 Pickup:</span> {routeInfo.rideshare.pickup_instructions}
-                </p>
+              <div className="px-3.5 py-2.5 rounded-[12px] text-[12.5px] mb-2" style={{ background: CAT.shopping.bg, color: CAT.shopping.ink }}>
+                <span className="font-semibold">📍 Pickup:</span> {routeInfo.rideshare.pickup_instructions}
                 {routeInfo.rideshare.estimated_wait && (
-                  <p className="text-sm text-purple-700 mt-1">
-                    <span className="font-semibold">⏱️ Wait:</span> {routeInfo.rideshare.estimated_wait}
-                  </p>
+                  <span> · <span className="font-semibold">⏱️ Wait:</span> {routeInfo.rideshare.estimated_wait}</span>
                 )}
               </div>
             )}
-            
-            <div className="grid grid-cols-2 gap-3">
-              {availableProviders.map((provider) => (
-                <button
-                  key={provider.name}
-                  onClick={() => {
-                    window.location.href = provider.deepLink(origin, destination);
-                    setTimeout(() => {
-                      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                      window.open(isIOS ? provider.appStore : provider.playStore, '_blank');
-                    }, 2000);
-                  }}
-                  className={`${provider.color} p-4 rounded-xl text-white font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity`}
-                >
-                  <span className="text-xl">{provider.logo}</span>
-                  {provider.name}
-                  <ExternalLink className="w-4 h-4" />
-                </button>
-              ))}
+            <div className="space-y-2">
+              {availableProviders.map(provider => {
+                const taxiOption = transportData.options.find(o => o.mode === 'taxi');
+                return (
+                  <button
+                    key={provider.name}
+                    onClick={() => {
+                      window.location.href = provider.deepLink(origin, destination);
+                      setTimeout(() => {
+                        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                        window.open(isIOS ? provider.appStore : provider.playStore, '_blank');
+                      }, 2000);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-[16px] transition-transform active:scale-[0.99]"
+                    style={{ background: '#FFFFFF', border: '1px solid #F0E9DC' }}
+                  >
+                    <div className="w-10 h-10 rounded-[10px] flex items-center justify-center text-xl text-white flex-none" style={{ background: '#0F1419' }}>
+                      {provider.logo}
+                    </div>
+                    <div className="flex-1 text-left min-w-0">
+                      <div className="font-bold text-[15px] text-[#0F1419]">{provider.name}</div>
+                      {taxiOption && (
+                        <div className="text-[11.5px] text-[#6B7280] mt-0.5">
+                          ~{taxiOption.fare.symbol}{taxiOption.fare.low}-{taxiOption.fare.high} · ~{taxiOption.time.minutes} min
+                        </div>
+                      )}
+                    </div>
+                    <div className="px-3.5 py-2 rounded-[10px] text-white font-bold text-[12.5px] flex-none flex items-center gap-1" style={{ background: '#0F1419' }}>
+                      Open <ExternalLink size={12} color="#fff" strokeWidth={2.4} />
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-            
             {availableProviders.length === 1 && (
-              <p className="text-sm text-gray-500 mt-3 text-center">
+              <div className="text-[11.5px] text-[#6B7280] text-center mt-1">
                 {availableProviders[0].name} is the primary rideshare service in this region
-              </p>
+              </div>
             )}
-          </motion.div>
+          </>
         )}
 
-        {/* ============================================================ */}
-        {/* PUBLIC TRANSPORTATION SECTION */}
-        {/* ============================================================ */}
-        {destination && transportData && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} 
-            className="bg-white rounded-2xl p-5 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                <span className="text-xl">🚌</span>
-                Public Transportation
-              </h3>
+        {/* CALL A TAXI — country-specific hotlines */}
+        {destination && taxiServices.length > 0 && taxiServices.some(t => t.phone) && (
+          <>
+            <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase font-semibold mt-3 mb-1" style={{ color: '#6B7280' }}>
+              Call a taxi
             </div>
-            
-            {/* Fare & Time for Bus/Train */}
-            {(() => {
-              const busOption = transportData.options.find(o => o.mode === 'bus');
-              const trainOption = transportData.options.find(o => o.mode === 'train');
-              const jeepneyOption = transportData.options.find(o => o.mode === 'jeepney');
-              return (
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  {busOption && (
-                    <div className="bg-green-50 border-2 border-green-200 rounded-xl p-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-lg">🚌</span>
-                        <p className="font-semibold text-gray-800">Bus</p>
-                      </div>
-                      <p className="text-sm font-bold text-green-800">{busOption.fare.symbol}{busOption.fare.low}-{busOption.fare.high}{busOption.fare.currency !== 'USD' && busOption.usdFare && <span className="font-normal text-gray-500"> (~${busOption.usdFare.low}-${busOption.usdFare.high} USD)</span>}</p>
-                      <p className="text-xs text-green-600">~{busOption.time.minutes} min</p>
-                    </div>
-                  )}
-                  {trainOption && (
-                    <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-lg">🚇</span>
-                        <p className="font-semibold text-gray-800">Train</p>
-                      </div>
-                      <p className="text-sm font-bold text-blue-800">{trainOption.fare.symbol}{trainOption.fare.low}-{trainOption.fare.high}{trainOption.fare.currency !== 'USD' && trainOption.usdFare && <span className="font-normal text-gray-500"> (~${trainOption.usdFare.low}-${trainOption.usdFare.high} USD)</span>}</p>
-                      <p className="text-xs text-blue-600">~{trainOption.time.minutes} min</p>
-                    </div>
-                  )}
-                  {jeepneyOption && (
-                    <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-lg">🚐</span>
-                        <p className="font-semibold text-gray-800">Jeepney</p>
-                      </div>
-                      <p className="text-sm font-bold text-orange-800">{jeepneyOption.fare.symbol}{jeepneyOption.fare.low}-{jeepneyOption.fare.high}{jeepneyOption.fare.currency !== 'USD' && jeepneyOption.usdFare && <span className="font-normal text-gray-500"> (~${jeepneyOption.usdFare.low}-${jeepneyOption.usdFare.high} USD)</span>}</p>
-                      <p className="text-xs text-orange-600">~{jeepneyOption.time.minutes} min</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-            
-            {loadingRouteInfo ? (
-              <div className="text-center py-6">
-                <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-2" />
-                <p className="text-gray-500 text-sm">Finding best routes...</p>
+            <div className="space-y-2">
+              {taxiServices.filter(t => t.phone).map((taxi, i) => (
+                <a
+                  key={i}
+                  href={`tel:${taxi.phone}`}
+                  className="flex items-center gap-3 px-4 py-3 rounded-[16px] transition-transform active:scale-[0.99]"
+                  style={{ background: CAT.weather.bg, color: CAT.weather.ink }}
+                >
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-none" style={{ background: CAT.weather.ink, color: '#fff' }}>
+                    <Phone size={18} color="#fff" strokeWidth={2} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-[14.5px]">{taxi.name}</div>
+                    <div className="text-[12px] mt-0.5 opacity-85">{taxi.phone}</div>
+                  </div>
+                  <span className="font-mono text-[10px] tracking-[0.14em] uppercase font-bold opacity-80">Tap to call</span>
+                </a>
+              ))}
+            </div>
+            {routeInfo?.taxi?.where_to_find && (
+              <div className="px-3.5 py-2.5 rounded-[12px] mt-2 text-[12px]" style={{ background: '#F7F4EC', color: '#374151' }}>
+                <span className="font-semibold">📍 Where to find:</span> {routeInfo.taxi.where_to_find}
               </div>
-            ) : routeInfo?.public_transport?.best_option ? (
-              <div className="space-y-4">
-                {/* Best Route Card */}
-                <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-2xl">
-                      {routeInfo.public_transport.best_option.type === 'train' ? '🚇' : 
-                       routeInfo.public_transport.best_option.type === 'bus' ? '🚌' : '🚐'}
+            )}
+            {routeInfo?.taxi?.safety_tips && (
+              <div className="px-3.5 py-2.5 rounded-[12px] mt-2 text-[12px]" style={{ background: CAT.food.bg, color: CAT.food.ink }}>
+                <span className="font-semibold">⚠️ Safety:</span> {routeInfo.taxi.safety_tips}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* OPEN IN MAPS — Google + Apple shortcuts */}
+        {destination && origin && (
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            <button
+              onClick={() => {
+                const url = `https://www.google.com/maps/dir/?api=1&origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&travelmode=transit`;
+                window.open(url, '_blank');
+              }}
+              className="flex items-center justify-center gap-2 py-3 rounded-[14px] font-semibold text-[13px]"
+              style={{ background: CAT.atm.bg, color: CAT.atm.ink }}
+            >
+              🗺️ Google Maps
+            </button>
+            <button
+              onClick={() => {
+                const url = `http://maps.apple.com/?saddr=${origin.latitude},${origin.longitude}&daddr=${destination.latitude},${destination.longitude}&dirflg=r`;
+                window.open(url, '_blank');
+              }}
+              className="flex items-center justify-center gap-2 py-3 rounded-[14px] font-semibold text-[13px]"
+              style={{ background: '#F7F4EC', color: '#374151' }}
+            >
+              🍎 Apple Maps
+            </button>
+          </div>
+        )}
+
+        {/* BEST PUBLIC-TRANSIT ROUTE — AI-fetched route info with step-by-step */}
+        {destination && (loadingRouteInfo || routeInfo?.public_transport?.best_option) && (
+          <>
+            <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase font-semibold mt-3 mb-1" style={{ color: '#6B7280' }}>
+              Best transit route
+            </div>
+            <div className="px-4 py-3.5 rounded-[16px]" style={{ background: CAT.transit.bg, color: CAT.transit.ink }}>
+              {loadingRouteInfo ? (
+                <div className="flex items-center justify-center gap-2 py-3">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span className="text-[13px] font-medium">Finding best route...</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-start gap-2 mb-2">
+                    <span className="text-xl flex-none">
+                      {routeInfo.public_transport.best_option.type === 'train' ? '🚇' : routeInfo.public_transport.best_option.type === 'bus' ? '🚌' : '🚐'}
                     </span>
-                    <div>
-                      <p className="font-bold text-gray-900">{routeInfo.public_transport.best_option.name || `Take the ${routeInfo.public_transport.best_option.type}`}</p>
-                      <p className="text-sm text-blue-700">From {routeInfo.public_transport.best_option.from_station}</p>
+                    <div className="flex-1">
+                      <div className="font-bold text-[14.5px]">{routeInfo.public_transport.best_option.name || `Take the ${routeInfo.public_transport.best_option.type}`}</div>
+                      {routeInfo.public_transport.best_option.from_station && (
+                        <div className="text-[12px] mt-0.5 opacity-90">From {routeInfo.public_transport.best_option.from_station}</div>
+                      )}
                     </div>
                   </div>
-                  
-                  <div className="flex gap-3 mb-3">
+                  <div className="flex gap-2 flex-wrap">
                     {routeInfo.public_transport.best_option.travel_time_minutes && (
-                      <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-1">
-                        ⏱️ {routeInfo.public_transport.best_option.travel_time_minutes} min
-                      </span>
+                      <span className="px-2.5 py-1 rounded-full text-[11.5px] font-semibold bg-white/40">⏱️ {routeInfo.public_transport.best_option.travel_time_minutes} min</span>
                     )}
                     {routeInfo.public_transport.best_option.fare_local && (
-                      <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-1">
-                        💰 {routeInfo.public_transport.best_option.fare_local}
-                      </span>
+                      <span className="px-2.5 py-1 rounded-full text-[11.5px] font-semibold bg-white/40">💰 {routeInfo.public_transport.best_option.fare_local}</span>
+                    )}
+                    {routeInfo.public_transport.best_option.frequency && (
+                      <span className="px-2.5 py-1 rounded-full text-[11.5px] font-semibold bg-white/40">🕐 {routeInfo.public_transport.best_option.frequency}</span>
                     )}
                   </div>
-
-                  {/* Step by Step Instructions */}
                   {routeInfo.public_transport.steps && routeInfo.public_transport.steps.length > 0 && (
-                    <div className="border-t border-blue-200 pt-3 mt-3">
-                      <p className="font-semibold text-gray-800 mb-2">📋 Step-by-Step:</p>
-                      <div className="space-y-2">
-                        {routeInfo.public_transport.steps.map((step, index) => (
-                          <div key={index} className="flex items-start gap-3">
-                            <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
-                              {step.step}
-                            </div>
-                            <div>
-                              <p className="text-sm text-gray-800">{step.instruction}</p>
-                              {step.duration && <p className="text-xs text-blue-600">⏱️ {step.duration}</p>}
+                    <div className="mt-3 pt-3 border-t" style={{ borderColor: 'rgba(63,73,212,0.2)' }}>
+                      <div className="font-semibold text-[12px] mb-2">📋 Step-by-step:</div>
+                      <div className="space-y-1.5">
+                        {routeInfo.public_transport.steps.map((step, i) => (
+                          <div key={i} className="flex items-start gap-2 text-[12.5px]">
+                            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold flex-none" style={{ background: CAT.transit.ink, color: '#fff' }}>{step.step}</div>
+                            <div className="flex-1">
+                              {step.instruction}
+                              {step.duration && <span className="opacity-75"> · ⏱️ {step.duration}</span>}
                             </div>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
-
                   {routeInfo.public_transport.best_option.ticket_info && (
-                    <div className="bg-white/60 rounded-lg p-3 mt-3">
-                      <p className="text-sm"><span className="font-semibold">🎫 Tickets:</span> {routeInfo.public_transport.best_option.ticket_info}</p>
+                    <div className="mt-2 text-[11.5px] opacity-90">🎫 {routeInfo.public_transport.best_option.ticket_info}</div>
+                  )}
+                  {routeInfo.public_transport.alternative && (
+                    <div className="mt-3 pt-3 border-t text-[12px]" style={{ borderColor: 'rgba(63,73,212,0.2)' }}>
+                      <span className="font-semibold">Alternative:</span> {routeInfo.public_transport.alternative.description}
                     </div>
                   )}
-                  
-                  {routeInfo.public_transport.best_option.frequency && (
-                    <p className="text-sm text-gray-600 mt-2">
-                      <span className="font-semibold">🕐 Frequency:</span> {routeInfo.public_transport.best_option.frequency}
-                    </p>
-                  )}
-                </div>
-
-                {/* Alternative Option */}
-                {routeInfo.public_transport.alternative && (
-                  <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4">
-                    <p className="text-sm text-gray-600 mb-1">Alternative option:</p>
-                    <p className="font-semibold text-gray-900">{routeInfo.public_transport.alternative.description}</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-4">No public transport info available</p>
-            )}
-            
-            {/* Map Links */}
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              <button
-                onClick={() => {
-                  const url = `https://www.google.com/maps/dir/?api=1&origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&travelmode=transit`;
-                  window.open(url, '_blank');
-                }}
-                className="p-3 bg-blue-50 rounded-xl flex items-center gap-2 hover:bg-blue-100"
-              >
-                <span className="text-xl">🗺️</span>
-                <span className="text-sm font-semibold text-gray-700">Google Maps</span>
-                <ExternalLink className="w-4 h-4 text-gray-400 ml-auto" />
-              </button>
-              
-              <button
-                onClick={() => {
-                  const url = `http://maps.apple.com/?saddr=${origin.latitude},${origin.longitude}&daddr=${destination.latitude},${destination.longitude}&dirflg=r`;
-                  window.open(url, '_blank');
-                }}
-                className="p-3 bg-gray-50 rounded-xl flex items-center gap-2 hover:bg-gray-100"
-              >
-                <span className="text-xl">🍎</span>
-                <span className="text-sm font-semibold text-gray-700">Apple Maps</span>
-                <ExternalLink className="w-4 h-4 text-gray-400 ml-auto" />
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* ============================================================ */}
-        {/* TAXI SECTION WITH PHONE NUMBERS */}
-        {/* ============================================================ */}
-        {destination && transportData && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} 
-            className="bg-white rounded-2xl p-5 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                <span className="text-xl">🚕</span>
-                Taxi Alternative
-              </h3>
-            </div>
-            
-            {/* Fare & Time for Taxi */}
-            {(() => {
-              const taxiOption = transportData.options.find(o => o.mode === 'taxi');
-              return taxiOption && (
-                <div className="flex gap-3 mb-4">
-                  <div className="flex-1 bg-yellow-50 border-2 border-yellow-200 rounded-xl p-3 text-center">
-                    <p className="text-xs text-yellow-700 font-semibold">Est. Fare</p>
-                    <p className="text-lg font-bold text-yellow-800">{taxiOption.fare.symbol}{taxiOption.fare.low}-{taxiOption.fare.high}</p>
-                    <p className="text-xs text-yellow-600">${taxiOption.usdFare.low}-${taxiOption.usdFare.high} USD</p>
-                  </div>
-                  <div className="flex-1 bg-amber-50 border-2 border-amber-200 rounded-xl p-3 text-center">
-                    <p className="text-xs text-amber-700 font-semibold">Est. Time</p>
-                    <p className="text-lg font-bold text-amber-800">~{taxiOption.time.minutes} min</p>
-                    <p className="text-xs text-amber-600">{taxiOption.time.trafficLevel} traffic</p>
-                  </div>
-                </div>
-              );
-            })()}
-            
-            {/* Where to find taxis */}
-            {routeInfo?.taxi?.where_to_find && (
-              <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 mb-4">
-                <p className="font-semibold text-yellow-900 mb-1">📍 Where to Find Taxis:</p>
-                <p className="text-sm text-yellow-800">{routeInfo.taxi.where_to_find}</p>
-              </div>
-            )}
-            
-            {/* Call a Taxi */}
-            <div className="space-y-2 mb-4">
-              <p className="font-semibold text-gray-700">📞 Call a Taxi:</p>
-              {taxiServices.map((taxi, index) => (
-                taxi.phone && (
-                  <a
-                    key={index}
-                    href={`tel:${taxi.phone}`}
-                    className="flex items-center justify-between p-4 bg-amber-100 hover:bg-amber-200 rounded-xl transition-colors"
-                  >
-                    <div>
-                      <p className="font-bold text-amber-900">{taxi.name}</p>
-                      <p className="text-sm text-amber-700">{taxi.phone}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-amber-800">TAP TO CALL</span>
-                      <Phone className="w-5 h-5 text-amber-700" />
-                    </div>
-                  </a>
-                )
-              ))}
-            </div>
-            
-            {/* Estimated Fare */}
-            {routeInfo?.taxi?.estimated_fare_local && (
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-lg">💰</span>
-                <p className="text-gray-700">
-                  <span className="font-semibold">Estimated Fare:</span> {routeInfo.taxi.estimated_fare_local}
-                </p>
-              </div>
-            )}
-            
-            {/* Payment Methods */}
-            {routeInfo?.taxi?.payment_methods && (
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-lg">💳</span>
-                <p className="text-gray-700">{routeInfo.taxi.payment_methods.join(", ")}</p>
-              </div>
-            )}
-            
-            {/* Safety Tips */}
-            {routeInfo?.taxi?.safety_tips && (
-              <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-3 mt-3">
-                <p className="text-sm text-yellow-800">
-                  <span className="font-semibold">⚠️ Safety Tips:</span> {routeInfo.taxi.safety_tips}
-                </p>
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {/* ============================================================ */}
-        {/* WALKING SECTION */}
-        {/* ============================================================ */}
-        {destination && transportData && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} 
-            className="bg-white rounded-2xl p-5 shadow-lg">
-            <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <span className="text-xl">🚶</span>
-              Walking Option
-            </h3>
-            
-            {/* Fare & Time for Walking */}
-            {(() => {
-              const walkOption = transportData.options.find(o => o.mode === 'walk');
-              return walkOption && (
-                <div className="flex gap-3 mb-4">
-                  <span className="bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold flex items-center gap-1">
-                    ⏱️ ~{walkOption.time.minutes} min
-                  </span>
-                  <span className="bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-full text-sm font-semibold flex items-center gap-1">
-                    💰 FREE
-                  </span>
-                  <span className="bg-lime-100 text-lime-800 px-3 py-1.5 rounded-full text-sm font-semibold flex items-center gap-1">
-                    🏃 {transportData.distance.km} km
-                  </span>
-                </div>
-              );
-            })()}
-            
-            <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-3xl">🚶</span>
-                <div>
-                  <p className="font-bold text-gray-900">Walk to your destination</p>
-                  <p className="text-sm text-green-700">Good for health • No cost</p>
-                </div>
-              </div>
-              
-              {routeInfo?.walking?.route_description && (
-                <p className="text-sm text-gray-600 mt-2">{routeInfo.walking.route_description}</p>
-              )}
-              
-              {routeInfo?.walking?.safety_notes && (
-                <p className="text-sm text-yellow-700 mt-2">
-                  <span className="font-semibold">⚠️ Note:</span> {routeInfo.walking.safety_notes}
-                </p>
-              )}
-              
-              {parseFloat(transportData.distance.km) > 3 && (
-                <p className="text-sm text-yellow-700 mt-2">
-                  <span className="font-semibold">⚠️ Note:</span> This is a long walk ({transportData.distance.km} km). Consider other transportation options.
-                </p>
+                </>
               )}
             </div>
-            
-            {/* Google/Apple Maps Walking Directions */}
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              <button
-                onClick={() => {
-                  const url = `https://www.google.com/maps/dir/?api=1&origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&travelmode=walking`;
-                  window.open(url, '_blank');
-                }}
-                className="p-3 bg-green-50 rounded-xl flex items-center gap-2 hover:bg-green-100"
-              >
-                <span className="text-xl">🗺️</span>
-                <span className="text-sm font-semibold text-gray-700">Google Maps</span>
-                <ExternalLink className="w-4 h-4 text-gray-400 ml-auto" />
-              </button>
-              
-              <button
-                onClick={() => {
-                  const url = `http://maps.apple.com/?saddr=${origin.latitude},${origin.longitude}&daddr=${destination.latitude},${destination.longitude}&dirflg=w`;
-                  window.open(url, '_blank');
-                }}
-                className="p-3 bg-gray-50 rounded-xl flex items-center gap-2 hover:bg-gray-100"
-              >
-                <span className="text-xl">🍎</span>
-                <span className="text-sm font-semibold text-gray-700">Apple Maps</span>
-                <ExternalLink className="w-4 h-4 text-gray-400 ml-auto" />
-              </button>
-            </div>
-          </motion.div>
+          </>
         )}
 
-        {/* ============================================================ */}
-        {/* RECOMMENDATION CARD */}
-        {/* ============================================================ */}
+        {/* HONEST TIP / RECOMMENDATION */}
         {destination && routeInfo?.recommendation && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} 
-            className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-2xl p-5 shadow-lg">
-            <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <span className="text-xl">💡</span>
-              Recommendation
-            </h3>
-            <p className="text-gray-700">{routeInfo.recommendation.reason}</p>
-          </motion.div>
+          <div className="px-3.5 py-3 rounded-[14px] flex items-start gap-2 mt-3" style={{ background: CAT.transit.bg, color: CAT.transit.ink }}>
+            <span className="text-base">💡</span>
+            <div className="text-[12.5px] leading-relaxed font-medium">{routeInfo.recommendation.reason}</div>
+          </div>
         )}
 
       </div>
-
       {/* ============================================================ */}
       {/* AIRPORT PICKER MODAL */}
       {/* ============================================================ */}
