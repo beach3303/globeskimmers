@@ -6,7 +6,8 @@ import PWASetup from "@/components/PWASetup";
 import { ToastContainer } from "@/components/Toast";
 import { LocationProvider } from "@/components/location/LocationContext";
 import BottomNav from "@/components/theme/BottomNav";
-import { useTheme } from "@/components/theme/ThemeContext";
+import BrandBanner from "@/components/redesign/BrandBanner";
+import { IVORY, TEAL_DEEP } from "@/components/redesign/constants";
 
 // Generate or retrieve session ID
 const getSessionId = () => {
@@ -42,7 +43,6 @@ const trackEvent = async (eventType, data = {}) => {
 export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { theme } = useTheme();
   const [checking, setChecking] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -114,16 +114,16 @@ export default function Layout({ children, currentPageName }) {
       <>
         <PWASetup />
         <ToastContainer />
-        <div 
-          className="min-h-screen flex items-center justify-center"
-          style={{ background: theme.colors.background }}
+        <div
+          className="min-h-screen flex items-center justify-center font-sans"
+          style={{ background: IVORY }}
         >
           <div className="text-center">
-            <div 
-              className="w-16 h-16 mx-auto mb-4 border-4 border-t-transparent rounded-full animate-spin"
-              style={{ borderColor: theme.colors.primary, borderTopColor: 'transparent' }}
+            <div
+              className="w-16 h-16 mx-auto mb-4 border-4 rounded-full animate-spin"
+              style={{ borderColor: TEAL_DEEP, borderTopColor: 'transparent' }}
             />
-            <p style={{ color: theme.colors.textPrimary }} className="font-semibold">
+            <p className="font-semibold" style={{ color: '#0F1419' }}>
               Loading Globeskimmers...
             </p>
           </div>
@@ -137,20 +137,16 @@ export default function Layout({ children, currentPageName }) {
       <PWASetup />
       <ToastContainer />
       <LocationProvider>
-        <div 
-          className="min-h-screen transition-colors duration-300"
-          style={{ background: theme.colors.background }}
-        >
-          {/* Globeskimmers Banner - Top */}
-          <div 
-            className="fixed top-0 left-0 right-0 z-50 text-white py-2 text-center shadow-md transition-all duration-300"
-            style={{ background: theme.colors.headerBg }}
-          >
-            <span className="font-bold text-sm tracking-wide">Globeskimmers</span>
+        <div className="min-h-screen font-sans" style={{ background: IVORY }}>
+          {/* Brand banner — teal gradient (redesign primitive). Fixed top
+              so it stays above scrolled content; content offset by pt-[50px]
+              below to clear it. */}
+          <div className="fixed top-0 left-0 right-0 z-50">
+            <BrandBanner />
           </div>
-          
-          {/* App Content */}
-          <div className="w-full min-h-screen pt-10 pb-16">
+
+          {/* App Content — offset by banner height (50) + nav clearance (64). */}
+          <div className="w-full min-h-screen pt-[50px] pb-16">
             {children}
           </div>
 

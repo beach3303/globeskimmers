@@ -7,7 +7,6 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
-import { ThemeProvider } from '@/components/theme/ThemeContext';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -68,13 +67,11 @@ function App() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
-        <ThemeProvider>
-          <Router>
-            <NavigationTracker />
-            <AuthenticatedApp />
-          </Router>
-          <Toaster />
-        </ThemeProvider>
+        <Router>
+          <NavigationTracker />
+          <AuthenticatedApp />
+        </Router>
+        <Toaster />
       </QueryClientProvider>
     </AuthProvider>
   )
