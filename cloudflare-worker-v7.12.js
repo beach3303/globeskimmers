@@ -1952,6 +1952,193 @@ async function handleNameInfo(request, env) {
 }
 
 // ============================================================================
+// PARSE-INTENT — LLM intent fallback for long-tail dish/restaurant queries.
+// Used when getRestaurants' keyword-based parseSearchIntent can't confidently
+// route the query (e.g. "chicken inasal" -> the generic /chicken/ pattern
+// instead of filipino_restaurant). Triggered by Strategy B in entry.ts:
+// GENERAL intents AND dish matches that left unrecognized words in the query.
+//
+// Returns structured intent matching the existing DISH_MAP shape so the
+// downstream tier classifier doesn't need to know the LLM ever touched it.
+// Cached in KV (24h TTL) per normalized query -- expected ~80% cache hit
+// rate after a week of accumulation.
+// ============================================================================
+
+const PARSE_INTENT_TTL_SECONDS = 24 * 60 * 60;  // 24 hours
+const PARSE_INTENT_PROMPT_VERSION = 'v1';
+
+// Valid Google Places API (New) Table A primary types we use in the app.
+// Claude is instructed to ONLY emit types from this set; anything else is
+// dropped during normalization.
+const VALID_GOOGLE_PLACE_TYPES = new Set([
+  // Cuisine-specific restaurants
+  'african_restaurant','american_restaurant','asian_restaurant','brazilian_restaurant',
+  'breakfast_restaurant','brunch_restaurant','chinese_restaurant','filipino_restaurant',
+  'french_restaurant','greek_restaurant','hamburger_restaurant','indian_restaurant',
+  'indonesian_restaurant','italian_restaurant','japanese_restaurant','korean_restaurant',
+  'lebanese_restaurant','mediterranean_restaurant','mexican_restaurant',
+  'middle_eastern_restaurant','pizza_restaurant','ramen_restaurant','restaurant',
+  'sandwich_shop','seafood_restaurant','spanish_restaurant','steak_house',
+  'sushi_restaurant','thai_restaurant','turkish_restaurant','vegan_restaurant',
+  'vegetarian_restaurant','vietnamese_restaurant',
+  // Specialty / casual
+  'bagel_shop','bakery','bar','barbecue_restaurant','cafe','cafeteria','chocolate_shop',
+  'coffee_shop','deli','dessert_restaurant','dessert_shop','diner','donut_shop',
+  'fast_food_restaurant','fine_dining_restaurant','food_court','ice_cream_shop',
+  'juice_shop','meal_delivery','meal_takeaway','pastry_shop','pub','tea_house',
+  'wine_bar',
+]);
+
+const PARSE_INTENT_SYSTEM_PROMPT = `You are a restaurant-search intent parser for Globeskimmers, a travel app. Given a free-text query, return STRICT JSON describing the search intent so the app can find matching restaurants.
+
+OUTPUT SCHEMA (return EXACTLY this shape — no extra keys, no markdown):
+{
+  "dishLabel": "<canonical short English label for the dish/cuisine, max 30 chars>" | null,
+  "cuisine": "<lowercase cuisine slug, e.g. 'filipino', 'japanese', 'mexican'>" | null,
+  "tier1Types": ["<1-3 Google primary types for the specialist place>"],
+  "tier2Types": ["<0-3 related Google primary types>"],
+  "nameKeywords": ["<chain names + signature dish words for name-based matching, max 8>"],
+  "mealTime": "breakfast" | "brunch" | "lunch" | "dinner" | null,
+  "strict": <true|false>,
+  "strictPrimaryTypes": ["<REQUIRED if strict=true: allowlist of valid types>"],
+  "confidence": <0.0-1.0>
+}
+
+VALID GOOGLE PRIMARY TYPES (use ONLY these — anything else will be dropped):
+african_restaurant, american_restaurant, asian_restaurant, brazilian_restaurant,
+breakfast_restaurant, brunch_restaurant, chinese_restaurant, filipino_restaurant,
+french_restaurant, greek_restaurant, hamburger_restaurant, indian_restaurant,
+indonesian_restaurant, italian_restaurant, japanese_restaurant, korean_restaurant,
+lebanese_restaurant, mediterranean_restaurant, mexican_restaurant,
+middle_eastern_restaurant, pizza_restaurant, ramen_restaurant, restaurant,
+sandwich_shop, seafood_restaurant, spanish_restaurant, steak_house, sushi_restaurant,
+thai_restaurant, turkish_restaurant, vegan_restaurant, vegetarian_restaurant,
+vietnamese_restaurant, bagel_shop, bakery, bar, barbecue_restaurant, cafe, cafeteria,
+chocolate_shop, coffee_shop, deli, dessert_restaurant, dessert_shop, diner, donut_shop,
+fast_food_restaurant, fine_dining_restaurant, food_court, ice_cream_shop, juice_shop,
+meal_delivery, meal_takeaway, pastry_shop, pub, tea_house, wine_bar
+
+RULES:
+1. dishLabel: canonical English. "chicken inasal" stays "chicken inasal"; "kare-kare" stays "kare-kare"; "pho" stays "pho". Set to null if the query isn't food-related.
+2. cuisine: lowercase snake_case slug. Set to null if cross-cuisine (e.g. "salad", "sandwich" -- no single cuisine).
+3. strict: TRUE if the dish is so cuisine-specific that a non-cuisine restaurant serving it would be a misleading result. Examples: TRUE for inasal/sisig/butter chicken/ramen/pho. FALSE for chicken/salad/burger/pizza (cross-cuisine).
+4. strictPrimaryTypes (required when strict=true): the allowlist of Google primary types that ARE legitimate for this dish. For chicken inasal: ['filipino_restaurant']. For ramen: ['ramen_restaurant','japanese_restaurant'].
+5. mealTime: only set if the dish is tied to a specific meal (e.g. "pancakes" -> breakfast). Leave null for all-day foods.
+6. nameKeywords: chain names + obvious signature words. For inasal: ['inasal','mang inasal','bacolod']. For pho: ['pho','phở','pho 79','pho saigon']. Max 8.
+7. confidence: 0.0-1.0. Below 0.5 means "I'm not sure" and the app should ignore your output.
+8. If the query is a brand/restaurant name (not a dish), set dishLabel = null and only fill cuisine + tier1Types + nameKeywords with the brand name.
+9. Return ONLY JSON. No prose, no markdown fences, no commentary.
+
+EXAMPLES:
+
+Input: "chicken inasal"
+Output: {"dishLabel":"chicken inasal","cuisine":"filipino","tier1Types":["filipino_restaurant"],"tier2Types":["barbecue_restaurant"],"nameKeywords":["inasal","chicken inasal","mang inasal","bacolod chicken house"],"mealTime":null,"strict":true,"strictPrimaryTypes":["filipino_restaurant"],"confidence":0.95}
+
+Input: "pho"
+Output: {"dishLabel":"pho","cuisine":"vietnamese","tier1Types":["vietnamese_restaurant"],"tier2Types":[],"nameKeywords":["pho","phở","pho 79","pho saigon","pho hoa"],"mealTime":null,"strict":true,"strictPrimaryTypes":["vietnamese_restaurant"],"confidence":0.98}
+
+Input: "bibimbap"
+Output: {"dishLabel":"bibimbap","cuisine":"korean","tier1Types":["korean_restaurant"],"tier2Types":[],"nameKeywords":["bibimbap","dolsot","korean bbq"],"mealTime":null,"strict":true,"strictPrimaryTypes":["korean_restaurant"],"confidence":0.97}
+
+Input: "rendang"
+Output: {"dishLabel":"rendang","cuisine":"indonesian","tier1Types":["indonesian_restaurant"],"tier2Types":["malaysian_restaurant"],"nameKeywords":["rendang","nasi padang"],"mealTime":null,"strict":true,"strictPrimaryTypes":["indonesian_restaurant","malaysian_restaurant"],"confidence":0.95}
+
+Input: "salad"
+Output: {"dishLabel":"salad","cuisine":null,"tier1Types":["vegan_restaurant","vegetarian_restaurant"],"tier2Types":["cafe","restaurant"],"nameKeywords":["salad","sweetgreen","tossed","chop'd"],"mealTime":null,"strict":false,"strictPrimaryTypes":[],"confidence":0.85}
+
+Input: "asdfqwer"
+Output: {"dishLabel":null,"cuisine":null,"tier1Types":[],"tier2Types":[],"nameKeywords":[],"mealTime":null,"strict":false,"strictPrimaryTypes":[],"confidence":0.1}`;
+
+async function handleParseIntent(request, env) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
+  }
+  let body;
+  try { body = await request.json(); } catch (_e) {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400);
+  }
+  const query = (body?.query || '').toString().trim().toLowerCase();
+  if (!query) {
+    return jsonResponse({ error: 'query required' }, 400);
+  }
+
+  // Normalize query for cache key: collapse whitespace, drop punctuation that
+  // doesn't change meaning. "Chicken Inasal!" and "chicken  inasal" share a key.
+  const normalizedQuery = query.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+  const cacheKey = `parse_intent:${PARSE_INTENT_PROMPT_VERSION}:${normalizedQuery}`;
+
+  if (env.GLOBESKIMMERS_KV) {
+    const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+    if (cached) {
+      return jsonResponse({ ...cached, _cache: 'hit' });
+    }
+  }
+
+  let intent;
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        // Cache the long system prompt -- repeat queries within 5 min hit
+        // the cache at ~10% the input cost.
+        system: [{ type: 'text', text: PARSE_INTENT_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: `Query: ${query}` }],
+      }),
+    });
+    if (!apiRes.ok) {
+      const errText = await apiRes.text();
+      return jsonResponse({ error: 'Claude API error', status: apiRes.status, details: errText }, 502);
+    }
+    const data = await apiRes.json();
+    const raw = data?.content?.[0]?.text?.trim() || '';
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    intent = JSON.parse(cleaned);
+  } catch (e) {
+    return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
+  }
+
+  // Defensive normalization: clamp shape, validate types against known set,
+  // drop unknown types instead of letting them poison the downstream tier
+  // classifier with strings Google doesn't recognize.
+  const filterValidTypes = (arr) => Array.isArray(arr)
+    ? arr.filter((t) => typeof t === 'string' && VALID_GOOGLE_PLACE_TYPES.has(t.trim()))
+    : [];
+  const tier1Types = filterValidTypes(intent.tier1Types);
+  const tier2Types = filterValidTypes(intent.tier2Types);
+  const strictPrimaryTypes = filterValidTypes(intent.strictPrimaryTypes);
+  const confidence = typeof intent.confidence === 'number' ? Math.max(0, Math.min(1, intent.confidence)) : 0;
+  const validMealTimes = new Set(['breakfast','brunch','lunch','dinner']);
+  const mealTime = (typeof intent.mealTime === 'string' && validMealTimes.has(intent.mealTime)) ? intent.mealTime : null;
+
+  const normalized = {
+    dishLabel: typeof intent.dishLabel === 'string' && intent.dishLabel.trim() ? intent.dishLabel.trim() : null,
+    cuisine: typeof intent.cuisine === 'string' && intent.cuisine.trim() ? intent.cuisine.trim().toLowerCase() : null,
+    tier1Types,
+    tier2Types,
+    nameKeywords: Array.isArray(intent.nameKeywords)
+      ? intent.nameKeywords.filter((k) => typeof k === 'string' && k.trim()).slice(0, 8).map((k) => k.trim().toLowerCase())
+      : [],
+    mealTime,
+    // Strict only allowed if we have at least one valid allowlist type.
+    strict: intent.strict === true && strictPrimaryTypes.length > 0,
+    strictPrimaryTypes,
+    confidence,
+  };
+
+  if (env.GLOBESKIMMERS_KV) {
+    await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(normalized), { expirationTtl: PARSE_INTENT_TTL_SECONDS }).catch(() => {});
+  }
+  return jsonResponse({ ...normalized, _cache: 'miss' });
+}
+
+// ============================================================================
 // PRICE SCANNER — direct Anthropic Claude Sonnet 4.6 with prompt caching
 // Replaces Base44 InvokeLLM for the SmartPriceScanner. Set ANTHROPIC_API_KEY
 // as a Worker secret in the Cloudflare dashboard before deploying.
@@ -2164,6 +2351,7 @@ export default {
       if (pathname === '/label-photos' && request.method === 'POST') return await handleLabelPhotos(request, env);
       if (pathname === '/ai-details' && request.method === 'POST') return await handleAIDetails(request, env);
       if (pathname === '/name-info' && request.method === 'POST') return await handleNameInfo(request, env);
+      if (pathname === '/parse-intent' && request.method === 'POST') return await handleParseIntent(request, env);
 
       return jsonResponse({ error: 'Not found', path: pathname }, 404);
     } catch (error) {
