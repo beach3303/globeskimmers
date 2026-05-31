@@ -949,6 +949,38 @@ type ParsedIntent =
   | { kind: 'DISH'; label: string; tier1Types: string[]; tier2Types: string[]; rawWords: string[]; nameKeywords: string[]; mealTime?: 'breakfast' | 'brunch' | 'lunch' | 'dinner'; strict?: boolean; strictPrimaryTypes?: string[] }
   | { kind: 'GENERAL' };
 
+// Stopwords that shouldn't trigger the LLM fallback when leftover in a query.
+// "best pancakes", "open ramen", "pancakes near me" all parse fine and don't
+// need a re-parse just because of these connector words.
+const QUERY_STOPWORDS = new Set([
+  'the','and','with','for','restaurant','food','place','near','me','best','top',
+  'good','great','open','now','close','closest','find','show','any','some','this',
+  'that','place','places','have','has','want','need','around','here',
+]);
+
+// Strategy B suspicious-match detector: after parseSearchIntent matches a DISH
+// pattern, check whether the query contains content-bearing words that DIDN'T
+// participate in the match (not in rawWords / nameKeywords / stopwords). If so,
+// the parser likely missed cuisine-specific terms (e.g. "chicken inasal" matches
+// /\bchicken\b/ but loses "inasal") and we should consult the LLM.
+function hasUnrecognizedDishWords(searchQuery: string, intent: any): boolean {
+  if (intent?.kind !== 'DISH') return false;
+  const queryWords = new Set(
+    searchQuery.toLowerCase().split(/\s+/)
+      .map((w: string) => w.replace(/[^\w]/g, ''))
+      .filter((w: string) => w.length >= 3 && !QUERY_STOPWORDS.has(w))
+  );
+  if (queryWords.size <= 1) return false;  // single content word -- nothing to be suspicious about
+  const recognized = new Set<string>([
+    ...((intent.rawWords as string[]) || []),
+    ...((intent.nameKeywords as string[]) || []).flatMap((k: string) => k.toLowerCase().split(/\s+/)),
+  ]);
+  for (const w of queryWords) {
+    if (!recognized.has(w)) return true;
+  }
+  return false;
+}
+
 function parseSearchIntent(query: string): ParsedIntent {
   if (!query?.trim()) return { kind: 'GENERAL' };
   // Pass 1: try the raw query — preserves brand names and exact matches.
@@ -1335,6 +1367,52 @@ Deno.serve(async (req) => {
           keywords: chipUmbrella.keywords,
         };
         console.log(`🧠 Intent synthesized from cuisine chip: ${cuisine} -> UMBRELLA(${chipUmbrella.label})`);
+      }
+    }
+
+    // ── PHASE 2: LLM intent fallback (Strategy B) ───────────────────────────
+    // When the keyword parser returns GENERAL (no match) OR matches a DISH
+    // but leaves significant unrecognized words in the query (e.g. "chicken
+    // inasal" matches /\bchicken\b/ but loses "inasal"), call the Worker's
+    // /parse-intent endpoint for an LLM re-parse. Claude Haiku returns a
+    // DISH-shaped intent constrained to known Google primary types.
+    //
+    // Cost: ~$0.0009 per fresh LLM call, ~$0 on KV cache hit (24h TTL).
+    // Expected ~$1.50/month at 1K searches/day with 30% trigger + 80% cache.
+    //
+    // Failure modes (network error, Claude timeout, low confidence,
+    // unparseable output) all fall back to the parser intent silently --
+    // never blocks the search.
+    if (!!searchQuery?.trim() && (intent.kind === 'GENERAL' || hasUnrecognizedDishWords(searchQuery, intent))) {
+      try {
+        const llmRes = await fetch(`${API_BASE_URL}/parse-intent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: searchQuery }),
+        });
+        if (llmRes.ok) {
+          const llmIntent: any = await llmRes.json();
+          // Only override when Claude is confident AND returned usable types
+          // AND a dish label (brand-name-only results don't fit the DISH shape).
+          if (llmIntent.confidence >= 0.5 && Array.isArray(llmIntent.tier1Types) && llmIntent.tier1Types.length > 0 && llmIntent.dishLabel) {
+            console.log(`🤖 LLM fallback hit: "${searchQuery}" -> dish=${llmIntent.dishLabel} cuisine=${llmIntent.cuisine} strict=${llmIntent.strict} conf=${llmIntent.confidence} cache=${llmIntent._cache}`);
+            intent = {
+              kind: 'DISH',
+              label: llmIntent.dishLabel,
+              tier1Types: llmIntent.tier1Types,
+              tier2Types: Array.isArray(llmIntent.tier2Types) ? llmIntent.tier2Types : [],
+              rawWords: searchQuery.toLowerCase().split(/\s+/).map((w: string) => w.replace(/[^\w]/g, '')).filter((w: string) => w.length >= 3),
+              nameKeywords: Array.isArray(llmIntent.nameKeywords) ? llmIntent.nameKeywords : [],
+              mealTime: llmIntent.mealTime,
+              strict: llmIntent.strict === true,
+              strictPrimaryTypes: Array.isArray(llmIntent.strictPrimaryTypes) ? llmIntent.strictPrimaryTypes : [],
+            } as any;
+          } else {
+            console.log(`🤖 LLM fallback ignored (conf=${llmIntent.confidence}): "${searchQuery}"`);
+          }
+        }
+      } catch (e) {
+        console.warn(`🤖 LLM fallback failed (non-fatal):`, (e as Error).message);
       }
     }
 
