@@ -91,14 +91,14 @@ export default function OnboardingPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#FAFAF9] to-[#F0F9FA] flex items-center justify-center">
+      <div className="min-h-screen font-sans flex items-center justify-center" style={{ background: '#FFFCF7' }}>
         <div className="w-12 h-12 border-4 border-[#088395] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#FAFAF9] to-[#F0F9FA]">
+    <div className="min-h-screen font-sans" style={{ background: '#FFFCF7' }}>
       {currentStep === 0 && !isAuthenticated && (
         <WelcomeStep onNext={() => setCurrentStep(1)} />
       )}
