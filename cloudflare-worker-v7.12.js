@@ -1338,6 +1338,114 @@ const ANALYTICS_QUERIES = {
     ORDER BY ts DESC
     LIMIT 50
   `,
+  // ── TEXT SCANNER ANALYTICS ──────────────────────────────────────────────
+  // Each 'text_scan' event payload (Worker T-P1):
+  //   { cache, success, sourceLanguage, targetLanguage, textCategory,
+  //     menuType, dishKeywords[], confidence, textLength, latencyMs, error? }
+  // Cost basis: each cache MISS = ~$0.002 Claude call. Each cache HIT = $0.
+  text_scans_by_day_14d: `
+    SELECT
+      date(ts, 'unixepoch') AS day,
+      COUNT(*) AS calls,
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'hit' THEN 1 ELSE 0 END) AS cache_hits,
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'miss' THEN 1 ELSE 0 END) AS cache_misses,
+      SUM(CASE WHEN json_extract(payload, '$.success') = 1 THEN 0 ELSE 1 END) AS failures
+    FROM events
+    WHERE event_type = 'text_scan'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day
+    ORDER BY day ASC
+  `,
+  // What kind of text are travelers translating?
+  text_scans_top_categories_30d: `
+    SELECT
+      json_extract(payload, '$.textCategory') AS category,
+      COUNT(*) AS scans,
+      ROUND(AVG(CAST(json_extract(payload, '$.confidence') AS REAL)), 2) AS avg_confidence
+    FROM events
+    WHERE event_type = 'text_scan'
+      AND json_extract(payload, '$.success') = 1
+      AND json_extract(payload, '$.textCategory') IS NOT NULL
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY category
+    ORDER BY scans DESC
+  `,
+  // Top source languages -- what languages people encounter on trips.
+  text_scans_top_source_languages_30d: `
+    SELECT
+      json_extract(payload, '$.sourceLanguage') AS source_language,
+      COUNT(*) AS scans
+    FROM events
+    WHERE event_type = 'text_scan'
+      AND json_extract(payload, '$.success') = 1
+      AND json_extract(payload, '$.sourceLanguage') IS NOT NULL
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY source_language
+    ORDER BY scans DESC
+    LIMIT 25
+  `,
+  // Top target languages -- what languages travelers want translated INTO
+  // (i.e. their native language). Heavy English skew expected.
+  text_scans_top_target_languages_30d: `
+    SELECT
+      json_extract(payload, '$.targetLanguage') AS target_language,
+      COUNT(*) AS scans
+    FROM events
+    WHERE event_type = 'text_scan'
+      AND json_extract(payload, '$.success') = 1
+      AND json_extract(payload, '$.targetLanguage') IS NOT NULL
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY target_language
+    ORDER BY scans DESC
+    LIMIT 25
+  `,
+  // Cache hit rate -- cost monitoring. Single-row summary metric.
+  text_scans_cache_rate_7d: `
+    SELECT
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'hit' THEN 1 ELSE 0 END) AS hits,
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'miss' THEN 1 ELSE 0 END) AS misses,
+      COUNT(*) AS total,
+      ROUND(AVG(CAST(json_extract(payload, '$.latencyMs') AS INTEGER))) AS avg_latency_ms
+    FROM events
+    WHERE event_type = 'text_scan'
+      AND ts >= strftime('%s','now','-7 days')
+  `,
+  // Top dish keywords from menu scans -- feeds the same food-intelligence
+  // dataset as the Price Scanner item rollups. Uses json_each to unnest
+  // the dishKeywords[] array so each dish becomes its own row.
+  text_scans_top_dish_keywords_30d: `
+    SELECT
+      LOWER(TRIM(dish.value)) AS dish_keyword,
+      COUNT(*) AS sightings,
+      COUNT(DISTINCT json_extract(events.payload, '$.targetLanguage')) AS target_langs
+    FROM events, json_each(events.payload, '$.dishKeywords') AS dish
+    WHERE events.event_type = 'text_scan'
+      AND events.ts >= strftime('%s','now','-30 days')
+      AND json_extract(events.payload, '$.textCategory') = 'menu'
+    GROUP BY dish_keyword
+    HAVING dish_keyword != ''
+    ORDER BY sightings DESC
+    LIMIT 50
+  `,
+  // Most recent 50 text scans -- raw feed for spot-checking + debugging.
+  text_scans_recent_50: `
+    SELECT
+      ts,
+      json_extract(payload, '$.cache') AS cache,
+      json_extract(payload, '$.success') AS success,
+      json_extract(payload, '$.sourceLanguage') AS source_lang,
+      json_extract(payload, '$.targetLanguage') AS target_lang,
+      json_extract(payload, '$.textCategory') AS category,
+      json_extract(payload, '$.menuType') AS menu_type,
+      json_extract(payload, '$.confidence') AS confidence,
+      json_extract(payload, '$.textLength') AS text_length,
+      json_extract(payload, '$.latencyMs') AS latency_ms,
+      json_extract(payload, '$.error') AS error
+    FROM events
+    WHERE event_type = 'text_scan'
+    ORDER BY ts DESC
+    LIMIT 50
+  `,
 };
 
 async function handleAnalyticsQuery(request, env) {
