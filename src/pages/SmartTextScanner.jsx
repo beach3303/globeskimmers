@@ -196,6 +196,15 @@ export default function SmartTextScannerPage() {
           videoRef.current.onloadedmetadata = () => videoRef.current.play().then(res).catch(rej);
           videoRef.current.onerror = rej;
         });
+        // Enable continuous autofocus when the device supports it. Falls back
+        // silently on devices that don't expose focusMode (most iOS Safari).
+        try {
+          const track = stream.getVideoTracks()[0];
+          const caps = track?.getCapabilities?.() || {};
+          if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+            await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+          }
+        } catch { /* focus constraints are best-effort */ }
         setCameraReady(true);
       }
     } catch (e) {
@@ -355,7 +364,7 @@ export default function SmartTextScannerPage() {
           {/* Screenshot tip */}
           <div className="mt-3 px-4 py-3.5 rounded-[14px] text-[12.5px] leading-relaxed" style={{ background: CAT.todo.bg, color: CAT.todo.ink }}>
             <div className="font-bold mb-1">📸 Want to remember a translation?</div>
-            Please feel free to take a screenshot — your phone will save it. (We're working on saving them right in the app — coming soon!)
+            Feel free to take a screenshot to save it on your device.
           </div>
 
           {/* Start button */}
@@ -465,7 +474,7 @@ export default function SmartTextScannerPage() {
             className="px-3 py-1.5 rounded-full font-mono text-[10.5px] font-semibold tracking-[0.08em]"
             style={{ background: 'rgba(0,0,0,0.55)', color: counterColor, backdropFilter: 'blur(10px)' }}
           >
-            {remaining} of {DAILY_LIMIT} free today
+            {remaining} of {DAILY_LIMIT} left today
           </div>
 
           {/* Language picker pill — only on camera step (not while frozen) */}
@@ -513,6 +522,17 @@ export default function SmartTextScannerPage() {
           className="absolute bottom-0 left-0 right-0 z-20 rounded-t-[24px] px-5 pt-5 pb-7 text-[#0F1419]"
           style={{ background: '#FFFCF7', maxHeight: '70vh', overflowY: 'auto', boxShadow: '0 -10px 40px rgba(0,0,0,0.3)' }}
         >
+          {/* Card-level dismiss X — top-right, always reachable.
+              Tapping returns to the live camera (same as Scan another). */}
+          <button
+            onClick={handleDismissTranslation}
+            className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center z-10 transition-colors hover:bg-[#EFE8D6]"
+            style={{ background: '#F7F4EC' }}
+            aria-label="Close translation"
+          >
+            <X size={18} color="#0F1419" strokeWidth={2.2} />
+          </button>
+
           {errorMessage ? (
             <>
               <div className="text-[18px] font-bold mb-1">Couldn't read the text</div>
@@ -570,7 +590,7 @@ export default function SmartTextScannerPage() {
 
               {/* Screenshot hint */}
               <div className="text-[12px] text-[#6B7280] text-center mt-2 mb-3">
-                📸 Feel free to take a screenshot to save it on your device
+                📸 Feel free to take a screenshot to save it on your device.
               </div>
 
               {/* Scan-another quick action */}

@@ -26,15 +26,22 @@ export default function FloatingNav({ active, dark = false }) {
 
   // Auto-detect active tab from route. Mirrors the BottomNav logic so swapping
   // BottomNav -> FloatingNav doesn't lose the highlight behavior.
+  const path = location.pathname.toLowerCase();
   const detectActive = () => {
     if (active) return active;
-    const path = location.pathname.toLowerCase();
     if (path.includes('savedlocations') || path.endsWith('/saved')) return 'saved';
     if (path.includes('settings')) return 'settings';
     if (path === '/' || path.includes('home')) return 'home';
     return null;  // any other finder/page -> no tab highlighted
   };
   const activeTab = detectActive();
+
+  // Camera-led pages need the bottom of the screen for their primary CTA
+  // (e.g. "Freeze & translate", scanner shutter button). Hide the nav so it
+  // doesn't overlap. The user can still exit via the page's own back button.
+  if (path.includes('smarttextscanner') || path.includes('smartpricescanner')) {
+    return null;
+  }
 
   const bg = dark ? 'rgba(20,20,20,0.78)' : 'rgba(22,17,13,0.92)';
   const fg = '#FAF7EE';
