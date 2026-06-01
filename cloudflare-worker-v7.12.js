@@ -2347,6 +2347,258 @@ QUALITY GATE
 
 Return strict JSON only.`;
 
+// ============================================================================
+// TEXT SCANNER — Claude Haiku 4.5 vision for OCR + translation + romanization
+// Mirrors the Price Scanner pattern: image base64 in, structured JSON out.
+// KV-cached 24hr per (imageHash + targetLanguage) so retries / re-aims at the
+// same text cost $0. Frontend handles rate limiting (75/day per device) since
+// that's user-facing UX, not a security boundary.
+// ============================================================================
+
+const TEXT_SCAN_TTL_SECONDS = 24 * 60 * 60;  // 24 hours
+const TEXT_SCAN_PROMPT_VERSION = 'v1';
+
+const TEXT_SCAN_SYSTEM_PROMPT = `You are a vision OCR + translation engine for travelers using Globeskimmers, a travel app.
+
+ROLE
+Read the visible text in the image, identify its language, translate it into the requested target language, provide pronunciation for non-Latin scripts, AND classify what kind of text it is (menu, sign, label, etc) so the app can build category-level analytics. Return strict JSON. Never include narrative text, markdown fences, or commentary outside the JSON object.
+
+OUTPUT SCHEMA (exact shape, no extra keys):
+{
+  "originalText": "<the text as it appears in the image, in the source language, preserving line breaks with \\\\n>",
+  "sourceLanguage": "<BCP-47 code: 'ja', 'zh-Hans', 'ko', 'th', 'es', 'fr', etc. — best guess>",
+  "sourceLanguageName": "<English name of the source language: 'Japanese', 'Spanish', etc.>",
+  "translation": "<the same text translated into the target language>",
+  "romanization": "<Latin-alphabet phonetic spelling, ONLY when sourceLanguage uses a non-Latin script (Japanese, Chinese, Korean, Arabic, Hebrew, Thai, Russian, Greek, Hindi, etc.). Use Hepburn for Japanese, Pinyin for Chinese, Revised Romanization for Korean. NULL when source uses Latin alphabet>",
+  "lang": "<full BCP-47 code suitable for browser speechSynthesis: 'ja-JP', 'zh-CN', 'es-MX', etc.>",
+  "textCategory": "<one of: menu | directional_sign | informational_sign | warning_sign | product_label | document | newspaper | display_screen | handwritten | other>",
+  "menuType": "<ONLY when textCategory='menu', one of: appetizer | main | dessert | drink | breakfast | mixed | unclear. NULL otherwise>",
+  "dishKeywords": [<ONLY when textCategory='menu', up to 5 short dish name strings extracted from the menu (canonical English names if recognizable). Empty array otherwise>],
+  "confidence": <0.0-1.0 — how confident you are the OCR is accurate>
+}
+
+RULES
+
+1. OCR accuracy: read EXACTLY what's in the image. Don't fix typos, don't expand abbreviations, don't infer missing characters. If text is partially obscured, transcribe only the visible parts. If you can't read it at all, return originalText: "" and confidence: 0.
+
+2. Source language detection: identify the actual language of the text. If the image has English text and the user's target is English, still translate (e.g. confirm "Coffee" -> "Coffee").
+
+3. Translation: natural, fluent translation into the target language. For menus/signs, preserve formatting (line breaks, bullet points). Keep proper nouns in their original form. Don't translate brand names ("Coca-Cola" stays "Coca-Cola").
+
+4. Romanization: ONLY for non-Latin scripts. Examples:
+   - Japanese "こんにちは" -> romanization: "Konnichiwa"
+   - Chinese "你好" -> romanization: "Nǐ hǎo"
+   - Korean "안녕하세요" -> romanization: "Annyeonghaseyo"
+   - Thai "สวัสดี" -> romanization: "Sawatdi"
+   - Spanish "Hola" -> romanization: null (already Latin alphabet)
+
+5. lang field: BCP-47 with region tag suitable for speechSynthesis. Use:
+   - ja -> "ja-JP"
+   - zh-Hans -> "zh-CN", zh-Hant -> "zh-TW"
+   - ko -> "ko-KR"
+   - es -> "es-MX" (default Mexico) or "es-ES" (Spain context)
+   - pt -> "pt-BR" (default Brazil) or "pt-PT" (Portugal context)
+   - en -> "en-US" (default)
+
+6. textCategory: classify what kind of text this is:
+   - menu: restaurant/cafe menu, food list, drinks list, daily specials board
+   - directional_sign: street signs, station signs, exit signs, navigation arrows, room numbers, gate numbers
+   - informational_sign: museum plaques, park info boards, store hours, building info
+   - warning_sign: "Caution", "No entry", construction signs, safety warnings, "Wet floor"
+   - product_label: package labels, ingredient lists, instruction manuals, price tags, washing labels
+   - document: official paperwork, forms, tickets, receipts, contracts
+   - newspaper: printed periodicals, magazines, posters with article-like text
+   - display_screen: digital boards, kiosk screens, TV captions, departure/arrival boards
+   - handwritten: handwritten notes, blackboard menus, handwritten signs
+   - other: anything that doesn't fit the above (graffiti, art, mixed types)
+
+7. menuType (ONLY when textCategory='menu'):
+   - appetizer: starters, hors d'oeuvres section
+   - main: entrees, main courses, mains section
+   - dessert: dessert, sweet section
+   - drink: beverages, wine list, cocktails, coffee menu
+   - breakfast: breakfast / brunch items
+   - mixed: full menu spanning multiple categories
+   - unclear: menu but section not identifiable
+
+8. dishKeywords (ONLY when textCategory='menu'): up to 5 short dish names from the menu. Use canonical English names when recognizable (e.g. for "ramen" / "pho" / "tacos" — keep the international name). Skip generic words like "soup" or "rice" unless that's literally the dish name. Empty array for non-menu scans.
+
+9. Quality gate: if the image is too blurry, dark, or doesn't contain readable text, return:
+   {"originalText": "", "sourceLanguage": null, "sourceLanguageName": null, "translation": "", "romanization": null, "lang": null, "textCategory": "other", "menuType": null, "dishKeywords": [], "confidence": 0}
+
+10. Multiple separate items: if the image shows a menu with multiple dishes, keep them on separate lines (use \\\\n in originalText and translation).
+
+11. Currency, numbers, dates: keep them in their original numeric form. Don't convert units.
+
+Return strict JSON. No prose.`;
+
+// SHA-256 hash of the base64 image (truncated to 16 chars) so cache keys are
+// short but collision-resistant. Hashing the image content + target language
+// means re-aiming at the same menu returns instantly.
+async function hashImageContent(base64, targetLanguage) {
+  const enc = new TextEncoder();
+  // Just hash the first 8KB of base64 — typical phone photo is 50-200KB, but
+  // any meaningful change in the image changes the first chunk too.
+  const sample = base64.slice(0, 8192) + '|' + targetLanguage + '|' + TEXT_SCAN_PROMPT_VERSION;
+  const buf = await crypto.subtle.digest('SHA-256', enc.encode(sample));
+  return Array.from(new Uint8Array(buf)).slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function writeTextScanEvent(env, payload) {
+  if (!env.DB) return;
+  try {
+    const ts = Math.floor(Date.now() / 1000);
+    await env.DB.prepare(
+      `INSERT INTO events (ts, user_id, session_id, event_type, page, payload, ua_summary)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(ts, null, 'worker', 'text_scan', 'SmartTextScanner', JSON.stringify(payload), null).run();
+  } catch (_e) { /* analytics never breaks the response */ }
+}
+
+async function handleScanText(request, env) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (_e) {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const imageBase64 = body.image;
+  if (!imageBase64 || typeof imageBase64 !== 'string') {
+    return jsonResponse({ error: 'image (base64 string) is required' }, 400);
+  }
+  const mediaType = body.mediaType || 'image/jpeg';
+  const targetLanguage = (body.targetLanguage || 'en').toLowerCase();
+
+  const startedAt = Date.now();
+  const imgHash = await hashImageContent(imageBase64, targetLanguage);
+  const cacheKey = `text_scan:${TEXT_SCAN_PROMPT_VERSION}:${imgHash}`;
+
+  // Cache check — re-aiming at the same menu / sign returns instantly at $0.
+  if (env.GLOBESKIMMERS_KV) {
+    const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+    if (cached) {
+      writeTextScanEvent(env, {
+        cache: 'hit',
+        success: true,
+        sourceLanguage: cached.sourceLanguage,
+        targetLanguage,
+        textCategory: cached.textCategory || null,
+        menuType: cached.menuType || null,
+        confidence: cached.confidence,
+        latencyMs: Date.now() - startedAt,
+      });
+      return jsonResponse({ ...cached, _cache: 'hit' });
+    }
+  }
+
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: [
+          {
+            type: 'text',
+            text: TEXT_SCAN_SYSTEM_PROMPT,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: mediaType, data: imageBase64 },
+              },
+              {
+                type: 'text',
+                text: `Read all visible text in this image and translate it into language code: ${targetLanguage}. Return strict JSON matching the schema.`,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (!apiRes.ok) {
+      const errText = await apiRes.text().catch(() => '');
+      writeTextScanEvent(env, { cache: 'miss', success: false, error: `claude_api_${apiRes.status}`, latencyMs: Date.now() - startedAt });
+      return jsonResponse({ error: `Claude API error ${apiRes.status}`, details: errText }, 502);
+    }
+
+    const data = await apiRes.json();
+    const textBlock = (data.content || []).find(b => b.type === 'text');
+    const raw = textBlock?.text || '';
+
+    let parsed;
+    try {
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+      parsed = JSON.parse(cleaned);
+    } catch (_e) {
+      writeTextScanEvent(env, { cache: 'miss', success: false, error: 'parse_error', latencyMs: Date.now() - startedAt });
+      return jsonResponse({ error: 'Model returned non-JSON', raw }, 500);
+    }
+
+    // Defensive normalization
+    const VALID_CATEGORIES = new Set(['menu','directional_sign','informational_sign','warning_sign','product_label','document','newspaper','display_screen','handwritten','other']);
+    const VALID_MENU_TYPES = new Set(['appetizer','main','dessert','drink','breakfast','mixed','unclear']);
+    const rawCategory = typeof parsed.textCategory === 'string' ? parsed.textCategory.toLowerCase().trim() : 'other';
+    const textCategory = VALID_CATEGORIES.has(rawCategory) ? rawCategory : 'other';
+    const rawMenuType = typeof parsed.menuType === 'string' ? parsed.menuType.toLowerCase().trim() : null;
+    const menuType = (textCategory === 'menu' && rawMenuType && VALID_MENU_TYPES.has(rawMenuType)) ? rawMenuType : null;
+    const dishKeywords = (textCategory === 'menu' && Array.isArray(parsed.dishKeywords))
+      ? parsed.dishKeywords.filter(k => typeof k === 'string' && k.trim()).slice(0, 5).map(k => k.trim().toLowerCase())
+      : [];
+
+    const normalized = {
+      originalText: typeof parsed.originalText === 'string' ? parsed.originalText : '',
+      sourceLanguage: typeof parsed.sourceLanguage === 'string' && parsed.sourceLanguage.trim() ? parsed.sourceLanguage.trim() : null,
+      sourceLanguageName: typeof parsed.sourceLanguageName === 'string' && parsed.sourceLanguageName.trim() ? parsed.sourceLanguageName.trim() : null,
+      translation: typeof parsed.translation === 'string' ? parsed.translation : '',
+      romanization: typeof parsed.romanization === 'string' && parsed.romanization.trim() ? parsed.romanization.trim() : null,
+      lang: typeof parsed.lang === 'string' && /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/i.test(parsed.lang) ? parsed.lang : null,
+      textCategory,
+      menuType,
+      dishKeywords,
+      confidence: typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : 0,
+    };
+
+    if (env.GLOBESKIMMERS_KV) {
+      await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(normalized), { expirationTtl: TEXT_SCAN_TTL_SECONDS }).catch(() => {});
+    }
+
+    writeTextScanEvent(env, {
+      cache: 'miss',
+      success: true,
+      sourceLanguage: normalized.sourceLanguage,
+      targetLanguage,
+      textCategory: normalized.textCategory,
+      menuType: normalized.menuType,
+      dishKeywords: normalized.dishKeywords,
+      confidence: normalized.confidence,
+      textLength: normalized.originalText.length,
+      latencyMs: Date.now() - startedAt,
+    });
+
+    return jsonResponse({ ...normalized, _cache: 'miss' });
+  } catch (error) {
+    writeTextScanEvent(env, { cache: 'miss', success: false, error: 'network_' + (error.message || 'unknown').slice(0, 80), latencyMs: Date.now() - startedAt });
+    return jsonResponse({ error: error.message }, 500);
+  }
+}
+
 async function handlePriceScan(request, env) {
   if (!env.ANTHROPIC_API_KEY) {
     return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured', prices: [] }, 500);
@@ -2470,6 +2722,7 @@ export default {
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
+      if (pathname === '/scan-text' && request.method === 'POST') return await handleScanText(request, env);
       if (pathname === '/label-photos' && request.method === 'POST') return await handleLabelPhotos(request, env);
       if (pathname === '/ai-details' && request.method === 'POST') return await handleAIDetails(request, env);
       if (pathname === '/name-info' && request.method === 'POST') return await handleNameInfo(request, env);
