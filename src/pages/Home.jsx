@@ -461,7 +461,6 @@ export default function HomePage() {
               icon={MessageSquare}
               label="Text scanner"
               sub="Menus · signs · labels"
-              badge="Soon"
               onClick={() => handleQuickAction('Smart Text Scanner')}
             />
           </div>
