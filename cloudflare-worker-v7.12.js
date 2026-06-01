@@ -1659,7 +1659,7 @@ async function handleLabelPhotos(request, env) {
 
 const AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days
 
-const AI_DETAILS_PROMPT_VERSION = 'v6';  // v5 -> v6: expanded worthIt enum to 5 tiers (worth_the_stop / strong_nearby_pick / craving_match / know_before_you_go / better_if_convenient); gsVerdict can now be 1-2 sentences and fold in atmosphere-fit caveats
+const AI_DETAILS_PROMPT_VERSION = 'v7';  // v6 -> v7: removed duplicate fields (headsUp, goodFor, notIdealFor) — GS Verdict sentence + Good to Know cover the same ground. Strengthened bestTime/value/goodToKnow prompts to require concrete traveler language.
 
 function buildAIDetailsSystemPrompt(kind) {
   const safeKind = ['restaurant', 'coffee', 'attraction', 'restroom', 'atm'].includes(kind) ? kind : 'restaurant';
@@ -1698,19 +1698,16 @@ function buildAIDetailsSystemPrompt(kind) {
   - "know_before_you_go" = decent food / experience BUT meaningful planning friction (cash-only, long waits, hard-to-find, limited hours, language barrier, etc.) that travelers should know up front.
   - "better_if_convenient" = fine everyday option, not a destination — only stop if it's already on your route.
   Default to "strong_nearby_pick" when truly unsure. NEVER "skip" or negative framing.
-- goodFor: array of 3-6 short positive tags (each ≤4 words). Examples: ["families", "solo diners", "casual lunch", "dumpling lovers", "first-time Shanghainese food", "quick weekday meal"]. Tags should be navigational (who/what occasion fits), not generic ("good food").
-- notIdealFor: array of 0-3 short ATMOSPHERE-FIT tags (≤5 words each). Frame as occasion/setting mismatch ONLY, never as quality complaint. OK examples: "large groups (small space)", "fancy date nights (casual setting)", "quiet conversation (lively room)", "late-night dining (early close)". NOT OK: "picky eaters", "anyone wanting good service", "tourists". If nothing applies, return [].
 - practical: { payment, englishMenu, reservation, dietary } object with these factual fields (any can be null):
   - payment: short factual line about payment methods (e.g. "Cards + tap accepted; cash also OK", "Cash only — bring local currency", "Card-only, no cash"). NULL if reviews don't say.
   - englishMenu: short factual line about menu language + staff English (e.g. "Menu in English; staff speaks English", "English menu available; limited staff English", "Menu in local language only; photos help"). NULL if unclear.
   - reservation: short factual line (e.g. "Walk-in fine; weekend dinner gets busy", "Reservation recommended for dinner", "Reservations required — book ahead"). NULL if unclear.
   - dietary: short factual line covering vegetarian/vegan/gluten-free/halal/allergens IF mentioned (e.g. "Vegetarian options available; ask staff about gluten-free", "Limited vegetarian options", "Halal-certified"). NULL if no dietary info in reviews.
-- headsUp: array of 0-3 SHORT factual planning items, NEUTRALLY framed (NOT complaints). Examples: "Cash only — bring local currency", "QR code ordering at the table", "Most popular at weekend dinner", "Limited street parking — try side streets", "Closed Mondays". NOT OK: "slow service", "long waits", "rude staff", or anything in the FORBIDDEN words list. Empty array [] if nothing planning-worthy.
-- crowd: who eats here — short concrete labels preferred (e.g. "Mostly local diners; family crowd", "Food-focused regulars more than ambiance seekers"). Avoid vague phrasing.
-- bestTime: recommended time + factual note on busy hours (e.g. "Weekday lunch is calmer; weekend dinner is the busiest stretch").
-- vibe: 1 direct sentence describing atmosphere (casual, group-friendly, romantic, etc.). Avoid decorative language.
-- value: price range + value framing in traveler-friendly terms (e.g. "Budget-friendly ($$); good for sharing", "Mid-range ($$$); fair value for the cuisine").
-- goodToKnow: positive/neutral factual tips beyond what's already in practical/headsUp. NOT complaints.
+- crowd: who eats here — short concrete labels (e.g. "Mostly local diners; family crowd", "Food-focused regulars more than ambiance seekers"). Avoid vague phrasing.
+- bestTime: CONCRETE recommendation a traveler can act on. Don't say "weekday lunch is calmer" — say "Aim for weekday lunch around 12:30, or weekend brunch before 11 to avoid the rush". Always pair a SPECIFIC suggested window with a brief reason. Avoid vague "anytime is good" answers.
+- vibe: 1 direct sentence describing atmosphere (casual, group-friendly, romantic, energetic, quiet, etc.). Avoid decorative language ("charming", "delightful"). Be concrete.
+- value: traveler-friendly value language. Use words travelers actually say: "cheap", "fair for the cuisine", "expensive for what it is", "good for sharing", "small portions, order 2-3", "splurge-worthy". Always include the price tier ($/$$/$$$) AND a 1-line judgment. Examples: "Cheap ($) — generous portions, great for groups", "Fair for the cuisine ($$); order 2-3 small plates to share", "Splurge-worthy ($$$$); tasting menu runs about 2 hours".
+- goodToKnow: 2-4 SHORT verified facts that change how a traveler plans the visit. ONLY include items DIRECTLY supported by the reviews or place metadata — do NOT invent or assume. Prioritize: ordering quirks (QR code, table service), kitchen-pace ("Noodles made fresh daily"), parking realities, hours quirks ("Closed Mondays", "Lunch break 3-5pm"), BYOB / corkage, dress code, payment surcharges, busy windows specific enough to act on. AVOID generic platitudes ("good food", "nice place"). If reviews don't support a fact, omit it.
 - travelerNotes: practical tips for travelers (best dish to try first, ordering, language).
 - whatYouSee: null (restaurant doesn't use this).
 - aboutAndHistory: null (restaurant doesn't use this).`
@@ -1720,21 +1717,18 @@ function buildAIDetailsSystemPrompt(kind) {
 - photoWorthy: 1 short line naming a standout photo-worthy spot/exhibit/view at this attraction. Examples: "The cherry blossom canopy walkway at sunset — peak photo season early April", "The infinity-mirror room — most-photographed spot in the museum". NULL if no obvious photo-worthy feature is mentioned.
 - awards: 1 short line listing UNESCO status, top-tourist-attraction rankings, Michelin Green Guide stars, or notable recognitions. Examples: "UNESCO World Heritage Site (1996)", "Michelin Green Guide 3-star", "TripAdvisor Travelers' Choice 2024". NULL if no recognitions are mentioned.
 - worthIt: ONE of "worth_the_stop" | "strong_nearby_pick" | "craving_match" | "know_before_you_go" | "better_if_convenient". For famous landmarks / UNESCO sites default to "worth_the_stop"; for local parks default to "strong_nearby_pick". Use "know_before_you_go" if there's meaningful planning friction (timed entry, bag check restrictions, limited access). Use "craving_match" if niche-interest only (specific museum types, themed exhibits).
-- goodFor: 3-6 short positive tags (e.g. "families with kids", "photographers", "history buffs", "rainy day", "first-time visitors").
-- notIdealFor: 0-3 ATMOSPHERE-FIT tags (e.g. "limited mobility (lots of stairs)", "quick stops (needs 2+ hours)"). Parenthetical reason required. [] if none.
 - practical: { payment, englishMenu, reservation, dietary } — for attractions, "payment" = ticket purchase methods, "englishMenu" = signage/audio guide language + staff English, "reservation" = timed entry / advance booking, "dietary" = null (not relevant for attractions).
-- headsUp: 0-3 neutral planning facts (e.g. "Bag check at entrance", "No photography in main hall", "Timed-entry tickets sell out", "Closed Tuesdays").
 - whatYouSee: 1-2 short sentences describing what is physically present at the attraction (the buildings, exhibits, sculptures, rides, displays, scenery). Be concrete: "Three immersive haunted houses, a sculpture garden, an IMAX dome, a rooftop observation deck with city views." NULL if reviews/data don't describe what's there.
 - aboutAndHistory: 1-2 short sentences on the attraction's purpose / origin / brief history. Be factual and concise: "Built in 1872 as a Meiji-era symbol of modernization. Original wooden structure burned in the 1923 earthquake; current reconstruction completed 1957." NULL if data is silent.
-- crowd: who visits (families, photographers, history fans, etc.).
-- bestTime: recommended time + factual busy-hour note.
-- vibe: atmosphere of the attraction.
-- value: admission price + value framing (positive only).
-- goodToKnow: positive/neutral factual tips (what to bring, photo spots, accessibility, language).
+- crowd: who visits — short concrete labels (e.g. "Families with kids; school groups on weekdays", "Photographers and history fans"). Avoid vague phrasing.
+- bestTime: CONCRETE actionable recommendation. Don't say "mornings are calmer" — say "Arrive at opening (9 AM) on a weekday to avoid the crowds, or after 3 PM when tour buses leave". Pair a SPECIFIC suggested window with a brief reason.
+- vibe: 1 direct sentence describing atmosphere (busy/quiet, contemplative/energetic, kid-friendly/adult-focused). Avoid decorative language.
+- value: traveler-friendly admission framing. Use direct words: "free", "cheap", "fair", "pricey but worth it", "splurge-only". Include the actual admission tier and a 1-line judgment. Examples: "Free entry — fully worth a 2-hour visit", "Cheap (~$10); fair for what you see", "Pricey ($25-30); worth it if you have 3+ hours".
+- goodToKnow: 2-4 SHORT verified facts that change how a traveler plans the visit. ONLY include items DIRECTLY supported by reviews/metadata. Prioritize: bag-check rules, photography restrictions, accessibility realities, kid-friendliness specifics, audio-guide availability, dress code (temples/religious sites), what to bring, hours quirks, day-of-the-week closures. AVOID generic platitudes.
 - travelerNotes: practical traveler tips to make the visit better.`
       : isRestroom
         ? `- bestDish = null. alsoRecommended = [].
-- worthIt = null. goodFor = []. notIdealFor = []. practical = null. headsUp = [].
+- worthIt = null. practical = null.
 - crowd = null (typically not relevant).
 - bestTime: best time to use it (less busy windows).
 - vibe: cleanliness, comfort level (only describe positively or neutrally; if dirty, use gsStars=0 instead of writing it negatively).
@@ -1743,7 +1737,7 @@ function buildAIDetailsSystemPrompt(kind) {
 - travelerNotes: practical tips (carry tissue, bring small change, etc.).`
         : isATM
           ? `- bestDish = null. alsoRecommended = [].
-- worthIt = null. goodFor = []. notIdealFor = []. practical = null. headsUp = [].
+- worthIt = null. practical = null.
 - crowd = null (usually not relevant for ATMs).
 - bestTime: when access is best — lobby hours, drive-thru hours, when it's less busy or safer (e.g. "Lobby vestibule accessible 6 AM-11 PM. Drive-thru 24/7. Quietest before 8 AM"). Travelers care a lot about this.
 - vibe: where the ATM is PHYSICALLY located — this is the most important field. Be specific: inside lobby vestibule, outside on building wall, drive-thru, behind store counter, inside 7-Eleven by the entrance, etc. Reviewers consistently mention location specifics; extract them.
@@ -1788,42 +1782,26 @@ OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
   "photoWorthy": "<one line: standout photo-worthy dish/spot + why>" | null,
   "awards": "<one line: Michelin, James Beard, UNESCO, top-50 lists, etc.>" | null,
   "worthIt": "worth_the_stop" | "strong_nearby_pick" | "craving_match" | "know_before_you_go" | "better_if_convenient" (food/coffee/attraction only; null otherwise),
-  "goodFor": ["<short positive tag>", ...] (3-6 tags for food/coffee/attraction; [] otherwise),
-  "notIdealFor": ["<short atmosphere-fit tag>", ...] (0-3 tags for food/coffee/attraction; [] otherwise),
   "practical": {
     "payment": "<short factual line about payment methods>" | null,
     "englishMenu": "<short factual line about menu language + staff English>" | null,
     "reservation": "<short factual line>" | null,
     "dietary": "<short factual line about veg/vegan/GF/halal options>" | null
   } | null (food/coffee/attraction only; null otherwise),
-  "headsUp": ["<short neutral planning fact>", ...] (0-3 items; food/coffee/attraction; [] otherwise),
   "whatYouSee": "<short concrete description of physical features (attraction only)>" | null,
   "aboutAndHistory": "<short factual purpose / history (attraction only)>" | null,
   "crowd": "<one short sentence>" | null,
-  "bestTime": "<recommended time + factual busy-window note>" | null,
-  "vibe": "<one short sentence>" | null,
-  "value": "<one short sentence with price range if known>" | null,
-  "goodToKnow": ["<positive/neutral fact 1>", ...] (up to 3 strings, can be empty),
-  "ageFit": null,
+  "bestTime": "<concrete actionable recommendation with specific window + reason>" | null,
+  "vibe": "<one short concrete sentence>" | null,
+  "value": "<price tier + traveler-language judgment>" | null,
+  "goodToKnow": ["<short verified fact that changes planning>", ...] (2-4 strings when reviews support; [] otherwise),
   "travelerNotes": "<practical tip>" | null,
   "gsStars": <integer per per-kind rules above>,
   "gsRedFlag": <boolean per per-kind rules above>,
   "gsVerdict": "<one short positive/neutral summary, NO negative wording>"
 }
 
-GOOD FOR / NOT IDEAL FOR RULES (CRITICAL):
-- ${supportsAgeFit ? 'For this kind (restaurant/coffee/attraction), fill goodFor with 3-6 tags and notIdealFor with 0-3 tags.' : 'For this kind, return goodFor = [] and notIdealFor = [].'}
-- goodFor tags must be navigational (who / what occasion fits). Examples: "families", "solo diners", "casual lunch", "date night", "kid-friendly", "dumpling lovers", "first-time Shanghainese food", "quick weekday meal", "long leisurely meals".
-- notIdealFor tags must describe ATMOSPHERE / OCCASION mismatch, framed in parentheses. NEVER quality complaints. OK: "large groups (small space)", "fancy occasions (casual setting)", "quiet conversation (lively room)", "late-night dining (closes early)". FORBIDDEN: "picky eaters", "anyone wanting good service", "tourists", "people with taste buds".
-- If notIdealFor would require a quality complaint, return [] instead of inventing one.
-
-HEADS-UP RULES (CRITICAL):
-- headsUp items are NEUTRAL planning facts, NOT complaints. Same FORBIDDEN word list applies.
-- OK examples: "Cash only — bring local currency", "QR code ordering at the table", "Most popular at weekend dinner", "Limited street parking — try side streets", "Closed Mondays", "BYOB welcome", "Card surcharge applies".
-- NOT OK: "slow service", "rude staff", "long waits", "overpriced", "inconsistent quality" — none of these can appear.
-- If reviews only reveal complaint-type info with no neutral framing possible, return [].
-
-If any other field has no positive content to draw from, set it to null/empty. Do NOT fabricate.
+If any field has no positive content to draw from, set it to null/empty. Do NOT fabricate.
 
 Return JSON only.`;
 }
@@ -1915,10 +1893,7 @@ async function handleAIDetails(request, env) {
       photoWorthy: null,
       awards: null,
       worthIt: null,
-      goodFor: [],
-      notIdealFor: [],
       practical: null,
-      headsUp: [],
       whatYouSee: null,
       aboutAndHistory: null,
       crowd: null,
@@ -1954,10 +1929,10 @@ async function handleAIDetails(request, env) {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        // v5: bumped 1400 -> 1800 to make room for worthIt + goodFor +
-        // notIdealFor + practical{4} + headsUp + structured alsoRecommended
-        // ({name,context} per item). Most cards land ~1000-1300 tokens now.
-        max_tokens: 1800,
+        // v7: dropped goodFor/notIdealFor/headsUp (duplicates of verdict +
+        // goodToKnow), so the response is leaner again. ~1500 covers the
+        // remaining fields with headroom for richer bestTime/value copy.
+        max_tokens: 1500,
         system: buildAIDetailsSystemPrompt(kind),
         messages: [{ role: 'user', content: userContent }]
       })
@@ -2006,13 +1981,17 @@ async function handleAIDetails(request, env) {
       aiDetails.photoWorthy = typeof aiDetails.photoWorthy === 'string' && aiDetails.photoWorthy.trim() ? aiDetails.photoWorthy.trim() : null;
       aiDetails.awards = typeof aiDetails.awards === 'string' && aiDetails.awards.trim() ? aiDetails.awards.trim() : null;
     }
-    // ageFit is deprecated in v5 but we still normalize to null so any
-    // legacy frontend code reading it gets a stable shape.
+    // ageFit / goodFor / notIdealFor / headsUp are deprecated in v7 but
+    // we normalize to safe-empty shapes so any legacy frontend code reading
+    // them gets a stable response (no crash on undefined access).
     aiDetails.ageFit = null;
+    aiDetails.goodFor = [];
+    aiDetails.notIdealFor = [];
+    aiDetails.headsUp = [];
 
-    // v5 fields — worthIt / goodFor / notIdealFor / practical / headsUp.
-    // These apply to restaurant / coffee / attraction only.
-    const v5Allowed = (kind === 'restaurant' || kind === 'coffee' || kind === 'attraction');
+    // v7 fields — worthIt / practical. These apply to restaurant / coffee /
+    // attraction only.
+    const v7Allowed = (kind === 'restaurant' || kind === 'coffee' || kind === 'attraction');
     const sanitizeStr = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
     // worthIt: enum or null. v6 expanded to 5 tiers.
@@ -2023,23 +2002,12 @@ async function handleAIDetails(request, env) {
       'know_before_you_go',
       'better_if_convenient',
     ]);
-    if (!v5Allowed || !WORTH_ENUM.has(aiDetails.worthIt)) {
-      aiDetails.worthIt = v5Allowed ? 'strong_nearby_pick' : null;
+    if (!v7Allowed || !WORTH_ENUM.has(aiDetails.worthIt)) {
+      aiDetails.worthIt = v7Allowed ? 'strong_nearby_pick' : null;
     }
 
-    // goodFor / notIdealFor: arrays of short strings (cap at 6 / 3)
-    const sanitizeTagArray = (arr, cap) => {
-      if (!Array.isArray(arr)) return [];
-      return arr
-        .map(t => sanitizeStr(t))
-        .filter(Boolean)
-        .slice(0, cap);
-    };
-    aiDetails.goodFor = v5Allowed ? sanitizeTagArray(aiDetails.goodFor, 6) : [];
-    aiDetails.notIdealFor = v5Allowed ? sanitizeTagArray(aiDetails.notIdealFor, 3) : [];
-
     // practical: object with 4 string|null fields
-    if (!v5Allowed || !aiDetails.practical || typeof aiDetails.practical !== 'object') {
+    if (!v7Allowed || !aiDetails.practical || typeof aiDetails.practical !== 'object') {
       aiDetails.practical = null;
     } else {
       const p = aiDetails.practical;
@@ -2052,9 +2020,6 @@ async function handleAIDetails(request, env) {
       const anyPresent = Object.values(cleanedP).some(v => v !== null);
       aiDetails.practical = anyPresent ? cleanedP : null;
     }
-
-    // headsUp: array of up to 3 short strings
-    aiDetails.headsUp = v5Allowed ? sanitizeTagArray(aiDetails.headsUp, 3) : [];
 
     // alsoRecommended v5: array of {name, context} objects. Accept legacy
     // string form too in case a stale Haiku response slips through — coerce

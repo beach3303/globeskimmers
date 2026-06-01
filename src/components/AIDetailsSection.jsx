@@ -257,28 +257,6 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
     </ul>
   );
 
-  // Tag-chip row for goodFor / notIdealFor arrays.
-  const renderChips = (tags, palette) => (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-      {tags.map((t, i) => (
-        <span
-          key={i}
-          style={{
-            fontSize: '12px',
-            lineHeight: '1.3',
-            padding: '4px 10px',
-            background: palette.bg,
-            color: palette.color,
-            borderRadius: '9999px',
-            fontWeight: '500',
-          }}
-        >
-          {t}
-        </span>
-      ))}
-    </div>
-  );
-
   const bestDishItems = details.bestDish?.name
     ? [{ name: details.bestDish.name, context: details.bestDish.context }]
     : [];
@@ -293,7 +271,7 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
           subtitle explains what GS Verdict means; after that it's hidden. */}
       {hasVerdict && (
         <div style={{ marginBottom: '12px', paddingBottom: '10px', borderBottom: `1px solid ${PURPLE_LIGHT}` }}>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: showVerdictHelper ? '2px' : '6px' }}>GS VERDICT</div>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: showVerdictHelper ? '2px' : '6px' }}>💯 GS VERDICT</div>
           {showVerdictHelper && (
             <div style={{ fontSize: '11px', color: GRAY, fontStyle: 'italic', marginBottom: '8px' }}>
               Globeskimmers' traveler-fit take on this place.
@@ -378,37 +356,6 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
           </div>
         );
       })()}
-
-      {/* HEADS-UP — short factual planning items framed neutrally
-          (not complaints). Empty array hides the row. */}
-      {details.headsUp?.length > 0 && (
-        <div style={{ marginBottom: '8px' }}>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>⚠️ HEADS-UP</div>
-          <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', lineHeight: '1.5', color: DARK }}>
-            {details.headsUp.map((u, i) => (
-              <li key={i}>{h(u)}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* GOOD FOR — short positive tags (chips). Replaces the old
-          age-graded ageFit breakdown which was overbuilt + part-guessed. */}
-      {details.goodFor?.length > 0 && (
-        <div style={{ marginBottom: '8px' }}>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>🎯 GOOD FOR</div>
-          {renderChips(details.goodFor, { bg: '#DDD6FE', color: '#5B21B6' })}
-        </div>
-      )}
-
-      {/* NOT IDEAL FOR — atmosphere-fit mismatch tags (always parenthetical
-          with reason). Never quality complaints. Hidden when empty. */}
-      {details.notIdealFor?.length > 0 && (
-        <div style={{ marginBottom: '8px' }}>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>🤔 NOT IDEAL FOR</div>
-          {renderChips(details.notIdealFor, { bg: '#FEE2E2', color: '#991B1B' })}
-        </div>
-      )}
 
       {row('📸', 'PHOTO-WORTHY', details.photoWorthy)}
 
