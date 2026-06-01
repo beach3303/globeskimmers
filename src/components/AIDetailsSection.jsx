@@ -106,17 +106,37 @@ function highlightText(text, kind) {
   return nodes;
 }
 
+// localStorage flag so the GS Verdict helper subtitle (one-line explainer
+// of what "GS Verdict" means) shows only on the user's first-ever open of
+// any AI Details panel, then disappears forever. Wrapped in try/catch so
+// private-mode / disabled-storage failures degrade silently.
+const GS_VERDICT_HELPER_KEY = 'gs_verdict_helper_seen';
+function readVerdictHelperSeen() {
+  try { return localStorage.getItem(GS_VERDICT_HELPER_KEY) === '1'; }
+  catch { return true; }  // fail-safe: hide subtitle if storage broken
+}
+function markVerdictHelperSeen() {
+  try { localStorage.setItem(GS_VERDICT_HELPER_KEY, '1'); } catch { /* ignore */ }
+}
+
 export default function AIDetailsSection({ placeId, placeName, page, kind }) {
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Snapshot the helper-seen state at MOUNT (not on every render) so the
+  // subtitle stays visible for this open even after we mark it seen. Next
+  // panel the user opens reads the freshly-true flag and hides it.
+  const [showVerdictHelper] = useState(() => !readVerdictHelperSeen());
 
   const onToggle = () => {
     const next = !open;
     setOpen(next);
     if (next) {
       logEvent('ai_details_opened', { placeId, placeName, kind: kind || 'restaurant' }, page || 'unknown');
+      // Mark the helper as seen on first open so the next panel suppresses
+      // it. The current panel keeps showing it (snapshot above).
+      if (showVerdictHelper) markVerdictHelperSeen();
     }
   };
 
@@ -160,14 +180,14 @@ export default function AIDetailsSection({ placeId, placeName, page, kind }) {
       </button>
       {open && (
         <div style={{ marginTop: '10px' }}>
-          <AIDetailsBody loading={loading} error={error} details={details} kind={kind} />
+          <AIDetailsBody loading={loading} error={error} details={details} kind={kind} showVerdictHelper={showVerdictHelper} />
         </div>
       )}
     </div>
   );
 }
 
-function AIDetailsBody({ loading, error, details, kind }) {
+function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
   if (loading) {
     return (
       <div>
@@ -210,12 +230,14 @@ function AIDetailsBody({ loading, error, details, kind }) {
       </div>
     ) : null;
 
-  // Worth-it tag → display label + emoji. Three positive-only tiers; any
-  // unknown value (or legacy null) hides the chip.
+  // Worth-it tag → display label + emoji. Five tiers in v6; any unknown
+  // value (or legacy v5 enum) hides the chip rather than mislabeling.
   const WORTH_LABELS = {
-    worth_detour:     { icon: '✨', label: 'Worth a detour',    bg: '#DCFCE7', color: '#166534' },
-    good_if_nearby:   { icon: '👍', label: 'Good if nearby',    bg: '#DBEAFE', color: '#1E40AF' },
-    convenient_pick:  { icon: '📍', label: 'Convenient pick',   bg: '#FEF3C7', color: '#92400E' },
+    worth_the_stop:       { icon: '💎', label: 'Worth the Stop',       bg: '#DCFCE7', color: '#166534' },
+    strong_nearby_pick:   { icon: '✅', label: 'Strong Nearby Pick',   bg: '#DBEAFE', color: '#1E40AF' },
+    craving_match:        { icon: '🍽️', label: 'Craving Match',        bg: '#FCE7F3', color: '#9D174D' },
+    know_before_you_go:   { icon: '⚠️', label: 'Know Before You Go',   bg: '#FEF3C7', color: '#92400E' },
+    better_if_convenient: { icon: '↪️', label: 'Better If Convenient', bg: '#F1F5F9', color: '#475569' },
   };
   const worthTag = details.worthIt && WORTH_LABELS[details.worthIt];
 
@@ -265,13 +287,20 @@ function AIDetailsBody({ loading, error, details, kind }) {
 
   return (
     <div>
-      {/* GS VERDICT moved to the TOP — it's the single biggest decision
-          signal a traveler needs. Worth-it chip sits above the stars. */}
+      {/* GS VERDICT — moved to the TOP. The badge carries the personality
+          (💎 / ✅ / 🍽️ / ⚠️ / ↪️) so the title itself stays clean. On the
+          user's first-ever open of any AI Details panel, a one-line helper
+          subtitle explains what GS Verdict means; after that it's hidden. */}
       {hasVerdict && (
         <div style={{ marginBottom: '12px', paddingBottom: '10px', borderBottom: `1px solid ${PURPLE_LIGHT}` }}>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>💯 GS VERDICT</div>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: showVerdictHelper ? '2px' : '6px' }}>GS VERDICT</div>
+          {showVerdictHelper && (
+            <div style={{ fontSize: '11px', color: GRAY, fontStyle: 'italic', marginBottom: '8px' }}>
+              Globeskimmers' traveler-fit take on this place.
+            </div>
+          )}
           {worthTag && (
-            <div style={{ marginBottom: '6px' }}>
+            <div style={{ marginBottom: '8px' }}>
               <span style={{
                 display: 'inline-block',
                 fontSize: '12px',
@@ -285,15 +314,20 @@ function AIDetailsBody({ loading, error, details, kind }) {
               </span>
             </div>
           )}
-          <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>
-            {details.gsRedFlag ? (
-              <strong>🚩</strong>
-            ) : details.gsStars != null && details.gsStars > 0 ? (
-              <strong style={{ letterSpacing: '1px' }}>{'⭐'.repeat(Math.min(5, Math.max(0, details.gsStars)))}</strong>
-            ) : null}
-            {((details.gsRedFlag) || (details.gsStars != null && details.gsStars > 0)) && details.gsVerdict && ' — '}
-            {h(details.gsVerdict)}
-          </div>
+          {(details.gsStars != null && details.gsStars > 0) || details.gsRedFlag ? (
+            <div style={{ fontSize: '13px', marginBottom: '4px' }}>
+              {details.gsRedFlag ? (
+                <strong>🚩</strong>
+              ) : (
+                <strong style={{ letterSpacing: '1px' }}>{'⭐'.repeat(Math.min(5, Math.max(0, details.gsStars)))}</strong>
+              )}
+            </div>
+          ) : null}
+          {details.gsVerdict && (
+            <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+              {h(details.gsVerdict)}
+            </div>
+          )}
         </div>
       )}
 

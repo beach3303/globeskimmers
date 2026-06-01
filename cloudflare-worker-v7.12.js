@@ -1659,7 +1659,7 @@ async function handleLabelPhotos(request, env) {
 
 const AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days
 
-const AI_DETAILS_PROMPT_VERSION = 'v5';  // v4 -> v5: added worthIt/goodFor/notIdealFor/practical/headsUp; bestDish + alsoRecommended now structured {name, context} for outline rendering; ageFit deprecated (kept for back-compat read but not requested)
+const AI_DETAILS_PROMPT_VERSION = 'v6';  // v5 -> v6: expanded worthIt enum to 5 tiers (worth_the_stop / strong_nearby_pick / craving_match / know_before_you_go / better_if_convenient); gsVerdict can now be 1-2 sentences and fold in atmosphere-fit caveats
 
 function buildAIDetailsSystemPrompt(kind) {
   const safeKind = ['restaurant', 'coffee', 'attraction', 'restroom', 'atm'].includes(kind) ? kind : 'restaurant';
@@ -1691,7 +1691,13 @@ function buildAIDetailsSystemPrompt(kind) {
 - alsoRecommended: TOP 4 dishes/drinks beyond bestDish that reviewers mention, as an array of { name, context } objects. Each name = just the dish; context = short reason (≤90 chars). Aim for 4 — fewer only if data is thin.
 - photoWorthy: 1 short line naming any standout photo-worthy dish or drink (visually striking presentation, vibrant colors, unique vessel, frequently photographed). Include the dish name + WHY it's photo-worthy. Examples: "The rainbow milk tea — served in a clear hourglass jar with layered colors, frequently photographed", "Charcoal-black sushi roll plated on a bed of dry ice — a popular shot among visitors". NULL if no reviewer mentions visual / photo / shareable appeal.
 - awards: 1 short line listing notable awards, recognitions, or critical mentions. Examples: "★ 1 Michelin star (2024)", "Bib Gourmand listed (2023)", "James Beard Foundation Award winner — Best Chef Mid-Atlantic", "Top 50 Asia Restaurants 2024 #12", "Featured in Netflix's Chef's Table". NULL if no awards/recognitions are mentioned in reviews/editorialSummary/data.
-- worthIt: ONE of "worth_detour" | "good_if_nearby" | "convenient_pick" — pick based on review enthusiasm + uniqueness. "worth_detour" = standout, travelers should go out of their way. "good_if_nearby" = solid pick if you're already in the area. "convenient_pick" = decent everyday option, not a destination. Default to "good_if_nearby" when unsure. NEVER "skip" or negative framing.
+- worthIt: ONE of "worth_the_stop" | "strong_nearby_pick" | "craving_match" | "know_before_you_go" | "better_if_convenient". Pick the most accurate tier:
+  - "worth_the_stop" = standout reviewers say is worth a detour (high enthusiasm, unique, destination-worthy).
+  - "strong_nearby_pick" = solid, reliable choice if you're already in the area.
+  - "craving_match" = good ONLY if you specifically want this cuisine / vibe / experience (niche but excellent at its thing).
+  - "know_before_you_go" = decent food / experience BUT meaningful planning friction (cash-only, long waits, hard-to-find, limited hours, language barrier, etc.) that travelers should know up front.
+  - "better_if_convenient" = fine everyday option, not a destination — only stop if it's already on your route.
+  Default to "strong_nearby_pick" when truly unsure. NEVER "skip" or negative framing.
 - goodFor: array of 3-6 short positive tags (each ≤4 words). Examples: ["families", "solo diners", "casual lunch", "dumpling lovers", "first-time Shanghainese food", "quick weekday meal"]. Tags should be navigational (who/what occasion fits), not generic ("good food").
 - notIdealFor: array of 0-3 short ATMOSPHERE-FIT tags (≤5 words each). Frame as occasion/setting mismatch ONLY, never as quality complaint. OK examples: "large groups (small space)", "fancy date nights (casual setting)", "quiet conversation (lively room)", "late-night dining (early close)". NOT OK: "picky eaters", "anyone wanting good service", "tourists". If nothing applies, return [].
 - practical: { payment, englishMenu, reservation, dietary } object with these factual fields (any can be null):
@@ -1713,7 +1719,7 @@ function buildAIDetailsSystemPrompt(kind) {
 - alsoRecommended: TOP 3 must-see/must-do items at this attraction, as an array of { name, context } objects. name = the item (exhibit, view, ride, etc.), context = short reason (≤90 chars). Aim for 3 — fewer only if data is thin.
 - photoWorthy: 1 short line naming a standout photo-worthy spot/exhibit/view at this attraction. Examples: "The cherry blossom canopy walkway at sunset — peak photo season early April", "The infinity-mirror room — most-photographed spot in the museum". NULL if no obvious photo-worthy feature is mentioned.
 - awards: 1 short line listing UNESCO status, top-tourist-attraction rankings, Michelin Green Guide stars, or notable recognitions. Examples: "UNESCO World Heritage Site (1996)", "Michelin Green Guide 3-star", "TripAdvisor Travelers' Choice 2024". NULL if no recognitions are mentioned.
-- worthIt: ONE of "worth_detour" | "good_if_nearby" | "convenient_pick". For famous landmarks / UNESCO sites / unique experiences default to "worth_detour"; for local parks / neighborhood spots default to "good_if_nearby".
+- worthIt: ONE of "worth_the_stop" | "strong_nearby_pick" | "craving_match" | "know_before_you_go" | "better_if_convenient". For famous landmarks / UNESCO sites default to "worth_the_stop"; for local parks default to "strong_nearby_pick". Use "know_before_you_go" if there's meaningful planning friction (timed entry, bag check restrictions, limited access). Use "craving_match" if niche-interest only (specific museum types, themed exhibits).
 - goodFor: 3-6 short positive tags (e.g. "families with kids", "photographers", "history buffs", "rainy day", "first-time visitors").
 - notIdealFor: 0-3 ATMOSPHERE-FIT tags (e.g. "limited mobility (lots of stairs)", "quick stops (needs 2+ hours)"). Parenthetical reason required. [] if none.
 - practical: { payment, englishMenu, reservation, dietary } — for attractions, "payment" = ticket purchase methods, "englishMenu" = signage/audio guide language + staff English, "reservation" = timed entry / advance booking, "dietary" = null (not relevant for attractions).
@@ -1764,7 +1770,13 @@ ${kindFieldGuidance}
 
 GS VERDICT SCORING:
 ${starRules}
-- gsVerdict: one short positive/neutral summary line. NO negative wording. Examples for high score: "Locals' choice for authentic sisig". Examples for mixed-review minimum score (restaurants/coffee always ≥1 star): "Casual neighborhood spot worth checking out".
+- gsVerdict: 1-2 short sentences matching the chosen worthIt tier. CAN fold in atmosphere-fit caveats using the EXACT pattern "Best if you ... Not ideal for [atmosphere/occasion mismatch]." Atmosphere caveats are allowed; quality complaints are NOT (same FORBIDDEN word list applies). Examples:
+  - worth_the_stop: "Locals' choice for authentic sisig — destination-worthy for Filipino BBQ fans."
+  - strong_nearby_pick: "Reliable Shanghainese spot for a casual lunch or dinner."
+  - craving_match: "Best if you are specifically craving soup dumplings or casual Shanghainese comfort food. Not ideal for late-night dining, fancy ambiance, or a rushed meal."
+  - know_before_you_go: "Excellent ramen worth the trip — bring cash and expect a 30-minute weekend wait."
+  - better_if_convenient: "Decent coffee stop if you are already in the neighborhood."
+  The "Not ideal for ..." clause MUST describe atmosphere/occasion mismatch only (never quality). Keep the whole verdict under 200 chars.
 
 OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
 {
@@ -1775,7 +1787,7 @@ OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
   ] (aim for 4 for restaurants/coffee, 3 for attractions, fewer only if data truly doesn't support more),
   "photoWorthy": "<one line: standout photo-worthy dish/spot + why>" | null,
   "awards": "<one line: Michelin, James Beard, UNESCO, top-50 lists, etc.>" | null,
-  "worthIt": "worth_detour" | "good_if_nearby" | "convenient_pick" (food/coffee/attraction only; null otherwise),
+  "worthIt": "worth_the_stop" | "strong_nearby_pick" | "craving_match" | "know_before_you_go" | "better_if_convenient" (food/coffee/attraction only; null otherwise),
   "goodFor": ["<short positive tag>", ...] (3-6 tags for food/coffee/attraction; [] otherwise),
   "notIdealFor": ["<short atmosphere-fit tag>", ...] (0-3 tags for food/coffee/attraction; [] otherwise),
   "practical": {
@@ -2003,10 +2015,16 @@ async function handleAIDetails(request, env) {
     const v5Allowed = (kind === 'restaurant' || kind === 'coffee' || kind === 'attraction');
     const sanitizeStr = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
-    // worthIt: enum or null
-    const WORTH_ENUM = new Set(['worth_detour', 'good_if_nearby', 'convenient_pick']);
+    // worthIt: enum or null. v6 expanded to 5 tiers.
+    const WORTH_ENUM = new Set([
+      'worth_the_stop',
+      'strong_nearby_pick',
+      'craving_match',
+      'know_before_you_go',
+      'better_if_convenient',
+    ]);
     if (!v5Allowed || !WORTH_ENUM.has(aiDetails.worthIt)) {
-      aiDetails.worthIt = v5Allowed ? 'good_if_nearby' : null;
+      aiDetails.worthIt = v5Allowed ? 'strong_nearby_pick' : null;
     }
 
     // goodFor / notIdealFor: arrays of short strings (cap at 6 / 3)
