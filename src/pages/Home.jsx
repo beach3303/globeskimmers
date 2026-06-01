@@ -78,11 +78,17 @@ export default function HomePage() {
     }
   }, [locationMode, selectedLocation, currentGpsLocation, getActiveLocation]);
 
-  // Show home-country time chip only when the user is in a different country
-  // than their stated home (the away-from-home traveler case).
+  // Show home-country TIME chip when:
+  //   1. User toggled "Show Home Country Time" ON (show_home_country_info)
+  //   2. AND the user is currently in a DIFFERENT country than their home
+  //      (no point showing "Home time" when you're already at home)
   useEffect(() => {
     const checkShowHomeCountryTime = () => {
       if (!user || !homeCountryInfo || !getActiveLocation()?.address) {
+        setShouldShowHomeCountryTime(false);
+        return;
+      }
+      if (!user.show_home_country_info) {
         setShouldShowHomeCountryTime(false);
         return;
       }
@@ -112,14 +118,25 @@ export default function HomePage() {
       const preferredScale = userData.preferred_temperature_scale || 'fahrenheit';
       setTempUnit(preferredScale === 'celsius' ? 'C' : 'F');
 
-      // Home-country flag overlay — uses HOME country, not current location.
-      // Theme-system setHomeCountryCode removed with the theme picker.
-      if (userData.show_home_country_info && userData.home_country) {
+      // Always load home-country timezone data when home_country is set --
+      // the time chip's own visibility logic (the useEffect above) gates
+      // whether to actually render the chip. Loading the data eagerly means
+      // there's no flicker the moment the user toggles the chip on.
+      if (userData.home_country) {
         loadHomeCountryData(userData.home_country);
+      }
+
+      // Home-country FLAG overlay — gated by show_home_flag toggle in Settings.
+      // Independent of show_home_country_info (which only controls the time
+      // chip). User can show the flag whether they're at home or abroad.
+      if (userData.show_home_flag && userData.home_country) {
         const homeCode = COUNTRY_CODES[userData.home_country];
         if (homeCode) {
           setHomeFlagUrl(`https://flagcdn.com/w640/${homeCode.toLowerCase()}.png`);
           setShowHomeFlag(true);
+        } else {
+          setShowHomeFlag(false);
+          setHomeFlagUrl(null);
         }
       } else {
         setShowHomeFlag(false);
