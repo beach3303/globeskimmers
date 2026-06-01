@@ -347,7 +347,7 @@ export default function SmartTextScannerPage() {
               Translate anything, <span className="font-serif italic font-normal text-[#7C3AED]">instantly.</span>
             </div>
             <div className="mt-3 text-[15px] text-[#475569] leading-relaxed">
-              Point your camera at a sign, menu, or product label — we read it, translate it, AND show you how to say it.
+              Point your camera at a sign, menu, or product label — we read it and translate it.
             </div>
           </motion.div>
 
@@ -356,7 +356,7 @@ export default function SmartTextScannerPage() {
             <div className="font-mono text-[10px] tracking-[0.16em] uppercase font-semibold text-[#6B7280] mb-2">What's in your pocket</div>
             <ul className="space-y-2 text-[13.5px] text-[#0F1419]">
               <li className="flex gap-2"><span>•</span><span><strong>25 languages</strong> with pronunciation for Japanese, Thai, Korean, Arabic, Chinese and more</span></li>
-              <li className="flex gap-2"><span>•</span><span>Lives right next to your maps + money exchange — <strong>no app-switching</strong> mid-trip</span></li>
+              <li className="flex gap-2"><span>•</span><span><strong>All your travel tools in one app</strong> — no app-switching mid-trip</span></li>
               <li className="flex gap-2"><span>•</span><span><strong>10 free translations daily</strong></span></li>
             </ul>
           </div>
