@@ -210,22 +210,175 @@ function AIDetailsBody({ loading, error, details, kind }) {
       </div>
     ) : null;
 
-  const bestDishText = details.bestDish?.name
-    ? `${details.bestDish.name}${details.bestDish.context ? ` — ${details.bestDish.context}` : ''}`
-    : null;
+  // Worth-it tag → display label + emoji. Three positive-only tiers; any
+  // unknown value (or legacy null) hides the chip.
+  const WORTH_LABELS = {
+    worth_detour:     { icon: '✨', label: 'Worth a detour',    bg: '#DCFCE7', color: '#166534' },
+    good_if_nearby:   { icon: '👍', label: 'Good if nearby',    bg: '#DBEAFE', color: '#1E40AF' },
+    convenient_pick:  { icon: '📍', label: 'Convenient pick',   bg: '#FEF3C7', color: '#92400E' },
+  };
+  const worthTag = details.worthIt && WORTH_LABELS[details.worthIt];
+
+  // Bulleted outline renderer for arrays of { name, context } objects
+  // (bestDish wrapped into a 1-item array; alsoRecommended already is one).
+  const renderDishList = (items) => (
+    <ul style={{ margin: 0, paddingLeft: '0', listStyle: 'none', fontSize: '13px', lineHeight: '1.55', color: DARK }}>
+      {items.map((it, i) => (
+        <li key={i} style={{ marginBottom: '6px', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+          <span style={{ flexShrink: 0, color: PURPLE, fontWeight: '700' }}>•</span>
+          <span>
+            <strong style={{ fontWeight: '600' }}>{h(it.name)}</strong>
+            {it.context ? <span style={{ color: '#475569' }}> — {h(it.context)}</span> : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+
+  // Tag-chip row for goodFor / notIdealFor arrays.
+  const renderChips = (tags, palette) => (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+      {tags.map((t, i) => (
+        <span
+          key={i}
+          style={{
+            fontSize: '12px',
+            lineHeight: '1.3',
+            padding: '4px 10px',
+            background: palette.bg,
+            color: palette.color,
+            borderRadius: '9999px',
+            fontWeight: '500',
+          }}
+        >
+          {t}
+        </span>
+      ))}
+    </div>
+  );
+
+  const bestDishItems = details.bestDish?.name
+    ? [{ name: details.bestDish.name, context: details.bestDish.context }]
+    : [];
+
+  const hasVerdict = (details.gsStars != null || details.gsRedFlag || details.gsVerdict || worthTag);
 
   return (
     <div>
-      {/* Awards comes FIRST when present — Michelin / UNESCO / etc.
-          is the strongest single signal, deserves top placement. */}
+      {/* GS VERDICT moved to the TOP — it's the single biggest decision
+          signal a traveler needs. Worth-it chip sits above the stars. */}
+      {hasVerdict && (
+        <div style={{ marginBottom: '12px', paddingBottom: '10px', borderBottom: `1px solid ${PURPLE_LIGHT}` }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>💯 GS VERDICT</div>
+          {worthTag && (
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{
+                display: 'inline-block',
+                fontSize: '12px',
+                fontWeight: '600',
+                padding: '3px 10px',
+                background: worthTag.bg,
+                color: worthTag.color,
+                borderRadius: '9999px',
+              }}>
+                {worthTag.icon} {worthTag.label}
+              </span>
+            </div>
+          )}
+          <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+            {details.gsRedFlag ? (
+              <strong>🚩</strong>
+            ) : details.gsStars != null && details.gsStars > 0 ? (
+              <strong style={{ letterSpacing: '1px' }}>{'⭐'.repeat(Math.min(5, Math.max(0, details.gsStars)))}</strong>
+            ) : null}
+            {((details.gsRedFlag) || (details.gsStars != null && details.gsStars > 0)) && details.gsVerdict && ' — '}
+            {h(details.gsVerdict)}
+          </div>
+        </div>
+      )}
+
+      {/* Awards next when present — Michelin / UNESCO / etc.
+          is the strongest single recognition signal. */}
       {row('🏆', 'AWARDS', details.awards)}
-      {row('🥘', 'BEST DISH', bestDishText)}
-      {details.alsoRecommended?.length > 0 && row('👍', 'ALSO RECOMMENDED', details.alsoRecommended.join(', '))}
+
+      {/* BEST DISH — single-bullet outline (one item, formatted like the
+          alsoRecommended list for visual consistency). */}
+      {bestDishItems.length > 0 && (
+        <div style={{ marginBottom: '8px' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>🥘 BEST DISH</div>
+          {renderDishList(bestDishItems)}
+        </div>
+      )}
+
+      {/* ALSO RECOMMENDED — bulleted outline, one bullet per dish/item.
+          v5 schema: array of {name, context} objects. */}
+      {details.alsoRecommended?.length > 0 && (
+        <div style={{ marginBottom: '8px' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>👍 ALSO RECOMMENDED</div>
+          {renderDishList(details.alsoRecommended)}
+        </div>
+      )}
+
+      {/* PRACTICAL — payment / English menu / reservation / dietary.
+          The top traveler-anxiety cluster: surfaced high in the panel so
+          users see it before deciding to go. */}
+      {details.practical && (() => {
+        const rows = [
+          { key: 'payment',     icon: '💳', label: 'Payment' },
+          { key: 'englishMenu', icon: '🗣️', label: 'English' },
+          { key: 'reservation', icon: '📅', label: 'Reservation' },
+          { key: 'dietary',     icon: '🥗', label: 'Dietary' },
+        ].filter(r => details.practical[r.key]);
+        if (rows.length === 0) return null;
+        return (
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>📋 PRACTICAL</div>
+            <ul style={{ margin: 0, paddingLeft: '0', listStyle: 'none', fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+              {rows.map(r => (
+                <li key={r.key} style={{ marginBottom: '4px', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                  <span style={{ flexShrink: 0 }}>{r.icon}</span>
+                  <span><strong style={{ fontWeight: '600' }}>{r.label}:</strong> {h(details.practical[r.key])}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
+
+      {/* HEADS-UP — short factual planning items framed neutrally
+          (not complaints). Empty array hides the row. */}
+      {details.headsUp?.length > 0 && (
+        <div style={{ marginBottom: '8px' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>⚠️ HEADS-UP</div>
+          <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+            {details.headsUp.map((u, i) => (
+              <li key={i}>{h(u)}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* GOOD FOR — short positive tags (chips). Replaces the old
+          age-graded ageFit breakdown which was overbuilt + part-guessed. */}
+      {details.goodFor?.length > 0 && (
+        <div style={{ marginBottom: '8px' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>🎯 GOOD FOR</div>
+          {renderChips(details.goodFor, { bg: '#DDD6FE', color: '#5B21B6' })}
+        </div>
+      )}
+
+      {/* NOT IDEAL FOR — atmosphere-fit mismatch tags (always parenthetical
+          with reason). Never quality complaints. Hidden when empty. */}
+      {details.notIdealFor?.length > 0 && (
+        <div style={{ marginBottom: '8px' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>🤔 NOT IDEAL FOR</div>
+          {renderChips(details.notIdealFor, { bg: '#FEE2E2', color: '#991B1B' })}
+        </div>
+      )}
+
       {row('📸', 'PHOTO-WORTHY', details.photoWorthy)}
 
-      {/* Attraction-only fields — render below the headline items so the
-          flow reads: awards → top items → photo spots → what you see →
-          history → who it suits. */}
+      {/* Attraction-only fields */}
       {row('👀', 'WHAT YOU SEE', details.whatYouSee)}
       {row('📜', 'ABOUT & HISTORY', details.aboutAndHistory)}
 
@@ -245,50 +398,7 @@ function AIDetailsBody({ loading, error, details, kind }) {
         </div>
       )}
 
-      {/* GOOD FOR — structured per-age-group breakdown. Each line only
-          renders if its string is non-null (i.e., reviews/data say the
-          place actually suits that age group). All-null => entire
-          section hidden. */}
-      {details.ageFit && (() => {
-        const ageRows = [
-          { key: 'toddlers', icon: '👶', label: 'Toddlers (with parents)' },
-          { key: 'littleKids', icon: '🧒', label: 'Little Kids (5-12)' },
-          { key: 'teens', icon: '🧑', label: 'Teens (13-18)' },
-          { key: 'adults', icon: '👨', label: 'Adults' },
-          { key: 'olderAdults', icon: '👴', label: 'Older Adults' },
-        ].filter(r => details.ageFit[r.key]);
-        if (ageRows.length === 0) return null;
-        return (
-          <div style={{ marginBottom: '8px' }}>
-            <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>👨‍👩‍👧‍👦 GOOD FOR</div>
-            <ul style={{ margin: 0, paddingLeft: '0', listStyle: 'none', fontSize: '13px', lineHeight: '1.5', color: DARK }}>
-              {ageRows.map(r => (
-                <li key={r.key} style={{ marginBottom: '4px', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
-                  <span style={{ flexShrink: 0 }}>{r.icon}</span>
-                  <span><strong style={{ fontWeight: '600' }}>{r.label}:</strong> {h(details.ageFit[r.key])}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })()}
-
       {row('🌍', 'TRAVELER', details.travelerNotes)}
-
-      {(details.gsStars != null || details.gsRedFlag || details.gsVerdict) && (
-        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${PURPLE_LIGHT}` }}>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>💯 GS VERDICT</div>
-          <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>
-            {details.gsRedFlag ? (
-              <strong>🚩</strong>
-            ) : details.gsStars != null && details.gsStars > 0 ? (
-              <strong style={{ letterSpacing: '1px' }}>{'⭐'.repeat(Math.min(5, Math.max(0, details.gsStars)))}</strong>
-            ) : null}
-            {((details.gsRedFlag) || (details.gsStars != null && details.gsStars > 0)) && details.gsVerdict && ' — '}
-            {h(details.gsVerdict)}
-          </div>
-        </div>
-      )}
 
       {details.websiteUri && (
         <div style={{ marginTop: '10px', fontSize: '12px', color: GRAY }}>
