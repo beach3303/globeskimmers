@@ -8,7 +8,7 @@ import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
-import AIDetailsSection from "@/components/AIDetailsSection";
+import AttractionAIDetails from "@/components/AttractionAIDetails";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
@@ -403,15 +403,15 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
                 )}
               </div>
             )}
-            {/* AI Details — kind="attraction" so the Worker uses attraction-
-                specific voice (must-see, best time, photo spots, accessibility,
-                language tips). Returns red flag if reviews show genuine
-                worldwide safety concerns. */}
-            <AIDetailsSection
+            {/* AI Details — attraction-only renderer (Things-To-Do redesign,
+                Phase 1). Forked from AIDetailsSection so the 4-zone layout
+                can evolve without risk to PlacesToEat restaurant rendering.
+                Calls the same getAIDetails endpoint under the hood for now;
+                Phase 2 will fork the Worker prompt too. */}
+            <AttractionAIDetails
               placeId={a.placeId || a.id}
               placeName={name}
               page="ThingsToDo"
-              kind="attraction"
             />
           </div>
         </motion.div>)}</AnimatePresence>
