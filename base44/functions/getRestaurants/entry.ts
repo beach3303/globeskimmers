@@ -574,8 +574,8 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   { pattern: /\bhorchata\b|\baguas?\s*frescas?\b/,     tier1:['mexican_restaurant'],                                      tier2:[],                                                 label:'horchata',        nameKeywords:['horchata','aguas frescas','aguas'] },
   { pattern: /\bchurros?\b/,                           tier1:['mexican_restaurant','spanish_restaurant','dessert_shop'],  tier2:[],                                                 label:'churros',         nameKeywords:['churro','churros','churreria'] },
   { pattern: /\btres\s*leches\b|\bflan\b/,             tier1:['mexican_restaurant','latin_american_restaurant','dessert_shop'], tier2:[],                                            label:'Latin dessert',   nameKeywords:['tres leches','flan'] },
-  { pattern: /\bburger(s)?\b|\bwhopper\b/,             tier1:['hamburger_restaurant'],                                    tier2:['american_restaurant','fast_food_restaurant'],     label:'burgers',         nameKeywords:['burger','burgers','whopper','in-n-out','five guys','shake shack','smashburger','habit','fatburger','wendy','jack in the box','carl\'s jr','hardee\'s','culver\'s','whataburger'] },
-  { pattern: /\bsteak\b/,                              tier1:['steak_house'],                                             tier2:['american_restaurant','brazilian_restaurant'],     label:'steak',           nameKeywords:['steak','steakhouse','outback','ruth\'s chris','morton','fleming','black angus','sizzler','longhorn','texas roadhouse','lawry\'s'] },
+  { pattern: /\bburger(s)?\b|\bwhopper\b/,             tier1:['hamburger_restaurant'],                                    tier2:['american_restaurant','fast_food_restaurant'],     label:'burgers',         nameKeywords:['burger','burgers','whopper','in-n-out','five guys','shake shack','smashburger','habit','fatburger','wendy','jack in the box','carl\'s jr','hardee\'s','culver\'s','whataburger','mcdonald','burger king','sonic','white castle','a&w','red robin','fuddruckers','burgerfi','steak n shake','steak \'n shake','krystal'], strict:true, strictPrimaryTypes:['hamburger_restaurant','american_restaurant'] },
+  { pattern: /\bsteak\b/,                              tier1:['steak_house'],                                             tier2:['american_restaurant','brazilian_restaurant'],     label:'steak',           nameKeywords:['steak','steakhouse','steak house','outback','ruth\'s chris','morton','fleming','black angus','sizzler','longhorn','texas roadhouse','lawry\'s','peter luger','capital grille','smith & wollensky','del frisco','st. elmo','palm restaurant','lone star','keens steakhouse'], strict:true, strictPrimaryTypes:['steak_house','american_restaurant','brazilian_restaurant','barbecue_restaurant'] },
   { pattern: /\bbbq\b|\bbarbeque\b|\bbarbecue\b/,      tier1:['barbecue_restaurant'],                                     tier2:['american_restaurant'],                            label:'BBQ',             nameKeywords:['bbq','barbecue','barbeque','smokehouse','dickey','sonny','famous dave','rudy\'s','phil\'s bbq','salt lick'] },
   { pattern: /\bribs?\b|\bbrisket\b|\bpulled\s*pork\b/, tier1:['barbecue_restaurant'],                                    tier2:['american_restaurant','southern_restaurant'],      label:'ribs',            nameKeywords:['rib','ribs','brisket','pulled pork','smokehouse','tony roma','baby back','lucille\'s'] },
   { pattern: /\bwings\b|\bchicken\s*wings\b|\bbuffalo\s*wings\b/, tier1:['chicken_restaurant'],                          tier2:['pizza_restaurant','sports_bar','bar'],                          label:'wings',           nameKeywords:['wing','wings','buffalo wing','hooters','wingstop','buffalo wild wings','wing zone'] },
@@ -597,8 +597,8 @@ const DISH_MAP: Array<{ pattern: RegExp; tier1: string[]; tier2: string[]; label
   { pattern: /\bchicken\s*pot\s*pie\b/,                tier1:['american_restaurant','southern_restaurant'],               tier2:['diner'],                                          label:'chicken pot pie', nameKeywords:['chicken pot pie','pot pie','marie callender'] },
   { pattern: /\bbuffalo\s*chicken\b/,                  tier1:['chicken_restaurant','american_restaurant'],                tier2:['sports_bar'],                                     label:'buffalo',         nameKeywords:['buffalo chicken','buffalo wild wings'] },
   { pattern: /\bpancakes?\b|\bwaffles?\b/,             tier1:['breakfast_restaurant'],                                    tier2:['american_restaurant','diner'],                    label:'pancakes',        nameKeywords:['pancake','pancakes','waffle','flapjack','griddle','pancake house','ihop','waffle house','stack pancake'], mealTime:'breakfast', strict:true, strictPrimaryTypes:['breakfast_restaurant','brunch_restaurant','diner','american_restaurant'] },
-  { pattern: /\bbagels?\b/,                            tier1:['bagel_shop'],                                              tier2:['deli','bakery'],                                  label:'bagels',          nameKeywords:['bagel','bagels','einstein','noah','manhattan bagel','bruegger'] },
-  { pattern: /\bdonuts?\b|\bdoughnuts?\b/,             tier1:['donut_shop'],                                              tier2:['bakery','dessert_shop','pastry_shop'],            label:'donuts',          nameKeywords:['donut','donuts','doughnut','dunkin','krispy kreme','tim hortons','randy\'s','sidecar','blue star','voodoo','winchell','yum yum'] },
+  { pattern: /\bbagels?\b/,                            tier1:['bagel_shop'],                                              tier2:['deli','bakery'],                                  label:'bagels',          nameKeywords:['bagel','bagels','einstein','noah','manhattan bagel','bruegger'], strict:true, strictPrimaryTypes:['bagel_shop'] },
+  { pattern: /\bdonuts?\b|\bdoughnuts?\b/,             tier1:['donut_shop'],                                              tier2:['bakery','dessert_shop','pastry_shop'],            label:'donuts',          nameKeywords:['donut','donuts','doughnut','dunkin','krispy kreme','tim hortons','randy\'s','sidecar','blue star','voodoo','winchell','yum yum'], strict:true, strictPrimaryTypes:['donut_shop'] },
   { pattern: /\bmac\s*and\s*cheese\b|\bmac\s*n\s*cheese\b/, tier1:['american_restaurant'],                                tier2:['soul_food_restaurant'],                           label:'mac and cheese',  nameKeywords:['mac and cheese','mac n cheese','noodles & company'] },
   { pattern: /\bpoke\b|\bpoke\s*bowl\b/,               tier1:['hawaiian_restaurant'],                                     tier2:['japanese_restaurant'],                            label:'poke',            nameKeywords:['poke','poke bowl','poki','sweetfin','pokeworks'] },
   // ── Brunch / Breakfast ─────────────────────────────────────────────────────
@@ -1758,7 +1758,24 @@ Deno.serve(async (req) => {
     // covered; this extends symmetric coverage to typed queries.
     const TYPED_BAKERY_PATTERN = /\b(?:bakery|bakeries|pastr(?:y|ies)|patisserie|boulangerie|donuts?|doughnuts?|bagels?)\b/i;
     const typedBakeryActive = !!searchQuery?.trim() && TYPED_BAKERY_PATTERN.test(searchQuery);
-    const bakeryNearbyTypes    = (filterBakery || typedBakeryActive) ? ['bakery', 'pastry_shop', 'dessert_shop', 'donut_shop', 'bagel_shop'] : [];
+    // Narrow the nearby fan-out when the user typed a SPECIFIC sub-category
+    // (donut / bagel). Pulling all 5 bakery-style types into the candidate
+    // pool for a donut-specific search just loads it with bakeries / dessert
+    // shops that the strict-mode DISH_MAP entry will drop anyway — wasted
+    // Google API calls + slower response. The wide fan-out still fires for
+    // generic "bakery" / "pastry" typed queries and for the Bakery filter
+    // chip, since those genuinely want the broad coverage.
+    const qLower = (searchQuery || '').toLowerCase();
+    const typedSpecificBakeryType: string | null = typedBakeryActive
+      ? (/\b(?:donuts?|doughnuts?)\b/.test(qLower) ? 'donut_shop'
+        : /\bbagels?\b/.test(qLower)               ? 'bagel_shop'
+        : null)
+      : null;
+    const bakeryNearbyTypes = filterBakery
+      ? ['bakery', 'pastry_shop', 'dessert_shop', 'donut_shop', 'bagel_shop']
+      : typedBakeryActive
+        ? (typedSpecificBakeryType ? [typedSpecificBakeryType] : ['bakery', 'pastry_shop', 'dessert_shop', 'donut_shop', 'bagel_shop'])
+        : [];
     const barsNearbyTypes      = filterBars   ? ['bar', 'pub'] : [];
     const sportsBarVibeActive  = !!(filterVibes as any)?.sportsBar;
     const sportsBarNearbyTypes = sportsBarVibeActive ? ['sports_bar', 'bar'] : [];
