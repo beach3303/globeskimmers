@@ -117,7 +117,7 @@ export default function AttractionAIDetails({ placeId, placeName, page }) {
     setOpen(next);
     if (next) {
       logEvent('ai_details_opened', {
-        placeId, placeName, kind: 'attraction', variant: 'attraction_v1',
+        placeId, placeName, kind: 'attraction', variant: 'attraction_v2',
       }, page || 'ThingsToDo');
       if (showVerdictHelper) markVerdictHelperSeen();
     }
@@ -129,7 +129,11 @@ export default function AttractionAIDetails({ placeId, placeName, page }) {
     if (!placeId) return;
     setLoading(true);
     setError(null);
-    base44.functions.invoke('getAIDetails', { placeId, kind: 'attraction' })
+    // Phase 2: switched from /ai-details to /attraction-ai-details. The new
+    // endpoint returns a richer payload (verifiedFacts + _sources map) so
+    // the panel's source stamps reflect real per-field provenance instead
+    // of hardcoded placeholders.
+    base44.functions.invoke('getAttractionAIDetails', { placeId })
       .then(({ data }) => {
         if (data?.error) {
           setError(data.error);
@@ -141,7 +145,7 @@ export default function AttractionAIDetails({ placeId, placeName, page }) {
         const cache = data?._cache || 'unknown';
         logEvent('ai_details_fetched', {
           placeId, placeName,
-          kind: 'attraction', variant: 'attraction_v1',
+          kind: 'attraction', variant: 'attraction_v2',
           cache, paid: cache !== 'hit',
         }, page || 'ThingsToDo');
       })
@@ -178,13 +182,19 @@ function Body({ loading, error, details, showVerdictHelper }) {
   // When no website is known, the stamp is non-interactive (informational).
   const callConfirm = websiteUri ? () => window.open(websiteUri, '_blank', 'noopener,noreferrer') : null;
 
+  // Phase 2: read source-tier from the Worker's _sources map. Falls back
+  // to 'reviews' for any field the Worker didn't tag (so old cached
+  // entries before Phase 2 still render with a sensible default).
+  const sourcesMap = (details && typeof details._sources === 'object' && details._sources) || {};
+  const sourceFor = (key, fallback = 'reviews') => sourcesMap[key] || fallback;
+
   return (
     <div>
-      <ZoneDecide details={details} showVerdictHelper={showVerdictHelper} callConfirm={callConfirm} />
-      <ZoneDo details={details} />
-      <ZoneBook details={details} />
-      <ZoneFitPrep details={details} callConfirm={callConfirm} />
-      <DepthMore details={details} />
+      <ZoneDecide details={details} showVerdictHelper={showVerdictHelper} callConfirm={callConfirm} sourceFor={sourceFor} />
+      <ZoneDo details={details} sourceFor={sourceFor} />
+      <ZoneBook details={details} sourceFor={sourceFor} />
+      <ZoneFitPrep details={details} callConfirm={callConfirm} sourceFor={sourceFor} />
+      <DepthMore details={details} sourceFor={sourceFor} />
       {websiteUri && (
         <div style={{ marginTop: '12px', fontSize: '12px', color: GRAY }}>
           For more information, visit{' '}
@@ -224,15 +234,14 @@ function Shimmer() {
 // Zone 1 — DECIDE
 // ============================================================================
 
-function ZoneDecide({ details, showVerdictHelper, callConfirm }) {
+function ZoneDecide({ details, showVerdictHelper, callConfirm, sourceFor }) {
   const worthTag = details.worthIt && WORTH_LABELS[details.worthIt];
   const hasVerdict = (details.gsStars != null || details.gsRedFlag || details.gsVerdict || worthTag);
 
-  // Quick-Fit strip values. Each tile carries a source stamp so the user
-  // can see at a glance whether the value is hard fact or inferred. Phase 1
-  // derives these from existing fields; Phase 2 will get them from real
-  // per-field sources in a forked prompt.
-  const quickFit = buildQuickFit(details);
+  // Quick-Fit strip values. Each tile carries a source stamp driven by the
+  // Worker's verifiedFacts + _sources map (Phase 2). Time is still derived
+  // because we don't yet collect typical-visit-duration anywhere.
+  const quickFit = buildQuickFit(details, sourceFor);
 
   return (
     <div style={{ marginBottom: '14px' }}>
@@ -275,22 +284,22 @@ function ZoneDecide({ details, showVerdictHelper, callConfirm }) {
         </div>
       )}
 
-      {/* Price line — echoes the value field with a Verified stamp when the
-          value mentions a concrete amount or a "free" flag, else reviews. */}
+      {/* Price line — Verified stamp when Google priceLevel exists
+          (verifiedFacts.priceBand), reviews otherwise. */}
       {details.value && (
         <div style={{ marginBottom: '10px' }}>
           <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>💰 PRICE</div>
           <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>
             {details.value}
-            <SourceStamp tier={pickPriceTier(details.value)} />
+            <SourceStamp tier={details?.verifiedFacts?.priceBand ? 'verified' : sourceFor('value')} />
           </div>
         </div>
       )}
 
-      {/* Lines & Wait — Phase 1 placeholder. Phase 2 will derive "built-in
-          wait" (structural mechanics) vs "crowd-driven" (timing fixes it)
-          from a forked attraction prompt. Render a calm placeholder card
-          rather than fake data. */}
+      {/* Lines & Wait — still placeholder. We haven't built the structural
+          wait vs crowd-driven derivation yet (handoff defers it to a later
+          pass when we have a real signal). Better to say "coming soon" than
+          to invent numbers. */}
       <div style={{ marginBottom: '4px', padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}` }}>
         <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>⏳ LINES &amp; WAIT</div>
         <div style={{ fontSize: '13px', color: GRAY_DEEP, lineHeight: '1.5' }}>
@@ -320,48 +329,75 @@ function QuickFitTile({ tile, callConfirm }) {
   );
 }
 
-// Quick-Fit derivations. Phase 1 only reads existing fields; nothing
-// invented. Fields we don't have a signal for get a "call to confirm"
-// tile so the slot is still useful (wired to the website button).
-function buildQuickFit(details) {
+// Quick-Fit derivations. Phase 2 reads verifiedFacts (Google-sourced hard
+// facts) + the per-field _sources map so each tile's stamp reflects real
+// provenance. Time still falls back to a call-to-confirm placeholder
+// because we don't collect typical-visit-duration anywhere yet.
+function buildQuickFit(details, sourceFor) {
+  const vf = details.verifiedFacts || {};
   return [
-    { icon: '⏱️', label: 'Time',     value: deriveTime(details),     stamp: 'call' },
-    { icon: '💵', label: 'Price',    value: derivePrice(details),    stamp: details.value ? pickPriceTier(details.value) : 'call' },
-    { icon: '👥', label: 'Best for', value: deriveBestFor(details),  stamp: details.crowd || details.worthIt ? 'reviews' : 'call' },
-    { icon: '🎟️', label: 'Booking',  value: deriveBooking(details),  stamp: details?.practical?.reservation ? 'reviews' : 'call' },
+    {
+      icon: '⏱️', label: 'Time',
+      value: 'Allow 1–2 hr',
+      stamp: 'call',
+    },
+    {
+      icon: '💵', label: 'Price',
+      value: derivePrice(details, vf),
+      // Verified when Google priceLevel exists (vf.priceBand); reviews
+      // when the Haiku-derived value field is what we're showing; call
+      // when neither.
+      stamp: vf.priceBand
+        ? 'verified'
+        : (details.value ? sourceFor('value') : 'call'),
+    },
+    {
+      icon: '👥', label: 'Best for',
+      value: deriveBestFor(details),
+      stamp: (details.crowd || details.worthIt) ? sourceFor('crowd') : 'call',
+    },
+    {
+      icon: '🎟️', label: 'Booking',
+      value: deriveBooking(details, vf),
+      // Verified when Google reservable flag is present, reviews when
+      // we're falling back to the practical.reservation text, call when
+      // neither.
+      stamp: typeof vf.reservable === 'boolean'
+        ? 'verified'
+        : (details?.practical?.reservation ? sourceFor('practical.reservation') : 'call'),
+    },
   ];
 }
 
-function deriveTime(_details) {
-  // No structured "typical visit duration" field exists yet. Phase 2 will
-  // add one to the attraction prompt; for now we say so honestly.
-  return 'Allow 1–2 hr';
-}
-
-function derivePrice(details) {
+function derivePrice(details, vf) {
+  // Prefer the Google-verified price band when we have one.
+  if (vf && vf.priceBand) return vf.priceBand;
   const v = details.value;
   if (!v) return 'Check at gate';
   // Pull a leading token like "Free" / "Cheap" / "Pricey" / "$10".
   const match = v.match(/^(Free|Cheap|Fair|Pricey|Splurge-only|Splurge|Affordable|Budget|\$[\d\-+~]+|\$\$+)\b/i);
   if (match) return match[0];
-  // Otherwise show the first ~24 chars.
   return v.length > 28 ? v.slice(0, 26).trim() + '…' : v;
 }
 
 function deriveBestFor(details) {
   if (details.crowd) {
-    // Take the first short clause from the crowd sentence.
     const clause = String(details.crowd).split(/[;,.]/)[0].trim();
     return clause.length > 32 ? clause.slice(0, 30).trim() + '…' : clause;
   }
-  // Fall back to a Worth-It-derived hint if crowd is null.
   if (details.worthIt === 'craving_match') return 'Niche interest';
   if (details.worthIt === 'worth_the_stop') return 'Most travelers';
   if (details.worthIt === 'better_if_convenient') return 'Casual stop';
   return 'Mixed crowd';
 }
 
-function deriveBooking(details) {
+function deriveBooking(details, vf) {
+  // Google's reservable flag is the strongest signal. true → "Reservation
+  // available"; false → "Walk-in only". When unknown, fall back to the
+  // Haiku-derived practical.reservation text.
+  if (typeof vf?.reservable === 'boolean') {
+    return vf.reservable ? 'Reservation available' : 'Walk-in only';
+  }
   const r = details?.practical?.reservation;
   if (!r) return 'Walk-in or call';
   const lower = r.toLowerCase();
@@ -372,21 +408,14 @@ function deriveBooking(details) {
   return r.length > 24 ? r.slice(0, 22).trim() + '…' : r;
 }
 
-function pickPriceTier(value) {
-  if (!value) return 'call';
-  // "$10", "$25-30", "Free" → likely a concrete signal we'd Verify from
-  // Google one day. Until Phase 2 plumbs the real source, mark reviews-tier.
-  if (/\$\d|free\b/i.test(value)) return 'reviews';
-  return 'reviews';
-}
-
 // ============================================================================
 // Zone 2 — DO
 // ============================================================================
 
-function ZoneDo({ details }) {
+function ZoneDo({ details, sourceFor }) {
   const items = Array.isArray(details.alsoRecommended) ? details.alsoRecommended : [];
   if (items.length === 0) return null;
+  const tier = sourceFor('alsoRecommended');
   return (
     <div style={{ marginBottom: '14px' }}>
       <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
@@ -399,7 +428,8 @@ function ZoneDo({ details }) {
             <span>
               <strong style={{ fontWeight: '600' }}>{it.name}</strong>
               {it.context ? <span style={{ color: GRAY_DEEP }}> — {it.context}</span> : null}
-              <SourceStamp tier="reviews" />
+              {/* Source stamp once per list (on the first item) to avoid noise. */}
+              {i === 0 && <SourceStamp tier={tier} />}
             </span>
           </li>
         ))}
@@ -412,37 +442,30 @@ function ZoneDo({ details }) {
 // Zone 3 — BOOK AHEAD
 // ============================================================================
 
-function ZoneBook({ details }) {
-  // Phase 1: no real sell-out signal, no real affiliate routing. We render
-  // ONLY the affiliate placeholder slot so the layout is anchored. The
-  // sell-out nudge is intentionally omitted until Phase 2 supplies a signal.
+function ZoneBook({ details, sourceFor }) {
+  // Phase 4 is rescoped — the original affiliate-ticket button is on hold.
+  // The replacement direction is an "Eat Nearby" hand-off (attraction →
+  // PlacesToEat search of the attraction's address, with a return path
+  // back here). Until that's spec'd we render the existing practical.reservation
+  // line as the actionable info in this zone, with no fake CTA below it.
+  const reservation = details?.practical?.reservation;
+  const reservable = details?.verifiedFacts?.reservable;
+  if (!reservation && typeof reservable !== 'boolean') return null;
   return (
-    <div style={{ marginBottom: '14px', padding: '12px', background: '#FFFFFF', borderRadius: '8px', border: `1px dashed ${PURPLE_LIGHT}` }}>
+    <div style={{ marginBottom: '14px', padding: '12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}` }}>
       <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
-        🎟️ BOOK AHEAD
+        🎟️ BOOKING
       </div>
-      <div style={{ fontSize: '13px', color: GRAY_DEEP, lineHeight: '1.5', marginBottom: '8px' }}>
-        Tickets via trusted partners — coming soon.
-      </div>
-      <button
-        type="button"
-        disabled
-        style={{
-          fontSize: '13px', fontWeight: '600',
-          padding: '8px 14px',
-          background: '#F1F5F9', color: '#94A3B8',
-          border: `1px solid ${DIVIDER}`, borderRadius: '8px',
-          cursor: 'not-allowed', width: '100%',
-        }}
-      >
-        Get tickets · partner coming soon
-      </button>
-      {/* Booking detail line — surfaces the same practical.reservation
-          string the Quick-Fit tile reads, for readers who skim past the strip. */}
-      {details?.practical?.reservation && (
-        <div style={{ fontSize: '12px', color: GRAY_DEEP, marginTop: '8px', lineHeight: '1.5' }}>
-          {details.practical.reservation}
-          <SourceStamp tier="reviews" />
+      {typeof reservable === 'boolean' && (
+        <div style={{ fontSize: '13px', color: DARK, lineHeight: '1.5', marginBottom: reservation ? '6px' : '0' }}>
+          {reservable ? 'Reservations available.' : 'Walk-in only.'}
+          <SourceStamp tier="verified" />
+        </div>
+      )}
+      {reservation && (
+        <div style={{ fontSize: '13px', color: DARK, lineHeight: '1.5' }}>
+          {reservation}
+          <SourceStamp tier={sourceFor('practical.reservation')} />
         </div>
       )}
     </div>
@@ -453,19 +476,13 @@ function ZoneBook({ details }) {
 // Zone 4 — FIT & PREP (collapsed tap-rows)
 // ============================================================================
 
-function ZoneFitPrep({ details, callConfirm }) {
-  // Each row: icon, label, one-line summary, expandable body. In Phase 1
-  // most rows fall back to "call to confirm" because we don't yet collect
-  // accessibility / dress / pets data. Reservation row reads real data.
-  // Smart Tip row is intentionally absent — handoff rule: render only if
-  // there's a genuine save, never a platitude.
+function ZoneFitPrep({ details, callConfirm, sourceFor }) {
+  // Phase 2: Accessibility row reads real Google accessibilityOptions
+  // (Verified). Reservation row reads real Haiku-derived data when
+  // present. Other rows still fall back to "call to confirm" until we
+  // collect that data — handoff honesty rule: empty beats invented.
   const rows = [
-    {
-      key: 'accessibility', icon: '♿', label: 'Accessibility',
-      summary: 'Mobility, vision, hearing notes',
-      body: 'Detailed accessibility info isn’t in our data yet. Check the venue website for ramps, elevators, audio guides, and seating availability.',
-      stamp: 'call',
-    },
+    buildAccessibilityRow(details),
     {
       key: 'restWait', icon: '🪑', label: 'Rest & Wait',
       summary: 'Benches, shade, indoor breaks',
@@ -494,7 +511,7 @@ function ZoneFitPrep({ details, callConfirm }) {
       key: 'reservation', icon: '📅', label: 'Reservation',
       summary: details?.practical?.reservation || 'Walk-in or call',
       body: details?.practical?.reservation || 'Reservation info isn’t in our data yet. Call ahead or check the venue site.',
-      stamp: details?.practical?.reservation ? 'reviews' : 'call',
+      stamp: details?.practical?.reservation ? sourceFor('practical.reservation') : 'call',
     },
   ];
 
@@ -515,6 +532,58 @@ function ZoneFitPrep({ details, callConfirm }) {
       </div>
     </div>
   );
+}
+
+// Build the Accessibility row from Google's accessibilityOptions when
+// present. Each flag we have becomes a checkmark line in the expanded
+// body; absent flags get a "not reported" line so the user can see the
+// difference between "no" and "no data". Verified stamp ONLY when at
+// least one flag is present.
+function buildAccessibilityRow(details) {
+  const acc = details?.verifiedFacts?.accessibility;
+  if (!acc) {
+    return {
+      key: 'accessibility', icon: '♿', label: 'Accessibility',
+      summary: 'Mobility, vision, hearing notes',
+      body: 'Detailed accessibility info isn’t in our data yet. Check the venue website for ramps, elevators, audio guides, and seating availability.',
+      stamp: 'call',
+    };
+  }
+  const items = [
+    { key: 'wheelchairAccessibleEntrance', label: 'Wheelchair-accessible entrance' },
+    { key: 'wheelchairAccessibleParking',  label: 'Wheelchair-accessible parking' },
+    { key: 'wheelchairAccessibleRestroom', label: 'Wheelchair-accessible restroom' },
+    { key: 'wheelchairAccessibleSeating',  label: 'Wheelchair-accessible seating' },
+  ];
+  const reported = items.filter(i => acc[i.key] != null);
+  if (reported.length === 0) {
+    return {
+      key: 'accessibility', icon: '♿', label: 'Accessibility',
+      summary: 'Mobility, vision, hearing notes',
+      body: 'Detailed accessibility info isn’t reported for this place. Check the venue website to confirm.',
+      stamp: 'call',
+    };
+  }
+  // Build the summary from the strongest signal (entrance).
+  const entrance = acc.wheelchairAccessibleEntrance;
+  const summary = entrance === true
+    ? 'Wheelchair-accessible entrance reported'
+    : entrance === false
+      ? 'No wheelchair entrance reported'
+      : 'Some accessibility flags reported';
+  const body = (
+    <ul style={{ margin: 0, paddingLeft: '18px' }}>
+      {reported.map(i => (
+        <li key={i.key} style={{ marginBottom: '4px' }}>
+          {acc[i.key] ? '✅ ' : '❌ '} {i.label}
+        </li>
+      ))}
+    </ul>
+  );
+  return {
+    key: 'accessibility', icon: '♿', label: 'Accessibility',
+    summary, body, stamp: 'verified',
+  };
 }
 
 function FitPrepRow({ row, isLast, callConfirm }) {
@@ -553,17 +622,17 @@ function FitPrepRow({ row, isLast, callConfirm }) {
 // Depth — "More" tap-row
 // ============================================================================
 
-function DepthMore({ details }) {
+function DepthMore({ details, sourceFor }) {
   const [open, setOpen] = useState(false);
   const rows = [
-    { icon: '🎭', label: 'VIBE',           value: details.vibe },
-    { icon: '👀', label: 'WHAT YOU SEE',   value: details.whatYouSee },
-    { icon: '📜', label: 'ABOUT & HISTORY', value: details.aboutAndHistory },
-    { icon: '👥', label: 'CROWD',          value: details.crowd },
-    { icon: '⏰', label: 'BEST TIME',      value: details.bestTime },
-    { icon: '🏆', label: 'AWARDS',         value: details.awards },
-    { icon: '📸', label: 'PHOTO-WORTHY',   value: details.photoWorthy },
-    { icon: '🌍', label: 'TRAVELER NOTES', value: details.travelerNotes },
+    { sourceKey: 'vibe',            icon: '🎭', label: 'VIBE',            value: details.vibe },
+    { sourceKey: 'whatYouSee',      icon: '👀', label: 'WHAT YOU SEE',    value: details.whatYouSee },
+    { sourceKey: 'aboutAndHistory', icon: '📜', label: 'ABOUT & HISTORY', value: details.aboutAndHistory },
+    { sourceKey: 'crowd',           icon: '👥', label: 'CROWD',           value: details.crowd },
+    { sourceKey: 'bestTime',        icon: '⏰', label: 'BEST TIME',       value: details.bestTime },
+    { sourceKey: 'awards',          icon: '🏆', label: 'AWARDS',          value: details.awards },
+    { sourceKey: 'photoWorthy',     icon: '📸', label: 'PHOTO-WORTHY',    value: details.photoWorthy },
+    { sourceKey: 'travelerNotes',   icon: '🌍', label: 'TRAVELER NOTES',  value: details.travelerNotes },
   ].filter(r => r.value);
 
   const goodToKnow = Array.isArray(details.goodToKnow) ? details.goodToKnow.filter(Boolean) : [];
@@ -585,9 +654,12 @@ function DepthMore({ details }) {
         <div style={{ paddingTop: '6px' }}>
           {goodToKnow.length > 0 && (
             <div style={{ marginBottom: '10px' }}>
-              <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>📌 GOOD TO KNOW</div>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>
+                📌 GOOD TO KNOW
+                <SourceStamp tier={sourceFor('goodToKnow')} />
+              </div>
               <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', lineHeight: '1.5', color: DARK }}>
-                {goodToKnow.map((g, i) => <li key={i}>{g}<SourceStamp tier="reviews" /></li>)}
+                {goodToKnow.map((g, i) => <li key={i}>{g}</li>)}
               </ul>
             </div>
           )}
@@ -598,7 +670,7 @@ function DepthMore({ details }) {
               </div>
               <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>
                 {r.value}
-                <SourceStamp tier="reviews" />
+                <SourceStamp tier={sourceFor(r.sourceKey)} />
               </div>
             </div>
           ))}

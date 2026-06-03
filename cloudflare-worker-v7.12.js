@@ -2062,6 +2062,377 @@ async function handleAIDetails(request, env) {
 }
 
 // ============================================================================
+// ATTRACTION AI DETAILS — Things-To-Do redesign, Phase 2.
+// ============================================================================
+// Forked from handleAIDetails / buildAIDetailsSystemPrompt above so the
+// attraction layout can evolve without touching restaurant/coffee/restroom
+// code paths. Per the redesign handoff's HARD SCOPE FENCE.
+//
+// What's new vs the shared /ai-details endpoint:
+//   1. Dedicated cache prefix (`attr_ai_details_*`) so attraction iterations
+//      don't invalidate the restaurant cache.
+//   2. `verifiedFacts` block pre-filled from Google Places data (price band,
+//      rating, accessibility flags, reservable). These are HARD facts and
+//      get the Verified source stamp in the UI.
+//   3. `_sources` map — every renderable field tagged with its source tier
+//      ('verified' | 'reviews' | 'forecast' | 'call'). The frontend drives
+//      its per-field source-stamp badges from this map.
+//   4. Honesty-first prompt: explicit "do not invent" guardrails, omit-when-
+//      unknown over guess, conditional sections (sell-out nudge, smart tip)
+//      stay null unless evidence is present.
+//
+// Same Haiku model + voice rules as the shared endpoint; the system prompt
+// just adds the per-field tagging and the omission rules. Same restaurant
+// red-flag policy (gsRedFlag true only on genuine worldwide safety concerns).
+// ============================================================================
+
+const ATTRACTION_AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days, matches /ai-details
+const ATTRACTION_AI_DETAILS_PROMPT_VERSION = 'a1';            // bump on prompt change
+
+function buildAttractionAIDetailsSystemPrompt() {
+  return `You are GlobeSkimmers' Things-To-Do AI Details engine. Generate practical, honest insights for a traveler about to visit an ATTRACTION (museum, landmark, park, theme park, viewpoint, religious site, etc.).
+
+KIND: attraction
+
+VOICE RULES (ABSOLUTE):
+- DO NOT write ANYTHING that would deter a traveler from visiting. Content is public.
+- FORBIDDEN words/phrases: "inconsistent", "complaints", "issues", "concerns", "problems", "poor", "rude", "disappointed", "frustrating", "unreliable", "questionable", "lacking", "subpar", "stay away", "avoid", "skip", "don't go".
+- DO mention factual planning info that helps the visit go better.
+- ALWAYS lead with what people love.
+
+HONESTY RULES (CRITICAL — these are NEW for the attraction endpoint):
+- If a field has no positive content to draw from in the reviews/metadata, set it to null/empty. NEVER invent to fill a slot.
+- Do NOT fabricate facts you cannot tie back to the reviews or place metadata.
+- For each renderable text field, set its source tier in the "_sources" object using:
+    "verified"  → Hard fact from Google place metadata (priceLevel, accessibilityOptions, rating, reservable, editorialSummary).
+    "reviews"   → Inferred from review snippets.
+    "forecast"  → Computed from external signal (weather, elevation). Not used in this prompt — leave fields null rather than guess.
+    "call"      → Not in our data; user should call/visit the venue's website. Use this when you HAVE to render a field but lack supporting evidence.
+
+PER-FIELD FIELDS:
+- bestDish = null. (Attractions don't have dishes.)
+- alsoRecommended: TOP 3 must-see/must-do items at this attraction, as an array of { name, context } objects. name = the item (exhibit, view, ride, garden, etc.), context = short reason (≤90 chars). Aim for 3 — fewer only if data is thin.
+- photoWorthy: 1 short line naming a standout photo-worthy spot/exhibit/view. NULL if no obvious photo-worthy feature is mentioned.
+- awards: 1 short line listing UNESCO status, top-tourist-attraction rankings, Michelin Green Guide stars, or notable recognitions. NULL if none.
+- worthIt: ONE of "worth_the_stop" | "strong_nearby_pick" | "craving_match" | "know_before_you_go" | "better_if_convenient". For famous landmarks / UNESCO sites default to "worth_the_stop"; for local parks default to "strong_nearby_pick". Use "know_before_you_go" if there's meaningful planning friction (timed entry, bag check, limited access). Use "craving_match" for niche-interest venues.
+- practical: { payment, englishMenu, reservation, dietary } object. For attractions:
+  - payment: ticket purchase methods (e.g. "Card or cash at gate; book online for skip-the-line"). NULL if unclear.
+  - englishMenu: signage/audio-guide language + staff English (e.g. "Audio guide in English available", "Signage in local language only"). NULL if unclear.
+  - reservation: timed entry / advance booking (e.g. "Timed-entry tickets recommended for weekends", "Walk-in fine on weekdays"). NULL if unclear.
+  - dietary: null for attractions.
+- whatYouSee: 1-2 short concrete sentences describing what is physically present (buildings, exhibits, sculptures, rides, displays, scenery). NULL if data is silent.
+- aboutAndHistory: 1-2 short factual sentences on purpose / origin / brief history. NULL if data is silent.
+- crowd: who visits — short concrete labels (e.g. "Families with kids; school groups on weekdays", "Photographers and history fans"). Avoid vague phrasing.
+- bestTime: CONCRETE actionable recommendation. Don't say "mornings are calmer" — say "Arrive at opening (9 AM) on a weekday to avoid crowds, or after 3 PM when tour buses leave". Pair a SPECIFIC suggested window with a brief reason.
+- vibe: 1 direct sentence describing atmosphere (busy/quiet, contemplative/energetic, kid-friendly/adult-focused). Avoid decorative language.
+- value: traveler-friendly admission framing. Use direct words: "free", "cheap", "fair", "pricey but worth it", "splurge-only". Include actual admission tier + 1-line judgment. Examples: "Free entry — fully worth a 2-hour visit", "Cheap (~$10); fair for what you see".
+- goodToKnow: 2-4 SHORT verified facts that change how a traveler plans the visit. ONLY include items DIRECTLY supported by reviews/metadata. Prioritize: bag-check rules, photography restrictions, accessibility realities, kid-friendliness, audio-guide availability, dress code (temples/religious sites), what to bring, hours quirks, day-of-the-week closures.
+- travelerNotes: practical traveler tips to make the visit better.
+
+GS VERDICT SCORING:
+- gsStars MUST be an integer 1-5 (minimum 1).
+- gsRedFlag = true ONLY if multiple reviews flag a GENUINE worldwide safety concern (e.g. crime in area, unsafe structures, recent incidents). Otherwise false.
+- gsVerdict: 1-2 short sentences matching the chosen worthIt tier. CAN fold in atmosphere-fit caveats using the EXACT pattern "Best if you ... Not ideal for [atmosphere/occasion mismatch]." Atmosphere caveats are allowed; quality complaints are NOT. Keep under 200 chars.
+
+OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
+{
+  "bestDish": null,
+  "alsoRecommended": [ { "name": "...", "context": "..." }, ... ],
+  "photoWorthy": "..." | null,
+  "awards": "..." | null,
+  "worthIt": "worth_the_stop" | "strong_nearby_pick" | "craving_match" | "know_before_you_go" | "better_if_convenient",
+  "practical": { "payment": "..." | null, "englishMenu": "..." | null, "reservation": "..." | null, "dietary": null } | null,
+  "whatYouSee": "..." | null,
+  "aboutAndHistory": "..." | null,
+  "crowd": "..." | null,
+  "bestTime": "..." | null,
+  "vibe": "..." | null,
+  "value": "..." | null,
+  "goodToKnow": [ "...", ... ],
+  "travelerNotes": "..." | null,
+  "gsStars": <1-5>,
+  "gsRedFlag": <boolean>,
+  "gsVerdict": "...",
+  "_sources": {
+    "alsoRecommended": "reviews" | "verified" | "call",
+    "photoWorthy": "reviews" | "call",
+    "awards": "reviews" | "verified" | "call",
+    "worthIt": "reviews",
+    "practical.payment": "reviews" | "verified" | "call",
+    "practical.englishMenu": "reviews" | "verified" | "call",
+    "practical.reservation": "reviews" | "verified" | "call",
+    "whatYouSee": "reviews" | "verified" | "call",
+    "aboutAndHistory": "reviews" | "verified" | "call",
+    "crowd": "reviews" | "call",
+    "bestTime": "reviews" | "call",
+    "vibe": "reviews" | "call",
+    "value": "reviews" | "verified" | "call",
+    "goodToKnow": "reviews" | "call",
+    "travelerNotes": "reviews" | "call",
+    "gsVerdict": "reviews"
+  }
+}
+
+Rules for _sources tagging:
+- If a field is null/empty/[], you may omit its key OR set it to "call" — either is fine; the frontend treats both the same.
+- Use "verified" ONLY when the field clearly mirrors the place metadata (e.g. aboutAndHistory written from editorialSummary, awards naming Michelin/UNESCO etc. that appeared in metadata).
+- Default to "reviews" for everything else that you actually filled in from review snippets.
+
+Return JSON only.`;
+}
+
+async function handleAttractionAIDetails(request, env) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
+  }
+  let body;
+  try { body = await request.json(); } catch (_e) {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400);
+  }
+  const placeId = body?.placeId;
+  if (!placeId) {
+    return jsonResponse({ error: 'placeId required' }, 400);
+  }
+
+  // 1) Check attraction AI Details cache (30-day TTL, dedicated key prefix).
+  const aiCacheKey = `place:${placeId}:attr_ai_details_${ATTRACTION_AI_DETAILS_PROMPT_VERSION}`;
+  if (env.GLOBESKIMMERS_KV) {
+    const cached = await env.GLOBESKIMMERS_KV.get(aiCacheKey, { type: 'json' }).catch(() => null);
+    if (cached) {
+      return jsonResponse({ aiDetails: cached, _cache: 'hit' });
+    }
+  }
+
+  // 2) Load Place Details (prefer the existing details_{placeId} cache so
+  //    we don't pay Google again for a popular place).
+  const detailsCacheKey = `details_${placeId}`;
+  let place;
+  const cachedDetails = await getFromCache(env, detailsCacheKey);
+  if (cachedDetails && cachedDetails.data) {
+    place = cachedDetails.data;
+  } else {
+    try {
+      const apiKey = env.GOOGLE_API_KEY;
+      const detailsRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=en`, {
+        method: 'GET',
+        headers: {
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': CONFIG.DETAILS_FIELD_MASK
+        }
+      });
+      if (!detailsRes.ok) {
+        return jsonResponse({ error: 'Place details fetch failed', status: detailsRes.status }, 502);
+      }
+      const raw = await detailsRes.json();
+      place = normalizePlace(raw, new URL(request.url).origin, true);
+      await setInCache(env, detailsCacheKey, place, CONFIG.CACHE_TTL.DETAILS);
+    } catch (e) {
+      return jsonResponse({ error: 'Place details error: ' + e.message }, 502);
+    }
+  }
+
+  // 3) Build the verifiedFacts block from Google data. These are HARD facts
+  //    that the UI renders with a green Verified stamp.
+  const PRICE_BAND_LABELS = ['Free', '$', '$$', '$$$', '$$$$'];
+  const accessibility = place.accessibilityOptions || null;
+  const verifiedFacts = {
+    priceBand: (typeof place.priceLevel === 'number' && place.priceLevel >= 0 && place.priceLevel <= 4)
+      ? PRICE_BAND_LABELS[place.priceLevel]
+      : null,
+    rating: typeof place.rating === 'number' ? place.rating : null,
+    ratingCount: typeof place.userRatingCount === 'number' ? place.userRatingCount : null,
+    reservable: typeof place.reservable === 'boolean' ? place.reservable : null,
+    accessibility: accessibility
+      ? {
+          // Google's accessibilityOptions returns booleans (or undefined). Keep
+          // null when the field is absent so the UI can distinguish "no data"
+          // from "false". Verified stamp ONLY when the value is present.
+          wheelchairAccessibleEntrance: typeof accessibility.wheelchairAccessibleEntrance === 'boolean' ? accessibility.wheelchairAccessibleEntrance : null,
+          wheelchairAccessibleParking:  typeof accessibility.wheelchairAccessibleParking  === 'boolean' ? accessibility.wheelchairAccessibleParking  : null,
+          wheelchairAccessibleRestroom: typeof accessibility.wheelchairAccessibleRestroom === 'boolean' ? accessibility.wheelchairAccessibleRestroom : null,
+          wheelchairAccessibleSeating:  typeof accessibility.wheelchairAccessibleSeating  === 'boolean' ? accessibility.wheelchairAccessibleSeating  : null,
+        }
+      : null,
+    hasEditorialSummary: !!place.editorialSummary,
+  };
+
+  // 4) Build Claude input — reviews + key metadata.
+  const reviewSnippets = (place.reviews || []).slice(0, 5).map(r => ({
+    text: r.text || '',
+    rating: r.rating,
+    when: r.time || '',
+  })).filter(r => r.text);
+
+  const placeMeta = {
+    name: place.name || place.displayName?.text,
+    address: place.address || place.formattedAddress,
+    rating: place.rating,
+    reviewCount: place.userRatingCount,
+    priceLevel: place.priceLevel,
+    primaryType: place.primaryTypeDisplay || place.primaryType,
+    editorialSummary: place.editorialSummary,
+    websiteUri: place.websiteUri,
+  };
+
+  // 5) If reviews + editorial summary are both empty, return a stub.
+  if (reviewSnippets.length === 0 && !placeMeta.editorialSummary) {
+    const stub = {
+      bestDish: null,
+      alsoRecommended: [],
+      photoWorthy: null,
+      awards: null,
+      worthIt: 'strong_nearby_pick',
+      practical: null,
+      whatYouSee: null,
+      aboutAndHistory: null,
+      crowd: null,
+      bestTime: null,
+      vibe: null,
+      value: null,
+      goodToKnow: [],
+      travelerNotes: null,
+      gsStars: 1,
+      gsRedFlag: false,
+      gsVerdict: 'Not enough review data yet — check back as more visitors share their experience.',
+      verifiedFacts,
+      _sources: { worthIt: 'reviews', gsVerdict: 'reviews' },
+      websiteUri: placeMeta.websiteUri || null,
+      placeName: placeMeta.name || null,
+    };
+    if (env.GLOBESKIMMERS_KV) {
+      await env.GLOBESKIMMERS_KV.put(aiCacheKey, JSON.stringify(stub), { expirationTtl: ATTRACTION_AI_DETAILS_TTL_SECONDS }).catch(() => {});
+    }
+    return jsonResponse({ aiDetails: stub, _cache: 'miss-stub' });
+  }
+
+  const userContent = `PLACE METADATA:\n${JSON.stringify(placeMeta, null, 2)}\n\nVERIFIED FACTS (Google place data — already known):\n${JSON.stringify(verifiedFacts, null, 2)}\n\nREVIEW SNIPPETS (up to 5 from Google):\n${JSON.stringify(reviewSnippets, null, 2)}\n\nGenerate the Attraction AI Details JSON per the voice and honesty rules above. Tag each filled field's source in _sources.`;
+
+  // 6) Call Claude Haiku 4.5.
+  let aiDetails;
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1700,  // headroom over the shared endpoint's 1500 for the _sources map
+        system: buildAttractionAIDetailsSystemPrompt(),
+        messages: [{ role: 'user', content: userContent }]
+      })
+    });
+    if (!apiRes.ok) {
+      const errText = await apiRes.text();
+      return jsonResponse({ error: 'Claude API error', status: apiRes.status, details: errText }, 502);
+    }
+    const data = await apiRes.json();
+    const raw = data?.content?.[0]?.text?.trim() || '';
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    aiDetails = JSON.parse(cleaned);
+    aiDetails.websiteUri = placeMeta.websiteUri || null;
+    aiDetails.placeName = placeMeta.name || null;
+    aiDetails.verifiedFacts = verifiedFacts;
+
+    // Defensive clamping.
+    let stars = parseInt(aiDetails.gsStars, 10);
+    if (isNaN(stars)) stars = 1;
+    if (stars < 1) stars = 1;
+    if (stars > 5) stars = 5;
+    aiDetails.gsStars = stars;
+    aiDetails.gsRedFlag = !!aiDetails.gsRedFlag;
+
+    // bestDish is always null for attractions.
+    aiDetails.bestDish = null;
+
+    // Normalize alsoRecommended into {name, context}[] shape.
+    if (!Array.isArray(aiDetails.alsoRecommended)) {
+      aiDetails.alsoRecommended = [];
+    } else {
+      aiDetails.alsoRecommended = aiDetails.alsoRecommended
+        .map(item => {
+          if (item && typeof item === 'object') {
+            const name = typeof item.name === 'string' && item.name.trim() ? item.name.trim() : null;
+            const context = typeof item.context === 'string' && item.context.trim() ? item.context.trim() : null;
+            return name ? { name, context } : null;
+          }
+          if (typeof item === 'string' && item.trim()) {
+            const parts = item.split(/\s+—\s+|\s+-\s+/);
+            const name = parts[0]?.trim() || null;
+            const context = parts.length > 1 ? parts.slice(1).join(' — ').trim() : null;
+            return name ? { name, context } : null;
+          }
+          return null;
+        })
+        .filter(Boolean)
+        .slice(0, 3);
+    }
+
+    // Normalize practical object.
+    if (!aiDetails.practical || typeof aiDetails.practical !== 'object') {
+      aiDetails.practical = null;
+    } else {
+      const p = aiDetails.practical;
+      const sanitize = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+      const cleaned = {
+        payment: sanitize(p.payment),
+        englishMenu: sanitize(p.englishMenu),
+        reservation: sanitize(p.reservation),
+        dietary: null,  // attractions don't use this
+      };
+      const anyPresent = Object.values(cleaned).some(v => v !== null);
+      aiDetails.practical = anyPresent ? cleaned : null;
+    }
+
+    // Normalize goodToKnow.
+    if (!Array.isArray(aiDetails.goodToKnow)) {
+      aiDetails.goodToKnow = [];
+    } else {
+      aiDetails.goodToKnow = aiDetails.goodToKnow
+        .map(s => (typeof s === 'string' && s.trim() ? s.trim() : null))
+        .filter(Boolean)
+        .slice(0, 4);
+    }
+
+    // worthIt enum guard.
+    const WORTH_ENUM = new Set([
+      'worth_the_stop', 'strong_nearby_pick', 'craving_match',
+      'know_before_you_go', 'better_if_convenient',
+    ]);
+    if (!WORTH_ENUM.has(aiDetails.worthIt)) {
+      aiDetails.worthIt = 'strong_nearby_pick';
+    }
+
+    // Normalize _sources map.
+    if (!aiDetails._sources || typeof aiDetails._sources !== 'object') {
+      aiDetails._sources = {};
+    } else {
+      const VALID_TIERS = new Set(['verified', 'reviews', 'forecast', 'call']);
+      const cleanedSources = {};
+      for (const [k, v] of Object.entries(aiDetails._sources)) {
+        if (typeof v === 'string' && VALID_TIERS.has(v)) cleanedSources[k] = v;
+      }
+      aiDetails._sources = cleanedSources;
+    }
+  } catch (e) {
+    return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
+  }
+
+  // 7) Cache the AI Details JSON for 30 days under the dedicated attraction key.
+  if (env.GLOBESKIMMERS_KV) {
+    await env.GLOBESKIMMERS_KV.put(
+      aiCacheKey,
+      JSON.stringify(aiDetails),
+      { expirationTtl: ATTRACTION_AI_DETAILS_TTL_SECONDS }
+    ).catch(() => {});
+  }
+
+  return jsonResponse({ aiDetails, _cache: 'miss' });
+}
+
+// ============================================================================
 // NAME LANGUAGE HELP — Haiku 4.5 returns { romanization, translation } for
 // any place name. Used by the <NameLanguageHelp> frontend component which
 // renders "🔤 Pronounce" + "🌐 Translate" buttons under business names that
@@ -2889,6 +3260,7 @@ export default {
       if (pathname === '/scan-text' && request.method === 'POST') return await handleScanText(request, env);
       if (pathname === '/label-photos' && request.method === 'POST') return await handleLabelPhotos(request, env);
       if (pathname === '/ai-details' && request.method === 'POST') return await handleAIDetails(request, env);
+      if (pathname === '/attraction-ai-details' && request.method === 'POST') return await handleAttractionAIDetails(request, env);
       if (pathname === '/name-info' && request.method === 'POST') return await handleNameInfo(request, env);
       if (pathname === '/parse-intent' && request.method === 'POST') return await handleParseIntent(request, env);
 
