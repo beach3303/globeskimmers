@@ -1017,6 +1017,65 @@ const ANALYTICS_QUERIES = {
     WHERE event_type = 'ai_details_fetched'
       AND ts >= strftime('%s','now','-7 days')
   `,
+  // ── ATM AI DETAILS COST SPLIT ───────────────────────────────────────────
+  // Same shape as ai_details_paid/free_by_day_14d but filtered to kind='atm'.
+  // Lets the dashboard show the ATM-specific cost line alongside the global
+  // numbers — important because the ATM redesign drives net-new Haiku spend
+  // and we want to verify the cache earns its keep on the ATM panel
+  // specifically.
+  atm_ai_details_paid_by_day_14d: `
+    SELECT
+      date(ts, 'unixepoch') AS day,
+      COUNT(*) AS paid_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'atm'
+      AND json_extract(payload, '$.cache') != 'hit'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day
+    ORDER BY day ASC
+  `,
+  atm_ai_details_free_by_day_14d: `
+    SELECT
+      date(ts, 'unixepoch') AS day,
+      COUNT(*) AS free_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'atm'
+      AND json_extract(payload, '$.cache') = 'hit'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day
+    ORDER BY day ASC
+  `,
+  // ATM-specific cache hit rate over last 7 days. Lower-than-global hit
+  // rate here means the ATM cache (or its TTL) needs tuning.
+  atm_ai_details_cache_rate_7d: `
+    SELECT
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'hit' THEN 1 ELSE 0 END) AS hits,
+      SUM(CASE WHEN json_extract(payload, '$.cache') != 'hit' THEN 1 ELSE 0 END) AS misses,
+      COUNT(*) AS total_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'atm'
+      AND ts >= strftime('%s','now','-7 days')
+  `,
+  // Per-kind cost breakdown over the last 30 days. Each row =
+  // { kind, paid, free, total } so the dashboard can show every AI Details
+  // line item (atm, attraction, restaurant, coffee, restroom) and their
+  // share of overall Haiku spend. Sort by paid DESC so the most expensive
+  // surface is on top.
+  ai_details_by_kind_30d: `
+    SELECT
+      COALESCE(json_extract(payload, '$.kind'), 'unknown') AS kind,
+      SUM(CASE WHEN json_extract(payload, '$.cache') != 'hit' THEN 1 ELSE 0 END) AS paid,
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'hit' THEN 1 ELSE 0 END) AS free,
+      COUNT(*) AS total
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY kind
+    ORDER BY paid DESC
+  `,
   // ── PRICE SCANNER ANALYTICS ─────────────────────────────────────────────
   // Each 'price_scan' event payload:
   //   { country, city, target_currency, price_count, prices: [{currency, amount, amount_usd, context}, ...] }
