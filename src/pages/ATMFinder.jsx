@@ -150,6 +150,58 @@ function enrichATM(atm, userLat, userLng) {
   };
 }
 
+// ─── BEST ATM NEARBY RANKING (Phase A5) ────────────────────────────────────
+// Scores ATMs using ONLY signals already in the list response — no extra
+// AI Details fetches. The spec's full ranking factors (lowest fee, highest
+// limit) need per-ATM Haiku data which we don't pre-compute at list time;
+// those badges will land if/when crowdsourced fee data exists (Phase A6).
+// For now we surface the badges we CAN ground:
+//   💎 Best Overall — highest composite score (must clear a confidence floor).
+//   🛡️ Safest Option — best bank-branch ATM in the list.
+// Existing per-ATM badges (24/7, Bank Network, venue type) are preserved.
+function scoreATM(atm) {
+  let s = 0;
+  if (atm.rating) s += (atm.rating - 3) * 10;          // -10 to +20 around neutral
+  if (atm.userRatingCount > 10) s += 5;
+  if (atm.userRatingCount > 50) s += 5;
+  if (atm.isOpen === true) s += 8;
+  if (atm.is24Hours) s += 12;
+  if (atm.network && atm.network !== "Independent") s += 12;
+  if (atm.venueType === "bank") s += 25;                // strongest safety signal
+  if (atm.venueType === "airport") s += 4;              // convenience win
+  if (atm.venueType === "convenience") s += -2;         // independent operators carry more risk
+  if (atm.distanceMiles != null) s += Math.max(0, 5 - atm.distanceMiles);
+  return s;
+}
+
+function rankATMs(list) {
+  if (!Array.isArray(list) || list.length === 0) return list;
+  const scored = list.map((atm, idx) => ({ atm, idx, score: scoreATM(atm) }));
+  const sortedByScore = [...scored].sort((a, b) => b.score - a.score);
+  const bestOverall = sortedByScore[0];
+  // Safest: best-rated bank-branch ATM (rating tiebreaker keeps it
+  // separate from "Best Overall" when one is a non-bank highly-rated ATM).
+  const banks = scored.filter(s => s.atm.venueType === "bank");
+  const safest = banks.length > 0
+    ? [...banks].sort((a, b) => (b.atm.rating || 0) - (a.atm.rating || 0))[0]
+    : null;
+  return list.map((atm, i) => {
+    const extra = [];
+    // Only stamp "Best Overall" if the lead is clear — score floor of 20
+    // and at least a 5-point lead over runner-up — to avoid promoting a
+    // mediocre ATM when the list is weak overall.
+    const runnerUp = sortedByScore[1]?.score ?? -Infinity;
+    if (bestOverall.idx === i && bestOverall.score >= 20 && (bestOverall.score - runnerUp) >= 3) {
+      extra.push({ icon: "💎", label: "Best Overall", color: "#166534", bg: "#DCFCE7" });
+    }
+    if (safest && safest.idx === i && safest.idx !== bestOverall.idx) {
+      extra.push({ icon: "🛡️", label: "Safest Option", color: "#1E40AF", bg: "#DBEAFE" });
+    }
+    if (extra.length === 0) return atm;
+    return { ...atm, badges: [...extra, ...(atm.badges || [])].slice(0, 5) };
+  });
+}
+
 // ─── DIRECTIONS PICKER ─────────────────────────────────────────────────────
 function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng }) {
   if (!isOpen) return null;
@@ -556,7 +608,9 @@ export default function ATMFinderPage() {
 
         const rawList = data?.atms || data?.places || [];
         if (rawList.length > 0) {
-          const processed = rawList.map(p => enrichATM(p, lat, lng));
+          // Phase A5: rank pass appends 💎 Best Overall + 🛡️ Safest Option
+          // badges. Uses only list-time signals — no extra Haiku calls.
+          const processed = rankATMs(rawList.map(p => enrichATM(p, lat, lng)));
           setATMs(processed);
           if (data?.banks?.length > 0) setAvailableBanks(data.banks);
         } else {
