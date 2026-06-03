@@ -207,6 +207,11 @@ Deno.serve(async (req) => {
                         components.find(c => c.types.includes("postal_town"))?.longText || "";
             
             const state = components.find(c => c.types.includes("administrative_area_level_1"))?.shortText || "";
+            // administrative_area_level_2 = the next level down from state
+            // (province/county/prefecture). Used by the homepage greeting
+            // when the locality is a sub-city (e.g. an airport's locality
+            // is "Lapu-Lapu" but the broader recognizable region is "Cebu").
+            const region = components.find(c => c.types.includes("administrative_area_level_2"))?.longText || "";
             const postalCode = components.find(c => c.types.includes("postal_code"))?.longText || "";
             const countryComp = components.find(c => c.types.includes("country"));
             const country = countryComp?.longText || "";
@@ -254,6 +259,7 @@ Deno.serve(async (req) => {
                     formatted: place.formattedAddress || "",
                     street: street,
                     city: city,
+                    region: region,
                     state: state,
                     postalCode: postalCode,
                     country: country

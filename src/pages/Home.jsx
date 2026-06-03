@@ -261,7 +261,20 @@ export default function HomePage() {
   }
 
   const activeLocation = getActiveLocation();
-  const cityName = activeLocation?.placeName || activeLocation?.address?.city || '';
+  // Greeting headline uses the CITY of the selected location, not its full
+  // place name. For an airport like "Mactan-Cebu International Airport
+  // Authority (MCIAA)", we want "Hello Maiza, in Cebu" — not the full
+  // 8-word venue name. Priority:
+  //   1. address.city  (locality / sublocality / postal_town from Google)
+  //   2. address.region (administrative_area_level_2 — e.g. "Cebu" when
+  //      the airport's locality is the smaller "Lapu-Lapu")
+  //   3. placeName    (fallback for legacy saved locations missing both)
+  const cityName = activeLocation?.address?.city
+    || activeLocation?.address?.region
+    || activeLocation?.placeName
+    || '';
+  // Location chip below the greeting keeps the full place name so the user
+  // can confirm exactly which location they're on.
   const placeText = activeLocation?.placeName || activeLocation?.address?.city || 'Set location';
 
   // ── Render ────────────────────────────────────────────────────────────────
