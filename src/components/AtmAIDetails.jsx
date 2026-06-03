@@ -1,0 +1,610 @@
+/**
+ * AtmAIDetails — ATM Finder "🤖 AI DETAILS" panel.
+ *
+ * FORK of AIDetailsSection.jsx (Phase A2 of the ATM redesign).
+ * ATM-only renderer; PlacesToEat / Coffee / Restroom keep using the
+ * shared AIDetailsSection.jsx. Forked so the ATM layout (Card
+ * Compatibility, Fees, Withdrawal Calculator, Limits, Location, Safety)
+ * can evolve without touching the restaurant flow.
+ *
+ * Phase A2 scope: presentation restructure ONLY.
+ *   - Still calls the existing getAIDetails Base44 function with
+ *     kind='atm'. Consumes the v7 shared JSON shape today.
+ *   - ATM-specific sections (Card Compatibility, Fees, Withdrawal
+ *     Limits, Location Context, Safety) render as "call to confirm"
+ *     stubs in this phase since the shared prompt doesn't generate
+ *     that data yet.
+ *   - The Withdrawal Calculator slot is a placeholder anchor — Phase
+ *     A4 wires it to live exchange rates + primary_banking_currency.
+ *   - Best ATM Nearby ranking (section 8 of the spec) is intentionally
+ *     OUT of this component — it belongs on the ATMFinder list view,
+ *     scheduled for Phase A5.
+ *
+ * Honesty rules in render:
+ *   - Each fact carries a source-tier stamp.
+ *   - "Call to confirm" stamps are interactive: tap opens the venue's
+ *     website (when known) in a new tab.
+ *   - Sections with no data are silently absent rather than filled with
+ *     fluff — per the same handoff honesty principle as the Things-To-Do
+ *     redesign.
+ */
+import React, { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { logEvent } from '@/lib/analytics';
+
+// Palette — matches AIDetailsSection / AttractionAIDetails so the panel
+// reads consistently across the app.
+const DARK = '#1A2332';
+const GRAY = '#64748B';
+const GRAY_DEEP = '#475569';
+const PURPLE = '#6D28D9';
+const PURPLE_LIGHT = '#DDD6FE';
+const PURPLE_BG = '#F5F3FF';
+const PURPLE_SHIMMER = '#EDE9FE';
+const DIVIDER = '#E5E7EB';
+
+// Shared key with the restaurant + attraction panels so the one-time
+// GS-Verdict subtitle explainer is shown to a given user at most once.
+const GS_VERDICT_HELPER_KEY = 'gs_verdict_helper_seen';
+function readVerdictHelperSeen() {
+  try { return localStorage.getItem(GS_VERDICT_HELPER_KEY) === '1'; }
+  catch { return true; }
+}
+function markVerdictHelperSeen() {
+  try { localStorage.setItem(GS_VERDICT_HELPER_KEY, '1'); } catch { /* ignore */ }
+}
+
+// Source-tier stamp palette. Phase A2 mostly uses stubs ('reviews' for
+// generated copy / 'call' for fields without data yet). Phase A3 plumbs
+// real per-field provenance through a Worker _sources map.
+const STAMP_STYLES = {
+  verified:  { label: 'Verified',          bg: '#DCFCE7', color: '#166534' },
+  reported:  { label: 'reported',          bg: '#E0E7FF', color: '#3730A3' },
+  reviews:   { label: 'from reviews',      bg: '#FEF3C7', color: '#92400E' },
+  estimated: { label: 'estimated',         bg: '#FEF3C7', color: '#92400E' },
+  call:      { label: 'call to confirm',   bg: '#DBEAFE', color: '#1E40AF' },
+};
+
+function SourceStamp({ tier, onClick }) {
+  const s = STAMP_STYLES[tier];
+  if (!s) return null;
+  const interactive = tier === 'call' && typeof onClick === 'function';
+  return (
+    <span
+      onClick={interactive ? onClick : undefined}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      style={{
+        display: 'inline-block',
+        fontSize: '10px',
+        fontWeight: '600',
+        padding: '1px 6px',
+        background: s.bg,
+        color: s.color,
+        borderRadius: '4px',
+        marginLeft: '6px',
+        cursor: interactive ? 'pointer' : 'default',
+        textDecoration: interactive ? 'underline dotted' : 'none',
+        verticalAlign: 'middle',
+      }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
+// Worth-It badge palette — same 5-tier vocabulary as the restaurant and
+// attraction panels so the brand stays consistent. The Worker decides
+// which tier suits a given ATM (Phase A3 will tune the prompt's mapping
+// for ATM-specific signals: bank-branch + 24/7 + low-fee → worth_the_stop,
+// outdoor + unknown-network → know_before_you_go, etc.).
+const WORTH_LABELS = {
+  worth_the_stop:       { icon: '💎', label: 'Top-Tier ATM',         bg: '#DCFCE7', color: '#166534' },
+  strong_nearby_pick:   { icon: '✅', label: 'Solid Nearby ATM',     bg: '#DBEAFE', color: '#1E40AF' },
+  craving_match:        { icon: '🏦', label: 'Specialist (Bank ATM)', bg: '#FCE7F3', color: '#9D174D' },
+  know_before_you_go:   { icon: '⚠️', label: 'Know Before You Go',   bg: '#FEF3C7', color: '#92400E' },
+  better_if_convenient: { icon: '↪️', label: 'Better If Convenient', bg: '#F1F5F9', color: '#475569' },
+};
+
+// Card networks we recognize. Phase A3 will populate
+// details.cardCompatibility with an array of these (with confidence per
+// network). For now we render a stub row of all 9 marked "unknown" so
+// the user can see the section's shape.
+const CARD_NETWORKS = [
+  { key: 'visa',         label: 'Visa' },
+  { key: 'mastercard',   label: 'Mastercard' },
+  { key: 'plus',         label: 'Plus' },
+  { key: 'cirrus',       label: 'Cirrus' },
+  { key: 'maestro',      label: 'Maestro' },
+  { key: 'unionpay',     label: 'UnionPay' },
+  { key: 'jcb',          label: 'JCB' },
+  { key: 'discover',     label: 'Discover' },
+  { key: 'amex',         label: 'American Express' },
+];
+
+export default function AtmAIDetails({ placeId, placeName, page }) {
+  const [open, setOpen] = useState(false);
+  const [details, setDetails] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [showVerdictHelper] = useState(() => !readVerdictHelperSeen());
+
+  const onToggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next) {
+      // variant='atm_v1' so the analytics dashboard can slice ATM panel
+      // engagement separately from the legacy AIDetailsSection traffic.
+      logEvent('ai_details_opened', {
+        placeId, placeName, kind: 'atm', variant: 'atm_v1',
+      }, page || 'ATMFinder');
+      if (showVerdictHelper) markVerdictHelperSeen();
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    if (details || loading) return;
+    if (!placeId) return;
+    setLoading(true);
+    setError(null);
+    // Phase A2 still hits the shared /ai-details endpoint with kind='atm'.
+    // Phase A3 will swap to a dedicated /atm-ai-details endpoint that
+    // returns ATM-specific schema (cardCompatibility, atmOperatorFee,
+    // withdrawalLimits, locationContext, safety, _sources, verifiedFacts).
+    // Same variant tag on both phases so the analytics queries don't
+    // change.
+    base44.functions.invoke('getAIDetails', { placeId, kind: 'atm' })
+      .then(({ data }) => {
+        if (data?.error) {
+          setError(data.error);
+        } else if (data?.aiDetails) {
+          setDetails(data.aiDetails);
+        } else {
+          setError('No AI details returned');
+        }
+        const cache = data?._cache || 'unknown';
+        logEvent('ai_details_fetched', {
+          placeId, placeName,
+          kind: 'atm', variant: 'atm_v1',
+          cache, paid: cache !== 'hit',
+        }, page || 'ATMFinder');
+      })
+      .catch((e) => setError(e?.message || 'Failed to load AI details'))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, placeId]);
+
+  return (
+    <div style={{ padding: '12px 14px', background: PURPLE_BG, borderRadius: '10px', border: `1px solid ${PURPLE_LIGHT}` }}>
+      <button
+        onClick={onToggle}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}
+      >
+        <span style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.5px' }}>🤖 AI DETAILS</span>
+        <span style={{ fontSize: '11px', color: PURPLE }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ marginTop: '10px' }}>
+          <Body loading={loading} error={error} details={details} showVerdictHelper={showVerdictHelper} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Body({ loading, error, details, showVerdictHelper }) {
+  if (loading) return <Shimmer />;
+  if (error) return <div style={{ fontSize: '12px', color: '#B91C1C' }}>AI Details unavailable right now. {error}</div>;
+  if (!details) return null;
+
+  const websiteUri = details.websiteUri || null;
+  const callConfirm = websiteUri ? () => window.open(websiteUri, '_blank', 'noopener,noreferrer') : null;
+
+  // Phase A2 has no _sources map yet (the shared endpoint doesn't return
+  // one). Default everything to 'reviews' so the stamps look right; the
+  // Worker fork in A3 will populate _sources for real provenance.
+  const sourcesMap = (details && typeof details._sources === 'object' && details._sources) || {};
+  const sourceFor = (key, fallback = 'reviews') => sourcesMap[key] || fallback;
+
+  return (
+    <div>
+      <ZoneVerdict details={details} showVerdictHelper={showVerdictHelper} sourceFor={sourceFor} />
+      <ZoneCalculator details={details} />
+      <ZoneFees details={details} callConfirm={callConfirm} sourceFor={sourceFor} />
+      <ZoneCardCompatibility details={details} callConfirm={callConfirm} sourceFor={sourceFor} />
+      <ZoneLimits details={details} callConfirm={callConfirm} sourceFor={sourceFor} />
+      <ZoneLocation details={details} sourceFor={sourceFor} />
+      <ZoneSafety details={details} callConfirm={callConfirm} sourceFor={sourceFor} />
+      <DepthMore details={details} sourceFor={sourceFor} />
+      {websiteUri && (
+        <div style={{ marginTop: '12px', fontSize: '12px', color: GRAY }}>
+          For more information, visit{' '}
+          <a href={websiteUri} target="_blank" rel="noopener noreferrer" style={{ color: PURPLE, textDecoration: 'underline' }}>
+            {websiteUri.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Shimmer() {
+  return (
+    <div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {[88, 72, 80, 66, 75].map((w, i) => (
+          <div
+            key={i}
+            style={{
+              height: '12px',
+              width: `${w}%`,
+              background: `linear-gradient(90deg,${PURPLE_SHIMMER} 0%,${PURPLE_LIGHT} 50%,${PURPLE_SHIMMER} 100%)`,
+              backgroundSize: '200% 100%',
+              borderRadius: '4px',
+              animation: 'gsShimmer 1.2s ease-in-out infinite',
+            }}
+          />
+        ))}
+      </div>
+      <style>{`@keyframes gsShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
+    </div>
+  );
+}
+
+// ============================================================================
+// Section 1 — GS VERDICT
+// ============================================================================
+
+function ZoneVerdict({ details, showVerdictHelper, sourceFor }) {
+  const worthTag = details.worthIt && WORTH_LABELS[details.worthIt];
+  const hasVerdict = (details.gsStars != null || details.gsRedFlag || details.gsVerdict || worthTag);
+  if (!hasVerdict) return null;
+  return (
+    <div style={{ marginBottom: '12px', paddingBottom: '10px', borderBottom: `1px solid ${PURPLE_LIGHT}` }}>
+      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: showVerdictHelper ? '2px' : '6px' }}>💯 GS VERDICT</div>
+      {showVerdictHelper && (
+        <div style={{ fontSize: '11px', color: GRAY, fontStyle: 'italic', marginBottom: '8px' }}>
+          Globeskimmers' traveler-fit take on this ATM.
+        </div>
+      )}
+      {worthTag && (
+        <div style={{ marginBottom: '8px' }}>
+          <span style={{
+            display: 'inline-block', fontSize: '12px', fontWeight: '600',
+            padding: '3px 10px', background: worthTag.bg, color: worthTag.color, borderRadius: '9999px',
+          }}>
+            {worthTag.icon} {worthTag.label}
+          </span>
+        </div>
+      )}
+      {(details.gsStars != null && details.gsStars > 0) || details.gsRedFlag ? (
+        <div style={{ fontSize: '13px', marginBottom: '4px' }}>
+          {details.gsRedFlag
+            ? <strong>🚩</strong>
+            : <strong style={{ letterSpacing: '1px' }}>{'⭐'.repeat(Math.min(5, Math.max(0, details.gsStars)))}</strong>}
+        </div>
+      ) : null}
+      {details.gsVerdict && (
+        <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+          {details.gsVerdict}
+          <SourceStamp tier={sourceFor('gsVerdict')} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Section 4 — WITHDRAWAL CALCULATOR (slot only in Phase A2; wired in A4)
+// ============================================================================
+
+function ZoneCalculator(_props) {
+  return (
+    <div style={{ marginBottom: '14px', padding: '12px', background: '#FFFFFF', borderRadius: '8px', border: `1px dashed ${PURPLE_LIGHT}` }}>
+      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>🧮 WITHDRAWAL CALCULATOR</div>
+      <div style={{ fontSize: '13px', color: GRAY_DEEP, lineHeight: '1.5' }}>
+        Live exchange-rate calculator — coming next. Will default to your Primary Banking Currency → this ATM's local currency, minus the known operator fee.
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Section 3 — FEES (Operator / Bank / Foreign Transaction / DCC warning)
+// ============================================================================
+
+function ZoneFees({ details, callConfirm, sourceFor }) {
+  const fee = details.atmOperatorFee || null;
+  const operatorLine = fee?.amount != null && fee?.currency
+    ? `${formatMoney(fee.amount, fee.currency)} per withdrawal`
+    : null;
+  const operatorTier = fee?.confidence === 'confirmed' ? 'verified'
+    : fee?.confidence === 'reported' ? 'reported'
+    : fee?.confidence === 'estimated' ? 'estimated'
+    : 'call';
+
+  return (
+    <div style={{ marginBottom: '14px' }}>
+      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>💸 FEES</div>
+      <div style={{ background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}`, overflow: 'hidden' }}>
+        {/* A. ATM operator fee */}
+        <FeeRow
+          icon="🏧" label="ATM Operator Fee"
+          value={operatorLine || 'Unknown — check the ATM screen before confirming.'}
+          stamp={operatorTier}
+          onCallConfirm={callConfirm}
+        />
+        {/* B. Your bank's foreign ATM fee */}
+        <FeeRow
+          icon="🏦" label="Your Bank's Foreign ATM Fee"
+          value="Your home bank may charge a foreign ATM fee. Add your bank or card in Settings to estimate this."
+          stamp="call"
+          onCallConfirm={callConfirm}
+        />
+        {/* C. Foreign transaction / currency conversion fee */}
+        <FeeRow
+          icon="🌐" label="Foreign Transaction Fee"
+          value="Many banks charge 0%–3% when the transaction is processed in a foreign currency. Some travel cards charge 0%."
+          stamp="call"
+          onCallConfirm={callConfirm}
+        />
+        {/* D. DCC warning */}
+        <FeeRow
+          icon="⚠️" label="Dynamic Currency Conversion"
+          value="If the ATM asks 'convert to your home currency?' — decline. Choose local currency for a better rate."
+          stamp="reviews"
+          isLast
+        />
+      </div>
+      {/* Phase-stub note when no real data is wired yet. */}
+      {!fee && (
+        <div style={{ fontSize: '11px', color: GRAY, marginTop: '6px', lineHeight: '1.4' }}>
+          Specific fee details for this ATM will appear here once the Phase A3 prompt is deployed.<SourceStamp tier={sourceFor('atmOperatorFee')} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeeRow({ icon, label, value, stamp, onCallConfirm, isLast }) {
+  return (
+    <div style={{ padding: '10px 12px', borderBottom: isLast ? 'none' : `1px solid ${DIVIDER}` }}>
+      <div style={{ fontSize: '12px', fontWeight: '700', color: DARK, marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <span>{icon}</span>{label}
+        <SourceStamp tier={stamp} onClick={stamp === 'call' ? onCallConfirm : null} />
+      </div>
+      <div style={{ fontSize: '12px', color: GRAY_DEEP, lineHeight: '1.5' }}>{value}</div>
+    </div>
+  );
+}
+
+function formatMoney(amount, currency) {
+  // Minimal formatter; the calculator in A4 will do proper locale formatting.
+  const num = typeof amount === 'number' ? amount : Number(amount);
+  if (!Number.isFinite(num)) return '—';
+  return `${num.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${currency}`;
+}
+
+// ============================================================================
+// Section 2 — CARD COMPATIBILITY
+// ============================================================================
+
+function ZoneCardCompatibility({ details, callConfirm, sourceFor }) {
+  // details.cardCompatibility (added in A3) is expected to be one of:
+  //   - array of network keys with confidence: [{ network: 'visa', accepted: true|false }, ...]
+  //   - undefined/null when the Worker hasn't tagged this ATM yet
+  const list = Array.isArray(details.cardCompatibility) ? details.cardCompatibility : null;
+  const accepted = list ? new Set(list.filter(n => n?.accepted).map(n => n.network)) : null;
+  const tier = list ? sourceFor('cardCompatibility') : 'call';
+
+  return (
+    <div style={{ marginBottom: '14px' }}>
+      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
+        💳 CARD COMPATIBILITY
+        <SourceStamp tier={tier} onClick={tier === 'call' ? callConfirm : null} />
+      </div>
+      {!list ? (
+        <div style={{ fontSize: '13px', color: GRAY_DEEP, lineHeight: '1.5', padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}` }}>
+          Compatibility not confirmed for this ATM. Most international debit cards using Visa, Mastercard, Plus, or Cirrus may work.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {CARD_NETWORKS.map(n => {
+            const ok = accepted.has(n.key);
+            return (
+              <span key={n.key} style={{
+                fontSize: '12px', padding: '4px 10px', borderRadius: '9999px',
+                background: ok ? '#DCFCE7' : '#F1F5F9',
+                color: ok ? '#166534' : '#94A3B8',
+                fontWeight: '500',
+                textDecoration: ok ? 'none' : 'line-through',
+              }}>{ok ? '✅ ' : '•'} {n.label}</span>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Section 5 — WITHDRAWAL LIMITS
+// ============================================================================
+
+function ZoneLimits({ details, callConfirm, sourceFor }) {
+  const limits = details.withdrawalLimits || null;
+  const tier = limits ? sourceFor('withdrawalLimits') : 'call';
+  return (
+    <div style={{ marginBottom: '14px' }}>
+      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
+        📊 WITHDRAWAL LIMITS
+        <SourceStamp tier={tier} onClick={tier === 'call' ? callConfirm : null} />
+      </div>
+      <div style={{ padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}`, fontSize: '13px', color: DARK, lineHeight: '1.5' }}>
+        {limits?.perTransaction != null && (
+          <div><strong style={{ fontSize: '11px', textTransform: 'uppercase', color: PURPLE, letterSpacing: '0.4px', marginRight: '6px' }}>Per transaction</strong>{formatMoney(limits.perTransaction, limits.currency || '')}</div>
+        )}
+        {limits?.daily != null && (
+          <div style={{ marginTop: '4px' }}><strong style={{ fontSize: '11px', textTransform: 'uppercase', color: PURPLE, letterSpacing: '0.4px', marginRight: '6px' }}>Daily</strong>{formatMoney(limits.daily, limits.currency || '')}</div>
+        )}
+        {!limits && (
+          <div style={{ color: GRAY_DEEP }}>Limit not confirmed. The ATM will display the maximum before you confirm a withdrawal.</div>
+        )}
+        {limits?.dependsOnCard && (
+          <div style={{ fontSize: '12px', color: GRAY_DEEP, marginTop: '4px' }}>Limits may vary based on your home bank or card.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Section 6 — LOCATION CONTEXT
+// ============================================================================
+
+function ZoneLocation({ details, sourceFor }) {
+  // Phase A2 reuses the existing 'vibe' field — for kind='atm' the shared
+  // prompt already places the physical location description there
+  // (cloudflare-worker-v7.12.js:1743). Phase A3 will add a richer
+  // locationContext object with venue type + sub-location.
+  const loc = details.locationContext || details.vibe || null;
+  if (!loc) return null;
+  const text = typeof loc === 'string' ? loc : loc.summary || '';
+  if (!text) return null;
+  return (
+    <div style={{ marginBottom: '14px' }}>
+      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
+        📍 LOCATION
+        <SourceStamp tier={sourceFor(details.locationContext ? 'locationContext' : 'vibe')} />
+      </div>
+      <div style={{ fontSize: '13px', color: DARK, lineHeight: '1.5', padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}` }}>
+        {text}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Section 7 — SAFETY & CONVENIENCE
+// ============================================================================
+
+function ZoneSafety({ details, callConfirm, sourceFor }) {
+  // Phase A2: render a single-line summary derived from the existing
+  // verdict + open-status fields. A3 will provide a structured `safety`
+  // object with concrete flags (indoor, well_lit, security_guard, etc.).
+  const safety = details.safety || null;
+  if (safety && typeof safety === 'object') {
+    const flags = [
+      { key: 'indoor',          label: 'Indoors',           good: true },
+      { key: 'wellLit',         label: 'Well-lit',          good: true },
+      { key: 'securityGuard',   label: 'Security on-site',  good: true },
+      { key: 'bankBranch',      label: 'Bank branch',       good: true },
+      { key: 'cameras',         label: 'Cameras',           good: true },
+      { key: 'highFootTraffic', label: 'Busy area',         good: true },
+      { key: 'open24h',         label: 'Open 24/7',         good: true },
+      { key: 'skimmerReports',  label: 'Skimmer reports',   good: false },
+    ].filter(f => safety[f.key] != null);
+    if (flags.length === 0) {
+      return (
+        <SafetyBlock summary="Safety info not reported for this ATM. Use the same caution you would at any unfamiliar ATM." stamp="call" onCallConfirm={callConfirm} />
+      );
+    }
+    return (
+      <div style={{ marginBottom: '14px' }}>
+        <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
+          🛡️ SAFETY & CONVENIENCE
+          <SourceStamp tier={sourceFor('safety')} />
+        </div>
+        <div style={{ padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}`, display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {flags.map(f => {
+            const present = !!safety[f.key];
+            const positive = f.good ? present : !present;
+            return (
+              <span key={f.key} style={{
+                fontSize: '12px', padding: '4px 10px', borderRadius: '9999px',
+                background: positive ? '#DCFCE7' : '#FEE2E2',
+                color: positive ? '#166534' : '#991B1B',
+                fontWeight: '500',
+              }}>
+                {positive ? '✅' : '⚠️'} {f.label}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+  // No structured safety yet — fall back to a calm placeholder.
+  return (
+    <SafetyBlock summary="Safety info not reported for this ATM. Use the same caution you would at any unfamiliar ATM." stamp="call" onCallConfirm={callConfirm} />
+  );
+}
+
+function SafetyBlock({ summary, stamp, onCallConfirm }) {
+  return (
+    <div style={{ marginBottom: '14px' }}>
+      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
+        🛡️ SAFETY & CONVENIENCE
+        <SourceStamp tier={stamp} onClick={stamp === 'call' ? onCallConfirm : null} />
+      </div>
+      <div style={{ padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}`, fontSize: '13px', color: GRAY_DEEP, lineHeight: '1.5' }}>
+        {summary}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Depth — "More" tap
+// ============================================================================
+
+function DepthMore({ details, sourceFor }) {
+  const [open, setOpen] = useState(false);
+  const rows = [
+    { sourceKey: 'bestTime',      icon: '⏰', label: 'BEST TIME',      value: details.bestTime },
+    { sourceKey: 'crowd',         icon: '👥', label: 'CROWD',          value: details.crowd },
+    { sourceKey: 'travelerNotes', icon: '🌍', label: 'TRAVELER NOTES', value: details.travelerNotes },
+    { sourceKey: 'value',         icon: '💰', label: 'PRICING NOTE',   value: details.value },
+  ].filter(r => r.value);
+  const goodToKnow = Array.isArray(details.goodToKnow) ? details.goodToKnow.filter(Boolean) : [];
+  if (rows.length === 0 && goodToKnow.length === 0) return null;
+  return (
+    <div style={{ marginBottom: '4px' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+          background: 'transparent', border: 'none', padding: '8px 0', cursor: 'pointer', fontFamily: 'inherit',
+        }}
+      >
+        <span style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.5px' }}>📖 MORE DETAIL</span>
+        <span style={{ fontSize: '11px', color: PURPLE }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ paddingTop: '6px' }}>
+          {goodToKnow.length > 0 && (
+            <div style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>
+                📌 GOOD TO KNOW<SourceStamp tier={sourceFor('goodToKnow')} />
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+                {goodToKnow.map((g, i) => <li key={i}>{g}</li>)}
+              </ul>
+            </div>
+          )}
+          {rows.map(r => (
+            <div key={r.label} style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>
+                {r.icon} {r.label}
+              </div>
+              <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+                {r.value}<SourceStamp tier={sourceFor(r.sourceKey)} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

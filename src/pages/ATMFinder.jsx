@@ -7,7 +7,7 @@ import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
-import AIDetailsSection from "@/components/AIDetailsSection";
+import AtmAIDetails from "@/components/AtmAIDetails";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import { ChevronLeft, MapPin, CreditCard } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
@@ -401,14 +401,17 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
                     )}
                   </div>
                 )}
-                {/* AI Details — kind="atm" so the Worker uses ATM-specific
-                    voice (location specifics, foreign card support, fees,
-                    safety) and 1-5 stars with red flag for unsafe ATMs. */}
-                <AIDetailsSection
+                {/* AI Details — ATM-only renderer (ATM redesign Phase A2).
+                    Forked from AIDetailsSection so the 8-section ATM layout
+                    (Verdict / Calculator / Fees / Card Compatibility /
+                    Limits / Location / Safety / More) can evolve without
+                    risk to PlacesToEat or other finders. Calls the same
+                    getAIDetails endpoint under the hood for now; Phase A3
+                    forks the Worker prompt + endpoint. */}
+                <AtmAIDetails
                   placeId={atm.placeId || atm.id}
                   placeName={name}
                   page="ATMFinder"
-                  kind="atm"
                 />
                 {(atm.websiteUri || atm.website) && (
                   <a href={atm.websiteUri || atm.website} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 12px", background:"#fff", border:"1px solid #E2E8F0", borderRadius:"10px", textDecoration:"none", color:TEAL_DARK, fontSize:"13px", fontWeight:"600" }}>🌐 Visit Website</a>
