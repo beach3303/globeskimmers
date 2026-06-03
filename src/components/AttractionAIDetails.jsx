@@ -192,6 +192,7 @@ function Body({ loading, error, details, showVerdictHelper }) {
     <div>
       <ZoneDecide details={details} showVerdictHelper={showVerdictHelper} callConfirm={callConfirm} sourceFor={sourceFor} />
       <ZoneDo details={details} sourceFor={sourceFor} />
+      <TravelerChips details={details} callConfirm={callConfirm} sourceFor={sourceFor} />
       <ZoneBook details={details} sourceFor={sourceFor} />
       <ZoneFitPrep details={details} callConfirm={callConfirm} sourceFor={sourceFor} />
       <DepthMore details={details} sourceFor={sourceFor} />
@@ -616,6 +617,199 @@ function FitPrepRow({ row, isLast, callConfirm }) {
       )}
     </div>
   );
+}
+
+// ============================================================================
+// Traveler chips — Phase 3
+// ============================================================================
+// Tap-to-expand chips for traveler-type quick reads. STRICT RULES:
+//   1. Recombine data ALREADY in details / verifiedFacts. No new Haiku call.
+//   2. Render a chip ONLY if its underlying data exists (handoff: empty
+//      beats invented).
+//   3. Heights chip mentions a harness ONLY if a harness is required.
+//      Silent on harnesses for venues that don't need one — no editorializing.
+//   4. Stroller chip: lead with "can it roll inside" (positive), distance
+//      stated neutrally, park-it line carries "call to confirm".
+//   5. Limited-mobility chip: surface verified accessibility flags first,
+//      then review-derived friction (stairs etc.) below.
+
+function TravelerChips({ details, callConfirm, sourceFor }) {
+  const acc = details?.verifiedFacts?.accessibility || {};
+  const rawTexts = collectScannableText(details);
+
+  const chips = [
+    buildLimitedMobilityChip(details, acc, rawTexts, sourceFor),
+    buildStrollerChip(details, acc, rawTexts, sourceFor),
+    buildHeightsChip(details, rawTexts, sourceFor),
+  ].filter(Boolean);
+
+  if (chips.length === 0) return null;
+
+  return (
+    <div style={{ marginBottom: '14px' }}>
+      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
+        🧑‍🤝‍🧑 TRAVELER FIT
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+        {chips.map(c => <TravelerChip key={c.key} chip={c} callConfirm={callConfirm} />)}
+      </div>
+    </div>
+  );
+}
+
+function TravelerChip({ chip, callConfirm }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ width: '100%' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: '6px',
+          fontSize: '12px', fontWeight: '600',
+          padding: '4px 10px',
+          background: open ? PURPLE_LIGHT : '#FFFFFF',
+          color: PURPLE,
+          border: `1px solid ${PURPLE_LIGHT}`,
+          borderRadius: '9999px',
+          cursor: 'pointer', fontFamily: 'inherit',
+        }}
+      >
+        <span>{chip.icon} {chip.label}</span>
+        <span style={{ fontSize: '10px' }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ marginTop: '8px', padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}`, fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+          {chip.lines.map((line, i) => (
+            <div key={i} style={{ marginBottom: i === chip.lines.length - 1 ? 0 : '6px' }}>
+              {line.text}
+              {line.stamp && (
+                <SourceStamp
+                  tier={line.stamp}
+                  onClick={line.stamp === 'call' ? callConfirm : null}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Pulls every renderable string field into one normalized lowercase blob
+// for keyword scanning. Cheap, runs once per panel open.
+function collectScannableText(details) {
+  const parts = [];
+  if (details.whatYouSee) parts.push(details.whatYouSee);
+  if (details.aboutAndHistory) parts.push(details.aboutAndHistory);
+  if (details.crowd) parts.push(details.crowd);
+  if (details.vibe) parts.push(details.vibe);
+  if (details.travelerNotes) parts.push(details.travelerNotes);
+  if (Array.isArray(details.goodToKnow)) parts.push(details.goodToKnow.join(' '));
+  if (Array.isArray(details.alsoRecommended)) {
+    parts.push(details.alsoRecommended.map(x => `${x.name || ''} ${x.context || ''}`).join(' '));
+  }
+  const lower = parts.join(' \n ').toLowerCase();
+  return {
+    lower,
+    has: (rx) => rx.test(lower),
+  };
+}
+
+// Limited-mobility chip — surfaces Google accessibility flags first (the
+// strongest signal), then review-derived friction (stairs, multi-level,
+// long walks) below. Renders if there is ANY signal.
+function buildLimitedMobilityChip(details, acc, rawTexts, sourceFor) {
+  const accReported = Object.values(acc || {}).some(v => v != null);
+  const stairsRx = /\b(stairs?|steep|climb|many steps?|multi[- ]level|no elevator)\b/i;
+  const accessibleRx = /\b(wheelchair|step[- ]free|ramp|elevator|accessible)\b/i;
+  const friction = rawTexts.has(stairsRx);
+  const accessibleMention = rawTexts.has(accessibleRx);
+  if (!accReported && !friction && !accessibleMention) return null;
+
+  const lines = [];
+  // Verified line per reported Google flag (compact, one sentence).
+  if (accReported) {
+    const entrance = acc.wheelchairAccessibleEntrance;
+    if (entrance === true) {
+      lines.push({ text: '✅ Wheelchair-accessible entrance reported.', stamp: 'verified' });
+    } else if (entrance === false) {
+      lines.push({ text: '❌ No wheelchair-accessible entrance reported.', stamp: 'verified' });
+    }
+    if (acc.wheelchairAccessibleRestroom === true) {
+      lines.push({ text: '✅ Wheelchair-accessible restroom reported.', stamp: 'verified' });
+    }
+    if (acc.wheelchairAccessibleParking === true) {
+      lines.push({ text: '✅ Wheelchair-accessible parking reported.', stamp: 'verified' });
+    }
+  }
+  if (friction) {
+    lines.push({ text: 'Reviewers mention stairs or steps inside.', stamp: sourceFor('whatYouSee') });
+  }
+  if (accessibleMention && !accReported) {
+    lines.push({ text: 'Reviewers mention some accessibility features. Confirm specifics with the venue.', stamp: 'reviews' });
+  }
+  if (lines.length === 0) {
+    lines.push({ text: 'Some accessibility info reported. Confirm specifics with the venue.', stamp: 'call' });
+  }
+
+  return {
+    key: 'limitedMobility', icon: '♿', label: 'Limited mobility',
+    lines,
+  };
+}
+
+// Stroller chip — leads with "can it roll inside" (positive frame), then
+// distance neutrally, then park-it (call to confirm because we don't have
+// stroller-parking metadata anywhere). Renders if there's any wheelchair-
+// accessible signal or review mention of paths/strollers.
+function buildStrollerChip(details, acc, rawTexts, sourceFor) {
+  const rollInside = acc?.wheelchairAccessibleEntrance === true;
+  const noRoll = acc?.wheelchairAccessibleEntrance === false;
+  const strollerMention = rawTexts.has(/\b(stroller|pram|paths?|walkway|pavement|paved)\b/i);
+  if (!rollInside && !noRoll && !strollerMention) return null;
+
+  const lines = [];
+  if (rollInside) {
+    lines.push({ text: '✅ Can roll inside — wheelchair-accessible entrance reported.', stamp: 'verified' });
+  } else if (noRoll) {
+    lines.push({ text: '❌ No wheelchair-accessible entrance reported. Strollers may face the same access issues.', stamp: 'verified' });
+  }
+  // Path / walkway mention is neutral — just state it.
+  if (strollerMention) {
+    lines.push({ text: 'Reviewers mention paths or walkways on site.', stamp: sourceFor('whatYouSee') });
+  }
+  // Park-it line — we don't have stroller-parking data anywhere yet.
+  lines.push({ text: 'Stroller-parking location is not in our data. Tap to check with the venue.', stamp: 'call' });
+
+  return {
+    key: 'stroller', icon: '🚼', label: 'Stroller',
+    lines,
+  };
+}
+
+// Heights chip — render ONLY if the attraction text references heights,
+// towers, observation decks, drops, or harnesses. Mention a harness ONLY
+// when one is required (silent otherwise — no editorializing).
+function buildHeightsChip(details, rawTexts, sourceFor) {
+  const heightsRx = /\b(tower|observation deck|skywalk|sky walk|glass floor|cliff|viewpoint|panoram|rooftop|gondola|cable car|drop tower|ferris wheel|zipline|bungee|skydive|height)\b/i;
+  const harnessRequiredRx = /\b(harness (?:required|provided|mandatory|needed)|safety harness|requires? a harness)\b/i;
+  const heights = rawTexts.has(heightsRx);
+  const harnessRequired = rawTexts.has(harnessRequiredRx);
+  if (!heights && !harnessRequired) return null;
+
+  const lines = [];
+  if (heights) {
+    lines.push({ text: 'Reviewers mention high vantage points or vertical drops on site.', stamp: sourceFor('whatYouSee') });
+  }
+  if (harnessRequired) {
+    // ONLY mention harness if required. Silent otherwise.
+    lines.push({ text: 'A safety harness is required for parts of the visit.', stamp: sourceFor('goodToKnow') });
+  }
+  return {
+    key: 'heights', icon: '🏔️', label: 'Heights',
+    lines,
+  };
 }
 
 // ============================================================================
