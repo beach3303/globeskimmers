@@ -106,6 +106,38 @@ const WORTH_LABELS = {
   better_if_convenient: { icon: '↪️', label: 'Better If Convenient', bg: '#F1F5F9', color: '#475569' },
 };
 
+// Currencies for the Withdrawal Calculator picker. Top travel currencies
+// — small enough to scroll without a search box. Spec says nationality
+// is NOT a proxy for banking currency; the user picks both sides
+// explicitly (defaulting to their primary_banking_currency from Settings).
+const CALC_CURRENCIES = [
+  { code: 'USD', name: 'US Dollar',           flag: '🇺🇸' },
+  { code: 'EUR', name: 'Euro',                flag: '🇪🇺' },
+  { code: 'GBP', name: 'British Pound',       flag: '🇬🇧' },
+  { code: 'JPY', name: 'Japanese Yen',        flag: '🇯🇵' },
+  { code: 'AUD', name: 'Australian Dollar',   flag: '🇦🇺' },
+  { code: 'CAD', name: 'Canadian Dollar',     flag: '🇨🇦' },
+  { code: 'CHF', name: 'Swiss Franc',         flag: '🇨🇭' },
+  { code: 'SGD', name: 'Singapore Dollar',    flag: '🇸🇬' },
+  { code: 'HKD', name: 'Hong Kong Dollar',    flag: '🇭🇰' },
+  { code: 'NZD', name: 'New Zealand Dollar',  flag: '🇳🇿' },
+  { code: 'THB', name: 'Thai Baht',           flag: '🇹🇭' },
+  { code: 'PHP', name: 'Philippine Peso',     flag: '🇵🇭' },
+  { code: 'IDR', name: 'Indonesian Rupiah',   flag: '🇮🇩' },
+  { code: 'MYR', name: 'Malaysian Ringgit',   flag: '🇲🇾' },
+  { code: 'VND', name: 'Vietnamese Dong',     flag: '🇻🇳' },
+  { code: 'CNY', name: 'Chinese Yuan',        flag: '🇨🇳' },
+  { code: 'KRW', name: 'South Korean Won',    flag: '🇰🇷' },
+  { code: 'INR', name: 'Indian Rupee',        flag: '🇮🇳' },
+  { code: 'MXN', name: 'Mexican Peso',        flag: '🇲🇽' },
+  { code: 'BRL', name: 'Brazilian Real',      flag: '🇧🇷' },
+  { code: 'AED', name: 'UAE Dirham',          flag: '🇦🇪' },
+  { code: 'TRY', name: 'Turkish Lira',        flag: '🇹🇷' },
+  { code: 'ZAR', name: 'South African Rand',  flag: '🇿🇦' },
+];
+
+const CALC_SAMPLE_TIERS = [50, 100, 200, 500, 1000];  // "Withdraw From"-currency amounts. ATM Max appended dynamically when known.
+
 // Card networks we recognize. Phase A3 will populate
 // details.cardCompatibility with an array of these (with confidence per
 // network). For now we render a stub row of all 9 marked "unknown" so
@@ -296,15 +328,300 @@ function ZoneVerdict({ details, showVerdictHelper, sourceFor }) {
 }
 
 // ============================================================================
-// Section 4 — WITHDRAWAL CALCULATOR (slot only in Phase A2; wired in A4)
+// Section 4 — WITHDRAWAL CALCULATOR
 // ============================================================================
+// Defaults the "Withdraw From" currency to the user's primary_banking_currency
+// (Phase A1 field). The "Receive" currency defaults to the ATM's local
+// currency derived from atmOperatorFee.currency when known, else USD with
+// a picker. Live rate via getExchangeRate (1-hour module-level cache to
+// avoid redundant calls when the user toggles sample tiers).
 
-function ZoneCalculator(_props) {
+// Module-level rate cache. Keyed by `${from}>${to}`. We never persist —
+// fresh per app load, which is conservative for accuracy.
+const RATE_CACHE = new Map();
+const RATE_TTL_MS = 60 * 60 * 1000;  // 1 hour
+async function fetchRate(from, to) {
+  if (!from || !to) return null;
+  if (from === to) return 1;
+  const key = `${from}>${to}`;
+  const hit = RATE_CACHE.get(key);
+  if (hit && (Date.now() - hit.ts) < RATE_TTL_MS) return hit.rate;
+  try {
+    const { data } = await base44.functions.invoke('getExchangeRate', { from, to, amount: 1 });
+    if (data?.error) return null;
+    const rate = typeof data?.exchange_rate === 'number' ? data.exchange_rate : null;
+    if (rate != null) RATE_CACHE.set(key, { rate, ts: Date.now() });
+    return rate;
+  } catch (_e) {
+    return null;
+  }
+}
+
+function formatLocal(amount, currency, opts) {
+  if (amount == null || !Number.isFinite(amount)) return '—';
+  const { dp } = opts || {};
+  const fractionDigits = typeof dp === 'number'
+    ? dp
+    // No-decimal currencies — JPY/KRW/VND/IDR/HUF/CLP rarely show cents on ATMs.
+    : (currency && /^(JPY|KRW|VND|IDR|HUF|CLP)$/.test(currency)) ? 0
+    : (amount >= 1000 ? 0 : 2);
+  return `${amount.toLocaleString(undefined, { maximumFractionDigits: fractionDigits, minimumFractionDigits: fractionDigits === 0 ? 0 : 0 })} ${currency || ''}`.trim();
+}
+
+function ZoneCalculator({ details }) {
+  // Lazy-load the user profile (once per panel open) so we can read
+  // primary_banking_currency. Avoid a top-of-Body load to keep the
+  // calculator self-contained.
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    base44.auth.me().then(u => { if (!cancelled) setUser(u); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  // Defaults. fromCurrency = user.primary_banking_currency (fallback to
+  // preferred_currencies[0], then USD). toCurrency = ATM's local currency
+  // when Phase A3 populated atmOperatorFee.currency, else USD.
+  const defaultFrom = user?.primary_banking_currency || user?.preferred_currencies?.[0] || 'USD';
+  const defaultTo = details?.atmOperatorFee?.currency || details?.withdrawalLimits?.currency || 'USD';
+  const [fromCurrency, setFromCurrency] = useState(defaultFrom);
+  const [toCurrency, setToCurrency] = useState(defaultTo);
+  // Sync the from/to defaults when user / details land after first render.
+  useEffect(() => { if (user && fromCurrency === 'USD' && defaultFrom !== 'USD') setFromCurrency(defaultFrom); }, [user]);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (defaultTo !== 'USD') setToCurrency(defaultTo); }, [defaultTo]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [amount, setAmount] = useState(100);
+  const [rate, setRate] = useState(null);
+  const [rateLoading, setRateLoading] = useState(false);
+  const [usdRef, setUsdRef] = useState(false);
+  const [usdRate, setUsdRate] = useState(null);
+
+  // Fetch the primary rate whenever the pair changes.
+  useEffect(() => {
+    let cancelled = false;
+    setRate(null);
+    if (fromCurrency === toCurrency) { setRate(1); return; }
+    setRateLoading(true);
+    fetchRate(fromCurrency, toCurrency).then(r => {
+      if (cancelled) return;
+      setRate(r);
+      setRateLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [fromCurrency, toCurrency]);
+
+  // USD reference rate (only when toggled and the destination isn't already USD).
+  useEffect(() => {
+    if (!usdRef || toCurrency === 'USD') { setUsdRate(null); return; }
+    let cancelled = false;
+    fetchRate('USD', toCurrency).then(r => { if (!cancelled) setUsdRate(r); });
+    return () => { cancelled = true; };
+  }, [usdRef, toCurrency]);
+
+  // Tiers — include the ATM Max as a final tier when known.
+  const atmMaxLocal = details?.withdrawalLimits?.perTransaction || null;
+  // Convert ATM-max-in-LOCAL into FROM-currency for the tier button.
+  const atmMaxFrom = (atmMaxLocal && rate && rate > 0) ? Math.floor(atmMaxLocal / rate) : null;
+  const tiers = atmMaxFrom
+    ? [...CALC_SAMPLE_TIERS.filter(t => t < atmMaxFrom), atmMaxFrom]
+    : CALC_SAMPLE_TIERS;
+
+  // Computed amounts.
+  const grossLocal = (rate && Number.isFinite(amount)) ? amount * rate : null;
+  const operatorFeeLocal = details?.atmOperatorFee?.amount && details?.atmOperatorFee?.currency === toCurrency
+    ? details.atmOperatorFee.amount
+    : null;
+  const netLocal = (grossLocal != null && operatorFeeLocal != null)
+    ? Math.max(0, grossLocal - operatorFeeLocal)
+    : grossLocal;
+  const usdEquiv = (usdRef && grossLocal != null && usdRate)
+    ? grossLocal / usdRate
+    : null;
+
+  const needsBankingCurrencyPrompt = user && !user.primary_banking_currency;
+
   return (
-    <div style={{ marginBottom: '14px', padding: '12px', background: '#FFFFFF', borderRadius: '8px', border: `1px dashed ${PURPLE_LIGHT}` }}>
-      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>🧮 WITHDRAWAL CALCULATOR</div>
-      <div style={{ fontSize: '13px', color: GRAY_DEEP, lineHeight: '1.5' }}>
-        Live exchange-rate calculator — coming next. Will default to your Primary Banking Currency → this ATM's local currency, minus the known operator fee.
+    <div style={{ marginBottom: '14px', padding: '12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${PURPLE_LIGHT}` }}>
+      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '8px' }}>
+        🧮 WITHDRAWAL CALCULATOR
+      </div>
+
+      {needsBankingCurrencyPrompt && (
+        <BankingCurrencyPrompt user={user} onSet={(code) => { setUser({ ...user, primary_banking_currency: code }); setFromCurrency(code); }} />
+      )}
+
+      {/* From / To picker row. */}
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '10px', color: GRAY, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '3px' }}>Withdraw From</div>
+          <CurrencyPicker value={fromCurrency} onChange={setFromCurrency} />
+        </div>
+        <div style={{ paddingTop: '16px', fontSize: '16px', color: PURPLE }}>→</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '10px', color: GRAY, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '3px' }}>Receive</div>
+          <CurrencyPicker value={toCurrency} onChange={setToCurrency} />
+        </div>
+      </div>
+
+      {/* Amount input + tiers. */}
+      <div style={{ marginBottom: '10px' }}>
+        <div style={{ fontSize: '10px', color: GRAY, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '3px' }}>Amount ({fromCurrency})</div>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          value={amount}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            setAmount(Number.isFinite(n) && n >= 0 ? n : 0);
+          }}
+          style={{ width: '100%', padding: '8px 10px', fontSize: '14px', borderRadius: '6px', border: `1px solid ${DIVIDER}`, fontFamily: 'inherit', marginBottom: '6px', boxSizing: 'border-box' }}
+        />
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          {tiers.map((t, i) => {
+            const isMax = atmMaxFrom && t === atmMaxFrom;
+            const active = amount === t;
+            return (
+              <button
+                key={`${t}-${i}`}
+                type="button"
+                onClick={() => setAmount(t)}
+                style={{
+                  fontSize: '12px', padding: '4px 10px',
+                  background: active ? PURPLE : '#F1F5F9',
+                  color: active ? '#FFFFFF' : DARK,
+                  border: `1px solid ${active ? PURPLE : DIVIDER}`,
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {isMax ? `Max · ${formatLocal(t, fromCurrency)}` : `${t.toLocaleString()} ${fromCurrency}`}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Result rows. */}
+      <div style={{ background: PURPLE_BG, borderRadius: '6px', padding: '10px 12px', fontSize: '13px', color: DARK, lineHeight: '1.6' }}>
+        <ResultRow label="Gross estimate" value={rateLoading ? 'Loading rate…' : formatLocal(grossLocal, toCurrency)} bold />
+        {operatorFeeLocal != null && (
+          <ResultRow label={`ATM operator fee`} value={`− ${formatLocal(operatorFeeLocal, toCurrency)}`} muted />
+        )}
+        {operatorFeeLocal != null && (
+          <ResultRow label="Estimated cash received" value={formatLocal(netLocal, toCurrency)} bold accent />
+        )}
+        {operatorFeeLocal == null && (
+          <div style={{ fontSize: '11px', color: GRAY, marginTop: '4px' }}>
+            Operator fee not confirmed — actual cash received may be lower than the gross estimate.
+          </div>
+        )}
+        {rate != null && rate !== 1 && (
+          <div style={{ fontSize: '11px', color: GRAY, marginTop: '6px' }}>
+            1 {fromCurrency} ≈ {rate.toLocaleString(undefined, { maximumFractionDigits: 4 })} {toCurrency}
+          </div>
+        )}
+      </div>
+
+      {/* USD reference toggle. */}
+      {toCurrency !== 'USD' && (
+        <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <label style={{ fontSize: '12px', color: GRAY_DEEP, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={usdRef} onChange={(e) => setUsdRef(e.target.checked)} />
+            Show USD reference
+          </label>
+          {usdRef && usdEquiv != null && (
+            <span style={{ fontSize: '12px', color: GRAY_DEEP }}>
+              ≈ {formatLocal(usdEquiv, 'USD')}
+            </span>
+          )}
+        </div>
+      )}
+
+      <div style={{ fontSize: '10px', color: GRAY, marginTop: '8px', lineHeight: '1.4' }}>
+        Possible bank/card foreign-transaction fees not included. Decline ATM-side currency conversion (DCC) for a better rate.
+      </div>
+    </div>
+  );
+}
+
+function CurrencyPicker({ value, onChange }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        width: '100%', padding: '6px 8px', fontSize: '13px',
+        borderRadius: '6px', border: `1px solid ${DIVIDER}`,
+        background: '#FFFFFF', fontFamily: 'inherit', boxSizing: 'border-box',
+      }}
+    >
+      {CALC_CURRENCIES.find(c => c.code === value) ? null : (
+        // Allow exotic currencies the Worker may return (e.g. RON) to render
+        // even when not in our short list.
+        <option value={value}>{value}</option>
+      )}
+      {CALC_CURRENCIES.map(c => (
+        <option key={c.code} value={c.code}>{c.flag} {c.code} — {c.name}</option>
+      ))}
+    </select>
+  );
+}
+
+function ResultRow({ label, value, bold, accent, muted }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', color: muted ? GRAY_DEEP : (accent ? '#166534' : DARK) }}>
+      <span style={{ fontSize: '12px' }}>{label}</span>
+      <span style={{ fontWeight: bold ? '700' : '500', fontSize: bold ? '15px' : '13px' }}>{value}</span>
+    </div>
+  );
+}
+
+function BankingCurrencyPrompt({ user, onSet }) {
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState(user?.preferred_currencies?.[0] || 'USD');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await base44.auth.updateMe({ primary_banking_currency: picked });
+      onSet?.(picked);
+      setOpen(false);
+    } catch (_e) {
+      // Silent fail — user can retry from Settings.
+    }
+    setSaving(false);
+  };
+
+  if (!open) {
+    return (
+      <div style={{
+        marginBottom: '10px', padding: '8px 10px',
+        background: '#FEF3C7', border: '1px solid #FDE68A',
+        borderRadius: '6px', fontSize: '12px', color: '#92400E',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px',
+      }}>
+        <span>Set your Primary Banking Currency for accurate estimates.</span>
+        <button onClick={() => setOpen(true)} style={{ fontSize: '12px', padding: '3px 10px', background: '#92400E', color: '#FFFFFF', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', flexShrink: 0 }}>
+          Set now
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div style={{ marginBottom: '10px', padding: '10px', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '6px' }}>
+      <div style={{ fontSize: '11px', fontWeight: '700', color: '#92400E', marginBottom: '6px' }}>Which currency does your main travel card or bank account use?</div>
+      <CurrencyPicker value={picked} onChange={setPicked} />
+      <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+        <button onClick={save} disabled={saving} style={{ flex: 1, fontSize: '12px', padding: '6px 10px', background: '#166534', color: '#FFFFFF', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        <button onClick={() => setOpen(false)} style={{ fontSize: '12px', padding: '6px 10px', background: '#FFFFFF', color: '#92400E', border: '1px solid #FDE68A', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}>
+          Cancel
+        </button>
       </div>
     </div>
   );
