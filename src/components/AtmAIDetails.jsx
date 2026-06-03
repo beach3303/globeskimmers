@@ -133,10 +133,11 @@ export default function AtmAIDetails({ placeId, placeName, page }) {
     const next = !open;
     setOpen(next);
     if (next) {
-      // variant='atm_v1' so the analytics dashboard can slice ATM panel
-      // engagement separately from the legacy AIDetailsSection traffic.
+      // variant='atm_v2' (A3) — switched to dedicated /atm-ai-details
+      // endpoint with richer ATM schema. Same event name so the existing
+      // ATM analytics queries keep working through the version bump.
       logEvent('ai_details_opened', {
-        placeId, placeName, kind: 'atm', variant: 'atm_v1',
+        placeId, placeName, kind: 'atm', variant: 'atm_v2',
       }, page || 'ATMFinder');
       if (showVerdictHelper) markVerdictHelperSeen();
     }
@@ -148,13 +149,12 @@ export default function AtmAIDetails({ placeId, placeName, page }) {
     if (!placeId) return;
     setLoading(true);
     setError(null);
-    // Phase A2 still hits the shared /ai-details endpoint with kind='atm'.
-    // Phase A3 will swap to a dedicated /atm-ai-details endpoint that
-    // returns ATM-specific schema (cardCompatibility, atmOperatorFee,
-    // withdrawalLimits, locationContext, safety, _sources, verifiedFacts).
-    // Same variant tag on both phases so the analytics queries don't
-    // change.
-    base44.functions.invoke('getAIDetails', { placeId, kind: 'atm' })
+    // Phase A3: dedicated /atm-ai-details endpoint that returns the
+    // richer ATM schema (cardCompatibility, atmOperatorFee, withdrawalLimits,
+    // locationContext, safety, dccWarning, verifiedFacts, _sources).
+    // Same ai_details_fetched event name so the existing ATM analytics
+    // queries (atm_ai_details_paid_by_day_14d etc.) keep working.
+    base44.functions.invoke('getAtmAIDetails', { placeId })
       .then(({ data }) => {
         if (data?.error) {
           setError(data.error);
@@ -166,7 +166,7 @@ export default function AtmAIDetails({ placeId, placeName, page }) {
         const cache = data?._cache || 'unknown';
         logEvent('ai_details_fetched', {
           placeId, placeName,
-          kind: 'atm', variant: 'atm_v1',
+          kind: 'atm', variant: 'atm_v2',
           cache, paid: cache !== 'hit',
         }, page || 'ATMFinder');
       })

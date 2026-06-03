@@ -2547,6 +2547,432 @@ async function handleAttractionAIDetails(request, env) {
 }
 
 // ============================================================================
+// ATM AI DETAILS — ATM Finder redesign, Phase A3.
+// ============================================================================
+// Forked from handleAIDetails / buildAIDetailsSystemPrompt above so the
+// ATM panel can evolve a richer schema (cardCompatibility, atmOperatorFee,
+// withdrawalLimits, locationContext, safety, dccWarning) without touching
+// restaurant or attraction code paths. Per the redesign HARD SCOPE FENCE.
+//
+// What's new vs the shared /ai-details endpoint:
+//   1. Dedicated cache prefix (`atm_ai_details_*`) so ATM iterations
+//      don't invalidate the restaurant cache.
+//   2. `verifiedFacts` block pre-filled from Google Places (open status,
+//      hours, primary type, accessibility, address).
+//   3. ATM-specific schema fields the AtmAIDetails.jsx component already
+//      reads in Phase A2 — those sections will start rendering real data
+//      the moment this endpoint is deployed.
+//   4. `_sources` per-field map driving the source-stamp badges.
+//   5. Voice rules tuned for INFRASTRUCTURE, not businesses-to-protect:
+//      safety warnings (outdoor at night, skimmer reports, no-cameras)
+//      ARE allowed and important. Fee facts are reported neutrally.
+//
+// Same Haiku 4.5 model as the shared endpoint.
+// ============================================================================
+
+const ATM_AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days
+const ATM_AI_DETAILS_PROMPT_VERSION = 'atm1';
+
+function buildAtmAIDetailsSystemPrompt() {
+  return `You are GlobeSkimmers' ATM Finder AI Details engine. Generate practical, honest insights for a traveler about to use this ATM.
+
+KIND: atm
+
+CORE PRINCIPLE — this is INFRASTRUCTURE, not a business we're protecting from negative reviews:
+- Travelers' safety and money come first. Honest safety warnings benefit the user.
+- Fee facts are stated neutrally. "Operator fee: 220 THB (reported by travelers)" is correct; "expensive ATM" is not.
+- We do NOT editorialize or attack operators. We DO surface risk signals (skimmer reports, outdoor location after dark, no cameras).
+
+FORBIDDEN words/phrases (still no inflammatory language): "rip-off", "scam", "garbage", "trash", "stay away" — these are emotional, not informative. Use neutral terms: "high fee compared to nearby ATMs", "outdoor location — use caution at night", "reports of card-skimming incidents — be cautious".
+
+HONESTY RULES (CRITICAL):
+- For every renderable field, set its source tier in "_sources":
+    "verified"  → From Google place metadata (hours, openNow, accessibilityOptions, address, primaryType).
+    "confirmed" → Stated by the operator's official channel (rare — use sparingly, only if reviewers cite the official posted fee schedule).
+    "reported"  → Multiple traveler reports back the same number/fact.
+    "reviews"   → Inferred from one or two review snippets.
+    "estimated" → Country/operator pattern-based estimate (e.g. "Bangkok Bank ATMs in Thailand typically charge 220 THB").
+    "call"      → Not in our data; user should call/visit the operator's site. Use when the field MUST render but lacks evidence.
+- DEFAULT TO NULL when you can't tie a fact back to reviews/metadata/known patterns. Empty beats invented.
+- Operator-fee CONFIDENCE field must match the source tier you set for atmOperatorFee in _sources.
+
+PER-FIELD GUIDANCE:
+
+- bestDish = null. alsoRecommended = []. (ATMs don't have these.)
+
+- worthIt: ONE of "worth_the_stop" | "strong_nearby_pick" | "craving_match" | "know_before_you_go" | "better_if_convenient":
+  - "worth_the_stop" = inside a bank branch, low/no surcharge, accepts global networks, safe location. The ATM you'd send a traveler to.
+  - "strong_nearby_pick" = solid bank-network ATM in a normal location. Most common pick.
+  - "craving_match" = specific bank-branch ATM for travelers wanting that bank's fee waiver (use sparingly).
+  - "know_before_you_go" = meaningful friction: high surcharge, limited network compatibility, awkward access, language barrier on screen, or safety caveat.
+  - "better_if_convenient" = independent / convenience-store ATM with reasonable fees but not a destination.
+  Default to "strong_nearby_pick" when unsure. NEVER "skip".
+
+- gsStars: integer 1–5 (minimum 1, even for ATMs with mixed reviews).
+- gsRedFlag: true ONLY if reviews show GENUINE safety concerns at this specific ATM (past skimmer reports, multiple recent reviews mentioning unsafe area at night, robbery incidents). Otherwise false.
+- gsVerdict: 1–2 short sentences synthesizing the verdict. Mention the network/operator + location type + key fee/safety signal. Example: "Good ATM for most travelers — inside a bank branch with a reported 220 THB operator fee and Visa/Mastercard/Plus/Cirrus support. Decline ATM-side currency conversion for a better rate."
+
+- cardCompatibility: array of { network, accepted } objects covering ONLY networks travelers commonly need. Valid network keys: "visa", "mastercard", "plus", "cirrus", "maestro", "unionpay", "jcb", "discover", "amex". Set accepted=true ONLY when reviews/metadata indicate the network works at this ATM (or when the operator's bank brand reliably accepts it). Set accepted=false ONLY when explicit reviews say it doesn't. Omit unknown networks rather than guessing true. If you can't confidently judge ANY network, return null and let the UI show the safe-default copy.
+
+- atmOperatorFee: object { amount, currency, confidence } | null.
+  - amount: numeric, in local currency. NEVER include the foreign-transaction-fee or your-home-bank-fee here; this is the surcharge the ATM operator charges at withdrawal time only.
+  - currency: ISO 4217 code matching the country (e.g. "THB" for Thailand).
+  - confidence: "confirmed" | "reported" | "estimated".
+  - Return null if you have no confident grounding. DO NOT estimate randomly. Estimating is fine when the operator brand has a well-documented pattern (e.g. Bangkok Bank, Wells Fargo, CIBC); not fine when the operator is unknown.
+
+- withdrawalLimits: object { perTransaction, daily, currency, dependsOnCard, confidence } | null.
+  - perTransaction / daily: numeric, in local currency. Either can be null while the other is filled.
+  - dependsOnCard: true when the actual limit varies by the traveler's home bank/card (almost always true). Default true.
+  - confidence: "confirmed" | "reported" | "estimated".
+  - Return null if you can't ground a number.
+
+- locationContext: { venueType, subLocation, summary } | null.
+  - venueType: ONE of "airport" | "bank_branch" | "mall" | "grocery" | "convenience" | "hotel" | "restaurant" | "transit" | "outdoor" | "other".
+  - subLocation: short specific phrase like "Terminal 3 Arrivals near baggage claim" or "Inside 7-Eleven by the front entrance". Null if not in reviews.
+  - summary: 1 short sentence combining the two, e.g. "Located inside Terminal 3 Arrivals near baggage claim.".
+
+- safety: object | null with the following boolean (or null when unknown) flags. Include a flag ONLY when reviews / metadata support a confident verdict; OMIT the field entirely otherwise.
+    indoor:           ATM is inside a building.
+    wellLit:          Area is well-lit.
+    securityGuard:    Visible security staff or guard.
+    bankBranch:       ATM is at a bank branch (strongest safety signal).
+    cameras:          Visible CCTV at or near the ATM.
+    highFootTraffic:  Busy area (passive safety from foot traffic).
+    open24h:          Vestibule / area accessible 24/7.
+    skimmerReports:   true if MULTIPLE reviews mention card-skimming incidents at THIS ATM. Use sparingly; this is a strong claim.
+  Return null for the entire safety object if you have no signals at all.
+
+- dccWarning: boolean. Almost always true — most ATMs offer Dynamic Currency Conversion at withdrawal time. Set false only when reviews specifically say this ATM doesn't ask.
+
+- crowd: who uses this ATM (short — e.g. "Mostly arriving international travelers"). Avoid vague phrasing.
+- bestTime: CONCRETE actionable window. e.g. "Before 8 AM weekdays for the shortest queue. Avoid 11 PM–5 AM if the area is dark.".
+- vibe: physical-location detail. KEEP THIS POPULATED for back-compat with current ATM panel — even if locationContext.summary covers similar ground.
+- value: short fee-framing line in traveler language. e.g. "Mid-range surcharge for a bank-branch ATM" or "Free if you bank with Chase". NOT a duplicate of atmOperatorFee.
+- goodToKnow: 2–4 SHORT verified facts that change planning. e.g. "Drive-thru only after 10 PM", "Dispenses 1000-THB notes; bring smaller bills for taxis".
+- travelerNotes: 1 practical tip beyond what's above. e.g. "Press 'English' BEFORE inserting your card to avoid the local-language flow.".
+
+OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
+{
+  "bestDish": null,
+  "alsoRecommended": [],
+  "worthIt": "worth_the_stop" | "strong_nearby_pick" | "craving_match" | "know_before_you_go" | "better_if_convenient",
+  "cardCompatibility": [ { "network": "visa", "accepted": true|false }, ... ] | null,
+  "atmOperatorFee": { "amount": <number>, "currency": "<ISO>", "confidence": "confirmed"|"reported"|"estimated" } | null,
+  "withdrawalLimits": { "perTransaction": <number>|null, "daily": <number>|null, "currency": "<ISO>", "dependsOnCard": <bool>, "confidence": "confirmed"|"reported"|"estimated" } | null,
+  "locationContext": { "venueType": "airport"|..., "subLocation": "..."|null, "summary": "..." } | null,
+  "safety": { "indoor": <bool>, "wellLit": <bool>, "securityGuard": <bool>, "bankBranch": <bool>, "cameras": <bool>, "highFootTraffic": <bool>, "open24h": <bool>, "skimmerReports": <bool> } | null,
+  "dccWarning": <bool>,
+  "crowd": "..." | null,
+  "bestTime": "..." | null,
+  "vibe": "..." | null,
+  "value": "..." | null,
+  "goodToKnow": [ "...", ... ],
+  "travelerNotes": "..." | null,
+  "gsStars": <1-5>,
+  "gsRedFlag": <boolean>,
+  "gsVerdict": "...",
+  "_sources": {
+    "worthIt": "reviews",
+    "cardCompatibility": "verified"|"reviews"|"estimated"|"call",
+    "atmOperatorFee": "confirmed"|"reported"|"estimated"|"call",
+    "withdrawalLimits": "confirmed"|"reported"|"estimated"|"call",
+    "locationContext": "verified"|"reviews"|"call",
+    "safety": "verified"|"reviews"|"call",
+    "crowd": "reviews"|"call",
+    "bestTime": "reviews"|"call",
+    "vibe": "reviews"|"call",
+    "value": "reviews"|"call",
+    "goodToKnow": "reviews"|"call",
+    "travelerNotes": "reviews"|"call",
+    "gsVerdict": "reviews"
+  }
+}
+
+Return JSON only.`;
+}
+
+async function handleAtmAIDetails(request, env) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
+  }
+  let body;
+  try { body = await request.json(); } catch (_e) {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400);
+  }
+  const placeId = body?.placeId;
+  if (!placeId) {
+    return jsonResponse({ error: 'placeId required' }, 400);
+  }
+
+  const aiCacheKey = `place:${placeId}:atm_ai_details_${ATM_AI_DETAILS_PROMPT_VERSION}`;
+  if (env.GLOBESKIMMERS_KV) {
+    const cached = await env.GLOBESKIMMERS_KV.get(aiCacheKey, { type: 'json' }).catch(() => null);
+    if (cached) {
+      return jsonResponse({ aiDetails: cached, _cache: 'hit' });
+    }
+  }
+
+  // Load Place Details (reuse the existing 90-day cached payload).
+  const detailsCacheKey = `details_${placeId}`;
+  let place;
+  const cachedDetails = await getFromCache(env, detailsCacheKey);
+  if (cachedDetails && cachedDetails.data) {
+    place = cachedDetails.data;
+  } else {
+    try {
+      const apiKey = env.GOOGLE_API_KEY;
+      const detailsRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=en`, {
+        method: 'GET',
+        headers: {
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': CONFIG.DETAILS_FIELD_MASK,
+        }
+      });
+      if (!detailsRes.ok) {
+        return jsonResponse({ error: 'Place details fetch failed', status: detailsRes.status }, 502);
+      }
+      const raw = await detailsRes.json();
+      place = normalizePlace(raw, new URL(request.url).origin, true);
+      await setInCache(env, detailsCacheKey, place, CONFIG.CACHE_TTL.DETAILS);
+    } catch (e) {
+      return jsonResponse({ error: 'Place details error: ' + e.message }, 502);
+    }
+  }
+
+  // Pre-fill verifiedFacts from Google data — these get the Verified
+  // stamp in the UI without any LLM involvement.
+  const accessibility = place.accessibilityOptions || null;
+  const verifiedFacts = {
+    openNow: place.regularOpeningHours?.openNow ?? place.currentOpeningHours?.openNow ?? null,
+    open24h: !!place.is24Hours || /24[\s\-/]?hours?|24[\s\-/]?7|always open/i.test(place.regularOpeningHours?.weekdayDescriptions?.join(' ') || ''),
+    hours: place.regularOpeningHours?.weekdayDescriptions || null,
+    address: place.formattedAddress || place.shortFormattedAddress || null,
+    primaryType: place.primaryTypeDisplay || place.primaryType || null,
+    rating: typeof place.rating === 'number' ? place.rating : null,
+    ratingCount: typeof place.userRatingCount === 'number' ? place.userRatingCount : null,
+    accessibility: accessibility
+      ? {
+          wheelchairAccessibleEntrance: typeof accessibility.wheelchairAccessibleEntrance === 'boolean' ? accessibility.wheelchairAccessibleEntrance : null,
+          wheelchairAccessibleParking:  typeof accessibility.wheelchairAccessibleParking  === 'boolean' ? accessibility.wheelchairAccessibleParking  : null,
+        }
+      : null,
+  };
+
+  const reviewSnippets = (place.reviews || []).slice(0, 5).map(r => ({
+    text: r.text || '',
+    rating: r.rating,
+    when: r.time || '',
+  })).filter(r => r.text);
+
+  const placeMeta = {
+    name: place.name || place.displayName?.text,
+    address: place.address || place.formattedAddress,
+    rating: place.rating,
+    reviewCount: place.userRatingCount,
+    primaryType: place.primaryTypeDisplay || place.primaryType,
+    websiteUri: place.websiteUri,
+  };
+
+  if (reviewSnippets.length === 0 && !place.editorialSummary) {
+    const stub = {
+      bestDish: null,
+      alsoRecommended: [],
+      worthIt: 'strong_nearby_pick',
+      cardCompatibility: null,
+      atmOperatorFee: null,
+      withdrawalLimits: null,
+      locationContext: null,
+      safety: null,
+      dccWarning: true,
+      crowd: null,
+      bestTime: null,
+      vibe: null,
+      value: null,
+      goodToKnow: [],
+      travelerNotes: null,
+      gsStars: 1,
+      gsRedFlag: false,
+      gsVerdict: 'Not enough review data yet — check the ATM screen before confirming any withdrawal.',
+      verifiedFacts,
+      _sources: { worthIt: 'reviews', gsVerdict: 'reviews' },
+      websiteUri: placeMeta.websiteUri || null,
+      placeName: placeMeta.name || null,
+    };
+    if (env.GLOBESKIMMERS_KV) {
+      await env.GLOBESKIMMERS_KV.put(aiCacheKey, JSON.stringify(stub), { expirationTtl: ATM_AI_DETAILS_TTL_SECONDS }).catch(() => {});
+    }
+    return jsonResponse({ aiDetails: stub, _cache: 'miss-stub' });
+  }
+
+  const userContent = `PLACE METADATA:\n${JSON.stringify(placeMeta, null, 2)}\n\nVERIFIED FACTS (Google place data — already known):\n${JSON.stringify(verifiedFacts, null, 2)}\n\nREVIEW SNIPPETS (up to 5 from Google):\n${JSON.stringify(reviewSnippets, null, 2)}\n\nGenerate the ATM AI Details JSON per the voice and honesty rules above. Tag each filled field's source in _sources.`;
+
+  let aiDetails;
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1800,  // headroom for the richer ATM schema + _sources map
+        system: buildAtmAIDetailsSystemPrompt(),
+        messages: [{ role: 'user', content: userContent }],
+      })
+    });
+    if (!apiRes.ok) {
+      const errText = await apiRes.text();
+      return jsonResponse({ error: 'Claude API error', status: apiRes.status, details: errText }, 502);
+    }
+    const data = await apiRes.json();
+    const raw = data?.content?.[0]?.text?.trim() || '';
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    aiDetails = JSON.parse(cleaned);
+    aiDetails.websiteUri = placeMeta.websiteUri || null;
+    aiDetails.placeName = placeMeta.name || null;
+    aiDetails.verifiedFacts = verifiedFacts;
+    aiDetails.bestDish = null;
+    aiDetails.alsoRecommended = [];
+
+    // Defensive normalization.
+    const sanitizeStr = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+    const sanitizeNum = (v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    let stars = parseInt(aiDetails.gsStars, 10);
+    if (isNaN(stars)) stars = 1;
+    if (stars < 1) stars = 1;
+    if (stars > 5) stars = 5;
+    aiDetails.gsStars = stars;
+    aiDetails.gsRedFlag = !!aiDetails.gsRedFlag;
+    aiDetails.dccWarning = aiDetails.dccWarning === false ? false : true;
+
+    const WORTH_ENUM = new Set([
+      'worth_the_stop', 'strong_nearby_pick', 'craving_match',
+      'know_before_you_go', 'better_if_convenient',
+    ]);
+    if (!WORTH_ENUM.has(aiDetails.worthIt)) aiDetails.worthIt = 'strong_nearby_pick';
+
+    // cardCompatibility: array of { network, accepted } objects.
+    const VALID_NETWORKS = new Set(['visa', 'mastercard', 'plus', 'cirrus', 'maestro', 'unionpay', 'jcb', 'discover', 'amex']);
+    if (Array.isArray(aiDetails.cardCompatibility)) {
+      const seen = new Set();
+      aiDetails.cardCompatibility = aiDetails.cardCompatibility
+        .map(item => {
+          if (!item || typeof item !== 'object') return null;
+          const net = typeof item.network === 'string' ? item.network.toLowerCase().trim() : null;
+          if (!net || !VALID_NETWORKS.has(net) || seen.has(net)) return null;
+          seen.add(net);
+          return { network: net, accepted: !!item.accepted };
+        })
+        .filter(Boolean);
+      if (aiDetails.cardCompatibility.length === 0) aiDetails.cardCompatibility = null;
+    } else {
+      aiDetails.cardCompatibility = null;
+    }
+
+    // atmOperatorFee object.
+    const CONF_ENUM = new Set(['confirmed', 'reported', 'estimated']);
+    if (aiDetails.atmOperatorFee && typeof aiDetails.atmOperatorFee === 'object') {
+      const f = aiDetails.atmOperatorFee;
+      const amount = sanitizeNum(f.amount);
+      const currency = sanitizeStr(f.currency);
+      const confidence = CONF_ENUM.has(f.confidence) ? f.confidence : 'estimated';
+      aiDetails.atmOperatorFee = (amount != null && amount >= 0 && currency)
+        ? { amount, currency: currency.toUpperCase().slice(0, 4), confidence }
+        : null;
+    } else {
+      aiDetails.atmOperatorFee = null;
+    }
+
+    // withdrawalLimits object.
+    if (aiDetails.withdrawalLimits && typeof aiDetails.withdrawalLimits === 'object') {
+      const w = aiDetails.withdrawalLimits;
+      const perTransaction = sanitizeNum(w.perTransaction);
+      const daily = sanitizeNum(w.daily);
+      const currency = sanitizeStr(w.currency);
+      const confidence = CONF_ENUM.has(w.confidence) ? w.confidence : 'estimated';
+      const dependsOnCard = w.dependsOnCard === false ? false : true;
+      aiDetails.withdrawalLimits = (perTransaction != null || daily != null)
+        ? {
+            perTransaction,
+            daily,
+            currency: currency ? currency.toUpperCase().slice(0, 4) : null,
+            dependsOnCard,
+            confidence,
+          }
+        : null;
+    } else {
+      aiDetails.withdrawalLimits = null;
+    }
+
+    // locationContext.
+    const VALID_VENUES = new Set(['airport', 'bank_branch', 'mall', 'grocery', 'convenience', 'hotel', 'restaurant', 'transit', 'outdoor', 'other']);
+    if (aiDetails.locationContext && typeof aiDetails.locationContext === 'object') {
+      const l = aiDetails.locationContext;
+      const venueType = typeof l.venueType === 'string' && VALID_VENUES.has(l.venueType) ? l.venueType : null;
+      const subLocation = sanitizeStr(l.subLocation);
+      const summary = sanitizeStr(l.summary);
+      aiDetails.locationContext = (venueType || summary) ? { venueType, subLocation, summary } : null;
+    } else {
+      aiDetails.locationContext = null;
+    }
+
+    // safety flags.
+    if (aiDetails.safety && typeof aiDetails.safety === 'object') {
+      const SAFETY_KEYS = ['indoor', 'wellLit', 'securityGuard', 'bankBranch', 'cameras', 'highFootTraffic', 'open24h', 'skimmerReports'];
+      const out = {};
+      for (const k of SAFETY_KEYS) {
+        if (typeof aiDetails.safety[k] === 'boolean') out[k] = aiDetails.safety[k];
+      }
+      aiDetails.safety = Object.keys(out).length > 0 ? out : null;
+    } else {
+      aiDetails.safety = null;
+    }
+
+    // goodToKnow.
+    if (!Array.isArray(aiDetails.goodToKnow)) aiDetails.goodToKnow = [];
+    else aiDetails.goodToKnow = aiDetails.goodToKnow.map(sanitizeStr).filter(Boolean).slice(0, 4);
+
+    // _sources map — validate tier strings.
+    const VALID_TIERS = new Set(['verified', 'confirmed', 'reported', 'reviews', 'estimated', 'call']);
+    if (!aiDetails._sources || typeof aiDetails._sources !== 'object') {
+      aiDetails._sources = {};
+    } else {
+      const cleanedSources = {};
+      for (const [k, v] of Object.entries(aiDetails._sources)) {
+        if (typeof v === 'string' && VALID_TIERS.has(v)) cleanedSources[k] = v;
+      }
+      aiDetails._sources = cleanedSources;
+    }
+    // Override _sources.atmOperatorFee with the actual confidence value
+    // so the stamp always agrees with the fee object's confidence field.
+    if (aiDetails.atmOperatorFee?.confidence) {
+      aiDetails._sources['atmOperatorFee'] = aiDetails.atmOperatorFee.confidence;
+    }
+    if (aiDetails.withdrawalLimits?.confidence) {
+      aiDetails._sources['withdrawalLimits'] = aiDetails.withdrawalLimits.confidence;
+    }
+  } catch (e) {
+    return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
+  }
+
+  if (env.GLOBESKIMMERS_KV) {
+    await env.GLOBESKIMMERS_KV.put(
+      aiCacheKey,
+      JSON.stringify(aiDetails),
+      { expirationTtl: ATM_AI_DETAILS_TTL_SECONDS }
+    ).catch(() => {});
+  }
+
+  return jsonResponse({ aiDetails, _cache: 'miss' });
+}
+
+// ============================================================================
 // NAME LANGUAGE HELP — Haiku 4.5 returns { romanization, translation } for
 // any place name. Used by the <NameLanguageHelp> frontend component which
 // renders "🔤 Pronounce" + "🌐 Translate" buttons under business names that
@@ -3375,6 +3801,7 @@ export default {
       if (pathname === '/label-photos' && request.method === 'POST') return await handleLabelPhotos(request, env);
       if (pathname === '/ai-details' && request.method === 'POST') return await handleAIDetails(request, env);
       if (pathname === '/attraction-ai-details' && request.method === 'POST') return await handleAttractionAIDetails(request, env);
+      if (pathname === '/atm-ai-details' && request.method === 'POST') return await handleAtmAIDetails(request, env);
       if (pathname === '/name-info' && request.method === 'POST') return await handleNameInfo(request, env);
       if (pathname === '/parse-intent' && request.method === 'POST') return await handleParseIntent(request, env);
 
