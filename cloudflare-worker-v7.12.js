@@ -1059,6 +1059,137 @@ const ANALYTICS_QUERIES = {
       AND json_extract(payload, '$.kind') = 'atm'
       AND ts >= strftime('%s','now','-7 days')
   `,
+  // ── PER-KIND AI DETAILS COST QUERIES ────────────────────────────────────
+  // CONVENTION (for any future AI Details surface — restaurant, coffee,
+  // attraction, restroom, atm, and anything we add later): every kind
+  // gets its own paid_by_day_14d / free_by_day_14d / cache_rate_7d trio
+  // so the dashboard can isolate that surface's Haiku spend and cache
+  // health.
+  //
+  // The events these queries read are already emitted by every AI Details
+  // renderer in the app (AIDetailsSection.jsx, AttractionAIDetails.jsx,
+  // AtmAIDetails.jsx) with a `kind` payload field. If you add a new AI
+  // Details surface (e.g. ShoppingFinder → kind='shopping'), copy the
+  // three queries below for the new kind and add them to this block.
+  //
+  // Schemas:
+  //   {kind}_ai_details_paid_by_day_14d  → daily cache MISSES (each row
+  //     costs ~$0.025 Claude+Place-Details spend).
+  //   {kind}_ai_details_free_by_day_14d  → daily cache HITS (each row is
+  //     value delivered at $0 cost).
+  //   {kind}_ai_details_cache_rate_7d    → 7-day hits/misses/total roll-up.
+  attraction_ai_details_paid_by_day_14d: `
+    SELECT date(ts, 'unixepoch') AS day, COUNT(*) AS paid_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'attraction'
+      AND json_extract(payload, '$.cache') != 'hit'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day ORDER BY day ASC
+  `,
+  attraction_ai_details_free_by_day_14d: `
+    SELECT date(ts, 'unixepoch') AS day, COUNT(*) AS free_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'attraction'
+      AND json_extract(payload, '$.cache') = 'hit'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day ORDER BY day ASC
+  `,
+  attraction_ai_details_cache_rate_7d: `
+    SELECT
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'hit' THEN 1 ELSE 0 END) AS hits,
+      SUM(CASE WHEN json_extract(payload, '$.cache') != 'hit' THEN 1 ELSE 0 END) AS misses,
+      COUNT(*) AS total_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'attraction'
+      AND ts >= strftime('%s','now','-7 days')
+  `,
+  restaurant_ai_details_paid_by_day_14d: `
+    SELECT date(ts, 'unixepoch') AS day, COUNT(*) AS paid_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'restaurant'
+      AND json_extract(payload, '$.cache') != 'hit'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day ORDER BY day ASC
+  `,
+  restaurant_ai_details_free_by_day_14d: `
+    SELECT date(ts, 'unixepoch') AS day, COUNT(*) AS free_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'restaurant'
+      AND json_extract(payload, '$.cache') = 'hit'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day ORDER BY day ASC
+  `,
+  restaurant_ai_details_cache_rate_7d: `
+    SELECT
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'hit' THEN 1 ELSE 0 END) AS hits,
+      SUM(CASE WHEN json_extract(payload, '$.cache') != 'hit' THEN 1 ELSE 0 END) AS misses,
+      COUNT(*) AS total_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'restaurant'
+      AND ts >= strftime('%s','now','-7 days')
+  `,
+  coffee_ai_details_paid_by_day_14d: `
+    SELECT date(ts, 'unixepoch') AS day, COUNT(*) AS paid_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'coffee'
+      AND json_extract(payload, '$.cache') != 'hit'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day ORDER BY day ASC
+  `,
+  coffee_ai_details_free_by_day_14d: `
+    SELECT date(ts, 'unixepoch') AS day, COUNT(*) AS free_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'coffee'
+      AND json_extract(payload, '$.cache') = 'hit'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day ORDER BY day ASC
+  `,
+  coffee_ai_details_cache_rate_7d: `
+    SELECT
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'hit' THEN 1 ELSE 0 END) AS hits,
+      SUM(CASE WHEN json_extract(payload, '$.cache') != 'hit' THEN 1 ELSE 0 END) AS misses,
+      COUNT(*) AS total_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'coffee'
+      AND ts >= strftime('%s','now','-7 days')
+  `,
+  restroom_ai_details_paid_by_day_14d: `
+    SELECT date(ts, 'unixepoch') AS day, COUNT(*) AS paid_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'restroom'
+      AND json_extract(payload, '$.cache') != 'hit'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day ORDER BY day ASC
+  `,
+  restroom_ai_details_free_by_day_14d: `
+    SELECT date(ts, 'unixepoch') AS day, COUNT(*) AS free_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'restroom'
+      AND json_extract(payload, '$.cache') = 'hit'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day ORDER BY day ASC
+  `,
+  restroom_ai_details_cache_rate_7d: `
+    SELECT
+      SUM(CASE WHEN json_extract(payload, '$.cache') = 'hit' THEN 1 ELSE 0 END) AS hits,
+      SUM(CASE WHEN json_extract(payload, '$.cache') != 'hit' THEN 1 ELSE 0 END) AS misses,
+      COUNT(*) AS total_fetches
+    FROM events
+    WHERE event_type = 'ai_details_fetched'
+      AND json_extract(payload, '$.kind') = 'restroom'
+      AND ts >= strftime('%s','now','-7 days')
+  `,
   // Per-kind cost breakdown over the last 30 days. Each row =
   // { kind, paid, free, total } so the dashboard can show every AI Details
   // line item (atm, attraction, restaurant, coffee, restroom) and their
