@@ -297,17 +297,50 @@ function ZoneDecide({ details, showVerdictHelper, callConfirm, sourceFor }) {
         </div>
       )}
 
-      {/* Lines & Wait — still placeholder. We haven't built the structural
-          wait vs crowd-driven derivation yet (handoff defers it to a later
-          pass when we have a real signal). Better to say "coming soon" than
-          to invent numbers. */}
-      <div style={{ marginBottom: '4px', padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}` }}>
-        <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>⏳ LINES &amp; WAIT</div>
+      {/* Lines & Wait — Phase 2.5 renders the structured wait object when
+          present: built-in (mechanism, timing won't fix) vs crowd-driven
+          (timing-fixable bottleneck) vs typical wait in minutes. Falls back
+          to a calm "coming soon" placeholder ONLY when no signal exists. */}
+      <LinesWait wait={details.wait} callConfirm={callConfirm} sourceFor={sourceFor} />
+    </div>
+  );
+}
+
+function LinesWait({ wait, callConfirm, sourceFor }) {
+  const hasReal = !!(wait && (wait.builtIn || wait.crowdDriven || wait.typicalMinutes != null));
+  return (
+    <div style={{ marginBottom: '4px', padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}` }}>
+      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>⏳ LINES &amp; WAIT</div>
+      {hasReal ? (
+        <div style={{ fontSize: '13px', color: DARK, lineHeight: '1.5' }}>
+          {wait.builtIn && (
+            <div style={{ marginBottom: '4px' }}>
+              <strong style={{ color: PURPLE, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px', marginRight: '6px' }}>Built-in</strong>
+              {wait.builtIn}
+              <SourceStamp tier={sourceFor('wait.builtIn')} />
+            </div>
+          )}
+          {wait.crowdDriven && (
+            <div style={{ marginBottom: wait.typicalMinutes != null ? '4px' : 0 }}>
+              <strong style={{ color: PURPLE, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px', marginRight: '6px' }}>Crowd</strong>
+              {wait.crowdDriven}
+              <SourceStamp tier={sourceFor('wait.crowdDriven')} />
+            </div>
+          )}
+          {wait.typicalMinutes != null && (
+            <div>
+              <strong style={{ color: PURPLE, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px', marginRight: '6px' }}>Typical</strong>
+              ~{wait.typicalMinutes} min
+              <SourceStamp tier={sourceFor('wait.typicalMinutes')} />
+            </div>
+          )}
+        </div>
+      ) : (
         <div style={{ fontSize: '13px', color: GRAY_DEEP, lineHeight: '1.5' }}>
-          Wait-time analysis is coming soon.
+          No queueing reported. Check the venue site if you're visiting on a peak day.
           <SourceStamp tier="call" onClick={callConfirm} />
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -332,15 +365,17 @@ function QuickFitTile({ tile, callConfirm }) {
 
 // Quick-Fit derivations. Phase 2 reads verifiedFacts (Google-sourced hard
 // facts) + the per-field _sources map so each tile's stamp reflects real
-// provenance. Time still falls back to a call-to-confirm placeholder
-// because we don't collect typical-visit-duration anywhere yet.
+// provenance. Phase 2.5 adds typicalDurationMin into the Time tile —
+// falls back to the "Allow 1–2 hr" stub with a call-to-confirm stamp
+// when reviews don't support a confident number.
 function buildQuickFit(details, sourceFor) {
   const vf = details.verifiedFacts || {};
+  const dur = Number.isInteger(details.typicalDurationMin) ? details.typicalDurationMin : null;
   return [
     {
       icon: '⏱️', label: 'Time',
-      value: 'Allow 1–2 hr',
-      stamp: 'call',
+      value: dur ? formatDurationMin(dur) : 'Allow 1–2 hr',
+      stamp: dur ? sourceFor('typicalDurationMin') : 'call',
     },
     {
       icon: '💵', label: 'Price',
@@ -368,6 +403,19 @@ function buildQuickFit(details, sourceFor) {
         : (details?.practical?.reservation ? sourceFor('practical.reservation') : 'call'),
     },
   ];
+}
+
+// "~45m" / "~1h" / "~1h 30m" / "~3h" / "~6h+" rendering for the Time tile.
+// Hours-only for >=60min that divides evenly; mixed h+m otherwise.
+function formatDurationMin(mins) {
+  if (mins < 60) return `~${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h >= 6) return `~${h}h`;          // anything beyond half-day, drop precision
+  if (m === 0) return `~${h}h`;
+  if (m <= 15) return `~${h}h`;          // round small remainders to the hour
+  if (m >= 45) return `~${h + 1}h`;      // round up large remainders
+  return `~${h}h ${m}m`;
 }
 
 function derivePrice(details, vf) {
@@ -482,6 +530,9 @@ function ZoneFitPrep({ details, callConfirm, sourceFor }) {
   // (Verified). Reservation row reads real Haiku-derived data when
   // present. Other rows still fall back to "call to confirm" until we
   // collect that data — handoff honesty rule: empty beats invented.
+  // Phase 2.5: Smart Tip surfaces at the top of the zone when the Worker
+  // returned a concrete review-supported save (money/time/mistake-avoidance).
+  // Silently absent when smartTip is null — no platitude fallback.
   const rows = [
     buildAccessibilityRow(details),
     {
@@ -521,6 +572,24 @@ function ZoneFitPrep({ details, callConfirm, sourceFor }) {
       <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
         🧭 FIT &amp; PREP
       </div>
+      {details.smartTip && (
+        <div style={{
+          marginBottom: '8px',
+          padding: '10px 12px',
+          background: '#FEF9C3',
+          borderRadius: '8px',
+          border: '1px solid #FDE68A',
+          fontSize: '13px',
+          color: '#713F12',
+          lineHeight: '1.5',
+        }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.4px', marginBottom: '4px' }}>
+            💡 SMART TIP
+          </div>
+          {details.smartTip}
+          <SourceStamp tier={sourceFor('smartTip')} />
+        </div>
+      )}
       <div style={{ background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}`, overflow: 'hidden' }}>
         {rows.map((r, i) => (
           <FitPrepRow

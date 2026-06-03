@@ -2087,7 +2087,7 @@ async function handleAIDetails(request, env) {
 // ============================================================================
 
 const ATTRACTION_AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days, matches /ai-details
-const ATTRACTION_AI_DETAILS_PROMPT_VERSION = 'a1';            // bump on prompt change
+const ATTRACTION_AI_DETAILS_PROMPT_VERSION = 'a2';            // a1 -> a2: added smartTip, typicalDurationMin, wait object (Phase 2.5)
 
 function buildAttractionAIDetailsSystemPrompt() {
   return `You are GlobeSkimmers' Things-To-Do AI Details engine. Generate practical, honest insights for a traveler about to visit an ATTRACTION (museum, landmark, park, theme park, viewpoint, religious site, etc.).
@@ -2128,6 +2128,18 @@ PER-FIELD FIELDS:
 - value: traveler-friendly admission framing. Use direct words: "free", "cheap", "fair", "pricey but worth it", "splurge-only". Include actual admission tier + 1-line judgment. Examples: "Free entry — fully worth a 2-hour visit", "Cheap (~$10); fair for what you see".
 - goodToKnow: 2-4 SHORT verified facts that change how a traveler plans the visit. ONLY include items DIRECTLY supported by reviews/metadata. Prioritize: bag-check rules, photography restrictions, accessibility realities, kid-friendliness, audio-guide availability, dress code (temples/religious sites), what to bring, hours quirks, day-of-the-week closures.
 - travelerNotes: practical traveler tips to make the visit better.
+- typicalDurationMin: integer minutes — typical visit duration (NOT wait time; the time the average traveler spends INSIDE this attraction). Examples: 30 (quick viewpoint), 90 (mid-size museum), 240 (theme park half-day), 480 (full-day park). Set to null if reviews don't converge on a window — DO NOT guess. Better to omit than to invent.
+- wait: object describing line / queue mechanics. Fill ONLY when reviews mention queueing, capacity, or ride-style throughput. Set the whole field to null for places where waiting isn't a thing (parks, viewpoints, walk-around museums with no entry queue).
+    { "builtIn": "...", "crowdDriven": "...", "typicalMinutes": <int> }
+    - builtIn: STRUCTURAL wait that timing won't fix — capacity, one-at-a-time mechanics, scheduled entry, etc. State the mechanism confidently (e.g. "One rider at a time on the cliff zipline", "Single-file pathway through the cave"). null if not applicable.
+    - crowdDriven: TIMING-FIXABLE bottleneck — weekend rush, after-school crowds, peak-season queues. Pair the time window with the queue (e.g. "Weekends 12–2 PM see ~30-min entry queues"). null if not applicable.
+    - typicalMinutes: integer rough wait estimate from reviews. null if reviews don't support a confident number.
+- smartTip: ONE concrete planning win travelers learn from reviews — a real save in money, time, or mistake-avoidance. Strict examples ONLY:
+    "Book the combo ticket online for ~30% off the gate price."
+    "Enter through the south gate to skip the main queue."
+    "Bring water — none sold inside; gates close at sunset."
+    "The audio guide is included free at the info desk; don't pay extra at the kiosk."
+  DEFAULT TO NULL. If no review-supported concrete save exists, return null. NEVER write platitudes ("great place", "go early"), opinions, or vague advice. NEVER invent a tip to fill the slot.
 
 GS VERDICT SCORING:
 - gsStars MUST be an integer 1-5 (minimum 1).
@@ -2150,6 +2162,9 @@ OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
   "value": "..." | null,
   "goodToKnow": [ "...", ... ],
   "travelerNotes": "..." | null,
+  "typicalDurationMin": <integer> | null,
+  "wait": { "builtIn": "..." | null, "crowdDriven": "..." | null, "typicalMinutes": <integer> | null } | null,
+  "smartTip": "..." | null,
   "gsStars": <1-5>,
   "gsRedFlag": <boolean>,
   "gsVerdict": "...",
@@ -2169,6 +2184,11 @@ OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
     "value": "reviews" | "verified" | "call",
     "goodToKnow": "reviews" | "call",
     "travelerNotes": "reviews" | "call",
+    "typicalDurationMin": "reviews",
+    "wait.builtIn": "reviews",
+    "wait.crowdDriven": "reviews",
+    "wait.typicalMinutes": "reviews",
+    "smartTip": "reviews",
     "gsVerdict": "reviews"
   }
 }
@@ -2291,6 +2311,9 @@ async function handleAttractionAIDetails(request, env) {
       value: null,
       goodToKnow: [],
       travelerNotes: null,
+      typicalDurationMin: null,
+      wait: null,
+      smartTip: null,
       gsStars: 1,
       gsRedFlag: false,
       gsVerdict: 'Not enough review data yet — check back as more visitors share their experience.',
@@ -2319,7 +2342,7 @@ async function handleAttractionAIDetails(request, env) {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1700,  // headroom over the shared endpoint's 1500 for the _sources map
+        max_tokens: 1900,  // a1 1700 → a2 1900 for the smartTip / typicalDurationMin / wait fields
         system: buildAttractionAIDetailsSystemPrompt(),
         messages: [{ role: 'user', content: userContent }]
       })
@@ -2403,6 +2426,38 @@ async function handleAttractionAIDetails(request, env) {
     ]);
     if (!WORTH_ENUM.has(aiDetails.worthIt)) {
       aiDetails.worthIt = 'strong_nearby_pick';
+    }
+
+    // Phase 2.5 fields — clamp / defensive null-out.
+    // typicalDurationMin: positive integer or null. Cap at 12h so a bad
+    // model response doesn't render as "Allow 47h".
+    const dur = parseInt(aiDetails.typicalDurationMin, 10);
+    aiDetails.typicalDurationMin = (Number.isFinite(dur) && dur > 0 && dur <= 720) ? dur : null;
+
+    // wait object: each sub-field independently nullable; whole object
+    // null if every sub-field is null after sanitization.
+    if (!aiDetails.wait || typeof aiDetails.wait !== 'object') {
+      aiDetails.wait = null;
+    } else {
+      const w = aiDetails.wait;
+      const sanitizeWait = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+      const wm = parseInt(w.typicalMinutes, 10);
+      const cleanedW = {
+        builtIn: sanitizeWait(w.builtIn),
+        crowdDriven: sanitizeWait(w.crowdDriven),
+        typicalMinutes: (Number.isFinite(wm) && wm > 0 && wm <= 600) ? wm : null,
+      };
+      const anyWait = cleanedW.builtIn || cleanedW.crowdDriven || cleanedW.typicalMinutes != null;
+      aiDetails.wait = anyWait ? cleanedW : null;
+    }
+
+    // smartTip: string or null. Hard cap at 200 chars so the prompt can't
+    // smuggle a paragraph in.
+    if (typeof aiDetails.smartTip === 'string' && aiDetails.smartTip.trim()) {
+      const trimmed = aiDetails.smartTip.trim();
+      aiDetails.smartTip = trimmed.length > 200 ? trimmed.slice(0, 198).trim() + '…' : trimmed;
+    } else {
+      aiDetails.smartTip = null;
     }
 
     // Normalize _sources map.
