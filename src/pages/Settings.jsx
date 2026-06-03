@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { X, User, Mail, Edit3, Check, Globe, DollarSign, Languages, Thermometer, Shield, Loader2, MessageCircle, MapPin, ChevronRight, BarChart3 } from "lucide-react";
+import { X, User, Mail, Edit3, Check, Globe, DollarSign, Languages, Thermometer, Shield, Loader2, MessageCircle, MapPin, ChevronRight, BarChart3, CreditCard } from "lucide-react";
 import ContactUsModal from "../components/ContactUsModal";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
@@ -460,6 +460,11 @@ export default function SettingsPage() {
   const [showHomeCountryInfo, setShowHomeCountryInfo] = useState(false);
   const [showHomeFlag, setShowHomeFlag] = useState(false);
   const [preferredCurrency, setPreferredCurrency] = useState("USD");
+  // primary_banking_currency = currency of the bank account / card the user
+  // will actually withdraw FROM at ATMs. Distinct from preferred_currencies
+  // (which is a DISPLAY preference). The spec is explicit these should not
+  // be conflated — nationality is NOT a reliable proxy for banking currency.
+  const [primaryBankingCurrency, setPrimaryBankingCurrency] = useState("USD");
   const [preferredLanguage, setPreferredLanguage] = useState("en");
   const [preferredTempScale, setPreferredTempScale] = useState("fahrenheit");
   const [preferredDistanceUnit, setPreferredDistanceUnit] = useState("km");
@@ -478,6 +483,9 @@ export default function SettingsPage() {
       else { setFirstName(""); }
       setHomeCountry(userData.home_country || "");
       setPreferredCurrency(userData.preferred_currencies?.[0] || "USD");
+      // Fall back to preferred currency for users who set up before this
+      // field existed; they can override it explicitly when editing.
+      setPrimaryBankingCurrency(userData.primary_banking_currency || userData.preferred_currencies?.[0] || "USD");
       setPreferredLanguage(userData.preferred_language || "en");
       setPreferredTempScale(userData.preferred_temperature_scale || "fahrenheit");
       setPreferredDistanceUnit(userData.preferred_distance_unit || "km");
@@ -494,7 +502,8 @@ export default function SettingsPage() {
         first_name: firstName.trim(), home_country: homeCountry,
         show_home_country_info: showHomeCountryInfo, show_home_flag: showHomeFlag,
         preferred_currencies: [preferredCurrency], preferred_language: preferredLanguage,
-        preferred_temperature_scale: preferredTempScale, preferred_distance_unit: preferredDistanceUnit
+        preferred_temperature_scale: preferredTempScale, preferred_distance_unit: preferredDistanceUnit,
+        primary_banking_currency: primaryBankingCurrency,
       };
       await base44.auth.updateMe(updates);
       window.dispatchEvent(new CustomEvent('globeskimmers:profileUpdated'));
@@ -534,7 +543,7 @@ export default function SettingsPage() {
               <button onClick={() => setEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white font-semibold rounded-xl hover:opacity-90 transition-all shadow-md"><Edit3 className="w-4 h-4" />Edit</button>
             ) : (
               <div className="flex items-center gap-1.5">
-                <button onClick={() => { setEditing(false); setFirstName(user?.first_name || ""); setHomeCountry(user?.home_country || ""); setShowHomeCountryInfo(user?.show_home_country_info || false); setShowHomeFlag(user?.show_home_flag || false); setPreferredCurrency(user?.preferred_currencies?.[0] || "USD"); setPreferredLanguage(user?.preferred_language || "en"); setPreferredTempScale(user?.preferred_temperature_scale || "fahrenheit"); setPreferredDistanceUnit(user?.preferred_distance_unit || "km"); }} className="px-2.5 py-1.5 text-xs text-gray-700 font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition-all">Cancel</button>
+                <button onClick={() => { setEditing(false); setFirstName(user?.first_name || ""); setHomeCountry(user?.home_country || ""); setShowHomeCountryInfo(user?.show_home_country_info || false); setShowHomeFlag(user?.show_home_flag || false); setPreferredCurrency(user?.preferred_currencies?.[0] || "USD"); setPrimaryBankingCurrency(user?.primary_banking_currency || user?.preferred_currencies?.[0] || "USD"); setPreferredLanguage(user?.preferred_language || "en"); setPreferredTempScale(user?.preferred_temperature_scale || "fahrenheit"); setPreferredDistanceUnit(user?.preferred_distance_unit || "km"); }} className="px-2.5 py-1.5 text-xs text-gray-700 font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition-all">Cancel</button>
                 <button onClick={handleSave} disabled={saving} className="px-2.5 py-1.5 text-xs bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium rounded-lg hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-1">{saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}Save</button>
               </div>
             )}
@@ -556,7 +565,18 @@ export default function SettingsPage() {
             {editing && (<div className="flex items-center justify-between p-5 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl border border-indigo-200 shadow-sm"><div><p className="font-bold text-gray-900 text-[15px]">Show Home Country Flag</p><p className="text-sm text-gray-600 mt-0.5">Display your flag on the home page card</p></div><button onClick={() => setShowHomeFlag(!showHomeFlag)} className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all duration-300 shadow-lg ${showHomeFlag ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2]' : 'bg-gray-300'}`}><span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-300 ${showHomeFlag ? 'translate-x-7' : 'translate-x-1'}`} /></button></div>)}
 
             <div><label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2"><DollarSign className="w-4 h-4" />Preferred Currency</label>
+              <p className="text-xs text-gray-500 -mt-1 mb-2">How prices are displayed across the app.</p>
               {editing ? (<Select value={preferredCurrency} onValueChange={setPreferredCurrency}><SelectTrigger className="h-12 rounded-xl border-gray-300"><SelectValue placeholder="Select preferred currency" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{CURRENCIES.map((currency) => (<SelectItem key={currency.code} value={currency.code}>{currency.flag} {currency.name} ({currency.code})</SelectItem>))}</SelectContent></Select>) : (<div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl text-gray-900 font-medium border border-gray-200">{user?.preferred_currencies?.[0] ? CURRENCIES.find(c => c.code === user.preferred_currencies[0])?.name : "Not set"}</div>)}
+            </div>
+
+            {/* Primary banking currency — the currency of the bank account or
+                card the user actually withdraws FROM at ATMs. Used by the ATM
+                Finder Withdrawal Calculator to set the default "Withdraw From"
+                currency. Distinct from Preferred Currency above per the ATM
+                redesign spec. */}
+            <div><label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2"><CreditCard className="w-4 h-4" />Primary Banking Currency</label>
+              <p className="text-xs text-gray-500 -mt-1 mb-2">The currency of the bank account or card you'll use at ATMs.</p>
+              {editing ? (<Select value={primaryBankingCurrency} onValueChange={setPrimaryBankingCurrency}><SelectTrigger className="h-12 rounded-xl border-gray-300"><SelectValue placeholder="Select banking currency" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{CURRENCIES.map((currency) => (<SelectItem key={currency.code} value={currency.code}>{currency.flag} {currency.name} ({currency.code})</SelectItem>))}</SelectContent></Select>) : (<div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl text-gray-900 font-medium border border-gray-200">{user?.primary_banking_currency ? (CURRENCIES.find(c => c.code === user.primary_banking_currency)?.name || user.primary_banking_currency) : "Not set"}</div>)}
             </div>
 
             <div><label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2"><Languages className="w-4 h-4" />Preferred Language</label>
@@ -572,7 +592,7 @@ export default function SettingsPage() {
             </div>
 
             {editing && (<div className="flex gap-2 pt-2">
-              <button onClick={() => { setEditing(false); setFirstName(user?.first_name || ""); setHomeCountry(user?.home_country || ""); setShowHomeCountryInfo(user?.show_home_country_info || false); setShowHomeFlag(user?.show_home_flag || false); setPreferredCurrency(user?.preferred_currencies?.[0] || "USD"); setPreferredLanguage(user?.preferred_language || "en"); setPreferredTempScale(user?.preferred_temperature_scale || "fahrenheit"); setPreferredDistanceUnit(user?.preferred_distance_unit || "km"); }} className="flex-1 px-4 py-3 text-gray-700 font-semibold bg-gray-100 hover:bg-gray-200 rounded-xl transition-all">Cancel</button>
+              <button onClick={() => { setEditing(false); setFirstName(user?.first_name || ""); setHomeCountry(user?.home_country || ""); setShowHomeCountryInfo(user?.show_home_country_info || false); setShowHomeFlag(user?.show_home_flag || false); setPreferredCurrency(user?.preferred_currencies?.[0] || "USD"); setPrimaryBankingCurrency(user?.primary_banking_currency || user?.preferred_currencies?.[0] || "USD"); setPreferredLanguage(user?.preferred_language || "en"); setPreferredTempScale(user?.preferred_temperature_scale || "fahrenheit"); setPreferredDistanceUnit(user?.preferred_distance_unit || "km"); }} className="flex-1 px-4 py-3 text-gray-700 font-semibold bg-gray-100 hover:bg-gray-200 rounded-xl transition-all">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-md">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Save</button>
             </div>)}
           </div>
