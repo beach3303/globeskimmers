@@ -239,11 +239,6 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
   const address = atm.formattedAddress || atm.shortFormattedAddress || "";
   const phone   = atm.nationalPhoneNumber || atm.internationalPhoneNumber || "";
 
-  const feeColor  = (atm.network !== "Independent") ? "#1565C0" : "#E65100";
-  const feeBg     = (atm.network !== "Independent") ? "#E3F2FD" : "#FFF3E0";
-  const feeLabel  = atm.feeInfo || "Standard ATM fees may apply";
-  const feeSurcharge = atm.surcharge || "$2.50–$4.00 typical";
-
   const hoursStatusBg = atm.is24Hours ? "#E3F2FD"
     : atm.isOpen === true ? "#E8F5E9"
     : atm.isOpen === false ? "#FFEBEE"
@@ -337,15 +332,6 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
             {atm.todayHours && !atm.is24Hours && (
               <span style={{ color:GRAY, marginLeft:"8px" }}>· {atm.todayHours}</span>
             )}
-          </div>
-        </div>
-
-        {/* Fee info */}
-        <div style={{ display:"flex", alignItems:"center", gap:"10px", marginBottom:"10px", padding:"10px 12px", background:feeBg, border:`1px solid ${feeColor}25`, borderRadius:"10px" }}>
-          <span style={{ fontSize:"20px", flexShrink:0 }}>💵</span>
-          <div style={{ flex:1 }}>
-            <div style={{ fontWeight:"600", fontSize:"13px", color:feeColor }}>{feeLabel}</div>
-            <div style={{ fontSize:"11px", color:GRAY }}>Non-customer fee: {feeSurcharge}</div>
           </div>
         </div>
 
@@ -460,7 +446,6 @@ function buildMapPopup(atm, index, fmt) {
   const is24H   = atm.is24Hours || false;
   const network = atm.network || "Independent ATM";
   const venueIcon = atm.venueIcon || "🏧";
-  const feeInfo   = atm.feeInfo || "Standard fees may apply";
 
   const hoursColor = is24H ? "#1565C0" : isOpen===true ? "#2E7D32" : isOpen===false ? "#D32F2F" : "#757575";
   const hoursBg    = is24H ? "#E3F2FD" : isOpen===true ? "#E8F5E9" : isOpen===false ? "#FFEBEE" : "#F5F5F5";
@@ -477,7 +462,7 @@ function buildMapPopup(atm, index, fmt) {
       <span style="font-weight:700;color:${hoursColor};">${hoursLabel}</span>
       ${todayHours && !is24H ? `<span style="color:#64748B;"> · ${todayHours}</span>` : ""}
     </div>
-    ${rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:6px;">★ <strong style="color:#1A2332;">${rating}</strong> <span style="color:#64748B;">(${ratingCount})</span>${distance?` · <span style="color:#00838F;">${distance}</span>`:''} · <span style="color:#9E9E9E;">💵 ${feeInfo}</span></div>`:`<div style="font-size:11px;color:#9E9E9E;margin-bottom:6px;">${distance?`📍 ${distance} · `:''}💵 ${feeInfo}</div>`}
+    ${rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:6px;">★ <strong style="color:#1A2332;">${rating}</strong> <span style="color:#64748B;">(${ratingCount})</span>${distance?` · <span style="color:#00838F;">${distance}</span>`:''}</div>`:distance?`<div style="font-size:11px;color:#9E9E9E;margin-bottom:6px;">📍 ${distance}</div>`:''}
     ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#1565C0;font-size:11px;font-weight:600;">📞 ${phone}</a>`:''}
     <div style="display:flex;gap:8px;">
       <button onclick="window._gsATMDirs&&window._gsATMDirs(${index})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#00BCD4;color:#fff;font-weight:600;font-size:11px;cursor:pointer;">🧭 Directions</button>
