@@ -678,12 +678,15 @@ export default function SmartPriceScannerPage() {
 
   const handleContinue = async () => {
     if (!selectedCurrency) return;
-    
+
     await base44.auth.updateMe({
       price_scanner_currency: selectedCurrency
     });
-    
-    setStep('instructions');
+    // Skip the legacy 'instructions' step (deleted) — first-time onboarding
+    // now happens on the warm 'intro' card before the currency picker, and
+    // a second instructions screen here just makes the user tap through a
+    // dead screen with copy that contradicts the actual scanner.
+    setStep('scanning');
   };
 
   const handleStartScanning = () => {
@@ -924,107 +927,6 @@ export default function SmartPriceScannerPage() {
                 className="w-full h-14 text-base font-semibold bg-gradient-to-r from-[#06BCC1] to-[#0891B2] hover:opacity-90 rounded-xl disabled:opacity-50"
               >
                 Continue
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (step === 'instructions') {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-[#06BCC1] to-[#0891B2]">
-        <div className="px-6 py-8">
-          <div className="flex justify-between items-center mb-8">
-            <button
-              onClick={() => navigate(createPageUrl("Home"))}
-              className="flex items-center gap-2 text-white hover:opacity-80 transition-opacity"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span>Back</span>
-            </button>
-            
-            <button
-              onClick={handleStartScanning}
-              className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/30 transition-colors"
-            >
-              <X className="w-5 h-5 text-white" />
-            </button>
-          </div>
-
-          <div className="max-w-md mx-auto">
-            <div className="bg-white rounded-3xl shadow-2xl p-8">
-              <div className="flex flex-col items-center mb-6">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#06BCC1] to-[#0891B2] flex items-center justify-center mb-4">
-                  <span className="text-3xl">🏷️</span>
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Smart Price Scanner</h2>
-                <p className="text-gray-600 text-center">Instantly convert prices to your preferred currency</p>
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#06BCC1] to-[#0891B2] flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-bold text-sm">01</span>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-gray-900 mb-1">Point your camera at any price tag</h3>
-                    <p className="text-sm text-gray-600">Menus, receipts, store signs</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#06BCC1] to-[#0891B2] flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-bold text-sm">02</span>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-gray-900 mb-1">Hold steady for 2–3 seconds</h3>
-                    <p className="text-sm text-gray-600">Auto-scanning every 3 seconds</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#06BCC1] to-[#0891B2] flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-bold text-sm">03</span>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-gray-900 mb-1">Prices automatically convert</h3>
-                    <p className="text-sm text-gray-600">To {selectedCurrency} with real-time rates</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-4 mb-6">
-                <p className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>✓</span>
-                  Features:
-                </p>
-                <ul className="space-y-1.5 text-xs text-gray-600">
-                  <li className="flex items-start gap-2">
-                    <span className="text-gray-400">•</span>
-                    <span>Detects multiple prices at once</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-gray-400">•</span>
-                    <span>Works with all languages and currencies</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-gray-400">•</span>
-                    <span>Real-time exchange rates (cached for speed)</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-gray-400">•</span>
-                    <span>No button press needed</span>
-                  </li>
-                </ul>
-              </div>
-
-              <Button
-                onClick={handleStartScanning}
-                className="w-full h-14 text-base font-semibold bg-gradient-to-r from-[#06BCC1] to-[#0891B2] hover:opacity-90 rounded-xl"
-              >
-                Start Scanning
               </Button>
             </div>
           </div>
