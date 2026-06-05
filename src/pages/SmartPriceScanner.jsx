@@ -169,6 +169,10 @@ export default function SmartPriceScannerPage() {
   const [frozenFrame, setFrozenFrame] = useState(null);
   const [isNativeApp, setIsNativeApp] = useState(false);
   const [debugInfo, setDebugInfo] = useState("");
+  // Price analysis (P2). Loaded lazily when user taps "View Price Analysis".
+  const [analysis, setAnalysis] = useState(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState(null);
 
   const detectPlatform = () => {
     if (window.Capacitor) {
@@ -600,6 +604,8 @@ export default function SmartPriceScannerPage() {
   const handleScanAnother = () => {
     setDetectedPrices([]);
     setFrozenFrame(null);
+    setAnalysis(null);
+    setAnalysisError(null);
     setStep('scanning');
   };
 
@@ -608,15 +614,44 @@ export default function SmartPriceScannerPage() {
   const handleDone = () => {
     setDetectedPrices([]);
     setFrozenFrame(null);
+    setAnalysis(null);
+    setAnalysisError(null);
     stopCamera();
     navigate(createPageUrl("Home"));
   };
 
-  // Open the price-analysis card (alternatives + GS verdict). Keeps the
-  // frozen frame visible underneath as context. The actual analysis fetch
-  // is wired in P2 (Worker /analyze-price endpoint + frontend card).
-  const handleViewAnalysis = () => {
+  // Open the price-analysis card and fetch alternatives + GS verdict from
+  // the Worker /analyze-price endpoint. Uses the first detected price as
+  // the input (most common case is one price tag at a time). Caches at the
+  // Worker layer keyed by (item description + currency + price bucket +
+  // country pair) so repeats of the same product type are free.
+  const handleViewAnalysis = async () => {
     setStep('analysis');
+    if (analysis || analysisLoading) return;  // already loaded / loading
+    const first = detectedPrices[0];
+    if (!first) return;  // nothing to analyze (shouldn't happen — button is gated above)
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    try {
+      const { data } = await base44.functions.invoke('analyzePrice', {
+        itemDescription: first.original?.context || 'Item',
+        price: first.original?.amount,
+        currency: first.original?.currency,
+        country: activeLocation?.address?.country || null,
+        homeCountry: user?.home_country || null,
+      });
+      if (data?.error) {
+        setAnalysisError(data.error);
+      } else if (data?.analysis) {
+        setAnalysis(data.analysis);
+      } else {
+        setAnalysisError('No analysis returned');
+      }
+    } catch (e) {
+      setAnalysisError(e?.message || 'Failed to load analysis');
+    } finally {
+      setAnalysisLoading(false);
+    }
   };
 
   if (step === 'currency') {
@@ -979,9 +1014,9 @@ export default function SmartPriceScannerPage() {
         </div>
       )}
 
-      {/* ANALYSIS — placeholder card in P1, real data + alternatives in P2. */}
+      {/* ANALYSIS CARD — fetched lazily on first View Analysis tap. */}
       {isAnalysis && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center px-4 pt-16 pb-8 overflow-y-auto">
+        <div className="absolute inset-0 z-10 flex items-start justify-center px-4 pt-16 pb-8 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -991,13 +1026,76 @@ export default function SmartPriceScannerPage() {
             {detectedPrices[0]?.original?.context && (
               <p className="text-white/70 text-[13px] mb-3">{detectedPrices[0].original.context}</p>
             )}
-            {/* P1 placeholder. P2 swaps this for a real analysis card with
-                alternatives + GS verdict + home-country reference. */}
-            <div className="bg-white/10 rounded-xl p-5 mb-4 text-center">
-              <div className="w-10 h-10 mx-auto mb-3 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-              <p className="text-white/80 text-sm">Analyzing similar items at nearby stores…</p>
-              <p className="text-white/50 text-[11px] mt-2">Coming soon — the analysis endpoint deploys next.</p>
-            </div>
+
+            {analysisLoading && (
+              <div className="bg-white/10 rounded-xl p-5 mb-4 text-center">
+                <div className="w-10 h-10 mx-auto mb-3 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+                <p className="text-white/80 text-sm">Analyzing similar items at nearby stores…</p>
+              </div>
+            )}
+
+            {analysisError && !analysisLoading && (
+              <div className="bg-red-500/20 border border-red-500/40 rounded-xl p-4 mb-4">
+                <p className="text-red-200 text-sm">Couldn't load analysis: {analysisError}</p>
+              </div>
+            )}
+
+            {analysis && !analysisLoading && (
+              <div className="mb-4">
+                {/* Verdict chip */}
+                <div className="mb-3">
+                  <span className="inline-block px-3 py-1.5 rounded-full text-[13px] font-bold" style={{
+                    background: verdictBg(analysis.verdict),
+                    color: verdictFg(analysis.verdict),
+                  }}>
+                    {analysis.verdictBadge}
+                  </span>
+                </div>
+
+                {/* GS Verdict sentence */}
+                {analysis.gsVerdict && (
+                  <p className="text-white text-[14px] leading-relaxed mb-4">{analysis.gsVerdict}</p>
+                )}
+
+                {/* Alternatives */}
+                {analysis.alternatives && analysis.alternatives.length > 0 && (
+                  <div className="bg-white/10 rounded-xl p-4 mb-3">
+                    <div className="text-white/70 text-[11px] font-bold uppercase tracking-wide mb-2">
+                      Similar items nearby
+                      <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold" style={{ background: '#FEF3C7', color: '#92400E' }}>estimated</span>
+                    </div>
+                    <ul className="space-y-2">
+                      {analysis.alternatives.map((a, i) => (
+                        <li key={i} className="text-white text-[13px]">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <span className="font-semibold">{a.store}</span>
+                              <span className="text-white/50 text-[11px] ml-2">{a.scope === 'online' ? '🌐 online' : '📍 local'}</span>
+                            </div>
+                            <div className="text-emerald-300 font-semibold whitespace-nowrap">{a.priceRange}</div>
+                          </div>
+                          {a.note && <div className="text-white/60 text-[11px] mt-0.5">{a.note}</div>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Home country reference */}
+                {analysis.homeReference && (
+                  <div className="bg-white/5 rounded-xl p-3 mb-3 text-white/80 text-[12px] leading-relaxed">
+                    🏠 {analysis.homeReference}
+                    <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold align-middle" style={{ background: '#FEF3C7', color: '#92400E' }}>estimated</span>
+                  </div>
+                )}
+
+                {/* Honesty footer */}
+                <p className="text-white/40 text-[10px] leading-relaxed">
+                  Price ranges are estimates based on typical store pricing — not live data. Verify before purchase.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <button
                 onClick={handleScanAnother}
@@ -1018,4 +1116,22 @@ export default function SmartPriceScannerPage() {
       )}
     </div>
   );
+}
+
+// Verdict pill palette. Order matters for fallback through unknown.
+function verdictBg(v) {
+  switch (v) {
+    case 'great_deal': return '#DCFCE7';
+    case 'fair_price': return '#DBEAFE';
+    case 'pricey':     return '#FEF3C7';
+    default:           return '#F1F5F9';
+  }
+}
+function verdictFg(v) {
+  switch (v) {
+    case 'great_deal': return '#166534';
+    case 'fair_price': return '#1E40AF';
+    case 'pricey':     return '#92400E';
+    default:           return '#475569';
+  }
 }

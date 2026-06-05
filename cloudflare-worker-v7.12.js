@@ -3896,6 +3896,232 @@ async function handlePriceScan(request, env) {
   }
 }
 
+// ============================================================================
+// ANALYZE PRICE — Price Scanner Phase P2.
+// ============================================================================
+// Given an OCR'd item description + a price + the country where the user is
+// shopping (+ optionally their home country), Haiku returns:
+//   - A 4-tier verdict (great_deal / fair_price / pricey / unknown)
+//   - 3–5 alternatives at nearby stores or online with TYPICAL price ranges
+//   - A 1–2 sentence GS Verdict
+//   - A home-country reference line ("In the US, similar dresses run $20-40")
+//
+// HONESTY RULES (enforced in the system prompt):
+//   - No exact prices — only ranges. Haiku doesn't have live pricing data.
+//   - No "this exact item is at store X" claims. Only "similar items at
+//     store X typically run Y-Z".
+//   - For niche items / unknown brands / low-data countries, return
+//     verdict='unknown' so the frontend renders "Not enough data to analyze"
+//     instead of guessing.
+//   - Every filled alternative is tagged source='estimated' on the way out.
+//
+// Cache key includes item description + currency + price bucket + country
+// pair so repeat scans of the "same kind of item near the same price" share
+// the cached analysis. 30-day TTL.
+// ============================================================================
+
+const ANALYZE_PRICE_TTL_SECONDS = 30 * 24 * 60 * 60;
+const ANALYZE_PRICE_PROMPT_VERSION = 'ap1';
+
+// Bucket the price into a coarse band so a $19 and $21 dress (same item type)
+// share a cache entry. Avoids burning Haiku on every micro price diff while
+// keeping the verdict ("good deal" vs "pricey") meaningful inside each band.
+function bucketPrice(price) {
+  const p = Number(price);
+  if (!Number.isFinite(p) || p <= 0) return 0;
+  if (p < 100)   return Math.round(p / 10)   * 10;
+  if (p < 1000)  return Math.round(p / 50)   * 50;
+  if (p < 10000) return Math.round(p / 500)  * 500;
+  return Math.round(p / 5000) * 5000;
+}
+
+async function sha256Hex(str) {
+  const enc = new TextEncoder().encode(str);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function buildAnalyzePricePrompt() {
+  return `You are GlobeSkimmers' Price Analyzer. A traveler has scanned a price tag. Tell them whether the price is a good deal, where similar items are typically sold nearby (or online), and how the price compares to their home country.
+
+HONESTY RULES (ABSOLUTE):
+- You do NOT have real-time pricing data. You can name brands / chains you know operate in the country and estimate the TYPICAL price range they charge for SIMILAR items.
+- Always use price RANGES, never exact prices. ✅ "₱500-1,200" ✅ "$15-40" ❌ "₱990" ❌ "$24.99".
+- Never claim a specific item is available at a specific store. ✅ "Similar A-line dresses at Uniqlo PH typically run ₱990-1,499" ❌ "Uniqlo has this dress for ₱990".
+- For obscure / niche items, unknown brands, low-data destinations, or anything where you cannot confidently name 3+ comparable stores: set verdict='unknown'. The frontend will show "Not enough data to analyze" — better than guessing.
+- Never editorialize ("rip-off", "scam", "overpriced for what it is"). Use neutral words: "above typical range", "below typical range".
+
+VERDICT TIERS:
+- "great_deal"  — At least ~20% below the typical range for similar items at known nearby stores.
+- "fair_price"  — Within the typical range.
+- "pricey"      — At least ~20% above the typical range.
+- "unknown"     — Data too thin to judge confidently. Returns alternatives:[] and homeReference:null.
+
+VERDICT BADGES (use the EXACT strings):
+- great_deal       → "💎 Great Deal"
+- fair_price       → "✅ Fair Price"
+- pricey           → "⚠️ Above Typical Range"
+- unknown          → "❓ Not Enough Data to Analyze"
+
+ALTERNATIVES:
+- 3 to 5 entries when verdict !== 'unknown'; 0 entries when unknown.
+- Prefer LOCAL brick-and-mortar stores in the country the user is shopping in (scope='local'); include 1–2 online options (Shein, ASOS, Amazon, Lazada, Shopee, Zalora — whatever's relevant to the region) tagged scope='online'.
+- "store" should include a regional suffix when ambiguous (e.g. "Uniqlo PH", "H&M US"). Use the brand name travelers will actually recognize.
+- "priceRange" must use the SAME currency as the input price (don't auto-convert).
+- "note" is one short clarifier of the style/category match (e.g. "Casual A-line dresses", "Mid-range street-style sneakers").
+
+HOME REFERENCE:
+- If homeCountry is provided AND different from country: ONE short sentence comparing typical prices in the home country (using the home country's local currency or USD if uncertain). Example: "In the US, similar dresses typically run $15-40 at Target / Old Navy / H&M."
+- If homeCountry is null OR same as country OR you can't estimate confidently: return null.
+
+GS VERDICT:
+- 1–2 short sentences synthesizing the call. Reference the alternatives in passing. Example: "Fair price for fast-fashion in PH — in line with what Uniqlo, H&M, and Zara charge for similar casual dresses." Keep under 220 chars.
+
+OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
+{
+  "verdict": "great_deal" | "fair_price" | "pricey" | "unknown",
+  "verdictBadge": "<badge string per the mapping above>",
+  "gsVerdict": "<1-2 sentence summary>",
+  "alternatives": [
+    { "store": "...", "scope": "local" | "online", "priceRange": "...", "note": "..." },
+    ...
+  ],
+  "homeReference": "<one short sentence>" | null,
+  "confidence": "high" | "medium" | "low",
+  "_sources": {
+    "verdict":       "estimated",
+    "alternatives":  "estimated",
+    "homeReference": "estimated"
+  }
+}
+
+Return JSON only.`;
+}
+
+async function handleAnalyzePrice(request, env) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
+  }
+  let body;
+  try { body = await request.json(); } catch (_e) {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400);
+  }
+  const itemDescription = (body?.itemDescription || '').toString().trim().slice(0, 200);
+  const price = Number(body?.price);
+  const currency = (body?.currency || '').toString().trim().toUpperCase().slice(0, 4);
+  const country = (body?.country || '').toString().trim().slice(0, 80);
+  const homeCountry = (body?.homeCountry || '').toString().trim().slice(0, 80);
+
+  if (!itemDescription || !Number.isFinite(price) || price <= 0 || !currency) {
+    return jsonResponse({ error: 'itemDescription, price, currency required' }, 400);
+  }
+
+  // Cache key. Lowercase + collapse whitespace so "Women's Dress" and
+  // "WOMEN'S  DRESS " share. priceBucket lets prices within the same band
+  // share. homeCountry is part of the key because the homeReference line
+  // depends on it.
+  const itemNorm = itemDescription.toLowerCase().replace(/\s+/g, ' ');
+  const priceB = bucketPrice(price);
+  const keyMaterial = `${itemNorm}|${currency}|${priceB}|${country.toLowerCase()}|${homeCountry.toLowerCase()}`;
+  const keyHash = await sha256Hex(keyMaterial);
+  const cacheKey = `price_analysis:${ANALYZE_PRICE_PROMPT_VERSION}:${keyHash}`;
+
+  if (env.GLOBESKIMMERS_KV) {
+    const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+    if (cached) return jsonResponse({ analysis: cached, _cache: 'hit' });
+  }
+
+  const userContent = `INPUT:
+${JSON.stringify({ itemDescription, price, currency, country: country || null, homeCountry: homeCountry || null }, null, 2)}
+
+Produce the Price Analysis JSON per the rules above. Remember: price RANGES only, every alternative tagged 'estimated', verdict='unknown' if you can't confidently name 3+ comparable nearby stores.`;
+
+  let analysis;
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1200,
+        system: buildAnalyzePricePrompt(),
+        messages: [{ role: 'user', content: userContent }],
+      }),
+    });
+    if (!apiRes.ok) {
+      const errText = await apiRes.text();
+      return jsonResponse({ error: 'Claude API error', status: apiRes.status, details: errText }, 502);
+    }
+    const data = await apiRes.json();
+    const raw = data?.content?.[0]?.text?.trim() || '';
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    analysis = JSON.parse(cleaned);
+  } catch (e) {
+    return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
+  }
+
+  // Defensive normalization.
+  const sanitizeStr = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const VERDICTS = new Set(['great_deal', 'fair_price', 'pricey', 'unknown']);
+  const VERDICT_BADGES = {
+    great_deal: '💎 Great Deal',
+    fair_price: '✅ Fair Price',
+    pricey:     '⚠️ Above Typical Range',
+    unknown:    '❓ Not Enough Data to Analyze',
+  };
+  if (!VERDICTS.has(analysis.verdict)) analysis.verdict = 'unknown';
+  // Force the badge to match the verdict so a slipped prompt response can't
+  // render an inconsistent chip ("pricey" verdict + "Great Deal" badge).
+  analysis.verdictBadge = VERDICT_BADGES[analysis.verdict];
+
+  analysis.gsVerdict = sanitizeStr(analysis.gsVerdict)
+    || (analysis.verdict === 'unknown'
+      ? 'Not enough data to analyze this item right now. Try a price-comparison site or scan a more common item.'
+      : 'Price reviewed.');
+
+  // Cap gsVerdict at 240 chars.
+  if (analysis.gsVerdict.length > 240) analysis.gsVerdict = analysis.gsVerdict.slice(0, 238).trim() + '…';
+
+  if (!Array.isArray(analysis.alternatives) || analysis.verdict === 'unknown') {
+    analysis.alternatives = [];
+  } else {
+    const VALID_SCOPES = new Set(['local', 'online']);
+    analysis.alternatives = analysis.alternatives
+      .map(a => {
+        if (!a || typeof a !== 'object') return null;
+        const store = sanitizeStr(a.store);
+        const scope = VALID_SCOPES.has(a.scope) ? a.scope : 'local';
+        const priceRange = sanitizeStr(a.priceRange);
+        const note = sanitizeStr(a.note);
+        return store && priceRange ? { store, scope, priceRange, note } : null;
+      })
+      .filter(Boolean)
+      .slice(0, 5);
+  }
+
+  analysis.homeReference = (analysis.verdict === 'unknown') ? null : sanitizeStr(analysis.homeReference);
+  analysis.confidence = ['high', 'medium', 'low'].includes(analysis.confidence) ? analysis.confidence : 'low';
+
+  // _sources — pin to 'estimated' for every renderable; any other claim is
+  // a violation of the prompt's honesty rules. The frontend's stamp UI uses
+  // these to label every line as inferred-not-verified.
+  analysis._sources = {
+    verdict: 'estimated',
+    alternatives: 'estimated',
+    homeReference: 'estimated',
+  };
+
+  if (env.GLOBESKIMMERS_KV) {
+    await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(analysis), { expirationTtl: ANALYZE_PRICE_TTL_SECONDS }).catch(() => {});
+  }
+
+  return jsonResponse({ analysis, _cache: 'miss' });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -3931,6 +4157,7 @@ export default {
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
+      if (pathname === '/analyze-price' && request.method === 'POST') return await handleAnalyzePrice(request, env);
       if (pathname === '/scan-text' && request.method === 'POST') return await handleScanText(request, env);
       if (pathname === '/label-photos' && request.method === 'POST') return await handleLabelPhotos(request, env);
       if (pathname === '/ai-details' && request.method === 'POST') return await handleAIDetails(request, env);
