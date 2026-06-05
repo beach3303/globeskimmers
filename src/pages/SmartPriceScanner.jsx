@@ -154,10 +154,11 @@ export default function SmartPriceScannerPage() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
-  const autoScanIntervalRef = useRef(null);
-  const isPricesLockedRef = useRef(false);
 
   const [user, setUser] = useState(null);
+  // step values: 'currency' (pick currency) → 'scanning' (live camera OR
+  // frozen frame with prices, distinguished by frozenFrame state) →
+  // 'analysis' (price-analysis card from P2 — alternatives, GS verdict).
   const [step, setStep] = useState('currency');
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
   const [cameraReady, setCameraReady] = useState(false);
@@ -193,34 +194,19 @@ export default function SmartPriceScannerPage() {
     setIsNativeApp(detectPlatform());
     
     loadUser();
-    return () => {
-      stopCamera();
-      if (autoScanIntervalRef.current) {
-        clearInterval(autoScanIntervalRef.current);
-        autoScanIntervalRef.current = null;
-      }
-    };
+    return () => { stopCamera(); };
   }, []);
 
   useEffect(() => {
-    if (step === 'scanning') {
+    // Camera runs on the live scanning step AND on the analysis step
+    // (so "Scan another" from the analysis card can hop back to a warm
+    // stream). It's stopped only on the currency picker step.
+    if (step === 'scanning' || step === 'analysis') {
       startCamera();
     } else {
       stopCamera();
     }
   }, [step]);
-
-  useEffect(() => {
-    if (cameraReady && step === 'scanning') {
-      startAutoScan();
-    }
-    return () => {
-      if (autoScanIntervalRef.current) {
-        clearInterval(autoScanIntervalRef.current);
-        autoScanIntervalRef.current = null;
-      }
-    };
-  }, [cameraReady, step]);
 
   const loadUser = async () => {
     try {
@@ -402,53 +388,18 @@ export default function SmartPriceScannerPage() {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-    if (autoScanIntervalRef.current) {
-      clearInterval(autoScanIntervalRef.current);
-      autoScanIntervalRef.current = null;
-    }
     setCameraReady(false);
-    isPricesLockedRef.current = false;
     setDebugInfo("Camera stopped");
   };
 
-  const startAutoScan = () => {
-    console.log("🔄 Starting auto-scan interval...");
-    
-    if (autoScanIntervalRef.current) {
-      clearInterval(autoScanIntervalRef.current);
-      autoScanIntervalRef.current = null;
-    }
-    
-    isPricesLockedRef.current = false;
-    
-    setTimeout(() => {
-      performAutoScan();
-    }, 500);
-    
-    autoScanIntervalRef.current = setInterval(() => {
-      performAutoScan();
-    }, 3000);
-    
-    console.log("✅ Auto-scan interval started");
-  };
-
-  const performAutoScan = async () => {
-    if (isPricesLockedRef.current) {
-      console.log("🔒 Prices are locked - skipping all scans until user clears");
-      return;
-    }
-    
-    if (isScanning) {
-      console.log("⏭️ Skipping scan - already scanning");
-      return;
-    }
-    
-    if (!cameraReady || !videoRef.current) {
-      console.log("⏭️ Skipping scan - camera not ready");
-      return;
-    }
-    
-    console.log("📸 Performing auto-scan...");
+  // ── Freeze & Convert (manual trigger) ─────────────────────────────────────
+  // Replaces the previous auto-scan interval. Fires only when the user taps
+  // the Freeze CTA, mirroring the Text Scanner pattern. Same backend call
+  // (extractPricesFromImage → convertToPreferredCurrency) — just user-gated.
+  const handleFreezeAndConvert = async () => {
+    if (isScanning) return;                      // ignore double-taps
+    if (!cameraReady || !videoRef.current) return;
+    console.log("📸 Freeze & convert tapped...");
     setIsScanning(true);
     
     try {
@@ -475,13 +426,9 @@ export default function SmartPriceScannerPage() {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const frozenImageUrl = canvas.toDataURL('image/jpeg', 0.95);
           
-          isPricesLockedRef.current = true;
-
           setFrozenFrame(frozenImageUrl);
           setDetectedPrices(filtered);
           setLastScanTime(new Date());
-
-          console.log("🔒 PRICES LOCKED - Will not scan again until user clears");
 
           // Fire analytics event with USD-normalized amounts so the data is
           // cross-comparable regardless of which target currency the user
@@ -518,7 +465,7 @@ export default function SmartPriceScannerPage() {
         }
       }
     } catch (error) {
-      console.error("❌ Auto-scan error:", error);
+      console.error("❌ Freeze & convert error:", error);
     } finally {
       setIsScanning(false);
     }
@@ -647,22 +594,29 @@ export default function SmartPriceScannerPage() {
     setStep('scanning');
   };
 
-  const handleClearPrices = () => {
-    console.log("🔓 UNLOCKING prices - scanning will resume");
-
-    isPricesLockedRef.current = false;
+  // "Scan another" — drops the frozen frame + cleared prices and returns to
+  // the live camera so the user can frame the next item and tap Freeze again.
+  // Used from BOTH the post-freeze panel and the analysis card.
+  const handleScanAnother = () => {
     setDetectedPrices([]);
     setFrozenFrame(null);
+    setStep('scanning');
   };
 
-  // Exit the scanner entirely after a successful scan. Stops the camera,
-  // clears state, returns the user to Home.
+  // Exit the scanner entirely. Stops the camera, clears state, returns
+  // the user to Home.
   const handleDone = () => {
-    isPricesLockedRef.current = false;
     setDetectedPrices([]);
     setFrozenFrame(null);
     stopCamera();
     navigate(createPageUrl("Home"));
+  };
+
+  // Open the price-analysis card (alternatives + GS verdict). Keeps the
+  // frozen frame visible underneath as context. The actual analysis fetch
+  // is wired in P2 (Worker /analyze-price endpoint + frontend card).
+  const handleViewAnalysis = () => {
+    setStep('analysis');
   };
 
   if (step === 'currency') {
@@ -859,32 +813,62 @@ export default function SmartPriceScannerPage() {
     );
   }
 
+  // ── Camera + Frozen + Analysis page ───────────────────────────────────────
+  // Reached when step === 'scanning' (live camera or frozen frame) or
+  // step === 'analysis' (frozen frame with analysis card overlay).
+  // Three visual states distinguished by frozenFrame + step:
+  //   A. Live camera        → step==='scanning' && !frozenFrame
+  //   B. Frozen w/ prices   → step==='scanning' && frozenFrame
+  //   C. Analysis card      → step==='analysis'  (always frozen underneath)
+  const isLive     = step === 'scanning' && !frozenFrame;
+  const isFrozen   = step === 'scanning' && !!frozenFrame;
+  const isAnalysis = step === 'analysis';
+
+  // X-button behavior: live → home, frozen → unfreeze to live, analysis → back to frozen.
+  const handleClose = () => {
+    if (isAnalysis) {
+      setStep('scanning');
+    } else if (isFrozen) {
+      setDetectedPrices([]);
+      setFrozenFrame(null);
+    } else {
+      handleDone();
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/60 to-transparent p-4">
+    <div className="fixed inset-0 bg-black overflow-hidden" style={{ background: '#0F1419' }}>
+      {/* Live camera preview — absolute inset-0 so it truly fills the screen
+          on iOS Safari where vh shrinks under the dynamic URL bar. Matches
+          Text Scanner's fullscreen treatment. */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{ display: frozenFrame ? 'none' : 'block' }}
+      />
+      {frozenFrame && (
+        <img
+          src={frozenFrame}
+          alt="Frozen frame"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      )}
+      <canvas ref={canvasRef} className="hidden" />
+
+      {/* TOP CHROME — X button + debug pill */}
+      <div className="absolute top-0 left-0 right-0 z-30 px-4 pt-3 pb-4 bg-gradient-to-b from-black/60 to-transparent">
         <div className="flex justify-between items-center">
           <button
-            onClick={() => {
-              if (detectedPrices.length > 0) {
-                console.log("🔓 X pressed - clearing prices and staying on camera");
-                isPricesLockedRef.current = false;
-                setDetectedPrices([]);
-                setFrozenFrame(null);
-              } else {
-                console.log("🔓 X pressed - no prices, exiting to home");
-                isPricesLockedRef.current = false;
-                setDetectedPrices([]);
-                setFrozenFrame(null);
-                stopCamera();
-                setStep('currency');
-              }
-            }}
+            onClick={handleClose}
             className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/30 transition-colors"
+            aria-label="Close"
           >
             <X className="w-5 h-5 text-white" />
           </button>
-          
-          {debugInfo && (
+          {debugInfo && isLive && (
             <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full">
               <p className="text-white text-xs">{debugInfo}</p>
             </div>
@@ -892,122 +876,144 @@ export default function SmartPriceScannerPage() {
         </div>
       </div>
 
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        className="w-full h-full object-cover"
-        style={{ display: frozenFrame ? 'none' : 'block' }}
-      />
-      
-      {frozenFrame && (
-        <img 
-          src={frozenFrame} 
-          alt="Frozen frame"
-          className="absolute inset-0 w-full h-full object-cover z-5"
-        />
+      {/* LIVE CAMERA — gentle instruction text only (no auto-scan). The user
+          taps the bottom Freeze CTA when ready, mirroring Text Scanner. */}
+      {isLive && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none px-6">
+          <div className="text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-white text-[14px] font-medium" style={{ background: 'rgba(0,0,0,0.5)' }}>
+              👉 Point at a price tag
+            </div>
+          </div>
+        </div>
       )}
-      
-      <canvas ref={canvasRef} className="hidden" />
 
-      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-        <AnimatePresence mode="wait">
-          {!isScanning && detectedPrices.length === 0 && (
-            <motion.div
-              key="instruction"
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              className="text-center text-white px-6"
-            >
-              <div className="text-6xl mb-4">👉</div>
-              <p className="text-2xl font-bold drop-shadow-lg mb-2">Point camera at price tag</p>
-              <p className="text-lg text-white/90 drop-shadow-md">Hold steady...</p>
-            </motion.div>
-          )}
+      {/* LIVE CAMERA — Freeze CTA at bottom */}
+      {isLive && (
+        <div className="absolute bottom-0 left-0 right-0 z-20 px-5 pb-8 pt-6 bg-gradient-to-t from-black/70 to-transparent">
+          <button
+            onClick={handleFreezeAndConvert}
+            disabled={!cameraReady || isScanning}
+            className="w-full py-4 rounded-[18px] text-white font-bold text-[16px] flex items-center justify-center gap-2 shadow-lg transition-opacity disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg,#7C3AED 0%,#EC4899 100%)' }}
+          >
+            {!cameraReady
+              ? <>📷 Starting rear camera…</>
+              : isScanning
+                ? <><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Scanning prices…</>
+                : <>🧊 Freeze &amp; convert price</>}
+          </button>
+        </div>
+      )}
 
-          {isScanning && (
-            <motion.div
-              key="scanning"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className="bg-black/80 backdrop-blur-md rounded-2xl p-8 text-center"
-            >
-              <div className="w-16 h-16 mx-auto mb-4 border-4 border-white border-t-transparent rounded-full animate-spin" />
-              <p className="text-white font-semibold text-lg">Scanning prices...</p>
-            </motion.div>
-          )}
-
-          {detectedPrices.length > 0 && !isScanning && (
-            <motion.div
-              key="detected"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-black/85 backdrop-blur-md rounded-2xl p-6 max-w-sm mx-4 pointer-events-auto"
-            >
-              <h3 className="text-white font-bold text-lg mb-4">✓ Prices Detected</h3>
-
-              <div className="space-y-3 max-h-72 overflow-y-auto mb-4">
-                {detectedPrices.map((conversion, index) => (
-                  <div key={index} className="bg-white/10 rounded-xl p-4">
-                    {conversion.original.context && (
-                      <p className="text-white/70 text-sm mb-2">{conversion.original.context}</p>
-                    )}
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-white/80 text-sm">Original</p>
-                        <p className="text-white font-semibold">
-                          {conversion.original.symbol}{conversion.original.amount.toLocaleString()} {conversion.original.currency}
-                        </p>
-                      </div>
-
-                      <div className="text-green-400 text-xl mx-3">→</div>
-
-                      <div className="text-right">
-                        <p className="text-white/80 text-sm">Your Currency</p>
-                        <p className="text-green-400 font-bold text-xl">
-                          {conversion.converted.symbol}{parseFloat(conversion.converted.amount).toLocaleString()}
-                        </p>
+      {/* FROZEN STATE — show detected prices + 3 buttons */}
+      {isFrozen && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-black/85 backdrop-blur-md rounded-2xl p-6 max-w-sm w-full pointer-events-auto"
+          >
+            {detectedPrices.length > 0 ? (
+              <>
+                <h3 className="text-white font-bold text-lg mb-4">✓ Prices Detected</h3>
+                <div className="space-y-3 max-h-60 overflow-y-auto mb-4">
+                  {detectedPrices.map((conversion, index) => (
+                    <div key={index} className="bg-white/10 rounded-xl p-4">
+                      {conversion.original.context && (
+                        <p className="text-white/70 text-sm mb-2">{conversion.original.context}</p>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-white/80 text-sm">Original</p>
+                          <p className="text-white font-semibold">
+                            {conversion.original.symbol}{conversion.original.amount.toLocaleString()} {conversion.original.currency}
+                          </p>
+                        </div>
+                        <div className="text-green-400 text-xl mx-3">→</div>
+                        <div className="text-right">
+                          <p className="text-white/80 text-sm">Your Currency</p>
+                          <p className="text-green-400 font-bold text-xl">
+                            {conversion.converted.symbol}{parseFloat(conversion.converted.amount).toLocaleString()}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="mb-4">
+                <h3 className="text-white font-bold text-lg mb-2">No prices found</h3>
+                <p className="text-white/70 text-sm">Try framing the price tag more clearly and tap Scan another.</p>
               </div>
+            )}
 
-              <div className="space-y-2">
+            <div className="space-y-2">
+              {/* View price analysis — only meaningful when we have a price.
+                  P1 ships the button + nav; the analysis card itself is
+                  populated by the P2 Worker endpoint. */}
+              {detectedPrices.length > 0 && (
                 <button
-                  onClick={handleClearPrices}
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+                  onClick={handleViewAnalysis}
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
                 >
-                  <Camera className="w-4 h-4" />
-                  Scan another
+                  💡 View price analysis
                 </button>
-                <button
-                  onClick={handleDone}
-                  className="w-full text-white/70 hover:text-white text-sm font-medium py-2 transition-colors"
-                >
-                  ✕ Done
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+              )}
+              <button
+                onClick={handleScanAnother}
+                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+              >
+                <Camera className="w-4 h-4" />
+                Scan another
+              </button>
+              <button
+                onClick={handleDone}
+                className="w-full text-white/70 hover:text-white text-sm font-medium py-2 transition-colors"
+              >
+                🏠 Done
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
-      {detectedPrices.length === 0 && (
-        <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/60 to-transparent p-4">
-          <div className="text-center">
-            <p className="text-white text-sm drop-shadow-md">
-              {isScanning
-                ? '🔄 Scanning...'
-                : cameraReady
-                  ? '💡 Point at prices to scan'
-                  : '📷 Starting rear camera...'}
-            </p>
-          </div>
+      {/* ANALYSIS — placeholder card in P1, real data + alternatives in P2. */}
+      {isAnalysis && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center px-4 pt-16 pb-8 overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-black/90 backdrop-blur-md rounded-2xl p-6 max-w-sm w-full pointer-events-auto"
+          >
+            <h3 className="text-white font-bold text-lg mb-2">💡 Price Analysis</h3>
+            {detectedPrices[0]?.original?.context && (
+              <p className="text-white/70 text-[13px] mb-3">{detectedPrices[0].original.context}</p>
+            )}
+            {/* P1 placeholder. P2 swaps this for a real analysis card with
+                alternatives + GS verdict + home-country reference. */}
+            <div className="bg-white/10 rounded-xl p-5 mb-4 text-center">
+              <div className="w-10 h-10 mx-auto mb-3 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+              <p className="text-white/80 text-sm">Analyzing similar items at nearby stores…</p>
+              <p className="text-white/50 text-[11px] mt-2">Coming soon — the analysis endpoint deploys next.</p>
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={handleScanAnother}
+                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+              >
+                <Camera className="w-4 h-4" />
+                Scan another item
+              </button>
+              <button
+                onClick={handleDone}
+                className="w-full text-white/70 hover:text-white text-sm font-medium py-2 transition-colors"
+              >
+                🏠 Done
+              </button>
+            </div>
+          </motion.div>
         </div>
       )}
     </div>
