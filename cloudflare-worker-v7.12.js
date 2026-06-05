@@ -1371,6 +1371,85 @@ const ANALYTICS_QUERIES = {
     ORDER BY sightings DESC
     LIMIT 200
   `,
+  // ── PRICE SCANNER PER-SESSION / PER-DAY USAGE ──────────────────────────
+  // Answers: "how many freezes per user per day"? Each row = one day. We
+  // surface daily total + distinct sessions + avg/max per session so the
+  // dashboard can show both engagement (sessions touching the feature) and
+  // intensity (how many scans the most active users do).
+  price_scans_per_session_14d: `
+    SELECT
+      day,
+      SUM(cnt)                                                   AS total_scans,
+      COUNT(*)                                                   AS distinct_sessions,
+      ROUND(CAST(SUM(cnt) AS REAL) / NULLIF(COUNT(*), 0), 2)     AS avg_per_session,
+      MAX(cnt)                                                   AS max_per_session
+    FROM (
+      SELECT
+        date(ts, 'unixepoch') AS day,
+        session_id,
+        COUNT(*) AS cnt
+      FROM events
+      WHERE event_type = 'price_scan'
+        AND ts >= strftime('%s','now','-14 days')
+      GROUP BY day, session_id
+    )
+    GROUP BY day
+    ORDER BY day ASC
+  `,
+  // ── PRICE ANALYSIS USAGE ───────────────────────────────────────────────
+  // The 'price_analysis_viewed' event fires when a user taps "View price
+  // analysis" on a frozen scan and the analyzePrice fetch returns. Payload:
+  //   { country, currency, item_currency, cache, paid, verdict, comparisonType }
+  // These queries answer:
+  //   - per_day_14d        → total tapped per day across all users
+  //   - per_session_14d    → daily total / distinct sessions / avg / max
+  //   - verdict_dist_30d   → what % great_deal / fair / pricey / unknown
+  price_analysis_by_day_14d: `
+    SELECT
+      date(ts, 'unixepoch') AS day,
+      COUNT(*)              AS views,
+      COUNT(DISTINCT session_id) AS distinct_sessions
+    FROM events
+    WHERE event_type = 'price_analysis_viewed'
+      AND ts >= strftime('%s','now','-14 days')
+    GROUP BY day
+    ORDER BY day ASC
+  `,
+  price_analysis_per_session_14d: `
+    SELECT
+      day,
+      SUM(cnt)                                                   AS total_views,
+      COUNT(*)                                                   AS distinct_sessions,
+      ROUND(CAST(SUM(cnt) AS REAL) / NULLIF(COUNT(*), 0), 2)     AS avg_per_session,
+      MAX(cnt)                                                   AS max_per_session
+    FROM (
+      SELECT
+        date(ts, 'unixepoch') AS day,
+        session_id,
+        COUNT(*) AS cnt
+      FROM events
+      WHERE event_type = 'price_analysis_viewed'
+        AND ts >= strftime('%s','now','-14 days')
+      GROUP BY day, session_id
+    )
+    GROUP BY day
+    ORDER BY day ASC
+  `,
+  // Verdict distribution over the last 30 days. Tells us whether the
+  // analyzer skews great_deal/fair/pricey/unknown — useful for catching
+  // prompt drift (e.g. if 'unknown' creeps up to >50%, the prompt is too
+  // strict / cache key is too narrow).
+  price_analysis_verdict_distribution_30d: `
+    SELECT
+      COALESCE(json_extract(payload, '$.verdict'), 'unknown') AS verdict,
+      COUNT(*) AS views,
+      COUNT(DISTINCT session_id) AS distinct_sessions
+    FROM events
+    WHERE event_type = 'price_analysis_viewed'
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY verdict
+    ORDER BY views DESC
+  `,
   // ── DEAL-VERDICT BENCHMARKS (powers the user-facing "is this a good
   // deal?" answer in Phase 3) ────────────────────────────────────────────
   // The queries below answer the THREE questions a traveler is asking:
@@ -3921,7 +4000,7 @@ async function handlePriceScan(request, env) {
 // ============================================================================
 
 const ANALYZE_PRICE_TTL_SECONDS = 30 * 24 * 60 * 60;
-const ANALYZE_PRICE_PROMPT_VERSION = 'ap1';
+const ANALYZE_PRICE_PROMPT_VERSION = 'ap2';  // ap1 -> ap2: handcraft/artisan support via comparisonType=similar_style; unknown is true-last-resort only
 
 // Bucket the price into a coarse band so a $19 and $21 dress (same item type)
 // share a cache entry. Avoids burning Haiku on every micro price diff while
@@ -3945,17 +4024,21 @@ function buildAnalyzePricePrompt() {
   return `You are GlobeSkimmers' Price Analyzer. A traveler has scanned a price tag. Tell them whether the price is a good deal, where similar items are typically sold nearby (or online), and how the price compares to their home country.
 
 HONESTY RULES (ABSOLUTE):
-- You do NOT have real-time pricing data. You can name brands / chains you know operate in the country and estimate the TYPICAL price range they charge for SIMILAR items.
+- You do NOT have real-time pricing data. You can name brands / chains / market types you know operate in the country and estimate the TYPICAL price range they charge for SIMILAR items.
 - Always use price RANGES, never exact prices. ✅ "₱500-1,200" ✅ "$15-40" ❌ "₱990" ❌ "$24.99".
 - Never claim a specific item is available at a specific store. ✅ "Similar A-line dresses at Uniqlo PH typically run ₱990-1,499" ❌ "Uniqlo has this dress for ₱990".
-- For obscure / niche items, unknown brands, low-data destinations, or anything where you cannot confidently name 3+ comparable stores: set verdict='unknown'. The frontend will show "Not enough data to analyze" — better than guessing.
 - Never editorialize ("rip-off", "scam", "overpriced for what it is"). Use neutral words: "above typical range", "below typical range".
 
+COMPARISON TYPE — pick exactly one:
+- "exact_match"   — Branded / mass-market / chain-store item where you can name 3+ comparable stores selling the SAME TYPE of item (e.g. branded clothing, electronics, packaged goods).
+- "similar_style" — Handmade, artisan, local craft, market-stall item, or anything where the EXACT item won't be at chain stores but similar CATEGORY pieces are sold at artisan markets, craft cooperatives, local boutiques, or online artisan platforms (Etsy, local craft sections on Lazada / Shopee). Make the effort here — list the kinds of places that sell COMPARABLE handcrafted items in that style / category / material. Phrase notes like "comparable hand-carved wooden bowls" or "similar handmade silver earrings".
+- "unknown"       — True last resort: very obscure niche, you cannot confidently name even 2 comparable category venues. Returns alternatives:[] and homeReference:null.
+
 VERDICT TIERS:
-- "great_deal"  — At least ~20% below the typical range for similar items at known nearby stores.
+- "great_deal"  — At least ~20% below the typical range for comparable items at known nearby places.
 - "fair_price"  — Within the typical range.
 - "pricey"      — At least ~20% above the typical range.
-- "unknown"     — Data too thin to judge confidently. Returns alternatives:[] and homeReference:null.
+- "unknown"     — Use only when comparisonType is also 'unknown'.
 
 VERDICT BADGES (use the EXACT strings):
 - great_deal       → "💎 Great Deal"
@@ -3963,24 +4046,32 @@ VERDICT BADGES (use the EXACT strings):
 - pricey           → "⚠️ Above Typical Range"
 - unknown          → "❓ Not Enough Data to Analyze"
 
-ALTERNATIVES:
-- 3 to 5 entries when verdict !== 'unknown'; 0 entries when unknown.
-- Prefer LOCAL brick-and-mortar stores in the country the user is shopping in (scope='local'); include 1–2 online options (Shein, ASOS, Amazon, Lazada, Shopee, Zalora — whatever's relevant to the region) tagged scope='online'.
-- "store" should include a regional suffix when ambiguous (e.g. "Uniqlo PH", "H&M US"). Use the brand name travelers will actually recognize.
+ALTERNATIVES (when comparisonType !== 'unknown'):
+- 3 to 5 entries.
+- For "exact_match": LOCAL brick-and-mortar stores in the country (scope='local') + 1–2 online options (Shein, ASOS, Amazon, Lazada, Shopee, Zalora — whatever's relevant to the region) tagged scope='online'. Use brand names travelers recognize ("Uniqlo PH", "H&M US").
+- For "similar_style": artisan markets, craft cooperatives, local boutiques, weekend markets, souvenir districts — name them when you can ("Tabo-an Public Market", "Maginhawa weekend craft fair"); otherwise use category labels ("local artisan markets in Cebu", "handicraft cooperatives in the region"). Online: Etsy, Lazada's artisan / handicraft sections, Shopee's handmade sections.
+- "store" includes a regional suffix when ambiguous.
 - "priceRange" must use the SAME currency as the input price (don't auto-convert).
-- "note" is one short clarifier of the style/category match (e.g. "Casual A-line dresses", "Mid-range street-style sneakers").
+- "note" is ONE short clarifier of the style/category match. For exact_match: dish/style/category. For similar_style: explicitly call out the look-alike framing ("comparable hand-painted ceramic mugs", "similar silver filigree style").
 
 HOME REFERENCE:
-- If homeCountry is provided AND different from country: ONE short sentence comparing typical prices in the home country (using the home country's local currency or USD if uncertain). Example: "In the US, similar dresses typically run $15-40 at Target / Old Navy / H&M."
+- If homeCountry is provided AND different from country: ONE short sentence comparing typical prices in the home country (using the home country's local currency or USD if uncertain).
+  - exact_match example: "In the US, similar dresses typically run $15-40 at Target / Old Navy / H&M."
+  - similar_style example: "In the US, comparable handmade silver earrings typically run $25-80 on Etsy or at independent jewelers."
 - If homeCountry is null OR same as country OR you can't estimate confidently: return null.
 
 GS VERDICT:
-- 1–2 short sentences synthesizing the call. Reference the alternatives in passing. Example: "Fair price for fast-fashion in PH — in line with what Uniqlo, H&M, and Zara charge for similar casual dresses." Keep under 220 chars.
+- 1–2 short sentences synthesizing the call. Reference the alternatives in passing.
+  - exact_match: "Fair price for fast-fashion in PH — in line with what Uniqlo, H&M, and Zara charge for similar casual dresses."
+  - similar_style: "Fair price for a hand-carved wooden bowl this size — comparable pieces at Cebu's artisan markets typically run ₱400-900."
+  - unknown: "Not enough data to analyze this item right now. Try a price-comparison site or scan a more common item."
+- Keep under 240 chars.
 
 OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
 {
   "verdict": "great_deal" | "fair_price" | "pricey" | "unknown",
   "verdictBadge": "<badge string per the mapping above>",
+  "comparisonType": "exact_match" | "similar_style" | "unknown",
   "gsVerdict": "<1-2 sentence summary>",
   "alternatives": [
     { "store": "...", "scope": "local" | "online", "priceRange": "...", "note": "..." },
@@ -4078,6 +4169,17 @@ Produce the Price Analysis JSON per the rules above. Remember: price RANGES only
   // render an inconsistent chip ("pricey" verdict + "Great Deal" badge).
   analysis.verdictBadge = VERDICT_BADGES[analysis.verdict];
 
+  // comparisonType (ap2): drives the frontend's alternatives header. Forced
+  // to 'unknown' whenever the verdict is unknown so the two are consistent.
+  // For non-unknown verdicts, default to 'exact_match' if the model didn't
+  // tag (legacy ap1 responses).
+  const COMPARISON_TYPES = new Set(['exact_match', 'similar_style', 'unknown']);
+  if (analysis.verdict === 'unknown') {
+    analysis.comparisonType = 'unknown';
+  } else if (!COMPARISON_TYPES.has(analysis.comparisonType)) {
+    analysis.comparisonType = 'exact_match';
+  }
+
   analysis.gsVerdict = sanitizeStr(analysis.gsVerdict)
     || (analysis.verdict === 'unknown'
       ? 'Not enough data to analyze this item right now. Try a price-comparison site or scan a more common item.'
@@ -4086,7 +4188,7 @@ Produce the Price Analysis JSON per the rules above. Remember: price RANGES only
   // Cap gsVerdict at 240 chars.
   if (analysis.gsVerdict.length > 240) analysis.gsVerdict = analysis.gsVerdict.slice(0, 238).trim() + '…';
 
-  if (!Array.isArray(analysis.alternatives) || analysis.verdict === 'unknown') {
+  if (!Array.isArray(analysis.alternatives) || analysis.comparisonType === 'unknown') {
     analysis.alternatives = [];
   } else {
     const VALID_SCOPES = new Set(['local', 'online']);
@@ -4103,7 +4205,7 @@ Produce the Price Analysis JSON per the rules above. Remember: price RANGES only
       .slice(0, 5);
   }
 
-  analysis.homeReference = (analysis.verdict === 'unknown') ? null : sanitizeStr(analysis.homeReference);
+  analysis.homeReference = (analysis.comparisonType === 'unknown') ? null : sanitizeStr(analysis.homeReference);
   analysis.confidence = ['high', 'medium', 'low'].includes(analysis.confidence) ? analysis.confidence : 'low';
 
   // _sources — pin to 'estimated' for every renderable; any other claim is

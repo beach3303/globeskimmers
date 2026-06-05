@@ -647,6 +647,21 @@ export default function SmartPriceScannerPage() {
       } else {
         setAnalysisError('No analysis returned');
       }
+      // Fire usage event so the analytics dashboard can answer "how many
+      // price analyses per user / per day". Schema mirrors the prompt's
+      // _cache hint + worker's verdict/comparisonType output. Failures and
+      // cache hits both count as a view from the user's perspective.
+      try {
+        logEvent('price_analysis_viewed', {
+          country: activeLocation?.address?.country || null,
+          currency: selectedCurrency,
+          item_currency: first.original?.currency || null,
+          cache: data?._cache || (data?.error ? 'error' : 'unknown'),
+          paid: data?._cache && data._cache !== 'hit',
+          verdict: data?.analysis?.verdict || null,
+          comparisonType: data?.analysis?.comparisonType || null,
+        }, 'SmartPriceScanner');
+      } catch (_e) { /* ignore analytics failure */ }
     } catch (e) {
       setAnalysisError(e?.message || 'Failed to load analysis');
     } finally {
@@ -1057,13 +1072,24 @@ export default function SmartPriceScannerPage() {
                   <p className="text-white text-[14px] leading-relaxed mb-4">{analysis.gsVerdict}</p>
                 )}
 
-                {/* Alternatives */}
+                {/* Alternatives. Header copy varies by comparisonType so the
+                    user knows whether these are exact-match alternatives
+                    (chain-store items) or look-alike comparable pieces
+                    (handcrafted / artisan items where the exact item won't
+                    be at chain stores). */}
                 {analysis.alternatives && analysis.alternatives.length > 0 && (
                   <div className="bg-white/10 rounded-xl p-4 mb-3">
                     <div className="text-white/70 text-[11px] font-bold uppercase tracking-wide mb-2">
-                      Similar items nearby
+                      {analysis.comparisonType === 'similar_style'
+                        ? <>🎨 Comparable handcrafted / look-alike pieces</>
+                        : <>Similar items nearby</>}
                       <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold" style={{ background: '#FEF3C7', color: '#92400E' }}>estimated</span>
                     </div>
+                    {analysis.comparisonType === 'similar_style' && (
+                      <div className="text-white/60 text-[11px] mb-2 leading-relaxed">
+                        Exact item isn't typically sold at chain stores. These are similar in style / category at places that sell comparable handcrafted pieces.
+                      </div>
+                    )}
                     <ul className="space-y-2">
                       {analysis.alternatives.map((a, i) => (
                         <li key={i} className="text-white text-[13px]">
