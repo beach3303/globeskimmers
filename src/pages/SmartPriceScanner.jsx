@@ -1448,7 +1448,7 @@ function CapHitModal({ type, onClose, onGoHome }) {
           You've used today's {cap} free {what}
         </h3>
         <p className="text-[14px] text-gray-600 mb-5 leading-relaxed text-center">
-          Don't worry — it generously refreshes at <strong>midnight your local time</strong>. Or get unlimited scans + analyses with <strong>Globeskimmers Premium, launching soon</strong>.
+          Your free daily {what} reset at <strong>midnight your local time</strong>. Or unlock unlimited with <strong>Globeskimmers Premium, launching soon</strong>.
         </p>
         <button
           type="button"
