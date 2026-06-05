@@ -30,3 +30,17 @@ dist-ssr
 .env
 # Wrangler local state (KV/D1 emulation cache)
 .wrangler/
+
+# Capacitor — belt-and-suspenders entries for native build artifacts and
+# machine-specific paths. The native platforms also have their OWN
+# .gitignore inside ios/ and android/ (auto-created by Capacitor); these
+# root entries are extra protection against first-time builds adding
+# things like local.properties (absolute SDK paths) or Pods.
+ios/App/Pods/
+ios/DerivedData/
+ios/App/build/
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
