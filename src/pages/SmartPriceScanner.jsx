@@ -1460,15 +1460,8 @@ function CapHitModal({ type, onClose, onGoHome }) {
         </button>
         <button
           type="button"
-          onClick={onClose}
-          className="w-full text-gray-700 font-semibold py-2.5 text-[14px] hover:underline"
-        >
-          Maybe later
-        </button>
-        <button
-          type="button"
           onClick={onGoHome}
-          className="w-full text-gray-400 text-[12px] mt-1 hover:text-gray-600"
+          className="w-full text-gray-500 text-[13px] mt-1 hover:text-gray-700"
         >
           🏠 Back to Home
         </button>

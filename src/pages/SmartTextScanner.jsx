@@ -454,6 +454,9 @@ export default function SmartTextScannerPage() {
   }
 
   // ── RENDER: Limit reached card ───────────────────────────────────────────
+  // Shown ONLY when the user has hit their daily 10-translation cap.
+  // Copy + Premium framing matches the Price Scanner cap-hit modal so the
+  // two scanners read consistently when a free-tier user hits the wall.
   if (step === 'limit') {
     return (
       <div className="min-h-screen font-sans flex flex-col items-center justify-center px-5" style={{ background: IVORY }}>
@@ -463,7 +466,7 @@ export default function SmartTextScannerPage() {
             You've used all <span className="font-serif italic font-normal text-[#C5197A]">10 free</span> translations today.
           </div>
           <div className="mt-3 text-[14.5px] text-[#475569] leading-relaxed">
-            Resets at midnight your time.
+            Your free daily translations reset at <strong>midnight your local time</strong>. Or unlock unlimited with <strong>Globeskimmers Premium, launching soon</strong>.
           </div>
 
           <div className="mt-5 px-4 py-4 rounded-[14px] text-left" style={{ background: CAT.todo.bg, color: CAT.todo.ink }}>
@@ -473,12 +476,23 @@ export default function SmartTextScannerPage() {
             </div>
           </div>
 
+          {/* Premium CTA — non-functional placeholder until the subscription
+              flow lands. Same "coming soon" framing as the Price Scanner
+              cap-hit modal so the user hears a consistent message. */}
+          <button
+            type="button"
+            onClick={() => { /* Premium flow lands later */ }}
+            className="mt-5 w-full h-[54px] rounded-[16px] text-white font-bold text-[15.5px] transition-opacity hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg,#7C3AED 0%,#EC4899 100%)' }}
+          >
+            ✨ Get Globeskimmers Premium — coming soon
+          </button>
+
           <button
             onClick={() => navigate(createPageUrl('Home'))}
-            className="mt-6 w-full h-[54px] rounded-[16px] text-white font-bold text-[15.5px]"
-            style={{ background: '#0F1419', boxShadow: '0 12px 28px -14px rgba(15,20,25,.4)' }}
+            className="mt-2 w-full text-gray-500 text-[13px] font-medium py-2.5 hover:text-gray-700"
           >
-            Back to Home
+            🏠 Back to Home
           </button>
         </motion.div>
       </div>
