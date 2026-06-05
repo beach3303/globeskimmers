@@ -869,7 +869,7 @@ export default function SmartPriceScannerPage() {
               className="w-full h-[54px] rounded-[16px] text-white flex items-center justify-center gap-2 font-bold text-[15.5px]"
               style={{ background: '#0F1419', boxShadow: '0 12px 28px -14px rgba(15,20,25,.4)' }}
             >
-              Got it, let's scan
+              Start price scanning
               <ArrowRight size={18} color="#fff" strokeWidth={2.4} />
             </button>
           </div>
