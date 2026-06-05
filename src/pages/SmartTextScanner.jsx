@@ -106,6 +106,14 @@ export default function SmartTextScannerPage() {
   const [frozenFrame, setFrozenFrame] = useState(null);
   const [translation, setTranslation] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  // Tap-to-focus visual cue. Holds { x, y } in pixels relative to the
+  // video element's top-left when the user taps the live preview. Used
+  // ONLY for the on-screen focus ring — the lens-refocus constraint is
+  // applied separately and works only where the browser exposes the
+  // MediaTrackCapabilities `pointsOfInterest` field (mostly Android
+  // Chrome; iOS Safari falls back to a visual cue + best-effort
+  // continuous-focus re-trigger).
+  const [focusRing, setFocusRing] = useState(null);
 
   const [todayCount, setTodayCount] = useState(0);
 
@@ -218,6 +226,68 @@ export default function SmartTextScannerPage() {
       streamRef.current = null;
     }
     setCameraReady(false);
+  };
+
+  // ── Tap-to-focus ──────────────────────────────────────────────────────────
+  // Mobile UX: when the user taps the live preview, ask the camera to
+  // refocus at that point. Then restore continuous autofocus so the lens
+  // stays sharp as the user moves the phone around.
+  //
+  // Platform support is uneven (browser-based getUserMedia limits):
+  //   - Android Chrome: `pointsOfInterest` + `focusMode: 'single-shot'`
+  //     constraints work — true tap-to-focus at the tap point.
+  //   - iOS Safari / WKWebView: `focusMode` and `pointsOfInterest` are
+  //     NOT exposed in MediaTrackCapabilities; the constraint call
+  //     silently fails. iOS does its own automatic autofocus at the OS
+  //     level. The visual focus ring still fires so users get the "tap
+  //     registered" cue.
+  //
+  // For a true cross-platform tap-to-focus we'd need a Capacitor native
+  // camera plugin (out of scope for this commit).
+  const handleVideoTap = async (e) => {
+    if (step !== 'camera' || !cameraReady || frozenFrame) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const xPx = e.clientX - rect.left;
+    const yPx = e.clientY - rect.top;
+    // Normalized 0–1 coordinates for the constraint API.
+    const nx = Math.max(0, Math.min(1, xPx / rect.width));
+    const ny = Math.max(0, Math.min(1, yPx / rect.height));
+
+    // Show the focus ring immediately (independent of constraint success).
+    const ringKey = Date.now() + Math.random();
+    setFocusRing({ x: xPx, y: yPx, key: ringKey });
+    // Auto-clear after the animation finishes. Guarded on key so a NEW
+    // tap during the previous tap's 750ms timer doesn't get cleared early.
+    setTimeout(() => setFocusRing((r) => (r && r.key === ringKey ? null : r)), 750);
+
+    // Best-effort lens refocus.
+    try {
+      const stream = streamRef.current;
+      const track = stream?.getVideoTracks?.()[0];
+      if (!track || !track.applyConstraints) return;
+      const caps = (track.getCapabilities && track.getCapabilities()) || {};
+      const advanced = [];
+      // Apply pointsOfInterest first so it pairs with single-shot below.
+      if ('pointsOfInterest' in caps) {
+        advanced.push({ pointsOfInterest: [{ x: nx, y: ny }] });
+      }
+      if (Array.isArray(caps.focusMode) && caps.focusMode.includes('single-shot')) {
+        advanced.push({ focusMode: 'single-shot' });
+      }
+      if (advanced.length === 0) return;  // iOS path — silent no-op
+      await track.applyConstraints({ advanced });
+      // Restore continuous so the lens stays sharp as the user moves the
+      // phone. Tiny delay so the single-shot has time to settle.
+      setTimeout(async () => {
+        try {
+          if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+            await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+          }
+        } catch (_e) { /* ignore */ }
+      }, 1500);
+    } catch (_e) {
+      // Silent fail — the focus ring still gave the user feedback.
+    }
   };
 
   // ── Capture frame + call Claude for translation ───────────────────────────
@@ -425,6 +495,7 @@ export default function SmartTextScannerPage() {
         autoPlay
         playsInline
         muted
+        onClick={handleVideoTap}
         className="absolute inset-0 w-full h-full object-cover"
         style={{ display: frozenFrame ? 'none' : 'block' }}
       />
@@ -432,6 +503,37 @@ export default function SmartTextScannerPage() {
         <img src={frozenFrame} alt="frozen frame" className="absolute inset-0 w-full h-full object-cover" />
       )}
       <canvas ref={canvasRef} className="hidden" />
+
+      {/* Tap-to-focus visual cue. 60px ring that scales-in + fades-out at
+          the tap location. Renders regardless of whether the lens-refocus
+          constraint actually applied — gives iOS users (where the
+          MediaTrackCapabilities API doesn't expose focusMode) a "tap
+          registered" cue. pointer-events-none so it never blocks the
+          live preview underneath. */}
+      {focusRing && step === 'camera' && !frozenFrame && (
+        <div
+          key={focusRing.key}
+          className="pointer-events-none absolute"
+          style={{
+            left: focusRing.x - 30,
+            top: focusRing.y - 30,
+            width: 60,
+            height: 60,
+            border: '2px solid rgba(255,255,255,0.95)',
+            borderRadius: '50%',
+            boxShadow: '0 0 0 1px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(0,0,0,0.35)',
+            animation: 'gsFocusRing 700ms ease-out forwards',
+            zIndex: 25,
+          }}
+        />
+      )}
+      <style>{`
+        @keyframes gsFocusRing {
+          0%   { transform: scale(1.5); opacity: 0; }
+          25%  { opacity: 1; }
+          100% { transform: scale(1); opacity: 0; }
+        }
+      `}</style>
 
       {/* Camera error state */}
       {cameraError && step === 'camera' && (
