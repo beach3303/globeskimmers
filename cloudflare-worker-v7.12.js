@@ -1849,7 +1849,7 @@ async function handleLabelPhotos(request, env) {
 
 const AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days
 
-const AI_DETAILS_PROMPT_VERSION = 'v7';  // v6 -> v7: removed duplicate fields (headsUp, goodFor, notIdealFor) — GS Verdict sentence + Good to Know cover the same ground. Strengthened bestTime/value/goodToKnow prompts to require concrete traveler language.
+const AI_DETAILS_PROMPT_VERSION = 'v8';  // v7 -> v8: added practical.tipping (service charge / cover charge / tip norms). Surfaces the #1 traveler-anxiety cluster ("money surprises") directly in the Practical row instead of relying on it accidentally landing in goodToKnow.
 
 function buildAIDetailsSystemPrompt(kind) {
   const safeKind = ['restaurant', 'coffee', 'attraction', 'restroom', 'atm'].includes(kind) ? kind : 'restaurant';
@@ -1888,11 +1888,12 @@ function buildAIDetailsSystemPrompt(kind) {
   - "know_before_you_go" = decent food / experience BUT meaningful planning friction (cash-only, long waits, hard-to-find, limited hours, language barrier, etc.) that travelers should know up front.
   - "better_if_convenient" = fine everyday option, not a destination — only stop if it's already on your route.
   Default to "strong_nearby_pick" when truly unsure. NEVER "skip" or negative framing.
-- practical: { payment, englishMenu, reservation, dietary } object with these factual fields (any can be null):
+- practical: { payment, englishMenu, reservation, dietary, tipping } object with these factual fields (any can be null):
   - payment: short factual line about payment methods (e.g. "Cards + tap accepted; cash also OK", "Cash only — bring local currency", "Card-only, no cash"). NULL if reviews don't say.
   - englishMenu: short factual line about menu language + staff English (e.g. "Menu in English; staff speaks English", "English menu available; limited staff English", "Menu in local language only; photos help"). NULL if unclear.
   - reservation: short factual line (e.g. "Walk-in fine; weekend dinner gets busy", "Reservation recommended for dinner", "Reservations required — book ahead"). NULL if unclear.
   - dietary: short factual line covering vegetarian/vegan/gluten-free/halal/allergens IF mentioned (e.g. "Vegetarian options available; ask staff about gluten-free", "Limited vegetarian options", "Halal-certified"). NULL if no dietary info in reviews.
+  - tipping: ONE short factual line about tipping norms / service charges / cover charges / hidden fees AT THIS SPECIFIC PLACE if reviews mention them, OR the COUNTRY-LEVEL tipping norm if the venue itself is silent. Examples: "10% service charge auto-added — no extra tip expected", "15–20% tip standard in the US; servers prefer cash", "No tipping culture — rounding up is appreciated but not required", "Cover charge ~€2 per person", "Service NOT included — leave 5–10% in cash". NEVER editorialize ("overpriced", "rip-off"). NULL only when both review evidence AND country norms are unknown.
 - crowd: who eats here — short concrete labels (e.g. "Mostly local diners; family crowd", "Food-focused regulars more than ambiance seekers"). Avoid vague phrasing.
 - bestTime: CONCRETE recommendation a traveler can act on. Don't say "weekday lunch is calmer" — say "Aim for weekday lunch around 12:30, or weekend brunch before 11 to avoid the rush". Always pair a SPECIFIC suggested window with a brief reason. Avoid vague "anytime is good" answers.
 - vibe: 1 direct sentence describing atmosphere (casual, group-friendly, romantic, energetic, quiet, etc.). Avoid decorative language ("charming", "delightful"). Be concrete.
@@ -1976,7 +1977,8 @@ OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
     "payment": "<short factual line about payment methods>" | null,
     "englishMenu": "<short factual line about menu language + staff English>" | null,
     "reservation": "<short factual line>" | null,
-    "dietary": "<short factual line about veg/vegan/GF/halal options>" | null
+    "dietary": "<short factual line about veg/vegan/GF/halal options>" | null,
+    "tipping": "<short factual line about tipping norms / service charges / cover charges>" | null
   } | null (food/coffee/attraction only; null otherwise),
   "whatYouSee": "<short concrete description of physical features (attraction only)>" | null,
   "aboutAndHistory": "<short factual purpose / history (attraction only)>" | null,
@@ -2196,7 +2198,7 @@ async function handleAIDetails(request, env) {
       aiDetails.worthIt = v7Allowed ? 'strong_nearby_pick' : null;
     }
 
-    // practical: object with 4 string|null fields
+    // practical: object with 5 string|null fields (v8 added `tipping`)
     if (!v7Allowed || !aiDetails.practical || typeof aiDetails.practical !== 'object') {
       aiDetails.practical = null;
     } else {
@@ -2206,6 +2208,7 @@ async function handleAIDetails(request, env) {
         englishMenu: sanitizeStr(p.englishMenu),
         reservation: sanitizeStr(p.reservation),
         dietary: sanitizeStr(p.dietary),
+        tipping: sanitizeStr(p.tipping),
       };
       const anyPresent = Object.values(cleanedP).some(v => v !== null);
       aiDetails.practical = anyPresent ? cleanedP : null;

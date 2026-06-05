@@ -331,15 +331,19 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
         </div>
       )}
 
-      {/* PRACTICAL — payment / English menu / reservation / dietary.
+      {/* PRACTICAL — payment / English menu / reservation / dietary / tipping.
           The top traveler-anxiety cluster: surfaced high in the panel so
-          users see it before deciding to go. */}
+          users see it before deciding to go. v8 added tipping to address
+          the #1 reported money-surprise complaint (service charges, cover
+          charges, cash-only tip jars, country-level norms travelers don't
+          know coming in). */}
       {details.practical && (() => {
         const rows = [
           { key: 'payment',     icon: '💳', label: 'Payment' },
           { key: 'englishMenu', icon: '🗣️', label: 'English' },
           { key: 'reservation', icon: '📅', label: 'Reservation' },
           { key: 'dietary',     icon: '🥗', label: 'Dietary' },
+          { key: 'tipping',     icon: '💁', label: 'Tipping' },
         ].filter(r => details.practical[r.key]);
         if (rows.length === 0) return null;
         return (
