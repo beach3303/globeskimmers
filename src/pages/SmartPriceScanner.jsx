@@ -849,16 +849,17 @@ export default function SmartPriceScannerPage() {
             <ul className="space-y-2 text-[13.5px] text-[#0F1419]">
               <li className="flex gap-2"><span>•</span><span><strong>Instant currency conversion</strong> on any price tag</span></li>
               <li className="flex gap-2"><span>•</span><span><strong>Price analysis</strong> — typical prices at nearby stores + how it compares to your home country</span></li>
-              <li className="flex gap-2"><span>•</span><span><strong>10 free scans + 5 free price analyses</strong> each day, generously refreshed every midnight</span></li>
+              <li className="flex gap-2"><span>•</span><span><strong>10 free scans + 5 free price analyses</strong> each day — and it generously refreshes at midnight</span></li>
             </ul>
           </div>
 
-          {/* Cap framing — kind, not restrictive. Acknowledges the user
-              by name of behavior, not the number of the cap. Frames the
-              cap as our way of keeping the app free + sustainable. */}
+          {/* Cap framing — kind, not restrictive. Frames the cap as our
+              way of keeping the app free + sustainable, and the Premium
+              tier as something to look forward to (no false promise it's
+              available today). */}
           <div className="mt-3 px-4 py-3.5 rounded-[14px] text-[12.5px] leading-relaxed" style={{ background: CAT.money.bg, color: CAT.money.ink }}>
             <div className="font-bold mb-1">💚 A quick note</div>
-            Most travelers never reach the daily caps — they're there so we can keep this free for everyone. If you're on a big shopping day and want unlimited, Premium will be available soon.
+            Most travelers never reach the daily caps — they're there so we can keep the app free for everyone. If you're on a big shopping day and want unlimited, <strong>Globeskimmers Premium is launching soon</strong>.
           </div>
 
           {/* Start button */}
@@ -1447,15 +1448,15 @@ function CapHitModal({ type, onClose, onGoHome }) {
           You've used today's {cap} free {what}
         </h3>
         <p className="text-[14px] text-gray-600 mb-5 leading-relaxed text-center">
-          Your daily {what} reset at <strong>midnight your local time</strong>. Or unlock unlimited with Globeskimmers Premium.
+          Don't worry — it generously refreshes at <strong>midnight your local time</strong>. Or get unlimited scans + analyses with <strong>Globeskimmers Premium, launching soon</strong>.
         </p>
         <button
           type="button"
-          onClick={() => { /* Premium flow lands later — for now this is a placeholder */ }}
+          onClick={() => { /* Premium flow lands later — button is a soft "coming soon" placeholder for now, no false promise it does anything today */ }}
           className="w-full text-white font-bold py-3 rounded-xl mb-2 transition-opacity hover:opacity-90"
           style={{ background: 'linear-gradient(135deg,#7C3AED 0%,#EC4899 100%)' }}
         >
-          ✨ Get Globeskimmers Premium
+          ✨ Get Globeskimmers Premium — coming soon
         </button>
         <button
           type="button"
