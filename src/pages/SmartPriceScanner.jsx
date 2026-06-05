@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { X, RefreshCw, ArrowLeft, Camera } from "lucide-react";
+import { X, RefreshCw, ArrowLeft, Camera, ChevronLeft, ArrowRight, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import { CAT, IVORY } from "@/components/redesign/constants";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocation } from "@/components/location/LocationContext";
 import { logEvent } from "@/lib/analytics";
@@ -84,6 +85,9 @@ const DAILY_SCAN_CAP = 10;
 const DAILY_ANALYSIS_CAP = 5;
 const STORAGE_KEY_SCAN_COUNT     = 'globeskimmers_price_scan_count';
 const STORAGE_KEY_ANALYSIS_COUNT = 'globeskimmers_price_analysis_count';
+// One-time intro card flag — set after the user taps "Got it" on the
+// welcome screen. Subsequent opens skip straight to the currency picker.
+const STORAGE_KEY_PRICE_INTRO_SEEN = 'globeskimmers_price_scan_intro_seen';
 
 // Reads count for today from a storage slot. Returns 0 on any error (storage
 // disabled, malformed payload, different date). Date check is local-time so
@@ -291,7 +295,12 @@ export default function SmartPriceScannerPage() {
       const userData = await base44.auth.me();
       setUser(userData);
 
-      setStep('currency');
+      // First open of the lifetime → show the kind intro card; subsequent
+      // opens skip to the currency picker. Storage flag check wrapped in
+      // try/catch because private-mode iOS Safari can throw on localStorage.
+      let introSeen = false;
+      try { introSeen = localStorage.getItem(STORAGE_KEY_PRICE_INTRO_SEEN) === '1'; } catch { /* default false */ }
+      setStep(introSeen ? 'currency' : 'intro');
     } catch (error) {
       console.error("Error loading user:", error);
       base44.auth.redirectToLogin(window.location.pathname);
@@ -681,6 +690,13 @@ export default function SmartPriceScannerPage() {
     setStep('scanning');
   };
 
+  // "Got it, let's start" on the intro card. Persists the seen flag so
+  // future opens skip the welcome and go straight to the currency picker.
+  const handleStartFromIntro = () => {
+    try { localStorage.setItem(STORAGE_KEY_PRICE_INTRO_SEEN, '1'); } catch { /* ignore */ }
+    setStep('currency');
+  };
+
   // "Scan another" — drops the frozen frame + cleared prices and returns to
   // the live camera so the user can frame the next item and tap Freeze again.
   // Used from BOTH the post-freeze panel and the analysis card.
@@ -774,6 +790,92 @@ export default function SmartPriceScannerPage() {
       setAnalysisLoading(false);
     }
   };
+
+  // ── RENDER: Intro card (first open of a user's lifetime) ─────────────────
+  // Warm welcome that frames the daily caps as a generous gift, not a
+  // restriction. Same visual pattern as the Text Scanner intro
+  // (SmartTextScanner.jsx) so the two scanners feel like siblings.
+  // After the user taps "Got it", the seen flag is persisted to localStorage
+  // and they go to the currency picker. Future opens skip this card.
+  if (step === 'intro') {
+    return (
+      <div className="min-h-screen font-sans flex flex-col" style={{ background: IVORY }}>
+        {/* Violet gradient header — matches Text Scanner */}
+        <div
+          className="text-white px-5 pt-6 pb-7 rounded-b-[24px]"
+          style={{
+            background: 'linear-gradient(135deg, #6D28D9 0%, #7C3AED 55%, #A855F7 100%)',
+            boxShadow: '0 14px 30px -16px rgba(124,58,237,.55)',
+          }}
+        >
+          <div className="max-w-md mx-auto flex items-center justify-between">
+            <button
+              onClick={() => navigate(createPageUrl('Home'))}
+              className="flex items-center gap-1.5 hover:opacity-80 transition-opacity font-semibold text-[14px]"
+            >
+              <ChevronLeft size={18} color="#fff" strokeWidth={2.2} />
+              <span>Back</span>
+            </button>
+          </div>
+          <div className="max-w-md mx-auto mt-3 text-[26px] font-extrabold tracking-tight leading-tight">
+            Smart <span className="font-serif italic font-normal">Price Scanner</span>
+          </div>
+        </div>
+
+        {/* Intro body */}
+        <div className="max-w-md mx-auto px-5 pt-6 pb-8 flex-1 flex flex-col">
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="text-center">
+            <div
+              className="w-[88px] h-[88px] mx-auto rounded-[26px] flex items-center justify-center"
+              style={{
+                background: 'linear-gradient(135deg, #7C3AED 0%, #C5197A 100%)',
+                boxShadow: '0 16px 34px -14px rgba(124,58,237,.6)',
+              }}
+            >
+              <ScanLine size={42} color="#fff" strokeWidth={1.8} />
+            </div>
+            <div className="mt-[18px] text-[28px] font-extrabold text-[#0F1419] tracking-tight">
+              Know what you're paying, <span className="font-serif italic font-normal text-[#7C3AED]">anywhere.</span>
+            </div>
+            <div className="mt-3 text-[15px] text-[#475569] leading-relaxed">
+              Point your camera at a price tag — we'll convert it to your currency and tell you if it's a good deal.
+            </div>
+          </motion.div>
+
+          {/* What's in your pocket — value framing first, caps last so the
+              card reads as a list of gifts the user is getting for free */}
+          <div className="mt-6 px-4 py-4 rounded-[16px]" style={{ background: '#fff', border: '1px solid #F0E9DC' }}>
+            <div className="font-mono text-[10px] tracking-[0.16em] uppercase font-semibold text-[#6B7280] mb-2">What's in your pocket</div>
+            <ul className="space-y-2 text-[13.5px] text-[#0F1419]">
+              <li className="flex gap-2"><span>•</span><span><strong>Instant currency conversion</strong> on any price tag</span></li>
+              <li className="flex gap-2"><span>•</span><span><strong>Price analysis</strong> — typical prices at nearby stores + how it compares to your home country</span></li>
+              <li className="flex gap-2"><span>•</span><span><strong>10 free scans + 5 free price analyses</strong> each day, generously refreshed every midnight</span></li>
+            </ul>
+          </div>
+
+          {/* Cap framing — kind, not restrictive. Acknowledges the user
+              by name of behavior, not the number of the cap. Frames the
+              cap as our way of keeping the app free + sustainable. */}
+          <div className="mt-3 px-4 py-3.5 rounded-[14px] text-[12.5px] leading-relaxed" style={{ background: CAT.money.bg, color: CAT.money.ink }}>
+            <div className="font-bold mb-1">💚 A quick note</div>
+            Most travelers never reach the daily caps — they're there so we can keep this free for everyone. If you're on a big shopping day and want unlimited, Premium will be available soon.
+          </div>
+
+          {/* Start button */}
+          <div className="mt-auto pt-6">
+            <button
+              onClick={handleStartFromIntro}
+              className="w-full h-[54px] rounded-[16px] text-white flex items-center justify-center gap-2 font-bold text-[15.5px]"
+              style={{ background: '#0F1419', boxShadow: '0 12px 28px -14px rgba(15,20,25,.4)' }}
+            >
+              Got it, let's scan
+              <ArrowRight size={18} color="#fff" strokeWidth={2.4} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (step === 'currency') {
     return (
