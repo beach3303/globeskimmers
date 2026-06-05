@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { X, RefreshCw, ArrowLeft, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocation } from "@/components/location/LocationContext";
 import { logEvent } from "@/lib/analytics";
@@ -66,6 +66,62 @@ const CURRENCIES = [
 const WORKER_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
 const EXCHANGE_RATE_CACHE_KEY = 'globeskimmers_exchange_rates_v2';
 const EXCHANGE_RATE_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+// ============================================================================
+// DAILY USAGE CAPS (free tier)
+// ============================================================================
+// Why these numbers: see cap analysis in the project thread. Worst-case per
+// user per month at the cap: 30 × (10 × $0.011 + 5 × $0.005) = $4.05.
+//
+// Cap is a hard ceiling on free-tier spend per user and primary defense
+// against runaway / abuse scenarios. Premium-tier users will bypass via
+// getCaps() — see comment there.
+//
+// Storage: localStorage keyed by (storage_key, today's YYYY-MM-DD in local
+// time). Mirrors the Text Scanner pattern at SmartTextScanner.jsx so the
+// helpers are predictable across the app.
+const DAILY_SCAN_CAP = 10;
+const DAILY_ANALYSIS_CAP = 5;
+const STORAGE_KEY_SCAN_COUNT     = 'globeskimmers_price_scan_count';
+const STORAGE_KEY_ANALYSIS_COUNT = 'globeskimmers_price_analysis_count';
+
+// Reads count for today from a storage slot. Returns 0 on any error (storage
+// disabled, malformed payload, different date). Date check is local-time so
+// caps reset at the user's midnight, not UTC.
+function readDailyCount(storageKey) {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return 0;
+    const { date, count } = JSON.parse(raw);
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+    return date === today ? count : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function incrementDailyCount(storageKey) {
+  try {
+    const today = new Date().toLocaleDateString('en-CA');
+    const current = readDailyCount(storageKey);
+    const next = current + 1;
+    localStorage.setItem(storageKey, JSON.stringify({ date: today, count: next }));
+    return next;
+  } catch {
+    return 0;
+  }
+}
+
+// Subscription-aware cap. Today returns the free-tier caps; once Premium
+// ships and we set user.subscription_tier='premium', this returns Infinity
+// for both and the cap UI disappears for paid users. No other code changes
+// needed at that point.
+function getCaps(user) {
+  if (user?.subscription_tier === 'premium') {
+    return { scans: Infinity, analyses: Infinity };
+  }
+  return { scans: DAILY_SCAN_CAP, analyses: DAILY_ANALYSIS_CAP };
+}
 
 const FALLBACK_EXCHANGE_RATES = {
   USD: 1, EUR: 0.92, GBP: 0.79, JPY: 150, CNY: 7.24, KRW: 1320,
@@ -173,6 +229,13 @@ export default function SmartPriceScannerPage() {
   const [analysis, setAnalysis] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
+  // Daily cap counters (free tier). Loaded from localStorage on mount,
+  // incremented on tap (count-on-intent). Re-checked on every action so a
+  // tab open since yesterday gets fresh counts after midnight.
+  const [scanCount, setScanCount] = useState(0);
+  const [analysisCount, setAnalysisCount] = useState(0);
+  // null | 'scan' | 'analysis' — drives CapHitModal
+  const [capHitModal, setCapHitModal] = useState(null);
 
   const detectPlatform = () => {
     if (window.Capacitor) {
@@ -198,6 +261,11 @@ export default function SmartPriceScannerPage() {
     setIsNativeApp(detectPlatform());
     
     loadUser();
+    // Seed today's cap counts on mount so the chip + gate are honest from
+    // first render. If the user kept the tab open past midnight, the next
+    // tap re-reads via readDailyCount and naturally returns 0 for the new day.
+    setScanCount(readDailyCount(STORAGE_KEY_SCAN_COUNT));
+    setAnalysisCount(readDailyCount(STORAGE_KEY_ANALYSIS_COUNT));
     return () => { stopCamera(); };
   }, []);
 
@@ -400,9 +468,24 @@ export default function SmartPriceScannerPage() {
   // Replaces the previous auto-scan interval. Fires only when the user taps
   // the Freeze CTA, mirroring the Text Scanner pattern. Same backend call
   // (extractPricesFromImage → convertToPreferredCurrency) — just user-gated.
+  //
+  // Daily cap: counts the user's intent (the tap), not just successes.
+  // Failed scans / no-prices-found still consume a slot — this is by design
+  // so a frustrated user spamming the button can't bypass the cap.
   const handleFreezeAndConvert = async () => {
     if (isScanning) return;                      // ignore double-taps
     if (!cameraReady || !videoRef.current) return;
+    // Re-read on every tap so a tab kept open past midnight gets fresh counts.
+    const liveScans = readDailyCount(STORAGE_KEY_SCAN_COUNT);
+    const caps = getCaps(user);
+    if (liveScans >= caps.scans) {
+      setScanCount(liveScans);  // sync state so the chip reflects reality
+      setCapHitModal('scan');
+      return;
+    }
+    // Increment on tap (count-on-intent).
+    const nextScans = incrementDailyCount(STORAGE_KEY_SCAN_COUNT);
+    setScanCount(nextScans);
     console.log("📸 Freeze & convert tapped...");
     setIsScanning(true);
     
@@ -625,11 +708,34 @@ export default function SmartPriceScannerPage() {
   // the input (most common case is one price tag at a time). Caches at the
   // Worker layer keyed by (item description + currency + price bucket +
   // country pair) so repeats of the same product type are free.
+  //
+  // Daily cap: gated on the ANALYSIS counter. If the user has already
+  // loaded `analysis` for this scan, they're just navigating — no fetch,
+  // no slot consumed. The slot is only burned when we actually hit the
+  // Worker.
   const handleViewAnalysis = async () => {
-    setStep('analysis');
-    if (analysis || analysisLoading) return;  // already loaded / loading
+    // Navigation-only path: analysis already cached in state from a prior
+    // tap during this scan. Free.
+    if (analysis) {
+      setStep('analysis');
+      return;
+    }
     const first = detectedPrices[0];
     if (!first) return;  // nothing to analyze (shouldn't happen — button is gated above)
+    if (analysisLoading) return;  // request in flight
+
+    // About to fetch — check cap.
+    const liveAnalyses = readDailyCount(STORAGE_KEY_ANALYSIS_COUNT);
+    const caps = getCaps(user);
+    if (liveAnalyses >= caps.analyses) {
+      setAnalysisCount(liveAnalyses);  // sync chip
+      setCapHitModal('analysis');
+      return;
+    }
+    // Cap not hit — burn a slot and proceed.
+    const nextAnalyses = incrementDailyCount(STORAGE_KEY_ANALYSIS_COUNT);
+    setAnalysisCount(nextAnalyses);
+    setStep('analysis');
     setAnalysisLoading(true);
     setAnalysisError(null);
     try {
@@ -918,11 +1024,36 @@ export default function SmartPriceScannerPage() {
           >
             <X className="w-5 h-5 text-white" />
           </button>
-          {debugInfo && isLive && (
-            <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full">
-              <p className="text-white text-xs">{debugInfo}</p>
-            </div>
-          )}
+          {/* Top-right slot: scan-counter chip when the user is in their
+              last 5 scans of the day (so casual users never see it),
+              otherwise the existing debug pill. Color escalates as the
+              cap approaches: grey > amber (≤2) > red (0 — button disabled). */}
+          {(() => {
+            const caps = getCaps(user);
+            const scansLeft = Math.max(0, caps.scans - scanCount);
+            const showCounter = isLive && Number.isFinite(caps.scans) && scansLeft <= 5;
+            if (showCounter) {
+              const palette =
+                scansLeft === 0  ? { bg: '#DC2626', color: '#FFFFFF' } :
+                scansLeft <= 2   ? { bg: '#F59E0B', color: '#FFFFFF' } :
+                                   { bg: 'rgba(255,255,255,0.22)', color: '#FFFFFF' };
+              return (
+                <div className="backdrop-blur-md px-3 py-1 rounded-full" style={{ background: palette.bg }}>
+                  <p className="text-xs font-bold" style={{ color: palette.color }}>
+                    {scansLeft} of {caps.scans} scans left today
+                  </p>
+                </div>
+              );
+            }
+            if (debugInfo && isLive) {
+              return (
+                <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full">
+                  <p className="text-white text-xs">{debugInfo}</p>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
 
@@ -938,23 +1069,37 @@ export default function SmartPriceScannerPage() {
         </div>
       )}
 
-      {/* LIVE CAMERA — Freeze CTA at bottom */}
-      {isLive && (
-        <div className="absolute bottom-0 left-0 right-0 z-20 px-5 pb-8 pt-6 bg-gradient-to-t from-black/70 to-transparent">
-          <button
-            onClick={handleFreezeAndConvert}
-            disabled={!cameraReady || isScanning}
-            className="w-full py-4 rounded-[18px] text-white font-bold text-[16px] flex items-center justify-center gap-2 shadow-lg transition-opacity disabled:opacity-50"
-            style={{ background: 'linear-gradient(135deg,#7C3AED 0%,#EC4899 100%)' }}
-          >
-            {!cameraReady
-              ? <>📷 Starting rear camera…</>
-              : isScanning
-                ? <><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Scanning prices…</>
-                : <>🧊 Freeze &amp; convert price</>}
-          </button>
-        </div>
-      )}
+      {/* LIVE CAMERA — Freeze CTA at bottom. When the daily scan cap is
+          hit, the button stays tappable but its label flips and the tap
+          opens the CapHitModal (gating is done inside handleFreezeAndConvert
+          so we don't need to disable here — disabling would lose the
+          upgrade-nudge opportunity). */}
+      {isLive && (() => {
+        const caps = getCaps(user);
+        const scanCapHit = Number.isFinite(caps.scans) && scanCount >= caps.scans;
+        return (
+          <div className="absolute bottom-0 left-0 right-0 z-20 px-5 pb-8 pt-6 bg-gradient-to-t from-black/70 to-transparent">
+            <button
+              onClick={handleFreezeAndConvert}
+              disabled={!cameraReady || isScanning}
+              className="w-full py-4 rounded-[18px] text-white font-bold text-[16px] flex items-center justify-center gap-2 shadow-lg transition-opacity disabled:opacity-50"
+              style={{
+                background: scanCapHit
+                  ? 'linear-gradient(135deg,#475569 0%,#64748B 100%)'
+                  : 'linear-gradient(135deg,#7C3AED 0%,#EC4899 100%)',
+              }}
+            >
+              {!cameraReady
+                ? <>📷 Starting rear camera…</>
+                : isScanning
+                  ? <><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Scanning prices…</>
+                  : scanCapHit
+                    ? <>🔒 Daily scan limit reached</>
+                    : <>🧊 Freeze &amp; convert price</>}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* FROZEN STATE — show detected prices + 3 buttons */}
       {isFrozen && (
@@ -1001,16 +1146,36 @@ export default function SmartPriceScannerPage() {
 
             <div className="space-y-2">
               {/* View price analysis — only meaningful when we have a price.
-                  P1 ships the button + nav; the analysis card itself is
-                  populated by the P2 Worker endpoint. */}
-              {detectedPrices.length > 0 && (
-                <button
-                  onClick={handleViewAnalysis}
-                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
-                >
-                  💡 View price analysis
-                </button>
-              )}
+                  The button stays tappable when capped; gating happens
+                  inside handleViewAnalysis so a tap shows the cap-hit
+                  modal (upgrade nudge) instead of being a dead button. */}
+              {detectedPrices.length > 0 && (() => {
+                const caps = getCaps(user);
+                const analysesLeft = Math.max(0, caps.analyses - analysisCount);
+                const analysisCapHit = Number.isFinite(caps.analyses) && analysesLeft === 0 && !analysis;
+                return (
+                  <>
+                    {/* Counter line. Always shown so users learn the cadence
+                        early. Grey by default, amber at ≤1 left, coral at 0. */}
+                    {Number.isFinite(caps.analyses) && (
+                      <div className="text-center text-[11px] font-medium mb-1" style={{
+                        color: analysesLeft === 0 ? '#FCA5A5' : analysesLeft <= 1 ? '#FCD34D' : 'rgba(255,255,255,0.5)',
+                      }}>
+                        {analysesLeft} of {caps.analyses} analyses left today
+                      </div>
+                    )}
+                    <button
+                      onClick={handleViewAnalysis}
+                      className="w-full text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+                      style={{
+                        background: analysisCapHit ? '#475569' : '#7C3AED',
+                      }}
+                    >
+                      {analysisCapHit ? <>🔒 Daily analysis limit reached</> : <>💡 View price analysis</>}
+                    </button>
+                  </>
+                );
+              })()}
               <button
                 onClick={handleScanAnother}
                 className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
@@ -1140,6 +1305,71 @@ export default function SmartPriceScannerPage() {
           </motion.div>
         </div>
       )}
+
+      {/* CAP-HIT MODAL — single component used for both scan + analysis caps.
+          Renders on top of everything (z-50) so the user sees it whether
+          they're on the live camera or the freeze panel. The Premium
+          button is a placeholder until Stripe / subscription wiring lands. */}
+      {capHitModal && (
+        <CapHitModal
+          type={capHitModal}
+          onClose={() => setCapHitModal(null)}
+          onGoHome={() => { setCapHitModal(null); handleDone(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Reusable cap-hit modal. type='scan' for the 10-scan cap, type='analysis'
+// for the 5-analysis cap. The copy + cap-number changes per type; the
+// Premium CTA is identical. Placeholder onClick on Premium button until
+// the subscription flow exists.
+function CapHitModal({ type, onClose, onGoHome }) {
+  const isScan = type === 'scan';
+  const cap = isScan ? DAILY_SCAN_CAP : DAILY_ANALYSIS_CAP;
+  const what = isScan ? 'price scans' : 'price analyses';
+  const icon = isScan ? '📸' : '💡';
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-5"
+      style={{ background: 'rgba(0,0,0,0.78)' }}
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-4xl mb-3 text-center">{icon}</div>
+        <h3 className="text-[19px] font-bold text-gray-900 mb-2 text-center leading-snug">
+          You've used today's {cap} free {what}
+        </h3>
+        <p className="text-[14px] text-gray-600 mb-5 leading-relaxed text-center">
+          Your daily {what} reset at <strong>midnight your local time</strong>. Or unlock unlimited with Globeskimmers Premium.
+        </p>
+        <button
+          type="button"
+          onClick={() => { /* Premium flow lands later — for now this is a placeholder */ }}
+          className="w-full text-white font-bold py-3 rounded-xl mb-2 transition-opacity hover:opacity-90"
+          style={{ background: 'linear-gradient(135deg,#7C3AED 0%,#EC4899 100%)' }}
+        >
+          ✨ Get Globeskimmers Premium
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full text-gray-700 font-semibold py-2.5 text-[14px] hover:underline"
+        >
+          Maybe later
+        </button>
+        <button
+          type="button"
+          onClick={onGoHome}
+          className="w-full text-gray-400 text-[12px] mt-1 hover:text-gray-600"
+        >
+          🏠 Back to Home
+        </button>
+      </div>
     </div>
   );
 }
