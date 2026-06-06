@@ -61,7 +61,16 @@ export default function HomeCountryStep({ onNext, onSkip }) {
           {filteredCountries.map((country) => (
             <button
               key={country}
-              onClick={() => setSelectedCountry(country)}
+              onClick={() => {
+                // Tapping a result both confirms the selection AND fills the
+                // input box so the user sees their choice land in the textbox.
+                // Mirrors how iOS / Android system pickers work; without the
+                // searchQuery setter the input still shows "Unit" or whatever
+                // partial text the user typed and the selection looks
+                // invisible (the reported bug).
+                setSelectedCountry(country);
+                setSearchQuery(country);
+              }}
               className={`w-full px-4 py-3 text-left border-b border-gray-200 hover:bg-blue-50 transition-colors ${
                 selectedCountry === country
                   ? 'bg-[#088395] text-white hover:bg-[#088395]'

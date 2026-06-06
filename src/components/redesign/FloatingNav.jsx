@@ -36,10 +36,25 @@ export default function FloatingNav({ active, dark = false }) {
   };
   const activeTab = detectActive();
 
-  // Camera-led pages need the bottom of the screen for their primary CTA
-  // (e.g. "Freeze & translate", scanner shutter button). Hide the nav so it
-  // doesn't overlap. The user can still exit via the page's own back button.
-  if (path.includes('smarttextscanner') || path.includes('smartpricescanner')) {
+  // Hide the floating nav on screens where it would actively interfere:
+  //
+  //   - Camera-led pages (Smart Text Scanner / Smart Price Scanner) need
+  //     the bottom of the screen for their primary CTA ("Freeze & translate"
+  //     / "Freeze & convert price"). The user exits via the page's own X
+  //     button at the top.
+  //
+  //   - Onboarding flow (multi-step form: referral source, location, home
+  //     country, currency, language, temperature). Showing Home/Saved/
+  //     Settings during onboarding is hostile because the user hasn't been
+  //     authenticated to those features yet AND the pill overlaps the
+  //     content on small Android viewports (Galaxy S10 reported this hiding
+  //     the country dropdown / language list behind it). The "Skip for now"
+  //     link inside each step is the intentional escape hatch.
+  if (
+    path.includes('smarttextscanner') ||
+    path.includes('smartpricescanner') ||
+    path.includes('onboarding')
+  ) {
     return null;
   }
 

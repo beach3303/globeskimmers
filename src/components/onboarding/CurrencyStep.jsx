@@ -77,7 +77,15 @@ export default function CurrencyStep({ onNext, onSkip }) {
           {filteredCurrencies.map((currency) => (
             <button
               key={currency.code}
-              onClick={() => setSelectedCurrency(currency.code)}
+              onClick={() => {
+                // Same fix as HomeCountryStep — tapping a result should
+                // both confirm the selection AND fill the search box so the
+                // user sees their pick in the field. Use the human-readable
+                // currency name (e.g. "Philippine Peso") not the bare code
+                // so the input reads naturally.
+                setSelectedCurrency(currency.code);
+                setSearchQuery(currency.name);
+              }}
               className={`w-full px-4 py-3 text-left border-b border-gray-200 hover:bg-blue-50 transition-colors flex items-center justify-between ${
                 selectedCurrency === currency.code
                   ? 'bg-[#088395] text-white hover:bg-[#088395]'
