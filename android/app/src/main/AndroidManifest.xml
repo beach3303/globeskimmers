@@ -38,4 +38,20 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Location — used by Home / LocationContext / LocationSelector and
+         by every finder (PlacesToEat, Coffee, ATM, ThingsToDo, Restroom)
+         to surface nearby results. Both COARSE and FINE so the user can
+         pick precision-vs-privacy at runtime on Android 12+. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- Camera — used by SmartTextScanner (translate signs/menus) and
+         SmartPriceScanner (freeze + convert prices). The hardware feature
+         is declared non-required so phones / tablets without rear cameras
+         can still install the app even though those scanners won't work
+         on those devices. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 </manifest>
