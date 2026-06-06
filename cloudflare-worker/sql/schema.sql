@@ -181,3 +181,51 @@ CREATE TABLE IF NOT EXISTS seed_attempts (
 
 CREATE INDEX IF NOT EXISTS idx_seed_attempts_recent
   ON seed_attempts (attempted_at DESC);
+
+-- ─── Phase C: AI details permanent cache ──────────────────────────────
+-- Stores the full Haiku-generated "attraction AI details" payload
+-- (vibe, about prose, crowd patterns, best time, value assessment,
+-- traveler notes, smart tip, etc.) permanently keyed by the
+-- attraction's id/placeId. Replaces the prior KV cache which had a
+-- 30-day TTL — so every popular attraction was paying Haiku again
+-- every month. With D1 we pay Haiku ONCE per attraction, ever, then
+-- serve free forever.
+--
+-- Volatility test: this content describes the place's character
+-- (history, vibe, what makes it special) which doesn't meaningfully
+-- change. Live-changing data (current hours, ticket prices, today's
+-- crowd level) is NOT stored here — that comes from Places at detail-
+-- tap time. AI details cache is content that should be written once
+-- and held forever.
+--
+-- prompt_version: when we change the prompt or the schema of the AI
+-- response (e.g. add a new field), bump the version constant in the
+-- Worker. D1 lookups with the new version miss → regenerate with the
+-- new prompt → cache the new version. Old version rows stay in the
+-- table but become unreachable; can be GC'd periodically with a
+-- DELETE WHERE prompt_version != 'aN'.
+CREATE TABLE IF NOT EXISTS attraction_ai_details (
+  -- The attraction's id — Google placeId for Places-discovered
+  -- attractions (e.g. ChIJ...), or our "curated:..." / "auto:..." id
+  -- for D1-resident entries.
+  place_id        TEXT PRIMARY KEY,
+
+  -- Denormalized for audit visibility. Tells you what the cache row
+  -- is for without joining attractions every time.
+  place_name      TEXT,
+
+  -- Prompt + schema version the cached JSON was generated for. If we
+  -- change either, bump the Worker constant and old rows become
+  -- effectively invalid (lookup miss → regenerate).
+  prompt_version  TEXT NOT NULL,
+
+  -- Full ai_details JSON, as the Worker would normally return to the
+  -- frontend. Stored as TEXT (JSON-serialized) since D1 doesn't have a
+  -- native JSON type.
+  ai_json         TEXT NOT NULL,
+
+  generated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_details_generated
+  ON attraction_ai_details (generated_at DESC);

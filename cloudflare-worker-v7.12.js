@@ -2486,12 +2486,26 @@ async function handleAttractionAIDetails(request, env) {
     return jsonResponse({ error: 'placeId required' }, 400);
   }
 
+  // 0) D1 permanent cache — Phase C. Pay Haiku once per placeId, ever.
+  // The D1 row outlives KV's 30-day TTL, so popular attractions
+  // (Eiffel Tower, Pyramids, etc.) never re-trigger a Haiku call once
+  // they've been generated. KV check below stays for unmigrated entries
+  // and acts as a fast secondary read path.
+  const d1Cached = await readAttractionAiFromD1(env, placeId, ATTRACTION_AI_DETAILS_PROMPT_VERSION);
+  if (d1Cached) {
+    return jsonResponse({ aiDetails: d1Cached, _cache: 'hit-d1' });
+  }
+
   // 1) Check attraction AI Details cache (30-day TTL, dedicated key prefix).
   const aiCacheKey = `place:${placeId}:attr_ai_details_${ATTRACTION_AI_DETAILS_PROMPT_VERSION}`;
   if (env.GLOBESKIMMERS_KV) {
     const cached = await env.GLOBESKIMMERS_KV.get(aiCacheKey, { type: 'json' }).catch(() => null);
     if (cached) {
-      return jsonResponse({ aiDetails: cached, _cache: 'hit' });
+      // Backfill D1 from KV so subsequent reads are served from the
+      // permanent layer — and once KV expires, the D1 row keeps
+      // serving without paying Haiku.
+      await writeAttractionAiToD1(env, placeId, ATTRACTION_AI_DETAILS_PROMPT_VERSION, cached, body?.placeName || null);
+      return jsonResponse({ aiDetails: cached, _cache: 'hit-kv-backfilled' });
     }
   }
 
@@ -2597,6 +2611,11 @@ async function handleAttractionAIDetails(request, env) {
     if (env.GLOBESKIMMERS_KV) {
       await env.GLOBESKIMMERS_KV.put(aiCacheKey, JSON.stringify(stub), { expirationTtl: ATTRACTION_AI_DETAILS_TTL_SECONDS }).catch(() => {});
     }
+    // Persist stub to D1 too. A stub is the right cached answer for
+    // attractions without enough review signal; if the place later
+    // accumulates reviews and we want to regenerate, bump the prompt
+    // version and the cache miss will trigger a full Haiku run.
+    await writeAttractionAiToD1(env, placeId, ATTRACTION_AI_DETAILS_PROMPT_VERSION, stub, placeMeta.name);
     return jsonResponse({ aiDetails: stub, _cache: 'miss-stub' });
   }
 
@@ -2755,6 +2774,13 @@ async function handleAttractionAIDetails(request, env) {
       { expirationTtl: ATTRACTION_AI_DETAILS_TTL_SECONDS }
     ).catch(() => {});
   }
+
+  // 8) D1 permanent cache (Phase C). Pay Haiku ONCE per attraction,
+  // ever. The KV write above stays for fast read-paths, but the D1
+  // row is what survives past the 30-day KV expiry — and what stops
+  // popular attractions like Eiffel Tower from triggering a fresh
+  // Haiku call every month.
+  await writeAttractionAiToD1(env, placeId, ATTRACTION_AI_DETAILS_PROMPT_VERSION, aiDetails, placeMeta.name);
 
   return jsonResponse({ aiDetails, _cache: 'miss' });
 }
@@ -4222,6 +4248,57 @@ Produce the Price Analysis JSON per the rules above. Remember: price RANGES only
   }
 
   return jsonResponse({ analysis, _cache: 'miss' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Phase C — AI details permanent D1 cache (for /attraction-ai-details)
+// ─────────────────────────────────────────────────────────────────────
+// Replaces the 30-day KV TTL cache with a permanent D1 cache so we
+// only ever pay Haiku ONCE per attraction. Every subsequent request
+// for the same placeId returns the cached JSON in <50ms, $0.
+
+// Read a cached AI details payload from D1 keyed by placeId. Returns
+// null on miss (D1 binding absent, no row, prompt version drift, or
+// any DB error). Designed to be best-effort — a D1 hiccup falls
+// through to the existing KV/Haiku path silently.
+async function readAttractionAiFromD1(env, placeId, promptVersion) {
+  if (!env.ATTRACTIONS_DB) return null;
+  try {
+    const row = await env.ATTRACTIONS_DB
+      .prepare('SELECT ai_json, prompt_version FROM attraction_ai_details WHERE place_id = ?')
+      .bind(placeId)
+      .first();
+    if (!row) return null;
+    // Reject rows generated under an older prompt version — forces a
+    // regeneration with the current prompt schema rather than serving
+    // stale shape that the frontend may no longer understand.
+    if (row.prompt_version !== promptVersion) return null;
+    try { return JSON.parse(row.ai_json); } catch { return null; }
+  } catch {
+    return null;
+  }
+}
+
+// Persist an AI details payload to D1 for permanent reuse. INSERT OR
+// REPLACE so a fresh prompt-version regen overwrites the older row
+// for the same place_id. Best-effort — any DB error is swallowed
+// because the call site already returned the response to the user.
+async function writeAttractionAiToD1(env, placeId, promptVersion, aiDetails, placeName) {
+  if (!env.ATTRACTIONS_DB) return;
+  try {
+    await env.ATTRACTIONS_DB.prepare(`
+      INSERT OR REPLACE INTO attraction_ai_details
+        (place_id, place_name, prompt_version, ai_json, generated_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+    `).bind(
+      placeId,
+      placeName || null,
+      promptVersion,
+      JSON.stringify(aiDetails),
+    ).run();
+  } catch (e) {
+    console.error('attraction_ai_details write failed:', e?.message);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────
