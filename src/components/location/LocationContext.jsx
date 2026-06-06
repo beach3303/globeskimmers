@@ -161,10 +161,21 @@ export function LocationProvider({ children }) {
         longitude
       });
 
+      // Drop the literal "Current Location" placeholder string here.
+      // It used to land in placeName whenever Google's reverse geocode
+      // returned no locality, and then leaked through to the home page
+      // greeting as 'Hello Traveler, in Current Location' — which looks
+      // like a real city. Now we walk a real fallback chain (city →
+      // region → country) and let the consumer (Home.jsx) decide what
+      // to do with an empty string. The address.formatted string also
+      // gets cleaned so it doesn't read ', US' when city is missing.
+      const formatted = [data.city, data.state_or_country]
+        .filter(Boolean)
+        .join(", ");
       const gpsLocation = {
-        placeName: data.city || "Current Location",
+        placeName: data.city || data.state_or_country || data.country || "",
         address: {
-          formatted: `${data.city}, ${data.state_or_country}`,
+          formatted,
           city: data.city || "",
           state: "",
           postalCode: "",
