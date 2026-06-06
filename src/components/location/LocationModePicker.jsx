@@ -1,10 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Navigation, Search, Loader2, AlertCircle } from 'lucide-react';
+import { X, MapPin, Navigation, Search, Loader2, AlertCircle, Crosshair } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { base44 } from '@/api/base44Client';
 import { useLocation } from './LocationContext';
+
+// Preset cities for one-tap testing in the coordinate-entry mode.
+// Order is roughly by global familiarity / common test scenarios so
+// the row reads predictably. Keep this list short — these chips are
+// shortcuts, not a city directory; the user can paste any lat/lng
+// they want in the input above.
+const PRESET_COORDS = [
+  { name: 'San Francisco', lat: 37.7749, lng: -122.4194 },
+  { name: 'New York',      lat: 40.7128, lng: -74.0060 },
+  { name: 'London',        lat: 51.5074, lng: -0.1278 },
+  { name: 'Tokyo',         lat: 35.6762, lng: 139.6503 },
+  { name: 'Manila',        lat: 14.5995, lng: 120.9842 },
+  { name: 'Sydney',        lat: -33.8688, lng: 151.2093 },
+];
 
 const PLACE_TYPE_ICONS = {
   airport: '✈️',
@@ -27,13 +41,16 @@ export default function LocationModePicker({ isOpen, onClose }) {
     getCurrentLocation
   } = useLocation();
 
-  const [mode, setMode] = useState('select'); // 'select', 'search', 'info'
+  const [mode, setMode] = useState('select'); // 'select', 'search', 'coords', 'info'
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [savedLocations, setSavedLocations] = useState([]);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [coordsInput, setCoordsInput] = useState('');
+  const [coordsApplying, setCoordsApplying] = useState(false);
+  const [coordsError, setCoordsError] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -42,6 +59,8 @@ export default function LocationModePicker({ isOpen, onClose }) {
       setSearchQuery('');
       setSearchResults([]);
       setErrorMessage('');
+      setCoordsInput('');
+      setCoordsError('');
     }
   }, [isOpen]);
 
@@ -135,6 +154,80 @@ export default function LocationModePicker({ isOpen, onClose }) {
   const handleSelectSavedLocation = async (location) => {
     await switchToNavigateMode(location);
     onClose();
+  };
+
+  // Parse "lat, lng" / "lat lng" / "lat,lng" into a coordinate pair,
+  // reverse-geocode for the city label, and switch to Navigate Mode.
+  // Useful for: simulator testing without a real GPS fix, power users
+  // who paste from Google Maps, and field testing at a specific point
+  // (no street address yet, just numbers from a GPS unit).
+  //
+  // The location object shape mirrors what searchLocation returns so
+  // the rest of the app (greeting headline, finders, "Detecting your
+  // location…" placeholder, saved-locations dedup) treats it
+  // identically to a searched-and-tapped result.
+  const handleApplyCoordinates = async () => {
+    setCoordsError('');
+
+    // Accept comma, comma+space, or just whitespace as the separator —
+    // Google Maps copies as "lat, lng" but pasted GPS readings often
+    // come as "lat lng" or "lat,lng" with no space.
+    const parts = coordsInput.trim().split(/[\s,]+/).filter(Boolean);
+    if (parts.length !== 2) {
+      setCoordsError('Enter two numbers separated by a comma (latitude, longitude).');
+      return;
+    }
+
+    const lat = Number(parts[0]);
+    const lng = Number(parts[1]);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setCoordsError('Both values must be numbers.');
+      return;
+    }
+    if (lat < -90 || lat > 90) {
+      setCoordsError('Latitude must be between -90 and 90.');
+      return;
+    }
+    if (lng < -180 || lng > 180) {
+      setCoordsError('Longitude must be between -180 and 180.');
+      return;
+    }
+
+    setCoordsApplying(true);
+
+    try {
+      const { data } = await base44.functions.invoke('reverseGeocode', {
+        latitude: lat,
+        longitude: lng,
+      });
+
+      const formatted = [data.city, data.state_or_country].filter(Boolean).join(', ');
+      const location = {
+        // Same fallback chain LocationContext uses for GPS fixes — drop
+        // the literal placeholder strings, fall back to the bare
+        // coordinates if the geocoder returns nothing usable (e.g. a
+        // pin in the middle of an ocean).
+        placeName: data.city || data.state_or_country || data.country || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+        address: {
+          formatted: formatted || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+          city: data.city || '',
+          state: '',
+          postalCode: '',
+          country: data.country || data.state_or_country || '',
+        },
+        coordinates: { latitude: lat, longitude: lng },
+        placeType: 'location',
+      };
+
+      await switchToNavigateMode(location);
+      onClose();
+    } catch (error) {
+      console.error('Error applying coordinates:', error);
+      setCoordsError('Could not look up that location. Please try again.');
+    }
+
+    setCoordsApplying(false);
   };
 
   if (!isOpen) return null;
@@ -237,6 +330,99 @@ export default function LocationModePicker({ isOpen, onClose }) {
                   >
                     <MapPin className="w-5 h-5" />
                     {savedLocations.length > 0 ? 'Search Different Location' : 'Navigate to Another Location'}
+                  </Button>
+
+                  {/* Coordinate entry. Tertiary visual weight — most
+                      users won't need this, but it's invaluable for
+                      simulator testing and for power users who want to
+                      pin to an exact lat/lng (e.g., a GPS reading
+                      from a handheld unit, a Google Maps right-click
+                      paste, or a research / field-work coordinate).
+                      Reverse-geocodes the city so the home greeting
+                      reads "Hello [Name], in [City]" automatically. */}
+                  <button
+                    onClick={() => setMode('coords')}
+                    className="w-full mt-3 flex items-center justify-center gap-2 text-[12.5px] text-gray-500 hover:text-gray-700 font-medium transition-colors py-2"
+                  >
+                    <Crosshair className="w-4 h-4" />
+                    Or enter coordinates manually
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Coords Mode */}
+            {mode === 'coords' && (
+              <>
+                <div className="bg-gradient-to-r from-[#3A6EA5] to-[#1E3150] text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
+                  <h2 className="text-[20px] font-bold">Enter Coordinates</h2>
+                  <button
+                    onClick={() => setMode('select')}
+                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-5">
+                  <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                    Latitude, Longitude
+                  </label>
+                  <div className="relative">
+                    <Crosshair className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="e.g. 37.7749, -122.4194"
+                      value={coordsInput}
+                      onChange={(e) => {
+                        setCoordsInput(e.target.value);
+                        if (coordsError) setCoordsError('');
+                      }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleApplyCoordinates(); }}
+                      className="pl-10 h-12 text-base"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2 mb-4">
+                    Paste from Google Maps (right-click any point → coordinates).
+                    Latitude first (-90 to 90), then longitude (-180 to 180).
+                  </p>
+
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Common cities</p>
+                    <div className="flex flex-wrap gap-2">
+                      {PRESET_COORDS.map(p => (
+                        <button
+                          key={p.name}
+                          onClick={() => {
+                            setCoordsInput(`${p.lat}, ${p.lng}`);
+                            if (coordsError) setCoordsError('');
+                          }}
+                          className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-full font-medium text-gray-700 transition-colors"
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {coordsError && (
+                    <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-2">
+                      <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-orange-800">{coordsError}</p>
+                    </div>
+                  )}
+
+                  <Button
+                    onClick={handleApplyCoordinates}
+                    disabled={coordsApplying || !coordsInput.trim()}
+                    className="w-full h-12 bg-gradient-to-r from-[#3A6EA5] to-[#4A7EBA] hover:opacity-90 text-white font-semibold disabled:opacity-50"
+                  >
+                    {coordsApplying ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Looking up…</>
+                    ) : (
+                      'Use This Location'
+                    )}
                   </Button>
                 </div>
               </>
