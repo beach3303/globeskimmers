@@ -516,7 +516,14 @@ export default function SettingsPage() {
     setSaving(false);
   };
 
-  const isAdmin = user && ADMIN_EMAILS.includes(user.email.toLowerCase());
+  // Guard against `user.email` being undefined. Reported as a white
+  // screen on Settings: `user.email.toLowerCase()` threw a TypeError
+  // when user was truthy but the email field was missing (can happen
+  // in Capacitor builds where the SDK occasionally hands back a
+  // partial user object during the auth handshake). React with no
+  // error boundary in this tree renders nothing — exactly the symptom.
+  // Optional-chain it so a missing email just means "not admin".
+  const isAdmin = !!(user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase()));
 
   if (loading) {
     return (<div className="min-h-screen bg-gradient-to-b from-[#f7fafc] to-[#e2e8f0] flex items-center justify-center"><div className="w-16 h-16 border-4 border-[#6366f1] border-t-transparent rounded-full animate-spin"></div></div>);
