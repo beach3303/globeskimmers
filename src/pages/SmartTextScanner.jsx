@@ -437,7 +437,7 @@ export default function SmartTextScannerPage() {
             Feel free to take a screenshot to save it on your device.
           </div>
 
-          {/* Start button */}
+          {/* Start button + secondary escape */}
           <div className="mt-auto pt-6">
             <button
               onClick={handleStartScanning}
@@ -446,6 +446,21 @@ export default function SmartTextScannerPage() {
             >
               Got it, let's translate
               <ArrowRight size={18} color="#fff" strokeWidth={2.4} />
+            </button>
+
+            {/* Subtle Back to Home — matches the Price Scanner intro
+                screen pattern. Tertiary visual weight (small, muted,
+                no bold) so it sits under the primary CTA without
+                competing for attention. The violet header at the top
+                also has a back button, but this gives the user a
+                guaranteed escape inside their natural reading flow
+                even if the top header gets clipped on small viewports
+                (the reported iPhone issue on the Price Scanner). */}
+            <button
+              onClick={() => navigate(createPageUrl('Home'))}
+              className="w-full mt-2.5 text-[#94A3B8] hover:text-[#475569] text-[11.5px] font-normal transition-colors"
+            >
+              Back to Home
             </button>
           </div>
         </div>

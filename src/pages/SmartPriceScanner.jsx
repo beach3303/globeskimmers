@@ -881,12 +881,14 @@ export default function SmartPriceScannerPage() {
                 no visible way back to Home from this intro screen — the
                 top header was apparently being clipped / hidden in their
                 build. Putting a second escape directly under the primary
-                CTA guarantees a way out regardless of viewport quirks
-                and matches the onboarding "Skip for now" pattern users
-                already know from the Welcome flow. */}
+                CTA guarantees a way out regardless of viewport quirks.
+                Intentionally tertiary visual weight (small, muted, no
+                font weight emphasis) so it doesn't compete with the
+                dark primary CTA above — the user only sees it when
+                they actively need it. */}
             <button
               onClick={() => navigate(createPageUrl('Home'))}
-              className="w-full mt-3 text-[#475569] hover:text-[#0F1419] text-[13px] font-medium transition-colors"
+              className="w-full mt-2.5 text-[#94A3B8] hover:text-[#475569] text-[11.5px] font-normal transition-colors"
             >
               Back to Home
             </button>
