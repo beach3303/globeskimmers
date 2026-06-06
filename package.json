@@ -1,7 +1,7 @@
 {
   "name": "base44-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync",
     "cap:ios": "npm run build && npx cap sync ios && npx cap open ios",
-    "cap:android": "npm run build && npx cap sync android && npx cap open android"
+    "cap:android": "npm run build && npx cap sync android && npx cap open android",
+    "assets": "npx @capacitor/assets generate --iconBackgroundColor \"#FFFCF7\" --iconBackgroundColorDark \"#0F1419\" --splashBackgroundColor \"#FFFCF7\" --splashBackgroundColorDark \"#0F1419\""
   },
   "dependencies": {
     "@base44/sdk": "^0.8.31",
@@ -21,6 +22,8 @@
     "@capacitor/android": "^8.4.0",
     "@capacitor/core": "^8.4.0",
     "@capacitor/ios": "^8.4.0",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
     "@hello-pangea/dnd": "^17.0.0",
     "@hookform/resolvers": "^4.1.2",
     "@radix-ui/react-accordion": "^1.2.3",
@@ -86,6 +89,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.4.0",
     "@eslint/js": "^9.19.0",
     "@types/node": "^22.13.5",
