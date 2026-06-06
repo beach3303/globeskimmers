@@ -87,19 +87,35 @@ export default function Layout({ children, currentPageName }) {
     try {
       const authenticated = await base44.auth.isAuthenticated();
       setIsAuthenticated(authenticated);
-      
+
       if (!authenticated) {
         setChecking(false);
         return;
       }
 
       const user = await base44.auth.me();
-      
+
       trackEvent('login');
-      
-      if (!user.onboarding_completed && currentPageName !== "Onboarding") {
+
+      // Belt-and-suspenders against the post-onboarding redirect loop.
+      // Base44's auth.me() is eventually-consistent — immediately after
+      // Onboarding.jsx calls updateMe({ onboarding_completed: true }) and
+      // navigates here, this me() call can still return the user with
+      // onboarding_completed=false. Without a check, we'd bounce the user
+      // back to /Onboarding (the reported loop).
+      //
+      // Onboarding.jsx writes a localStorage flag synchronously the moment
+      // it decides the user is done — we trust that local intent over the
+      // server-side flag for the redirect decision. Server will catch up
+      // on the next page change.
+      let localCompleted = false;
+      try { localCompleted = localStorage.getItem('globeskimmers_onboarding_completed') === '1'; } catch { /* ignore */ }
+
+      const effectivelyCompleted = user.onboarding_completed || localCompleted;
+
+      if (!effectivelyCompleted && currentPageName !== "Onboarding") {
         navigate(createPageUrl("Onboarding"));
-      } else if (user.onboarding_completed && currentPageName === "Onboarding") {
+      } else if (effectivelyCompleted && currentPageName === "Onboarding") {
         navigate(createPageUrl("Home"));
       }
     } catch (error) {

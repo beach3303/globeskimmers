@@ -65,11 +65,21 @@ export default function OnboardingPage() {
 
   const handleTemperatureNext = async (data) => {
     const finalData = { ...onboardingData, ...data, onboarding_completed: true };
-    
+
     // Save all preferences
     await base44.auth.updateMe(finalData);
-    
-    // Navigate to home
+
+    // Belt-and-suspenders against the redirect loop where Layout.jsx's
+    // path-change useEffect fires checkOnboarding immediately after we
+    // navigate, calls auth.me(), and gets back the user with
+    // onboarding_completed=false because Base44's auth.me() is
+    // eventually-consistent and the updateMe hasn't propagated yet.
+    // The localStorage flag is the synchronous signal that Layout uses
+    // to skip the redirect; the auth.me() call here also helps prime
+    // the SDK's cache so any subsequent reads see the update.
+    try { localStorage.setItem('globeskimmers_onboarding_completed', '1'); } catch { /* ignore */ }
+    try { await base44.auth.me(); } catch { /* ignore */ }
+
     navigate(createPageUrl("Home"));
   };
 
@@ -79,7 +89,11 @@ export default function OnboardingPage() {
       ...onboardingData,
       onboarding_completed: true
     });
-    
+
+    // Same anti-loop belt-and-suspenders as handleTemperatureNext.
+    try { localStorage.setItem('globeskimmers_onboarding_completed', '1'); } catch { /* ignore */ }
+    try { await base44.auth.me(); } catch { /* ignore */ }
+
     navigate(createPageUrl("Home"));
   };
 
