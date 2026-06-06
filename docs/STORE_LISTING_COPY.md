@@ -139,9 +139,9 @@ Reasoning on each:
 ## Support URL
 
 ```
-mailto:support@globeskimmers.app
+mailto:founder@globeskimmers.io
 ```
-*or whatever support email you use — Apple/Google accept a `mailto:` link or a real support page.*
+*Apple/Google accept either a `mailto:` link or a real support page.*
 
 ---
 
@@ -203,8 +203,9 @@ Recommend launching **globally** unless you have a specific reason to start narr
 
 | ✅ | Item |
 |---|---|
-| ⏳ | Replace `[YOUR LEGAL NAME OR BUSINESS NAME]` in the privacy policy |
-| ⏳ | Replace `support@globeskimmers.app` everywhere with your real monitored email |
+| ✅ | Legal name in privacy policy → Globeskimmers |
+| ✅ | Contact email in privacy policy + store listing → founder@globeskimmers.io |
+| ✅ | Privacy policy effective + last-updated date set |
 | ⏳ | Host the privacy policy at a public URL, paste that URL above |
 | ⏳ | Set up the marketing URL OR mark optional |
 | ⏳ | Capture 6.7" iPhone screenshots (1290×2796) — minimum 3, ideally 5-7 |

@@ -1,13 +1,11 @@
 # Privacy Policy — Globeskimmers
 
-**Draft for review. Edit the placeholders in bold, then host this at a public URL (Notion public page, GitHub Pages, your own site, even a published Google Doc work). Paste the final URL into App Store Connect + Play Console.**
-
-**Effective date: [DATE OF FIRST PUBLIC RELEASE]**
-**Last updated: [TODAY'S DATE]**
+**Effective date: June 6, 2026**
+**Last updated: June 6, 2026**
 
 ## Who we are
 
-Globeskimmers is a travel utility app published by **[YOUR LEGAL NAME OR BUSINESS NAME]** (referred to as "we", "us", or "Globeskimmers" in this policy). If you have questions, contact us at **support@globeskimmers.app** *(or whatever support email you choose — make sure it's monitored)*.
+Globeskimmers is a travel utility app published by Globeskimmers (referred to as "we", "us", or "Globeskimmers" in this policy). If you have questions, contact us at founder@globeskimmers.io.
 
 This policy explains what we collect, how we use it, who we share it with, and your choices.
 
@@ -42,8 +40,9 @@ We only collect what we need to make the app work for you.
 - To **respond to your support messages**.
 - To **improve the app** by understanding which features get used and which fail.
 - To **show non-intrusive ads** that help us keep the app free.
+- To **understand general travel patterns in aggregate** — for example, which cities are most commonly visited or what categories of goods travelers tend to look for. We may use these *aggregated* insights to make the app smarter, to plan new features, and to share with advertising partners as statistical summaries (e.g. "users heading to Tokyo commonly look for X"). Aggregated insights are statistical summaries that cannot be linked back to any individual user.
 
-We do not sell your personal information to anyone. Ever.
+We do not sell or share your personal information — meaning information that identifies you as an individual — with advertisers, data brokers, or any other party. Aggregated, non-identifying statistics (described above) are not personal information and are not subject to this restriction.
 
 ## Who we share it with
 
@@ -79,15 +78,15 @@ You can:
 - **Edit or delete your saved preferences** anytime via the Settings screen in the app.
 - **Revoke location or camera permissions** anytime in your device's Settings → Privacy. The app continues to work, but features depending on those permissions become unavailable.
 - **Sign out** anytime via Settings → Sign Out. Signing out doesn't delete your account; it only ends the current session.
-- **Delete your account and all associated data**, by emailing **support@globeskimmers.app** with the subject "Delete my account". We process deletion requests within 30 days.
+- **Delete your account and all associated data**, by emailing **founder@globeskimmers.io** with the subject "Delete my account". We process deletion requests within 30 days.
 - **Opt out of personalized ads** in your device's Settings (iOS: Settings → Privacy → Tracking; Android: Settings → Google → Ads → Opt out).
-- **Request a copy of your data**, by emailing **support@globeskimmers.app** with the subject "Data export request". We respond within 30 days.
+- **Request a copy of your data**, by emailing **founder@globeskimmers.io** with the subject "Data export request". We respond within 30 days.
 
 Residents of California, the EU, the UK, and certain other regions may have additional rights under local law (CCPA, GDPR, UK GDPR). Email us with any specific request — we honor all such requests, not just from residents of those regions.
 
 ## Children
 
-Globeskimmers is not directed at children under 13 (or under 16 in the EU/UK). We do not knowingly collect personal information from children. If you believe a child has provided us with personal information, please email **support@globeskimmers.app** and we'll delete it.
+Globeskimmers is not directed at children under 13 (or under 16 in the EU/UK). We do not knowingly collect personal information from children. If you believe a child has provided us with personal information, please email **founder@globeskimmers.io** and we'll delete it.
 
 ## Security
 
@@ -103,4 +102,4 @@ The latest version is always available at this URL.
 
 ## Contact
 
-Questions, comments, or requests? **support@globeskimmers.app** *(replace with your monitored email)*
+Questions, comments, or requests? **founder@globeskimmers.io** *(replace with your monitored email)*
