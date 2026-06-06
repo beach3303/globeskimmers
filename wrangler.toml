@@ -36,7 +36,7 @@ database_id = "e059428f-87ce-400f-9b82-159ac601b382"
 [[d1_databases]]
 binding = "ATTRACTIONS_DB"
 database_name = "globeskimmers-attractions"
-database_id = "REPLACE_WITH_ID_FROM_WRANGLER_D1_CREATE"
+database_id = "f27d0c24-786b-4422-b0bb-e19e8b7c70c6"
 
 # Your GOOGLE_API_KEY is already set as a secret in Cloudflare
 # If you need to update it: wrangler secret put GOOGLE_API_KEY

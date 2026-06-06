@@ -114,6 +114,92 @@ If you see `tookMs: 0` and an empty array, the binding isn't attached or the see
 
 Open the app, switch to a location near one of your seeded cities (Paris, Tokyo, NYC, Bangkok, etc.), tap **Things to Do**. The page should fill within 1 second. Compare to the old behavior in a non-seeded city (e.g. Boise) — you'll see the existing slower flow as a fallback.
 
+## Phase B: auto-seeding for non-launch cities
+
+Phase A ships with 360 hand-curated attractions across the top 25 cities + 25 countries. Phase B extends this with **automatic self-seeding** — when the first user visits a city not in the launch set (Boise, Tagbilaran, anywhere), the Worker silently runs a discovery + seed pass in the background. Every subsequent visitor to that city gets the fast D1 path.
+
+### How it works (no user-facing UX change)
+
+1. User in **Boise** opens ThingsToDo.
+2. `getActivities` calls `/attractions/nearby` with `cityName=Boise`, `countryName=United States`.
+3. D1 returns 0 results (Boise not in launch seed).
+4. Worker still returns instantly (~50ms) so the existing Places fallback handles this user's view.
+5. **In the background**, `ctx.waitUntil` runs a seed task: 8 Places searches for staple categories → quality filter (rating ≥ 4.0, reviews ≥ 100, category in the allowed list) → INSERT INTO attractions with `source = 'auto-seeded'`.
+6. The next user in Boise → D1 returns the seeded attractions → fast path.
+
+### Apply the Phase B schema migration
+
+```bash
+cd "/Users/globeskimmers/Desktop/CODES PROTECT/globeskimmers-cacf36e4-10" && wrangler d1 execute globeskimmers-attractions --file=cloudflare-worker/sql/schema.sql --remote
+```
+
+The schema file uses `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS`, so re-running it is **safe and idempotent** — existing rows untouched, new `seed_attempts` table added.
+
+### Redeploy the Worker
+
+```bash
+cd "/Users/globeskimmers/Desktop/CODES PROTECT/globeskimmers-cacf36e4-10" && wrangler deploy
+```
+
+### Smoke test — manually trigger a seed for a city
+
+```bash
+# Boise, ID — a city NOT in the Phase A launch seed
+curl -X POST https://globeskimmers-api.maizasimeon.workers.dev/attractions/seed-city \
+  -H "Content-Type: application/json" \
+  -d '{"latitude":43.6150,"longitude":-116.2023,"cityName":"Boise","countryName":"United States"}'
+```
+
+Returns `{"ok":true}` within ~5-10 seconds. Then verify it landed:
+
+```bash
+curl -X POST https://globeskimmers-api.maizasimeon.workers.dev/attractions/nearby \
+  -H "Content-Type: application/json" \
+  -d '{"latitude":43.6150,"longitude":-116.2023,"radiusKm":20}' \
+  | python3 -m json.tool | head -30
+```
+
+You should see ~5-15 Boise attractions with `id` prefixed `auto:united-states-boise-...`.
+
+### Audit auto-seeded entries
+
+Auto-seeded rows are tagged with `source = 'auto-seeded'` so you can spot-check or curate them later:
+
+```bash
+# List the 20 most recently auto-seeded entries
+wrangler d1 execute globeskimmers-attractions --remote --command "
+SELECT name, city, country, category, rating, is_marquee
+FROM attractions
+WHERE source = 'auto-seeded'
+ORDER BY created_at DESC
+LIMIT 20;
+"
+
+# See which cities the Worker has attempted to seed
+wrangler d1 execute globeskimmers-attractions --remote --command "
+SELECT city, country, found_count, inserted_count, status, attempted_at
+FROM seed_attempts
+ORDER BY attempted_at DESC
+LIMIT 20;
+"
+
+# Promote a good auto-seeded entry to fully curated
+wrangler d1 execute globeskimmers-attractions --remote --command "
+UPDATE attractions SET source = 'curated' WHERE id = 'auto:...';
+"
+
+# Delete a bad auto-seeded entry
+wrangler d1 execute globeskimmers-attractions --remote --command "
+DELETE FROM attractions WHERE id = 'auto:...';
+"
+```
+
+### Cost
+
+Each new city that gets auto-seeded costs **~$0.05-0.25** in one-time Places API calls (8 text searches at $0.032 each, often cache-hit-ed by users who searched there recently). Once seeded, that city serves from D1 forever at $0. Throttle prevents re-seed storms (max 1 attempt per region per 24h).
+
+For context: 100 new cities auto-seeded per month = ~$10-25 in seed costs vs ~$1000+ in continuous Places fallback costs without it.
+
 ## How to add more cities / attractions later
 
 Three options, easiest first:

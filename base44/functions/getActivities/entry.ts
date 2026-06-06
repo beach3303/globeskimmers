@@ -577,12 +577,21 @@ function mapD1ToActivity(d: any) {
 // stages. radiusKm is forced to at least 100 km — staple landmarks
 // up to ~60 mi out are still relevant (Statue of Liberty when in
 // Brooklyn, Versailles when in central Paris, etc.).
-async function fetchD1Attractions(latitude:number, longitude:number) {
+//
+// Phase B: cityName + countryName are forwarded to the Worker so it
+// can trigger a background seed-city task via ctx.waitUntil when D1
+// returns sparse. Self-seeding: first user in Boise pays the slow
+// Places fallback; the Worker silently seeds Boise into D1; every
+// subsequent visitor gets the fast path.
+async function fetchD1Attractions(latitude:number, longitude:number, cityName:string, countryName:string) {
   try {
     const r = await fetch(`${WORKER}/attractions/nearby`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ latitude, longitude, radiusKm: 100, limit: 60 }),
+      body: JSON.stringify({
+        latitude, longitude, radiusKm: 100, limit: 60,
+        cityName, countryName,
+      }),
     });
     if (!r.ok) return null;
     const data = await r.json();
@@ -609,7 +618,12 @@ Deno.serve(async (req)=>{
     // it has good coverage (>=8 entries), we skip the slow Stage B
     // Places-based dance entirely. Outside the seeded regions, this
     // returns empty and Stage B picks up the load as before.
-    const d1Promise = fetchD1Attractions(latitude, longitude);
+    //
+    // cityName + countryName forwarded so Phase B auto-seed kicks in for
+    // non-launch cities: when the Worker sees sparse D1 coverage, it
+    // schedules a background seed task that hand-seeds that region into
+    // D1 — the next user who visits the same city gets the fast path.
+    const d1Promise = fetchD1Attractions(latitude, longitude, cityName, countryName);
 
     const map:Record<string,string[]>={
       culture:['museum','gallery','historic','heritage','ancient ruins','cultural center','fine arts'],

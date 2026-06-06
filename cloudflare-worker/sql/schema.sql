@@ -134,3 +134,50 @@ CREATE INDEX IF NOT EXISTS idx_attractions_country
 CREATE INDEX IF NOT EXISTS idx_attractions_marquee
   ON attractions (is_marquee, country)
   WHERE is_marquee = 1;
+
+-- ─── Phase B: auto-seed throttling ────────────────────────────────────
+-- Tracks every (city, country) pair we've attempted to auto-seed from
+-- Google Places. The Worker checks this table before kicking off a
+-- background discovery so we don't re-seed the same city on every
+-- visit. Stores the count of attractions found so we can spot cities
+-- where the auto-discovery returned nothing useful (a sign we should
+-- relax the quality filter or hand-curate those).
+--
+-- Why a separate table from `attractions`:
+--   - A city with 0 staple attractions in Places still counts as "attempted"
+--   - A city we EXPLICITLY decided not to seed (e.g. shopping mall zone)
+--     can be tracked with attempted_at + found_count=0
+--   - Cleanly separates "we tried" from "we have data"
+CREATE TABLE IF NOT EXISTS seed_attempts (
+  -- City + country normalized to lowercase, joined by '::' to form the
+  -- key. (e.g. "boise::united states", "tagbilaran::philippines")
+  -- Lowercasing means "Boise" / "boise" / "BOISE" all dedupe correctly.
+  region_key      TEXT PRIMARY KEY,
+
+  city            TEXT NOT NULL,
+  country         TEXT NOT NULL,
+  -- Approximate coords of the seed request (for debugging which lat/lng
+  -- triggered which seed). Not used as an index; the region_key is the
+  -- only thing we look up by.
+  trigger_lat     REAL,
+  trigger_lng     REAL,
+  -- ISO datetime of last attempt. Throttle window is 24h — if a new
+  -- visitor arrives at the same city within that window, no re-attempt.
+  attempted_at    TEXT NOT NULL,
+  -- How many staple attractions were FOUND by the discovery (before
+  -- quality filtering). Helps spot regions where Places coverage is
+  -- thin.
+  found_count     INTEGER NOT NULL DEFAULT 0,
+  -- How many actually INSERTed into attractions after dedup against
+  -- existing rows. Equal to found_count for brand-new regions.
+  inserted_count  INTEGER NOT NULL DEFAULT 0,
+  -- Status: ok | rate_limited | error. "error" rows can be retried
+  -- manually by deleting the row.
+  status          TEXT NOT NULL DEFAULT 'ok',
+  -- Free-form message for debugging (last error, "skipped: no city",
+  -- etc.). Truncated to 500 chars by the Worker before insert.
+  notes           TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_seed_attempts_recent
+  ON seed_attempts (attempted_at DESC);

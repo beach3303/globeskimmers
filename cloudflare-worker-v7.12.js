@@ -4225,6 +4225,335 @@ Produce the Price Analysis JSON per the rules above. Remember: price RANGES only
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Phase B helpers — auto-seed for non-launch cities
+// ─────────────────────────────────────────────────────────────────────
+// When a user visits a city not in the Phase A curated launch seed,
+// /attractions/nearby returns empty, the Base44 backend falls back to
+// the slow Places-based discovery path, AND in the background the
+// Worker fires off a one-time seed task. The next visitor to that
+// same city gets the fast D1 path automatically — the app self-seeds.
+
+// Google Places type -> our D1 category enum. Any returned types not
+// in this map cause the place to be REJECTED (we don't want
+// restaurants, hotels, gas stations, etc. polluting the static
+// attractions DB).
+const PLACES_TYPE_TO_CATEGORY = {
+  tourist_attraction:   'landmark',
+  museum:               'museum',
+  art_gallery:          'art_gallery',
+  park:                 'park',
+  national_park:        'national_park',
+  amusement_park:       'theme_park',
+  water_park:           'theme_park',
+  zoo:                  'zoo',
+  aquarium:             'aquarium',
+  natural_feature:      'viewpoint',
+  beach:                'beach',
+  historical_landmark:  'historic',
+  monument:             'monument',
+  church:               'religious',
+  mosque:               'mosque',
+  hindu_temple:         'temple',
+  synagogue:            'religious',
+  place_of_worship:     'religious',
+  garden:               'garden',
+  observation_deck:     'observation_deck',
+  fortress:             'fortress',
+  castle:               'palace',
+  shrine:               'shrine',
+};
+
+// Places types we explicitly do NOT want — these have to fall fully
+// outside the staple categories or get filtered out even when they
+// also carry a usable type. Belt-and-suspenders against Places
+// returning a museum that's "also" a cafe.
+const PLACES_REJECT_TYPES = new Set([
+  'restaurant','food','cafe','bar','night_club','bakery',
+  'lodging','hotel','rv_park',
+  'shopping_mall','store','clothing_store','grocery_store','supermarket',
+  'gas_station','parking','car_rental','car_dealer','car_repair',
+  'bank','atm','accounting','insurance_agency','real_estate_agency',
+  'hospital','doctor','dentist','pharmacy','health',
+  'school','university','library','primary_school','secondary_school',
+  'gym','beauty_salon','hair_care','spa',
+  'post_office','police','courthouse','embassy',
+  'movie_theater','bowling_alley','casino','liquor_store',
+  'taxi_stand','transit_station','airport','bus_station','subway_station',
+]);
+
+// Slug helper for auto-seeded ids. Mirrors emit_d1_seed.py's logic so
+// curated and auto-seeded entries share the same id format.
+function autoSeedSlug(name, country, city) {
+  const parts = [country.toLowerCase().replace(/\s+/g, '-')];
+  if (city) parts.push(city.toLowerCase().replace(/\s+/g, '-'));
+  parts.push(
+    name.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 80)
+  );
+  return 'auto:' + parts.join('-');
+}
+
+// Pick the best D1 category for a Place. Walks `types` in order, takes
+// the first hit on PLACES_TYPE_TO_CATEGORY, and rejects (returns null)
+// if any reject type is present.
+function categorizePlace(place) {
+  const types = place.types || [];
+  if (types.some((t) => PLACES_REJECT_TYPES.has(t))) return null;
+  for (const t of types) {
+    if (PLACES_TYPE_TO_CATEGORY[t]) return PLACES_TYPE_TO_CATEGORY[t];
+  }
+  // No staple-type match — reject. We only seed places we can confidently
+  // categorize, not generic POIs.
+  return null;
+}
+
+// Auto-marquee: a place qualifies as marquee when it's strongly rated
+// AND broadly reviewed. Tuned conservatively so the auto-seed doesn't
+// flood the marquee tier with random parks that happen to have
+// 5-star ratings from 50 reviewers.
+function isAutoMarquee(place) {
+  const rating = place.rating || 0;
+  const count = place.userRatingCount || 0;
+  return rating >= 4.5 && count >= 1500;
+}
+
+// Determine free_to_visit from category. Conservative — only flag
+// categories where the answer is almost always yes (parks, viewpoints,
+// public plazas). Museums / theme parks / observation decks default
+// to false even though some are free; the live Places hit at detail-
+// tap time corrects this when needed.
+const FREE_CATEGORIES = new Set([
+  'park','national_park','viewpoint','beach','waterfall',
+  'nature_reserve','garden','river','lake','square','district',
+]);
+
+// Quality filter — only seed places that meet the bar. Returns true if
+// the place is worth saving.
+function passesSeedQuality(place) {
+  if (!place.displayName?.text && !place.name) return false;
+  if (!place.location?.latitude || !place.location?.longitude) return false;
+  if ((place.rating || 0) < 4.0) return false;
+  if ((place.userRatingCount || 0) < 100) return false;
+  return true;
+}
+
+// Build the D1 row record from a Google Places result.
+function placeToAttractionRow(place, city, country) {
+  const cat = categorizePlace(place);
+  if (!cat) return null;
+  if (!passesSeedQuality(place)) return null;
+
+  const name = (place.displayName?.text || place.name || '').trim();
+  const lat = place.location.latitude;
+  const lng = place.location.longitude;
+  const desc = (place.editorialSummary?.text || place.editorialSummary || '').toString().trim();
+  const marquee = isAutoMarquee(place);
+  const freeToVisit = FREE_CATEGORIES.has(cat);
+
+  // Typical visit duration heuristic by category — same buckets the
+  // curators used for the hand-seeded launch set, just programmatic
+  // instead of human-judged.
+  const minutesByCategory = {
+    museum: 120, art_gallery: 90, theme_park: 240, water_park: 240,
+    zoo: 180, aquarium: 90, national_park: 240, park: 60,
+    viewpoint: 30, beach: 120, waterfall: 60, garden: 60,
+    landmark: 60, monument: 30, historic: 60,
+    religious: 45, mosque: 45, temple: 45, shrine: 45,
+    cathedral: 60, palace: 90, tower: 60, observation_deck: 60,
+    fortress: 90, district: 90, square: 30, market: 90,
+    nature_reserve: 180, river: 45, lake: 60, wildlife: 180,
+    experience: 120,
+  };
+
+  return {
+    id: autoSeedSlug(name, country, city),
+    name,
+    category: cat,
+    lat,
+    lng,
+    city: city || '',
+    country,
+    description: desc,
+    why_visit: '',  // empty — only the human-curated launch set has why_visit
+    typical_minutes: minutesByCategory[cat] || 60,
+    rating: place.rating || null,
+    is_marquee: marquee ? 1 : 0,
+    free_to_visit: freeToVisit ? 1 : 0,
+  };
+}
+
+// One round of seed queries for a region. Hits the Worker's own
+// /places/text-search via internal request (which uses the existing
+// GLOBESKIMMERS_KV cache, so repeat runs are free).
+const SEED_QUERY_TEMPLATES = [
+  'top tourist attractions in {region}',
+  'famous landmarks in {region}',
+  'must see places in {region}',
+  'museums in {region}',
+  'parks in {region}',
+  'historic sites in {region}',
+  'temples in {region}',
+  'monuments in {region}',
+];
+
+async function runSeedDiscovery(env, city, country, lat, lng) {
+  const region = city || country;
+  const tasks = SEED_QUERY_TEMPLATES.map(async (tpl) => {
+    const query = tpl.replace('{region}', region);
+    const url = new URL('https://internal/places/text-search');
+    url.searchParams.set('query', query);
+    url.searchParams.set('latitude', String(lat));
+    url.searchParams.set('longitude', String(lng));
+    url.searchParams.set('radius', '40000'); // 40km — covers a major city
+    url.searchParams.set('maxResults', '15');
+    url.searchParams.set('cacheTtl', String(60 * 60 * 24 * 7)); // 7-day TTL
+    try {
+      const res = await handleTextSearch(new Request(url), env);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.places || [];
+    } catch {
+      return [];
+    }
+  });
+  const batches = await Promise.all(tasks);
+  // Dedupe by place id
+  const byId = new Map();
+  for (const batch of batches) {
+    for (const p of batch) {
+      if (p.id) byId.set(p.id, p);
+    }
+  }
+  return [...byId.values()];
+}
+
+// Returns true if this region was attempted recently and we should
+// skip a fresh seed run. Conservative 24h throttle window.
+async function wasSeededRecently(env, regionKey) {
+  if (!env.ATTRACTIONS_DB) return true; // no DB → can't throttle, assume yes (skip)
+  try {
+    const stmt = env.ATTRACTIONS_DB
+      .prepare("SELECT attempted_at FROM seed_attempts WHERE region_key = ?");
+    const row = await stmt.bind(regionKey).first();
+    if (!row) return false;
+    const last = new Date(row.attempted_at).getTime();
+    return Date.now() - last < 24 * 3600 * 1000;
+  } catch {
+    return true; // err on the side of "skip" so a broken throttle doesn't loop-seed
+  }
+}
+
+// Run the actual seed for a region. Discovery + categorize + filter +
+// INSERT OR IGNORE + record attempt. Designed to run inside
+// ctx.waitUntil() so it doesn't block the user response.
+async function seedCityNow(env, lat, lng, cityName, countryName) {
+  if (!env.ATTRACTIONS_DB) return;
+  const city = (cityName || '').trim();
+  const country = (countryName || '').trim();
+  if (!country) return;
+
+  const regionKey = `${city.toLowerCase()}::${country.toLowerCase()}`;
+
+  if (await wasSeededRecently(env, regionKey)) return;
+
+  let foundCount = 0;
+  let insertedCount = 0;
+  let status = 'ok';
+  let notes = '';
+
+  try {
+    const places = await runSeedDiscovery(env, city, country, lat, lng);
+    foundCount = places.length;
+
+    const rows = [];
+    for (const p of places) {
+      const row = placeToAttractionRow(p, city, country);
+      if (row) rows.push(row);
+    }
+
+    if (rows.length > 0) {
+      // Bulk INSERT OR IGNORE. SQLite supports multi-row VALUES but D1's
+      // statement size limit is generous (~1MB) — fits hundreds of rows
+      // easily, but we batch in groups of 50 to keep query plans
+      // predictable and avoid hitting any per-statement quirks.
+      const insertSql = `
+        INSERT OR IGNORE INTO attractions
+          (id, name, category, lat, lng, city, country, description,
+           why_visit, typical_minutes, rating, is_marquee, free_to_visit,
+           source, last_reviewed)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'auto-seeded', date('now'))
+      `;
+      for (const r of rows) {
+        try {
+          const result = await env.ATTRACTIONS_DB
+            .prepare(insertSql)
+            .bind(r.id, r.name, r.category, r.lat, r.lng, r.city, r.country,
+                  r.description, r.why_visit, r.typical_minutes, r.rating,
+                  r.is_marquee, r.free_to_visit)
+            .run();
+          // D1's run() returns { meta: { changes: 0|1 } } — 0 means the
+          // OR IGNORE took (row already existed).
+          if (result?.meta?.changes > 0) insertedCount += 1;
+        } catch (e) {
+          notes = (e?.message || 'insert failed').slice(0, 500);
+        }
+      }
+    } else {
+      notes = 'no_quality_matches';
+    }
+  } catch (e) {
+    status = 'error';
+    notes = (e?.message || 'discovery failed').slice(0, 500);
+  }
+
+  // Record the attempt regardless of outcome (so the throttle works
+  // even when discovery returned nothing).
+  try {
+    await env.ATTRACTIONS_DB.prepare(`
+      INSERT OR REPLACE INTO seed_attempts
+        (region_key, city, country, trigger_lat, trigger_lng,
+         attempted_at, found_count, inserted_count, status, notes)
+      VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)
+    `).bind(
+      regionKey, city, country, lat, lng,
+      foundCount, insertedCount, status, notes
+    ).run();
+  } catch (e) {
+    console.error('seed_attempts insert failed:', e?.message);
+  }
+
+  console.log(`🌱 seed-city: ${city || '(no city)'}, ${country} → found=${foundCount}, inserted=${insertedCount}, status=${status}${notes ? ', notes=' + notes : ''}`);
+}
+
+// HTTP endpoint version. Lets you trigger a seed manually for testing:
+//   curl -X POST .../attractions/seed-city -d '{...}'
+// In production, this is mostly invoked indirectly via ctx.waitUntil
+// from handleAttractionsNearby when D1 returns sparse.
+async function handleSeedCity(request, env) {
+  if (!env.ATTRACTIONS_DB) {
+    return jsonResponse({ ok: false, reason: 'ATTRACTIONS_DB binding not present' }, 200);
+  }
+  let body;
+  try { body = await request.json(); }
+  catch { return jsonResponse({ error: 'Invalid JSON' }, 400); }
+  const { latitude, longitude, cityName, countryName } = body || {};
+  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+    return jsonResponse({ error: 'latitude and longitude required' }, 400);
+  }
+  if (!countryName || !String(countryName).trim()) {
+    return jsonResponse({ error: 'countryName required' }, 400);
+  }
+  // Synchronous when called as an HTTP endpoint so you can see the
+  // result. When called via waitUntil from handleAttractionsNearby it
+  // already runs asynchronously without blocking the response.
+  await seedCityNow(env, latitude, longitude, cityName || '', countryName);
+  return jsonResponse({ ok: true });
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // /attractions/nearby — D1 attractions seed lookup
 // ─────────────────────────────────────────────────────────────────────
 // Reads the static attractions D1 database (table `attractions`) and
@@ -4235,7 +4564,14 @@ Produce the Price Analysis JSON per the rules above. Remember: price RANGES only
 // See cloudflare-worker/handlers/handleAttractionsNearby.js for the
 // reference design + full doc comment. This in-file copy is the
 // version the deployed Worker actually loads.
-async function handleAttractionsNearby(request, env) {
+//
+// Phase B: when ctx is passed in AND the D1 query returns sparse
+// results (<5) AND the request body includes cityName + countryName,
+// schedules a background seed-city task via ctx.waitUntil so the next
+// visitor to this region gets the fast D1 path automatically. The
+// background task is rate-limited via the seed_attempts table (1
+// attempt per region per 24h).
+async function handleAttractionsNearby(request, env, ctx) {
   const startedAt = Date.now();
 
   // Tolerate missing binding so the Base44 backend can roll out a
@@ -4261,6 +4597,12 @@ async function handleAttractionsNearby(request, env) {
     categories = null,
     limit = 60,
     marqueeOnly = false,
+    // Phase B: client passes these so the Worker can trigger a
+    // background seed when D1 returns sparse coverage. Empty strings
+    // are tolerated (and skip seeding) for fresh-GPS lookups before
+    // reverse-geocode has resolved.
+    cityName = '',
+    countryName = '',
   } = body || {};
 
   if (typeof latitude !== 'number' || typeof longitude !== 'number') {
@@ -4366,6 +4708,16 @@ async function handleAttractionsNearby(request, env) {
     return a.distanceKm - b.distanceKm;
   });
 
+  // Phase B background seed trigger. When D1 has sparse coverage for
+  // this region AND we have the city/country labels to identify it,
+  // kick off a discovery+seed task that runs after the response. The
+  // throttle inside seedCityNow() means we attempt at most once per
+  // region per 24h, so a stampede of users hitting Boise on day 1
+  // results in a SINGLE seed run, not 10,000.
+  if (ctx && within.length < 5 && countryName) {
+    ctx.waitUntil(seedCityNow(env, latitude, longitude, cityName, countryName));
+  }
+
   return jsonResponse({
     source: 'd1',
     tookMs: Date.now() - startedAt,
@@ -4421,7 +4773,14 @@ export default {
       // ~70-Places-call discovery sequence that dominated mobile cold-load
       // time. Returns empty when ATTRACTIONS_DB binding isn't attached, so
       // the Base44 backend's existing Places-based fallback takes over.
-      if (pathname === '/attractions/nearby' && request.method === 'POST') return await handleAttractionsNearby(request, env);
+      // ctx is forwarded so the handler can ctx.waitUntil() a Phase B
+      // background seed task when D1 returns sparse for this region.
+      if (pathname === '/attractions/nearby' && request.method === 'POST') return await handleAttractionsNearby(request, env, ctx);
+      // Phase B manual / debug trigger. Same seed logic as the
+      // ctx.waitUntil path above, just synchronous so the response
+      // tells you whether the seed worked. Useful for hand-seeding
+      // specific cities or running smoke tests against the discovery.
+      if (pathname === '/attractions/seed-city' && request.method === 'POST') return await handleSeedCity(request, env);
 
       return jsonResponse({ error: 'Not found', path: pathname }, 404);
     } catch (error) {
