@@ -852,7 +852,7 @@ export default function SmartPriceScannerPage() {
             <ul className="space-y-2 text-[13.5px] text-[#0F1419]">
               <li className="flex gap-2"><span>•</span><span><strong>Instant currency conversion</strong> on any price tag</span></li>
               <li className="flex gap-2"><span>•</span><span><strong>Price analysis</strong> — typical prices at nearby stores + how it compares to your home country</span></li>
-              <li className="flex gap-2"><span>•</span><span><strong>10 free scans + 5 free price analyses</strong> each day — and it generously refreshes at midnight</span></li>
+              <li className="flex gap-2"><span>•</span><span><strong>10 free scans + 5 free price analyses</strong> each day — and it instantly refreshes at midnight</span></li>
             </ul>
           </div>
 
