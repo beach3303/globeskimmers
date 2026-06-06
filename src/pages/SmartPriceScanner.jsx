@@ -865,7 +865,7 @@ export default function SmartPriceScannerPage() {
             Most travelers never reach the daily caps — they're there so we can keep the app free for everyone. If you're on a big shopping day and want unlimited, <strong>Globeskimmers Premium is launching soon</strong>.
           </div>
 
-          {/* Start button */}
+          {/* Start button + secondary back-out */}
           <div className="mt-auto pt-6">
             <button
               onClick={handleStartFromIntro}
@@ -874,6 +874,21 @@ export default function SmartPriceScannerPage() {
             >
               Start price scanning
               <ArrowRight size={18} color="#fff" strokeWidth={2.4} />
+            </button>
+
+            {/* Secondary escape. The violet header at the top already
+                has a Back button, but a user testing on iPhone reported
+                no visible way back to Home from this intro screen — the
+                top header was apparently being clipped / hidden in their
+                build. Putting a second escape directly under the primary
+                CTA guarantees a way out regardless of viewport quirks
+                and matches the onboarding "Skip for now" pattern users
+                already know from the Welcome flow. */}
+            <button
+              onClick={() => navigate(createPageUrl('Home'))}
+              className="w-full mt-3 text-[#475569] hover:text-[#0F1419] text-[13px] font-medium transition-colors"
+            >
+              Back to Home
             </button>
           </div>
         </div>
