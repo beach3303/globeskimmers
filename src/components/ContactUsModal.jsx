@@ -11,15 +11,22 @@ export default function ContactUsModal({ isOpen, onClose }) {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  // Inline error replaces the prior `alert("Failed to send...")` —
+  // alerts look like a browser dialog inside a glass / gradient
+  // modal, which breaks the polished feel. Inline rendering keeps
+  // the user inside the modal so they can edit + retry without
+  // re-typing.
+  const [errorMessage, setErrorMessage] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!subject.trim() || !message.trim()) return;
 
     setSubmitting(true);
+    setErrorMessage("");
     try {
       const user = await base44.auth.me();
-      
+
       await base44.entities.ContactMessage.create({
         subject: subject,
         message: message,
@@ -31,14 +38,14 @@ export default function ContactUsModal({ isOpen, onClose }) {
       setSubmitted(true);
       setSubject("");
       setMessage("");
-      
+
       setTimeout(() => {
         setSubmitted(false);
         onClose();
       }, 2000);
     } catch (error) {
       console.error("Error sending message:", error);
-      alert("Failed to send message. Please try again.");
+      setErrorMessage("We couldn't send your message right now. Please check your connection and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -117,6 +124,18 @@ export default function ContactUsModal({ isOpen, onClose }) {
               >
                 <p className="text-green-800 font-semibold text-center">
                   ✓ Message sent! We'll get back to you soon.
+                </p>
+              </motion.div>
+            )}
+
+            {errorMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 bg-red-50 border-2 border-red-200 rounded-xl"
+              >
+                <p className="text-red-800 text-sm">
+                  {errorMessage}
                 </p>
               </motion.div>
             )}

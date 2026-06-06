@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createPageUrl } from "@/utils";
 import MapAppSelector from '../components/MapAppSelector';
 import { base44 } from "@/api/base44Client";
+import { showToast } from "../components/Toast";
 
 export default function ActivityDetailPage() {
   const navigate = useNavigate();
@@ -748,7 +749,11 @@ export default function ActivityDetailPage() {
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(window.location.href);
-                  alert('Link copied!');
+                  // Replaced alert('Link copied!') with the global toast
+                  // helper — alerts look like a browser dialog in a
+                  // native app, which is jarring on the polished detail
+                  // modal that already has motion / blur / glass styling.
+                  showToast('Link copied to clipboard', 'success');
                   setShowShareModal(false);
                 }}
                 className="w-full flex items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"

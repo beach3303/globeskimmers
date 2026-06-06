@@ -6,6 +6,17 @@ import { ArrowLeft, MapPin, Trash2, Check, Loader2, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from '../components/location/LocationContext';
 import AddLocationDialog from '../components/location/AddLocationDialog';
+import { showToast } from '../components/Toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const PLACE_TYPE_ICONS = {
   airport: '✈️',
@@ -27,6 +38,11 @@ export default function SavedLocationsPage() {
   const [deleting, setDeleting] = useState(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  // Replaces the prior browser confirm() — keeps the user inside the
+  // app's styled modal layer instead of breaking flow with a system
+  // dialog. The location to delete is stashed here; render shows a
+  // confirmation AlertDialog when it's truthy.
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   useEffect(() => {
     loadSavedLocations();
@@ -49,25 +65,25 @@ export default function SavedLocationsPage() {
     }
   };
 
+  // Called only AFTER the user confirms in the AlertDialog. The
+  // confirm-or-cancel decision now lives in the modal, so this just
+  // runs the actual delete.
   const handleDelete = async (location) => {
-    if (!confirm(`Delete ${location.nickname || location.placeName}?`)) {
-      return;
-    }
-
     setDeleting(location);
     try {
       const success = await contextDeleteLocation(location);
       if (success) {
-        setSavedLocations(prev => 
-          prev.filter(loc => 
+        setSavedLocations(prev =>
+          prev.filter(loc =>
             !(loc.coordinates.latitude === location.coordinates.latitude &&
               loc.coordinates.longitude === location.coordinates.longitude)
           )
         );
+        showToast('Location removed', 'success');
       }
     } catch (error) {
       console.error('Error deleting location:', error);
-      alert('Failed to delete location');
+      showToast('Couldn\'t delete this location. Please try again.', 'error');
     }
     setDeleting(null);
   };
@@ -88,7 +104,7 @@ export default function SavedLocationsPage() {
       }
     } catch (error) {
       console.error('Failed to save location:', error);
-      alert('Failed to save location. Please try again.');
+      showToast('Couldn\'t save this location. Please try again.', 'error');
     }
   };
 
@@ -194,7 +210,7 @@ export default function SavedLocationsPage() {
                       </button>
                       
                       <button
-                        onClick={() => handleDelete(location)}
+                        onClick={() => setPendingDelete(location)}
                         disabled={deleting === location}
                         className="flex items-center justify-center gap-2 bg-white border-2 border-red-300 text-red-600 py-2.5 rounded-xl font-semibold hover:bg-red-50 transition-colors disabled:opacity-50"
                       >
@@ -219,6 +235,39 @@ export default function SavedLocationsPage() {
         onAdd={handleAddLocation}
         onClose={() => setShowAddDialog(false)}
       />
+
+      {/* Delete confirmation — replaces a system confirm() call.
+          Naming the place inside the body makes the consequence
+          concrete ("Empire State Building will be removed" vs the
+          old generic "Delete?"). Cancel + Delete actions wired so
+          either dismisses the dialog; only Delete runs the side
+          effect. */}
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove from saved locations?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{pendingDelete?.nickname || pendingDelete?.placeName}</strong> will be removed from your list. You can save it again anytime by searching for it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const target = pendingDelete;
+                setPendingDelete(null);
+                if (target) handleDelete(target);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -13,6 +13,12 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
   const [permissionState, setPermissionState] = useState(null);
   const [browserType, setBrowserType] = useState('');
   const [isIOS, setIsIOS] = useState(false);
+  // Inline help card shown when openLocationSettings runs — replaces
+  // a pair of system alert() calls that interrupted the onboarding
+  // flow with a browser-style dialog. Inline rendering keeps the user
+  // on this screen and shows the steps as a checklist they can
+  // refer back to while toggling between Settings and the app.
+  const [settingsHelp, setSettingsHelp] = useState(null);
 
   useEffect(() => {
     checkPermissionState();
@@ -210,15 +216,34 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
 
   const openLocationSettings = () => {
     if (isIOS) {
-      // Try to open iOS settings
+      // Try to deep-link into iOS Settings → Privacy → Location.
+      // App-Prefs:// only works inside Safari (not Chrome iOS, not
+      // in-app WebView), so the inline help card below covers the
+      // case where the deep link is silently rejected by the OS.
       window.location.href = 'App-Prefs:Privacy&path=LOCATION';
-      
-      // Fallback message
+
       setTimeout(() => {
-        alert('If settings didn\'t open automatically:\n\n1. Go to Settings app\n2. Tap Safari\n3. Tap Location\n4. Select "Ask" or "Allow"\n5. Return here and the page will auto-check');
+        setSettingsHelp({
+          title: 'If Settings didn\'t open automatically',
+          steps: [
+            'Open the Settings app',
+            'Tap Safari',
+            'Tap Location',
+            'Select "Ask" or "Allow"',
+            'Return here — the page will auto-check',
+          ],
+        });
       }, 1000);
     } else {
-      alert('Please open your device settings and enable location services for your browser.');
+      setSettingsHelp({
+        title: 'Enable location for your browser',
+        steps: [
+          'Open your device settings',
+          'Find your browser app',
+          'Enable Location Services for it',
+          'Return here — the page will auto-check',
+        ],
+      });
     }
   };
 
@@ -407,6 +432,40 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
               </div>
             )}
           </div>
+        )}
+
+        {/* Inline help card — appears after tapping "Try Opening
+            Settings" when the App-Prefs deep link is silently
+            rejected (Chrome iOS, in-app WebView, Android) or when
+            the user is on an unsupported browser. Replaces a pair
+            of alert() calls that interrupted onboarding with a
+            browser dialog. Card stays visible while the user
+            toggles between Settings and the app, so they can refer
+            back to the steps. */}
+        {settingsHelp && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-2xl"
+          >
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <p className="text-sm font-bold text-blue-900">
+                {settingsHelp.title}
+              </p>
+              <button
+                onClick={() => setSettingsHelp(null)}
+                className="w-6 h-6 rounded-full bg-blue-100 hover:bg-blue-200 flex items-center justify-center flex-shrink-0"
+                aria-label="Dismiss"
+              >
+                <X className="w-3.5 h-3.5 text-blue-700" />
+              </button>
+            </div>
+            <ol className="text-sm text-blue-800 space-y-1.5 list-decimal list-inside ml-1">
+              {settingsHelp.steps.map((step, i) => (
+                <li key={i}>{step}</li>
+              ))}
+            </ol>
+          </motion.div>
         )}
 
         {granted && (

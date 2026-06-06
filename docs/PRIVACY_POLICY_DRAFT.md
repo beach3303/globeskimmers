@@ -1,0 +1,106 @@
+# Privacy Policy — Globeskimmers
+
+**Draft for review. Edit the placeholders in bold, then host this at a public URL (Notion public page, GitHub Pages, your own site, even a published Google Doc work). Paste the final URL into App Store Connect + Play Console.**
+
+**Effective date: [DATE OF FIRST PUBLIC RELEASE]**
+**Last updated: [TODAY'S DATE]**
+
+## Who we are
+
+Globeskimmers is a travel utility app published by **[YOUR LEGAL NAME OR BUSINESS NAME]** (referred to as "we", "us", or "Globeskimmers" in this policy). If you have questions, contact us at **support@globeskimmers.app** *(or whatever support email you choose — make sure it's monitored)*.
+
+This policy explains what we collect, how we use it, who we share it with, and your choices.
+
+## What we collect
+
+We only collect what we need to make the app work for you.
+
+### Information you give us directly
+
+- **Account info** — your name and email, when you sign in with Google, Facebook, or Apple. We never see your password — those providers handle authentication.
+- **Preferences** — your home country, preferred currency, language, temperature unit, and saved locations. Stored so we can personalize your experience.
+- **Messages you send us** — anything you write in the in-app "Contact Us" form (subject, message).
+
+### Information we collect automatically
+
+- **Approximate and precise location** — only when you grant permission. Used to find nearby restaurants, ATMs, attractions, restrooms, money exchange spots, and convenience stores. We do not record your location history; we only use your current location to answer your current query.
+- **Camera images** — only when you actively use the Smart Price Scanner or Smart Text Scanner. Images are sent to our backend for OCR processing and translation/conversion, then discarded. We do not store your scanned images.
+- **App usage events** — anonymized events like which feature you opened, when you started a session, and roughly how long a session lasted. Used to understand which features are useful and to fix bugs.
+- **Device info** — your device model, OS version, and a session identifier that resets when you reinstall the app. Used for debugging and to comply with platform policies.
+
+### What we do NOT collect
+
+- We do not access your contacts, photos library (beyond what you explicitly select), microphone, calendar, or messages.
+- We do not collect your real-time location in the background.
+- We do not track you across other apps or websites.
+
+## How we use what we collect
+
+- To **show you nearby places** that match your needs (restaurants, ATMs, etc.).
+- To **convert prices** between currencies and **translate text** in your camera view.
+- To **personalize the app** with your preferences (language, units, home country).
+- To **respond to your support messages**.
+- To **improve the app** by understanding which features get used and which fail.
+- To **show non-intrusive ads** that help us keep the app free.
+
+We do not sell your personal information to anyone. Ever.
+
+## Who we share it with
+
+Globeskimmers uses a small number of well-known third-party services to deliver the app. Each only receives what they need to do their job.
+
+- **Base44** (our backend platform) — stores your account, preferences, saved locations, and contact messages. [base44.com](https://base44.com)
+- **Google Places API** — receives your location (when you grant permission) so it can return nearby places. Subject to [Google's Privacy Policy](https://policies.google.com/privacy).
+- **Google AdMob** — serves the banner ads on the Home screen. May use a device advertising identifier to limit how often you see the same ad. You can reset this identifier in iOS or Android settings, or opt out of personalized ads entirely. Subject to [Google's AdMob Privacy Policy](https://support.google.com/admob/answer/6128543).
+- **Cloudflare Workers + KV** — caches frequently-requested data (currency rates, translation phrases, nearby place results) at the edge so the app is fast. Cached data is keyed by query, not by user. [cloudflare.com/privacypolicy](https://www.cloudflare.com/privacypolicy/)
+- **Google sign-in / Facebook sign-in / Apple sign-in** — handles authentication. Globeskimmers never sees your password.
+
+We never share your personal information with advertisers, data brokers, or any other party not listed above.
+
+## Where your data is stored
+
+- Account info and preferences: in Base44's hosted database, which runs on US-based cloud infrastructure.
+- Cached query data: in Cloudflare's global edge network.
+- Camera image data: never stored. Processed in transit and discarded.
+
+If you are accessing the app from outside the United States, your data may be transferred to and processed in the United States. By using the app, you consent to this transfer.
+
+## How long we keep your data
+
+- **Account info and preferences**: until you delete your account, plus up to 30 days for backup purposes.
+- **Usage events**: 90 days, then aggregated into anonymous statistics.
+- **Contact messages**: 2 years after the conversation closes.
+- **Cached data**: between 12 hours (text searches) and 90 days (place details), then automatically expires.
+
+## Your rights and choices
+
+You can:
+
+- **Edit or delete your saved preferences** anytime via the Settings screen in the app.
+- **Revoke location or camera permissions** anytime in your device's Settings → Privacy. The app continues to work, but features depending on those permissions become unavailable.
+- **Sign out** anytime via Settings → Sign Out. Signing out doesn't delete your account; it only ends the current session.
+- **Delete your account and all associated data**, by emailing **support@globeskimmers.app** with the subject "Delete my account". We process deletion requests within 30 days.
+- **Opt out of personalized ads** in your device's Settings (iOS: Settings → Privacy → Tracking; Android: Settings → Google → Ads → Opt out).
+- **Request a copy of your data**, by emailing **support@globeskimmers.app** with the subject "Data export request". We respond within 30 days.
+
+Residents of California, the EU, the UK, and certain other regions may have additional rights under local law (CCPA, GDPR, UK GDPR). Email us with any specific request — we honor all such requests, not just from residents of those regions.
+
+## Children
+
+Globeskimmers is not directed at children under 13 (or under 16 in the EU/UK). We do not knowingly collect personal information from children. If you believe a child has provided us with personal information, please email **support@globeskimmers.app** and we'll delete it.
+
+## Security
+
+We protect your data with industry-standard measures: encrypted connections (HTTPS) for everything that leaves your device, encrypted storage at our backend providers, and authentication for all administrative access. No system is 100% secure, but we treat your data with the care we'd want our own treated.
+
+## Changes to this policy
+
+If we change this policy, we will:
+1. Update the "Last updated" date at the top.
+2. Notify you in the app (and by email, for major changes) before the new policy takes effect.
+
+The latest version is always available at this URL.
+
+## Contact
+
+Questions, comments, or requests? **support@globeskimmers.app** *(replace with your monitored email)*
