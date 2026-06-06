@@ -114,6 +114,26 @@ export default function HomePage() {
         return;
       }
       const userData = await base44.auth.me();
+
+      // Self-heal first_name from full_name. Google / Facebook / Apple
+      // OAuth all give us full_name but NOT first_name — Base44 stores
+      // it on the OAuth identity object, not the user record. Without
+      // this step the Home greeting renders 'Hello Traveler' for fresh
+      // OAuth users until they manually edit their profile in Settings.
+      // We derive 'Maiza' from 'Maiza Simeon' once on first load and
+      // persist it back so every surface that reads user.first_name
+      // (Home greeting, Settings, future personalization) gets it for
+      // free without that surface having to know about the fallback.
+      if (!userData.first_name && userData.full_name) {
+        const derivedFirst = userData.full_name.trim().split(/\s+/)[0];
+        if (derivedFirst) {
+          try {
+            await base44.auth.updateMe({ first_name: derivedFirst });
+            userData.first_name = derivedFirst;
+          } catch { /* non-fatal — getFirstName() still does the split-fallback */ }
+        }
+      }
+
       setUser(userData);
       const preferredScale = userData.preferred_temperature_scale || 'fahrenheit';
       setTempUnit(preferredScale === 'celsius' ? 'C' : 'F');
@@ -187,12 +207,26 @@ export default function HomePage() {
         },
         add_context_from_internet: true,
       });
-      setTimezone(locationData.timezone);
-      setWeatherInfo({
-        celsius: Math.round(locationData.temperature_celsius),
-        fahrenheit: Math.round(locationData.temperature_fahrenheit),
-        condition: locationData.condition,
-      });
+      setTimezone(locationData.timezone || 'UTC');
+
+      // Guard against incomplete LLM responses. We saw "NaN°F" on first
+      // onboard — root cause is that the InvokeLLM weather call sometimes
+      // returns a JSON object missing temperature_celsius /
+      // temperature_fahrenheit (or with a string like "unknown"), and
+      // Math.round(undefined) === NaN flows straight to the render.
+      // Coerce to Number, gate on Number.isFinite, fall back to null so
+      // the render shows the existing "—°" placeholder instead.
+      const c = Number(locationData.temperature_celsius);
+      const f = Number(locationData.temperature_fahrenheit);
+      if (Number.isFinite(c) && Number.isFinite(f)) {
+        setWeatherInfo({
+          celsius: Math.round(c),
+          fahrenheit: Math.round(f),
+          condition: locationData.condition,
+        });
+      } else {
+        setWeatherInfo(null);
+      }
     } catch (error) {
       console.error("Error getting weather data:", error);
       setTimezone('UTC');
@@ -202,7 +236,19 @@ export default function HomePage() {
 
   const getFirstName = () => {
     if (user?.first_name) return user.first_name;
-    if (user?.full_name) return user.full_name.split(" ")[0];
+    if (user?.full_name) {
+      const first = user.full_name.trim().split(/\s+/)[0];
+      if (first) return first;
+    }
+    // Email-prefix fallback for accounts created via the email/password
+    // form, which never collects a name. We Title-Case the local part so
+    // 'maizasimeon@gmail.com' renders as 'Maizasimeon' (not perfect, but
+    // far better than 'Traveler' for the user's own account). Pure
+    // 'Traveler' stays as the very last resort if even email is absent.
+    if (user?.email) {
+      const local = user.email.split('@')[0];
+      if (local) return local.charAt(0).toUpperCase() + local.slice(1).toLowerCase();
+    }
     return "Traveler";
   };
 
@@ -269,13 +315,29 @@ export default function HomePage() {
   //   2. address.region (administrative_area_level_2 — e.g. "Cebu" when
   //      the airport's locality is the smaller "Lapu-Lapu")
   //   3. placeName    (fallback for legacy saved locations missing both)
+  //
+  // Filter out leftover placeholder strings ("Current Location",
+  // "Selected Location") that older saved-location records might still
+  // carry in placeName — these used to leak into the greeting as
+  // "Hello Traveler, in Current Location", which read like a real
+  // city. The new LocationContext doesn't write those strings anymore,
+  // but this filter makes existing users self-heal on next render.
+  const PLACEHOLDER_NAMES = new Set(["Current Location", "Selected Location"]);
+  const cleanPlaceName = (n) => (n && !PLACEHOLDER_NAMES.has(n)) ? n : '';
   const cityName = activeLocation?.address?.city
     || activeLocation?.address?.region
-    || activeLocation?.placeName
+    || cleanPlaceName(activeLocation?.placeName)
     || '';
   // Location chip below the greeting keeps the full place name so the user
-  // can confirm exactly which location they're on.
-  const placeText = activeLocation?.placeName || activeLocation?.address?.city || 'Set location';
+  // can confirm exactly which location they're on. When the GPS pin has
+  // no real label (offshore, mid-ocean, brand-new GPS lock before
+  // geocode completes), show "Detecting your location…" instead of
+  // "Set location" — the user IS at a location, we just don't have a
+  // name yet, and the prior "Set location" copy implied the user had to
+  // do something.
+  const placeText = cleanPlaceName(activeLocation?.placeName)
+    || activeLocation?.address?.city
+    || (activeLocation?.coordinates ? 'Detecting your location…' : 'Set location');
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -364,7 +426,11 @@ export default function HomePage() {
             >
               <span>{formatLocalDate(currentTime, timezone)}</span>
               <span>{formatLocalTime(currentTime, timezone)}</span>
-              {weatherInfo ? (
+              {/* Defense-in-depth NaN guard. setWeatherInfo already
+                  refuses non-finite values, but if a stale object ever
+                  reaches this branch we'd render 'NaN°F' — better to
+                  show the em-dash placeholder than the bug. */}
+              {weatherInfo && Number.isFinite(weatherInfo.celsius) && Number.isFinite(weatherInfo.fahrenheit) ? (
                 <button onClick={toggleTempUnit} className="flex items-center gap-1.5">
                   <Cloud size={16} color={TEAL_DEEP} strokeWidth={2} />
                   <span>{tempUnit === 'C' ? `${weatherInfo.celsius}°C` : `${weatherInfo.fahrenheit}°F`}</span>
