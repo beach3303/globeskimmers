@@ -127,8 +127,14 @@ def main():
     out.append("-- INSERT OR REPLACE means re-running the seed is idempotent — safe")
     out.append("-- to re-execute against an already-seeded database, will update any")
     out.append("-- rows whose content changed and add any new rows.")
-    out.append('')
-    out.append('BEGIN TRANSACTION;')
+    out.append('--')
+    out.append('-- No BEGIN TRANSACTION / COMMIT here on purpose — Cloudflare D1')
+    out.append('-- rejects SQL-level transaction control with')
+    out.append("--   ERROR: To execute a transaction, please use the state.storage")
+    out.append('--          .transaction() ... APIs instead of the SQL BEGIN TRANSACTION')
+    out.append('-- D1 wraps each --file execution in its own atomic operation, so the')
+    out.append('-- bare INSERT OR REPLACE statements below are still applied as a')
+    out.append('-- single unit. An error mid-file rolls the whole thing back.')
     out.append('')
 
     for r in rows:
@@ -156,8 +162,6 @@ def main():
         )
         out.append(sql)
 
-    out.append('')
-    out.append('COMMIT;')
     out.append('')
 
     sql_path.write_text('\n'.join(out))
