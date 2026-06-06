@@ -58,5 +58,53 @@
 	<string>Globeskimmers uses your camera to scan price tags for instant currency conversion and to translate signs, menus, and labels into your language.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Globeskimmers uses your photo library so you can save translation screenshots and scanned prices for offline reference.</string>
+
+	<!-- App Tracking Transparency (iOS 14+). Required when an SDK in the
+	     app could request the IDFA to personalize ads. The Google Mobile
+	     Ads SDK calls ATTrackingManager when this string is present;
+	     without it, the App Store can reject the build for "missing ATT
+	     usage description even though an ad SDK is bundled." The text
+	     here is shown verbatim in the system prompt the first time
+	     personalized ads are about to be served. -->
+	<key>NSUserTrackingUsageDescription</key>
+	<string>Globeskimmers uses this to show ads that are more relevant to you. Choosing "Ask App Not to Track" still shows ads — just less personalized ones.</string>
+
+	<!-- Google Mobile Ads SDK — App ID (Globeskimmers iOS). NOT secret;
+	     this identifier ships in every installed binary and is how
+	     AdMob attributes ad revenue to your account. Without this key,
+	     the SDK crashes the app on launch. -->
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-2858807823087664~5847327858</string>
+
+	<!-- SKAdNetwork — Apple's privacy-preserving ad attribution
+	     framework. Each ad network you want to receive attribution
+	     from must be declared here. Google publishes the canonical
+	     list at https://developers.google.com/admob/ios/sknetwork.
+	     The 20 entries below cover Google + the most common AdMob
+	     mediation partners; expand the list before enabling extra
+	     mediation networks in AdMob. -->
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict><key>SKAdNetworkIdentifier</key><string>cstr6suwn9.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>4fzdc2evr5.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>4pfyvq9l8r.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>2fnua5tdw4.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>ydx93a7ass.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>p78axxw29g.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>v72qych5uu.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>ludvb6z3bs.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>cp8zw746q7.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>3sh42y64q3.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>c6k4g5qg8m.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>s39g8k73mm.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>3qy4746246.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>3rd42ekr43.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>hs6bdukanm.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>mlmmfzh3r3.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>v9wttpbfk9.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>n38lu8286q.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>47vhws6wlr.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>kbd757ywx3.skadnetwork</string></dict>
+	</array>
 </dict>
 </plist>

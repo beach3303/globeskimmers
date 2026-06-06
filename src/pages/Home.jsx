@@ -7,6 +7,7 @@ import { createPageUrl } from "@/utils";
 import { trackEvent } from "../Layout";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
+import HomeBanner from "../components/ads/HomeBanner";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
 
 // Translation mapping for greetings — shown next to "Hello 👋"
@@ -562,6 +563,21 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* Bottom clearance for the AdMob banner overlay. The native
+          banner is rendered by the system as a fullscreen overlay at
+          BOTTOM_CENTER with margin: 76 — it does NOT participate in
+          React layout, so without this spacer the last row of cards
+          ("Things to do" / "Shopping" / scanners) sits behind the
+          banner on small viewports. ~140px = banner height (~60px) +
+          FloatingNav clearance (~76px) + a small visual gutter. */}
+      <div aria-hidden style={{ height: 140 }} />
+
+      {/* AdMob banner — iOS/Android only (no-op on web). Mount last
+          so showBanner runs after the rest of Home has rendered and
+          the user has a complete first paint before any ad UI
+          appears in the chrome. */}
+      <HomeBanner />
 
       <LocationModePicker isOpen={showLocationPicker} onClose={() => setShowLocationPicker(false)} />
     </div>
