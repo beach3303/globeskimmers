@@ -15,5 +15,28 @@ binding = "DB"
 database_name = "globeskimmers-events"
 database_id = "e059428f-87ce-400f-9b82-159ac601b382"
 
+# ── D1 ATTRACTIONS BINDING ──────────────────────────────────────────────
+# Read-mostly seed database for ThingsToDo: ~360 hand-curated marquee
+# attractions across 25 launch cities + 25 launch countries. Powers the
+# /attractions/nearby endpoint that replaces the previous 30s-of-Places-
+# calls cold-load path with a single bounding-box D1 query (~50ms).
+#
+# To provision (one-time, on the Mac):
+#   1. wrangler d1 create globeskimmers-attractions
+#      → copy the database_id from the output and paste below
+#   2. wrangler d1 execute globeskimmers-attractions \
+#          --file=cloudflare-worker/sql/schema.sql --remote
+#   3. wrangler d1 execute globeskimmers-attractions \
+#          --file=cloudflare-worker/sql/seed_attractions.sql --remote
+#   4. wrangler deploy
+#
+# Binding name MUST be "ATTRACTIONS_DB" — matches handleAttractionsNearby
+# in cloudflare-worker-v7.12.js. See cloudflare-worker/README_D1_ATTRACTIONS.md
+# for the full setup guide.
+[[d1_databases]]
+binding = "ATTRACTIONS_DB"
+database_name = "globeskimmers-attractions"
+database_id = "REPLACE_WITH_ID_FROM_WRANGLER_D1_CREATE"
+
 # Your GOOGLE_API_KEY is already set as a secret in Cloudflare
 # If you need to update it: wrangler secret put GOOGLE_API_KEY

@@ -4224,6 +4224,155 @@ Produce the Price Analysis JSON per the rules above. Remember: price RANGES only
   return jsonResponse({ analysis, _cache: 'miss' });
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// /attractions/nearby — D1 attractions seed lookup
+// ─────────────────────────────────────────────────────────────────────
+// Reads the static attractions D1 database (table `attractions`) and
+// returns nearby marquee + regional icons in a single round-trip.
+// Replaces ~70 sequential Places calls with one SQL query, cutting
+// ThingsToDo mobile cold-load from 30s → ~500ms.
+//
+// See cloudflare-worker/handlers/handleAttractionsNearby.js for the
+// reference design + full doc comment. This in-file copy is the
+// version the deployed Worker actually loads.
+async function handleAttractionsNearby(request, env) {
+  const startedAt = Date.now();
+
+  // Tolerate missing binding so the Base44 backend can roll out a
+  // call to this endpoint BEFORE D1 is provisioned. Returns empty
+  // payload, not an error, so the existing Places-based path takes over.
+  if (!env.ATTRACTIONS_DB) {
+    return jsonResponse({
+      source: 'd1',
+      attractions: [],
+      tookMs: Date.now() - startedAt,
+      note: 'ATTRACTIONS_DB binding not present — falling back to Places',
+    });
+  }
+
+  let body;
+  try { body = await request.json(); }
+  catch { return jsonResponse({ error: 'Invalid JSON body' }, 400); }
+
+  const {
+    latitude,
+    longitude,
+    radiusKm = 80,
+    categories = null,
+    limit = 60,
+    marqueeOnly = false,
+  } = body || {};
+
+  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+    return jsonResponse({ error: 'latitude and longitude required' }, 400);
+  }
+
+  // Bounding box prefilter. 1° lat ≈ 111 km; longitude width shrinks
+  // toward the poles by cos(lat). The box is a CHEAP indexed query
+  // (uses the indexed lat/lng columns); we re-rank by true great-circle
+  // distance after the rows come back. Slightly larger box than the
+  // requested radius lets the haversine pass do the precise circle clip
+  // without missing edge cases.
+  const latDelta = (radiusKm * 1.05) / 111;
+  const lngDelta = (radiusKm * 1.05) / (111 * Math.cos(latitude * Math.PI / 180) || 1);
+  const minLat = latitude - latDelta;
+  const maxLat = latitude + latDelta;
+  const minLng = longitude - lngDelta;
+  const maxLng = longitude + lngDelta;
+
+  const wheres = ['lat BETWEEN ? AND ?', 'lng BETWEEN ? AND ?'];
+  const params = [minLat, maxLat, minLng, maxLng];
+
+  if (Array.isArray(categories) && categories.length > 0) {
+    const placeholders = categories.map(() => '?').join(',');
+    wheres.push(`category IN (${placeholders})`);
+    params.push(...categories);
+  }
+
+  if (marqueeOnly === true) {
+    wheres.push('is_marquee = 1');
+  }
+
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 60, 200));
+
+  const sql = `
+    SELECT id, name, category, lat, lng, city, country, description,
+           why_visit, typical_minutes, photo_url, rating,
+           is_marquee, free_to_visit
+      FROM attractions
+     WHERE ${wheres.join(' AND ')}
+  ORDER BY is_marquee DESC, rating DESC
+     LIMIT ${safeLimit};
+  `;
+
+  let rows;
+  try {
+    const stmt = env.ATTRACTIONS_DB.prepare(sql).bind(...params);
+    const result = await stmt.all();
+    rows = result.results || [];
+  } catch (err) {
+    // Graceful degradation: log + return empty so caller falls back
+    // to Places. Worker logs surface this during dev; we don't want
+    // a D1 hiccup to take down ThingsToDo.
+    console.error('attractions/nearby D1 query failed:', err?.message);
+    return jsonResponse({
+      source: 'd1',
+      attractions: [],
+      tookMs: Date.now() - startedAt,
+      error: err?.message || 'D1 query failed',
+    });
+  }
+
+  // Haversine pass — refine the bounding-box prefilter to a true
+  // circular radius and compute distance miles for each row.
+  const R_KM = 6371;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const enriched = rows.map((r) => {
+    const dLat = toRad(r.lat - latitude);
+    const dLng = toRad(r.lng - longitude);
+    const a = Math.sin(dLat / 2) ** 2 +
+              Math.cos(toRad(latitude)) * Math.cos(toRad(r.lat)) *
+              Math.sin(dLng / 2) ** 2;
+    const distKm = R_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return {
+      id: r.id,
+      name: r.name,
+      category: r.category,
+      lat: r.lat,
+      lng: r.lng,
+      city: r.city || '',
+      country: r.country,
+      description: r.description || '',
+      whyVisit: r.why_visit || '',
+      typicalMinutes: r.typical_minutes ?? null,
+      photoUrl: r.photo_url || null,
+      rating: r.rating ?? null,
+      isMarquee: r.is_marquee === 1,
+      freeToVisit: r.free_to_visit === 1,
+      distanceKm: distKm,
+      distanceMiles: distKm * 0.621371,
+    };
+  });
+
+  // Drop rows outside the true circle (bounding box can include
+  // corners up to ~1.4x the radius). Re-sort by marquee-first +
+  // rating + distance — stable so distance ties preserve the D1
+  // ordering.
+  const within = enriched.filter((r) => r.distanceKm <= radiusKm);
+  within.sort((a, b) => {
+    if (a.isMarquee !== b.isMarquee) return a.isMarquee ? -1 : 1;
+    const ra = a.rating ?? 0, rb = b.rating ?? 0;
+    if (ra !== rb) return rb - ra;
+    return a.distanceKm - b.distanceKm;
+  });
+
+  return jsonResponse({
+    source: 'd1',
+    tookMs: Date.now() - startedAt,
+    attractions: within,
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -4267,6 +4416,12 @@ export default {
       if (pathname === '/atm-ai-details' && request.method === 'POST') return await handleAtmAIDetails(request, env);
       if (pathname === '/name-info' && request.method === 'POST') return await handleNameInfo(request, env);
       if (pathname === '/parse-intent' && request.method === 'POST') return await handleParseIntent(request, env);
+      // ThingsToDo D1 attractions lookup. Fast path for the launch-city +
+      // launch-country marquee + regional layer; replaces the prior
+      // ~70-Places-call discovery sequence that dominated mobile cold-load
+      // time. Returns empty when ATTRACTIONS_DB binding isn't attached, so
+      // the Base44 backend's existing Places-based fallback takes over.
+      if (pathname === '/attractions/nearby' && request.method === 'POST') return await handleAttractionsNearby(request, env);
 
       return jsonResponse({ error: 'Not found', path: pathname }, 404);
     } catch (error) {

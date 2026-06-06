@@ -45,7 +45,155 @@ const PROP_TAGS=[
   {key:"isGoodForCouples", icon:"💑",label:"Great for Couples",color:"#DB2777",bg:"#FCE7F3"},
   {key:"isSeniorFriendly", icon:"🧓",label:"Senior Friendly", color:"#0891B2",bg:"#E0F2FE"},
   {key:"isPetFriendly",    icon:"🐾",label:"Pet Friendly",    color:"#059669",bg:"#D1FAE5"},
+  // Audience tags introduced for the Phase 4 query restructure:
+  // - groups: bachelor/bachelorette/large-party venues
+  // - singles: hostel-style + solo-traveler-friendly venues
+  // - teens: theme parks, arcades, escape rooms, zip lines, etc.
+  //   ("teen-leaning" — distinct from family friendly which signals
+  //   strollers / small kids)
+  {key:"isGoodForGroups",  icon:"👥",label:"Great for Groups", color:"#2563EB",bg:"#DBEAFE"},
+  {key:"isGoodForSingles", icon:"🧍",label:"Solo Friendly",    color:"#0E7490",bg:"#CFFAFE"},
+  {key:"isGoodForTeens",   icon:"🛹",label:"Great for Teens",  color:"#9333EA",bg:"#F3E8FF"},
 ];
+
+// Tour-mode display map. Keys match the `tourMode` value the backend
+// stamps on results that came from a mode-bearing tour query
+// ("walking tour" -> walking, etc.). Used to render a small chip on
+// the activity card so a user can see "🚶 Walking tour" at a glance
+// without expanding the card.
+const TOUR_MODE_LABELS = {
+  walking: { icon: "🚶", label: "Walking tour" },
+  biking:  { icon: "🚴", label: "Bike tour" },
+  boating: { icon: "⛵", label: "Boat tour" },
+};
+
+// ── localStorage cache for instant ThingsToDo page open ──────────────
+// User sees their LAST results within 50ms of tapping the tile, while
+// a fresh fetch happens in the background. The fresh data quietly
+// replaces the cached data when it arrives (the "Fetching new spots"
+// chip at the top already exists for this).
+//
+// Cache key includes lat/lng rounded to 2 decimals (~1km grid),
+// category, and radius — so moving to a different neighborhood OR
+// switching the category invalidates correctly. Walking 200m doesn't
+// invalidate. TTL is 15 minutes — long enough that round-trip-from-
+// finder-back-to-list always hits cache, short enough that ratings /
+// open-now status stays reasonably fresh.
+const TTD_CACHE_TTL_MS = 15 * 60 * 1000;
+const ttdCacheKey = (lat, lng, category, radius) =>
+  `gs_ttd_${lat.toFixed(2)}_${lng.toFixed(2)}_${category}_${radius}`;
+
+function readTtdCache(lat, lng, category, radius) {
+  if (!lat || !lng) return null;
+  try {
+    const raw = localStorage.getItem(ttdCacheKey(lat, lng, category, radius));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.t || Date.now() - parsed.t > TTD_CACHE_TTL_MS) return null;
+    return parsed.data;
+  } catch { return null; }
+}
+
+function writeTtdCache(lat, lng, category, radius, data) {
+  if (!lat || !lng) return;
+  try {
+    localStorage.setItem(
+      ttdCacheKey(lat, lng, category, radius),
+      JSON.stringify({ t: Date.now(), data }),
+    );
+  } catch {
+    // localStorage full or disabled — non-fatal, the page still works
+    // off the live fetch like before. No need to surface anything.
+  }
+}
+
+// ── Skeleton placeholder cards ───────────────────────────────────────
+// Replaces the previous centered-spinner state with a grey-card
+// preview of the layout the user is about to see. Eye anchors land
+// in the right places immediately, so when real data arrives, the
+// page doesn't feel like it just appeared — it feels like it filled
+// in. Combined with the localStorage cache (instant cached render on
+// repeat opens), the page reads as "fast" even when the backend is
+// still chewing on 36+ queries behind the scenes.
+//
+// `shimmer` is the moving-highlight animation. Subtle on purpose —
+// strong shimmers feel busier than they help. The CSS gradient slides
+// at 1.4s loop, matching the polish on Instagram / Linear's skeletons.
+function SkeletonCard({ tall = false }) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        background: "#fff",
+        borderRadius: 16,
+        padding: 12,
+        boxShadow: "0 1px 0 rgba(15,20,25,.04), 0 6px 14px -10px rgba(15,20,25,.06)",
+        overflow: "hidden",
+      }}
+    >
+      <div className="gs-shimmer" style={{ height: tall ? 140 : 110, borderRadius: 12, marginBottom: 10 }} />
+      <div className="gs-shimmer" style={{ height: 14, borderRadius: 6, marginBottom: 8, width: "72%" }} />
+      <div className="gs-shimmer" style={{ height: 11, borderRadius: 6, marginBottom: 6, width: "92%" }} />
+      <div className="gs-shimmer" style={{ height: 11, borderRadius: 6, width: "55%" }} />
+    </div>
+  );
+}
+
+function SkeletonStrip({ count = 4 }) {
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: `repeat(${count}, minmax(160px, 1fr))`,
+      gap: 10,
+      overflowX: "auto",
+      paddingBottom: 4,
+    }}>
+      {Array.from({ length: count }).map((_, i) => <SkeletonCard key={i} />)}
+    </div>
+  );
+}
+
+function TtdSkeleton() {
+  return (
+    <div style={{ padding: "10px 12px 100px" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, margin:"4px 4px 10px" }}>
+        <div className="gs-shimmer" style={{ width: 22, height: 22, borderRadius: "50%" }} />
+        <div className="gs-shimmer" style={{ width: 200, height: 16, borderRadius: 6 }} />
+      </div>
+      <div style={{ marginBottom: 16 }}><SkeletonStrip count={3} /></div>
+
+      <div style={{ display:"flex", alignItems:"center", gap:8, margin:"4px 4px 10px" }}>
+        <div className="gs-shimmer" style={{ width: 22, height: 22, borderRadius: "50%" }} />
+        <div className="gs-shimmer" style={{ width: 180, height: 16, borderRadius: 6 }} />
+      </div>
+      <div style={{ marginBottom: 16 }}><SkeletonStrip count={3} /></div>
+
+      <div style={{ display:"flex", alignItems:"center", gap:8, margin:"4px 4px 10px" }}>
+        <div className="gs-shimmer" style={{ width: 22, height: 22, borderRadius: "50%" }} />
+        <div className="gs-shimmer" style={{ width: 100, height: 16, borderRadius: 6 }} />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <SkeletonCard tall /><SkeletonCard tall /><SkeletonCard tall /><SkeletonCard tall />
+      </div>
+
+      {/* Shimmer keyframes — scoped to elements with .gs-shimmer so we
+          don't accidentally animate anything else. Linear-gradient
+          moves left to right at 1.4s loop; the background size of 200%
+          keeps the moving highlight always inside the visible area. */}
+      <style>{`
+        .gs-shimmer {
+          background: linear-gradient(90deg, #EEF2F6 0%, #F8FAFC 50%, #EEF2F6 100%);
+          background-size: 200% 100%;
+          animation: gs-shimmer 1.4s linear infinite;
+        }
+        @keyframes gs-shimmer {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
 
 function openStatus(p){
   const h=p.currentOpeningHours?.weekdayDescriptions||p.hours||[];
@@ -319,6 +467,18 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
 
       <div style={{padding:"16px"}}>
         <div style={{fontWeight:"800",fontSize:"17px",color:T.dark,marginBottom:"4px"}}>{name}</div>
+        {/* Tour mode chip — only renders when the backend stamped a
+            mode (i.e. the venue came from a "walking tour" / "bike
+            tour" / "boat tour" query). Tells the user how the tour
+            gets around at a glance, without having to read the
+            description. Stays compact to avoid stealing focus from
+            the rating row that follows. */}
+        {a.tourMode && TOUR_MODE_LABELS[a.tourMode] && (
+          <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",marginBottom:"6px",background:"#F1F5F9",color:"#334155",borderRadius:"999px",fontSize:"11px",fontWeight:"600"}}>
+            <span>{TOUR_MODE_LABELS[a.tourMode].icon}</span>
+            {TOUR_MODE_LABELS[a.tourMode].label}
+          </div>
+        )}
         <NameLanguageHelp placeId={a.placeId||a.id} name={name}/>
 
         {/* Rating */}
@@ -565,18 +725,54 @@ export default function ThingsToDoFinder() {
   const city=activeLocation?.address?.city||activeLocation?.address?.municipality||fallbackParts[0]||'';
 
   useEffect(()=>{
-    if(!lat||!lng) return; setLoading(true); setError(null);
+    if(!lat||!lng) return;
     const force=forceNextRef.current; forceNextRef.current=false;
+
+    // Instant render from localStorage cache when we have a fresh
+    // entry — flips the perceived load from "open + spinner for 3s"
+    // to "open + content + (silent bg refresh)". The background
+    // refresh STILL runs below so the user always ends up on fresh
+    // data; cache is just a head-start.
+    //
+    // forceRefresh from the refresh button bypasses cache and goes
+    // straight to the live fetch so the user gets the result they
+    // explicitly asked for.
+    const cached = force ? null : readTtdCache(lat, lng, category, radius);
+    if (cached) {
+      setNationalIcons(cached.nationalIcons || []);
+      setRegionalGems(cached.regionalGems || []);
+      setActivities(cached.activities || []);
+      setError(null);
+      setLoading(true); // background refresh in flight — keep top chip visible
+    } else {
+      setLoading(true); setError(null);
+    }
+
     (async()=>{
       try{
         const fetchRadius=Math.max(radius,25)*1609; // always fetch at least 25mi
         const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:fetchRadius,maxResults:60,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city,forceRefresh:force});
         const raw=data?.activities||[];
-        setNationalIcons(data?.nationalIcons||[]);
-        setRegionalGems(data?.regionalGems||[]);
-        if(raw.length||data?.nationalIcons?.length||data?.regionalGems?.length) setActivities(raw);
-        else setError(data?.error||"No activities found nearby.");
-      }catch(e){setError(`Failed: ${e.message}`);}
+        const ni=data?.nationalIcons||[];
+        const rg=data?.regionalGems||[];
+        setNationalIcons(ni);
+        setRegionalGems(rg);
+        if(raw.length||ni.length||rg.length){
+          setActivities(raw);
+          // Persist fresh data to localStorage so the next page open
+          // hits the instant path above. Only store on success — never
+          // cache an error / empty response.
+          writeTtdCache(lat,lng,category,radius,{activities:raw,nationalIcons:ni,regionalGems:rg});
+        }else if(!cached){
+          // No cache to fall back on AND the fresh fetch is empty —
+          // show the error state. If we DID have cache, leave it
+          // visible (better stale results than nothing).
+          setError(data?.error||"No activities found nearby.");
+        }
+      }catch(e){
+        if(!cached) setError(`Failed: ${e.message}`);
+        // If we had cache, leave it on-screen on network error.
+      }
       finally{setLoading(false);}
     })();
   },[lat,lng,country,region,category,refreshTick]);
@@ -711,7 +907,15 @@ export default function ThingsToDoFinder() {
         </AnimatePresence>
       </div>
 
-      {loading&&activities.length===0&&nationalIcons.length===0?(<div style={{textAlign:"center",padding:"70px 24px"}}><motion.div animate={{scale:[1,1.1,1],rotate:[0,5,-5,0]}} transition={{repeat:Infinity,duration:1.8}} style={{fontSize:"52px",marginBottom:"16px",display:"inline-block"}}>⭐</motion.div><div style={{color:T.dark,fontWeight:"700",fontSize:"16px",marginBottom:"6px"}}>Discovering things to do…</div><div style={{color:T.gray,fontSize:"13px"}}>Landmarks · Museums · Parks · Outdoors</div><div style={{display:"flex",justifyContent:"center",gap:"6px",marginTop:"18px"}}>{[0,1,2].map(i=><motion.div key={i} animate={{opacity:[0.3,1,0.3]}} transition={{repeat:Infinity,duration:1.2,delay:i*0.2}} style={{width:"8px",height:"8px",borderRadius:"50%",background:T.accent}}/>)}</div></div>)
+      {/* Cold-load state: no cached results AND nothing fetched yet
+          → show skeleton grid instead of a centered spinner. Lets
+          the eye land on the right places before the data arrives
+          (~30% perceived speedup per Facebook's research). When
+          either the cache OR the fresh fetch returns ANY data, the
+          render falls through to the list view below, with the
+          existing "Fetching new spots" chip at the top covering
+          ongoing background refresh state. */}
+      {loading&&activities.length===0&&nationalIcons.length===0?(<TtdSkeleton/>)
       :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"48px",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"16px"}}>{error}</div><button onClick={()=>setRadius(r=>Math.min(r+5,25))} style={{marginTop:"14px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"14px",cursor:"pointer",fontFamily:"inherit"}}>Expand Radius</button></div>)
       :viewMode==="list"?(<div style={{padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"4px"}}>
         <TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng}/>
