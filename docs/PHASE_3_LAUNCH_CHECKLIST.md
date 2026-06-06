@@ -43,14 +43,11 @@ Once provided, run `npm run assets` then `npm run cap:sync` to push to native pr
 
 ### Privacy Policy URL
 
-**Status:** Not provided. **App Store + Play Store both REQUIRE this URL** in the listing.
+**Status:** ✅ Live at https://pacific-bandana-537.notion.site/Privacy-Policy-Globeskimmers-3776cbd3ba6b805c8775ffcdecafbd4f
 
-**What's needed:** A live, publicly-accessible URL hosting the privacy policy text. Must disclose:
-- What personal data is collected (location, camera images, email, name)
-- How it's used (showing nearby results, currency conversion, translations)
-- Where it's stored (Base44 backend, Cloudflare KV cache)
-- Third parties (Google Places, Google AdMob, Base44, Cloudflare)
-- User rights (request deletion, contact info)
+Notion-hosted, publicly accessible (no login required), HTTP 200 verified. Owner: Globeskimmers. Contact: founder@globeskimmers.io. Effective + last-updated: June 6, 2026.
+
+To edit later: open the page in Notion (signed in as owner), edit, saves are live immediately at the same URL. Bump the "Last updated" date when content changes substantively. **Don't change the page title or republish from scratch** — that breaks the URL the stores reference.
 
 ### App Store description copy
 

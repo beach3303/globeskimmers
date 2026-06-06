@@ -154,12 +154,15 @@ https://globeskimmers.com
 
 ---
 
-## Privacy policy URL (REQUIRED — hard blocker)
+## Privacy policy URL
 
 ```
-https://[your-hosted-policy-URL].com/privacy
+https://pacific-bandana-537.notion.site/Privacy-Policy-Globeskimmers-3776cbd3ba6b805c8775ffcdecafbd4f
 ```
-*See docs/PRIVACY_POLICY_DRAFT.md for the policy text. Host it anywhere publicly accessible: Notion published page, GitHub Pages, your own site, a published Google Doc. Then paste the URL here.*
+
+✅ Live and publicly accessible (verified). Hosted on Notion's published-page CDN — no login required for App Store / Play Store reviewers.
+
+To edit the policy later: open the page in Notion (you're signed in as the owner), make edits, they auto-save and are immediately live at the same URL. The "Last updated" date at the top should be bumped whenever the substantive content changes. The URL itself stays stable — that's the URL the store listings will reference, so don't change the page title or republish from scratch.
 
 ---
 
@@ -206,7 +209,7 @@ Recommend launching **globally** unless you have a specific reason to start narr
 | ✅ | Legal name in privacy policy → Globeskimmers |
 | ✅ | Contact email in privacy policy + store listing → founder@globeskimmers.io |
 | ✅ | Privacy policy effective + last-updated date set |
-| ⏳ | Host the privacy policy at a public URL, paste that URL above |
+| ✅ | Privacy policy hosted at a public URL (Notion) |
 | ⏳ | Set up the marketing URL OR mark optional |
 | ⏳ | Capture 6.7" iPhone screenshots (1290×2796) — minimum 3, ideally 5-7 |
 | ⏳ | Capture Android phone screenshots (1080×1920+) — minimum 2, ideally 5-7 |
