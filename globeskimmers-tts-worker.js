@@ -32,7 +32,7 @@ const VOICE_MAP = {
   'pt': { languageCode: 'pt-BR', name: 'pt-BR-Neural2-B', gender: 'MALE' },
   'ja': { languageCode: 'ja-JP', name: 'ja-JP-Neural2-B', gender: 'MALE' },
   'ko': { languageCode: 'ko-KR', name: 'ko-KR-Neural2-B', gender: 'MALE' },
-  'zh': { languageCode: 'cmn-CN', name: 'cmn-CN-Neural2-B', gender: 'MALE' },
+  'zh': { languageCode: 'cmn-CN', name: 'cmn-CN-Wavenet-B', gender: 'MALE' }, // Mandarin has no Neural2 voices; Wavenet-B is the best male option
   'vi': { languageCode: 'vi-VN', name: 'vi-VN-Neural2-A', gender: 'FEMALE' },
   'th': { languageCode: 'th-TH', name: 'th-TH-Neural2-C', gender: 'FEMALE' },
   'tl': { languageCode: 'fil-PH', name: 'fil-PH-Neural2-B', gender: 'MALE' },
@@ -151,19 +151,29 @@ export default {
         inputConfig = { text: phoneticText };
       }
       
-      const response = await fetch(
-        'https://texttospeech.googleapis.com/v1/text:synthesize?key=' + env.GOOGLE_TTS_API_KEY,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input: inputConfig,
-            voice: { languageCode: voiceConfig.languageCode, name: voiceConfig.name, ssmlGender: voiceConfig.gender },
-            audioConfig: { audioEncoding: 'MP3', speakingRate: 0.9, pitch: 0.0, volumeGainDb: 3.0, sampleRateHertz: 24000 }
-          })
-        }
-      );
-      
+      const ttsUrl = 'https://texttospeech.googleapis.com/v1/text:synthesize?key=' + env.GOOGLE_TTS_API_KEY;
+      const audioConfig = { audioEncoding: 'MP3', speakingRate: 0.9, pitch: 0.0, volumeGainDb: 3.0, sampleRateHertz: 24000 };
+
+      const callGoogle = (voice) => fetch(ttsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: inputConfig, voice, audioConfig })
+      });
+
+      // IMPORTANT: when a specific voice `name` is set, do NOT also send ssmlGender.
+      // Google returns 400 if the declared gender doesn't match the named voice
+      // (e.g. ja-JP-Neural2-B and ko-KR-Neural2-B are FEMALE, not MALE). The voice
+      // name alone fully determines the voice, so the gender field is redundant.
+      let response = await callGoogle({ languageCode: voiceConfig.languageCode, name: voiceConfig.name });
+
+      // Safety net: if the named voice is unavailable for this language (e.g. a
+      // Neural2 voice that doesn't exist, like cmn-CN/ar-XA/ru-RU), retry letting
+      // Google pick a default voice for the language so the user still hears native
+      // audio instead of falling back to the phone's robotic browser voice.
+      if (!response.ok) {
+        response = await callGoogle({ languageCode: voiceConfig.languageCode, ssmlGender: voiceConfig.gender });
+      }
+
       if (!response.ok) {
         return jsonResponse({ error: 'TTS error: ' + response.status, useFallback: true }, 500);
       }

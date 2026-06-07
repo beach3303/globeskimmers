@@ -22,7 +22,11 @@ import LocationModePicker from "../components/location/LocationModePicker";
 // ============================================================================
 // CLOUDFLARE WORKER URL - Your TTS endpoint
 // ============================================================================
-const CLOUDFLARE_TTS_URL = 'https://globeskimmers-api.maizasimeon.workers.dev/tts';
+// Use the standalone TTS worker (globeskimmers-tts): it serves the Neural2 audio
+// AND the translation KV cache. The main `globeskimmers-api` worker has no /tts
+// route, so the old URL 404'd every call → audio always fell back to the phone's
+// browser voice (which can't speak Japanese/CJK in the in-app webview).
+const CLOUDFLARE_TTS_URL = 'https://globeskimmers-tts.maizasimeon.workers.dev';
 
 // ============================================================================
 // PRESET PHRASES FROM YOUR WORD DOCUMENT
