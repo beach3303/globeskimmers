@@ -22,11 +22,17 @@ Deno.serve(async (req) => {
             return Response.json({ error: 'Latitude and longitude are required' }, { status: 400 });
         }
 
-        const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
-        
+        // Prefer a dedicated Geocoding key, but fall back to the other Google
+        // keys the app already has configured, so a mis-pointed / restricted
+        // GOOGLE_MAPS_API_KEY doesn't break location. (The chosen key must have
+        // the Geocoding API enabled — the project's main key does.)
+        const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY")
+            || Deno.env.get("GOOGLE_PLACES_API_KEY")
+            || Deno.env.get("GOOGLE_API_KEY");
+
         if (!apiKey) {
-            console.log("GOOGLE_MAPS_API_KEY not found");
-            return Response.json({ 
+            console.log("No Google API key configured (GOOGLE_MAPS_API_KEY / GOOGLE_PLACES_API_KEY / GOOGLE_API_KEY)");
+            return Response.json({
                 error: 'Google Maps API key not configured'
             }, { status: 500 });
         }
@@ -67,8 +73,11 @@ Deno.serve(async (req) => {
         let stateOrCountry = "";
         let country = "";
         
-        const cityComponent = addressComponents.find(c => 
-            c.types.includes("locality") || c.types.includes("sublocality")
+        const cityComponent = addressComponents.find(c =>
+            c.types.includes("locality") || c.types.includes("sublocality") ||
+            c.types.includes("postal_town") ||
+            c.types.includes("administrative_area_level_3") ||
+            c.types.includes("administrative_area_level_2")
         );
         const stateComponent = addressComponents.find(c => 
             c.types.includes("administrative_area_level_1")
