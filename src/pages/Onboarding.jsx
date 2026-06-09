@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import WelcomeStep from "../components/onboarding/WelcomeStep";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
+import { extractFirstName } from "@/lib/extractFirstName";
 import ReferralSourceStep from "../components/onboarding/ReferralSourceStep";
 import LocationStep from "../components/onboarding/LocationStep";
 import HomeCountryStep from "../components/onboarding/HomeCountryStep";
@@ -10,145 +11,60 @@ import CurrencyStep from "../components/onboarding/CurrencyStep";
 import LanguageStep from "../components/onboarding/LanguageStep";
 import TemperatureStep from "../components/onboarding/TemperatureStep";
 
+// Account-tied onboarding. The user is ALWAYS authenticated here (App.jsx's
+// forced gate guarantees a Supabase session before any route renders), so there
+// is no WelcomeStep / login branch anymore — that role moved to AuthGate.
+//
+// Phase 4 scope: run the existing steps for UX and, on completion, flip
+// profiles.onboarding_completed = true (+ best-effort first_name). Persisting
+// each typed answer into its profiles column — and the new question set (first
+// name, distance unit, travel frequency/purpose/type, optional fields) — lands
+// in Phase 5, which rebuilds this flow against the verified column mapping.
 export default function OnboardingPage() {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(0);
-  const [onboardingData, setOnboardingData] = useState({});
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { user, refreshProfile } = useAuth();
+  const [currentStep, setCurrentStep] = useState(1);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    const authenticated = await base44.auth.isAuthenticated();
-    setIsAuthenticated(authenticated);
-    
-    if (authenticated) {
-      setCurrentStep(1); // Start at referral source step for authenticated users
+  const finish = async () => {
+    if (saving) return;
+    setSaving(true);
+    const firstName = extractFirstName(user);
+    const update = { onboarding_completed: true, ...(firstName ? { first_name: firstName } : {}) };
+    try {
+      if (user?.id) {
+        await supabase.from("profiles").update(update).eq("id", user.id);
+      }
+    } catch (e) {
+      console.warn("Onboarding save failed:", e?.message || e);
     }
-    
-    setLoading(false);
-  };
-
-  const handleReferralSourceNext = async (data) => {
-    setOnboardingData(prev => ({ ...prev, ...data }));
-    
-    // Save referral source immediately
-    await base44.auth.updateMe({
-      referral_source: data.referral_source
-    });
-    
-    setCurrentStep(2); // Move to location step
-  };
-
-  const handleLocationGranted = (location) => {
-    setOnboardingData(prev => ({ ...prev, location_enabled: true }));
-    setCurrentStep(3); // Move to home country step
-  };
-
-  const handleHomeCountryNext = (data) => {
-    setOnboardingData(prev => ({ ...prev, ...data }));
-    setCurrentStep(4); // Move to currency step
-  };
-
-  const handleCurrencyNext = (data) => {
-    setOnboardingData(prev => ({ ...prev, ...data }));
-    setCurrentStep(5); // Move to language step
-  };
-
-  const handleLanguageNext = (data) => {
-    setOnboardingData(prev => ({ ...prev, ...data }));
-    setCurrentStep(6); // Move to temperature step
-  };
-
-  const handleTemperatureNext = async (data) => {
-    const finalData = { ...onboardingData, ...data, onboarding_completed: true };
-
-    // Save all preferences
-    await base44.auth.updateMe(finalData);
-
-    // Belt-and-suspenders against the redirect loop where Layout.jsx's
-    // path-change useEffect fires checkOnboarding immediately after we
-    // navigate, calls auth.me(), and gets back the user with
-    // onboarding_completed=false because Base44's auth.me() is
-    // eventually-consistent and the updateMe hasn't propagated yet.
-    // The localStorage flag is the synchronous signal that Layout uses
-    // to skip the redirect; the auth.me() call here also helps prime
-    // the SDK's cache so any subsequent reads see the update.
-    try { localStorage.setItem('globeskimmers_onboarding_completed', '1'); } catch { /* ignore */ }
-    try { await base44.auth.me(); } catch { /* ignore */ }
-
+    await refreshProfile(); // so Layout's gate sees onboarding_completed = true
     navigate(createPageUrl("Home"));
   };
-
-  const handleSkip = async () => {
-    // Skip current step and save what we have
-    await base44.auth.updateMe({
-      ...onboardingData,
-      onboarding_completed: true
-    });
-
-    // Same anti-loop belt-and-suspenders as handleTemperatureNext.
-    try { localStorage.setItem('globeskimmers_onboarding_completed', '1'); } catch { /* ignore */ }
-    try { await base44.auth.me(); } catch { /* ignore */ }
-
-    navigate(createPageUrl("Home"));
-  };
-
-  const handleExitToLogin = async () => {
-    await base44.auth.logout();
-    setCurrentStep(0);
-    setIsAuthenticated(false);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen font-sans flex items-center justify-center" style={{ background: '#FFFCF7' }}>
-        <div className="w-12 h-12 border-4 border-[#088395] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen font-sans" style={{ background: '#FFFCF7' }}>
-      {currentStep === 0 && !isAuthenticated && (
-        <WelcomeStep onNext={() => setCurrentStep(1)} />
-      )}
-      {currentStep === 1 && isAuthenticated && (
-        <ReferralSourceStep onNext={handleReferralSourceNext} />
+    <div className="min-h-screen font-sans" style={{ background: "#FFFCF7" }}>
+      {currentStep === 1 && (
+        <ReferralSourceStep onNext={() => setCurrentStep(2)} />
       )}
       {currentStep === 2 && (
-        <LocationStep 
+        <LocationStep
           onNext={() => setCurrentStep(3)}
-          onLocationGranted={handleLocationGranted}
-          onExit={handleExitToLogin}
+          onLocationGranted={() => setCurrentStep(3)}
+          onExit={finish}
         />
       )}
       {currentStep === 3 && (
-        <HomeCountryStep 
-          onNext={handleHomeCountryNext}
-          onSkip={handleSkip}
-        />
+        <HomeCountryStep onNext={() => setCurrentStep(4)} onSkip={finish} />
       )}
       {currentStep === 4 && (
-        <CurrencyStep 
-          onNext={handleCurrencyNext}
-          onSkip={handleSkip}
-        />
+        <CurrencyStep onNext={() => setCurrentStep(5)} onSkip={finish} />
       )}
       {currentStep === 5 && (
-        <LanguageStep 
-          onNext={handleLanguageNext}
-          onSkip={handleSkip}
-        />
+        <LanguageStep onNext={() => setCurrentStep(6)} onSkip={finish} />
       )}
       {currentStep === 6 && (
-        <TemperatureStep 
-          onNext={handleTemperatureNext}
-          onSkip={handleSkip}
-        />
+        <TemperatureStep onNext={finish} onSkip={finish} />
       )}
     </div>
   );

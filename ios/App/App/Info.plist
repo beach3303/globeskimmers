@@ -106,5 +106,25 @@
 		<dict><key>SKAdNetworkIdentifier</key><string>47vhws6wlr.skadnetwork</string></dict>
 		<dict><key>SKAdNetworkIdentifier</key><string>kbd757ywx3.skadnetwork</string></dict>
 	</array>
+
+	<!-- Custom URL scheme — routes globeskimmers://auth/callback (the Supabase
+	     OAuth deep-link redirect) back into the app. This is a CUSTOM scheme,
+	     NOT a Universal Link, so no Associated Domains capability and no
+	     apple-app-site-association file are needed. The OS hands the URL to
+	     AppDelegate and @capacitor/app emits it via the 'appUrlOpen' event.
+	     List ONLY the bare scheme here — never "globeskimmers://" or a path. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.globeskimmers.app</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>globeskimmers</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

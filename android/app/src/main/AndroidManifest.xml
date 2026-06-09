@@ -27,6 +27,18 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Custom URL scheme deep link — routes globeskimmers://auth/callback
+                 (the Supabase OAuth redirect) into MainActivity. Custom scheme,
+                 NOT an https App Link, so NO android:autoVerify and NO
+                 assetlinks.json. <data android:scheme> with no host matches every
+                 globeskimmers:// URL. @capacitor/app emits it via 'appUrlOpen'. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="globeskimmers" />
+            </intent-filter>
         </activity>
 
         <provider

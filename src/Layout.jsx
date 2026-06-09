@@ -1,13 +1,14 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import React, { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
 import { createPageUrl } from "@/utils";
 import PWASetup from "@/components/PWASetup";
 import { ToastContainer } from "@/components/Toast";
 import { LocationProvider } from "@/components/location/LocationContext";
 import BrandBanner from "@/components/redesign/BrandBanner";
 import FloatingNav from "@/components/redesign/FloatingNav";
-import { IVORY, TEAL_DEEP } from "@/components/redesign/constants";
+import { IVORY } from "@/components/redesign/constants";
 
 // Generate or retrieve session ID
 const getSessionId = () => {
@@ -20,7 +21,9 @@ const getSessionId = () => {
   return sessionId;
 };
 
-// Track event helper
+// Track event helper. Legacy Base44 analytics — safely no-ops when there's no
+// Base44 session (e.g. native), so it does not interfere with the Supabase
+// auth path. (Analytics move to the Workers data path in a later phase.)
 const trackEvent = async (eventType, data = {}) => {
   try {
     const isAuthenticated = await base44.auth.isAuthenticated();
@@ -42,13 +45,21 @@ const trackEvent = async (eventType, data = {}) => {
 
 export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
-  const location = useLocation();
-  const [checking, setChecking] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { profile, isAuthenticated, isLoadingAuth } = useAuth();
 
+  // Account-tied onboarding gate. Drives off the Supabase profile flag, which
+  // is set once-ever when onboarding completes (survives reinstall / 2nd
+  // device). Wait for the profile to load (it's null briefly on a cold start)
+  // before deciding, so we never bounce an already-onboarded user to /Onboarding.
   useEffect(() => {
-    checkOnboarding();
-  }, [location.pathname]);
+    if (isLoadingAuth || !profile) return;
+    const completed = profile.onboarding_completed === true;
+    if (!completed && currentPageName !== "Onboarding") {
+      navigate(createPageUrl("Onboarding"));
+    } else if (completed && currentPageName === "Onboarding") {
+      navigate(createPageUrl("Home"));
+    }
+  }, [profile, isLoadingAuth, currentPageName, navigate]);
 
   // Track page views
   useEffect(() => {
@@ -83,71 +94,6 @@ export default function Layout({ children, currentPageName }) {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isAuthenticated]);
 
-  const checkOnboarding = async () => {
-    try {
-      const authenticated = await base44.auth.isAuthenticated();
-      setIsAuthenticated(authenticated);
-
-      if (!authenticated) {
-        setChecking(false);
-        return;
-      }
-
-      const user = await base44.auth.me();
-
-      trackEvent('login');
-
-      // Belt-and-suspenders against the post-onboarding redirect loop.
-      // Base44's auth.me() is eventually-consistent — immediately after
-      // Onboarding.jsx calls updateMe({ onboarding_completed: true }) and
-      // navigates here, this me() call can still return the user with
-      // onboarding_completed=false. Without a check, we'd bounce the user
-      // back to /Onboarding (the reported loop).
-      //
-      // Onboarding.jsx writes a localStorage flag synchronously the moment
-      // it decides the user is done — we trust that local intent over the
-      // server-side flag for the redirect decision. Server will catch up
-      // on the next page change.
-      let localCompleted = false;
-      try { localCompleted = localStorage.getItem('globeskimmers_onboarding_completed') === '1'; } catch { /* ignore */ }
-
-      const effectivelyCompleted = user.onboarding_completed || localCompleted;
-
-      if (!effectivelyCompleted && currentPageName !== "Onboarding") {
-        navigate(createPageUrl("Onboarding"));
-      } else if (effectivelyCompleted && currentPageName === "Onboarding") {
-        navigate(createPageUrl("Home"));
-      }
-    } catch (error) {
-      console.error("Error checking onboarding:", error);
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  if (checking) {
-    return (
-      <>
-        <PWASetup />
-        <ToastContainer />
-        <div
-          className="min-h-screen flex items-center justify-center font-sans"
-          style={{ background: IVORY }}
-        >
-          <div className="text-center">
-            <div
-              className="w-16 h-16 mx-auto mb-4 border-4 rounded-full animate-spin"
-              style={{ borderColor: TEAL_DEEP, borderTopColor: 'transparent' }}
-            />
-            <p className="font-semibold" style={{ color: '#0F1419' }}>
-              Loading Globeskimmers...
-            </p>
-          </div>
-        </div>
-      </>
-    );
-  }
-
   return (
     <>
       <PWASetup />
@@ -161,14 +107,20 @@ export default function Layout({ children, currentPageName }) {
             <BrandBanner />
           </div>
 
-          {/* App Content — offset by banner height (50px) + floating nav
-              clearance (96px ≈ pill height + bottom gap + safe area). */}
-          <div className="w-full min-h-screen pt-[50px] pb-24">
+          {/* App Content — offset by banner height (50px + status-bar safe
+              area, so content clears the now-safe-area-aware BrandBanner) +
+              floating nav clearance (pb-24). */}
+          <div
+            className="w-full min-h-screen pb-24"
+            style={{ paddingTop: 'calc(50px + env(safe-area-inset-top))' }}
+          >
             {children}
           </div>
 
-          {/* Floating pill nav — 3 anchors (Home / Saved / Settings). */}
-          <FloatingNav />
+          {/* Floating pill nav — 3 anchors (Home / Saved / Settings).
+              Lifted above the AdMob banner on Home only (the banner is
+              Home-only and pins to the bottom edge). */}
+          <FloatingNav liftForAd={currentPageName === "Home"} />
         </div>
       </LocationProvider>
     </>

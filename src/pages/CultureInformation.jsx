@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { ArrowLeft, Loader2, Navigation, RefreshCw, ChevronLeft, Compass } from "lucide-react";
-import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import { Loader2, Navigation, RefreshCw, ChevronLeft, Compass } from "lucide-react";
+import { CAT, IVORY } from "@/components/redesign/constants";
 import { motion } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
@@ -396,13 +396,7 @@ export default function CultureInformationPage() {
     setIsFromCache(false);
     
     try {
-      const isAuthenticated = await base44.auth.isAuthenticated();
-      
-      if (!isAuthenticated) {
-        base44.auth.redirectToLogin(window.location.pathname);
-        return;
-      }
-
+      // Auth is guaranteed by the app-wide sign-in gate; never redirect here.
       if (!activeLocation?.address) return;
 
       const country = activeLocation.address.country;

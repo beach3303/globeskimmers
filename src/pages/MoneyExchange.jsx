@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, Loader2, Phone, Search, TrendingUp, ChevronDown, ArrowUpDown, Info, Map, Navigation, X, ChevronLeft, DollarSign } from "lucide-react";
-import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import { MapPin, Loader2, Phone, Search, TrendingUp, ChevronDown, ArrowUpDown, Info, Map, Navigation, X, ChevronLeft, DollarSign } from "lucide-react";
+import { CAT, IVORY } from "@/components/redesign/constants";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -315,13 +315,6 @@ export default function MoneyExchangePage() {
 
   const loadUserAndLocation = async () => {
     try {
-      const isAuthenticated = await base44.auth.isAuthenticated();
-
-      if (!isAuthenticated) {
-        base44.auth.redirectToLogin(window.location.pathname);
-        return;
-      }
-
       const userData = await base44.auth.me();
       setUser(userData);
       
@@ -344,8 +337,10 @@ export default function MoneyExchangePage() {
 
       setLoading(false);
     } catch (error) {
-      console.error("Error loading user:", error);
-      base44.auth.redirectToLogin(window.location.pathname);
+      // Auth is guaranteed by the app-wide sign-in gate; never redirect here.
+      // Prefs still live in Base44 (migrated later) → fall back to defaults.
+      console.warn("User prefs unavailable; using defaults:", error?.message || error);
+      setLoading(false);
     }
   };
 

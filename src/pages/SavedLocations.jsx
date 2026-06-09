@@ -50,17 +50,14 @@ export default function SavedLocationsPage() {
 
   const loadSavedLocations = async () => {
     try {
-      const isAuth = await base44.auth.isAuthenticated();
-      if (!isAuth) {
-        base44.auth.redirectToLogin(window.location.pathname);
-        return;
-      }
-
+      // Auth is guaranteed by the app-wide sign-in gate; never redirect here.
+      // Saved locations still live in Base44 (not yet migrated) → degrade to
+      // an empty list rather than throwing the user out.
       const user = await base44.auth.me();
       setSavedLocations(user.saved_locations || []);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error loading saved locations:', error);
+    } catch {
+      setSavedLocations([]);
+    } finally {
       setLoading(false);
     }
   };

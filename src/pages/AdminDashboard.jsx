@@ -62,13 +62,7 @@ export default function AdminDashboardPage() {
 
   const loadDashboardData = async () => {
     try {
-      const isAuthenticated = await base44.auth.isAuthenticated();
-      
-      if (!isAuthenticated) {
-        base44.auth.redirectToLogin(window.location.pathname);
-        return;
-      }
-
+      // Auth is guaranteed by the app-wide sign-in gate; never redirect here.
       const userData = await base44.auth.me();
       
       // Check if user is admin
@@ -124,8 +118,10 @@ export default function AdminDashboardPage() {
 
       setLoading(false);
     } catch (error) {
+      // No Base44 admin session (e.g. native) — send home instead of redirecting
+      // to the Base44 login. The admin dashboard is a web/desktop tool.
       console.error("Error loading dashboard:", error);
-      base44.auth.redirectToLogin(window.location.pathname);
+      navigate(createPageUrl("Home"));
     }
   };
 

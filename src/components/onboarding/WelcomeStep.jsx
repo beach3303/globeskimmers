@@ -2,16 +2,11 @@ import React from "react";
 import { Plane, MapPin, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { base44 } from "@/api/base44Client";
-
 export default function WelcomeStep({ onNext }) {
-  const handleLogin = () => {
-    base44.auth.redirectToLogin();
-  };
-
-  const handleSignUp = () => {
-    base44.auth.redirectToLogin();
-  };
+  // This screen is no longer in the onboarding flow — the app-wide AuthGate
+  // handles sign in / sign up. Kept for reference; both CTAs just advance.
+  const handleLogin = () => onNext?.();
+  const handleSignUp = () => onNext?.();
 
   return (
     <motion.div
