@@ -1,71 +1,178 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { extractFirstName } from "@/lib/extractFirstName";
-import ReferralSourceStep from "../components/onboarding/ReferralSourceStep";
+
+// Existing (reused) steps
 import LocationStep from "../components/onboarding/LocationStep";
 import HomeCountryStep from "../components/onboarding/HomeCountryStep";
 import CurrencyStep from "../components/onboarding/CurrencyStep";
 import LanguageStep from "../components/onboarding/LanguageStep";
 import TemperatureStep from "../components/onboarding/TemperatureStep";
+// New steps (Phase 5)
+import FirstNameStep from "../components/onboarding/FirstNameStep";
+import DistanceUnitStep from "../components/onboarding/DistanceUnitStep";
+import TravelFrequencyStep from "../components/onboarding/TravelFrequencyStep";
+import TravelPurposeStep from "../components/onboarding/TravelPurposeStep";
+import TravelerTypeStep from "../components/onboarding/TravelerTypeStep";
+import FavoriteCountriesStep from "../components/onboarding/FavoriteCountriesStep";
+import NextDestinationStep from "../components/onboarding/NextDestinationStep";
+import TravelBudgetStep from "../components/onboarding/TravelBudgetStep";
+import AccommodationStyleStep from "../components/onboarding/AccommodationStyleStep";
 
 // Account-tied onboarding. The user is ALWAYS authenticated here (App.jsx's
-// forced gate guarantees a Supabase session before any route renders), so there
-// is no WelcomeStep / login branch anymore — that role moved to AuthGate.
+// forced gate guarantees a Supabase session). Steps collect answers; on the
+// final step we write them all to public.profiles and flip
+// onboarding_completed = true (the once-ever flag the Layout gate reads).
 //
-// Phase 4 scope: run the existing steps for UX and, on completion, flip
-// profiles.onboarding_completed = true (+ best-effort first_name). Persisting
-// each typed answer into its profiles column — and the new question set (first
-// name, distance unit, travel frequency/purpose/type, optional fields) — lands
-// in Phase 5, which rebuilds this flow against the verified column mapping.
+// Required: first name (only if we don't already have one), location, home
+// country, currency, language, temperature, distance unit, travel frequency,
+// travel purpose, traveler type. Optional: favorite countries, next
+// destination, travel budget, accommodation style.
 export default function OnboardingPage() {
   const navigate = useNavigate();
-  const { user, refreshProfile } = useAuth();
-  const [currentStep, setCurrentStep] = useState(1);
+  const { user, profile, refreshProfile } = useAuth();
+
+  // First name may already be known (provider metadata → profiles.first_name via
+  // the signup trigger, or directly in user_metadata). If so, skip that step.
+  const initialFirstName = useMemo(
+    () => profile?.first_name || extractFirstName(user) || "",
+    [profile, user]
+  );
+
+  const steps = useMemo(() => {
+    const list = [];
+    if (!initialFirstName) list.push("first_name");
+    list.push(
+      "location", "home_country", "currency", "language", "temperature",
+      "distance", "frequency", "purpose", "traveler",      // required
+      "favorites", "next_destination", "budget", "accommodation" // optional
+    );
+    return list;
+  }, [initialFirstName]);
+
+  const [stepIndex, setStepIndex] = useState(0);
+  const [data, setData] = useState({});
   const [saving, setSaving] = useState(false);
 
-  const finish = async () => {
+  const finish = async (collected) => {
     if (saving) return;
     setSaving(true);
-    const firstName = extractFirstName(user);
-    const update = { onboarding_completed: true, ...(firstName ? { first_name: firstName } : {}) };
+
+    const fn = collected.first_name || initialFirstName;
+    const update = { onboarding_completed: true };
+    if (fn) update.first_name = fn;
+    if (collected.home_country) update.home_country = collected.home_country;
+    if (collected.preferred_currency) update.preferred_currency = collected.preferred_currency;
+    if (collected.preferred_language) update.preferred_language = collected.preferred_language;
+    // TemperatureStep emits a scale ('fahrenheit'|'celsius'); column is ('C'|'F').
+    if (collected.preferred_temperature_scale === "fahrenheit") update.temp_unit = "F";
+    else if (collected.preferred_temperature_scale === "celsius") update.temp_unit = "C";
+    if (collected.distance_unit) update.distance_unit = collected.distance_unit;
+    if (collected.travel_frequency) update.travel_frequency = collected.travel_frequency;
+    if (collected.travel_purpose?.length) update.travel_purpose = collected.travel_purpose;
+    if (collected.traveler_type) update.traveler_type = collected.traveler_type;
+    if (collected.frequent_countries?.length) update.frequent_countries = collected.frequent_countries;
+    if (collected.next_destination) update.next_destination = collected.next_destination;
+    if (collected.travel_budget) update.travel_budget = collected.travel_budget;
+    if (collected.accommodation_style?.length) update.accommodation_style = collected.accommodation_style;
+
     try {
-      if (user?.id) {
-        await supabase.from("profiles").update(update).eq("id", user.id);
-      }
+      if (user?.id) await supabase.from("profiles").update(update).eq("id", user.id);
     } catch (e) {
-      console.warn("Onboarding save failed:", e?.message || e);
+      // If some value tripped a constraint, still mark completion so the gate
+      // passes and the user isn't trapped in onboarding.
+      console.warn("Onboarding save partial:", e?.message || e);
+      try {
+        if (user?.id) {
+          await supabase.from("profiles")
+            .update({ onboarding_completed: true, ...(fn ? { first_name: fn } : {}) })
+            .eq("id", user.id);
+        }
+      } catch { /* last-resort: ignore */ }
     }
+
     await refreshProfile(); // so Layout's gate sees onboarding_completed = true
     navigate(createPageUrl("Home"));
   };
 
-  return (
-    <div className="min-h-screen font-sans" style={{ background: "#FFFCF7" }}>
-      {currentStep === 1 && (
-        <ReferralSourceStep onNext={() => setCurrentStep(2)} />
-      )}
-      {currentStep === 2 && (
+  // Merge any answer, then advance — or finish on the last step.
+  const advance = (partial) => {
+    const merged = partial ? { ...data, ...partial } : data;
+    if (partial) setData(merged);
+    if (stepIndex >= steps.length - 1) finish(merged);
+    else setStepIndex((i) => i + 1);
+  };
+
+  const key = steps[stepIndex];
+  let content = null;
+  switch (key) {
+    case "first_name":
+      content = <FirstNameStep defaultValue={initialFirstName} onNext={(d) => advance(d)} />;
+      break;
+    case "location":
+      content = (
         <LocationStep
-          onNext={() => setCurrentStep(3)}
-          onLocationGranted={() => setCurrentStep(3)}
-          onExit={finish}
+          onNext={() => advance()}
+          onLocationGranted={() => {}}
+          onExit={() => advance()}
         />
-      )}
-      {currentStep === 3 && (
-        <HomeCountryStep onNext={() => setCurrentStep(4)} onSkip={finish} />
-      )}
-      {currentStep === 4 && (
-        <CurrencyStep onNext={() => setCurrentStep(5)} onSkip={finish} />
-      )}
-      {currentStep === 5 && (
-        <LanguageStep onNext={() => setCurrentStep(6)} onSkip={finish} />
-      )}
-      {currentStep === 6 && (
-        <TemperatureStep onNext={finish} onSkip={finish} />
-      )}
+      );
+      break;
+    case "home_country":
+      content = <HomeCountryStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      break;
+    case "currency":
+      content = <CurrencyStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      break;
+    case "language":
+      content = <LanguageStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      break;
+    case "temperature":
+      content = <TemperatureStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      break;
+    case "distance":
+      content = <DistanceUnitStep onNext={(d) => advance(d)} />;
+      break;
+    case "frequency":
+      content = <TravelFrequencyStep onNext={(d) => advance(d)} />;
+      break;
+    case "purpose":
+      content = <TravelPurposeStep onNext={(d) => advance(d)} />;
+      break;
+    case "traveler":
+      content = <TravelerTypeStep onNext={(d) => advance(d)} />;
+      break;
+    case "favorites":
+      content = <FavoriteCountriesStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      break;
+    case "next_destination":
+      content = <NextDestinationStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      break;
+    case "budget":
+      content = <TravelBudgetStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      break;
+    case "accommodation":
+      content = <AccommodationStyleStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      break;
+    default:
+      content = null;
+  }
+
+  const progress = Math.round(((stepIndex + 1) / steps.length) * 100);
+
+  return (
+    <div className="min-h-screen font-sans relative" style={{ background: "#FFFCF7" }}>
+      {/* Progress bar */}
+      <div className="fixed top-0 left-0 right-0 h-1 bg-gray-200 z-50">
+        <div
+          className="h-full bg-gradient-to-r from-[#088395] to-[#05BFDB] transition-all duration-300"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+      {content}
     </div>
   );
 }
