@@ -16,7 +16,7 @@
     "assets": "npx @capacitor/assets generate --ios --android --iconBackgroundColor \"#FFFCF7\" --iconBackgroundColorDark \"#0F1419\" --splashBackgroundColor \"#FFFCF7\" --splashBackgroundColorDark \"#0F1419\""
   },
   "dependencies": {
-    "@base44/sdk": "^0.8.31",
+    "@base44/sdk": "^0.8.32",
     "@base44/vite-plugin": "^1.0.21",
     "@capacitor-community/admob": "^8.0.0",
     "@capacitor-community/apple-sign-in": "^7.1.0",
