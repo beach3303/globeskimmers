@@ -4,6 +4,8 @@ import { X, MapPin, Navigation, Search, Loader2, AlertCircle, Crosshair } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { base44 } from '@/api/base44Client';
+import { callWorker } from '@/lib/callWorker';
+import { ROUTE } from '@/lib/workerRoutes';
 import { useLocation } from './LocationContext';
 
 // Preset cities for one-tap testing in the coordinate-entry mode.
@@ -93,7 +95,7 @@ export default function LocationModePicker({ isOpen, onClose }) {
     setErrorMessage('');
     
     try {
-      const { data } = await base44.functions.invoke('searchLocation', {
+      const { data } = await callWorker(ROUTE.searchLocation, {
         query: query
       });
 
@@ -197,7 +199,7 @@ export default function LocationModePicker({ isOpen, onClose }) {
     setCoordsApplying(true);
 
     try {
-      const { data } = await base44.functions.invoke('reverseGeocode', {
+      const { data } = await callWorker(ROUTE.reverseGeocode, {
         latitude: lat,
         longitude: lng,
       });

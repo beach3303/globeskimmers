@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Search, Loader2, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { base44 } from '@/api/base44Client';
+import { callWorker } from '@/lib/callWorker';
+import { ROUTE } from '@/lib/workerRoutes';
 
 const PLACE_TYPE_ICONS = {
   airport: '✈️',
@@ -46,7 +47,7 @@ export default function AddLocationDialog({ isOpen, onAdd, onClose }) {
     setErrorMessage('');
     
     try {
-      const { data } = await base44.functions.invoke('searchLocation', {
+      const { data } = await callWorker(ROUTE.searchLocation, {
         query: query
       });
 

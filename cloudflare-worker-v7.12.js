@@ -4481,6 +4481,164 @@ async function writeCafeWorkToD1(env, placeId, promptVersion, workProfile, place
   }
 }
 
+// ============================================================================
+// LOCATION — reverse geocode (coords→city) + location text search.
+// Ported from base44/functions/{reverseGeocode,searchLocation} for the native
+// data path (Phase 7). OPEN routes (no per-user data), use env.GOOGLE_API_KEY.
+// NOTE: /reverse-geocode needs the Geocoding API enabled on that key.
+// ============================================================================
+async function handleReverseGeocode(request, env) {
+  let body;
+  try { body = await request.json(); } catch (_e) { return jsonResponse({ error: 'Invalid JSON body' }, 400); }
+  const { latitude, longitude } = body || {};
+  if (latitude == null || longitude == null) {
+    return jsonResponse({ error: 'Latitude and longitude are required' }, 400);
+  }
+  const apiKey = env.GOOGLE_API_KEY;
+  if (!apiKey) return jsonResponse({ error: 'Google API key not configured' }, 500);
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}`;
+    const response = await fetch(url);
+    if (!response.ok) return jsonResponse({ error: 'Geocoding API request failed', details: await response.text() }, 502);
+    const data = await response.json();
+    if (data.status !== 'OK' || !data.results?.length) {
+      return jsonResponse({ error: 'Geocoding error', details: data.status }, 502);
+    }
+    const result = data.results[0];
+    const comps = result.address_components || [];
+    const cityComponent = comps.find(c =>
+      c.types.includes('locality') || c.types.includes('sublocality') ||
+      c.types.includes('postal_town') || c.types.includes('administrative_area_level_3') ||
+      c.types.includes('administrative_area_level_2'));
+    const stateComponent = comps.find(c => c.types.includes('administrative_area_level_1'));
+    const countryComponent = comps.find(c => c.types.includes('country'));
+    const city = cityComponent?.long_name || '';
+    const country = countryComponent?.long_name || '';
+    const stateOrCountry = (countryComponent?.short_name === 'US' || countryComponent?.short_name === 'CA')
+      ? (stateComponent?.long_name || country) : country;
+    return jsonResponse({ city, state_or_country: stateOrCountry, country, latitude, longitude, formatted_address: result.formatted_address });
+  } catch (e) {
+    return jsonResponse({ error: 'Internal server error', details: e.message }, 500);
+  }
+}
+
+function haversineMilesLoc(lat1, lon1, lat2, lon2) {
+  const R = 3959, toRad = (d) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function handleSearchLocation(request, env) {
+  let body;
+  try { body = await request.json(); } catch (_e) { return jsonResponse({ error: 'Invalid request', results: [] }, 200); }
+  const query = body?.query;
+  if (!query || typeof query !== 'string') {
+    return jsonResponse({ error: 'Query required', message: 'Please enter a search term', results: [] }, 200);
+  }
+  const apiKey = env.GOOGLE_API_KEY;
+  if (!apiKey) return jsonResponse({ error: 'Service unavailable', results: [] }, 200);
+
+  const isHotelSearch = /hotel|lodging|accommodation/i.test(query);
+  const requestBody = { textQuery: query, ...(isHotelSearch && { includedType: 'lodging', rankPreference: 'RELEVANCE' }) };
+
+  let response;
+  try {
+    response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.viewport,places.addressComponents,places.types,places.primaryType',
+      },
+      body: JSON.stringify(requestBody),
+    });
+  } catch (_e) { return jsonResponse({ error: 'Network error', results: [] }, 200); }
+  if (!response.ok) return jsonResponse({ error: 'Location search unavailable', results: [] }, 200);
+
+  let data;
+  try { data = await response.json(); } catch (_e) { return jsonResponse({ error: 'Invalid response', results: [] }, 200); }
+  if (data.error) return jsonResponse({ error: `Google API Error: ${data.error.message || data.error.status}`, results: [] }, 200);
+  if (!data.places?.length) {
+    return jsonResponse({ results: [], message: isHotelSearch ? 'No hotels found. Try a specific hotel name or area.' : 'No locations found. Try a different search term.' }, 200);
+  }
+
+  const results = [];
+  let rejectedTooBroadCount = 0;
+  for (const place of data.places.slice(0, 8)) {
+    const types = place.types || [];
+    const primaryType = place.primaryType || '';
+    const hasSpecificType = types.some(t => ['street_address','premise','point_of_interest','establishment','airport','train_station','transit_station','bus_station','subway_station','tourist_attraction','lodging','restaurant','park','shopping_mall','store','museum','stadium','university','school','cafe'].includes(t))
+      || ['airport','lodging','tourist_attraction','shopping_mall','store','restaurant','train_station','museum','park'].includes(primaryType);
+    const isStreetAddress = types.includes('street_address') || types.includes('premise');
+    const isCity = types.includes('locality') || types.includes('sublocality') || types.includes('postal_town');
+    const isState = types.includes('administrative_area_level_1') && !isCity;
+    const isCountry = types.includes('country') && !types.includes('administrative_area_level_1') && !isCity;
+    let granularity;
+    if (isStreetAddress) granularity = 'address';
+    else if (hasSpecificType) granularity = 'place';
+    else if (isCity) granularity = 'city';
+    else if (isState) granularity = 'state';
+    else if (isCountry) granularity = 'country';
+    else granularity = 'place';
+    if (granularity === 'state' || granularity === 'country') { rejectedTooBroadCount++; continue; }
+
+    const c = place.addressComponents || [];
+    const streetNumber = c.find(x => x.types.includes('street_number'))?.longText || '';
+    const route = c.find(x => x.types.includes('route'))?.longText || '';
+    const street = streetNumber && route ? `${streetNumber} ${route}` : route || streetNumber;
+    const city = c.find(x => x.types.includes('locality'))?.longText || c.find(x => x.types.includes('sublocality'))?.longText || c.find(x => x.types.includes('postal_town'))?.longText || '';
+    const state = c.find(x => x.types.includes('administrative_area_level_1'))?.shortText || '';
+    const region = c.find(x => x.types.includes('administrative_area_level_2'))?.longText || '';
+    const postalCode = c.find(x => x.types.includes('postal_code'))?.longText || '';
+    const countryComp = c.find(x => x.types.includes('country'));
+    const country = countryComp?.longText || '';
+    const stateOrCountry = (countryComp?.shortText === 'US' || countryComp?.shortText === 'CA') ? (state || country) : country;
+
+    let placeType = 'location';
+    if (types.includes('airport') || primaryType === 'airport') placeType = 'airport';
+    else if (types.includes('lodging') || primaryType === 'lodging') placeType = 'hotel';
+    else if (types.includes('restaurant') || primaryType === 'restaurant') placeType = 'restaurant';
+    else if (types.includes('shopping_mall') || types.includes('store') || primaryType === 'shopping_mall') placeType = 'shopping';
+    else if (types.includes('tourist_attraction') || types.includes('museum') || primaryType === 'tourist_attraction') placeType = 'attraction';
+    else if (types.includes('park') || primaryType === 'park') placeType = 'park';
+    else if (types.includes('transit_station') || types.includes('train_station') || types.includes('bus_station') || primaryType === 'train_station') placeType = 'transit';
+
+    let suggestedRadius = null;
+    if (granularity === 'city') {
+      const vp = place.viewport;
+      if (vp?.high?.latitude && vp?.low?.latitude) {
+        const halfDiagMi = haversineMilesLoc(vp.high.latitude, vp.high.longitude, vp.low.latitude, vp.low.longitude) / 2;
+        suggestedRadius = Math.max(5, Math.min(25, Math.round(halfDiagMi)));
+      } else suggestedRadius = 15;
+    }
+
+    results.push({
+      placeId: place.id,
+      placeName: place.displayName?.text || '',
+      granularity,
+      suggestedRadius,
+      address: { formatted: place.formattedAddress || '', street, city, region, state, postalCode, country },
+      coordinates: { latitude: place.location?.latitude || 0, longitude: place.location?.longitude || 0 },
+      placeType,
+      types,
+      city: place.displayName?.text || city,
+      state_or_country: stateOrCountry,
+      latitude: place.location?.latitude || 0,
+      longitude: place.location?.longitude || 0,
+      full_name: place.formattedAddress || '',
+    });
+  }
+
+  if (results.length === 0) {
+    const message = rejectedTooBroadCount > 0
+      ? "That's too broad — please add a city (e.g. \"Paris, France\") or pick a specific address or landmark."
+      : 'No locations found. Try a different search term.';
+    return jsonResponse({ results: [], message }, 200);
+  }
+  return jsonResponse({ results }, 200);
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Phase B helpers — auto-seed for non-launch cities
 // ─────────────────────────────────────────────────────────────────────
@@ -5024,6 +5182,8 @@ export default {
       if (pathname === '/attraction-ai-details' && request.method === 'POST') return await handleAttractionAIDetails(request, env);
       if (pathname === '/atm-ai-details' && request.method === 'POST') return await handleAtmAIDetails(request, env);
       if (pathname === '/cafe-work-profile' && request.method === 'POST') return await handleCafeWorkProfile(request, env);
+      if (pathname === '/reverse-geocode' && request.method === 'POST') return await handleReverseGeocode(request, env);
+      if (pathname === '/search-location' && request.method === 'POST') return await handleSearchLocation(request, env);
       if (pathname === '/name-info' && request.method === 'POST') return await handleNameInfo(request, env);
       if (pathname === '/parse-intent' && request.method === 'POST') return await handleParseIntent(request, env);
       // ThingsToDo D1 attractions lookup. Fast path for the launch-city +

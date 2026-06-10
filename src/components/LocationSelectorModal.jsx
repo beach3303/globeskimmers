@@ -4,6 +4,9 @@ import { X, MapPin, Navigation, Search, Loader2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { base44 } from "@/api/base44Client";
+import { callWorker } from "@/lib/callWorker";
+import { ROUTE } from "@/lib/workerRoutes";
+import { getCurrentPositionSmart } from "@/lib/geolocation";
 import { showToast } from "./Toast";
 
 export default function LocationSelectorModal({ isOpen, onClose, globalLocationManager }) {
@@ -41,7 +44,7 @@ export default function LocationSelectorModal({ isOpen, onClose, globalLocationM
   const searchLocations = async (query) => {
     setSearchLoading(true);
     try {
-      const { data } = await base44.functions.invoke('searchLocation', {
+      const { data } = await callWorker(ROUTE.searchLocation, {
         query: query
       });
 
@@ -60,17 +63,15 @@ export default function LocationSelectorModal({ isOpen, onClose, globalLocationM
   const handleUseCurrentLocation = async () => {
     setGpsLoading(true);
     try {
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 15000, // Increased timeout
-          maximumAge: 0
-        });
+      const position = await getCurrentPositionSmart({
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
       });
 
       const { latitude, longitude } = position.coords;
 
-      const { data: geocodedData } = await base44.functions.invoke('reverseGeocode', {
+      const { data: geocodedData } = await callWorker(ROUTE.reverseGeocode, {
         latitude,
         longitude
       });

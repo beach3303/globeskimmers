@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { callWorker } from "@/lib/callWorker";
+import { ROUTE } from "@/lib/workerRoutes";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
@@ -825,7 +827,7 @@ export default function Transportation() {
       }
       
       // Fallback to base44
-      const { data } = await base44.functions.invoke('searchLocation', {
+      const { data } = await callWorker(ROUTE.searchLocation, {
         query,
         latitude: activeLocation.latitude,
         longitude: activeLocation.longitude
@@ -1590,7 +1592,7 @@ export default function Transportation() {
         
         const searchQuery = `airport ${city} ${country}`.trim();
         
-        const { data } = await base44.functions.invoke('searchLocation', {
+        const { data } = await callWorker(ROUTE.searchLocation, {
           query: searchQuery,
           latitude: origin.latitude,
           longitude: origin.longitude
@@ -2567,7 +2569,8 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
           </>
         )}
 
-        {/* OPEN IN MAPS — Google + Apple shortcuts */}
+        {/* OPEN IN MAPS — Google + Apple TRANSIT shortcuts (transit routing is
+            the point of this page; do NOT swap for the driving-only picker). */}
         {destination && origin && (
           <div className="grid grid-cols-2 gap-2 mt-3">
             <button
@@ -2927,9 +2930,9 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
       </AnimatePresence>
 
       {/* Location Picker Modal */}
-      <LocationModePicker 
-        isOpen={showLocationPicker} 
-        onClose={() => setShowLocationPicker(false)} 
+      <LocationModePicker
+        isOpen={showLocationPicker}
+        onClose={() => setShowLocationPicker(false)}
       />
 
       <div className="h-20"></div>
