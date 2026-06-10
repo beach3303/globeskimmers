@@ -16,7 +16,8 @@
  * Shopping, ConvenienceStore, RestroomFinder. (Excluded: ATMFinder.)
  */
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { callWorker } from '@/lib/callWorker';
+import { ROUTE } from '@/lib/workerRoutes';
 import { hasNonLatinScript, looksEnglish } from '@/lib/nameAnalyzer';
 
 const GRAY = '#64748B';
@@ -49,7 +50,7 @@ export default function NameLanguageHelp({ placeId, name }) {
     if (!placeId || !name) return;
     setLoading(true);
     setError(null);
-    base44.functions.invoke('getNameInfo', { placeId, name })
+    callWorker(ROUTE.getNameInfo, { placeId, name })
       .then(({ data: resp }) => {
         if (resp?.error) {
           setError(resp.error);

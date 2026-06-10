@@ -30,7 +30,8 @@
  *   - No editorializing.
  */
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { callWorker } from '@/lib/callWorker';
+import { ROUTE } from '@/lib/workerRoutes';
 import { logEvent } from '@/lib/analytics';
 
 // Shared palette — matches AIDetailsSection.jsx so the AI panel reads the
@@ -133,7 +134,7 @@ export default function AttractionAIDetails({ placeId, placeName, page }) {
     // endpoint returns a richer payload (verifiedFacts + _sources map) so
     // the panel's source stamps reflect real per-field provenance instead
     // of hardcoded placeholders.
-    base44.functions.invoke('getAttractionAIDetails', { placeId })
+    callWorker(ROUTE.getAttractionAIDetails, { placeId })
       .then(({ data }) => {
         if (data?.error) {
           setError(data.error);

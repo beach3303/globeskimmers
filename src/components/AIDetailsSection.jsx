@@ -28,7 +28,8 @@
  *               Different kinds get separate cache entries on the Worker.
  */
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { callWorker } from '@/lib/callWorker';
+import { ROUTE } from '@/lib/workerRoutes';
 import { logEvent } from '@/lib/analytics';
 
 const DARK = '#1A2332';
@@ -146,7 +147,7 @@ export default function AIDetailsSection({ placeId, placeName, page, kind }) {
     if (!placeId) return;
     setLoading(true);
     setError(null);
-    base44.functions.invoke('getAIDetails', { placeId, kind: kind || 'restaurant' })
+    callWorker(ROUTE.getAIDetails, { placeId, kind: kind || 'restaurant' })
       .then(({ data }) => {
         if (data?.error) {
           setError(data.error);

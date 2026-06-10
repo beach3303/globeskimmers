@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
+import { callWorker } from "@/lib/callWorker";
+import { ROUTE } from "@/lib/workerRoutes";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { X, RefreshCw, ArrowLeft, Camera, ChevronLeft, ArrowRight, ScanLine } from "lucide-react";
@@ -286,12 +288,7 @@ export default function SmartPriceScannerPage() {
 
   const loadUser = async () => {
     try {
-      const isAuthenticated = await base44.auth.isAuthenticated();
-      if (!isAuthenticated) {
-        base44.auth.redirectToLogin(window.location.pathname);
-        return;
-      }
-
+      // Auth is guaranteed by the app-wide sign-in gate; never redirect here.
       const userData = await base44.auth.me();
       setUser(userData);
 
@@ -302,8 +299,7 @@ export default function SmartPriceScannerPage() {
       try { introSeen = localStorage.getItem(STORAGE_KEY_PRICE_INTRO_SEEN) === '1'; } catch { /* default false */ }
       setStep(introSeen ? 'currency' : 'intro');
     } catch (error) {
-      console.error("Error loading user:", error);
-      base44.auth.redirectToLogin(window.location.pathname);
+      console.warn("User prefs unavailable:", error?.message || error);
     }
   };
 
@@ -758,7 +754,7 @@ export default function SmartPriceScannerPage() {
     setAnalysisLoading(true);
     setAnalysisError(null);
     try {
-      const { data } = await base44.functions.invoke('analyzePrice', {
+      const { data } = await callWorker(ROUTE.analyzePrice, {
         itemDescription: first.original?.context || 'Item',
         price: first.original?.amount,
         currency: first.original?.currency,

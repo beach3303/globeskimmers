@@ -30,6 +30,8 @@
  */
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { callWorker } from '@/lib/callWorker';
+import { ROUTE } from '@/lib/workerRoutes';
 import { logEvent } from '@/lib/analytics';
 
 // Palette — matches AIDetailsSection / AttractionAIDetails so the panel
@@ -186,7 +188,7 @@ export default function AtmAIDetails({ placeId, placeName, page }) {
     // locationContext, safety, dccWarning, verifiedFacts, _sources).
     // Same ai_details_fetched event name so the existing ATM analytics
     // queries (atm_ai_details_paid_by_day_14d etc.) keep working.
-    base44.functions.invoke('getAtmAIDetails', { placeId })
+    callWorker(ROUTE.getAtmAIDetails, { placeId })
       .then(({ data }) => {
         if (data?.error) {
           setError(data.error);

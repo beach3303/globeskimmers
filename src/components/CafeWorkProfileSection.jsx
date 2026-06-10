@@ -8,7 +8,8 @@
  * "based on reviews" disclaimer.
  */
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { callWorker } from '@/lib/callWorker';
+import { ROUTE } from '@/lib/workerRoutes';
 import { logEvent } from '@/lib/analytics';
 
 const TEAL = '#0E7C73';
@@ -102,7 +103,7 @@ export default function CafeWorkProfileSection({ placeId, placeName, page = 'Cof
     if (!open || data || loading || !placeId) return;
     setLoading(true);
     setError(null);
-    base44.functions.invoke('getCafeWorkProfile', { placeId, placeName })
+    callWorker(ROUTE.getCafeWorkProfile, { placeId, placeName })
       .then(({ data: res }) => {
         if (res?.error) setError(res.error);
         else if (res?.workProfile) setData(res.workProfile);
