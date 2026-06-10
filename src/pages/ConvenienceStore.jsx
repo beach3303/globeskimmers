@@ -23,6 +23,7 @@ import DistanceUnitToggle from '@/components/location/DistanceUnitToggle';
 import { base44 } from '@/api/base44Client';
 import RefreshButton from '@/components/RefreshButton';
 import NameLanguageHelp from '@/components/NameLanguageHelp';
+import MapAppSelector from '@/components/MapAppSelector';
 import { ChevronLeft, MapPin, Store } from 'lucide-react';
 import { CAT, TEAL_DEEP, IVORY } from '@/components/redesign/constants';
 
@@ -375,41 +376,6 @@ function PhotoGallery({ photos, storeName, onClose }) {
 }
 
 // ============================================================================
-// COMPONENT: Directions Picker Modal
-// ============================================================================
-
-function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng }) {
-  if (!isOpen) return null;
-  const origin = userLat && userLng;
-  const apps = [
-    { icon: '🗺️', label: 'Google Maps', url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}${origin?`&origin=${userLat},${userLng}`:""}` },
-    { icon: '🍎', label: 'Apple Maps',  url: `https://maps.apple.com/?daddr=${lat},${lng}${origin?`&saddr=${userLat},${userLng}`:""}` },
-    { icon: '📍', label: 'Waze',        url: `https://waze.com/ul?ll=${lat},${lng}&navigate=yes` },
-  ];
-  return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(10,15,25,0.75)', zIndex:9999, display:'flex', alignItems:'flex-end', justifyContent:'center', padding:'20px' }}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:'#fff', borderRadius:'24px 24px 16px 16px', padding:'24px', width:'100%', maxWidth:'400px' }}>
-        <div style={{ width:'40px', height:'4px', background:'#E2E8F0', borderRadius:'2px', margin:'0 auto 20px' }}/>
-        <div style={{ textAlign:'center', marginBottom:'18px' }}>
-          <div style={{ fontSize:'22px', marginBottom:'4px' }}>🧭</div>
-          <div style={{ fontWeight:'800', fontSize:'17px', color:COLORS.dark }}>Get Directions</div>
-          <div style={{ fontSize:'13px', color:COLORS.textLight, marginTop:'3px' }}>{name}</div>
-        </div>
-        {apps.map(a => (
-          <button key={a.label} onClick={() => { window.open(a.url, '_blank'); onClose(); }}
-            style={{ display:'flex', alignItems:'center', gap:'14px', padding:'14px 16px', borderRadius:'14px', border:'1px solid #E2E8F0', background:'#FAFBFC', cursor:'pointer', fontFamily:'inherit', width:'100%', marginBottom:'10px', textAlign:'left' }}>
-            <span style={{ fontSize:'26px' }}>{a.icon}</span>
-            <span style={{ fontWeight:'700', color:COLORS.dark, fontSize:'15px' }}>{a.label}</span>
-            <span style={{ marginLeft:'auto', color:COLORS.textLight, fontSize:'20px' }}>›</span>
-          </button>
-        ))}
-        <button onClick={onClose} style={{ width:'100%', padding:'14px', borderRadius:'12px', border:'none', background:'#F1F5F9', color:COLORS.textLight, fontWeight:'700', cursor:'pointer', fontFamily:'inherit', fontSize:'14px' }}>Cancel</button>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
 // COMPONENT: Store Card (Beautiful Design)
 // ============================================================================
 
@@ -455,7 +421,18 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
           onClose={() => setShowGallery(false)}
         />
       )}
-      <DirectionsPicker isOpen={showDirs} onClose={() => setShowDirs(false)} lat={store.lat} lng={store.lng} name={store.name} userLat={userLat} userLng={userLng} />
+      <MapAppSelector
+        isOpen={showDirs}
+        onClose={() => setShowDirs(false)}
+        destination={{
+          name: store.name,
+          address: store.address || store.shortAddress || '',
+          latitude: store.lat,
+          longitude: store.lng,
+        }}
+        userLat={userLat}
+        userLng={userLng}
+      />
       
       <div
         style={{
@@ -1395,12 +1372,15 @@ export default function ConvenienceStorePage() {
 
         {/* Directions modal triggered from map popup */}
         {directionsStore && (
-          <DirectionsPicker
+          <MapAppSelector
             isOpen={true}
             onClose={() => setDirectionsStore(null)}
-            lat={directionsStore.lat}
-            lng={directionsStore.lng}
-            name={directionsStore.name}
+            destination={{
+              name: directionsStore.name,
+              address: directionsStore.address || directionsStore.shortAddress || '',
+              latitude: directionsStore.lat,
+              longitude: directionsStore.lng,
+            }}
             userLat={location?.latitude}
             userLng={location?.longitude}
           />

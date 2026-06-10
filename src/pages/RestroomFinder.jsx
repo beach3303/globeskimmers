@@ -10,6 +10,7 @@ import RefreshButton from "@/components/RefreshButton";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
+import MapAppSelector from "@/components/MapAppSelector";
 import { ChevronLeft, MapPin } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 
@@ -145,42 +146,6 @@ function PhotoStrip({ photos, fallbackIcon = "🚻", onPhotoClick }) {
             style={{ width: "100%", height: "140px", objectFit: "cover", opacity: loading[i] ? 0 : 1, transition: "opacity 0.4s" }} />
         </div>
       ))}
-    </div>
-  );
-}
-
-// ─── DIRECTIONS PICKER ─────────────────────────────────────────────────────
-function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng }) {
-  if (!isOpen) return null;
-  const origin = userLat && userLng;
-  const apps = [
-    { key: "google", icon: "🗺️", label: "Google Maps", url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}${origin?`&origin=${userLat},${userLng}`:""}&travelmode=walking` },
-    { key: "apple", icon: "🍎", label: "Apple Maps", url: `https://maps.apple.com/?daddr=${lat},${lng}${origin?`&saddr=${userLat},${userLng}`:""}&dirflg=w` },
-    { key: "waze", icon: "📍", label: "Waze", url: `https://waze.com/ul?ll=${lat},${lng}&navigate=yes` },
-  ];
-  return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(10,15,25,0.7)", zIndex: 9999, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "20px" }}>
-      <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
-        onClick={e => e.stopPropagation()}
-        style={{ background: "#fff", borderRadius: "24px 24px 16px 16px", padding: "24px", width: "100%", maxWidth: "400px" }}>
-        <div style={{ width: "40px", height: "4px", background: "#E2E8F0", borderRadius: "2px", margin: "0 auto 20px" }} />
-        <div style={{ textAlign: "center", marginBottom: "16px" }}>
-          <div style={{ fontSize: "20px", marginBottom: "4px" }}>🧭</div>
-          <div style={{ fontWeight: "800", fontSize: "16px", color: DARK }}>Get Directions</div>
-          <div style={{ fontSize: "13px", color: GRAY, marginTop: "2px" }}>{name}</div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          {apps.map(app => (
-            <button key={app.key} onClick={() => { window.open(app.url, "_blank"); onClose(); }}
-              style={{ display: "flex", alignItems: "center", gap: "14px", padding: "14px 16px", borderRadius: "14px", border: "1px solid #E2E8F0", background: "#FAFBFC", cursor: "pointer", fontFamily: "inherit", width: "100%", textAlign: "left" }}>
-              <span style={{ fontSize: "24px" }}>{app.icon}</span>
-              <span style={{ fontWeight: "700", color: DARK, fontSize: "15px" }}>{app.label}</span>
-              <span style={{ marginLeft: "auto", color: GRAY, fontSize: "18px" }}>›</span>
-            </button>
-          ))}
-        </div>
-        <button onClick={onClose} style={{ marginTop: "14px", width: "100%", padding: "14px", borderRadius: "12px", border: "none", background: GRAY_LIGHT, color: GRAY, fontWeight: "700", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-      </motion.div>
     </div>
   );
 }
@@ -383,7 +348,13 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
         </AnimatePresence>
       </div>
 
-      <DirectionsPicker isOpen={showDirs} onClose={() => setShowDirs(false)} lat={r.lat} lng={r.lng} name={name} userLat={userLat} userLng={userLng} />
+      <MapAppSelector
+        isOpen={showDirs}
+        onClose={() => setShowDirs(false)}
+        destination={{ name, address: r.formattedAddress || r.vicinity || r.address || "", latitude: r.lat, longitude: r.lng }}
+        userLat={userLat}
+        userLng={userLng}
+      />
       <PhotoGalleryModal photos={r.photos || []} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
     </motion.div>
   );
@@ -854,9 +825,18 @@ export default function RestroomFinderPage() {
         ::-webkit-scrollbar{display:none}
       `}</style>
 
-      <AnimatePresence>
-        {directionsRR && <DirectionsPicker isOpen={true} onClose={() => setDirectionsRR(null)} lat={directionsRR.lat} lng={directionsRR.lng} name={directionsRR.name || "Restroom"} userLat={lat} userLng={lng} />}
-      </AnimatePresence>
+      <MapAppSelector
+        isOpen={!!directionsRR}
+        onClose={() => setDirectionsRR(null)}
+        destination={{
+          name: directionsRR?.name || "Restroom",
+          address: directionsRR?.formattedAddress || directionsRR?.vicinity || directionsRR?.address || "",
+          latitude: directionsRR?.lat,
+          longitude: directionsRR?.lng,
+        }}
+        userLat={lat}
+        userLng={lng}
+      />
       <LocationModePicker isOpen={showLocPicker} onClose={() => setShowLocPicker(false)} />
     </div>
   );

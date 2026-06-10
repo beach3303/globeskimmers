@@ -29,7 +29,7 @@
 //   ✅ Load more (20 at a time)
 // ============================================================================
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -43,6 +43,7 @@ import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
+import MapAppSelector from "@/components/MapAppSelector";
 import { ChevronLeft, MapPin, Utensils } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 
@@ -451,31 +452,6 @@ function processRest(place, userLat, userLng) {
     cashSource:    place.cashSource    || null,
     bestTimeNote:  place.bestTimeNote  || null,
   };
-}
-
-// ─── DIRECTIONS PICKER ───────────────────────────────────────────────────────
-function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng }) {
-  if (!isOpen) return null;
-  const origin = userLat && userLng;
-  const go = app => {
-    const urls = { google:`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}${origin?`&origin=${userLat},${userLng}`:""}&travelmode=driving`, apple:`https://maps.apple.com/?daddr=${lat},${lng}${origin?`&saddr=${userLat},${userLng}`:""}&dirflg=d`, waze:`https://waze.com/ul?ll=${lat},${lng}&navigate=yes` };
-    window.open(urls[app],'_blank'); onClose();
-  };
-  return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
-      <motion.div initial={{scale:0.9,opacity:0}} animate={{scale:1,opacity:1}} onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:"20px",padding:"24px",width:"100%",maxWidth:"320px"}}>
-        <div style={{textAlign:"center",marginBottom:"20px"}}><div style={{fontSize:"14px",color:GRAY}}>Get directions to</div><div style={{fontSize:"16px",fontWeight:"700",color:DARK}}>{name}</div></div>
-        <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
-          {[{key:'google',icon:'🗺️',name:'Google Maps'},{key:'apple',icon:'🍎',name:'Apple Maps'},{key:'waze',icon:'📍',name:'Waze'}].map(a=>(
-            <button key={a.key} onClick={()=>go(a.key)} style={{display:"flex",alignItems:"center",gap:"14px",padding:"14px 18px",borderRadius:"12px",border:"1px solid #E2E8F0",background:"#fff",cursor:"pointer",fontFamily:"inherit",width:"100%"}}>
-              <span style={{fontSize:"28px"}}>{a.icon}</span><span style={{fontWeight:"600",color:DARK,fontSize:"15px"}}>{a.name}</span>
-            </button>
-          ))}
-        </div>
-        <button onClick={onClose} style={{marginTop:"14px",width:"100%",padding:"12px",borderRadius:"12px",border:"none",background:"#F1F5F9",color:GRAY,fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
-      </motion.div>
-    </div>
-  );
 }
 
 // ─── PHOTO CAROUSEL ──────────────────────────────────────────────────────────
@@ -898,7 +874,7 @@ export default function PlacesToEat() {
   }, []);
   // Analytics: log a page_view once on mount.
   useEffect(() => { logEvent('page_view', {}, 'PlacesToEat'); }, []);
-  const [dirModal, setDirModal]         = useState({ open:false, lat:null, lng:null, name:'' });
+  const [dirModal, setDirModal]         = useState({ open:false, lat:null, lng:null, name:'', address:'' });
   const [fallbackInfo, setFallbackInfo]  = useState(null);
   // Phase 1.5 "Also serves X" banner state. Populated when the backend
   // returns fallbackPlaces for a strict 0-result search (e.g. "Mang Inasal"
@@ -1299,7 +1275,7 @@ export default function PlacesToEat() {
       window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OSM"}).addTo(map);
       mapInstanceRef.current=map; window.mapInstance=map;
       window.viewRestDetails=(i)=>{setViewMode("list");setTimeout(()=>cardRefs.current[i]?.scrollIntoView({behavior:"smooth",block:"center"}),150);};
-      window.openDirFromMap=(i)=>{const r=filtered[i];r&&setDirModal({open:true,lat:r.lat,lng:r.lng,name:r.name});};
+      window.openDirFromMap=(i)=>{const r=filtered[i];r&&setDirModal({open:true,lat:r.lat,lng:r.lng,name:r.name,address:r.formattedAddress||r.shortFormattedAddress||r.vicinity||r.address||''});};
       // User-location pin with collapsible "📍 You are here" tooltip below
       // (anti-overlap with restaurant popups above). Same pattern as
       // ThingsToDo TierMapOverlay + MoneyExchange map.
@@ -1574,7 +1550,7 @@ export default function PlacesToEat() {
               <div key={r.id||i} ref={el=>cardRefs.current[i]=el}>
                 <RestaurantCard
                   restaurant={r} rank={i+1}
-                  onDirections={()=>setDirModal({open:true,lat:r.lat,lng:r.lng,name:r.name})}
+                  onDirections={()=>setDirModal({open:true,lat:r.lat,lng:r.lng,name:r.name,address:r.formattedAddress||r.shortFormattedAddress||r.vicinity||r.address||''})}
                   onShowOnMap={()=>handleShowOnMap(i)}
                   formatDistance={formatDistance}
                 />
@@ -1603,7 +1579,13 @@ export default function PlacesToEat() {
       {/* Scroll-to-top — appears after scrolling down */}
       {displayCount>20&&<button onClick={()=>window.scrollTo({top:0,behavior:'smooth'})} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9998,display:"flex",alignItems:"center",gap:"4px",padding:"8px 14px",borderRadius:"24px",border:"none",background:DARK,color:"#fff",fontWeight:"700",fontSize:"12px",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.3)",fontFamily:"inherit",opacity:0.9}}>↑ Top</button>}
       <LocationModePicker isOpen={showLocPicker} onClose={()=>setShowLocPicker(false)}/>
-      <DirectionsPicker isOpen={dirModal.open} onClose={()=>setDirModal({open:false,lat:null,lng:null,name:''})} lat={dirModal.lat} lng={dirModal.lng} name={dirModal.name} userLat={lat} userLng={lng}/>
+      <MapAppSelector
+        isOpen={dirModal.open}
+        onClose={()=>setDirModal({open:false,lat:null,lng:null,name:'',address:''})}
+        destination={{ name:dirModal.name, address:dirModal.address, latitude:dirModal.lat, longitude:dirModal.lng }}
+        userLat={lat}
+        userLng={lng}
+      />
     </div>
   );
 }

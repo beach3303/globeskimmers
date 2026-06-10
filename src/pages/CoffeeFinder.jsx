@@ -14,6 +14,8 @@ import AIDetailsSection from "@/components/AIDetailsSection";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import { ChevronLeft, MapPin, Coffee as CoffeeIcon } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import MapAppSelector from "@/components/MapAppSelector";
+import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 
 // ─── COLORS ────────────────────────────────────────────────────────────────
 const BROWN      = "#6F4E37";
@@ -138,39 +140,24 @@ function processShop(shop, userLat, userLng) {
   return { ...shop, lat, lng, name, distanceMiles, distance:distanceMiles?`${distanceMiles.toFixed(1)} mi`:null, isOpen:openStatus.isOpen, todayHours:openStatus.todayHours, is24Hours:openStatus.is24Hours, detectedDrinks, amenities, parking, seating, hasIndoorSeating, hasOutdoorSeating, seatingSource, hasWifi, isChain:chainFlag, isSpecialty:specialtyFlag, tier, badges:badges.slice(0,5), photos, photoUrl:photos[0]||null };
 }
 
-// ─── DIRECTIONS PICKER ─────────────────────────────────────────────────────
-function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng }) {
-  if (!isOpen) return null;
-  const origin=userLat&&userLng;
-  const go = app => { const urls={google:`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}${origin?`&origin=${userLat},${userLng}`:""}&travelmode=driving`,apple:`https://maps.apple.com/?daddr=${lat},${lng}${origin?`&saddr=${userLat},${userLng}`:""}&dirflg=d`,waze:`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`}; window.open(urls[app],'_blank'); onClose(); };
-  return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
-      <motion.div initial={{scale:0.9,opacity:0}} animate={{scale:1,opacity:1}} onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:"20px",padding:"20px",width:"100%",maxWidth:"320px"}}>
-        <div style={{textAlign:"center",marginBottom:"16px"}}><div style={{fontSize:"13px",color:GRAY}}>Get directions to</div><div style={{fontSize:"16px",fontWeight:"700",color:DARK}}>{name}</div></div>
-        <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
-          {[{key:'google',icon:'🗺️',name:'Google Maps'},{key:'apple',icon:'🍎',name:'Apple Maps'},{key:'waze',icon:'📍',name:'Waze'}].map(app=>(
-            <button key={app.key} onClick={()=>go(app.key)} style={{display:"flex",alignItems:"center",gap:"12px",padding:"14px 16px",borderRadius:"12px",border:"1px solid #E2E8F0",background:"#fff",cursor:"pointer",fontFamily:"inherit",width:"100%"}}>
-              <span style={{fontSize:"24px"}}>{app.icon}</span><span style={{fontWeight:"600",color:DARK}}>{app.name}</span>
-            </button>
-          ))}
-        </div>
-        <button onClick={onClose} style={{marginTop:"16px",width:"100%",padding:"12px",borderRadius:"10px",border:"none",background:"#F1F5F9",color:GRAY,fontWeight:"600",cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
-      </motion.div>
-    </div>
-  );
-}
+// Directions handled by the shared <MapAppSelector> (address-aware destination +
+// "from my location / other address" origin picker) — see src/components/MapAppSelector.jsx
 
 // ─── PHOTO CAROUSEL ────────────────────────────────────────────────────────
 function PhotoCarousel({ photos=[], height="180px" }) {
   const [cur,setCur]=useState(0); const [errs,setErrs]=useState({}); const ref=useRef(null);
+  const [galleryOpen,setGalleryOpen]=useState(false); const [galleryStart,setGalleryStart]=useState(0);
   const valid=photos.filter((_,i)=>!errs[i]);
   if(!valid.length)return <div style={{height:"120px",background:`linear-gradient(135deg,${CREAM},${BROWN_LIGHT},${GOLD}40)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"48px"}}>☕</div>;
   return (
     <div style={{position:"relative",overflow:"hidden"}}>
       <div ref={ref} onScroll={()=>ref.current&&setCur(Math.round(ref.current.scrollLeft/ref.current.offsetWidth))} style={{display:"flex",overflowX:"auto",scrollSnapType:"x mandatory",scrollbarWidth:"none",height}}>
-        {valid.map((p,i)=><img key={i} src={p} onError={()=>setErrs(e=>({...e,[photos.indexOf(p)]:true}))} style={{minWidth:"100%",height,objectFit:"cover",scrollSnapAlign:"start",flexShrink:0}} alt=""/>)}
+        {valid.map((p,i)=><img key={i} src={p} onError={()=>setErrs(e=>({...e,[photos.indexOf(p)]:true}))} onClick={()=>{setGalleryStart(i);setGalleryOpen(true);}} style={{minWidth:"100%",height,objectFit:"cover",scrollSnapAlign:"start",flexShrink:0,cursor:"zoom-in"}} alt=""/>)}
       </div>
+      {/* tap-to-enlarge affordance */}
+      <div style={{position:"absolute",top:"10px",right:"10px",background:"rgba(0,0,0,0.55)",color:"#fff",width:"28px",height:"28px",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"15px",pointerEvents:"none"}}>⤢</div>
       {valid.length>1&&<div style={{position:"absolute",bottom:"10px",right:"10px",background:"rgba(0,0,0,0.6)",color:"#fff",padding:"4px 10px",borderRadius:"20px",fontSize:"12px",fontWeight:"600"}}>{cur+1}/{valid.length}</div>}
+      {galleryOpen&&<PhotoGalleryModal photos={valid} initialIndex={galleryStart} isOpen onClose={()=>setGalleryOpen(false)}/>}
     </div>
   );
 }
@@ -364,7 +351,7 @@ function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance
           )}
         </AnimatePresence>
       </div>
-      <DirectionsPicker isOpen={showDir} onClose={()=>setShowDir(false)} lat={shop.lat} lng={shop.lng} name={name} userLat={userLat} userLng={userLng}/>
+      <MapAppSelector isOpen={showDir} onClose={()=>setShowDir(false)} destination={{name, address, latitude:shop.lat, longitude:shop.lng}} userLat={userLat} userLng={userLng}/>
     </motion.div>
   );
 }
@@ -692,7 +679,18 @@ export default function CoffeeFinderPage() {
       {showAdvanced&&<button onClick={()=>setShowAdvanced(false)} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9999,width:"40px",height:"40px",borderRadius:"50%",border:"none",background:DARK,color:"#fff",fontWeight:"700",fontSize:"18px",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:12px;padding:0;overflow:hidden}.gs-popup .leaflet-popup-content{margin:0}`}</style>
       <LocationModePicker isOpen={showLocPicker} onClose={()=>setShowLocPicker(false)}/>
-      {directionsShop&&<DirectionsPicker isOpen={true} onClose={()=>setDirectionsShop(null)} lat={directionsShop.lat} lng={directionsShop.lng} name={directionsShop.displayName?.text||directionsShop.name||"Coffee Shop"} userLat={lat} userLng={lng}/>}
+      <MapAppSelector
+        isOpen={!!directionsShop}
+        onClose={()=>setDirectionsShop(null)}
+        destination={{
+          name: directionsShop?.displayName?.text||directionsShop?.name||"Coffee Shop",
+          address: directionsShop?.formattedAddress||directionsShop?.shortFormattedAddress||directionsShop?.vicinity||directionsShop?.address||"",
+          latitude: directionsShop?.lat,
+          longitude: directionsShop?.lng,
+        }}
+        userLat={lat}
+        userLng={lng}
+      />
     </div>
   );
 }

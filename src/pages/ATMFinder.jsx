@@ -9,6 +9,7 @@ import { base44 } from "@/api/base44Client";
 import RefreshButton from "@/components/RefreshButton";
 import AtmAIDetails from "@/components/AtmAIDetails";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
+import MapAppSelector from "@/components/MapAppSelector";
 import { ChevronLeft, MapPin, CreditCard } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 
@@ -200,38 +201,6 @@ function rankATMs(list) {
     if (extra.length === 0) return atm;
     return { ...atm, badges: [...extra, ...(atm.badges || [])].slice(0, 5) };
   });
-}
-
-// ─── DIRECTIONS PICKER ─────────────────────────────────────────────────────
-function DirectionsPicker({ isOpen, onClose, lat, lng, name, userLat, userLng }) {
-  if (!isOpen) return null;
-  const origin = userLat && userLng;
-  const apps = [
-    { key: "google", icon: "🗺️", label: "Google Maps",  url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}${origin?`&origin=${userLat},${userLng}`:""}&travelmode=driving` },
-    { key: "apple",  icon: "🍎", label: "Apple Maps",   url: `https://maps.apple.com/?daddr=${lat},${lng}${origin?`&saddr=${userLat},${userLng}`:""}&dirflg=d` },
-    { key: "waze",   icon: "📍", label: "Waze",         url: `https://waze.com/ul?ll=${lat},${lng}&navigate=yes` },
-  ];
-  return (
-    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:"20px" }}>
-      <motion.div initial={{ scale:0.9, opacity:0 }} animate={{ scale:1, opacity:1 }} onClick={e=>e.stopPropagation()}
-        style={{ background:"#fff", borderRadius:"20px", padding:"22px", width:"100%", maxWidth:"320px" }}>
-        <div style={{ textAlign:"center", marginBottom:"16px" }}>
-          <div style={{ fontSize:"13px", color:GRAY }}>Get directions to</div>
-          <div style={{ fontSize:"16px", fontWeight:"700", color:DARK }}>{name}</div>
-        </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:"10px" }}>
-          {apps.map(app => (
-            <button key={app.key} onClick={() => { window.open(app.url, "_blank"); onClose(); }}
-              style={{ display:"flex", alignItems:"center", gap:"14px", padding:"14px 16px", borderRadius:"12px", border:"1px solid #E2E8F0", background:"#fff", cursor:"pointer", fontFamily:"inherit", width:"100%" }}>
-              <span style={{ fontSize:"24px" }}>{app.icon}</span>
-              <span style={{ fontWeight:"600", color:DARK, fontSize:"15px" }}>{app.label}</span>
-            </button>
-          ))}
-        </div>
-        <button onClick={onClose} style={{ marginTop:"14px", width:"100%", padding:"12px", borderRadius:"10px", border:"none", background:"#F1F5F9", color:GRAY, fontWeight:"600", cursor:"pointer", fontFamily:"inherit" }}>Cancel</button>
-      </motion.div>
-    </div>
-  );
 }
 
 // ─── PHOTO STRIP (up to 2 photos) ──────────────────────────────────────────
@@ -474,7 +443,13 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
         </AnimatePresence>
       </div>
 
-      <DirectionsPicker isOpen={showDirs} onClose={() => setShowDirs(false)} lat={atm.lat} lng={atm.lng} name={name} userLat={userLat} userLng={userLng} />
+      <MapAppSelector
+        isOpen={showDirs}
+        onClose={() => setShowDirs(false)}
+        destination={{ name, address: address || atm.vicinity || "", latitude: atm.lat, longitude: atm.lng }}
+        userLat={userLat}
+        userLng={userLng}
+      />
       <PhotoGalleryModal photos={atm.photos || []} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
     </motion.div>
   );
@@ -930,12 +905,15 @@ export default function ATMFinderPage() {
 
       <LocationModePicker isOpen={showLocPicker} onClose={() => setShowLocPicker(false)} />
       {directionsATM && (
-        <DirectionsPicker
+        <MapAppSelector
           isOpen={true}
           onClose={() => setDirectionsATM(null)}
-          lat={directionsATM.lat}
-          lng={directionsATM.lng}
-          name={directionsATM.displayName?.text || directionsATM.name || "ATM"}
+          destination={{
+            name: directionsATM.displayName?.text || directionsATM.name || "ATM",
+            address: directionsATM.formattedAddress || directionsATM.shortFormattedAddress || directionsATM.vicinity || "",
+            latitude: directionsATM.lat,
+            longitude: directionsATM.lng,
+          }}
           userLat={lat}
           userLng={lng}
         />

@@ -8,6 +8,7 @@ import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
+import MapAppSelector from "@/components/MapAppSelector";
 import AttractionAIDetails from "@/components/AttractionAIDetails";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import RefreshButton from "@/components/RefreshButton";
@@ -213,25 +214,6 @@ function openStatus(p){
   return {isOpen:open,label:open?"Open Now":"Closed Now",is24H:false,today:txt};
 }
 
-function Directions({isOpen,onClose,lat,lng,name,userLat,userLng}){
-  if(!isOpen) return null;
-  const origin=userLat&&userLng;
-  return(
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,15,25,0.75)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"20px"}}>
-      <motion.div initial={{y:80,opacity:0}} animate={{y:0,opacity:1}} exit={{y:80,opacity:0}} onClick={(e)=>e.stopPropagation()} style={{background:"#fff",borderRadius:"24px 24px 16px 16px",padding:"24px",width:"100%",maxWidth:"400px"}}>
-        <div style={{width:"40px",height:"4px",background:"#E2E8F0",borderRadius:"2px",margin:"0 auto 20px"}}/>
-        <div style={{textAlign:"center",marginBottom:"18px"}}><div style={{fontSize:"22px",marginBottom:"4px"}}>🧭</div><div style={{fontWeight:"800",fontSize:"17px",color:T.dark}}>Get Directions</div><div style={{fontSize:"13px",color:T.gray,marginTop:"3px"}}>{name}</div></div>
-        {[{icon:"🗺️",label:"Google Maps",url:`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}${origin?`&origin=${userLat},${userLng}`:""}`},{icon:"🍎",label:"Apple Maps",url:`https://maps.apple.com/?daddr=${lat},${lng}${origin?`&saddr=${userLat},${userLng}`:""}`},{icon:"📍",label:"Waze",url:`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`}].map(a=>(
-          <motion.button key={a.label} whileTap={{scale:0.97}} onClick={()=>{window.open(a.url,"_blank");onClose();}} style={{display:"flex",alignItems:"center",gap:"14px",padding:"14px 16px",borderRadius:"14px",border:"1px solid #E2E8F0",background:"#FAFBFC",cursor:"pointer",fontFamily:"inherit",width:"100%",marginBottom:"10px",textAlign:"left"}}>
-            <span style={{fontSize:"26px"}}>{a.icon}</span><span style={{fontWeight:"700",color:T.dark,fontSize:"15px"}}>{a.label}</span><span style={{marginLeft:"auto",color:T.gray,fontSize:"20px"}}>›</span>
-          </motion.button>
-        ))}
-        <button onClick={onClose} style={{width:"100%",padding:"14px",borderRadius:"12px",border:"none",background:T.grayL,color:T.gray,fontWeight:"700",cursor:"pointer",fontFamily:"inherit",fontSize:"14px"}}>Cancel</button>
-      </motion.div>
-    </div>
-  );
-}
-
 // TierMapOverlay — fullscreen modal map for the National Icons / Regional
 // Must-See "Map" button. Renders ON TOP of the TierCard's expanded modal
 // (which stays mounted underneath), so the X here closes the overlay and
@@ -402,19 +384,18 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
           relative to this overlay (10001) — wait, that's lower. Use
           a wrapper that bumps the modal above the overlay backdrop. */}
       <div style={{position:"fixed",inset:0,zIndex:10005,pointerEvents:showDirs?'auto':'none'}}>
-        <AnimatePresence>
-          {showDirs && (
-            <Directions
-              isOpen={true}
-              onClose={()=>setShowDirs(false)}
-              lat={a.lat}
-              lng={a.lng}
-              name={a.displayName?.text||a.name}
-              userLat={userLat}
-              userLng={userLng}
-            />
-          )}
-        </AnimatePresence>
+        <MapAppSelector
+          isOpen={showDirs}
+          onClose={()=>setShowDirs(false)}
+          destination={{
+            name:a.displayName?.text||a.name,
+            address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",
+            latitude:a.lat,
+            longitude:a.lng,
+          }}
+          userLat={userLat}
+          userLng={userLng}
+        />
       </div>
     </motion.div>
   );
@@ -576,7 +557,7 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
           </div>
         </motion.div>)}</AnimatePresence>
       </div>
-      <Directions isOpen={dirs} onClose={()=>setDirs(false)} lat={a.lat} lng={a.lng} name={name} userLat={userLat} userLng={userLng}/>
+      <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",latitude:a.lat,longitude:a.lng}} userLat={userLat} userLng={userLng}/>
       <PhotoGalleryModal photos={a.photos||[]} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
     </motion.div>
   );
@@ -641,7 +622,7 @@ function TierCard({a,userLat,userLng}){
           </div>
         </div>
       </div>
-      <Directions isOpen={dirs} onClose={()=>setDirs(false)} lat={a.lat} lng={a.lng} name={name} userLat={userLat} userLng={userLng}/>
+      <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",latitude:a.lat,longitude:a.lng}} userLat={userLat} userLng={userLng}/>
       <PhotoGalleryModal photos={a.photos||[]} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
       <AnimatePresence>
         {expanded&&(
@@ -928,7 +909,7 @@ export default function ThingsToDoFinder() {
 
       {showAdvanced&&<button onClick={()=>setShowAdvanced(false)} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9999,width:"40px",height:"40px",borderRadius:"50%",border:"none",background:T.dark,color:"#fff",fontWeight:"700",fontSize:"18px",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
       <style>{`::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:16px;padding:0;overflow:hidden;}.gs-popup .leaflet-popup-content{margin:0;}.gs-popup .leaflet-popup-tip-container{display:none;}`}</style>
-      <AnimatePresence>{dirsA&&<Directions isOpen={true} onClose={()=>setDirsA(null)} lat={dirsA.lat} lng={dirsA.lng} name={dirsA.displayName?.text||dirsA.name} userLat={lat} userLng={lng}/>}</AnimatePresence>
+      <MapAppSelector isOpen={!!dirsA} onClose={()=>setDirsA(null)} destination={dirsA?{name:dirsA.displayName?.text||dirsA.name,address:dirsA.formattedAddress||dirsA.shortFormattedAddress||dirsA.vicinity||dirsA.address||"",latitude:dirsA.lat,longitude:dirsA.lng}:null} userLat={lat} userLng={lng}/>
       <AnimatePresence>{loading&&(activities.length>0||nationalIcons.length>0)&&(<motion.div initial={{opacity:0,y:-20,x:'-50%'}} animate={{opacity:1,y:0,x:'-50%'}} exit={{opacity:0,y:-20,x:'-50%'}} style={{position:"fixed",top:"24px",left:"50%",zIndex:9999,background:T.dark,color:"#fff",padding:"8px 16px",borderRadius:"24px",fontSize:"13px",fontWeight:"700",display:"flex",alignItems:"center",gap:"8px",boxShadow:"0 4px 12px rgba(0,0,0,0.2)"}}><motion.div animate={{rotate:360}} transition={{repeat:Infinity,duration:1,ease:"linear"}} style={{display:"inline-block"}}>⏳</motion.div>Fetching new spots...</motion.div>)}</AnimatePresence>
       <LocationModePicker isOpen={locPicker} onClose={()=>setLocPicker(false)}/>
     </div>

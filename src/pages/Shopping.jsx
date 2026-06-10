@@ -7,6 +7,7 @@ import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { base44 } from "@/api/base44Client";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
+import MapAppSelector from "@/components/MapAppSelector";
 import { ChevronLeft, MapPin, ShoppingBag } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 
@@ -73,24 +74,8 @@ function openStatus(p){
   return {isOpen:open,label:open?"Open Now":"Closed Now",is24H:false,today:txt};
 }
 
-function Directions({isOpen,onClose,lat,lng,name,userLat,userLng}){
-  if(!isOpen) return null;
-  const origin=userLat&&userLng;
-  return(
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,15,25,0.75)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"20px"}}>
-      <motion.div initial={{y:80,opacity:0}} animate={{y:0,opacity:1}} exit={{y:80,opacity:0}} onClick={(e)=>e.stopPropagation()} style={{background:"#fff",borderRadius:"24px 24px 16px 16px",padding:"24px",width:"100%",maxWidth:"400px"}}>
-        <div style={{width:"40px",height:"4px",background:"#E2E8F0",borderRadius:"2px",margin:"0 auto 20px"}}/>
-        <div style={{textAlign:"center",marginBottom:"18px"}}><div style={{fontSize:"22px",marginBottom:"4px"}}>🧭</div><div style={{fontWeight:"800",fontSize:"17px",color:T.dark}}>Get Directions</div><div style={{fontSize:"13px",color:T.gray,marginTop:"3px"}}>{name}</div></div>
-        {[{icon:"🗺️",label:"Google Maps",url:`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}${origin?`&origin=${userLat},${userLng}`:""}`},{icon:"🍎",label:"Apple Maps",url:`https://maps.apple.com/?daddr=${lat},${lng}${origin?`&saddr=${userLat},${userLng}`:""}`},{icon:"📍",label:"Waze",url:`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`}].map(a=>(
-          <motion.button key={a.label} whileTap={{scale:0.97}} onClick={()=>{window.open(a.url,"_blank");onClose();}} style={{display:"flex",alignItems:"center",gap:"14px",padding:"14px 16px",borderRadius:"14px",border:"1px solid #E2E8F0",background:"#FAFBFC",cursor:"pointer",fontFamily:"inherit",width:"100%",marginBottom:"10px",textAlign:"left"}}>
-            <span style={{fontSize:"26px"}}>{a.icon}</span><span style={{fontWeight:"700",color:T.dark,fontSize:"15px"}}>{a.label}</span><span style={{marginLeft:"auto",color:T.gray,fontSize:"20px"}}>›</span>
-          </motion.button>
-        ))}
-        <button onClick={onClose} style={{width:"100%",padding:"14px",borderRadius:"12px",border:"none",background:T.grayL,color:T.gray,fontWeight:"700",cursor:"pointer",fontFamily:"inherit",fontSize:"14px"}}>Cancel</button>
-      </motion.div>
-    </div>
-  );
-}
+// Directions handled by the shared <MapAppSelector> (address-aware destination +
+// "from my location / other address" origin picker) — see src/components/MapAppSelector.jsx
 
 function PhotoStrip({photos,fallback="🛍️",bg}){
   const [err,setErr]=useState({}); const [ld,setLd]=useState({0:true,1:true});
@@ -174,7 +159,7 @@ function ShopCard({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,use
           {p.hours.map((d,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(n=>d.toLowerCase().startsWith(n.toLowerCase()));const isT=di===today;const pts=d.split(":");const dn2=pts[0];const hrs=pts.slice(1).join(":").trim();return(<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:"13px",color:isT?T.accentD:T.dark,fontWeight:isT?"700":"400",padding:isT?"7px 10px":"5px 2px",background:isT?`${T.accent}12`:"transparent",margin:isT?"2px -2px":"0",borderRadius:isT?"8px":"0",borderLeft:isT?`3px solid ${T.accent}`:"3px solid transparent"}}><span>{dn2}{isT&&<span style={{fontSize:"10px",color:T.accent,marginLeft:"5px",fontWeight:"800"}}>TODAY</span>}</span><span style={{color:hrs.toLowerCase()==="closed"?T.coral:isT?T.accentD:T.gray}}>{hrs}</span></div>);})}
         </div></motion.div>)}</AnimatePresence>
       </div>
-      <Directions isOpen={dirs} onClose={()=>setDirs(false)} lat={p.lat} lng={p.lng} name={name} userLat={userLat} userLng={userLng}/>
+      <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:p.formattedAddress||p.shortFormattedAddress||p.vicinity||p.address||"",latitude:p.lat,longitude:p.lng}} userLat={userLat} userLng={userLng}/>
     </motion.div>
   );
 }
@@ -317,7 +302,7 @@ export default function ShoppingFinder() {
       :viewMode==="list"?(<div style={{padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"14px"}}>{filtered.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"52px",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"18px",color:T.dark}}>No matches</div></div>:filtered.map((p,i)=><ShopCard key={p.id||i} p={p} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance}/>)}</div>)
       :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"absolute",top:"14px",right:"14px",zIndex:1000,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"20px",color:T.dark}}>✕</button></div>)}
       <style>{`::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:16px;padding:0;overflow:hidden;}.gs-popup .leaflet-popup-content{margin:0;}.gs-popup .leaflet-popup-tip-container{display:none;}`}</style>
-      <AnimatePresence>{dirsP&&<Directions isOpen={true} onClose={()=>setDirsP(null)} lat={dirsP.lat} lng={dirsP.lng} name={dirsP.displayName?.text||dirsP.name} userLat={lat} userLng={lng}/>}</AnimatePresence>
+      <MapAppSelector isOpen={!!dirsP} onClose={()=>setDirsP(null)} destination={dirsP?{name:dirsP.displayName?.text||dirsP.name,address:dirsP.formattedAddress||dirsP.shortFormattedAddress||dirsP.vicinity||dirsP.address||"",latitude:dirsP.lat,longitude:dirsP.lng}:null} userLat={lat} userLng={lng}/>
       <LocationModePicker isOpen={locPicker} onClose={()=>setLocPicker(false)}/>
     </div>
   );
