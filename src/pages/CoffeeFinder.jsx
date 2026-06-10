@@ -16,6 +16,7 @@ import { ChevronLeft, MapPin, Coffee as CoffeeIcon } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import MapAppSelector from "@/components/MapAppSelector";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
+import CafeWorkProfileSection from "@/components/CafeWorkProfileSection";
 
 // ─── COLORS ────────────────────────────────────────────────────────────────
 const BROWN      = "#6F4E37";
@@ -331,6 +332,12 @@ function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance
                     )}
                   </div>
                 )}
+                {/* Work-friendliness — laptop/remote-work signals (wifi, outlets,
+                    tables, AC, seating, noise) from reviews; cached in D1. */}
+                <CafeWorkProfileSection
+                  placeId={shop.placeId || shop.id}
+                  placeName={name}
+                />
                 {/* AI Details — shared component with PlacesToEat. Collapsed
                     by default. Lazy fetch on first open of the panel. */}
                 <AIDetailsSection

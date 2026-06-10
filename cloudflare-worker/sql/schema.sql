@@ -229,3 +229,22 @@ CREATE TABLE IF NOT EXISTS attraction_ai_details (
 
 CREATE INDEX IF NOT EXISTS idx_ai_details_generated
   ON attraction_ai_details (generated_at DESC);
+
+-- ===========================================================================
+-- cafe_work_profiles — "Good for working" amenity profiles for coffee shops.
+-- Haiku reads a cafe's Google reviews and extracts laptop/remote-work signals
+-- (wifi, power outlets, work tables, AC, seating comfort, noise). Same
+-- "pay Haiku once, ever" pattern as attraction_ai_details: keyed by Google
+-- placeId, regenerated only when CAFE_WORK_PROMPT_VERSION bumps. Reuses the
+-- ATTRACTIONS_DB binding.
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS cafe_work_profiles (
+  place_id        TEXT PRIMARY KEY,
+  place_name      TEXT,
+  prompt_version  TEXT NOT NULL,
+  work_json       TEXT NOT NULL,
+  generated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_cafe_work_generated
+  ON cafe_work_profiles (generated_at DESC);

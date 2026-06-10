@@ -2361,6 +2361,10 @@ async function handleAIDetails(request, env) {
 const ATTRACTION_AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days, matches /ai-details
 const ATTRACTION_AI_DETAILS_PROMPT_VERSION = 'a2';            // a1 -> a2: added smartTip, typicalDurationMin, wait object (Phase 2.5)
 
+// Cafe "work-friendly" profile (laptop/remote-work signals from reviews).
+const CAFE_WORK_TTL_SECONDS = 30 * 24 * 60 * 60;             // 30 days KV secondary
+const CAFE_WORK_PROMPT_VERSION = 'w1';                        // bump to regenerate all profiles
+
 function buildAttractionAIDetailsSystemPrompt() {
   return `You are GlobeSkimmers' Things-To-Do AI Details engine. Generate practical, honest insights for a traveler about to visit an ATTRACTION (museum, landmark, park, theme park, viewpoint, religious site, etc.).
 
@@ -2783,6 +2787,149 @@ async function handleAttractionAIDetails(request, env) {
   await writeAttractionAiToD1(env, placeId, ATTRACTION_AI_DETAILS_PROMPT_VERSION, aiDetails, placeMeta.name);
 
   return jsonResponse({ aiDetails, _cache: 'miss' });
+}
+
+// ============================================================================
+// CAFE WORK-FRIENDLY PROFILE — "Good for working" signals from reviews.
+// Mirrors the attraction AI-details pattern: D1 permanent cache → KV 30d →
+// Place Details (reused cache) → Haiku → cache. Pay Haiku once per cafe, ever.
+// ============================================================================
+function buildCafeWorkSystemPrompt() {
+  return `You analyze a coffee shop's Google reviews + editorial summary to judge how good it is for getting WORK done (laptop / remote work / studying). Output STRICT JSON only — no prose, no markdown fences.
+
+HONESTY RULES:
+- Use ONLY what the reviews/summary actually say. If a topic is not mentioned, set its status to "unknown" — NEVER guess or infer from vibe.
+- Prefer recent, repeated signals. One offhand mention = low confidence (reflect in evidenceCount).
+- State negatives plainly but neutrally (e.g. "reviewers say outlets are limited").
+
+Return EXACTLY this JSON shape:
+{
+  "laptopFriendly": "great" | "ok" | "not_ideal" | "unknown",
+  "wifi":    { "status": "yes" | "no" | "unknown", "note": "<=8 words or empty string" },
+  "outlets": { "status": "yes" | "limited" | "no" | "unknown", "note": "<=8 words or empty string" },
+  "tables":  { "status": "yes" | "limited" | "no" | "unknown", "note": "<=8 words (work-suitable tables/space) or empty string" },
+  "ac":      { "status": "yes" | "no" | "unknown", "note": "<=8 words or empty string" },
+  "seatingComfort": "comfy" | "basic" | "cramped" | "unknown",
+  "noise": "quiet" | "moderate" | "lively" | "unknown",
+  "summary": "<=18 words, one honest line about working here",
+  "bestForWork": "<=8 words (e.g. weekday mornings) or null",
+  "evidenceCount": 0
+}
+
+evidenceCount = how many of the provided reviews actually touched on work topics (wifi/outlets/seating/noise/working).
+laptopFriendly: "great" = several positive work signals; "ok" = mixed/some positives; "not_ideal" = reviews say loud/cramped/no outlets/no wifi/laptops discouraged; "unknown" = reviews do not cover it.`;
+}
+
+async function handleCafeWorkProfile(request, env) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
+  }
+  let body;
+  try { body = await request.json(); } catch (_e) {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400);
+  }
+  const placeId = body?.placeId;
+  if (!placeId) {
+    return jsonResponse({ error: 'placeId required' }, 400);
+  }
+
+  // 0) D1 permanent cache — pay Haiku once per cafe, ever.
+  const d1Cached = await readCafeWorkFromD1(env, placeId, CAFE_WORK_PROMPT_VERSION);
+  if (d1Cached) return jsonResponse({ workProfile: d1Cached, _cache: 'hit-d1' });
+
+  // 1) KV 30-day secondary (backfills D1 on hit).
+  const kvKey = `place:${placeId}:cafe_work_${CAFE_WORK_PROMPT_VERSION}`;
+  if (env.GLOBESKIMMERS_KV) {
+    const cached = await env.GLOBESKIMMERS_KV.get(kvKey, { type: 'json' }).catch(() => null);
+    if (cached) {
+      await writeCafeWorkToD1(env, placeId, CAFE_WORK_PROMPT_VERSION, cached, body?.placeName || null);
+      return jsonResponse({ workProfile: cached, _cache: 'hit-kv' });
+    }
+  }
+
+  // 2) Place Details — reuse the details_{placeId} cache (no new Google cost when warm).
+  const detailsCacheKey = `details_${placeId}`;
+  let place;
+  const cachedDetails = await getFromCache(env, detailsCacheKey);
+  if (cachedDetails && cachedDetails.data) {
+    place = cachedDetails.data;
+  } else {
+    try {
+      const detailsRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=en`, {
+        method: 'GET',
+        headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': CONFIG.DETAILS_FIELD_MASK }
+      });
+      if (!detailsRes.ok) return jsonResponse({ error: 'Place details fetch failed', status: detailsRes.status }, 502);
+      place = normalizePlace(await detailsRes.json(), new URL(request.url).origin, true);
+      await setInCache(env, detailsCacheKey, place, CONFIG.CACHE_TTL.DETAILS);
+    } catch (e) {
+      return jsonResponse({ error: 'Place details error: ' + e.message }, 502);
+    }
+  }
+
+  const reviewSnippets = (place.reviews || []).slice(0, 5).map(r => ({ text: r.text || '', rating: r.rating })).filter(r => r.text);
+  const placeName = place.name || place.displayName?.text || null;
+  const editorialSummary = place.editorialSummary || null;
+
+  const UNKNOWN = {
+    laptopFriendly: 'unknown',
+    wifi: { status: 'unknown', note: '' },
+    outlets: { status: 'unknown', note: '' },
+    tables: { status: 'unknown', note: '' },
+    ac: { status: 'unknown', note: '' },
+    seatingComfort: 'unknown',
+    noise: 'unknown',
+    summary: 'Not enough reviews yet to assess work-friendliness.',
+    bestForWork: null,
+    evidenceCount: 0,
+    placeName,
+  };
+
+  // 3) No review/editorial signal → cache an "unknown" stub so we do not re-check.
+  if (reviewSnippets.length === 0 && !editorialSummary) {
+    if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(kvKey, JSON.stringify(UNKNOWN), { expirationTtl: CAFE_WORK_TTL_SECONDS }).catch(() => {});
+    await writeCafeWorkToD1(env, placeId, CAFE_WORK_PROMPT_VERSION, UNKNOWN, placeName);
+    return jsonResponse({ workProfile: UNKNOWN, _cache: 'miss-stub' });
+  }
+
+  const userContent = `CAFE: ${JSON.stringify({ name: placeName, primaryType: place.primaryTypeDisplay || place.primaryType, editorialSummary })}\n\nREVIEW SNIPPETS (up to 5 from Google):\n${JSON.stringify(reviewSnippets, null, 2)}\n\nReturn the work-friendliness JSON per the rules. Use "unknown" for anything the reviews do not mention — never guess.`;
+
+  let workProfile;
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 700,
+        system: buildCafeWorkSystemPrompt(),
+        messages: [{ role: 'user', content: userContent }]
+      })
+    });
+    if (!apiRes.ok) {
+      const errText = await apiRes.text();
+      return jsonResponse({ error: 'Claude API error', status: apiRes.status, details: errText }, 502);
+    }
+    const data = await apiRes.json();
+    const raw = data?.content?.[0]?.text?.trim() || '';
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    workProfile = JSON.parse(cleaned);
+
+    // Defensive normalization.
+    const VERDICTS = new Set(['great', 'ok', 'not_ideal', 'unknown']);
+    if (!VERDICTS.has(workProfile.laptopFriendly)) workProfile.laptopFriendly = 'unknown';
+    for (const k of ['wifi', 'outlets', 'tables', 'ac']) {
+      if (!workProfile[k] || typeof workProfile[k] !== 'object') workProfile[k] = { status: 'unknown', note: '' };
+    }
+    workProfile.evidenceCount = Number.isFinite(workProfile.evidenceCount) ? workProfile.evidenceCount : 0;
+    workProfile.placeName = placeName;
+  } catch (e) {
+    return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
+  }
+
+  if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(kvKey, JSON.stringify(workProfile), { expirationTtl: CAFE_WORK_TTL_SECONDS }).catch(() => {});
+  await writeCafeWorkToD1(env, placeId, CAFE_WORK_PROMPT_VERSION, workProfile, placeName);
+  return jsonResponse({ workProfile, _cache: 'miss' });
 }
 
 // ============================================================================
@@ -4301,6 +4448,39 @@ async function writeAttractionAiToD1(env, placeId, promptVersion, aiDetails, pla
   }
 }
 
+// Cafe work-profile D1 cache (same best-effort pattern as the attraction helpers).
+async function readCafeWorkFromD1(env, placeId, promptVersion) {
+  if (!env.ATTRACTIONS_DB) return null;
+  try {
+    const row = await env.ATTRACTIONS_DB
+      .prepare('SELECT work_json, prompt_version FROM cafe_work_profiles WHERE place_id = ?')
+      .bind(placeId)
+      .first();
+    if (!row || row.prompt_version !== promptVersion) return null;
+    try { return JSON.parse(row.work_json); } catch { return null; }
+  } catch {
+    return null;
+  }
+}
+
+async function writeCafeWorkToD1(env, placeId, promptVersion, workProfile, placeName) {
+  if (!env.ATTRACTIONS_DB) return;
+  try {
+    await env.ATTRACTIONS_DB.prepare(`
+      INSERT OR REPLACE INTO cafe_work_profiles
+        (place_id, place_name, prompt_version, work_json, generated_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+    `).bind(
+      placeId,
+      placeName || null,
+      promptVersion,
+      JSON.stringify(workProfile),
+    ).run();
+  } catch (e) {
+    console.error('cafe_work_profiles write failed:', e?.message);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Phase B helpers — auto-seed for non-launch cities
 // ─────────────────────────────────────────────────────────────────────
@@ -4843,6 +5023,7 @@ export default {
       if (pathname === '/ai-details' && request.method === 'POST') return await handleAIDetails(request, env);
       if (pathname === '/attraction-ai-details' && request.method === 'POST') return await handleAttractionAIDetails(request, env);
       if (pathname === '/atm-ai-details' && request.method === 'POST') return await handleAtmAIDetails(request, env);
+      if (pathname === '/cafe-work-profile' && request.method === 'POST') return await handleCafeWorkProfile(request, env);
       if (pathname === '/name-info' && request.method === 'POST') return await handleNameInfo(request, env);
       if (pathname === '/parse-intent' && request.method === 'POST') return await handleParseIntent(request, env);
       // ThingsToDo D1 attractions lookup. Fast path for the launch-city +
