@@ -7,7 +7,7 @@
 // field on sign-up). On native, the OAuth buttons open the in-app browser and
 // the session completes via the deep-link callback handled in AuthContext.
 import React, { useState } from 'react';
-import { Globe, Loader2 } from 'lucide-react';
+import { Globe, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 import { IVORY, TEAL_DEEP, TEAL_GRADIENT } from '@/components/redesign/constants';
@@ -38,12 +38,14 @@ function FacebookIcon() {
 }
 
 export default function AuthGate() {
-  const { signInWithProvider, signInWithApple, signInWithEmail, signUpWithEmail, authError } = useAuth();
-  const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
+  const { signInWithProvider, signInWithApple, signInWithEmail, signUpWithEmail, resendConfirmation, verifyEmailOtp, authError } = useAuth();
+  const [mode, setMode] = useState('signin'); // 'signin' | 'signup' | 'verify'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
-  const [busy, setBusy] = useState(null); // 'google' | 'facebook' | 'apple' | 'email' | null
+  const [code, setCode] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [busy, setBusy] = useState(null); // 'google' | 'facebook' | 'apple' | 'email' | 'resend' | null
   const [info, setInfo] = useState(null);
   const [localError, setLocalError] = useState(null);
 
@@ -72,8 +74,9 @@ export default function AuthGate() {
       if (isSignup) {
         const { needsConfirmation } = await signUpWithEmail({ email, password, firstName: firstName.trim() });
         if (needsConfirmation) {
-          setInfo('Almost there — check your email to confirm your account, then sign in.');
-          setMode('signin');
+          setInfo("You're almost there — enter the 6-digit code we just emailed you.");
+          setCode('');
+          setMode('verify');
         }
       } else {
         await signInWithEmail(email, password);
@@ -85,11 +88,106 @@ export default function AuthGate() {
     }
   };
 
+  const submitOtp = async (e) => {
+    e.preventDefault();
+    setInfo(null); setLocalError(null);
+    if (code.length !== 6) { setLocalError('Enter the 6-digit code from your email.'); return; }
+    setBusy('verify');
+    try {
+      await verifyEmailOtp(email, code);
+      // success → session set → AuthContext flips isAuthenticated → the gate unmounts
+    } catch {
+      // authError surfaced by context
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const resend = async () => {
+    setInfo(null); setLocalError(null);
+    if (!email) { setLocalError('Enter your email above, then tap resend.'); return; }
+    setBusy('resend');
+    try {
+      await resendConfirmation(email);
+      setCode('');
+      setMode('verify'); // land on the code screen so the user can enter it
+      setInfo('New code sent — enter it below (check your spam folder too).');
+    } catch (err) {
+      setLocalError(err?.message || 'Could not resend just now. Try again in a moment.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const errorMsg = localError || authError?.message;
 
   const inputCls =
     'w-full h-12 px-4 rounded-xl border border-black/10 bg-white text-[15px] text-[#0F1419] ' +
     'placeholder:text-black/35 outline-none focus:border-[#0E7C73] focus:ring-2 focus:ring-[#0E7C73]/20 transition';
+
+  // Email-confirmation code screen (shown right after a successful sign-up). The
+  // user types the 6-digit code from their email; verifyEmailOtp creates the
+  // session and the gate unmounts. Codes avoid the Gmail link-prefetch problem.
+  if (mode === 'verify') {
+    return (
+      <div className="min-h-screen font-sans flex flex-col px-6 py-10" style={{ background: IVORY }}>
+        <div className="w-full max-w-sm mx-auto flex-1 flex flex-col justify-center">
+          <div className="flex flex-col items-center text-center mb-8">
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg mb-4"
+              style={{ background: TEAL_GRADIENT }}
+            >
+              <Globe className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-[#0F1419]">Check your email</h1>
+            <p className="text-[15px] text-black/50 mt-1">
+              We sent a 6-digit code to<br />
+              <span className="font-semibold text-[#0F1419]">{email}</span>
+            </p>
+          </div>
+
+          <form onSubmit={submitOtp} className="space-y-3">
+            <input
+              className={inputCls + ' text-center text-lg tracking-[0.4em] font-semibold'}
+              type="text" inputMode="numeric" autoComplete="one-time-code"
+              maxLength={6} placeholder="••••••" autoFocus
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              disabled={disabled}
+            />
+
+            {info && <p className="text-[13px] text-[#0E7C73] font-medium px-1">{info}</p>}
+            {errorMsg && <p className="text-[13px] text-red-600 font-medium px-1">{errorMsg}</p>}
+
+            <Button
+              type="submit" disabled={disabled || code.length !== 6}
+              className="w-full h-12 text-white text-[15px] font-semibold rounded-xl shadow-md hover:opacity-95 disabled:opacity-50"
+              style={{ background: TEAL_DEEP }}
+            >
+              {busy === 'verify' ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Verify & continue'}
+            </Button>
+
+            <button
+              type="button" onClick={resend} disabled={disabled}
+              className="block mx-auto text-[12.5px] text-black/45 hover:text-[#0E7C73] underline underline-offset-2 disabled:opacity-50 transition"
+            >
+              {busy === 'resend' ? 'Sending…' : 'Resend code'}
+            </button>
+          </form>
+
+          <p className="text-center text-[14px] text-black/55 mt-6">
+            <button
+              type="button" disabled={disabled}
+              onClick={() => { setMode('signin'); setCode(''); setInfo(null); setLocalError(null); }}
+              className="font-semibold text-[#0E7C73] disabled:opacity-50"
+            >
+              ← Back to sign in
+            </button>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen font-sans flex flex-col px-6 py-10" style={{ background: IVORY }}>
@@ -152,11 +250,20 @@ export default function AuthGate() {
             className={inputCls} type="email" autoComplete="email" placeholder="Email"
             value={email} onChange={(e) => setEmail(e.target.value)} disabled={disabled}
           />
-          <input
-            className={inputCls} type="password"
-            autoComplete={isSignup ? 'new-password' : 'current-password'} placeholder="Password"
-            value={password} onChange={(e) => setPassword(e.target.value)} disabled={disabled}
-          />
+          <div className="relative">
+            <input
+              className={inputCls + ' pr-12'} type={showPassword ? 'text' : 'password'}
+              autoComplete={isSignup ? 'new-password' : 'current-password'} placeholder="Password"
+              value={password} onChange={(e) => setPassword(e.target.value)} disabled={disabled}
+            />
+            <button
+              type="button" onClick={() => setShowPassword((s) => !s)} disabled={disabled}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70 disabled:opacity-50 transition"
+            >
+              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
+          </div>
 
           {info && <p className="text-[13px] text-[#0E7C73] font-medium px-1">{info}</p>}
           {errorMsg && <p className="text-[13px] text-red-600 font-medium px-1">{errorMsg}</p>}
@@ -170,6 +277,15 @@ export default function AuthGate() {
               ? <Loader2 className="w-5 h-5 animate-spin" />
               : (isSignup ? 'Create account' : 'Sign in')}
           </Button>
+
+          {!isSignup && (
+            <button
+              type="button" onClick={resend} disabled={disabled}
+              className="block mx-auto text-[12.5px] text-black/45 hover:text-[#0E7C73] underline underline-offset-2 disabled:opacity-50 transition"
+            >
+              {busy === 'resend' ? 'Resending…' : 'Resend confirmation email'}
+            </button>
+          )}
         </form>
 
         {/* Mode toggle */}

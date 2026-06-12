@@ -25,10 +25,16 @@ const isNative = () => Capacitor.isNativePlatform();
 
 // --- OAuth: Google / Facebook (and Apple on web/Android) ---------------------
 export async function startProviderSignIn(provider /* 'google' | 'facebook' | 'apple' */) {
+  // Force Google's account chooser every time so users with multiple Gmail
+  // accounts always pick which one to use (instead of silently reusing the last
+  // browser session). Facebook/Apple show their own choosers; the param is
+  // harmless to them but we scope it to Google to be safe.
+  const queryParams = provider === 'google' ? { prompt: 'select_account' } : undefined;
+
   if (isNative()) {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: OAUTH_REDIRECT_TO, skipBrowserRedirect: true },
+      options: { redirectTo: OAUTH_REDIRECT_TO, skipBrowserRedirect: true, queryParams },
     });
     if (error) throw error;
     if (!data?.url) throw new Error('Supabase returned no OAuth URL');
@@ -39,7 +45,7 @@ export async function startProviderSignIn(provider /* 'google' | 'facebook' | 'a
   // Web: standard redirect flow; supabase handles ?code= via detectSessionInUrl.
   const { error } = await supabase.auth.signInWithOAuth({
     provider,
-    options: { redirectTo: window.location.origin },
+    options: { redirectTo: window.location.origin, queryParams },
   });
   if (error) throw error;
 }
@@ -90,6 +96,23 @@ export async function signUpWithEmail({ email, password, firstName }) {
   if (error) throw error;
   const needsConfirmation = !data.session; // no session ⇒ email confirmation required
   return { data, needsConfirmation };
+}
+
+// Resend the signup confirmation email — used by the gate's "Resend
+// confirmation email" link when the code expired or never arrived.
+export async function resendConfirmation(email) {
+  const { error } = await supabase.auth.resend({ type: 'signup', email });
+  if (error) throw error;
+}
+
+// Verify the 6-digit signup code the user typed from their email. Codes (OTP)
+// are used instead of magic links because Gmail/security scanners pre-click
+// one-time links and consume them before the user taps. On success Supabase
+// returns a session and onAuthStateChange signs the user in.
+export async function verifyEmailOtp(email, token) {
+  const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
+  if (error) throw error;
+  return data;
 }
 
 export async function signOut() {

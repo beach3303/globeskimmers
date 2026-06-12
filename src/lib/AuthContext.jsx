@@ -23,6 +23,8 @@ import {
   signInWithApple,
   signInWithEmail as emailSignIn,
   signUpWithEmail as emailSignUp,
+  resendConfirmation,
+  verifyEmailOtp as authVerifyOtp,
   signOut as authSignOut,
   completeOAuthFromUrl,
   logLoginEvent,
@@ -139,6 +141,12 @@ export const AuthProvider = ({ children }) => {
     catch (e) { setAuthError({ type: 'email', message: e?.message || 'Sign-up failed' }); throw e; }
   }, []);
 
+  const verifyEmailOtp = useCallback(async (email, token) => {
+    setAuthError(null);
+    try { return await authVerifyOtp(email, token); }
+    catch (e) { setAuthError({ type: 'email', message: e?.message || 'Verification failed' }); throw e; }
+  }, []);
+
   const logout = useCallback(async () => {
     try { await authSignOut(); } finally {
       setSession(null); setUser(null); setProfile(null);
@@ -158,6 +166,8 @@ export const AuthProvider = ({ children }) => {
     signInWithApple: signInApple,
     signInWithEmail,
     signUpWithEmail,
+    resendConfirmation,
+    verifyEmailOtp,
     refreshProfile,
     logout,
     // ---- backward-compat shims for old Base44 consumers ----
@@ -168,7 +178,7 @@ export const AuthProvider = ({ children }) => {
   }), [
     session, user, profile, isLoadingAuth, authError,
     signInWithProvider, signInApple, signInWithEmail, signUpWithEmail,
-    refreshProfile, logout,
+    verifyEmailOtp, refreshProfile, logout,
   ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
