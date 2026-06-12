@@ -46,11 +46,16 @@ create table if not exists public.profiles (
 --    schema-qualified (public.profiles). first_name is best-effort from the
 --    provider metadata; onboarding's first-name step is the fallback.
 -- ---------------------------------------------------------------------
+-- Let the auth-admin role (which runs the signup transaction) reach profiles.
+-- Without this, the trigger can fail with "Database error saving new user".
+grant usage on schema public to supabase_auth_admin;
+grant insert, select on table public.profiles to supabase_auth_admin;
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = ''
+set search_path = public
 as $$
 begin
   insert into public.profiles (id, first_name)
@@ -63,6 +68,10 @@ begin
     )
   )
   on conflict (id) do nothing;
+  return new;
+exception when others then
+  -- Never block signup if profile creation hiccups; log + continue.
+  raise warning 'handle_new_user failed for %: %', new.id, sqlerrm;
   return new;
 end;
 $$;
