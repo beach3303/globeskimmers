@@ -43,11 +43,24 @@ export const AuthProvider = ({ children }) => {
   const loadProfile = useCallback(async (userId) => {
     if (!userId) { setProfile(null); return null; }
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('profiles').select('*').eq('id', userId).single();
-      // Right after signup the row may not exist for a beat (DB trigger creates
-      // it). Treat "no row" as null rather than an error.
-      if (error) { setProfile(null); return null; }
+      // Brand-new signups: the row may not be readable yet — the handle_new_user
+      // DB trigger can race this first read, or be misconfigured. Self-heal by
+      // creating our own row (RLS "profiles_insert_own" permits it) so the
+      // onboarding gate always has a row to key off (onboarding_completed
+      // defaults to false → Onboarding fires). Idempotent: if the trigger
+      // already created the row, the upsert just returns it unchanged (only `id`
+      // is written, so onboarding_completed / answers are never reset).
+      if (error || !data) {
+        const { data: created, error: upsertErr } = await supabase
+          .from('profiles')
+          .upsert({ id: userId }, { onConflict: 'id' })
+          .select('*')
+          .single();
+        if (upsertErr || !created) { setProfile(null); return null; }
+        data = created;
+      }
       setProfile(data);
       return data;
     } catch {
