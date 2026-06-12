@@ -61,7 +61,7 @@ export default function WeatherPage() {
       const isAuthenticated = await base44.auth.isAuthenticated();
       
       if (!isAuthenticated) {
-        base44.auth.redirectToLogin(window.location.pathname);
+        setLoading(false);
         return;
       }
 
@@ -74,7 +74,7 @@ export default function WeatherPage() {
       setLoading(false);
     } catch (error) {
       console.error("Error loading data:", error);
-      base44.auth.redirectToLogin(window.location.pathname);
+      setLoading(false);
     }
   };
 

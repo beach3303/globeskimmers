@@ -640,7 +640,7 @@ export default function BasicPhrasesPage() {
     try {
       const isAuthenticated = await base44.auth.isAuthenticated();
       if (!isAuthenticated) {
-        base44.auth.redirectToLogin(window.location.pathname);
+        setLoading(false);
         return;
       }
       const userData = await base44.auth.me();
@@ -656,7 +656,7 @@ export default function BasicPhrasesPage() {
       setLoading(false);
     } catch (error) {
       console.error("Error loading data:", error);
-      base44.auth.redirectToLogin(window.location.pathname);
+      setLoading(false);
     }
   };
 

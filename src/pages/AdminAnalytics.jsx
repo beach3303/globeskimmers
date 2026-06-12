@@ -87,7 +87,7 @@ export default function AdminAnalytics() {
     try {
       const isAuthed = await base44.auth.isAuthenticated();
       if (!isAuthed) {
-        base44.auth.redirectToLogin(window.location.pathname);
+        setLoading(false);
         return;
       }
       const me = await base44.auth.me();

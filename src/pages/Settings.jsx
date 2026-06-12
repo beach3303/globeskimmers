@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { X, User, Mail, Edit3, Check, Globe, DollarSign, Languages, Thermometer, Shield, Loader2, MessageCircle, MapPin, ChevronRight, BarChart3, CreditCard } from "lucide-react";
@@ -451,6 +452,7 @@ const showToast = (message, type) => {
 
 export default function SettingsPage() {
   const navigate = useNavigate();
+  const { logout } = useAuth(); // Supabase sign-out (clears session → AuthGate)
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -475,7 +477,7 @@ export default function SettingsPage() {
   const loadUser = async () => {
     try {
       const isAuthenticated = await base44.auth.isAuthenticated();
-      if (!isAuthenticated) { base44.auth.redirectToLogin(window.location.pathname); return; }
+      if (!isAuthenticated) { setLoading(false); return; }
       const userData = await base44.auth.me();
       setUser(userData);
       if (userData.first_name) { setFirstName(userData.first_name); }
@@ -492,7 +494,7 @@ export default function SettingsPage() {
       setShowHomeCountryInfo(userData.show_home_country_info || false);
       setShowHomeFlag(userData.show_home_flag || false);
       setLoading(false);
-    } catch (error) { console.error("Error loading user:", error); base44.auth.redirectToLogin(window.location.pathname); }
+    } catch (error) { console.error("Error loading user:", error); setLoading(false); }
   };
 
   const handleSave = async () => {
@@ -610,7 +612,7 @@ export default function SettingsPage() {
           {isAdmin && (<button onClick={() => navigate(createPageUrl("AdminDashboard"))} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><Shield className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[15px] font-bold text-white">Admin Portal</p><p className="text-[13px] text-white/90">Manage app and users</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>)}
           {isAdmin && (<button onClick={() => navigate(createPageUrl("AdminAnalytics"))} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-indigo-600 to-slate-800 hover:from-indigo-700 hover:to-slate-900 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><BarChart3 className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[15px] font-bold text-white">Analytics</p><p className="text-[13px] text-white/90">Page views, searches, zero-results</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>)}
           <button onClick={() => setShowContactUs(true)} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><MessageCircle className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[15px] font-bold text-white">Contact Us</p><p className="text-[13px] text-white/90">Get in touch with our team</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>
-          <button onClick={() => base44.auth.logout()} className="w-full flex items-center justify-center gap-3 p-4 bg-gray-100 hover:bg-gray-200 rounded-2xl transition-all text-gray-700 font-medium"><span className="text-lg">🚪</span><span>Sign Out</span></button>
+          <button onClick={logout} className="w-full flex items-center justify-center gap-3 p-4 bg-gray-100 hover:bg-gray-200 rounded-2xl transition-all text-gray-700 font-medium"><span className="text-lg">🚪</span><span>Sign Out</span></button>
         </motion.div>
 
         <div className="mt-8 text-center text-sm text-gray-500 pb-8"><p className="font-medium">Made with ❤️ for travelers worldwide</p><p className="mt-2 text-xs">© 2025 Globeskimmers. All rights reserved.</p></div>

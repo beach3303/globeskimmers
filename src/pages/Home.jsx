@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { MapPin, Cloud, Utensils, Coffee as CoffeeIcon, CreditCard, Bath, Store, CloudSun, Bus, ChevronRight, Star, ShoppingBag, Compass, Languages, ScanLine, MessageSquare } from "lucide-react";
 import { motion } from "framer-motion";
@@ -9,6 +9,8 @@ import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import HomeBanner from "../components/ads/HomeBanner";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
+import { useAuth } from "@/lib/AuthContext";
+import { extractFirstName } from "@/lib/extractFirstName";
 
 // Translation mapping for greetings — shown next to "Hello 👋"
 // when the active location's country has a non-English primary language.
@@ -42,6 +44,7 @@ const COUNTRY_CODES = {
 export default function HomePage() {
   const navigate = useNavigate();
   const { locationMode, selectedLocation, currentGpsLocation, getActiveLocation, loading: locationLoading } = useLocation();
+  const { profile, user: authUser } = useAuth();
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -56,9 +59,23 @@ export default function HomePage() {
   const [shouldShowHomeCountryTime, setShouldShowHomeCountryTime] = useState(false);
   const [showHomeFlag, setShowHomeFlag] = useState(false);
   const [homeFlagUrl, setHomeFlagUrl] = useState(null);
+  const locationPrompted = useRef(false); // gate the one-time auto-open of the location picker
 
   useEffect(() => {
     if (!locationLoading) loadUserAndWeather();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationLoading, locationMode, selectedLocation, currentGpsLocation, profile]);
+
+  // If location init finishes with no location set, proactively open the picker
+  // so the user can choose "Use My Current Location" or navigate to another —
+  // the app is location-centric and does nothing useful without one. Fires once
+  // per mount; the user can still dismiss it and tap "Set location" later.
+  useEffect(() => {
+    if (locationLoading || locationPrompted.current) return;
+    if (!getActiveLocation()?.coordinates) {
+      locationPrompted.current = true;
+      setShowLocationPicker(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationLoading, locationMode, selectedLocation, currentGpsLocation]);
 
@@ -109,31 +126,20 @@ export default function HomePage() {
 
   const loadUserAndWeather = async () => {
     try {
-      const isAuthenticated = await base44.auth.isAuthenticated();
-      if (!isAuthenticated) {
-        base44.auth.redirectToLogin();
-        return;
-      }
-      const userData = await base44.auth.me();
-
-      // Self-heal first_name from full_name. Google / Facebook / Apple
-      // OAuth all give us full_name but NOT first_name — Base44 stores
-      // it on the OAuth identity object, not the user record. Without
-      // this step the Home greeting renders 'Hello Traveler' for fresh
-      // OAuth users until they manually edit their profile in Settings.
-      // We derive 'Maiza' from 'Maiza Simeon' once on first load and
-      // persist it back so every surface that reads user.first_name
-      // (Home greeting, Settings, future personalization) gets it for
-      // free without that surface having to know about the fallback.
-      if (!userData.first_name && userData.full_name) {
-        const derivedFirst = userData.full_name.trim().split(/\s+/)[0];
-        if (derivedFirst) {
-          try {
-            await base44.auth.updateMe({ first_name: derivedFirst });
-            userData.first_name = derivedFirst;
-          } catch { /* non-fatal — getFirstName() still does the split-fallback */ }
-        }
-      }
+      // User data comes from the Supabase profile — the app-wide AuthGate
+      // already guarantees a signed-in user, so there is NO Base44 auth check
+      // here (and no redirect to Base44 login). We shape the profile into the
+      // fields the rest of Home reads. The greeting itself reads
+      // profile.first_name directly via getFirstName(); show_home_flag /
+      // show_home_country_info aren't in the Supabase profile schema yet, so
+      // they default off until Settings is migrated to Supabase.
+      const userData = {
+        first_name: profile?.first_name || extractFirstName(authUser) || '',
+        home_country: profile?.home_country || null,
+        preferred_temperature_scale: profile?.temp_unit === 'C' ? 'celsius' : 'fahrenheit',
+        show_home_flag: false,
+        show_home_country_info: false,
+      };
 
       setUser(userData);
       const preferredScale = userData.preferred_temperature_scale || 'fahrenheit';
@@ -175,7 +181,7 @@ export default function HomePage() {
       setLoading(false);
     } catch (error) {
       console.error("Error loading user or weather:", error);
-      base44.auth.redirectToLogin();
+      setLoading(false); // AuthGate handles auth — never bounce to Base44 login
     }
   };
 
@@ -236,18 +242,22 @@ export default function HomePage() {
   };
 
   const getFirstName = () => {
+    // Supabase profile (captured during onboarding) is the source of truth now.
+    if (profile?.first_name) return profile.first_name;
+    // Then the signed-in identity's provider metadata (Google given_name, etc.).
+    const fromIdentity = extractFirstName(authUser);
+    if (fromIdentity) return fromIdentity;
+    // Legacy Base44 user fallbacks (web only; null on native).
     if (user?.first_name) return user.first_name;
     if (user?.full_name) {
       const first = user.full_name.trim().split(/\s+/)[0];
       if (first) return first;
     }
-    // Email-prefix fallback for accounts created via the email/password
-    // form, which never collects a name. We Title-Case the local part so
-    // 'maizasimeon@gmail.com' renders as 'Maizasimeon' (not perfect, but
-    // far better than 'Traveler' for the user's own account). Pure
-    // 'Traveler' stays as the very last resort if even email is absent.
-    if (user?.email) {
-      const local = user.email.split('@')[0];
+    // Email-prefix fallback (Title-Cased) before the generic last resort, e.g.
+    // 'maizasimeon@gmail.com' → 'Maizasimeon'. "Traveler" is the final fallback.
+    const email = authUser?.email || user?.email;
+    if (email) {
+      const local = email.split('@')[0];
       if (local) return local.charAt(0).toUpperCase() + local.slice(1).toLowerCase();
     }
     return "Traveler";
@@ -519,7 +529,6 @@ export default function HomePage() {
               gradient={`linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 60%, #FF7DB1 100%)`}
               icon={Star}
               label="Things to do"
-              sub="Curated picks"
               decoration="✦"
               onClick={() => handleQuickAction('Things to Do')}
             />
@@ -533,14 +542,14 @@ export default function HomePage() {
             <GradCard
               gradient={`linear-gradient(135deg, ${CAT.culture.ink} 0%, #D97706 60%, #FBBF24 100%)`}
               icon={Compass}
-              label="Culture"
+              label="Cultural Info"
               sub="Museums · sights"
               onClick={() => handleQuickAction('Culture Information')}
             />
             <GradCard
               gradient={`linear-gradient(135deg, ${CAT.phrases.ink} 0%, #CA8A04 60%, #EAB308 100%)`}
               icon={Languages}
-              label="Phrases"
+              label="Basic Language Phrases"
               sub="50 essentials"
               decoration="あ"
               decorationSerif
@@ -564,14 +573,15 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Bottom clearance for the AdMob banner overlay. The native
-          banner is rendered by the system as a fullscreen overlay at
-          BOTTOM_CENTER with margin: 76 — it does NOT participate in
-          React layout, so without this spacer the last row of cards
-          ("Things to do" / "Shopping" / scanners) sits behind the
-          banner on small viewports. ~140px = banner height (~60px) +
-          FloatingNav clearance (~76px) + a small visual gutter. */}
-      <div aria-hidden style={{ height: 140 }} />
+      {/* Bottom clearance for the AdMob banner overlay + lifted nav.
+          The native banner is a system overlay at BOTTOM_CENTER with
+          margin: 0 (pinned to the very bottom edge), and on Home the
+          FloatingNav pill is lifted to bottom: 64 to sit just above it.
+          Neither participates in React layout, so without this spacer
+          the last row of cards ("Things to do" / "Shopping" / scanners)
+          sits behind them. ~180px = ad height (~60px) + lifted-nav
+          extent (~64px) + a small visual gutter. */}
+      <div aria-hidden style={{ height: 180 }} />
 
       {/* AdMob banner — iOS/Android only (no-op on web). Mount last
           so showBanner runs after the rest of Home has rendered and
@@ -667,15 +677,20 @@ function GradCard({ gradient, icon: Icon, label, sub, decoration, decorationSeri
           {badge}
         </span>
       )}
-      <div
-        className="flex items-center justify-center relative"
-        style={{ width: 36, height: 36, borderRadius: 11, background: 'rgba(255,255,255,0.22)' }}
-      >
-        <Icon size={18} color="#fff" strokeWidth={2} />
-      </div>
-      <div className="relative">
+      {/* TEXT — upper-left. paddingRight keeps long labels clear of the
+          decorative circle / accent glyph in the top-right corner. */}
+      <div className="relative" style={{ paddingRight: 26 }}>
         <div className="font-extrabold text-[16px] tracking-tight leading-tight">{label}</div>
-        <div className="text-[11.5px] opacity-90 mt-0.5">{sub}</div>
+        {sub && <div className="text-[11.5px] opacity-90 mt-0.5">{sub}</div>}
+      </div>
+      {/* ICON — moved to the bottom-right to balance the text now at top-left. */}
+      <div className="relative flex justify-end">
+        <div
+          className="flex items-center justify-center"
+          style={{ width: 36, height: 36, borderRadius: 11, background: 'rgba(255,255,255,0.22)' }}
+        >
+          <Icon size={18} color="#fff" strokeWidth={2} />
+        </div>
       </div>
     </motion.button>
   );
