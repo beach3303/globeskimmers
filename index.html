@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="https://base44.com/logo_v2.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover is required on iOS for env(safe-area-inset-*) to
+         resolve to real values (notch / Dynamic Island / home indicator).
+         Without it the brand banner renders under the status bar. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link rel="manifest" href="/manifest.json" />
     <!-- Redesign typography stack: Inter Tight (UI), Instrument Serif (italic accents), JetBrains Mono (labels) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

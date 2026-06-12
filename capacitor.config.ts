@@ -49,6 +49,16 @@ const config: CapacitorConfig = {
       style: 'DARK',
       overlaysWebView: true,
     },
+
+    // Route the WebView's fetch/XHR through native HTTP. On native the page
+    // origin is capacitor://localhost, so calls to the absolute Base44 API
+    // host (https://base44.app — see src/api/base44Client.js) are cross-origin
+    // and would be blocked by browser CORS. CapacitorHttp issues them from the
+    // native layer instead, which is not subject to CORS. Built into
+    // @capacitor/core — no extra dependency.
+    CapacitorHttp: {
+      enabled: true,
+    },
   },
 };
 
