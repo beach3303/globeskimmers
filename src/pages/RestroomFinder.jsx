@@ -11,7 +11,7 @@ import AIDetailsSection from "@/components/AIDetailsSection";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
-import { ChevronLeft, MapPin } from "lucide-react";
+import { ChevronLeft, MapPin, Crosshair, Loader2 } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 
 // ─── THEME ─────────────────────────────────────────────────────────────────
@@ -494,13 +494,14 @@ export default function RestroomFinderPage() {
   const [viewMode, setViewMode] = useState("list");
   const [refreshTick, setRefreshTick] = useState(0);
   const forceNextRef = useRef(false);
+  const autoExpandRef = useRef(false); // when set, a 0-result 5mi search auto-widens to 10mi (refresh-to-current)
   const handleRefresh = () => { forceNextRef.current = true; setRefreshTick(t => t + 1); };
   const [venueType, setVenueType] = useState("all");
   const [radius, setRadius] = useState(5);
   const [openOnly, setOpenOnly] = useState(false);
-  const [freeOnly, setFreeOnly] = useState(false);
   const [accessOnly, setAccessOnly] = useState(false);
   const [showLocPicker, setShowLocPicker] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
   const [userPinExpanded, setUserPinExpanded] = useState(true);
   useEffect(() => {
     /** @type {any} */ (window)._gsRFUserPin = () => setUserPinExpanded(e => !e);
@@ -517,12 +518,31 @@ export default function RestroomFinderPage() {
   const mapInstRef = useRef(null);
   const markersRef = useRef([]);
 
-  const { activeLocation } = useLocation();
+  const { activeLocation, switchToCurrentLocation } = useLocation();
   const lat = activeLocation?.coordinates?.latitude;
   const lng = activeLocation?.coordinates?.longitude;
   const locLabel = getLocationLabel(activeLocation);
   const isCity = isCityLocation(activeLocation);
   const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
+
+  // Snap to live GPS. Restroom Finder is urgent ("I need one NOW"), so we give a
+  // one-tap way to jump from a stale/city location to the user's exact current
+  // position — which re-runs the search via the lat/lng effect below.
+  const handleUseCurrentLocation = async () => {
+    if (gpsLoading) return;
+    setGpsLoading(true);
+    try {
+      await switchToCurrentLocation();
+      // Urgent intent: search the user's exact spot at 5 mi, and auto-widen to
+      // 10 mi if nothing turns up (handled in the fetch effect). forceRefresh +
+      // refreshTick guarantee a fresh "now" search even if the coords are unchanged.
+      autoExpandRef.current = true;
+      setRadius(5);
+      forceNextRef.current = true;
+      setRefreshTick(t => t + 1);
+    } catch { /* GPS denied/unavailable — user can still tap "Change" to pick manually */ }
+    finally { setGpsLoading(false); }
+  };
 
   useEffect(() => {
     setRadius(activeLocation?.suggestedRadius ?? 5);
@@ -530,7 +550,7 @@ export default function RestroomFinderPage() {
 
   // Fetch
   useEffect(() => {
-    if (!lat || !lng) return;
+    if (!lat || !lng) { setLoading(false); return; }
     setLoading(true); setError(null);
     const force = forceNextRef.current; forceNextRef.current = false;
     (async () => {
@@ -548,7 +568,14 @@ export default function RestroomFinderPage() {
             lng: r.location?.longitude || r.lng || 0,
           }));
           setRestrooms(enriched);
+          autoExpandRef.current = false;
+        } else if (autoExpandRef.current && radius < 10) {
+          // No hits at 5 mi right after "refresh to current location" — auto-widen
+          // to 10 mi once before showing the empty state.
+          autoExpandRef.current = false;
+          setRadius(10);
         } else {
+          autoExpandRef.current = false;
           setError(data?.error || "No restrooms found. Try expanding radius.");
         }
       } catch (e) { setError(`Failed to load: ${e.message}`); }
@@ -559,10 +586,9 @@ export default function RestroomFinderPage() {
   const filtered = useMemo(() => {
     let r = [...restrooms];
     if (openOnly) r = r.filter(x => x.isOpen === true || x.properties?.is24Hours);
-    if (freeOnly) r = r.filter(x => x.accessType === "free");
     if (accessOnly) r = r.filter(x => x.properties?.isAccessible);
     return r;
-  }, [restrooms, openOnly, freeOnly, accessOnly]);
+  }, [restrooms, openOnly, accessOnly]);
 
   const handleShowOnMap = (index) => {
     setViewMode("map"); setActiveMapPin(index); setSheetExpanded(false);
@@ -701,6 +727,15 @@ export default function RestroomFinderPage() {
             <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
           </div>
         )}
+        <button
+          onClick={handleUseCurrentLocation}
+          disabled={gpsLoading}
+          className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-[12px] font-semibold text-[13px] transition-transform active:scale-[0.99] disabled:opacity-60"
+          style={{ background: CAT.restroom.ink, color: '#fff' }}
+        >
+          {gpsLoading ? <Loader2 size={15} className="animate-spin" /> : <Crosshair size={15} />}
+          {gpsLoading ? 'Locating…' : 'Refresh to current location'}
+        </button>
       </div>
 
       {/* Filters band — keeps existing radius/venue tabs structure, restyled to fit warm-ivory */}
@@ -734,9 +769,6 @@ export default function RestroomFinderPage() {
         <button onClick={() => setOpenOnly(o => !o)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", borderRadius: "20px", flexShrink: 0, border: openOnly ? `2px solid ${GREEN}` : "1px solid #E2E8F0", background: openOnly ? GREEN_LIGHT : "#fff", color: openOnly ? GREEN : GRAY, fontWeight: openOnly ? "700" : "500", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>
           <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: openOnly ? GREEN : "#CBD5E1" }} /> Open Now
         </button>
-        <button onClick={() => setFreeOnly(f => !f)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", borderRadius: "20px", flexShrink: 0, border: freeOnly ? `2px solid ${GREEN}` : "1px solid #E2E8F0", background: freeOnly ? GREEN_LIGHT : "#fff", color: freeOnly ? GREEN : GRAY, fontWeight: freeOnly ? "700" : "500", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>
-          💚 Free Only
-        </button>
         <button onClick={() => setAccessOnly(a => !a)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", borderRadius: "20px", flexShrink: 0, border: accessOnly ? `2px solid ${BLUE}` : "1px solid #E2E8F0", background: accessOnly ? BLUE_LIGHT : "#fff", color: accessOnly ? BLUE : GRAY, fontWeight: accessOnly ? "700" : "500", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>
           ♿ Accessible
         </button>
@@ -754,7 +786,16 @@ export default function RestroomFinderPage() {
       </div>
 
       {/* Content */}
-      {loading ? (
+      {(!lat || !lng) ? (
+        <div style={{ textAlign: "center", padding: "60px 24px" }}>
+          <div style={{ fontSize: "48px", marginBottom: "14px" }}>📍</div>
+          <div style={{ color: DARK, fontWeight: "700", fontSize: "16px", marginBottom: "6px" }}>Set your location to find restrooms</div>
+          <div style={{ color: GRAY, fontSize: "13px", marginBottom: "18px", maxWidth: "300px", marginLeft: "auto", marginRight: "auto" }}>Find the nearest restroom right now — use your current location, or tap “Change” above to pick a place.</div>
+          <button onClick={handleUseCurrentLocation} disabled={gpsLoading} style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "12px 24px", borderRadius: "12px", border: "none", background: `linear-gradient(135deg,${TEAL_DARK},${TEAL})`, color: "#fff", fontWeight: "700", fontSize: "14px", cursor: gpsLoading ? "default" : "pointer", fontFamily: "inherit", opacity: gpsLoading ? 0.6 : 1 }}>
+            {gpsLoading ? "Locating…" : "📍 Refresh to current location"}
+          </button>
+        </div>
+      ) : loading ? (
         <div style={{ textAlign: "center", padding: "60px 24px" }}>
           <motion.div animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }} transition={{ repeat: Infinity, duration: 1.5 }} style={{ fontSize: "48px", marginBottom: "16px", display: "inline-block" }}>🚻</motion.div>
           <div style={{ color: DARK, fontWeight: "700", fontSize: "16px", marginBottom: "6px" }}>Finding restrooms nearby…</div>
