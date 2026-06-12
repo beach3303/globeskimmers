@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import { Home as HomeIcon, Bookmark, Settings as SettingsIcon } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 
@@ -14,7 +15,7 @@ import { createPageUrl } from '@/utils';
 // Props:
 //   dark:   pass `true` over dark/map surfaces to lift contrast.
 //   active: optional explicit override; otherwise auto-detected from route.
-export default function FloatingNav({ active, dark = false }) {
+export default function FloatingNav({ active, dark = false, liftForAd = false }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -65,7 +66,17 @@ export default function FloatingNav({ active, dark = false }) {
     <div
       style={{
         position: 'fixed',
-        bottom: 22,
+        // Lifted above the AdMob banner on Home (liftForAd) so the ad can
+        // pin to the very bottom edge without the pill overlapping it.
+        // env(safe-area-inset-bottom) keeps the pill above the home indicator
+        // now that viewport-fit=cover makes the WebView extend edge-to-edge.
+        //
+        // Android has no iOS-style bottom safe-area inset (env resolves to 0)
+        // and the AdMob banner sits lower, so the pill needs a bigger base
+        // lift there to clear the ad. iOS keeps the tighter value + its inset.
+        bottom: liftForAd
+          ? `calc(${Capacitor.getPlatform() === 'android' ? 72 : 64}px + env(safe-area-inset-bottom))`
+          : 'calc(22px + env(safe-area-inset-bottom))',
         left: '50%',
         transform: 'translateX(-50%)',
         display: 'flex',

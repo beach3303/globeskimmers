@@ -9,7 +9,14 @@ export default function BrandBanner() {
     <div
       style={{
         background: TEAL_GRADIENT,
-        height: 50,
+        // Extend the teal up through the iOS status-bar / notch safe area,
+        // but keep the "Globeskimmers" wordmark in the 50px BELOW it so it
+        // isn't hidden under the Dynamic Island. env() resolves to 0 on web
+        // (and needs viewport-fit=cover on iOS — set in index.html), so this
+        // degrades to a plain 50px bar everywhere else.
+        height: 'calc(50px + env(safe-area-inset-top))',
+        paddingTop: 'env(safe-area-inset-top)',
+        boxSizing: 'border-box',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

@@ -22,9 +22,10 @@ import { ADMOB_BANNER_IDS, USE_PRODUCTION_ADS } from '@/lib/admobConfig';
 // not as a React element. That means it doesn't participate in the
 // React layout flow — content under it can be hidden. To avoid the
 // banner covering the last "Explore More" cards, the Home page adds
-// extra bottom padding when this component is mounted. The banner's
-// `margin: 76` reserves clearance for the FloatingNav pill that
-// sits at `bottom: 22` with ~44px height.
+// extra bottom padding when this component is mounted. With `margin: 0`
+// the banner pins to the very bottom edge; the FloatingNav pill is
+// lifted to `bottom: 64` on Home (see FloatingNav's `liftForAd` prop +
+// Layout.jsx) so it floats just ABOVE the ad instead of over it.
 export default function HomeBanner() {
   useEffect(() => {
     const platform = Capacitor.getPlatform();
@@ -55,7 +56,9 @@ export default function HomeBanner() {
           adId,
           adSize: BannerAdSize.ADAPTIVE_BANNER,
           position: BannerAdPosition.BOTTOM_CENTER,
-          margin: 76,
+          // Pin to the very bottom edge. The FloatingNav is lifted above
+          // it on Home (liftForAd) so the ad sits clearly below the nav.
+          margin: 0,
           // Belt-and-suspenders. Even if initializeForTesting is
           // already set globally, isTesting on the call guarantees
           // a single missed flip doesn't accidentally serve real

@@ -3,6 +3,7 @@ import { MapPin, AlertCircle, CheckCircle2, X, Settings, Globe, RefreshCw } from
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { getCurrentPositionSmart } from "@/lib/geolocation";
 
 export default function LocationStep({ onNext, onLocationGranted, onExit }) {
   const [loading, setLoading] = useState(false);
@@ -123,13 +124,12 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
       // RE-CHECK permission state before attempting
       await checkPermissionState();
 
-      // Attempt the request regardless of cached state
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0
-        });
+      // Attempt the request regardless of cached state (native plugin on
+      // iOS/Android, browser geolocation on web — see src/lib/geolocation.js).
+      const position = await getCurrentPositionSmart({
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
       });
 
       // Success! Save permission status to user profile
@@ -138,14 +138,18 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
       setDenialCount(0);
       setShowSorryMessage(false);
       
-      // Import base44 client to save permission status
-      const { base44 } = await import("@/api/base44Client");
-      await base44.auth.updateMe({
-        location_permission_granted: true,
-        location_permission_date: new Date().toISOString(),
-        location_enabled: true
-      });
-      
+      // Best-effort: persist permission status. GUARDED so a missing Base44
+      // session (Supabase auth path) can't throw into this success path and
+      // surface a false "location error" AFTER GPS already succeeded.
+      try {
+        const { base44 } = await import("@/api/base44Client");
+        await base44.auth.updateMe({
+          location_permission_granted: true,
+          location_permission_date: new Date().toISOString(),
+          location_enabled: true
+        });
+      } catch { /* prefs unavailable — non-fatal */ }
+
       onLocationGranted({
         latitude: position.coords.latitude,
         longitude: position.coords.longitude
@@ -160,12 +164,14 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
         const newDenialCount = denialCount + 1;
         setDenialCount(newDenialCount);
         
-        // Save that permission was denied
-        const { base44 } = await import("@/api/base44Client");
-        await base44.auth.updateMe({
-          location_permission_granted: false,
-          location_permission_date: new Date().toISOString()
-        });
+        // Best-effort: record denial. GUARDED — non-fatal without a Base44 session.
+        try {
+          const { base44 } = await import("@/api/base44Client");
+          await base44.auth.updateMe({
+            location_permission_granted: false,
+            location_permission_date: new Date().toISOString()
+          });
+        } catch { /* prefs unavailable — non-fatal */ }
         
         // Only show "sorry" screen after 3 attempts
         if (newDenialCount >= 3) {
