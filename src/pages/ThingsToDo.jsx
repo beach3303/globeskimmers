@@ -6,7 +6,8 @@ import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
-import { base44 } from "@/api/base44Client";
+import { callWorker } from "@/lib/callWorker";
+import { ROUTE } from "@/lib/workerRoutes";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import MapAppSelector from "@/components/MapAppSelector";
 import AttractionAIDetails from "@/components/AttractionAIDetails";
@@ -732,7 +733,7 @@ export default function ThingsToDoFinder() {
     (async()=>{
       try{
         const fetchRadius=Math.max(radius,25)*1609; // always fetch at least 25mi
-        const {data}=await base44.functions.invoke("getActivities",{latitude:lat,longitude:lng,radius:fetchRadius,maxResults:60,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city,forceRefresh:force});
+        const {data}=await callWorker(ROUTE.getActivities,{latitude:lat,longitude:lng,radius:fetchRadius,maxResults:60,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city,forceRefresh:force});
         const raw=data?.activities||[];
         const ni=data?.nationalIcons||[];
         const rg=data?.regionalGems||[];
