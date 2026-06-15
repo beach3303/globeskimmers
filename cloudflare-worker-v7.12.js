@@ -5731,6 +5731,131 @@ async function handleCoffeeShops(request, env, ctx) {
   }
 }
 
+// ============================================================================
+// ATM FINDER — ported from base44/functions/getATMLocations (v6.0).
+// Category query sets + bank-network detection + venue typing. Reuses the
+// restroom internal text-search helper (rrTextSearch) and rrCalcDist.
+// ============================================================================
+const ATM_NETWORKS = {
+  'chase': { name: 'Chase', network: 'Chase', feeInfo: 'Free for Chase customers', surcharge: '$3.00–$3.50 non-customer' },
+  'bank of america': { name: 'Bank of America', network: 'BofA', feeInfo: 'Free for BofA customers', surcharge: '$2.50–$3.00 non-customer' },
+  'wells fargo': { name: 'Wells Fargo', network: 'Wells Fargo', feeInfo: 'Free for Wells Fargo customers', surcharge: '$3.00 non-customer' },
+  'citibank': { name: 'Citibank', network: 'Citi', feeInfo: 'Free for Citi customers', surcharge: '$2.50–$3.00 non-customer' },
+  'citi bank': { name: 'Citibank', network: 'Citi', feeInfo: 'Free for Citi customers', surcharge: '$2.50–$3.00 non-customer' },
+  'us bank': { name: 'US Bank', network: 'US Bank', feeInfo: 'Free for US Bank customers', surcharge: '$3.00 non-customer' },
+  'u.s. bank': { name: 'US Bank', network: 'US Bank', feeInfo: 'Free for US Bank customers', surcharge: '$3.00 non-customer' },
+  'pnc': { name: 'PNC', network: 'PNC', feeInfo: 'Free for PNC customers', surcharge: '$3.00 non-customer' },
+  'td bank': { name: 'TD Bank', network: 'TD', feeInfo: 'Free for TD customers', surcharge: '$3.00 non-customer' },
+  'capital one': { name: 'Capital One', network: 'Capital One', feeInfo: 'Free for Capital One 360 customers', surcharge: '$0–$2.00 non-customer' },
+  'allpoint': { name: 'Allpoint', network: 'Allpoint', feeInfo: 'Fee-free for network members', surcharge: '$0 in-network' },
+  'moneypass': { name: 'MoneyPass', network: 'MoneyPass', feeInfo: 'Fee-free for network members', surcharge: '$0 in-network' },
+  'co-op': { name: 'CO-OP', network: 'CO-OP', feeInfo: 'Fee-free for credit union members', surcharge: '$0 in-network' },
+  'credit union': { name: 'Credit Union', network: 'CO-OP', feeInfo: 'Fee-free for members', surcharge: 'Varies' },
+  'hsbc': { name: 'HSBC', network: 'HSBC', feeInfo: 'Free for HSBC customers', surcharge: '$2.50–$5.00 non-customer' },
+  'barclays': { name: 'Barclays', network: 'Barclays', feeInfo: 'Free for Barclays customers', surcharge: 'Varies by country' },
+  'santander': { name: 'Santander', network: 'Santander', feeInfo: 'Free for Santander customers', surcharge: 'Varies by country' },
+  'scotiabank': { name: 'Scotiabank', network: 'Scotiabank', feeInfo: 'Free for Scotiabank customers', surcharge: 'Varies' },
+  'bmo': { name: 'BMO', network: 'BMO', feeInfo: 'Free for BMO customers', surcharge: 'Varies' },
+  'rbc': { name: 'RBC', network: 'RBC', feeInfo: 'Free for RBC customers', surcharge: 'Varies' },
+  'anz': { name: 'ANZ', network: 'ANZ', feeInfo: 'Free for ANZ customers', surcharge: 'Varies' },
+  'westpac': { name: 'Westpac', network: 'Westpac', feeInfo: 'Free for Westpac customers', surcharge: 'Varies' },
+  'commonwealth': { name: 'Commonwealth Bank', network: 'CommBank', feeInfo: 'Free for CommBank customers', surcharge: 'Varies' },
+  'natwest': { name: 'NatWest', network: 'NatWest', feeInfo: 'Free for NatWest customers', surcharge: 'Varies' },
+  'lloyds': { name: 'Lloyds', network: 'Lloyds', feeInfo: 'Free for Lloyds customers', surcharge: 'Varies' },
+  'deutsche bank': { name: 'Deutsche Bank', network: 'Deutsche Bank', feeInfo: 'Free for DB customers', surcharge: 'Varies' },
+};
+const ATM_CATEGORY_QUERIES = {
+  all: ['ATM','cash machine','cash point','cash dispenser','automated teller machine','cajero automático','Geldautomat','distributeur automatique','bancomat','caixa eletrônico','เครื่องเอทีเอ็ม','ATM machine near me'],
+  safe_lobbies: ['ATM bank lobby','ATM bank branch','ATM credit union','ATM financial center','ATM savings bank','ATM building society','ATM hospital lobby','ATM medical center','ATM hotel lobby','ATM post office','ATM government building'],
+  airport_transit: ['ATM airport','ATM airport terminal','ATM departure lounge','ATM arrivals hall','ATM train station','ATM railway station','ATM subway station','ATM metro station','ATM underground station','ATM bus terminal','ATM bus station','ATM ferry terminal','ATM port','ATM transit hub','cash machine train station','ATM tram stop'],
+  gas_stations: ['ATM gas station','ATM fuel station','ATM petrol station','ATM filling station','ATM service station','ATM forecourt','ATM Shell','ATM BP','ATM Chevron','ATM ExxonMobil','ATM Mobil','ATM Texaco','ATM Valero','ATM Sunoco','ATM Marathon','ATM Circle K','ATM Speedway','ATM Wawa',"ATM Casey's",'ATM RaceTrac','ATM Total','ATM Esso'],
+  retail: ['ATM supermarket','ATM grocery store','ATM walmart','ATM target','ATM kroger','ATM safeway','ATM albertsons','ATM costco','ATM whole foods','ATM trader joes','ATM CVS pharmacy','ATM walgreens','ATM rite aid','ATM boots pharmacy','ATM tesco','ATM sainsburys','ATM aldi','ATM lidl','ATM carrefour','ATM department store'],
+  small_retail: ['ATM liquor store','ATM off licence','ATM bottle shop','ATM corner store','ATM bodega','ATM convenience store','ATM 7-eleven','ATM minimart','ATM newsagent','ATM tobacconist','ATM deli','ATM off-license','ATM pawn shop','ATM check cashing','ATM payday loan'],
+  shopping: ['ATM mall','ATM shopping mall','ATM shopping center','ATM shopping centre','ATM outlet mall','ATM strip mall','ATM retail park','ATM food court','ATM flea market','ATM public market','ATM bazaar','ATM night market'],
+  education: ['ATM university','ATM college campus','ATM student union','ATM campus','ATM school','ATM library','ATM cafeteria school','ATM dormitory','ATM community college','ATM polytechnic'],
+  entertainment: ['ATM casino','ATM hotel casino','ATM resort casino','ATM stadium','ATM sports arena','ATM concert venue','ATM arena','ATM movie theater','ATM cinema','ATM theme park','ATM amusement park','ATM water park','ATM fairground','ATM carnival','ATM bowling alley','ATM bingo hall','ATM racetrack','ATM nightclub','ATM bar'],
+  hospitality: ['ATM hotel','ATM resort','ATM motel','ATM hostel','ATM bed and breakfast','ATM vacation rental','ATM cruise terminal','ATM marina','ATM tourist area','ATM spa resort'],
+  community: ['ATM post office','ATM library','ATM community center','ATM city hall','ATM government office','ATM courthouse','ATM police station','ATM fire station','ATM church','ATM mosque','ATM temple','ATM laundromat','ATM barbershop','ATM hair salon'],
+};
+async function handleAtmLocations(request, env, ctx) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { latitude, longitude, radius = 10000, maxResults = 40, category = 'all', bankFilter = 'all', openOnly = false, forceRefresh = false } = body;
+    if (!latitude || !longitude) return jsonResponse({ error: 'Latitude and longitude required', atms: [] }, 400);
+    const origin = new URL(request.url).origin;
+    const queries = ATM_CATEGORY_QUERIES[category] || ATM_CATEGORY_QUERIES['all'];
+
+    const seen = new Set();
+    const all = [];
+    const batchSize = 8;
+    for (let i = 0; i < queries.length; i += batchSize) {
+      const batch = queries.slice(i, i + batchSize);
+      const results = await Promise.all(batch.map(q =>
+        rrTextSearch(env, ctx, origin, { query: q, latitude, longitude, radius, maxResults: 20, forceRefresh }).catch(() => [])
+      ));
+      for (const places of results) for (const p of places) { const id = p.id || p.placeId; if (id && !seen.has(id)) { seen.add(id); all.push(p); } }
+    }
+
+    if (all.length === 0) return jsonResponse({ atms: [], count: 0, banks: [], error: 'No ATMs found in this area. Try expanding your search radius.' });
+
+    const processed = all.map(place => {
+      const lat = place.location?.latitude || 0;
+      const lng = place.location?.longitude || 0;
+      const distance = rrCalcDist(latitude, longitude, lat, lng);
+      const weekdayDescriptions = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
+      const photos = (place.photos || []).map(p => p.url || p).filter(Boolean).slice(0, 2);
+      const placeName = (place.displayName?.text || place.name || '').toLowerCase();
+      let networkInfo = { name: 'Independent ATM', network: 'Independent', feeInfo: 'Standard fees may apply', surcharge: '$2.50–$4.00 typical' };
+      for (const [key, info] of Object.entries(ATM_NETWORKS)) { if (placeName.includes(key)) { networkInfo = info; break; } }
+      let venueType = 'standalone', venueIcon = '🏧';
+      const types = (place.types || []).join(' ').toLowerCase();
+      if (types.includes('airport') || placeName.includes('airport') || placeName.includes('terminal')) { venueType = 'airport'; venueIcon = '✈️'; }
+      else if (types.includes('train') || types.includes('subway') || types.includes('transit') || placeName.includes('station') || placeName.includes('metro')) { venueType = 'transit'; venueIcon = '🚇'; }
+      else if (types.includes('hospital') || placeName.includes('hospital') || placeName.includes('medical')) { venueType = 'hospital'; venueIcon = '🏥'; }
+      else if (types.includes('hotel') || types.includes('lodging') || placeName.includes('hotel')) { venueType = 'hotel'; venueIcon = '🏨'; }
+      else if (types.includes('gas_station') || placeName.includes('shell') || placeName.includes('chevron') || placeName.includes('arco') || placeName.includes('exxon') || placeName.includes('mobil') || placeName.includes('bp')) { venueType = 'gas'; venueIcon = '⛽'; }
+      else if (types.includes('convenience_store') || placeName.includes('7-eleven') || placeName.includes('cvs') || placeName.includes('walgreens') || placeName.includes('wawa') || placeName.includes('circle k')) { venueType = 'convenience'; venueIcon = '🏪'; }
+      else if (types.includes('shopping_mall') || placeName.includes('mall') || placeName.includes('plaza') || placeName.includes('center')) { venueType = 'mall'; venueIcon = '🛒'; }
+      else if (types.includes('supermarket') || types.includes('grocery') || placeName.includes('walmart') || placeName.includes('target') || placeName.includes('costco') || placeName.includes('safeway') || placeName.includes('kroger')) { venueType = 'grocery'; venueIcon = '🛒'; }
+      else if (types.includes('casino') || types.includes('night_club') || types.includes('stadium')) { venueType = 'entertainment'; venueIcon = '🎰'; }
+      else if (types.includes('bank') || types.includes('credit_union') || types.includes('financial')) { venueType = 'bank'; venueIcon = '🏦'; }
+      return {
+        id: place.id, placeId: place.id,
+        displayName: place.displayName || { text: place.name || '' }, name: place.displayName?.text || place.name || '',
+        location: { latitude: lat, longitude: lng }, lat, lng,
+        formattedAddress: place.formattedAddress || place.address || '',
+        shortFormattedAddress: place.shortFormattedAddress || place.shortAddress || '',
+        distanceKm: distance, distanceMiles: distance * 0.621371,
+        rating: place.rating || null, userRatingCount: place.userRatingCount || 0,
+        currentOpeningHours: { openNow: place.isOpen, weekdayDescriptions },
+        regularOpeningHours: { weekdayDescriptions }, hours: weekdayDescriptions, isOpen: place.isOpen ?? null,
+        photos, photoUrl: photos[0] || null, photoUrl2: photos[1] || null,
+        nationalPhoneNumber: place.nationalPhoneNumber || place.phone || '',
+        internationalPhoneNumber: place.internationalPhoneNumber || place.phone || '',
+        websiteUri: place.websiteUri || place.website || '', googleMapsUri: place.googleMapsUri || place.googleMapsUrl || '',
+        types: place.types || [], primaryType: place.primaryType,
+        network: networkInfo.network, networkName: networkInfo.name, feeInfo: networkInfo.feeInfo, surcharge: networkInfo.surcharge,
+        venueType, venueIcon,
+        serviceOptions: place.serviceOptions || {},
+      };
+    });
+
+    let filtered = processed;
+    if (openOnly) filtered = filtered.filter(a => a.isOpen === true);
+    if (bankFilter && bankFilter !== 'all') filtered = filtered.filter(a => a.network === bankFilter);
+    filtered.sort((a, b) => a.distanceKm - b.distanceKm);
+    const results = filtered.slice(0, maxResults);
+
+    const bankSet = new Set();
+    for (const a of processed) if (a.network && a.network !== 'Independent') bankSet.add(a.network);
+    const banks = Array.from(bankSet).sort();
+
+    return jsonResponse({ atms: results, count: results.length, banks, version: 'v6.0-worker' });
+  } catch (err) {
+    return jsonResponse({ error: err.message, atms: [] }, 200);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -5767,6 +5892,7 @@ export default {
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
       if (pathname === '/restroom-locations' && request.method === 'POST') return await handleRestroomSearch(request, env, ctx);
       if (pathname === '/coffee-shops' && request.method === 'POST') return await handleCoffeeShops(request, env, ctx);
+      if (pathname === '/atm-locations' && request.method === 'POST') return await handleAtmLocations(request, env, ctx);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
       if (pathname === '/analyze-price' && request.method === 'POST') return await handleAnalyzePrice(request, env);
       if (pathname === '/scan-text' && request.method === 'POST') return await handleScanText(request, env);

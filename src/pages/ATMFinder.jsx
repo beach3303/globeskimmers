@@ -5,7 +5,8 @@ import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
-import { base44 } from "@/api/base44Client";
+import { callWorker } from "@/lib/callWorker";
+import { ROUTE } from "@/lib/workerRoutes";
 import RefreshButton from "@/components/RefreshButton";
 import AtmAIDetails from "@/components/AtmAIDetails";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
@@ -571,7 +572,7 @@ export default function ATMFinderPage() {
     (async () => {
       try {
         console.log("🏧 ATMFinder v6.0: fetching", { lat, lng, radius });
-        const { data } = await base44.functions.invoke("getATMLocations", {
+        const { data, error: workerError } = await callWorker(ROUTE.getATMLocations, {
           latitude:  lat,
           longitude: lng,
           radius:    radius * 1609,
@@ -580,6 +581,7 @@ export default function ATMFinderPage() {
           openOnly,
           forceRefresh: force,
         });
+        if (workerError) throw new Error(workerError);
 
         const rawList = data?.atms || data?.places || [];
         if (rawList.length > 0) {
