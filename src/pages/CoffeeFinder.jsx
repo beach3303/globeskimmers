@@ -7,7 +7,8 @@ import LocationModePicker from "@/components/location/LocationModePicker";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
-import { base44 } from "@/api/base44Client";
+import { callWorker } from "@/lib/callWorker";
+import { ROUTE } from "@/lib/workerRoutes";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 import AIDetailsSection from "@/components/AIDetailsSection";
@@ -457,7 +458,8 @@ export default function CoffeeFinderPage() {
     const force = forceNextRef.current; forceNextRef.current = false;
     (async()=>{
       try {
-        const {data} = await base44.functions.invoke('getCoffeeShops',{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,forceRefresh:force});
+        const {data, error: workerError} = await callWorker(ROUTE.getCoffeeShops,{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,forceRefresh:force});
+        if (workerError) throw new Error(workerError);
         const places = data?.places||data?.shops||[];
         if(places.length>0){
           const processed=places.map(p=>processShop(p,lat,lng));

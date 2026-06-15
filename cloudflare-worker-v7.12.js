@@ -5661,6 +5661,76 @@ async function handleRestroomSearch(request, env, ctx) {
   }
 }
 
+// ============================================================================
+// COFFEE FINDER — ported from base44/functions/getCoffeeShops (v5.2).
+// 2-query pattern: text "coffee shop" + nearby coffee_shop ranked by distance
+// (catches chains Google text-search skips), dedup, distance-sort. Reuses the
+// restroom internal helpers (rrTextSearch / rrNearbySearch / rrCalcDist).
+// ============================================================================
+async function handleCoffeeShops(request, env, ctx) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { latitude, longitude, radius = 16093, maxResults = 60, forceRefresh = false } = body;
+    if (!latitude || !longitude) return jsonResponse({ error: 'Latitude and longitude required', places: [] }, 400);
+    const origin = new URL(request.url).origin;
+
+    const seen = new Set();
+    const all = [];
+    const addAll = (places) => { for (const p of places) { const id = p.id || p.placeId; if (id && !seen.has(id)) { seen.add(id); all.push(p); } } };
+
+    const [textHits, nearbyHits] = await Promise.all([
+      rrTextSearch(env, ctx, origin, { query: 'coffee shop', latitude, longitude, radius, maxResults: 20, forceRefresh }).catch(() => []),
+      rrNearbySearch(env, ctx, origin, { types: 'coffee_shop', latitude, longitude, radius, maxResults: 20, forceRefresh }).catch(() => []),
+    ]);
+    addAll(textHits); addAll(nearbyHits);
+
+    if (all.length === 0) return jsonResponse({ places: [], count: 0, error: 'No coffee shops found in this area.' });
+
+    const processed = all.slice(0, maxResults).map(place => {
+      const lat = place.location?.latitude || 0;
+      const lng = place.location?.longitude || 0;
+      const dist = rrCalcDist(latitude, longitude, lat, lng);
+      const mi = dist * 0.621371;
+      const photos = (place.photos || []).map(p => p.url || p).filter(Boolean);
+      const name = place.displayName?.text || place.name || '';
+      const phone = place.nationalPhoneNumber || place.internationalPhoneNumber || '';
+      const hours = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
+      const serviceOptions = { dineIn: place.dineIn, outdoorSeating: place.outdoorSeating, takeout: place.takeout, delivery: place.delivery };
+      return {
+        id: place.id, placeId: place.id,
+        displayName: place.displayName || { text: name }, name,
+        location: { latitude: lat, longitude: lng }, latitude: lat, longitude: lng,
+        formattedAddress: place.formattedAddress || '',
+        shortFormattedAddress: place.shortFormattedAddress || '',
+        distanceKm: dist, distanceMiles: mi,
+        distanceText: mi < 0.1 ? `${Math.round(mi * 5280)} ft` : `${mi.toFixed(1)} mi`,
+        rating: place.rating || null, userRatingCount: place.userRatingCount || 0,
+        currentOpeningHours: { openNow: place.isOpen, weekdayDescriptions: hours },
+        regularOpeningHours: { weekdayDescriptions: hours },
+        hours, isOpen: place.isOpen ?? null,
+        priceLevel: place.priceLevel,
+        photos,
+        types: place.types || [], primaryType: place.primaryType,
+        nationalPhoneNumber: phone, internationalPhoneNumber: phone,
+        websiteUri: place.websiteUri || '', googleMapsUri: place.googleMapsUri || '',
+        serviceOptions,
+        reviews: place.reviews || [],
+        parking: null,
+        seating: null,
+        hasIndoorSeating: place.dineIn ?? null,
+        hasOutdoorSeating: place.outdoorSeating ?? null,
+        outdoorSeating: place.outdoorSeating,
+        dineIn: place.dineIn,
+      };
+    });
+    processed.sort((a, b) => a.distanceKm - b.distanceKm);
+
+    return jsonResponse({ places: processed, count: processed.length, version: 'v5.2-worker' });
+  } catch (err) {
+    return jsonResponse({ error: err.message, places: [] }, 200);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -5696,6 +5766,7 @@ export default {
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
       if (pathname === '/restroom-locations' && request.method === 'POST') return await handleRestroomSearch(request, env, ctx);
+      if (pathname === '/coffee-shops' && request.method === 'POST') return await handleCoffeeShops(request, env, ctx);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
       if (pathname === '/analyze-price' && request.method === 'POST') return await handleAnalyzePrice(request, env);
       if (pathname === '/scan-text' && request.method === 'POST') return await handleScanText(request, env);
