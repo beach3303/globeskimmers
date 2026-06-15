@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { callWorker } from "@/lib/callWorker";
+import { ROUTE } from "@/lib/workerRoutes";
 import { useNavigate } from "react-router-dom";
 import { MapPin, Loader2, Phone, Search, TrendingUp, ChevronDown, ArrowUpDown, Info, Map, Navigation, X, ChevronLeft, DollarSign } from "lucide-react";
 import { CAT, IVORY } from "@/components/redesign/constants";
@@ -354,14 +356,14 @@ export default function MoneyExchangePage() {
 
     setConverting(true);
     try {
-      const response = await base44.functions.invoke('getExchangeRate', {
+      const response = await callWorker(ROUTE.getExchangeRate, {
         from: fromCurrency,
         to: toCurrency,
         amount: parseFloat(fromAmount),
         forceRefresh
       });
 
-      if (!response || !response.data || response.data.error) {
+      if (!response || !response.data || response.error || response.data.error) {
         setConvertedAmount("Error");
         setExchangeRate("Unable to get exchange rate");
         setRateTimestamp(null);
@@ -393,7 +395,7 @@ export default function MoneyExchangePage() {
     try {
       const radiusInMiles = usesMiles ? searchRadius : kmToMiles(searchRadius);
 
-      const { data } = await base44.functions.invoke('getMoneyExchangeLocations', {
+      const { data } = await callWorker(ROUTE.getMoneyExchangeLocations, {
         latitude: activeLocation.coordinates.latitude,
         longitude: activeLocation.coordinates.longitude,
         fromCurrency: fromCurrency,
@@ -405,7 +407,7 @@ export default function MoneyExchangePage() {
         forceRefresh: forceRefresh
       });
 
-      setExchangeStores(data.locations || []);
+      setExchangeStores(data?.locations || []);
     } catch (error) {
       console.error("Error loading exchange stores:", error);
       setExchangeStores([]);

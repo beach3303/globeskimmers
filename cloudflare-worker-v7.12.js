@@ -6178,6 +6178,133 @@ async function handleConvenienceStores(request, env, ctx) {
   }
 }
 
+// ── Money Exchange (ported from Base44 getExchangeRate + getMoneyExchangeLocations) ──
+// Live mid-market rate from exchangerate-api.com. Requires secret EXCHANGERATE_API_KEY.
+async function handleExchangeRate(request, env) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { from, to, amount } = body;
+    if (!from || !to) return jsonResponse({ error: 'from and to currencies are required' }, 400);
+
+    const apiKey = env.EXCHANGERATE_API_KEY;
+    if (!apiKey) return jsonResponse({ error: 'Exchange Rate API key not configured' }, 500);
+
+    const res = await fetch(`https://v6.exchangerate-api.com/v6/${apiKey}/pair/${from}/${to}`);
+    if (!res.ok) {
+      const details = await res.text().catch(() => '');
+      return jsonResponse({ error: `Exchange Rate API returned ${res.status}`, details }, 502);
+    }
+    const data = await res.json();
+    if (data.result !== 'success') return jsonResponse({ error: 'Exchange rate API error', details: data }, 502);
+
+    const rate = data.conversion_rate;
+    const convertedAmount = amount ? parseFloat(amount) * rate : null;
+    return jsonResponse({
+      from_currency: from,
+      to_currency: to,
+      exchange_rate: rate,
+      rate_description: `1 ${from} = ${rate.toFixed(4)} ${to}`,
+      converted_amount: convertedAmount,
+      last_updated: data.time_last_update_utc,
+    });
+  } catch (e) {
+    return jsonResponse({ error: 'Internal server error', details: e.message }, 500);
+  }
+}
+
+// Currency-exchange storefronts near a point. Locations come from the cached
+// Google text/nearby helpers; the rate is fetched LIVE per request (never
+// cached) with a ±2% per-location spread to mimic counter-to-counter variance.
+async function handleMoneyExchange(request, env, ctx) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const {
+      latitude, longitude, fromCurrency, toCurrency,
+      radiusMiles = 5, limit, sortBy = 'distance', openOnly = false, forceRefresh = false,
+    } = body;
+
+    if (!latitude || !longitude) {
+      return jsonResponse({ error: 'Latitude and longitude required', locations: [], all_locations: [] }, 400);
+    }
+
+    const origin = new URL(request.url).origin;
+    const radiusMeters = Math.min(radiusMiles * 1609.34, 50000);
+    const fetchCount = openOnly ? 50 : 20;
+
+    // Primary: text search for exchange storefronts. Fallback: nearby financial institutions.
+    let places = await rrTextSearch(env, ctx, origin, {
+      query: 'currency exchange OR money exchange OR bureau de change',
+      latitude, longitude, radius: radiusMeters, maxResults: fetchCount, forceRefresh,
+    }).catch(() => []);
+    if (!places.length) {
+      places = await rrNearbySearch(env, ctx, origin, {
+        types: 'financial_institution',
+        latitude, longitude, radius: radiusMeters, maxResults: fetchCount, forceRefresh,
+      }).catch(() => []);
+    }
+
+    // Live mid-market rate (never cached). Per-location variance applied below.
+    let baseRate = null;
+    if (fromCurrency && toCurrency && env.EXCHANGERATE_API_KEY) {
+      try {
+        const r = await fetch(`https://v6.exchangerate-api.com/v6/${env.EXCHANGERATE_API_KEY}/pair/${fromCurrency}/${toCurrency}`);
+        const d = await r.json();
+        if (d.result === 'success') baseRate = d.conversion_rate;
+      } catch { /* rate is optional; locations still return */ }
+    }
+
+    const today = new Date().getDay();
+    const locations = [];
+    for (const place of places) {
+      const lat = place.location?.latitude;
+      const lng = place.location?.longitude;
+      if (lat == null || lng == null) continue;
+
+      const distance = rrCalcDist(latitude, longitude, lat, lng) * 0.621371; // km → miles
+      if (distance > radiusMiles) continue;
+
+      const isOpen = place.currentOpeningHours?.openNow ?? place.regularOpeningHours?.openNow ?? place.isOpen ?? false;
+      if (openOnly && !isOpen) continue;
+
+      let rate = null;
+      if (baseRate) rate = baseRate * (1 + ((Math.random() * 0.04) - 0.02)); // ±2%
+
+      const weekday = place.currentOpeningHours?.weekdayDescriptions
+        || place.regularOpeningHours?.weekdayDescriptions
+        || place.hours || [];
+
+      locations.push({
+        name: place.displayName?.text || place.name || 'Currency Exchange',
+        address: place.formattedAddress || place.address || '',
+        phone: place.nationalPhoneNumber || place.phone || null,
+        latitude: lat,
+        longitude: lng,
+        distance_miles: distance,
+        exchange_rate: rate,
+        type: 'Currency Exchange',
+        hours_today: weekday[today] || null,
+        hours: weekday,
+        website: place.websiteUri || place.website || null,
+        is_open: isOpen,
+      });
+    }
+
+    if (sortBy === 'rate') {
+      const withRates = locations.filter(l => l.exchange_rate != null).sort((a, b) => b.exchange_rate - a.exchange_rate);
+      const withoutRates = locations.filter(l => l.exchange_rate == null);
+      locations.length = 0;
+      locations.push(...withRates, ...withoutRates);
+    } else {
+      locations.sort((a, b) => a.distance_miles - b.distance_miles);
+    }
+
+    const limited = limit ? locations.slice(0, limit) : locations;
+    return jsonResponse({ locations: limited, all_locations: locations, source: 'live', fetched_at: new Date().toISOString() });
+  } catch (e) {
+    return jsonResponse({ error: 'Internal server error', details: e.message, locations: [], all_locations: [] }, 500);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -6217,6 +6344,8 @@ export default {
       if (pathname === '/atm-locations' && request.method === 'POST') return await handleAtmLocations(request, env, ctx);
       if (pathname === '/shopping' && request.method === 'POST') return await handleShoppingPlaces(request, env, ctx);
       if (pathname === '/convenience-stores' && request.method === 'POST') return await handleConvenienceStores(request, env, ctx);
+      if (pathname === '/exchange-rate' && request.method === 'POST') return await handleExchangeRate(request, env);
+      if (pathname === '/money-exchange' && request.method === 'POST') return await handleMoneyExchange(request, env, ctx);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
       if (pathname === '/analyze-price' && request.method === 'POST') return await handleAnalyzePrice(request, env);
       if (pathname === '/scan-text' && request.method === 'POST') return await handleScanText(request, env);
