@@ -38,7 +38,8 @@ import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
-import { base44 } from "@/api/base44Client";
+import { callWorker } from "@/lib/callWorker";
+import { ROUTE } from "@/lib/workerRoutes";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 import AIDetailsSection from "@/components/AIDetailsSection";
@@ -1011,7 +1012,7 @@ export default function PlacesToEat() {
         // Bump the candidate pool when client-side filters will trim results.
         const clientFilterActive = filterOutdoor || filterParking || filterDriveThru;
 
-        const { data } = await base44.functions.invoke('getRestaurants', {
+        const { data } = await callWorker(ROUTE.getRestaurants, {
           latitude: lat, longitude: lng,
           radius: radius * 1609,
           maxResults: clientFilterActive ? 60 : 40,

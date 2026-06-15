@@ -7027,6 +7027,2408 @@ async function handleActivities(request, env, ctx) {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// Places to Eat (ported from Base44 getRestaurants v5.1)
+// The full intent/tier/cuisine/dish orchestrator, moved onto the Worker so it
+// works on native (no Base44 auth_required 403). Types stripped via esbuild;
+// self-HTTP calls (POST /, /places/nearby, /places/dietary, /places/text-search,
+// /parse-intent, /label-photos) rewritten to internal handler calls (rxDispatch)
+// — no HTTP round-trip. Same {places, count, fallbackInfo, fallbackPlaces, ...}
+// output shape so PlacesToEat.jsx is a 1-line repoint.
+// ════════════════════════════════════════════════════════════════════════
+const grResp = (obj, init) => jsonResponse(obj, init?.status || 200);
+async function rxDispatch(env, ctx, origin, pathAndQuery, opts = {}) {
+  const req = new Request(`${origin}${pathAndQuery}`, {
+    method: opts.method || 'GET',
+    headers: opts.headers || {},
+    body: opts.body,
+  });
+  const p = new URL(req.url).pathname;
+  if (p === '/' && req.method === 'POST') return await handleRestaurantSearch(req, env, ctx);
+  if (p === '/places/nearby') return await handleNearbySearch(req, env, ctx);
+  if (p === '/places/dietary') return await handleDietarySearch(req, env);
+  if (p === '/places/text-search') return await handleTextSearch(req, env, ctx);
+  if (p === '/parse-intent' && req.method === 'POST') return await handleParseIntent(req, env);
+  if (p === '/label-photos' && req.method === 'POST') return await handleLabelPhotos(req, env);
+  return jsonResponse({ error: 'unknown internal route: ' + p }, 404);
+}
+
+// API_BASE_URL removed — self-calls now route through rxDispatch (internal).
+const NON_FOOD_TYPES = /* @__PURE__ */ new Set([
+  "grocery_or_supermarket",
+  "supermarket",
+  "grocery_store",
+  "food_store",
+  "convenience_store",
+  "department_store",
+  "clothing_store",
+  "hardware_store",
+  "pharmacy",
+  "drug_store",
+  "gas_station",
+  "car_wash",
+  "laundry",
+  "health",
+  "beauty_salon",
+  "hair_care",
+  "bank",
+  "atm",
+  "school",
+  "church",
+  "hospital",
+  "doctor",
+  "book_store",
+  "library",
+  "shopping_mall",
+  "furniture_store",
+  "home_goods_store",
+  "electronics_store",
+  "pet_store",
+  "shoe_store",
+  "jewelry_store"
+]);
+const STRICT_NON_FOOD_PRIMARY = /* @__PURE__ */ new Set([
+  "convenience_store",
+  "gas_station",
+  "pharmacy",
+  "drug_store",
+  "car_wash",
+  "laundry",
+  "beauty_salon",
+  "hair_care",
+  "bank",
+  "atm",
+  "school",
+  "church",
+  "hospital",
+  "doctor",
+  "book_store",
+  "library",
+  "shopping_mall",
+  "furniture_store",
+  "home_goods_store",
+  "electronics_store",
+  "pet_store",
+  "shoe_store",
+  "jewelry_store",
+  "clothing_store",
+  "hardware_store",
+  "department_store"
+]);
+const FOOD_TYPES = /* @__PURE__ */ new Set([
+  "restaurant",
+  "meal_delivery",
+  "meal_takeaway",
+  "cafe",
+  "bakery",
+  "bar",
+  "night_club",
+  "fast_food_restaurant",
+  "american_restaurant",
+  "chinese_restaurant",
+  "japanese_restaurant",
+  "mexican_restaurant",
+  "italian_restaurant",
+  "thai_restaurant",
+  "korean_restaurant",
+  "vietnamese_restaurant",
+  "indian_restaurant",
+  "mediterranean_restaurant",
+  "seafood_restaurant",
+  "steak_house",
+  "pizza_restaurant",
+  "ramen_restaurant",
+  "sushi_restaurant",
+  "breakfast_restaurant",
+  "brunch_restaurant",
+  "sandwich_shop",
+  "hamburger_restaurant",
+  "ice_cream_shop",
+  "dessert_shop",
+  "coffee_shop",
+  "donut_shop",
+  "bagel_shop",
+  "pastry_shop",
+  "diner",
+  "buffet_restaurant",
+  "tapas_bar",
+  "wine_bar",
+  "juice_bar",
+  "boba_tea_shop",
+  "food_court",
+  "halal_restaurant",
+  "kosher_restaurant",
+  "vegan_restaurant",
+  "vegetarian_restaurant",
+  "middle_eastern_restaurant",
+  "greek_restaurant",
+  "spanish_restaurant",
+  "french_restaurant",
+  "german_restaurant",
+  "filipino_restaurant",
+  "indonesian_restaurant",
+  "latin_american_restaurant",
+  "pub",
+  "sports_bar",
+  "lounge",
+  "brewery",
+  "winery"
+]);
+function isActuallyARestaurant(place) {
+  const types = place.types || [];
+  const primaryType = place.primaryType || "";
+  const status = (place.businessStatus || "").toUpperCase();
+  if (status === "CLOSED_PERMANENTLY" || status === "CLOSED_TEMPORARILY") return false;
+  if (STRICT_NON_FOOD_PRIMARY.has(primaryType)) return false;
+  const hasFoodSignal = FOOD_TYPES.has(primaryType) || primaryType.includes("restaurant") || primaryType.includes("cafe") || primaryType.includes("bar") || types.some(
+    (t) => FOOD_TYPES.has(t) || t.includes("restaurant") || t.includes("cafe") || t.includes("bar") || t.includes("bakery")
+  );
+  if (hasFoodSignal) return true;
+  if (NON_FOOD_TYPES.has(primaryType)) return false;
+  if (types.some((t) => NON_FOOD_TYPES.has(t))) return false;
+  return false;
+}
+const SPORTS_REVIEW_KEYWORDS = [
+  // Infrastructure signals
+  "tv",
+  "tvs",
+  "screen",
+  "screens",
+  "big screen",
+  "flat screen",
+  "flatscreen",
+  "multiple tvs",
+  "big tv",
+  "projector",
+  "hd screen",
+  // Social viewing behavior
+  "watch the game",
+  "watch the match",
+  "watch sports",
+  "watch party",
+  "game night",
+  "watching",
+  "game day",
+  "gameday",
+  "came to watch",
+  "showing sports",
+  "showing the game",
+  "live sports",
+  "showing live",
+  // Atmosphere
+  "cheer",
+  "cheering",
+  "loud",
+  "crowd",
+  "lively",
+  "energetic",
+  "rowdy",
+  "packed",
+  "buzzing",
+  "electric",
+  "full house",
+  "chanting",
+  // US leagues
+  "nfl",
+  "nba",
+  "mlb",
+  "nhl",
+  "ufc",
+  "playoff",
+  "playoffs",
+  "touchdown",
+  "overtime",
+  // Global leagues / sports
+  "soccer",
+  "football",
+  "rugby",
+  "cricket",
+  "boxing",
+  "mma",
+  "wrestling",
+  "premier league",
+  "champions league",
+  "world cup",
+  "copa america",
+  "nrl",
+  "afl",
+  "super rugby",
+  "six nations",
+  // Event words
+  "match",
+  "game",
+  "jersey",
+  "halftime",
+  "penalty",
+  // Sports identity
+  "sports",
+  "sports bar",
+  // Food & drink (social sports bar staples)
+  "wing",
+  "wings",
+  "nachos",
+  "beer",
+  "draft",
+  "pitchers",
+  "pints",
+  "happy hour",
+  "pub food",
+  "bar food",
+  "finger food"
+];
+const SPORTS_BAR_TYPES = /* @__PURE__ */ new Set([
+  "bar",
+  "pub",
+  "tapas_bar",
+  "wine_bar",
+  "lounge",
+  "brewery",
+  "night_club"
+]);
+function calcSportsScore(place) {
+  const types = [...place.types || [], place.primaryType || ""].map((t) => t.toLowerCase());
+  const name = (place.displayName?.text || place.name || "").toLowerCase();
+  const reviews = place.reviews || [];
+  const allReviewText = reviews.map((r) => r.text?.text || r.text || "").join(" ").toLowerCase();
+  let score = 0;
+  if (types.includes("sports_bar")) {
+    score += 20 + 15;
+  } else if (types.some((t) => SPORTS_BAR_TYPES.has(t))) {
+    score += 12;
+  } else if (types.some((t) => t.includes("restaurant"))) {
+    score += 5;
+  }
+  if (/sports?\s*(bar|grill|pub|lounge|tavern)/i.test(name)) {
+    score += 15;
+  } else if (/(football|soccer|match|game)\s*(pub|bar|lounge|café|cafe)/i.test(name)) {
+    score += 12;
+  } else if (["tavern", "pub", "alehouse", "taproom", "roadhouse", "grille", "clubhouse", "stadium"].some((k) => name.includes(k))) {
+    score += 8;
+  } else if (["biergarten", "bier garten", "beer hall", "taphouse", "tap house", " taps ", "brewhouse", "beerhouse"].some((k) => name.includes(k)) || /\btaps\b/.test(name)) {
+    score += 7;
+  } else if (["brewery", "brewpub", "brew pub", "sports lounge", "bar deportivo", "cerveceria"].some((k) => name.includes(k))) {
+    score += 5;
+  }
+  let reviewHits = 0;
+  SPORTS_REVIEW_KEYWORDS.forEach((kw) => {
+    const regex = new RegExp("\\b" + kw.replace(/\s+/g, "\\s+") + "\\b", "gi");
+    const matches = allReviewText.match(regex);
+    if (matches) reviewHits += matches.length;
+  });
+  score += Math.min(reviewHits * 2, 35);
+  const foodKws = ["wings", "nachos", "burgers", "burger", "beer", "draft", "pitchers", "pints", "happy hour", "pub food", "bar food", "finger food"];
+  const foodHits = foodKws.filter((k) => allReviewText.includes(k)).length;
+  score += Math.min(foodHits * 2, 10);
+  if (place.servesBeer === true) score += 3;
+  if (place.servesCocktails === true) score += 2;
+  return Math.min(score, 100);
+}
+function sportsLabel(score) {
+  if (score >= 85) return "Best Sports Bar";
+  if (score >= 70) return "Sports-Friendly";
+  if (score >= 55) return "Casual Watch Spot";
+  return null;
+}
+const ASIAN_TYPES = /* @__PURE__ */ new Set([
+  "chinese_restaurant",
+  "japanese_restaurant",
+  "korean_restaurant",
+  "thai_restaurant",
+  "vietnamese_restaurant",
+  "filipino_restaurant",
+  "ramen_restaurant",
+  "sushi_restaurant"
+]);
+const CUISINE_CHIP_TO_UMBRELLA = {
+  italian: { label: "Italian", types: /* @__PURE__ */ new Set(["italian_restaurant"]), keywords: ["pasta", "pizza", "risotto", "lasagna", "antipasto"] },
+  mexican: { label: "Mexican", types: /* @__PURE__ */ new Set(["mexican_restaurant"]), keywords: ["taco", "burrito", "enchilada", "quesadilla", "tamale"] },
+  chinese: { label: "Chinese", types: /* @__PURE__ */ new Set(["chinese_restaurant"]), keywords: ["dim sum", "noodle", "dumpling", "chow mein", "kung pao"] },
+  japanese: { label: "Japanese", types: /* @__PURE__ */ new Set(["japanese_restaurant", "ramen_restaurant"]), keywords: ["sushi", "ramen", "tempura", "udon", "teriyaki"] },
+  sushi: { label: "Sushi", types: /* @__PURE__ */ new Set(["sushi_restaurant", "japanese_restaurant"]), keywords: ["sushi", "sashimi", "maki", "nigiri", "omakase"] },
+  korean: { label: "Korean", types: /* @__PURE__ */ new Set(["korean_restaurant"]), keywords: ["bibimbap", "kimchi", "bulgogi", "korean bbq", "tteokbokki"] },
+  thai: { label: "Thai", types: /* @__PURE__ */ new Set(["thai_restaurant"]), keywords: ["pad thai", "tom yum", "green curry", "massaman", "satay"] },
+  vietnamese: { label: "Vietnamese", types: /* @__PURE__ */ new Set(["vietnamese_restaurant"]), keywords: ["pho", "banh mi", "spring roll", "vermicelli", "bun bo hue"] },
+  indian: { label: "Indian", types: /* @__PURE__ */ new Set(["indian_restaurant"]), keywords: ["curry", "biryani", "naan", "tikka masala", "tandoori"] },
+  filipino: { label: "Filipino", types: /* @__PURE__ */ new Set(["filipino_restaurant"]), keywords: ["adobo", "sinigang", "lumpia", "sisig", "halo halo"] },
+  french: { label: "French", types: /* @__PURE__ */ new Set(["french_restaurant"]), keywords: ["croissant", "baguette", "crepe", "quiche", "bouillabaisse"] },
+  pizza: { label: "Pizza", types: /* @__PURE__ */ new Set(["pizza_restaurant"]), keywords: ["pizza", "slice", "margherita", "pepperoni", "sicilian"] },
+  seafood: { label: "Seafood", types: /* @__PURE__ */ new Set(["seafood_restaurant"]), keywords: ["fish", "shrimp", "lobster", "crab", "clam", "oyster"] },
+  mediterranean: { label: "Mediterranean", types: /* @__PURE__ */ new Set(["mediterranean_restaurant", "greek_restaurant"]), keywords: ["gyro", "hummus", "falafel", "shawarma", "tzatziki"] },
+  american: { label: "American", types: /* @__PURE__ */ new Set(["american_restaurant", "hamburger_restaurant"]), keywords: ["burger", "fries", "sandwich", "wing", "bbq"] },
+  breakfast: { label: "Breakfast", types: /* @__PURE__ */ new Set(["breakfast_restaurant", "brunch_restaurant"]), keywords: ["pancake", "waffle", "egg", "french toast", "omelet"] }
+};
+const CULTURAL_INTENTS = {
+  asian: {
+    label: "Asian",
+    types: ASIAN_TYPES,
+    keywords: [
+      "chinese",
+      "japanese",
+      "korean",
+      "thai",
+      "vietnamese",
+      "filipino",
+      "asian",
+      "dim sum",
+      "ramen",
+      "sushi",
+      "pho",
+      "pad thai",
+      "boba",
+      "banh mi",
+      "kimchi"
+    ]
+  },
+  latin: {
+    label: "Latin",
+    types: /* @__PURE__ */ new Set(["mexican_restaurant", "latin_american_restaurant", "spanish_restaurant"]),
+    keywords: ["mexican", "latin", "taco", "burrito", "tamale", "empanada", "torta", "ceviche"]
+  },
+  mediterranean: {
+    label: "Mediterranean",
+    types: /* @__PURE__ */ new Set(["mediterranean_restaurant", "greek_restaurant", "middle_eastern_restaurant"]),
+    keywords: ["mediterranean", "greek", "middle eastern", "lebanese", "turkish", "hummus", "falafel", "shawarma"]
+  },
+  european: {
+    label: "European",
+    types: /* @__PURE__ */ new Set(["italian_restaurant", "french_restaurant", "german_restaurant", "spanish_restaurant"]),
+    keywords: ["italian", "french", "german", "european", "pasta", "risotto", "crepe", "schnitzel"]
+  }
+};
+const KNOWN_BREAKFAST_CHAINS = [
+  // US
+  "mcdonald",
+  "ihop",
+  "denny",
+  "waffle house",
+  "cracker barrel",
+  "bob evans",
+  "corner bakery",
+  "panera",
+  "first watch",
+  "snooze",
+  "black bear diner",
+  "mimi's cafe",
+  "coco's",
+  "marie callender",
+  "bob's big boy",
+  "perkins",
+  "village inn",
+  "le pain quotidien",
+  "einstein",
+  "the original pancake",
+  "stack'd",
+  "another broken egg",
+  "wildflower",
+  "norms",
+  // SoCal 24hr family chain — pancakes, French toast, breakfast platters
+  // International expansion (Step 4.6, 2026-05-22)
+  "tim hortons",
+  // Canada / US / Mexico / global
+  "cora's",
+  // Canada — pancake-specialty breakfast chain
+  "sunset grill",
+  // Canada — breakfast specialty
+  "eggsmart",
+  // Canada — breakfast chain
+  "the breakfast club",
+  // UK — modern brunch / pancakes
+  "granger",
+  // UK / Australia — Bill Granger's fluffy pancakes
+  "pret a manger",
+  // UK / US — breakfast staples
+  "komeda",
+  // Japan — morning-set breakfast chain
+  "doutor",
+  // Japan — breakfast / coffee chain
+  "caf\xE9 du monde",
+  // US / Japan — beignets / pastries
+  "cafe du monde",
+  //   (no-accent fallback for Google name variants)
+  "egg slut",
+  // US / global — egg-focused breakfast spot
+  "eggslut",
+  //   (concatenated variant)
+  "stack pancake"
+  // UK — pancake specialty
+];
+const BREAKFAST_PLAUSIBLE_TYPES = /* @__PURE__ */ new Set([
+  "breakfast_restaurant",
+  "brunch_restaurant",
+  "diner",
+  // 'american_restaurant' intentionally NOT included — Google tags
+  // Chick-fil-A, KFC, Applebee's, and similar fast-food chains with this
+  // type, so admitting it as a breakfast signal lets them tier 3/4 on
+  // pancakes searches even though they don't actually serve breakfast.
+  // McDonald's stays via KNOWN_BREAKFAST_CHAINS (chain list is trustworthy).
+  "bakery",
+  "pastry_shop",
+  "donut_shop",
+  "bagel_shop"
+]);
+const DISH_MAP = [
+  // ── Japanese ────────────────────────────────────────────────────────────────
+  { pattern: /\bsushi\b/, tier1: ["sushi_restaurant"], tier2: ["japanese_restaurant"], label: "sushi", nameKeywords: ["sushi", "sashimi", "maki", "nigiri", "omakase"] },
+  { pattern: /\bramen\b/, tier1: ["ramen_restaurant"], tier2: ["japanese_restaurant"], label: "ramen", nameKeywords: ["ramen", "ramenya", "jinya", "daikokuya", "tsujita", "tatsu"] },
+  { pattern: /\budon\b/, tier1: ["japanese_restaurant"], tier2: ["noodle_restaurant"], label: "udon", nameKeywords: ["udon", "udonya", "marugame"] },
+  { pattern: /\btempura\b/, tier1: ["japanese_restaurant"], tier2: [], label: "tempura", nameKeywords: ["tempura"] },
+  { pattern: /\bokonomiyaki\b/, tier1: ["japanese_restaurant"], tier2: [], label: "okonomiyaki", nameKeywords: ["okonomiyaki"] },
+  { pattern: /\btonkatsu\b/, tier1: ["japanese_restaurant"], tier2: [], label: "tonkatsu", nameKeywords: ["tonkatsu", "katsu", "wakana"] },
+  { pattern: /\byakitori\b/, tier1: ["japanese_restaurant"], tier2: [], label: "yakitori", nameKeywords: ["yakitori", "torisushi"] },
+  { pattern: /\bshabu[\s-]*shabu\b|\bshabu\b/, tier1: ["japanese_restaurant"], tier2: ["korean_restaurant"], label: "shabu shabu", nameKeywords: ["shabu", "shabu shabu", "shabuya"] },
+  { pattern: /\bhot\s*pot\b/, tier1: ["chinese_restaurant", "korean_restaurant"], tier2: ["japanese_restaurant"], label: "hot pot", nameKeywords: ["hot pot", "hotpot", "haidilao", "little sheep", "boiling point"] },
+  { pattern: /\bkatsu\b|\bchicken\s*katsu\b|\bpork\s*katsu\b/, tier1: ["japanese_restaurant"], tier2: [], label: "katsu", nameKeywords: ["katsu", "tonkatsu", "curry house"] },
+  { pattern: /\bgyoza\b/, tier1: ["japanese_restaurant"], tier2: ["chinese_restaurant"], label: "gyoza", nameKeywords: ["gyoza", "gyozaya"] },
+  { pattern: /\btakoyaki\b/, tier1: ["japanese_restaurant"], tier2: [], label: "takoyaki", nameKeywords: ["takoyaki", "octopus ball"] },
+  { pattern: /\byakiniku\b/, tier1: ["japanese_restaurant", "korean_restaurant"], tier2: ["barbecue_restaurant"], label: "yakiniku", nameKeywords: ["yakiniku", "gyu-kaku", "gyukaku"] },
+  { pattern: /\byakisoba\b|\bsoba\b/, tier1: ["japanese_restaurant"], tier2: ["noodle_house"], label: "soba", nameKeywords: ["soba", "yakisoba", "sobaya"] },
+  { pattern: /\bonigiri\b|\briceballs?\b/, tier1: ["japanese_restaurant"], tier2: [], label: "onigiri", nameKeywords: ["onigiri", "riceball", "musubi"] },
+  { pattern: /\bomurice\b|\bomu\s*rice\b/, tier1: ["japanese_restaurant"], tier2: [], label: "omurice", nameKeywords: ["omurice", "omu rice"] },
+  { pattern: /\bbento\b/, tier1: ["japanese_restaurant"], tier2: [], label: "bento", nameKeywords: ["bento", "bentoya", "bento box"] },
+  { pattern: /\bmochi\b|\bdaifuku\b/, tier1: ["japanese_restaurant", "dessert_shop"], tier2: ["ice_cream_shop"], label: "mochi", nameKeywords: ["mochi", "mochiko", "daifuku", "mikawaya"] },
+  // ── Chinese ─────────────────────────────────────────────────────────────────
+  { pattern: /\bdim\s*sum\b|\bdimsum\b/, tier1: ["chinese_restaurant"], tier2: [], label: "dim sum", nameKeywords: ["dim sum", "dimsum", "yum cha", "sea harbour"] },
+  { pattern: /\bxiaolong\s*bao\b|\bsoup\s*dump\w+/, tier1: ["chinese_restaurant"], tier2: [], label: "xiaolongbao", nameKeywords: ["xiaolongbao", "xlb", "soup dumpling", "din tai fung", "joe shanghai"] },
+  { pattern: /\bmapo\s*tofu\b/, tier1: ["chinese_restaurant"], tier2: [], label: "mapo tofu", nameKeywords: ["mapo", "mapo tofu"] },
+  { pattern: /\bpeking\s*duck\b|\bbeijing\s*duck\b/, tier1: ["chinese_restaurant"], tier2: [], label: "Peking duck", nameKeywords: ["peking duck", "beijing duck", "duck house", "quanjude"] },
+  { pattern: /\bdumplings?\b|\bpotstickers?\b/, tier1: ["chinese_restaurant"], tier2: ["japanese_restaurant"], label: "dumplings", nameKeywords: ["dumpling", "dumplings", "potsticker", "jiaozi"] },
+  { pattern: /\bdan\s*dan\b/, tier1: ["chinese_restaurant"], tier2: [], label: "dan dan noodles", nameKeywords: ["dan dan", "dan dan noodle"] },
+  { pattern: /\bcongee\b|\bjook\b/, tier1: ["chinese_restaurant"], tier2: [], label: "congee", nameKeywords: ["congee", "jook"] },
+  { pattern: /\bchar\s*siu\b|\bbbq\s*pork\b/, tier1: ["chinese_restaurant"], tier2: [], label: "char siu", nameKeywords: ["char siu", "bbq pork", "siu mei"] },
+  { pattern: /\bwonton\b/, tier1: ["chinese_restaurant"], tier2: [], label: "wonton", nameKeywords: ["wonton", "wonton house"] },
+  { pattern: /\bchow\s*mein\b|\blo\s*mein\b/, tier1: ["chinese_restaurant"], tier2: [], label: "chow mein", nameKeywords: ["chow mein", "lo mein", "noodle house", "noodle world"] },
+  { pattern: /\bfried\s*rice\b/, tier1: ["chinese_restaurant", "thai_restaurant"], tier2: ["asian_restaurant"], label: "fried rice", nameKeywords: ["fried rice"] },
+  { pattern: /\bkung\s*pao\b/, tier1: ["chinese_restaurant"], tier2: [], label: "kung pao", nameKeywords: ["kung pao"] },
+  { pattern: /\bgeneral\s*tso\b|\borange\s*chicken\b/, tier1: ["chinese_restaurant"], tier2: [], label: "Chinese-American", nameKeywords: ["general tso", "orange chicken", "panda express", "panda inn"] },
+  { pattern: /\bbao(zi)?\b|\bsteamed\s*buns?\b/, tier1: ["chinese_restaurant"], tier2: [], label: "bao", nameKeywords: ["bao", "baozi", "steamed bun", "wow bao"] },
+  { pattern: /\bsiu\s*mai\b|\bshumai\b|\bhar\s*gow\b/, tier1: ["chinese_restaurant"], tier2: [], label: "dim sum", nameKeywords: ["siu mai", "shumai", "har gow", "dim sum"] },
+  { pattern: /\bhong\s*kong\s*style\b|\bcantonese\b/, tier1: ["cantonese_restaurant", "chinese_restaurant"], tier2: [], label: "Cantonese", nameKeywords: ["cantonese", "hong kong"] },
+  // ── Korean ──────────────────────────────────────────────────────────────────
+  { pattern: /\bbibimbap\b/, tier1: ["korean_restaurant"], tier2: [], label: "bibimbap", nameKeywords: ["bibimbap", "bibibop", "dolsot"] },
+  { pattern: /\bbulgogi\b/, tier1: ["korean_restaurant"], tier2: [], label: "bulgogi", nameKeywords: ["bulgogi"] },
+  { pattern: /\bkorean\s*bbq\b|\bkbbq\b/, tier1: ["korean_restaurant"], tier2: [], label: "Korean BBQ", nameKeywords: ["kbbq", "korean bbq", "gen korean", "quarters bbq", "sura korean", "park's bbq", "kang ho dong"] },
+  { pattern: /\bjjigae\b|\bkimchi\s*stew\b/, tier1: ["korean_restaurant"], tier2: [], label: "jjigae", nameKeywords: ["jjigae", "kimchi stew"] },
+  { pattern: /\bbossam\b|\bsamgyeopsal\b/, tier1: ["korean_restaurant"], tier2: [], label: "Korean BBQ", nameKeywords: ["bossam", "samgyeopsal", "kbbq", "korean bbq"] },
+  { pattern: /\btteokbokki\b/, tier1: ["korean_restaurant"], tier2: [], label: "tteokbokki", nameKeywords: ["tteokbokki", "rice cake"] },
+  { pattern: /\bkimchi\b/, tier1: ["korean_restaurant"], tier2: [], label: "kimchi", nameKeywords: ["kimchi"] },
+  { pattern: /\bjajangmyeon\b|\bjjajangmyeon\b/, tier1: ["korean_restaurant"], tier2: ["chinese_restaurant"], label: "jajangmyeon", nameKeywords: ["jajangmyeon", "jjajangmyeon", "black bean noodle"] },
+  { pattern: /\bmandu\b/, tier1: ["korean_restaurant"], tier2: ["chinese_restaurant"], label: "mandu", nameKeywords: ["mandu", "korean dumpling"] },
+  { pattern: /\bjapchae\b/, tier1: ["korean_restaurant"], tier2: [], label: "japchae", nameKeywords: ["japchae"] },
+  { pattern: /\bgimbap\b|\bkimbap\b/, tier1: ["korean_restaurant"], tier2: [], label: "gimbap", nameKeywords: ["gimbap", "kimbap", "korean roll"] },
+  { pattern: /\bsoondubu\b|\bsundubu\b/, tier1: ["korean_restaurant"], tier2: [], label: "soondubu", nameKeywords: ["soondubu", "sundubu", "tofu house", "tofu soup", "beverly soon tofu"] },
+  { pattern: /\bkorean\s*fried\s*chicken\b|\bkfc\s*korean\b/, tier1: ["korean_restaurant", "chicken_restaurant"], tier2: [], label: "Korean fried chicken", nameKeywords: ["korean fried chicken", "bonchon", "kyochon", "bb.q", "pelicana"] },
+  { pattern: /\bbingsu\b|\bbingsoo\b|\bpatbingsu\b/, tier1: ["korean_restaurant", "dessert_shop"], tier2: ["ice_cream_shop"], label: "bingsu", nameKeywords: ["bingsu", "bingsoo", "patbingsu", "snowflake", "snow ice"] },
+  // ── Vietnamese ──────────────────────────────────────────────────────────────
+  { pattern: /\bpho\b/, tier1: ["vietnamese_restaurant"], tier2: [], label: "pho", nameKeywords: ["pho", "pho saigon", "pho 79", "pho ha noi", "pho hoa", "pho 24"] },
+  { pattern: /\bbanh\s*mi\b/, tier1: ["vietnamese_restaurant"], tier2: [], label: "banh mi", nameKeywords: ["banh mi", "sandwich vietnam", "lee's sandwiches"] },
+  { pattern: /\bbun\s*cha\b/, tier1: ["vietnamese_restaurant"], tier2: [], label: "bun cha", nameKeywords: ["bun cha"] },
+  { pattern: /\bcuon\b|\bspring\s*rolls?\b/, tier1: ["vietnamese_restaurant"], tier2: ["asian_restaurant"], label: "spring rolls", nameKeywords: ["spring roll", "cuon", "goi cuon"] },
+  { pattern: /\bbun\s*bo\s*hue\b/, tier1: ["vietnamese_restaurant"], tier2: [], label: "bun bo hue", nameKeywords: ["bun bo hue"] },
+  { pattern: /\bcom\s*tam\b|\bbroken\s*rice\b/, tier1: ["vietnamese_restaurant"], tier2: [], label: "com tam", nameKeywords: ["com tam", "broken rice"] },
+  { pattern: /\bvietnamese\s*coffee\b|\bca\s*phe\s*sua\s*da\b/, tier1: ["vietnamese_restaurant", "coffee_shop"], tier2: ["cafe"], label: "Vietnamese coffee", nameKeywords: ["vietnamese coffee", "ca phe sua da", "phin filter"] },
+  // ── Thai ────────────────────────────────────────────────────────────────────
+  { pattern: /\bpad\s*thai\b/, tier1: ["thai_restaurant"], tier2: [], label: "Pad Thai", nameKeywords: ["pad thai", "thai house"] },
+  { pattern: /\bpad\s*see\s*ew\b|\bpad\s*kra\s*pao\b/, tier1: ["thai_restaurant"], tier2: [], label: "Thai noodles", nameKeywords: ["pad see ew", "pad kra pao", "pad kee mao"] },
+  { pattern: /\bsom\s*tam\b|\bpapaya\s*salad\b/, tier1: ["thai_restaurant"], tier2: [], label: "som tam", nameKeywords: ["som tam", "papaya salad"] },
+  { pattern: /\btom\s*yum\b/, tier1: ["thai_restaurant"], tier2: [], label: "tom yum", nameKeywords: ["tom yum", "tom yum goong"] },
+  { pattern: /\bgreen\s*curry\b|\bred\s*curry\b|\bmassaman\b|\bkhao\s*soi\b/, tier1: ["thai_restaurant"], tier2: [], label: "Thai curry", nameKeywords: ["green curry", "red curry", "massaman", "khao soi", "thai curry"] },
+  { pattern: /\bthai\s*iced\s*tea\b|\bthai\s*tea\b/, tier1: ["thai_restaurant"], tier2: [], label: "Thai tea", nameKeywords: ["thai tea", "thai iced tea", "cha yen"] },
+  { pattern: /\bmango\s*sticky\s*rice\b/, tier1: ["thai_restaurant"], tier2: ["dessert_shop"], label: "mango sticky rice", nameKeywords: ["mango sticky rice", "khao niao mamuang"] },
+  { pattern: /\blarb\b/, tier1: ["thai_restaurant"], tier2: [], label: "larb", nameKeywords: ["larb", "laap", "laab"] },
+  { pattern: /\btom\s*kha\b/, tier1: ["thai_restaurant"], tier2: [], label: "tom kha", nameKeywords: ["tom kha", "tom kha gai"] },
+  { pattern: /\bdrunken\s*noodles\b|\bpad\s*kee\s*mao\b/, tier1: ["thai_restaurant"], tier2: [], label: "drunken noodles", nameKeywords: ["drunken noodles", "pad kee mao"] },
+  // ── Indian ──────────────────────────────────────────────────────────────────
+  { pattern: /\bcurry\b/, tier1: ["indian_restaurant"], tier2: ["thai_restaurant"], label: "curry", nameKeywords: ["curry", "curry house", "curry leaves", "curry up"] },
+  { pattern: /\bbiryani\b/, tier1: ["indian_restaurant"], tier2: [], label: "biryani", nameKeywords: ["biryani", "biryani house", "paradise biryani"] },
+  { pattern: /\bdosa\b|\bmasala\s*dosa\b/, tier1: ["indian_restaurant"], tier2: [], label: "dosa", nameKeywords: ["dosa", "dosa hut", "dosa palace", "masala dosa", "udupi"] },
+  { pattern: /\btandoori\b|\bbutter\s*chicken\b|\bmurgh\s*makhani\b/, tier1: ["indian_restaurant"], tier2: [], label: "tandoori", nameKeywords: ["tandoori", "tandoor", "butter chicken", "murgh makhani", "clay oven"] },
+  { pattern: /\btikka\s*masala\b/, tier1: ["indian_restaurant"], tier2: [], label: "tikka masala", nameKeywords: ["tikka masala", "tikka"] },
+  { pattern: /\bpalak\s*paneer\b|\bsaag\b/, tier1: ["indian_restaurant"], tier2: [], label: "palak paneer", nameKeywords: ["palak paneer", "saag paneer"] },
+  { pattern: /\bsamosa\b/, tier1: ["indian_restaurant"], tier2: [], label: "samosa", nameKeywords: ["samosa", "samosa house"] },
+  { pattern: /\bchana\s*masala\b/, tier1: ["indian_restaurant"], tier2: [], label: "chana masala", nameKeywords: ["chana masala", "chole"] },
+  { pattern: /\bvindaloo\b|\bkorma\b|\brogan\s*josh\b/, tier1: ["indian_restaurant"], tier2: [], label: "Indian curry", nameKeywords: ["vindaloo", "korma", "rogan josh"] },
+  { pattern: /\bnaan\b|\bgarlic\s*naan\b/, tier1: ["indian_restaurant"], tier2: [], label: "naan", nameKeywords: ["naan", "naan stop", "tandoor"] },
+  { pattern: /\bchaat\b|\bpani\s*puri\b|\bgolgappa\b|\bbhel\s*puri\b/, tier1: ["indian_restaurant"], tier2: [], label: "chaat", nameKeywords: ["chaat", "chaat bhavan", "chaat corner", "pani puri", "golgappa", "bhel puri"] },
+  { pattern: /\bvada\s*pav\b|\bpav\s*bhaji\b|\bvada\b|\bpakora\b/, tier1: ["indian_restaurant"], tier2: [], label: "Indian street food", nameKeywords: ["vada pav", "pav bhaji", "pakora", "chaat"] },
+  { pattern: /\bthali\b/, tier1: ["indian_restaurant"], tier2: [], label: "thali", nameKeywords: ["thali", "thali house", "udupi"] },
+  { pattern: /\bchai\b|\bmasala\s*chai\b|\bchai\s*latte\b/, tier1: ["indian_restaurant", "tea_house"], tier2: ["cafe", "coffee_shop"], label: "chai", nameKeywords: ["chai", "masala chai", "chai latte", "chaiwala", "dishoom"] },
+  { pattern: /\blassi\b|\bmango\s*lassi\b/, tier1: ["indian_restaurant"], tier2: [], label: "lassi", nameKeywords: ["lassi", "mango lassi"] },
+  { pattern: /\bgulab\s*jamun\b|\bjalebi\b|\brasmalai\b|\bkulfi\b/, tier1: ["indian_restaurant", "dessert_shop"], tier2: [], label: "Indian dessert", nameKeywords: ["gulab jamun", "jalebi", "rasmalai", "kulfi", "mithai", "sweets"] },
+  { pattern: /\baloo\s*gobi\b|\bsaag\b/, tier1: ["indian_restaurant"], tier2: [], label: "Indian vegetarian", nameKeywords: ["aloo gobi", "saag", "udupi"] },
+  // ── Filipino ────────────────────────────────────────────────────────────────
+  { pattern: /\badobo\b/, tier1: ["filipino_restaurant"], tier2: [], label: "adobo", nameKeywords: ["adobo"] },
+  { pattern: /\bsinigang\b/, tier1: ["filipino_restaurant"], tier2: [], label: "sinigang", nameKeywords: ["sinigang"] },
+  { pattern: /\blechon\b/, tier1: ["filipino_restaurant"], tier2: [], label: "lechon", nameKeywords: ["lechon"] },
+  { pattern: /\bsisig\b/, tier1: ["filipino_restaurant"], tier2: [], label: "sisig", nameKeywords: ["sisig"] },
+  { pattern: /\bkare[\s-]*kare\b/, tier1: ["filipino_restaurant"], tier2: [], label: "kare kare", nameKeywords: ["kare kare", "kare-kare"] },
+  { pattern: /\blumpia\b/, tier1: ["filipino_restaurant"], tier2: [], label: "lumpia", nameKeywords: ["lumpia", "lumpia shanghai"] },
+  { pattern: /\bpancit\b/, tier1: ["filipino_restaurant"], tier2: [], label: "pancit", nameKeywords: ["pancit", "pansit"] },
+  { pattern: /\bhalo[\s-]*halo\b/, tier1: ["filipino_restaurant"], tier2: [], label: "halo halo", nameKeywords: ["halo halo", "halo-halo", "jollibee", "chowking"] },
+  { pattern: /\bbulalo\b/, tier1: ["filipino_restaurant"], tier2: [], label: "bulalo", nameKeywords: ["bulalo"] },
+  { pattern: /\bbicol\s*express\b|\blaing\b/, tier1: ["filipino_restaurant"], tier2: [], label: "Bicolano", nameKeywords: ["bicol express", "laing"] },
+  { pattern: /\btapsilog\b|\bsilog\b|\blongganisa\b/, tier1: ["filipino_restaurant"], tier2: [], label: "Filipino breakfast", nameKeywords: ["tapsilog", "silog", "tocilog", "longsilog", "longganisa"] },
+  { pattern: /\bcaldereta\b|\bpinakbet\b|\bcrispy\s*pata\b|\blechon\s*kawali\b/, tier1: ["filipino_restaurant"], tier2: [], label: "Filipino classics", nameKeywords: ["caldereta", "pinakbet", "crispy pata", "lechon kawali"] },
+  { pattern: /\bube\b|\bleche\s*flan\b|\bbibingka\b|\bensaymada\b|\bturon\b/, tier1: ["filipino_restaurant", "bakery", "dessert_shop"], tier2: [], label: "Filipino dessert", nameKeywords: ["ube", "leche flan", "bibingka", "ensaymada", "turon", "goldilocks", "red ribbon", "valerio's"] },
+  { pattern: /\bchicken\s*inasal\b|\binasal\b/, tier1: ["filipino_restaurant"], tier2: ["barbecue_restaurant"], label: "chicken inasal", nameKeywords: ["inasal", "chicken inasal", "mang inasal", "bacolod chicken house", "bacolod"], strict: true, strictPrimaryTypes: ["filipino_restaurant"] },
+  // ── Southeast Asian ─────────────────────────────────────────────────────────
+  { pattern: /\blaksa\b/, tier1: ["malaysian_restaurant", "singaporean_restaurant"], tier2: [], label: "laksa", nameKeywords: ["laksa"] },
+  { pattern: /\bsatay\b/, tier1: ["malaysian_restaurant", "indonesian_restaurant"], tier2: ["thai_restaurant"], label: "satay", nameKeywords: ["satay", "sate"] },
+  { pattern: /\brendang\b/, tier1: ["indonesian_restaurant", "malaysian_restaurant"], tier2: [], label: "rendang", nameKeywords: ["rendang"] },
+  { pattern: /\bnasi\s*goreng\b/, tier1: ["indonesian_restaurant", "malaysian_restaurant"], tier2: [], label: "nasi goreng", nameKeywords: ["nasi goreng"] },
+  // ── Middle Eastern ──────────────────────────────────────────────────────────
+  { pattern: /\bshawarma\b/, tier1: ["middle_eastern_restaurant", "turkish_restaurant"], tier2: [], label: "shawarma", nameKeywords: ["shawarma", "halal guys", "the halal guys"] },
+  { pattern: /\bkebab\b|\bdoner\b/, tier1: ["middle_eastern_restaurant", "turkish_restaurant"], tier2: [], label: "kebab", nameKeywords: ["kebab", "doner", "shish kebab", "adana kebab", "kabob"] },
+  { pattern: /\bfalafel\b/, tier1: ["middle_eastern_restaurant", "greek_restaurant"], tier2: ["mediterranean_restaurant"], label: "falafel", nameKeywords: ["falafel", "falafel king", "maoz"] },
+  { pattern: /\bhummus\b/, tier1: ["middle_eastern_restaurant", "mediterranean_restaurant"], tier2: [], label: "hummus", nameKeywords: ["hummus", "hummus bar", "cava"] },
+  { pattern: /\bshakshuka\b/, tier1: ["middle_eastern_restaurant", "israeli_restaurant"], tier2: ["mediterranean_restaurant", "brunch_restaurant"], label: "shakshuka", nameKeywords: ["shakshuka"] },
+  { pattern: /\btabb?ouleh\b|\bbaba\s*ganoush\b|\bmezz?e\b/, tier1: ["middle_eastern_restaurant"], tier2: ["mediterranean_restaurant"], label: "mezze", nameKeywords: ["mezze", "meze", "tabbouleh", "baba ganoush"] },
+  { pattern: /\bbaklava\b/, tier1: ["middle_eastern_restaurant", "turkish_restaurant", "dessert_shop"], tier2: ["pastry_shop", "bakery"], label: "baklava", nameKeywords: ["baklava"] },
+  { pattern: /\bdolmas?\b|\bdolmadakia\b/, tier1: ["greek_restaurant", "middle_eastern_restaurant", "turkish_restaurant"], tier2: [], label: "dolma", nameKeywords: ["dolma", "dolmas", "dolmadakia"] },
+  { pattern: /\bpita\b/, tier1: ["middle_eastern_restaurant", "mediterranean_restaurant"], tier2: ["greek_restaurant"], label: "pita", nameKeywords: ["pita", "pita pit", "pita way", "pita inn"] },
+  { pattern: /\bmansaf\b|\bkabsa\b|\bmaqluba\b/, tier1: ["middle_eastern_restaurant"], tier2: [], label: "Levantine", nameKeywords: ["mansaf", "kabsa", "maqluba", "levantine"] },
+  // ── Turkish ─────────────────────────────────────────────────────────────────
+  { pattern: /\bgozleme\b|\bgözleme\b/, tier1: ["turkish_restaurant"], tier2: ["middle_eastern_restaurant"], label: "g\xF6zleme", nameKeywords: ["gozleme", "g\xF6zleme"] },
+  { pattern: /\blahmacun\b|\bpide\b/, tier1: ["turkish_restaurant"], tier2: ["middle_eastern_restaurant"], label: "Turkish flatbread", nameKeywords: ["lahmacun", "pide", "turkish pizza"] },
+  { pattern: /\bborek\b|\bbörek\b/, tier1: ["turkish_restaurant", "bakery"], tier2: [], label: "b\xF6rek", nameKeywords: ["borek", "b\xF6rek"] },
+  { pattern: /\bmeze\b|\bmezeler\b/, tier1: ["turkish_restaurant", "middle_eastern_restaurant"], tier2: ["mediterranean_restaurant"], label: "meze", nameKeywords: ["meze", "mezeler"] },
+  // ── European ────────────────────────────────────────────────────────────────
+  { pattern: /\bpasta\b|\blasagna\b|\brigatoni\b|\bpenne\b|\bspaghetti\b|\bcarbonara\b|\bcacio\s*e\s*pepe\b/, tier1: ["italian_restaurant"], tier2: ["mediterranean_restaurant"], label: "pasta", nameKeywords: ["pasta", "spaghetti", "lasagna", "carbonara", "olive garden", "spaghetti factory", "buca di beppo", "maggiano", "sbarro", "noodles & company"] },
+  { pattern: /\bneapolitan\s*pizza\b|\bnew\s*york\s*style\s*pizza\b|\bdeep\s*dish\b|\bpizza\b/, tier1: ["pizza_restaurant"], tier2: ["italian_restaurant"], label: "pizza", nameKeywords: ["pizza", "pizzeria", "blaze pizza", "mod pizza", "pizza hut", "domino", "papa john", "little caesars", "round table", "sbarro", "&pizza", "marco's"] },
+  { pattern: /\barancini\b|\bsupplì\b|\bsuppli\b/, tier1: ["italian_restaurant"], tier2: [], label: "arancini", nameKeywords: ["arancini", "suppli"] },
+  { pattern: /\baperitivo\b/, tier1: ["italian_restaurant", "wine_bar", "cafe"], tier2: ["bar"], label: "aperitivo", nameKeywords: ["aperitivo", "aperol", "spritz"] },
+  { pattern: /\bcroissant\b|\bpain\s*au\s*chocolat\b|\bchocolatines?\b|\bpastries\b/, tier1: ["french_restaurant", "bakery", "pastry_shop"], tier2: ["cafe"], label: "pastries", nameKeywords: ["croissant", "pain au chocolat", "pastries", "french bakery", "la madeleine", "paul"] },
+  { pattern: /\bschnitzel\b/, tier1: ["german_restaurant"], tier2: [], label: "schnitzel", nameKeywords: ["schnitzel", "wiener schnitzel"] },
+  { pattern: /\bpaella\b/, tier1: ["spanish_restaurant"], tier2: [], label: "paella", nameKeywords: ["paella"] },
+  { pattern: /\btapas\b/, tier1: ["spanish_restaurant", "tapas_bar"], tier2: [], label: "tapas", nameKeywords: ["tapas", "tapas bar", "jaleo"] },
+  { pattern: /\bfish\s*and\s*chips\b/, tier1: ["british_restaurant"], tier2: ["pub"], label: "fish and chips", nameKeywords: ["fish and chips", "chippy", "long john silver"] },
+  { pattern: /\bgyro(s)?\b/, tier1: ["greek_restaurant", "mediterranean_restaurant"], tier2: [], label: "gyros", nameKeywords: ["gyro", "gyros", "daphne's", "great greek"] },
+  // ── Italian beyond pasta ──
+  { pattern: /\brisotto\b/, tier1: ["italian_restaurant"], tier2: [], label: "risotto", nameKeywords: ["risotto"] },
+  { pattern: /\bravioli\b|\btortellini\b|\bgnocchi\b/, tier1: ["italian_restaurant"], tier2: ["mediterranean_restaurant"], label: "pasta", nameKeywords: ["ravioli", "tortellini", "gnocchi", "pasta"] },
+  { pattern: /\bbruschetta\b|\bantipasto\b|\bcaprese\b/, tier1: ["italian_restaurant"], tier2: [], label: "Italian appetizer", nameKeywords: ["bruschetta", "antipasto", "caprese"] },
+  { pattern: /\bpanini\b|\bfocaccia\b/, tier1: ["italian_restaurant", "sandwich_shop"], tier2: ["cafe", "deli"], label: "panini", nameKeywords: ["panini", "focaccia", "panera", "potbelly"] },
+  { pattern: /\bcalzone\b|\bstromboli\b/, tier1: ["pizza_restaurant", "italian_restaurant"], tier2: [], label: "calzone", nameKeywords: ["calzone", "stromboli"] },
+  { pattern: /\bchicken\s*parm(igiana|esan)?\b|\beggplant\s*parm/, tier1: ["italian_restaurant"], tier2: ["american_restaurant"], label: "chicken parm", nameKeywords: ["chicken parm", "chicken parmesan", "eggplant parm", "parmigiana"] },
+  { pattern: /\bmeatballs?\b/, tier1: ["italian_restaurant"], tier2: ["american_restaurant", "sandwich_shop"], label: "meatballs", nameKeywords: ["meatball", "meatballs", "the meatball shop"] },
+  { pattern: /\bminestrone\b/, tier1: ["italian_restaurant"], tier2: [], label: "minestrone", nameKeywords: ["minestrone"] },
+  { pattern: /\btiramisu\b|\bcannoli\b|\baffogato\b/, tier1: ["italian_restaurant", "dessert_shop"], tier2: ["cafe", "pastry_shop"], label: "Italian dessert", nameKeywords: ["tiramisu", "cannoli", "affogato", "gelato", "venchi"] },
+  // ── French beyond crepes ──
+  { pattern: /\bfrench\s*onion\s*soup\b/, tier1: ["french_restaurant"], tier2: ["european_restaurant"], label: "French onion soup", nameKeywords: ["french onion soup"] },
+  { pattern: /\bescargot\b|\bbouillabaisse\b|\bratatouille\b|\bcoq\s*au\s*vin\b/, tier1: ["french_restaurant"], tier2: [], label: "French classic", nameKeywords: ["escargot", "bouillabaisse", "ratatouille", "coq au vin"] },
+  { pattern: /\bboeuf\s*bourguignon\b|\bbeef\s*bourguignon\b/, tier1: ["french_restaurant"], tier2: [], label: "boeuf bourguignon", nameKeywords: ["boeuf bourguignon", "beef bourguignon"] },
+  { pattern: /\bcassoulet\b/, tier1: ["french_restaurant"], tier2: [], label: "cassoulet", nameKeywords: ["cassoulet"] },
+  { pattern: /\bquiche\b/, tier1: ["french_restaurant", "brunch_restaurant"], tier2: ["cafe", "bakery"], label: "quiche", nameKeywords: ["quiche", "la madeleine"] },
+  { pattern: /\bfoie\s*gras\b/, tier1: ["french_restaurant"], tier2: [], label: "foie gras", nameKeywords: ["foie gras"] },
+  // ── Spanish beyond paella/tapas ──
+  { pattern: /\bjamon\b|\bjamón\b|\bchorizo\b/, tier1: ["spanish_restaurant"], tier2: [], label: "Spanish cured meat", nameKeywords: ["jamon", "jam\xF3n", "chorizo", "iberico", "jamoner\xEDa"] },
+  { pattern: /\bgazpacho\b/, tier1: ["spanish_restaurant"], tier2: [], label: "gazpacho", nameKeywords: ["gazpacho"] },
+  { pattern: /\bpatatas\s*bravas\b|\bpintxos?\b|\btortilla\s*espanola\b/, tier1: ["spanish_restaurant", "tapas_bar"], tier2: [], label: "Spanish tapas", nameKeywords: ["patatas bravas", "pintxos", "tortilla espanola", "tapas bar"] },
+  { pattern: /\bvermut\b|\bvermouth\s*hour\b/, tier1: ["spanish_restaurant", "wine_bar", "bar"], tier2: ["tapas_bar"], label: "vermut", nameKeywords: ["vermut", "vermouth"] },
+  // ── German / Austrian / Swiss ──
+  { pattern: /\bbratwurst\b|\bsausages?\b|\bwurst\b/, tier1: ["german_restaurant"], tier2: ["american_restaurant"], label: "sausage", nameKeywords: ["bratwurst", "sausage", "wurst", "sausage haus"] },
+  { pattern: /\bpretzels?\b|\bbrezel\b/, tier1: ["german_restaurant", "bakery"], tier2: [], label: "pretzel", nameKeywords: ["pretzel", "brezel", "auntie anne", "wetzel", "philly pretzel"] },
+  { pattern: /\bsauerkraut\b|\bspaetzle\b/, tier1: ["german_restaurant"], tier2: [], label: "German classic", nameKeywords: ["sauerkraut", "spaetzle"] },
+  { pattern: /\bfondue\b|\braclette\b/, tier1: ["swiss_restaurant", "french_restaurant"], tier2: ["european_restaurant"], label: "fondue", nameKeywords: ["fondue", "raclette", "melting pot"] },
+  // ── British / Irish ──
+  { pattern: /\bshepherds?\s*pie\b/, tier1: ["british_restaurant", "irish_restaurant"], tier2: ["pub"], label: "shepherd's pie", nameKeywords: ["shepherd's pie", "shepherds pie"] },
+  { pattern: /\bbangers?\s*and\s*mash\b/, tier1: ["british_restaurant", "irish_restaurant"], tier2: ["pub"], label: "bangers and mash", nameKeywords: ["bangers and mash"] },
+  { pattern: /\bfull\s*english\b|\benglish\s*breakfast\b/, tier1: ["british_restaurant"], tier2: ["breakfast_restaurant", "brunch_restaurant"], label: "English breakfast", nameKeywords: ["full english", "english breakfast"] },
+  { pattern: /\bmeat\s*pie\b|\bmince\s*pie\b|\bsteak\s*and\s*kidney\s*pie\b/, tier1: ["british_restaurant", "australian_restaurant"], tier2: ["pub", "bakery"], label: "meat pie", nameKeywords: ["meat pie", "mince pie", "steak and kidney", "pie hole", "pie shop"] },
+  { pattern: /\byorkshire\s*pudding\b/, tier1: ["british_restaurant"], tier2: [], label: "Yorkshire pudding", nameKeywords: ["yorkshire pudding"] },
+  // ── Eastern European ──
+  { pattern: /\bpierogi(es)?\b|\bperogi(es)?\b/, tier1: ["polish_restaurant", "ukrainian_restaurant"], tier2: ["european_restaurant"], label: "pierogi", nameKeywords: ["pierogi", "pierogies", "perogi", "perogies"] },
+  { pattern: /\bborscht\b/, tier1: ["russian_restaurant", "ukrainian_restaurant", "polish_restaurant"], tier2: ["european_restaurant"], label: "borscht", nameKeywords: ["borscht"] },
+  { pattern: /\bgoulash\b/, tier1: ["hungarian_restaurant", "german_restaurant"], tier2: ["european_restaurant"], label: "goulash", nameKeywords: ["goulash"] },
+  { pattern: /\bstroganoff\b|\bbeef\s*stroganoff\b/, tier1: ["russian_restaurant"], tier2: ["european_restaurant"], label: "stroganoff", nameKeywords: ["stroganoff", "beef stroganoff"] },
+  { pattern: /\bblini\b|\bpelmeni\b/, tier1: ["russian_restaurant"], tier2: [], label: "Russian classic", nameKeywords: ["blini", "pelmeni"] },
+  // ── South American ──────────────────────────────────────────────────────────
+  { pattern: /\bceviche\b/, tier1: ["peruvian_restaurant", "latin_american_restaurant"], tier2: ["seafood_restaurant"], label: "ceviche", nameKeywords: ["ceviche", "cebicheria", "sebastian"] },
+  { pattern: /\bempanadas?\b/, tier1: ["latin_american_restaurant"], tier2: ["mexican_restaurant"], label: "empanadas", nameKeywords: ["empanada", "empanadas"] },
+  { pattern: /\barepas?\b/, tier1: ["venezuelan_restaurant", "latin_american_restaurant"], tier2: [], label: "arepas", nameKeywords: ["arepa", "arepas"] },
+  { pattern: /\bchurrasco\b|\bbrazilian\s*bbq\b|\bbrazilian\s*steak\b/, tier1: ["brazilian_restaurant", "steak_house"], tier2: [], label: "churrasco", nameKeywords: ["churrasco", "brazilian bbq", "brazilian steak", "fogo de chao", "texas de brazil", "rodizio"] },
+  { pattern: /\bfeijoada\b|\bpicanha\b|\bmoqueca\b/, tier1: ["brazilian_restaurant"], tier2: [], label: "Brazilian classic", nameKeywords: ["feijoada", "picanha", "moqueca"] },
+  { pattern: /\bpao\s*de\s*queijo\b|\bp[aã]o\s*de\s*queijo\b|\bcoxinha\b|\bpastel\b/, tier1: ["brazilian_restaurant"], tier2: ["bakery"], label: "Brazilian snack", nameKeywords: ["pao de queijo", "p\xE3o de queijo", "coxinha", "pastel"] },
+  { pattern: /\bcaipirinha\b/, tier1: ["brazilian_restaurant", "bar"], tier2: [], label: "caipirinha", nameKeywords: ["caipirinha"] },
+  // ── African ─────────────────────────────────────────────────────────────────
+  { pattern: /\binjera\b|\bethiopian\b/, tier1: ["ethiopian_restaurant"], tier2: ["african_restaurant"], label: "Ethiopian", nameKeywords: ["injera", "ethiopian", "meskerem", "messob", "queen sheba"] },
+  { pattern: /\bjollof\s*rice\b/, tier1: ["nigerian_restaurant", "west_african_restaurant"], tier2: ["african_restaurant"], label: "jollof rice", nameKeywords: ["jollof", "jollof rice"] },
+  { pattern: /\btagine\b|\bmoroccan\b/, tier1: ["moroccan_restaurant"], tier2: ["north_african_restaurant"], label: "tagine", nameKeywords: ["tagine", "moroccan", "tagine house"] },
+  // ── American ────────────────────────────────────────────────────────────────
+  { pattern: /\btaco(s)?\b|\bburrito(s)?\b|\bquesadilla\b/, tier1: ["mexican_restaurant"], tier2: ["latin_american_restaurant"], label: "tacos", nameKeywords: ["taco", "tacos", "burrito", "quesadilla", "taqueria", "rubio's", "baja fresh", "chipotle", "qdoba", "el pollo loco"] },
+  { pattern: /\benchilada(s)?\b|\btamale(s)?\b|\bchilaquiles\b|\btostada(s)?\b|\bchimichanga\b/, tier1: ["mexican_restaurant"], tier2: ["latin_american_restaurant"], label: "Mexican", nameKeywords: ["enchilada", "tamale", "chilaquiles", "tostada", "chimichanga"] },
+  { pattern: /\bmole\b|\bpozole\b|\bbirria\b/, tier1: ["mexican_restaurant"], tier2: [], label: "Mexican classic", nameKeywords: ["mole", "pozole", "birria", "birrieria", "birria-landia"] },
+  { pattern: /\bcarnitas\b|\bal\s*pastor\b|\bbarbacoa\b/, tier1: ["mexican_restaurant", "taqueria"], tier2: [], label: "Mexican meat", nameKeywords: ["carnitas", "al pastor", "barbacoa", "taqueria", "leo's tacos", "tacos el gordo", "guisados"] },
+  { pattern: /\bfajita(s)?\b/, tier1: ["mexican_restaurant"], tier2: ["tex_mex_restaurant"], label: "fajitas", nameKeywords: ["fajita", "fajitas", "on the border"] },
+  { pattern: /\belote(s)?\b|\besquite(s)?\b/, tier1: ["mexican_restaurant"], tier2: [], label: "elote", nameKeywords: ["elote", "elotes", "esquite", "esquites"] },
+  { pattern: /\bhorchata\b|\baguas?\s*frescas?\b/, tier1: ["mexican_restaurant"], tier2: [], label: "horchata", nameKeywords: ["horchata", "aguas frescas", "aguas"] },
+  { pattern: /\bchurros?\b/, tier1: ["mexican_restaurant", "spanish_restaurant", "dessert_shop"], tier2: [], label: "churros", nameKeywords: ["churro", "churros", "churreria"] },
+  { pattern: /\btres\s*leches\b|\bflan\b/, tier1: ["mexican_restaurant", "latin_american_restaurant", "dessert_shop"], tier2: [], label: "Latin dessert", nameKeywords: ["tres leches", "flan"] },
+  { pattern: /\bburger(s)?\b|\bwhopper\b/, tier1: ["hamburger_restaurant"], tier2: ["american_restaurant", "fast_food_restaurant"], label: "burgers", nameKeywords: ["burger", "burgers", "whopper", "in-n-out", "five guys", "shake shack", "smashburger", "habit", "fatburger", "wendy", "jack in the box", "carl's jr", "hardee's", "culver's", "whataburger", "mcdonald", "burger king", "sonic", "white castle", "a&w", "red robin", "fuddruckers", "burgerfi", "steak n shake", "steak 'n shake", "krystal"], strict: true, strictPrimaryTypes: ["hamburger_restaurant", "american_restaurant"] },
+  { pattern: /\bsteak\b/, tier1: ["steak_house"], tier2: ["american_restaurant", "brazilian_restaurant"], label: "steak", nameKeywords: ["steak", "steakhouse", "steak house", "outback", "ruth's chris", "morton", "fleming", "black angus", "sizzler", "longhorn", "texas roadhouse", "lawry's", "peter luger", "capital grille", "smith & wollensky", "del frisco", "st. elmo", "palm restaurant", "lone star", "keens steakhouse"], strict: true, strictPrimaryTypes: ["steak_house", "american_restaurant", "brazilian_restaurant", "barbecue_restaurant"] },
+  { pattern: /\bbbq\b|\bbarbeque\b|\bbarbecue\b/, tier1: ["barbecue_restaurant"], tier2: ["american_restaurant"], label: "BBQ", nameKeywords: ["bbq", "barbecue", "barbeque", "smokehouse", "dickey", "sonny", "famous dave", "rudy's", "phil's bbq", "salt lick"] },
+  { pattern: /\bribs?\b|\bbrisket\b|\bpulled\s*pork\b/, tier1: ["barbecue_restaurant"], tier2: ["american_restaurant", "southern_restaurant"], label: "ribs", nameKeywords: ["rib", "ribs", "brisket", "pulled pork", "smokehouse", "tony roma", "baby back", "lucille's"] },
+  { pattern: /\bwings\b|\bchicken\s*wings\b|\bbuffalo\s*wings\b/, tier1: ["chicken_restaurant"], tier2: ["pizza_restaurant", "sports_bar", "bar"], label: "wings", nameKeywords: ["wing", "wings", "buffalo wing", "hooters", "wingstop", "buffalo wild wings", "wing zone"] },
+  { pattern: /\bfried\s*chicken\b|\bchicken\b/, tier1: ["chicken_restaurant"], tier2: ["fast_food_restaurant", "american_restaurant"], label: "fried chicken", nameKeywords: ["fried chicken", "chick-fil-a", "chick fil a", "kfc", "kentucky fried", "popeyes", "raising cane", "church's chicken", "el pollo loco", "dave's hot chicken", "jollibee"] },
+  { pattern: /\bseafood\b|\bshellfish\b|\boysters?\b|\bclams?\b|\blobster\s*roll\b|\bclam\s*chowder\b|\bfish\s*and\s*chips\b/, tier1: ["seafood_restaurant"], tier2: ["american_restaurant"], label: "seafood", nameKeywords: ["seafood", "oysters", "clam chowder", "lobster roll", "red lobster", "joe's crab", "bonefish", "legal sea foods", "crab shack"] },
+  { pattern: /\bgumbo\b|\bpo[\s-]*boy\b/, tier1: ["cajun_restaurant", "southern_restaurant"], tier2: ["american_restaurant"], label: "Cajun", nameKeywords: ["gumbo", "po boy", "po-boy", "popeyes", "cajun"] },
+  { pattern: /\bjambalaya\b|\bcrawfish\b|\bcrayfish\b/, tier1: ["cajun_restaurant", "southern_restaurant"], tier2: ["seafood_restaurant"], label: "Cajun", nameKeywords: ["jambalaya", "crawfish", "crayfish", "cajun"] },
+  { pattern: /\bshrimp\s*and\s*grits\b|\bbiscuits?\s*and\s*gravy\b|\bchicken\s*and\s*waffles\b/, tier1: ["southern_restaurant", "soul_food_restaurant"], tier2: ["american_restaurant", "breakfast_restaurant"], label: "Southern", nameKeywords: ["shrimp and grits", "biscuits and gravy", "chicken and waffles", "cracker barrel", "roscoe's", "soul food"] },
+  { pattern: /\bcheesesteak\b|\bphilly\s*cheesesteak\b/, tier1: ["sandwich_shop", "american_restaurant"], tier2: [], label: "cheesesteak", nameKeywords: ["cheesesteak", "philly cheesesteak", "philly", "pat's", "geno's", "jim's steaks"] },
+  // Breakfast sandwich — MUST precede the generic "sandwich" and "breakfast"
+  // patterns below (first-match wins), else "breakfast" hijacks it into a strict
+  // breakfast_restaurant search that filters out sandwich shops/delis (the
+  // reported bug: "breakfast sandwich" → bakeries). NOT strict, so sandwich
+  // shops + delis + diners survive tiering.
+  { pattern: /\bbreakfast\s*sandwich(es)?\b|\begg\s*sandwich(es)?\b|\bbreakfast\s*(bagel|wrap|biscuit)\b|\b(bacon|sausage)\s*egg\s*(and\s*)?cheese\b/, tier1: ["sandwich_shop", "american_restaurant", "breakfast_restaurant"], tier2: ["deli", "diner", "cafe", "bagel_shop", "fast_food_restaurant"], label: "breakfast sandwich", nameKeywords: ["breakfast sandwich", "egg sandwich", "breakfast bagel", "breakfast wrap", "breakfast biscuit", "egg and cheese", "bacon egg", "sausage egg", "mcmuffin"], mealTime: "breakfast" },
+  { pattern: /\breuben\b|\bclub\s*sandwich\b|\bblt\b/, tier1: ["sandwich_shop", "deli"], tier2: ["american_restaurant"], label: "deli sandwich", nameKeywords: ["reuben", "club sandwich", "blt", "deli", "katz's", "langer's", "canter's"] },
+  { pattern: /\bsandwich(es)?\b|\bsub(marine|s)?\b|\bhoagie\b|\bgrinder\b/, tier1: ["sandwich_shop", "deli"], tier2: ["cafe", "american_restaurant"], label: "sandwich", nameKeywords: ["sandwich", "sub", "hoagie", "grinder", "subway", "jimmy john", "jersey mike", "firehouse", "potbelly", "quiznos", "which wich", "blimpie"] },
+  { pattern: /\bgrilled\s*cheese\b/, tier1: ["sandwich_shop", "american_restaurant"], tier2: ["cafe", "diner"], label: "grilled cheese", nameKeywords: ["grilled cheese", "melt", "tom and chee"] },
+  { pattern: /\bhot\s*dog\b|\bcorn\s*dog\b|\bfrankfurter\b/, tier1: ["american_restaurant", "fast_food_restaurant"], tier2: [], label: "hot dog", nameKeywords: ["hot dog", "corn dog", "frankfurter", "wienerschnitzel", "pink's", "nathan's", "portillo", "sonic", "five guys"] },
+  { pattern: /\bnachos\b/, tier1: ["mexican_restaurant"], tier2: ["american_restaurant", "sports_bar"], label: "nachos", nameKeywords: ["nacho", "nachos"] },
+  { pattern: /\bchili\b/, tier1: ["american_restaurant"], tier2: ["mexican_restaurant"], label: "chili", nameKeywords: ["chili", "chili's", "wendy's chili"] },
+  { pattern: /\bmeatloaf\b/, tier1: ["american_restaurant", "diner"], tier2: ["southern_restaurant"], label: "meatloaf", nameKeywords: ["meatloaf"] },
+  { pattern: /\bchicken\s*tenders?\b|\bchicken\s*strips?\b|\bnuggets?\b|\bsliders?\b/, tier1: ["chicken_restaurant", "american_restaurant", "fast_food_restaurant"], tier2: [], label: "finger food", nameKeywords: ["chicken tender", "chicken strip", "nugget", "slider", "raising cane", "tender shack", "white castle", "krystal"] },
+  { pattern: /\bonion\s*rings\b|\bfries?\b|\bfrench\s*fries\b|\bpoutine\b/, tier1: ["american_restaurant", "fast_food_restaurant"], tier2: ["canadian_restaurant"], label: "fries", nameKeywords: ["fries", "french fries", "poutine", "onion ring"] },
+  { pattern: /\bchicken\s*pot\s*pie\b/, tier1: ["american_restaurant", "southern_restaurant"], tier2: ["diner"], label: "chicken pot pie", nameKeywords: ["chicken pot pie", "pot pie", "marie callender"] },
+  { pattern: /\bbuffalo\s*chicken\b/, tier1: ["chicken_restaurant", "american_restaurant"], tier2: ["sports_bar"], label: "buffalo", nameKeywords: ["buffalo chicken", "buffalo wild wings"] },
+  { pattern: /\bpancakes?\b|\bwaffles?\b/, tier1: ["breakfast_restaurant"], tier2: ["american_restaurant", "diner"], label: "pancakes", nameKeywords: ["pancake", "pancakes", "waffle", "flapjack", "griddle", "pancake house", "ihop", "waffle house", "stack pancake"], mealTime: "breakfast", strict: true, strictPrimaryTypes: ["breakfast_restaurant", "brunch_restaurant", "diner", "american_restaurant"] },
+  { pattern: /\bbagels?\b/, tier1: ["bagel_shop"], tier2: ["deli", "bakery"], label: "bagels", nameKeywords: ["bagel", "bagels", "einstein", "noah", "manhattan bagel", "bruegger"], strict: true, strictPrimaryTypes: ["bagel_shop"] },
+  { pattern: /\bdonuts?\b|\bdoughnuts?\b/, tier1: ["donut_shop"], tier2: ["bakery", "dessert_shop", "pastry_shop"], label: "donuts", nameKeywords: ["donut", "donuts", "doughnut", "dunkin", "krispy kreme", "tim hortons", "randy's", "sidecar", "blue star", "voodoo", "winchell", "yum yum"], strict: true, strictPrimaryTypes: ["donut_shop"] },
+  { pattern: /\bmac\s*and\s*cheese\b|\bmac\s*n\s*cheese\b/, tier1: ["american_restaurant"], tier2: ["soul_food_restaurant"], label: "mac and cheese", nameKeywords: ["mac and cheese", "mac n cheese", "noodles & company"] },
+  { pattern: /\bpoke\b|\bpoke\s*bowl\b/, tier1: ["hawaiian_restaurant"], tier2: ["japanese_restaurant"], label: "poke", nameKeywords: ["poke", "poke bowl", "poki", "sweetfin", "pokeworks"] },
+  // ── Brunch / Breakfast ─────────────────────────────────────────────────────
+  { pattern: /\bbrunch\b/, tier1: ["brunch_restaurant"], tier2: ["breakfast_restaurant", "cafe"], label: "brunch", nameKeywords: ["brunch", "brunch club"], mealTime: "brunch", strict: true, strictPrimaryTypes: ["brunch_restaurant", "breakfast_restaurant", "cafe", "diner"] },
+  { pattern: /\bbreakfast\b/, tier1: ["breakfast_restaurant"], tier2: ["diner", "cafe"], label: "breakfast", nameKeywords: ["breakfast", "breakfast club", "breakfast republic", "first watch", "snooze"], mealTime: "breakfast", strict: true, strictPrimaryTypes: ["breakfast_restaurant", "brunch_restaurant", "diner"] },
+  { pattern: /\beggs\s*benedict\b|\bbenedict\b/, tier1: ["brunch_restaurant", "breakfast_restaurant"], tier2: ["cafe", "diner"], label: "eggs benedict", nameKeywords: ["eggs benedict", "benedict", "egg slut", "eggslut"], mealTime: "brunch", strict: true, strictPrimaryTypes: ["brunch_restaurant", "breakfast_restaurant", "cafe", "diner"] },
+  { pattern: /\bomelet(te)?\b|\bfrittata\b/, tier1: ["breakfast_restaurant", "brunch_restaurant"], tier2: ["diner", "cafe"], label: "omelette", nameKeywords: ["omelet", "omelette", "frittata"], mealTime: "breakfast", strict: true, strictPrimaryTypes: ["breakfast_restaurant", "brunch_restaurant", "diner", "cafe"] },
+  { pattern: /\bavocado\s*toast\b|\bacai\s*bowl\b|\baçaí\s*bowl\b/, tier1: ["brunch_restaurant", "cafe"], tier2: ["juice_bar", "vegan_restaurant"], label: "brunch bowl", nameKeywords: ["avocado toast", "acai bowl", "a\xE7a\xED bowl", "vitality bowls"], mealTime: "brunch", strict: true, strictPrimaryTypes: ["brunch_restaurant", "cafe", "juice_shop", "vegan_restaurant"] },
+  { pattern: /\bfrench\s*toast\b/, tier1: ["breakfast_restaurant", "brunch_restaurant"], tier2: ["cafe", "diner"], label: "French toast", nameKeywords: ["french toast"], mealTime: "breakfast", strict: true, strictPrimaryTypes: ["breakfast_restaurant", "brunch_restaurant", "cafe", "diner"] },
+  { pattern: /\bbreakfast\s*burrito\b/, tier1: ["mexican_restaurant", "breakfast_restaurant"], tier2: [], label: "breakfast burrito", nameKeywords: ["breakfast burrito"], mealTime: "breakfast", strict: true, strictPrimaryTypes: ["mexican_restaurant", "breakfast_restaurant"] },
+  // ── Australian ────────────────────────────────────────────────────────────
+  { pattern: /\bpavlova\b|\blamington\b/, tier1: ["australian_restaurant", "dessert_shop"], tier2: ["bakery"], label: "Australian dessert", nameKeywords: ["pavlova", "lamington"] },
+  { pattern: /\bchicken\s*parm(igiana)?\b/, tier1: ["italian_restaurant", "australian_restaurant"], tier2: ["pub", "american_restaurant"], label: "chicken parmigiana", nameKeywords: ["chicken parm", "chicken parmigiana", "parmi"] },
+  // ── Drinks & Cafe ──────────────────────────────────────────────────────────
+  { pattern: /\bmatcha\b/, tier1: ["japanese_restaurant", "tea_house", "cafe"], tier2: ["coffee_shop", "dessert_shop"], label: "matcha", nameKeywords: ["matcha", "matcha bar", "matcha cafe"] },
+  { pattern: /\btea\b|\bteahouse\b/, tier1: ["tea_house", "cafe"], tier2: ["bubble_tea_shop"], label: "tea", nameKeywords: ["tea", "teahouse", "tea house", "teavana", "adagio", "david's tea"] },
+  { pattern: /\bjuice\b|\bfresh\s*juice\b|\bjuice\s*bar\b|\bsmoothie(s)?\b/, tier1: ["juice_bar"], tier2: ["cafe", "vegan_restaurant"], label: "juice", nameKeywords: ["juice", "smoothie", "jamba", "jamba juice", "tropical smoothie", "smoothie king", "juice it up", "nekter"] },
+  { pattern: /\bmilkshake(s)?\b|\bshakes?\b/, tier1: ["ice_cream_shop", "diner", "american_restaurant"], tier2: ["dessert_shop"], label: "milkshake", nameKeywords: ["milkshake", "shake", "shake shack", "steak n shake"] },
+  { pattern: /\bcocktails?\b|\bmartini\b|\bmojito\b/, tier1: ["cocktail_bar", "bar"], tier2: ["lounge", "restaurant"], label: "cocktails", nameKeywords: ["cocktail", "martini", "mojito", "cocktail bar", "speakeasy"] },
+  { pattern: /\bwine\b|\bwinery\b|\bwine\s*bar\b/, tier1: ["wine_bar", "winery"], tier2: ["bar", "restaurant"], label: "wine", nameKeywords: ["wine", "winery", "wine bar"] },
+  { pattern: /\bbeer\b|\bbrewery\b|\bbrewpub\b|\bcraft\s*beer\b/, tier1: ["brewery", "brewpub"], tier2: ["bar", "pub"], label: "beer", nameKeywords: ["beer", "brewery", "brewpub", "craft beer", "taproom", "stone brewing"] },
+  { pattern: /\bwhiskey\b|\bwhisky\b|\bscotch\b|\bbourbon\b/, tier1: ["whiskey_bar", "bar"], tier2: ["lounge"], label: "whiskey", nameKeywords: ["whiskey", "whisky", "scotch", "bourbon", "whiskey bar"] },
+  { pattern: /\bsake\b/, tier1: ["japanese_restaurant", "bar"], tier2: [], label: "sake", nameKeywords: ["sake", "sake bar"] },
+  // ── Generic categories ─────────────────────────────────────────────────────
+  { pattern: /\bsalad(s)?\b/, tier1: ["salad_bar", "vegan_restaurant", "vegetarian_restaurant"], tier2: ["cafe", "restaurant"], label: "salad", nameKeywords: ["salad", "salad bar", "sweetgreen", "chop't", "tossed", "tender greens"] },
+  { pattern: /\bsoup(s)?\b/, tier1: ["soup_restaurant"], tier2: ["cafe", "asian_restaurant"], label: "soup", nameKeywords: ["soup", "souplantation", "soup plantation"] },
+  { pattern: /\bnoodles?\b/, tier1: ["noodle_house", "ramen_restaurant"], tier2: ["chinese_restaurant", "japanese_restaurant", "vietnamese_restaurant", "thai_restaurant"], label: "noodles", nameKeywords: ["noodle", "noodles", "noodle house", "noodle bar", "noodles & company"] },
+  { pattern: /\brice\s*bowl(s)?\b|\bpoke\s*bowl(s)?\b|\bgrain\s*bowl(s)?\b/, tier1: ["bowl_restaurant", "asian_restaurant"], tier2: ["vegan_restaurant", "vegetarian_restaurant"], label: "bowl", nameKeywords: ["bowl", "rice bowl", "grain bowl", "poke bowl"] },
+  { pattern: /\bdessert(s)?\b/, tier1: ["dessert_shop", "ice_cream_shop", "bakery"], tier2: ["pastry_shop", "cafe"], label: "dessert", nameKeywords: ["dessert", "desserts", "sweets", "sweet shop"], strict: true, strictPrimaryTypes: ["dessert_shop", "ice_cream_shop", "bakery", "cake_shop", "pastry_shop", "chocolate_shop"] },
+  { pattern: /\bvegan\b/, tier1: ["vegan_restaurant"], tier2: ["vegetarian_restaurant"], label: "vegan", nameKeywords: ["vegan", "plant based", "vegan kitchen", "plant power", "veggie grill"] },
+  { pattern: /\bvegetarian\b/, tier1: ["vegetarian_restaurant"], tier2: ["vegan_restaurant", "indian_restaurant"], label: "vegetarian", nameKeywords: ["vegetarian", "veggie", "plant based"] },
+  { pattern: /\bgluten[\s-]*free\b/, tier1: ["gluten_free_restaurant"], tier2: ["vegan_restaurant"], label: "gluten free", nameKeywords: ["gluten free", "gf bakery", "gf kitchen"] },
+  { pattern: /\bhalal\b/, tier1: ["halal_restaurant"], tier2: ["middle_eastern_restaurant", "indian_restaurant"], label: "halal", nameKeywords: ["halal", "halal guys", "halal cart", "the halal guys"] },
+  { pattern: /\bkosher\b/, tier1: ["kosher_restaurant"], tier2: ["israeli_restaurant"], label: "kosher", nameKeywords: ["kosher", "kosher kitchen", "kosher deli"] },
+  { pattern: /\bbuffet\b|\ball\s*you\s*can\s*eat\b/, tier1: ["buffet_restaurant"], tier2: ["restaurant"], label: "buffet", nameKeywords: ["buffet", "all you can eat", "golden corral", "hometown buffet", "sizzler"] },
+  { pattern: /\bdiner\b/, tier1: ["diner"], tier2: ["american_restaurant", "breakfast_restaurant"], label: "diner", nameKeywords: ["diner"] },
+  { pattern: /\bpub\b|\bgastropub\b/, tier1: ["pub", "gastropub"], tier2: ["british_restaurant", "bar"], label: "pub", nameKeywords: ["pub", "gastropub", "tavern"] },
+  { pattern: /\bfast\s*food\b/, tier1: ["fast_food_restaurant"], tier2: [], label: "fast food", nameKeywords: ["fast food"] },
+  // snacks: STRICT. Removed `cafe` from tier2 (coffee shops aren't snack
+  // places). Allowlist: snack_bar, convenience_store, fast_food_restaurant,
+  // food_court. Drops pizza restaurants / sit-down restaurants / coffee
+  // shops / sandwich shops that previously leaked in via Tier 4 review-text.
+  { pattern: /\bsnacks?\b|\bfinger\s*food\b/, tier1: ["snack_bar", "convenience_store"], tier2: ["fast_food_restaurant", "food_court"], label: "snacks", nameKeywords: ["snacks", "finger food"], strict: true, strictPrimaryTypes: ["snack_bar", "convenience_store", "fast_food_restaurant", "food_court"] },
+  // comfort food: STRICT. Allowlist American comfort categories only.
+  // Drops Asian/Mexican/Italian sit-down restaurants that previously
+  // leaked in via Tier 4 review-text mention of "comfort food".
+  { pattern: /\bcomfort\s*food\b|\bhome\s*cooking\b/, tier1: ["diner", "american_restaurant"], tier2: ["southern_restaurant", "soul_food_restaurant", "bbq_restaurant"], label: "comfort food", nameKeywords: ["comfort food", "home cooking", "soul food"], strict: true, strictPrimaryTypes: ["diner", "american_restaurant", "southern_restaurant", "soul_food_restaurant", "bbq_restaurant"] },
+  // ── Bakery & Desserts (dishes whose "specialty" is a shop type, not a cuisine) ─────────
+  { pattern: /\bcakes?\b|\bcupcakes?\b/, tier1: ["cake_shop", "bakery"], tier2: ["dessert_shop", "pastry_shop", "cafe"], label: "cake", nameKeywords: ["cake", "cakes", "cupcake", "sprinkles", "crumbs", "magnolia bakery"] },
+  { pattern: /\bbread\b|\bsourdough\b|\bbaguette\b/, tier1: ["bakery"], tier2: ["cafe", "sandwich_shop"], label: "bread", nameKeywords: ["bread", "sourdough", "baguette", "breadworks", "le pain quotidien", "la brea bakery"] },
+  { pattern: /\bpastr(y|ies)\b|\bdanish\b|\beclair\b|\bmacarons?\b/, tier1: ["pastry_shop", "bakery"], tier2: ["french_restaurant", "cafe", "dessert_shop"], label: "pastries", nameKeywords: ["pastry", "pastries", "danish", "eclair", "macaron", "laduree", "pierre herme", "dominique ansel"] },
+  { pattern: /\bpies?\b|\bcobblers?\b/, tier1: ["bakery", "dessert_shop"], tier2: ["american_restaurant", "diner"], label: "pie", nameKeywords: ["pie", "pies", "cobbler", "marie callender", "house of pies", "pie hole", "pie shop"] },
+  { pattern: /\bcookies?\b/, tier1: ["bakery", "dessert_shop"], tier2: ["cafe"], label: "cookies", nameKeywords: ["cookie", "cookies", "crumbl", "insomnia", "mrs. fields", "dirty dough", "levain", "tate's"] },
+  { pattern: /\bice\s*cream\b|\bgelato\b|\bsorbet\b/, tier1: ["ice_cream_shop", "gelato_shop"], tier2: ["dessert_shop", "cafe"], label: "ice cream", nameKeywords: ["ice cream", "gelato", "sorbet", "baskin robbins", "ben & jerry", "cold stone", "salt & straw", "jeni's", "h\xE4agen-dazs", "dairy queen", "mcconnell", "rite aid", "handel's"] },
+  { pattern: /\bcrepes?\b/, tier1: ["creperie", "french_restaurant"], tier2: ["dessert_shop", "cafe"], label: "crepes", nameKeywords: ["crepe", "crepes", "creperie"] },
+  { pattern: /\bboba\b|\bbubble\s*tea\b/, tier1: ["bubble_tea_shop", "tea_house"], tier2: ["cafe"], label: "boba", nameKeywords: ["boba", "bubble tea", "tpumps", "7 leaves", "sharetea", "kung fu tea", "85c", "happy lemon", "tiger sugar", "yi fang", "coco fresh"] },
+  // coffee: STRICT. Coffee/espresso/latte restricted to actual coffee
+  // venues. Drops restaurants that happen to mention coffee in reviews.
+  { pattern: /\bcoffee\b|\bespresso\b|\blatte\b/, tier1: ["coffee_shop", "cafe"], tier2: ["bakery", "bakery_cafe", "tea_house"], label: "coffee", nameKeywords: ["coffee", "espresso", "latte", "starbucks", "peet", "blue bottle", "dutch bros", "dunkin", "la colombe", "intelligentsia", "philz", "stumptown", "caribou", "tim hortons", "coffee bean", "verve"], strict: true, strictPrimaryTypes: ["coffee_shop", "cafe", "bakery", "bakery_cafe", "tea_house"] },
+  // cheesecake: STRICT. Drops random restaurants that mention cheesecake
+  // in reviews (sushi places with "cheesecake roll", etc.). Cheesecake
+  // Factory is american_restaurant — kept via allowlist + nameKeyword.
+  { pattern: /\bcheesecake\b/, tier1: ["dessert_shop", "bakery", "cake_shop"], tier2: ["cafe", "american_restaurant", "bakery_cafe"], label: "cheesecake", nameKeywords: ["cheesecake", "cheesecake factory", "junior's"], strict: true, strictPrimaryTypes: ["dessert_shop", "bakery", "cake_shop", "bakery_cafe", "cafe", "american_restaurant"] },
+  // chocolate: STRICT. Real chocolate venues only. Drops bakeries that
+  // happen to have chocolate-cake reviews, etc.
+  { pattern: /\bchocolate\b|\bcacao\b|\btruffles?\b/, tier1: ["chocolatier", "dessert_shop", "candy_store"], tier2: ["bakery", "bakery_cafe"], label: "chocolate", nameKeywords: ["chocolate", "cacao", "truffle", "godiva", "lindt", "see's", "ghirardelli", "vosges", "jacques torres"], strict: true, strictPrimaryTypes: ["chocolatier", "dessert_shop", "candy_store", "bakery", "bakery_cafe"] },
+  { pattern: /\bbrownies?\b/, tier1: ["bakery", "dessert_shop"], tier2: ["cafe"], label: "brownies", nameKeywords: ["brownie", "brownies", "fairytale brownies"] },
+  // frozen yogurt: STRICT mode. Allowlist is real frozen-dessert types
+  // ONLY (ice_cream_shop / gelato_shop / frozen_yogurt_shop). dessert_shop
+  // is intentionally EXCLUDED because Google over-tags Asian bakeries,
+  // donut shops, candy stores, and Indian markets with that tag — including
+  // it leaked 85°C / JJ Bakery / Tous Les Jours / Donut King / Bhanu Indian
+  // into results. Tier 4 review-text fallback is also skipped (see
+  // `if (isStrict) return 5;` in computeTier above) so AI summaries or
+  // contextual reviews that mention "frozen yogurt" can't promote
+  // unrelated places.
+  // Named brands (Yogurtland, Menchie's, Pinkberry, etc.) still hit Tier 1
+  // via nameKeywords regardless of their Google primaryType.
+  // Tradeoff: small independent froyo shops Google tags as dessert_shop
+  // will not appear unless they match a brand keyword. Acceptable per
+  // 2026-05-26 design call.
+  { pattern: /\bfrozen\s*yogurt\b|\bfro[\s-]?yo\b/, tier1: ["ice_cream_shop", "gelato_shop", "frozen_yogurt_shop"], tier2: [], label: "frozen yogurt", nameKeywords: ["frozen yogurt", "froyo", "yogurtland", "menchie", "pinkberry", "tcby", "sweetfrog", "red mango", "16 handles", "tutti frutti"], strict: true, strictPrimaryTypes: ["ice_cream_shop", "gelato_shop", "frozen_yogurt_shop"] },
+  { pattern: /\bshaved\s*ice\b|\bsno[\s-]*cone\b|\bhalo[\s-]*halo\b/, tier1: ["ice_cream_shop", "dessert_shop"], tier2: [], label: "shaved ice", nameKeywords: ["shaved ice", "sno cone", "snow cone", "snowflake", "hawaiian shaved ice", "class 302"] },
+  { pattern: /\bcr[eè]me\s*br[uû]l[eé]e\b|\bsouffl[eé]\b/, tier1: ["french_restaurant", "dessert_shop"], tier2: ["bakery"], label: "French dessert", nameKeywords: ["creme brulee", "cr\xE8me br\xFBl\xE9e", "souffl\xE9", "souffle"] },
+  // candy: STRICT. Drops restaurants/cafes that mention candy in reviews.
+  { pattern: /\bcandy\b|\bsweets?\b|\bfudge\b/, tier1: ["candy_store", "dessert_shop"], tier2: ["bakery", "chocolatier"], label: "candy", nameKeywords: ["candy", "sweets", "fudge", "see's", "jelly belly", "dylan's candy", "sugarfina"], strict: true, strictPrimaryTypes: ["candy_store", "dessert_shop", "bakery", "chocolatier"] }
+];
+function levenshtein(a, b, maxDist) {
+  if (a === b) return 0;
+  const aLen = a.length, bLen = b.length;
+  if (Math.abs(aLen - bLen) > maxDist) return maxDist + 1;
+  if (aLen === 0) return bLen;
+  if (bLen === 0) return aLen;
+  let prev = new Array(bLen + 1);
+  let curr = new Array(bLen + 1);
+  for (let j = 0; j <= bLen; j++) prev[j] = j;
+  for (let i = 1; i <= aLen; i++) {
+    curr[0] = i;
+    let rowMin = i;
+    for (let j = 1; j <= bLen; j++) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+      if (curr[j] < rowMin) rowMin = curr[j];
+    }
+    if (rowMin > maxDist) return maxDist + 1;
+    const tmp = prev;
+    prev = curr;
+    curr = tmp;
+  }
+  return prev[bLen];
+}
+const FUZZY_VOCAB_SINGLE = /* @__PURE__ */ new Set([
+  // Cuisines
+  "italian",
+  "mexican",
+  "chinese",
+  "japanese",
+  "korean",
+  "thai",
+  "vietnamese",
+  "filipino",
+  "indian",
+  "french",
+  "greek",
+  "spanish",
+  "german",
+  "british",
+  "irish",
+  "mediterranean",
+  "european",
+  "asian",
+  "latin",
+  "latino",
+  "american",
+  "brazilian",
+  "peruvian",
+  "ethiopian",
+  "moroccan",
+  "turkish",
+  "israeli",
+  "polish",
+  "russian",
+  "hawaiian",
+  "cantonese",
+  "venezuelan",
+  "indonesian",
+  "malaysian",
+  "singaporean",
+  "swiss",
+  "hungarian",
+  "ukrainian",
+  "nigerian",
+  "australian",
+  "canadian",
+  // Venue types
+  "trattoria",
+  "osteria",
+  "bistro",
+  "bistrot",
+  "brasserie",
+  "taberna",
+  "bodega",
+  "izakaya",
+  "cantina",
+  "taqueria",
+  "creperie",
+  "gastropub",
+  "pub",
+  "diner",
+  "cafe",
+  "bakery",
+  "grill",
+  "restaurant",
+  "buffet",
+  "deli",
+  // Dietary
+  "vegan",
+  "vegetarian",
+  "halal",
+  "kosher",
+  // Dishes — Japanese
+  "sushi",
+  "ramen",
+  "udon",
+  "tempura",
+  "okonomiyaki",
+  "tonkatsu",
+  "yakitori",
+  "shabu",
+  "katsu",
+  "gyoza",
+  "takoyaki",
+  "yakiniku",
+  "yakisoba",
+  "soba",
+  "onigiri",
+  "omurice",
+  "bento",
+  "mochi",
+  "daifuku",
+  // Dishes — Chinese
+  "dumplings",
+  "potstickers",
+  "congee",
+  "jook",
+  "wonton",
+  "dimsum",
+  "bao",
+  "baozi",
+  "shumai",
+  // Dishes — Korean
+  "bibimbap",
+  "bulgogi",
+  "kbbq",
+  "jjigae",
+  "bossam",
+  "samgyeopsal",
+  "tteokbokki",
+  "kimchi",
+  "jajangmyeon",
+  "jjajangmyeon",
+  "mandu",
+  "japchae",
+  "gimbap",
+  "kimbap",
+  "soondubu",
+  "sundubu",
+  "bingsu",
+  "bingsoo",
+  "patbingsu",
+  // Dishes — Vietnamese / Thai
+  "pho",
+  "cuon",
+  "larb",
+  // Dishes — Indian
+  "curry",
+  "biryani",
+  "dosa",
+  "tandoori",
+  "samosa",
+  "vindaloo",
+  "korma",
+  "naan",
+  "chaat",
+  "vada",
+  "pakora",
+  "thali",
+  "chai",
+  "lassi",
+  "jalebi",
+  "rasmalai",
+  "kulfi",
+  "saag",
+  "paneer",
+  // Dishes — Filipino
+  "adobo",
+  "sinigang",
+  "lechon",
+  "sisig",
+  "lumpia",
+  "pancit",
+  "bulalo",
+  "laing",
+  "tapsilog",
+  "silog",
+  "longganisa",
+  "caldereta",
+  "pinakbet",
+  "ube",
+  "bibingka",
+  "ensaymada",
+  "turon",
+  // Dishes — SE Asian
+  "laksa",
+  "satay",
+  "rendang",
+  // Dishes — Middle Eastern / Turkish
+  "shawarma",
+  "kebab",
+  "doner",
+  "falafel",
+  "hummus",
+  "shakshuka",
+  "tabbouleh",
+  "tabouleh",
+  "baba",
+  "mezze",
+  "meze",
+  "baklava",
+  "dolma",
+  "pita",
+  "mansaf",
+  "kabsa",
+  "maqluba",
+  "gozleme",
+  "lahmacun",
+  "pide",
+  "borek",
+  // Dishes — Italian
+  "pasta",
+  "lasagna",
+  "rigatoni",
+  "penne",
+  "spaghetti",
+  "carbonara",
+  "pizza",
+  "arancini",
+  "suppli",
+  "aperitivo",
+  "risotto",
+  "ravioli",
+  "tortellini",
+  "gnocchi",
+  "bruschetta",
+  "antipasto",
+  "caprese",
+  "panini",
+  "focaccia",
+  "calzone",
+  "stromboli",
+  "meatballs",
+  "minestrone",
+  "tiramisu",
+  "cannoli",
+  "affogato",
+  // Dishes — French
+  "croissant",
+  "baguette",
+  "escargot",
+  "bouillabaisse",
+  "ratatouille",
+  "cassoulet",
+  "quiche",
+  // Dishes — Spanish
+  "paella",
+  "tapas",
+  "jamon",
+  "chorizo",
+  "gazpacho",
+  "pintxos",
+  "vermut",
+  "vermouth",
+  // Dishes — German / Swiss
+  "schnitzel",
+  "bratwurst",
+  "wurst",
+  "pretzel",
+  "pretzels",
+  "brezel",
+  "sauerkraut",
+  "spaetzle",
+  "fondue",
+  "raclette",
+  // Dishes — Eastern European
+  "pierogi",
+  "pierogies",
+  "perogi",
+  "perogies",
+  "borscht",
+  "goulash",
+  "stroganoff",
+  "blini",
+  "pelmeni",
+  // Dishes — South American
+  "ceviche",
+  "empanada",
+  "empanadas",
+  "arepa",
+  "arepas",
+  "churrasco",
+  "feijoada",
+  "picanha",
+  "moqueca",
+  "coxinha",
+  "pastel",
+  "caipirinha",
+  // Dishes — African
+  "injera",
+  "jollof",
+  "tagine",
+  // Dishes — Mexican
+  "taco",
+  "tacos",
+  "burrito",
+  "burritos",
+  "quesadilla",
+  "enchilada",
+  "enchiladas",
+  "tamale",
+  "tamales",
+  "chilaquiles",
+  "tostada",
+  "tostadas",
+  "chimichanga",
+  "mole",
+  "pozole",
+  "birria",
+  "carnitas",
+  "barbacoa",
+  "fajita",
+  "fajitas",
+  "elote",
+  "elotes",
+  "esquites",
+  "horchata",
+  "churros",
+  "flan",
+  // Dishes — American
+  "burger",
+  "burgers",
+  "whopper",
+  "steak",
+  "bbq",
+  "barbeque",
+  "barbecue",
+  "ribs",
+  "brisket",
+  "wings",
+  "seafood",
+  "shellfish",
+  "oysters",
+  "clams",
+  "lobster",
+  "gumbo",
+  "jambalaya",
+  "crawfish",
+  "crayfish",
+  "cheesesteak",
+  "reuben",
+  "blt",
+  "sandwich",
+  "sandwiches",
+  "submarine",
+  "sub",
+  "subs",
+  "hoagie",
+  "grinder",
+  "nachos",
+  "chili",
+  "meatloaf",
+  "sliders",
+  "poutine",
+  "poke",
+  // Dishes — Brunch
+  "brunch",
+  "breakfast",
+  "benedict",
+  "omelet",
+  "omelette",
+  "frittata",
+  "acai",
+  // Australian
+  "pavlova",
+  "lamington",
+  "parmigiana",
+  // Drinks
+  "matcha",
+  "tea",
+  "teahouse",
+  "juice",
+  "smoothie",
+  "smoothies",
+  "milkshake",
+  "cocktails",
+  "martini",
+  "mojito",
+  "wine",
+  "winery",
+  "beer",
+  "brewery",
+  "brewpub",
+  "whiskey",
+  "whisky",
+  "scotch",
+  "bourbon",
+  "sake",
+  "coffee",
+  "espresso",
+  "latte",
+  // Generic
+  "salad",
+  "salads",
+  "soup",
+  "soups",
+  "noodles",
+  "dessert",
+  "desserts",
+  "snacks",
+  "snack",
+  // Bakery / Sweets
+  "cake",
+  "cakes",
+  "cupcakes",
+  "bread",
+  "sourdough",
+  "pastries",
+  "pastry",
+  "danish",
+  "eclair",
+  "macaron",
+  "macarons",
+  "pie",
+  "pies",
+  "cobblers",
+  "cookies",
+  "gelato",
+  "sorbet",
+  "crepe",
+  "crepes",
+  "boba",
+  "cheesecake",
+  "chocolate",
+  "cacao",
+  "truffles",
+  "brownies",
+  "froyo",
+  "candy",
+  "sweets",
+  "fudge",
+  "bagel",
+  "bagels",
+  "donut",
+  "donuts",
+  "doughnut",
+  "doughnuts"
+]);
+const FUZZY_VOCAB_PHRASES = [
+  "gluten free",
+  "gluten-free",
+  "pad thai",
+  "pad see ew",
+  "pad kee mao",
+  "pad kra pao",
+  "tom yum",
+  "tom kha",
+  "green curry",
+  "red curry",
+  "khao soi",
+  "massaman curry",
+  "banh mi",
+  "bun cha",
+  "bun bo hue",
+  "com tam",
+  "spring rolls",
+  "spring roll",
+  "dim sum",
+  "peking duck",
+  "dan dan",
+  "char siu",
+  "chow mein",
+  "lo mein",
+  "fried rice",
+  "kung pao",
+  "steamed buns",
+  "siu mai",
+  "har gow",
+  "hong kong",
+  "soup dumplings",
+  "soup dumpling",
+  "xiao long bao",
+  "xiaolong bao",
+  "korean bbq",
+  "korean fried chicken",
+  "kimchi stew",
+  "kare kare",
+  "halo halo",
+  "butter chicken",
+  "murgh makhani",
+  "tikka masala",
+  "palak paneer",
+  "chana masala",
+  "rogan josh",
+  "garlic naan",
+  "pani puri",
+  "golgappa",
+  "bhel puri",
+  "vada pav",
+  "pav bhaji",
+  "aloo gobi",
+  "mango lassi",
+  "masala chai",
+  "masala dosa",
+  "gulab jamun",
+  "leche flan",
+  "bicol express",
+  "crispy pata",
+  "lechon kawali",
+  "nasi goreng",
+  "baba ganoush",
+  "sticky rice",
+  "thai tea",
+  "thai iced tea",
+  "mango sticky rice",
+  "papaya salad",
+  "drunken noodles",
+  "som tam",
+  "cacio e pepe",
+  "french onion",
+  "french onion soup",
+  "coq au vin",
+  "beef bourguignon",
+  "boeuf bourguignon",
+  "foie gras",
+  "pao de queijo",
+  "jollof rice",
+  "brazilian bbq",
+  "brazilian steak",
+  "fish and chips",
+  "shepherds pie",
+  "bangers and mash",
+  "full english",
+  "english breakfast",
+  "meat pie",
+  "mince pie",
+  "yorkshire pudding",
+  "fried chicken",
+  "pulled pork",
+  "chicken wings",
+  "buffalo wings",
+  "clam chowder",
+  "lobster roll",
+  "po boy",
+  "poor boy",
+  "poboy",
+  "shrimp and grits",
+  "biscuits and gravy",
+  "chicken and waffles",
+  "philly cheesesteak",
+  "club sandwich",
+  "grilled cheese",
+  "hot dog",
+  "corn dog",
+  "onion rings",
+  "french fries",
+  "chicken tenders",
+  "chicken strips",
+  "chicken nuggets",
+  "chicken parm",
+  "chicken parmesan",
+  "chicken parmigiana",
+  "chicken pot pie",
+  "buffalo chicken",
+  "mac and cheese",
+  "mac n cheese",
+  "poke bowl",
+  "rice bowl",
+  "grain bowl",
+  "eggs benedict",
+  "avocado toast",
+  "acai bowl",
+  "french toast",
+  "breakfast burrito",
+  "frozen yogurt",
+  "shaved ice",
+  "sno cone",
+  "creme brulee",
+  "fast food",
+  "finger food",
+  "comfort food",
+  "home cooking",
+  "all you can eat",
+  "soul food",
+  "tres leches",
+  "agua fresca",
+  "aguas frescas",
+  "orange chicken",
+  "general tso",
+  "tapas bar",
+  "food hall",
+  "food court",
+  "food market",
+  "wine bar",
+  "sports bar",
+  "cocktail bar",
+  "sushi bar",
+  "juice bar",
+  "noodle bar"
+];
+let _phrasesByLen = null;
+function phrasesByTokenCount() {
+  if (_phrasesByLen) return _phrasesByLen;
+  const m = /* @__PURE__ */ new Map();
+  for (const p of FUZZY_VOCAB_PHRASES) {
+    const n = p.split(/\s+/).length;
+    if (!m.has(n)) m.set(n, []);
+    m.get(n).push(p);
+  }
+  _phrasesByLen = m;
+  return m;
+}
+const FUZZY_VOCAB_PHRASES_SET = new Set(FUZZY_VOCAB_PHRASES);
+function fuzzyMatchSingle(token) {
+  if (FUZZY_VOCAB_SINGLE.has(token)) return token;
+  let maxDist;
+  if (token.length <= 3) return null;
+  else if (token.length <= 5) maxDist = 1;
+  else maxDist = 2;
+  let best = null;
+  let tied = false;
+  for (const vocab of FUZZY_VOCAB_SINGLE) {
+    if (Math.abs(vocab.length - token.length) > maxDist) continue;
+    const d = levenshtein(token, vocab, maxDist);
+    if (d > maxDist) continue;
+    if (!best || d < best.dist) {
+      best = { word: vocab, dist: d };
+      tied = false;
+    } else if (d === best.dist && vocab !== best.word) tied = true;
+  }
+  return best && !tied ? best.word : null;
+}
+function fuzzyMatchPhrase(phrase) {
+  if (FUZZY_VOCAB_PHRASES_SET.has(phrase)) return phrase;
+  const tokenCount = phrase.split(/\s+/).length;
+  const candidates = phrasesByTokenCount().get(tokenCount);
+  if (!candidates) return null;
+  const maxDist = 2;
+  let best = null;
+  let tied = false;
+  for (const vocab of candidates) {
+    if (Math.abs(vocab.length - phrase.length) > maxDist) continue;
+    const d = levenshtein(phrase, vocab, maxDist);
+    if (d > maxDist) continue;
+    if (!best || d < best.dist) {
+      best = { word: vocab, dist: d };
+      tied = false;
+    } else if (d === best.dist && vocab !== best.word) tied = true;
+  }
+  return best && !tied ? best.word : null;
+}
+function fuzzyNormalizeQuery(query) {
+  const trimmed = query?.trim();
+  if (!trimmed) return query;
+  const tokens = trimmed.toLowerCase().split(/\s+/);
+  const out = [];
+  let i = 0;
+  while (i < tokens.length) {
+    if (i + 1 < tokens.length) {
+      const pair = `${tokens[i]} ${tokens[i + 1]}`;
+      const phraseHit = fuzzyMatchPhrase(pair);
+      if (phraseHit) {
+        out.push(phraseHit);
+        i += 2;
+        continue;
+      }
+    }
+    const tok = tokens[i];
+    if (/^[a-z]+$/.test(tok)) {
+      out.push(fuzzyMatchSingle(tok) ?? tok);
+    } else {
+      out.push(tok);
+    }
+    i += 1;
+  }
+  return out.join(" ");
+}
+function detectDietaryModifier(query, dishLabel) {
+  const q = (query || "").toLowerCase();
+  if (dishLabel) {
+    const dl = dishLabel.toLowerCase();
+    if (["halal", "kosher", "vegan", "vegetarian", "gluten free"].includes(dl)) return null;
+  }
+  if (/\bhalal\b/.test(q)) return "halal";
+  if (/\bkosher\b/.test(q)) return "kosher";
+  if (/\bvegan\b/.test(q)) return "vegan";
+  if (/\bvegetarian\b/.test(q)) return "vegetarian";
+  if (/\bgluten[\s-]?free\b/.test(q)) return "glutenFree";
+  return null;
+}
+const QUERY_STOPWORDS = /* @__PURE__ */ new Set([
+  "the",
+  "and",
+  "with",
+  "for",
+  "restaurant",
+  "food",
+  "place",
+  "near",
+  "me",
+  "best",
+  "top",
+  "good",
+  "great",
+  "open",
+  "now",
+  "close",
+  "closest",
+  "find",
+  "show",
+  "any",
+  "some",
+  "this",
+  "that",
+  "place",
+  "places",
+  "have",
+  "has",
+  "want",
+  "need",
+  "around",
+  "here"
+]);
+function hasUnrecognizedDishWords(searchQuery, intent) {
+  if (intent?.kind !== "DISH") return false;
+  const queryWords = new Set(
+    searchQuery.toLowerCase().split(/\s+/).map((w) => w.replace(/[^\w]/g, "")).filter((w) => w.length >= 3 && !QUERY_STOPWORDS.has(w))
+  );
+  if (queryWords.size <= 1) return false;
+  const recognized = /* @__PURE__ */ new Set([
+    ...intent.rawWords || [],
+    ...(intent.nameKeywords || []).flatMap((k) => k.toLowerCase().split(/\s+/))
+  ]);
+  for (const w of queryWords) {
+    if (!recognized.has(w)) return true;
+  }
+  return false;
+}
+function parseSearchIntent(query) {
+  if (!query?.trim()) return { kind: "GENERAL" };
+  const direct = parseSearchIntentInner(query.toLowerCase());
+  if (direct.kind !== "GENERAL") return direct;
+  const fuzzed = fuzzyNormalizeQuery(query);
+  if (fuzzed && fuzzed !== query.toLowerCase()) {
+    return parseSearchIntentInner(fuzzed);
+  }
+  return { kind: "GENERAL" };
+}
+function parseSearchIntentInner(q) {
+  if (/\basian\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "asian", ...CULTURAL_INTENTS.asian };
+  if (/\blatin\b|\blatino\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "latin", ...CULTURAL_INTENTS.latin };
+  if (/\bmediterranean\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "mediterranean", ...CULTURAL_INTENTS.mediterranean };
+  if (/\beuropean\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "european", ...CULTURAL_INTENTS.european };
+  if (/\btrattoria\b|\bosteria\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "italian", label: "Trattoria", types: /* @__PURE__ */ new Set(["italian_restaurant"]), keywords: ["trattoria", "osteria", "pasta", "pizza", "antipasto"] };
+  if (/\bbistro(t)?\b|\bbrasserie\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "french", label: "Bistro", types: /* @__PURE__ */ new Set(["french_restaurant"]), keywords: ["bistro", "brasserie", "croissant", "crepe"] };
+  if (/\btaberna\b|\btapas\s*bar\b|\bbodega\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "spanish", label: "Taberna", types: /* @__PURE__ */ new Set(["spanish_restaurant", "tapas_bar"]), keywords: ["tapas", "pintxos", "jamon", "wine", "vermut"] };
+  if (/\bizakaya\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "japanese", label: "Izakaya", types: /* @__PURE__ */ new Set(["japanese_restaurant", "bar"]), keywords: ["sake", "yakitori", "small plates", "japanese pub"] };
+  if (/\bcantina\b|\btaqueria\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "mexican", label: "Cantina", types: /* @__PURE__ */ new Set(["mexican_restaurant"]), keywords: ["tacos", "tequila", "margarita", "tortas"] };
+  if (/\bfood\s*hall\b|\bfood\s*market\b|\bmercato\b|\bmercado\b|\bfood\s*court\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "market", label: "Food Market", types: /* @__PURE__ */ new Set(["food_court"]), keywords: ["market", "hall", "stall", "street food"] };
+  if (/\bitalian\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "italian", label: "Italian", types: /* @__PURE__ */ new Set(["italian_restaurant"]), keywords: ["pasta", "pizza", "risotto", "lasagna"] };
+  if (/\bmexican\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "mexican", label: "Mexican", types: /* @__PURE__ */ new Set(["mexican_restaurant"]), keywords: ["taco", "burrito", "enchilada", "quesadilla"] };
+  if (/\bchinese\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "chinese", label: "Chinese", types: /* @__PURE__ */ new Set(["chinese_restaurant"]), keywords: ["dim sum", "noodle", "dumpling", "chow mein"] };
+  if (/\bjapanese\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "japanese", label: "Japanese", types: /* @__PURE__ */ new Set(["japanese_restaurant"]), keywords: ["sushi", "ramen", "tempura", "udon"] };
+  if (/\bkorean\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "korean", label: "Korean", types: /* @__PURE__ */ new Set(["korean_restaurant"]), keywords: ["bibimbap", "kimchi", "bulgogi", "korean bbq"] };
+  if (/\bthai\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "thai", label: "Thai", types: /* @__PURE__ */ new Set(["thai_restaurant"]), keywords: ["pad thai", "tom yum", "green curry"] };
+  if (/\bvietnamese\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "vietnamese", label: "Vietnamese", types: /* @__PURE__ */ new Set(["vietnamese_restaurant"]), keywords: ["pho", "banh mi", "spring roll"] };
+  if (/\bfilipino\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "filipino", label: "Filipino", types: /* @__PURE__ */ new Set(["filipino_restaurant"]), keywords: ["adobo", "sinigang", "lumpia", "sisig"] };
+  if (/\bindian\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "indian", label: "Indian", types: /* @__PURE__ */ new Set(["indian_restaurant"]), keywords: ["curry", "biryani", "naan", "tikka masala"] };
+  if (/\bfrench\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "french", label: "French", types: /* @__PURE__ */ new Set(["french_restaurant"]), keywords: ["croissant", "baguette", "crepe"] };
+  if (/\bgreek\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "greek", label: "Greek", types: /* @__PURE__ */ new Set(["greek_restaurant"]), keywords: ["gyro", "souvlaki", "tzatziki"] };
+  for (const entry of DISH_MAP) {
+    const m = q.match(entry.pattern);
+    if (m) {
+      const matched = (m[0] || "").toLowerCase();
+      const rawWords = Array.from(new Set(matched.split(/\s+/).filter((w) => w.length >= 3)));
+      let mealTime = entry.mealTime;
+      if (/\bbreakfast\b/.test(q)) mealTime = "breakfast";
+      else if (/\bbrunch\b/.test(q)) mealTime = "brunch";
+      else if (/\blunch\b/.test(q)) mealTime = "lunch";
+      else if (/\bdinner\b|\bsupper\b/.test(q)) mealTime = "dinner";
+      return { kind: "DISH", label: entry.label, tier1Types: entry.tier1, tier2Types: entry.tier2, rawWords, nameKeywords: entry.nameKeywords || [], mealTime, strict: entry.strict, strictPrimaryTypes: entry.strictPrimaryTypes };
+    }
+  }
+  return { kind: "GENERAL" };
+}
+function getTierForPlace(place, intent) {
+  if (intent.kind === "GENERAL") return 1;
+  const types = new Set([...place.types || [], place.primaryType || ""].map((t) => t.toLowerCase()));
+  const name = (place.displayName?.text || place.name || "").toLowerCase();
+  const reviewText = (place.reviews || []).map((r) => r.text?.text || r.text || "").join(" ").toLowerCase();
+  if (intent.kind === "UMBRELLA") {
+    if ([...types].some((t) => intent.types.has(t))) return 1;
+    if (intent.keywords.some((kw) => name.includes(kw) || reviewText.includes(kw))) return 2;
+    return 4;
+  }
+  if (intent.kind === "DISH") {
+    const dishWords = Array.from(new Set([
+      intent.label.toLowerCase(),
+      ...intent.rawWords || [],
+      ...intent.nameKeywords || []
+    ].filter(Boolean)));
+    const strictDishWords = Array.from(new Set([
+      intent.label.toLowerCase(),
+      ...intent.nameKeywords || []
+    ].filter(Boolean)));
+    const isBreakfasty = intent.mealTime === "breakfast" || intent.mealTime === "brunch";
+    const hasBreakfastPlausibleType = !isBreakfasty || (BREAKFAST_PLAUSIBLE_TYPES.has(place.primaryType || "") || [...types].some((t) => BREAKFAST_PLAUSIBLE_TYPES.has(t)));
+    if (dishWords.some((w) => name.includes(w))) return 1;
+    const isStrict = intent.strict === true && Array.isArray(intent.strictPrimaryTypes) && intent.strictPrimaryTypes.length > 0;
+    if (isStrict) {
+      const primary = (place.primaryType || "").toString();
+      if (!intent.strictPrimaryTypes.includes(primary)) {
+        return 5;
+      }
+    }
+    if (isBreakfasty) {
+      const inChainList = KNOWN_BREAKFAST_CHAINS.some((c) => name.includes(c));
+      if (!inChainList) {
+        const primary = place.primaryType || "";
+        const isFastFood = primary === "fast_food_restaurant" || types.has("fast_food_restaurant");
+        const isCoffeeShop = primary === "coffee_shop" || types.has("coffee_shop");
+        if (isFastFood || isCoffeeShop) return 5;
+      }
+    }
+    if (intent.tier1Types.some((t) => types.has(t)) && hasBreakfastPlausibleType) return 2;
+    if (intent.tier2Types.some((t) => types.has(t)) && hasBreakfastPlausibleType) return 3;
+    if (isStrict) return 5;
+    const editorial = (place.editorialSummary?.text || place.editorialSummary || "").toString().toLowerCase();
+    if (hasBreakfastPlausibleType && editorial && strictDishWords.some((w) => editorial.includes(w))) return 4;
+    if (isBreakfasty) {
+      if (types.has("bakery") || place.primaryType === "bakery") return 4;
+      if (KNOWN_BREAKFAST_CHAINS.some((c) => name.includes(c))) return 4;
+    }
+    if (intent.mealTime === "lunch" && place.servesLunch === true) return 4;
+    if (intent.mealTime === "dinner" && place.servesDinner === true) return 4;
+    if (hasBreakfastPlausibleType && strictDishWords.some((w) => reviewText.includes(w))) return 4;
+    const menuDishes = place.menuDishes || [];
+    if (hasBreakfastPlausibleType && menuDishes.length && strictDishWords.some((w) => menuDishes.some((md) => md.includes(w)))) return 4;
+    const aiSummary = (place.generativeSummary?.overview?.text || "").toString().toLowerCase();
+    if (hasBreakfastPlausibleType && aiSummary && strictDishWords.some((w) => aiSummary.includes(w))) return 4;
+    const contextualReviewText = (place.contextualContents?.reviews || []).map((r) => (r?.text?.text || r?.text || "").toString()).join(" ").toLowerCase();
+    if (hasBreakfastPlausibleType && contextualReviewText && strictDishWords.some((w) => contextualReviewText.includes(w))) return 4;
+    return 5;
+  }
+  return 1;
+}
+const TIER_LABELS = {
+  1: "Namesake",
+  // name match — place name contains the dish word
+  2: "Specialist",
+  // place type matches the dish's primary cuisine type
+  3: "Related Cuisine",
+  // place type matches secondary cultural cuisine
+  4: "Serves It"
+  // editorialSummary / cached reviews / menu OCR mention the dish
+  // 5 = noise (not in TIER_LABELS by design — filtered out before reaching the frontend)
+};
+const CUISINE_QUERIES = {
+  // 'all': reduced from 8 to 3 queries (saves 5 API calls per page load)
+  // nearby types already cover fast food, bakery, takeout — no need to duplicate via text
+  all: ["restaurant", "best restaurant near me", "popular restaurant"],
+  american: ["american restaurant", "burger restaurant", "diner"],
+  mexican: ["mexican restaurant", "taqueria", "tacos"],
+  italian: ["italian restaurant", "pasta restaurant", "trattoria"],
+  chinese: ["chinese restaurant", "dim sum"],
+  japanese: ["japanese restaurant", "ramen"],
+  sushi: ["sushi restaurant", "sushi bar"],
+  thai: ["thai restaurant"],
+  indian: ["indian restaurant", "curry restaurant"],
+  korean: ["korean restaurant", "korean bbq"],
+  vietnamese: ["vietnamese restaurant", "pho"],
+  mediterranean: ["mediterranean restaurant", "greek restaurant"],
+  seafood: ["seafood restaurant", "fish restaurant"],
+  steakhouse: ["steakhouse", "steak restaurant"],
+  pizza: ["pizza restaurant", "pizzeria"],
+  breakfast: ["breakfast restaurant", "brunch restaurant"],
+  fast_food: ["fast food", "quick service restaurant"],
+  vegetarian: ["vegetarian restaurant", "vegan restaurant", "plant based restaurant"],
+  vegan: ["vegan restaurant", "plant based restaurant"],
+  halal: ["halal restaurant", "halal food", "halal meat"],
+  kosher: ["kosher restaurant", "kosher food", "kosher deli"],
+  dessert: ["dessert shop", "ice cream", "bakery"],
+  // reduced from 6 to 3 (nearby types cover pastry_shop/dessert_shop already)
+  bakery: ["bakery", "pastry shop", "donut shop"],
+  // Sports bar: 2 text queries max (more causes network timeouts at 25mi).
+  // Query 1 "sports bar" — finds explicitly self-labeled sports bars (Rocco's Tavern,
+  //   Barney's Beanery, 33 Taps — anything with "sports bar" in Google name/description/reviews).
+  // Query 2 "bar" — broad bar text-scan so British/local pubs like Lucky Baldwin's, T. Boyle's
+  //   Tavern, and Yard House (tagged 'bar' not 'sports_bar') enter the candidate pool for scoring.
+  //   sportsScore sorting ensures actual sports bars float to top over generic bars.
+  sports_bar: ["sports bar", "bar"],
+  filipino: ["filipino restaurant", "pinoy restaurant"],
+  // Trending: broad queries — Worker uses rankPreference:RELEVANCE; frontend sorts by rating×reviews
+  trending: ["best restaurant", "most popular restaurant"],
+  local: ["local favorite restaurant", "neighborhood restaurant"],
+  // Hidden Gems: specific language Google understands for underrated spots
+  // Client-side badge threshold: rating ≥4.5, reviews 50–500 (under the radar but proven)
+  hidden: ["hidden gem restaurant", "underrated local restaurant", "best kept secret restaurant"],
+  fine: ["fine dining", "upscale restaurant"],
+  budget: ["cheap eats", "budget friendly restaurant"],
+  latenight: ["late night food", "24 hour restaurant", "open late restaurant"]
+};
+async function handleRestaurantsFull(request, env, ctx) {
+  console.log("\n\u{1F37D}\uFE0F === getRestaurants v5.0 START ===\n");
+  try {
+    const origin = new URL(request.url).origin;
+    let hasStrongDietaryMatch = function(place, cuisine2) {
+      const types = [...place.types || [], place.primaryType || ""].filter(Boolean).map((t) => t.toLowerCase());
+      const text = [
+        place.name || "",
+        ...(place.reviews || []).map((r) => r.text || "")
+      ].join(" ").toLowerCase();
+      if (cuisine2 === "halal")
+        return types.includes("halal_restaurant") || /\bhalal\b/.test(text) || /\bzabiha\b/.test(text);
+      if (cuisine2 === "kosher")
+        return types.includes("kosher_restaurant") || /\bkosher\b/.test(text) || /\bhechsher\b|\bmashgiach\b|\bglatt\b|\bparve\b|\bshomer\s*shabbat\b/.test(text) || /\b(?:ou|star-k|kof-k|crc|orb)[\s-]?(?:kosher|certified|approved)\b/.test(text);
+      if (cuisine2 === "vegan")
+        return types.includes("vegan_restaurant") || /\bvegan\b/.test(text) || /\bplant[\s-]?based\b/.test(text);
+      if (cuisine2 === "vegetarian")
+        return place.servesVegetarianFood === true || types.includes("vegetarian_restaurant") || /\bvegetarian\b/.test(text);
+      if (cuisine2 === "glutenFree")
+        return /\bgluten[\s-]?free\b/.test(text) || /\bceliac\b|\bcoeliac\b/.test(text) || /\bgf\s*(?:menu|bakery|bread|pizza|pasta|options?|friendly)\b/.test(text) || /\bdedicated\s+gluten[\s-]?free\b/.test(text) || /\bwheat[\s-]?free\b/.test(text) || /\bgfco\b|\bgluten[\s-]?free\s+certified\b/.test(text);
+      return true;
+    }, dietaryScore = function(place, cuisine2) {
+      const types = [...place.types || [], place.primaryType || ""].filter(Boolean).map((t) => t.toLowerCase());
+      const text = [
+        place.name || "",
+        ...(place.reviews || []).map((r) => r.text || "")
+      ].join(" ").toLowerCase();
+      let score = 0;
+      if (cuisine2 === "halal") {
+        if (types.includes("halal_restaurant")) score += 100;
+        if (/\bhalal\b/.test(text)) score += 20;
+        if (/\bzabiha\b|\bhmc\b/.test(text)) score += 10;
+      }
+      if (cuisine2 === "kosher") {
+        if (types.includes("kosher_restaurant")) score += 100;
+        if (/\bkosher\b/.test(text)) score += 20;
+        if (/\bhechsher\b|\bmashgiach\b|\bglatt\b|\bparve\b|\bshomer\s*shabbat\b/.test(text)) score += 10;
+        if (/\b(?:ou|star-k|kof-k|crc|orb)[\s-]?(?:kosher|certified|approved)\b/.test(text)) score += 10;
+      }
+      if (cuisine2 === "vegan") {
+        if (types.includes("vegan_restaurant")) score += 100;
+        if (/\bvegan\b/.test(text)) score += 20;
+        if (/\bplant[\s-]?based\b/.test(text)) score += 10;
+      }
+      score += (place.rating || 0) * 5;
+      score += Math.min(place.userRatingCount || 0, 500) / 25;
+      score -= place.distanceKm || 0;
+      return score;
+    };
+    const body = await request.json().catch(() => ({}));
+    const {
+      latitude,
+      longitude,
+      radius = 16093,
+      // PlacesToEat sends radius * 1609 (meters)
+      maxResults = 40,
+      cuisine = "all",
+      searchQuery = "",
+      forceRefresh = false,
+      // v5.0: server-side filter params (passed from PlacesToEat filters)
+      filterOpenNow = false,
+      filterMinRating = 0,
+      filterMaxPrice = 0,
+      // 0=any, 1=$, 2=$$, 3=$$$, 4=$$$$
+      // v5.2: user's active dietary chip. Passed alongside searchQuery so we
+      // can still filter+tag results even when the dietary shortcut is skipped
+      // (which happens whenever searchQuery is non-empty).
+      activeDietary = null,
+      // v5.3: full UI filter state for the Semantic Text Compiler. All chip
+      // state is translated into one natural-language query Google AI can
+      // match on, instead of being stripped client-side after the fetch.
+      filterDriveThru = false,
+      filterOutdoor = false,
+      filterIndoor = false,
+      filterParking = false,
+      filterBakery = false,
+      filterBars = false,
+      filterVibes = {},
+      // { family, liveMusic, groups, sportsBar, outdoor }
+      filterDietary = {}
+      // { vegetarian, vegan, halal, kosher, glutenFree }
+    } = body;
+    const PRICE_LEVEL_NAMES = [
+      "PRICE_LEVEL_FREE",
+      "PRICE_LEVEL_INEXPENSIVE",
+      "PRICE_LEVEL_MODERATE",
+      "PRICE_LEVEL_EXPENSIVE",
+      "PRICE_LEVEL_VERY_EXPENSIVE"
+    ];
+    let priceLevels = filterMaxPrice > 0 ? PRICE_LEVEL_NAMES.slice(0, filterMaxPrice + 1) : [];
+    if (cuisine === "fine") {
+      priceLevels = ["PRICE_LEVEL_EXPENSIVE", "PRICE_LEVEL_VERY_EXPENSIVE"];
+    } else if (cuisine === "budget") {
+      priceLevels = ["PRICE_LEVEL_INEXPENSIVE"];
+    }
+    if (!latitude || !longitude) {
+      return grResp({ error: "Latitude and longitude required", places: [] }, { status: 400 });
+    }
+    const radiusMiles = Math.round(radius / 1609.34);
+    console.log("\u{1F4CB} Request:", { latitude, longitude, radius, radiusMiles: radiusMiles.toFixed(1), cuisine, searchQuery, forceRefresh });
+    let intent = parseSearchIntent(searchQuery);
+    if (intent.kind === "GENERAL" && cuisine && cuisine !== "all") {
+      const chipUmbrella = CUISINE_CHIP_TO_UMBRELLA[cuisine];
+      if (chipUmbrella) {
+        intent = {
+          kind: "UMBRELLA",
+          cultureKey: cuisine,
+          label: chipUmbrella.label,
+          types: chipUmbrella.types,
+          keywords: chipUmbrella.keywords
+        };
+        console.log(`\u{1F9E0} Intent synthesized from cuisine chip: ${cuisine} -> UMBRELLA(${chipUmbrella.label})`);
+      }
+    }
+    if (!!searchQuery?.trim() && (intent.kind === "GENERAL" || hasUnrecognizedDishWords(searchQuery, intent))) {
+      try {
+        const llmRes = await rxDispatch(env, ctx, origin, `/parse-intent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: searchQuery })
+        });
+        if (llmRes.ok) {
+          const llmIntent = await llmRes.json();
+          if (llmIntent.confidence >= 0.5 && Array.isArray(llmIntent.tier1Types) && llmIntent.tier1Types.length > 0 && llmIntent.dishLabel) {
+            console.log(`\u{1F916} LLM fallback hit: "${searchQuery}" -> dish=${llmIntent.dishLabel} cuisine=${llmIntent.cuisine} strict=${llmIntent.strict} conf=${llmIntent.confidence} cache=${llmIntent._cache}`);
+            intent = {
+              kind: "DISH",
+              label: llmIntent.dishLabel,
+              tier1Types: llmIntent.tier1Types,
+              tier2Types: Array.isArray(llmIntent.tier2Types) ? llmIntent.tier2Types : [],
+              rawWords: searchQuery.toLowerCase().split(/\s+/).map((w) => w.replace(/[^\w]/g, "")).filter((w) => w.length >= 3),
+              nameKeywords: Array.isArray(llmIntent.nameKeywords) ? llmIntent.nameKeywords : [],
+              mealTime: llmIntent.mealTime,
+              strict: llmIntent.strict === true,
+              strictPrimaryTypes: Array.isArray(llmIntent.strictPrimaryTypes) ? llmIntent.strictPrimaryTypes : []
+            };
+          } else {
+            console.log(`\u{1F916} LLM fallback ignored (conf=${llmIntent.confidence}): "${searchQuery}"`);
+          }
+        }
+      } catch (e) {
+        console.warn(`\u{1F916} LLM fallback failed (non-fatal):`, e.message);
+      }
+    }
+    console.log(`\u{1F9E0} Intent: ${intent.kind}${intent.kind !== "GENERAL" ? ` (${intent.label})` : ""}`);
+    const DIETARY_TYPES = ["halal", "kosher", "vegan", "vegetarian", "glutenFree"];
+    const dietaryShortcutKey = DIETARY_TYPES.includes(cuisine) ? cuisine : activeDietary && DIETARY_TYPES.includes(activeDietary) ? activeDietary : null;
+    if (!searchQuery?.trim() && dietaryShortcutKey) {
+      console.log(`\u{1F957} Dietary shortcut: calling /places/dietary?dietary=${dietaryShortcutKey}`);
+      try {
+        const params = new URLSearchParams({
+          latitude: String(latitude),
+          longitude: String(longitude),
+          radius: String(radius),
+          maxResults: String(maxResults),
+          dietary: dietaryShortcutKey
+        });
+        const res = await rxDispatch(env, ctx, origin, `/places/dietary?${params}`);
+        if (res.ok) {
+          const data = await res.json();
+          const places = data.places || [];
+          console.log(`\u2705 /places/dietary returned ${places.length} places`);
+          if (places.length > 0) {
+            const tagged = places.map((p) => ({ ...p, dietary: { ...p.dietary || {}, [dietaryShortcutKey]: true } }));
+            return grResp({ places: tagged, count: tagged.length, version: "v4.3", dietary: dietaryShortcutKey });
+          }
+          console.warn(`\u26A0\uFE0F /places/dietary returned 0 \u2014 falling back to text search`);
+        }
+      } catch (e) {
+        console.error(`/places/dietary error: ${e.message} \u2014 falling back`);
+      }
+    }
+    const rawQuery = searchQuery?.trim() || "";
+    const baseTypes = [];
+    const features = [];
+    const cuisineReadable = {
+      fast_food: "fast food",
+      fine: "fine dining",
+      latenight: "late night",
+      glutenFree: "gluten-free",
+      sports_bar: "sports bar",
+      dessert: "desserts"
+    };
+    const skipCuisineInSemantic = cuisine === "all" || cuisine === "sports_bar" || cuisine === "bakery";
+    if (!skipCuisineInSemantic) {
+      const friendly = cuisineReadable[cuisine] ?? cuisine.replace(/_/g, " ");
+      const needsVenue = !/(shop|dining|bar|restaurant|desserts?)/i.test(friendly);
+      baseTypes.push(needsVenue ? `${friendly} restaurant` : friendly);
+    }
+    if (filterBakery) baseTypes.push("bakeries and pastries");
+    if (filterBars) baseTypes.push("bars pubs");
+    if (filterVibes.sportsBar) baseTypes.push("sports bar");
+    const DIETARY_READABLE = {
+      vegan: "vegan",
+      vegetarian: "vegetarian",
+      halal: "halal",
+      kosher: "kosher",
+      glutenFree: "gluten-free"
+    };
+    const activeDietaryKeys = Object.keys(filterDietary || {}).filter((k) => filterDietary[k]);
+    activeDietaryKeys.forEach((k) => {
+      const adj = DIETARY_READABLE[k];
+      if (adj) baseTypes.unshift(adj);
+    });
+    if (filterDriveThru) features.push("drive-thru");
+    if (filterOutdoor) features.push("outdoor seating");
+    if (filterIndoor) features.push("indoor seating");
+    if (filterParking) features.push("parking");
+    const vibes = filterVibes || {};
+    if (vibes.family) features.push("family friendly");
+    if (vibes.liveMusic) features.push("live music");
+    if (vibes.groups) features.push("good for groups");
+    const wantsRooftop = /\brooftop\b/i.test(rawQuery);
+    const wantsFarmToTable = /\bfarm[\s-]*to[\s-]*table\b/i.test(rawQuery);
+    const wantsHiddenGem = /\bhidden\s*gem(s)?\b/i.test(rawQuery);
+    if (wantsRooftop) features.push("with view");
+    if (wantsFarmToTable) features.push("locally sourced");
+    let semanticQuery = rawQuery;
+    let dishHasItQuery = null;
+    const isRawFoodNoun = !baseTypes.length && semanticQuery && !/restaurant|food|near me|cafe|bar|bakery|shop|grill|diner|bistro|place/i.test(semanticQuery);
+    if (isRawFoodNoun && intent.kind === "DISH" && intent.tier1Types?.length > 0) {
+      const tier1Type = intent.tier1Types[0];
+      const expertType = tier1Type.replace(/_/g, " ");
+      semanticQuery = `${semanticQuery} ${expertType}`;
+      const SKIP_DUAL = /* @__PURE__ */ new Set(["pizza_restaurant", "sushi_restaurant", "ramen_restaurant", "bakery"]);
+      if (!SKIP_DUAL.has(tier1Type)) {
+        dishHasItQuery = rawQuery.replace(/\bbest\b/i, "").trim();
+      }
+    }
+    if (baseTypes.length) {
+      semanticQuery = semanticQuery ? `${baseTypes.join(" ")} ${semanticQuery}` : baseTypes.join(" ");
+    }
+    if (!semanticQuery.trim()) semanticQuery = "restaurant";
+    if (features.length) {
+      semanticQuery = `${semanticQuery} with ${features.join(" and ")}`;
+    }
+    {
+      const seen = /* @__PURE__ */ new Set();
+      semanticQuery = semanticQuery.split(/\s+/).filter((w) => {
+        const lw = w.toLowerCase();
+        if (seen.has(lw)) return false;
+        seen.add(lw);
+        return true;
+      }).join(" ");
+    }
+    if (dishHasItQuery !== null) {
+      if (baseTypes.length) {
+        dishHasItQuery = dishHasItQuery ? `${baseTypes.join(" ")} ${dishHasItQuery}` : baseTypes.join(" ");
+      }
+      if (!dishHasItQuery.trim()) dishHasItQuery = "restaurant";
+      if (features.length) {
+        dishHasItQuery = `${dishHasItQuery} with ${features.join(" and ")}`;
+      }
+      const seen = /* @__PURE__ */ new Set();
+      dishHasItQuery = dishHasItQuery.split(/\s+/).filter((w) => {
+        const lw = w.toLowerCase();
+        if (seen.has(lw)) return false;
+        seen.add(lw);
+        return true;
+      }).join(" ");
+      if (dishHasItQuery === semanticQuery) dishHasItQuery = null;
+    }
+    const anyFilterActive = baseTypes.length > 0 || features.length > 0 || !!rawQuery;
+    const queries = anyFilterActive ? dishHasItQuery ? [semanticQuery, dishHasItQuery] : [semanticQuery] : CUISINE_QUERIES[cuisine] || CUISINE_QUERIES.all;
+    console.log(`\u{1F9E9} Semantic query: "${semanticQuery}"${dishHasItQuery ? ` | + Has-It: "${dishHasItQuery}"` : ""} | anyFilterActive: ${anyFilterActive}`);
+    const allPlaces = [];
+    const seenPlaceIds = /* @__PURE__ */ new Set();
+    const errors = [];
+    const NEARBY_TYPES_ALL = [
+      "restaurant",
+      // general: local, ethnic, sit-down
+      "fast_food_restaurant",
+      // chains: Subway, Taco Bell, KFC, Panda Express, McDonald's, IHOP
+      "meal_takeaway"
+      // takeout-only spots often missed by other types
+    ];
+    const NEARBY_TYPES_CUISINE = {
+      chinese: ["chinese_restaurant"],
+      japanese: ["japanese_restaurant", "ramen_restaurant"],
+      sushi: ["sushi_restaurant"],
+      korean: ["korean_restaurant"],
+      thai: ["thai_restaurant"],
+      vietnamese: ["vietnamese_restaurant"],
+      indian: ["indian_restaurant"],
+      mexican: ["mexican_restaurant"],
+      american: ["american_restaurant", "hamburger_restaurant"],
+      // 'pizza_restaurant' INTENTIONALLY excluded from Italian nearby fan-out.
+      // Pizza chains (Domino's, Papa Johns, Little Caesars, Pizza Hut, Sbarro)
+      // were drowning the Italian chip's results in stuff that's pizza-only,
+      // not authentically Italian. They still appear under the Pizza chip
+      // (which has its own pizza_restaurant nearby fan-out below).
+      italian: ["italian_restaurant"],
+      pizza: ["pizza_restaurant"],
+      seafood: ["seafood_restaurant"],
+      mediterranean: ["mediterranean_restaurant", "greek_restaurant"],
+      fast_food: ["fast_food_restaurant", "hamburger_restaurant", "sandwich_shop"],
+      breakfast: ["breakfast_restaurant", "brunch_restaurant"],
+      dessert: ["ice_cream_shop", "dessert_shop", "bakery", "donut_shop"],
+      filipino: ["filipino_restaurant"],
+      // Bakery: removed 'cafe' — it flooded results with Starbucks that stole the 40-item slots,
+      // then got filtered out by the frontend bakery filter, leaving 0 results.
+      bakery: ["bakery", "pastry_shop", "dessert_shop"],
+      sports_bar: ["sports_bar", "bar"]
+      // nearby fetch; text search queries above do the heavy lifting
+    };
+    const hasAdvancedFilters = filterBakery || filterBars || filterDriveThru || filterOutdoor || filterIndoor || filterParking || Object.values(filterVibes || {}).some((v) => v) || Object.keys(filterDietary || {}).length > 0;
+    const isDishSearch = intent.kind === "DISH";
+    const skipNearby = hasAdvancedFilters || !!searchQuery?.trim() && !isDishSearch;
+    const DISH_BROAD_TYPES = ["restaurant", "fast_food_restaurant", "meal_takeaway", "bakery"];
+    const dishSpecialistTypes = isDishSearch ? [...intent.tier1Types || [], ...intent.tier2Types || []] : [];
+    const isBreakfastyDish = isDishSearch && (intent.mealTime === "breakfast" || intent.mealTime === "brunch");
+    const breakfastyBakeryTypes = isBreakfastyDish && !intent.strict ? ["bakery", "pastry_shop", "donut_shop", "bagel_shop"] : [];
+    const dishNearbyTypes = isDishSearch ? Array.from(/* @__PURE__ */ new Set([...dishSpecialistTypes, ...DISH_BROAD_TYPES, ...breakfastyBakeryTypes])) : [];
+    const TYPED_BAKERY_PATTERN = /\b(?:bakery|bakeries|pastr(?:y|ies)|patisserie|boulangerie|donuts?|doughnuts?|bagels?)\b/i;
+    const typedBakeryActive = !!searchQuery?.trim() && TYPED_BAKERY_PATTERN.test(searchQuery);
+    const qLower = (searchQuery || "").toLowerCase();
+    const typedSpecificBakeryType = typedBakeryActive ? /\b(?:donuts?|doughnuts?)\b/.test(qLower) ? "donut_shop" : /\bbagels?\b/.test(qLower) ? "bagel_shop" : null : null;
+    const bakeryNearbyTypes = filterBakery ? ["bakery", "pastry_shop", "dessert_shop", "donut_shop", "bagel_shop"] : typedBakeryActive ? typedSpecificBakeryType ? [typedSpecificBakeryType] : ["bakery", "pastry_shop", "dessert_shop", "donut_shop", "bagel_shop"] : [];
+    const barsNearbyTypes = filterBars ? ["bar", "pub"] : [];
+    const sportsBarVibeActive = !!filterVibes?.sportsBar;
+    const sportsBarNearbyTypes = sportsBarVibeActive ? ["sports_bar", "bar"] : [];
+    const venueChipTypes = Array.from(/* @__PURE__ */ new Set([
+      ...bakeryNearbyTypes,
+      ...barsNearbyTypes,
+      ...sportsBarNearbyTypes
+    ]));
+    const nearbyTypeList = skipNearby ? venueChipTypes : isDishSearch ? Array.from(/* @__PURE__ */ new Set([...dishNearbyTypes, ...venueChipTypes])) : cuisine === "all" ? Array.from(/* @__PURE__ */ new Set([...NEARBY_TYPES_ALL, ...venueChipTypes])) : Array.from(/* @__PURE__ */ new Set([...NEARBY_TYPES_CUISINE[cuisine] || ["restaurant"], ...venueChipTypes]));
+    const BAKERY_TYPES_SET = /* @__PURE__ */ new Set(["bakery", "pastry_shop", "dessert_shop", "donut_shop", "bagel_shop"]);
+    const SPORTS_TYPES_SET = /* @__PURE__ */ new Set(["sports_bar", "bar"]);
+    const BAKERY_RANK_BY = radiusMiles > 5 ? "POPULARITY" : "DISTANCE";
+    const SPORTS_BAR_ACTIVE = sportsBarVibeActive || cuisine === "sports_bar";
+    const rankByForType = (type) => {
+      if (filterBakery && BAKERY_TYPES_SET.has(type)) return BAKERY_RANK_BY;
+      if (SPORTS_BAR_ACTIVE && SPORTS_TYPES_SET.has(type)) return "POPULARITY";
+      return "DISTANCE";
+    };
+    const nearbyPromise = Promise.allSettled(
+      nearbyTypeList.map(async (type) => {
+        try {
+          const params = new URLSearchParams({
+            type,
+            latitude: String(latitude),
+            longitude: String(longitude),
+            radius: String(Math.min(radius, 5e4)),
+            maxResults: "20",
+            rankBy: rankByForType(type),
+            // v5.0: pass server-side filters to nearby search too
+            ...filterOpenNow ? { openNow: "true" } : {},
+            ...filterMinRating > 0 ? { minRating: String(filterMinRating) } : {},
+            ...priceLevels.length ? { priceLevels: priceLevels.join(",") } : {}
+          });
+          const res = await rxDispatch(env, ctx, origin, `/places/nearby?${params}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          const places = data.places || [];
+          console.log(`\u{1F5FA}\uFE0F nearby type=${type}: ${places.length} places`);
+          for (const place of places) {
+            const pid = place.id || place.placeId;
+            if (pid && !seenPlaceIds.has(pid) && isActuallyARestaurant(place)) {
+              seenPlaceIds.add(pid);
+              allPlaces.push(place);
+            }
+          }
+        } catch (e) {
+          console.warn(`nearby type=${type} error (non-fatal):`, e.message);
+        }
+      })
+    );
+    const cuisineTypeList = NEARBY_TYPES_CUISINE[cuisine];
+    const cuisineIncludedType = !rawQuery && !hasAdvancedFilters && cuisine !== "all" && cuisineTypeList?.length === 1 ? cuisineTypeList[0] : "";
+    const isStrictBreakfasty = isDishSearch && intent.strict && (intent.mealTime === "breakfast" || intent.mealTime === "brunch");
+    const mealTimeIncludedType = isStrictBreakfasty ? intent.mealTime === "breakfast" ? "breakfast_restaurant" : "brunch_restaurant" : "";
+    const serverIncludedType = cuisineIncludedType || mealTimeIncludedType;
+    const runQueryPass = async (passRadiusMiles) => {
+      const passRadiusMeters = Math.round(passRadiusMiles * 1609.34);
+      for (const query of queries) {
+        try {
+          console.log(`\u{1F4E1} POST /  query: "${query}" radiusMiles: ${passRadiusMiles.toFixed(1)}${serverIncludedType ? ` includedType: ${serverIncludedType}` : ""}`);
+          const response = await rxDispatch(env, ctx, origin, `/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              latitude,
+              longitude,
+              query,
+              radiusMiles: passRadiusMiles,
+              dietary: {},
+              // v5.0: server-side filters — Google filters at source, not client-side
+              openNow: filterOpenNow || false,
+              minRating: filterMinRating > 0 ? filterMinRating : 0,
+              priceLevels: priceLevels.length ? priceLevels : [],
+              // v5.4: honor caller's forceRefresh flag. Was temporarily hardcoded
+              // to true to purge the poisoned 0-result KV cache — now that the
+              // cache is healthy, revert to normal caching behavior so we stop
+              // paying for duplicate Google calls on repeat searches.
+              forceRefresh,
+              // v5.1: pass includedType so Google narrows by type (italian_restaurant etc.)
+              ...serverIncludedType ? { includedType: serverIncludedType } : {}
+            })
+          });
+          if (!response.ok) {
+            const errText = await response.text().catch(() => "");
+            console.error(`POST / HTTP ${response.status}: ${errText}`);
+            errors.push(`"${query}": HTTP ${response.status}`);
+            try {
+              const params = new URLSearchParams({
+                query,
+                latitude: String(latitude),
+                longitude: String(longitude),
+                radius: String(passRadiusMeters),
+                maxResults: "20",
+                cacheTtl: String(60 * 60 * 2),
+                // 2hr fallback TTL
+                ...forceRefresh ? { forceRefresh: "true" } : {}
+              });
+              const fbRes = await rxDispatch(env, ctx, origin, `/places/text-search?${params}`);
+              if (fbRes.ok) {
+                const fbData = await fbRes.json();
+                for (const place of fbData.places || []) {
+                  const pid = place.id || place.placeId;
+                  if (pid && !seenPlaceIds.has(pid) && isActuallyARestaurant(place)) {
+                    seenPlaceIds.add(pid);
+                    allPlaces.push(place);
+                  }
+                }
+                console.log(`   Fallback got ${fbData.places?.length || 0}`);
+              }
+            } catch (_e) {
+            }
+            continue;
+          }
+          const data = await response.json();
+          console.log(`   _cache:${data._cache || "none"} total:${data.totalFound || 0}`);
+          if (data.error) errors.push(`"${query}": ${data.error}`);
+          const places = data.restaurants || data.places || data.results || [];
+          console.log(`   \u2705 ${places.length} places`);
+          for (const place of places) {
+            const pid = place.id || place.placeId;
+            if (pid && !seenPlaceIds.has(pid) && isActuallyARestaurant(place)) {
+              seenPlaceIds.add(pid);
+              allPlaces.push(place);
+            }
+          }
+        } catch (err) {
+          console.error(`Error for "${query}":`, err.message);
+          errors.push(`"${query}": ${err.message}`);
+        }
+      }
+    };
+    await runQueryPass(radiusMiles);
+    await nearbyPromise;
+    console.log(`\u{1F4CA} Total unique after all searches: ${allPlaces.length}`);
+    if (errors.length) console.error("\u26A0\uFE0F Errors:", errors);
+    let autoExpandedFrom = null;
+    let effectiveRadiusMiles = radiusMiles;
+    const SPARSE_THRESHOLD = 15;
+    const MAX_EXPAND_RADIUS = 25;
+    const intentful = intent.kind !== "GENERAL" || !!searchQuery?.trim() || cuisine !== "all";
+    if (intentful && allPlaces.length < SPARSE_THRESHOLD && radiusMiles < MAX_EXPAND_RADIUS) {
+      const expandedRadius = Math.min(radiusMiles + 10, MAX_EXPAND_RADIUS);
+      console.log(`\u{1F52D} Auto-expanding radius: ${radiusMiles} \u2192 ${expandedRadius} mi (only ${allPlaces.length} raw results)`);
+      autoExpandedFrom = radiusMiles;
+      effectiveRadiusMiles = expandedRadius;
+      await runQueryPass(expandedRadius);
+      console.log(`\u{1F52D} After auto-expand: ${allPlaces.length} total`);
+    }
+    if (allPlaces.length === 0) {
+      return grResp({
+        places: [],
+        count: 0,
+        debug: {
+          errors,
+          hint: errors.length > 0 ? "Check Worker deployment + Google API key" : "API succeeded but 0 results \u2014 Worker may have empty cache for this area"
+        },
+        error: "No restaurants found. Try expanding your search radius."
+      });
+    }
+    const foodPlaces = allPlaces.filter(isActuallyARestaurant);
+    console.log(`\u{1F354} After restaurant filter: ${foodPlaces.length} (removed ${allPlaces.length - foodPlaces.length} non-food)`);
+    const processedPlaces = foodPlaces.map((place) => {
+      const lat = place.location?.latitude || place.lat || 0;
+      const lng = place.location?.longitude || place.lng || 0;
+      const dist = calcDistance(latitude, longitude, lat, lng);
+      const weekdayDescriptions = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
+      const photos = (place.photos || []).map((p) => p.url || p).filter(Boolean);
+      const customerFavorites = place.customerFavorites || place.customer_favorites || [];
+      const reviews = (place.reviews || []).map((r) => ({
+        rating: r.rating || 0,
+        text: r.text?.text || r.text || "",
+        author: r.authorDisplayName || r.authorAttribution?.displayName || r.author || "Anonymous",
+        time: r.relativePublishTimeDescription || r.relative_time_description || r.time || "",
+        profilePhoto: r.authorAttribution?.photoUri || r.profilePhoto || null
+      }));
+      const hasDriveThru = place.hasDriveThru || false;
+      const isTakeoutOnly = place.isTakeoutOnly || false;
+      const isCashOnly = place.isCashOnly || false;
+      const bestTimeNote = place.bestTimeNote || detectBestTime(reviews);
+      const sportsScore = calcSportsScore(place);
+      const sportsBadge = sportsLabel(sportsScore);
+      return {
+        id: place.id || place.placeId,
+        placeId: place.id || place.placeId,
+        displayName: place.displayName || { text: place.name || "" },
+        name: place.displayName?.text || place.name || "",
+        location: { latitude: lat, longitude: lng },
+        latitude: lat,
+        longitude: lng,
+        formattedAddress: place.formattedAddress || "",
+        shortFormattedAddress: place.shortFormattedAddress || "",
+        distanceKm: dist,
+        distanceMiles: dist * 0.621371,
+        rating: place.rating || null,
+        userRatingCount: place.userRatingCount || 0,
+        priceLevel: place.priceLevel,
+        currentOpeningHours: { openNow: place.isOpen, weekdayDescriptions },
+        regularOpeningHours: { weekdayDescriptions },
+        hours: weekdayDescriptions,
+        isOpen: place.isOpen ?? null,
+        photos,
+        photoUrl: photos[0] || null,
+        photoUrl2: photos[1] || null,
+        types: place.types || [],
+        primaryType: place.primaryType || null,
+        nationalPhoneNumber: place.nationalPhoneNumber || "",
+        internationalPhoneNumber: place.internationalPhoneNumber || "",
+        websiteUri: place.websiteUri || null,
+        googleMapsUri: place.googleMapsUri || null,
+        serviceOptions: place.serviceOptions || {},
+        dineIn: place.serviceOptions?.dineIn ?? place.dineIn ?? null,
+        takeout: place.serviceOptions?.takeout ?? place.takeout ?? null,
+        delivery: place.serviceOptions?.delivery ?? place.delivery ?? null,
+        outdoorSeating: place.serviceOptions?.outdoorSeating ?? place.outdoorSeating ?? null,
+        reservable: place.reservable ?? null,
+        goodForChildren: place.goodForChildren ?? null,
+        goodForGroups: place.goodForGroups ?? null,
+        servesBeer: place.servesBeer ?? null,
+        servesWine: place.servesWine ?? null,
+        servesCocktails: place.servesCocktails ?? null,
+        servesVegetarianFood: place.servesVegetarianFood ?? null,
+        customerFavorites,
+        reviews,
+        hasDriveThru,
+        isTakeoutOnly,
+        isCashOnly,
+        bestTimeNote,
+        why: place.why || null,
+        is_breakthrough: place.is_breakthrough || false,
+        paymentOptions: place.paymentOptions || {},
+        parkingOptions: place.parkingOptions || null,
+        seatingSource: place.dineIn != null || place.outdoorSeating != null ? "api" : null,
+        sportsScore,
+        // 0–100 confidence score (ChatGPT + Gemini multi-signal algorithm)
+        sportsBadge,
+        // "Best Sports Bar" | "Sports-Friendly" | "Casual Watch Spot" | null
+        // Intent-aware tiering (1=Authentic, 2=Good Match, 3=Has It, 4=Other)
+        // Overrides any Worker-pass-through tier with our richer client-side logic
+        tier: getTierForPlace(place, intent),
+        tierLabel: TIER_LABELS[getTierForPlace(place, intent)] || "Match"
+      };
+    }).filter((p) => p.distanceMiles <= effectiveRadiusMiles + 1);
+    const DIETARY_FILTER_TYPES = ["halal", "kosher", "vegan", "vegetarian", "glutenFree"];
+    const DIETARY_INTENT_LABEL_TO_KEY = {
+      "halal": "halal",
+      "kosher": "kosher",
+      "vegan": "vegan",
+      "vegetarian": "vegetarian",
+      "gluten free": "glutenFree"
+    };
+    const intentDietary = intent.kind === "DISH" ? DIETARY_INTENT_LABEL_TO_KEY[(intent.label || "").toLowerCase()] || null : null;
+    const compoundDietary = detectDietaryModifier(
+      searchQuery || "",
+      intent.kind === "DISH" ? intent.label : null
+    );
+    const effectiveDietary = DIETARY_FILTER_TYPES.includes(cuisine) ? cuisine : activeDietary && DIETARY_FILTER_TYPES.includes(activeDietary) ? activeDietary : compoundDietary || intentDietary;
+    let finalPlaces = processedPlaces;
+    if (cuisine === "latenight") {
+      finalPlaces = finalPlaces.filter((p) => {
+        if (!p.hours || p.hours.length === 0) return false;
+        return p.hours.some((dayStr) => {
+          const text = dayStr.toLowerCase();
+          if (text.includes("24 hours")) return true;
+          const parts = text.split(/[-–to]/);
+          const closingPart = parts.length > 1 ? parts[parts.length - 1] : text;
+          return /(10|11):\d{2}\s*pm|(12|1|2|3|4|5):\d{2}\s*am/i.test(closingPart);
+        });
+      });
+    }
+    if (effectiveDietary) {
+      finalPlaces = processedPlaces.filter((p) => hasStrongDietaryMatch(p, effectiveDietary));
+      finalPlaces.sort((a, b) => dietaryScore(b, effectiveDietary) - dietaryScore(a, effectiveDietary));
+      finalPlaces.forEach((p) => {
+        if (hasStrongDietaryMatch(p, effectiveDietary)) {
+          p.dietary = { ...p.dietary || {}, [effectiveDietary]: true };
+        }
+      });
+    } else if (intent.kind !== "GENERAL" && searchQuery?.trim()) {
+      const wantsBest = /\bbest\b/i.test(searchQuery);
+      finalPlaces.sort((a, b) => {
+        if ((a.tier || 4) !== (b.tier || 4)) return (a.tier || 4) - (b.tier || 4);
+        if (wantsBest || wantsHiddenGem) {
+          const qa0 = (a.rating || 0) * Math.log10(Math.max(a.userRatingCount || 1, 1));
+          const qb0 = (b.rating || 0) * Math.log10(Math.max(b.userRatingCount || 1, 1));
+          const qa = wantsHiddenGem && (a.userRatingCount || 0) > 5e3 ? qa0 * 0.5 : qa0;
+          const qb = wantsHiddenGem && (b.userRatingCount || 0) > 5e3 ? qb0 * 0.5 : qb0;
+          return qb - qa;
+        }
+        return (a.distanceKm || 999) - (b.distanceKm || 999);
+      });
+    } else if (cuisine === "sports_bar" || sportsBarVibeActive) {
+      finalPlaces.sort((a, b) => {
+        const qa = (a.rating || 0) * Math.log10(Math.max(a.userRatingCount || 1, 1));
+        const qb = (b.rating || 0) * Math.log10(Math.max(b.userRatingCount || 1, 1));
+        return qb - qa;
+      });
+    } else {
+      finalPlaces.sort((a, b) => a.distanceKm - b.distanceKm);
+    }
+    if (intent.kind === "DISH") {
+      const before = finalPlaces.length;
+      finalPlaces = finalPlaces.filter((p) => (p.tier || 5) <= 4);
+      const dropped = before - finalPlaces.length;
+      if (dropped > 0) console.log(`\u{1F6AE} Dropped ${dropped} tier-5 noise places`);
+    }
+    let fallbackPlaces = [];
+    let fallbackCuisine = null;
+    let fallbackQueryLabel = null;
+    if (finalPlaces.length === 0 && intent.kind === "DISH" && intent.strict) {
+      const tier1 = (intent.tier1Types || [])[0] || "";
+      const cuisineKey = tier1.replace(/_restaurant$/, "");
+      const umbrella = CUISINE_CHIP_TO_UMBRELLA[cuisineKey];
+      if (umbrella) {
+        fallbackCuisine = umbrella.label;
+        fallbackQueryLabel = intent.label || searchQuery;
+        fallbackPlaces = processedPlaces.filter((p) => {
+          const types = new Set([
+            ...p.types || [],
+            p.primaryType || ""
+          ].map((t) => t.toLowerCase()));
+          return [...types].some((t) => umbrella.types.has(t));
+        }).map((p) => ({ ...p, fallback: true, fallbackCuisine: umbrella.label })).sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 20);
+        console.log(`\u{1F504} Fallback fired for "${fallbackQueryLabel}" -> ${fallbackPlaces.length} ${fallbackCuisine} restaurants from existing pool`);
+      }
+    }
+    const intentSorted = intent.kind !== "GENERAL" && !!searchQuery?.trim();
+    finalPlaces.forEach((p, i) => {
+      p.backendRank = i + 1;
+    });
+    fallbackPlaces.forEach((p, i) => {
+      p.backendRank = i + 1;
+    });
+    if (intent.kind === "DISH") {
+      const dishLabelLower = intent.label?.toString().toLowerCase() || "";
+      const dishRawWords = intent.rawWords || [];
+      const matchers = [dishLabelLower, ...dishRawWords].filter(Boolean);
+      const EAGER_PLACES = 20;
+      const PHOTOS_PER_PLACE = 5;
+      const eagerTargets = finalPlaces.slice(0, EAGER_PLACES);
+      await Promise.all(eagerTargets.map(async (place) => {
+        try {
+          const allPhotos = place.photos || [];
+          const photosToLabel = allPhotos.slice(0, PHOTOS_PER_PLACE).filter((p) => p?.name || typeof p === "string");
+          if (photosToLabel.length === 0) return;
+          const labelReq = await rxDispatch(env, ctx, origin, `/label-photos`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              placeId: place.id || place.placeId,
+              photos: photosToLabel.map((p) => ({ name: p?.name || p }))
+            })
+          });
+          if (!labelReq.ok) return;
+          const { labels, dishes } = await labelReq.json();
+          if (Array.isArray(dishes) && dishes.length) {
+            place.menuDishes = dishes;
+            if ((place.tier === 5 || place.tier == null) && matchers.some((w) => dishes.some((md) => md.includes(w)))) {
+              place.tier = 4;
+              place.tierLabel = TIER_LABELS[4];
+            }
+          }
+          if (labels && Object.keys(labels).length) {
+            const isMatch = (photoName) => {
+              const tag = (labels[photoName] || "").toString().toLowerCase();
+              return matchers.some((w) => tag.includes(w));
+            };
+            const matchedFront = [];
+            const rest = [];
+            for (const ph of allPhotos) {
+              const phName = ph?.name || ph;
+              if (typeof phName === "string" && isMatch(phName)) matchedFront.push(ph);
+              else rest.push(ph);
+            }
+            if (matchedFront.length) place.photos = [...matchedFront, ...rest];
+          }
+          place.photosLabeled = true;
+        } catch (_e) {
+        }
+      }));
+    }
+    const tier1Count = finalPlaces.filter((p) => p.tier === 1).length;
+    const tier2Count = finalPlaces.filter((p) => p.tier === 2).length;
+    const allTier1 = processedPlaces.filter((p) => p.tier === 1).sort((a, b) => a.distanceKm - b.distanceKm);
+    const fallbackInfo = {
+      needed: intent.kind !== "GENERAL" && !!searchQuery?.trim() && tier1Count + tier2Count === 0,
+      intentKind: intent.kind,
+      intentLabel: intent.kind === "UMBRELLA" ? intent.label : intent.kind === "DISH" ? intent.label : null,
+      tier1Count,
+      tier2Count,
+      nearestAuthenticName: allTier1[0]?.name || null,
+      nearestAuthenticDistanceMiles: allTier1[0] ? +(allTier1[0].distanceKm * 0.621371).toFixed(1) : null
+    };
+    console.log(`\u2705 Returning ${finalPlaces.length} places | tier1:${tier1Count} tier2:${tier2Count} fallback:${fallbackInfo.needed}`);
+    console.log("\u{1F37D}\uFE0F === getRestaurants v5.1 END ===\n");
+    return grResp({
+      places: finalPlaces,
+      count: finalPlaces.length,
+      version: "v5.2",
+      intentSorted,
+      fallbackInfo,
+      // Auto-expand-on-sparse signal: lets the frontend display a small banner
+      // ("Expanded to 20 mi — only 3 results within 10 mi") when results were
+      // sparse and the backend widened the search.
+      autoExpanded: autoExpandedFrom !== null,
+      autoExpandedFrom,
+      effectiveRadiusMiles,
+      // ── Phase 1.5 "Also serves X" fallback section ────────────────────
+      // Populated when strict DISH search returned 0 results AND we found
+      // umbrella-cuisine restaurants in the existing pool. Frontend renders
+      // these below a divider explaining no exact match was found.
+      fallbackPlaces,
+      fallbackCuisine,
+      fallbackQueryLabel
+    });
+  } catch (error) {
+    console.error("\u{1F4A5} ERROR:", error.message);
+    return grResp({ error: error.message, places: [] }, { status: 200 });
+  }
+}
+function calcDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function detectBestTime(reviews) {
+  if (!reviews?.length) return null;
+  const text = reviews.map((r) => r.text || "").join(" ").toLowerCase();
+  if (text.match(/\b(lunch|midday|noon)\b.*\b(quiet|empty|not crowded|easy|quick)\b/)) return "Lunchtime or early";
+  if (text.match(/\b(weekday|monday|tuesday|wednesday|thursday)\b.*\b(better|quiet|less crowded|easier)\b/)) return "Weekday visit";
+  if (text.match(/\b(weekend|saturday|sunday)\b.*\b(crowded|busy|wait|packed)\b/)) return "Go on weekdays \u2014 busy weekends";
+  if (text.match(/\b(evening|dinner|night)\b.*\b(best|great|romantic|recommend)\b/)) return "Dinner time";
+  if (text.match(/\b(early|open|first|11am|10am)\b.*\b(best|less|avoid|beat)\b/)) return "Early \u2014 beats the rush";
+  return null;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -7069,6 +9471,7 @@ export default {
       if (pathname === '/exchange-rate' && request.method === 'POST') return await handleExchangeRate(request, env);
       if (pathname === '/money-exchange' && request.method === 'POST') return await handleMoneyExchange(request, env, ctx);
       if (pathname === '/activities' && request.method === 'POST') return await handleActivities(request, env, ctx);
+      if (pathname === '/restaurants-full' && request.method === 'POST') return await handleRestaurantsFull(request, env, ctx);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
       if (pathname === '/analyze-price' && request.method === 'POST') return await handleAnalyzePrice(request, env);
       if (pathname === '/scan-text' && request.method === 'POST') return await handleScanText(request, env);
