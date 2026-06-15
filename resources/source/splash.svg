@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1290" height="2796" viewBox="0 0 1290 2796">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0A1015"></stop><stop offset=".5" stop-color="#0C1726"></stop><stop offset="1" stop-color="#0A1118"></stop></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#2E6BF0" stop-opacity=".34"></stop><stop offset="1" stop-color="#2E6BF0" stop-opacity="0"></stop></radialGradient>
+    <radialGradient id="orb" cx=".4" cy=".34" r=".75"><stop offset="0" stop-color="#3D8BFF" stop-opacity=".4"></stop><stop offset=".6" stop-color="#1E4ABF" stop-opacity=".18"></stop><stop offset="1" stop-color="#0C1F66" stop-opacity=".4"></stop></radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE08A"></stop><stop offset="1" stop-color="#F5A93B"></stop></linearGradient>
+    <linearGradient id="gtrail" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FFD27A" stop-opacity="0"></stop><stop offset="1" stop-color="#FFD27A" stop-opacity=".95"></stop></linearGradient>
+    <clipPath id="gc"><circle cx="645" cy="1040" r="252"></circle></clipPath>
+    <filter id="soft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="26"></feGaussianBlur></filter>
+    <radialGradient id="hl" cx=".4" cy=".32" r=".5"><stop offset="0" stop-color="#fff" stop-opacity=".18"></stop><stop offset=".5" stop-color="#fff" stop-opacity="0"></stop></radialGradient>
+  </defs>
+
+  <rect width="1290" height="2796" fill="url(#sky)"></rect>
+  <ellipse cx="645" cy="1040" rx="660" ry="660" fill="url(#glow)"></ellipse>
+
+  <g filter="url(#soft)" opacity=".6"><circle cx="645" cy="1040" r="252" fill="none" stroke="#2E6BF0" stroke-width="20"></circle></g>
+
+  <path d="M360 1320 Q 520 1010 826 876" fill="none" stroke="url(#gtrail)" stroke-width="18" stroke-linecap="round" stroke-dasharray="48 34"></path>
+
+  <circle cx="645" cy="1040" r="252" fill="url(#orb)"></circle>
+  <g clip-path="url(#gc)" fill="none" stroke="#E4EEFF" stroke-linecap="round">
+    <g stroke-width="6.5" opacity=".92"><line x1="393" y1="1040" x2="897" y2="1040"></line><path d="M412 952 Q 645 916 878 952"></path><path d="M436 874 Q 645 846 854 874"></path><path d="M412 1128 Q 645 1164 878 1128"></path><path d="M436 1206 Q 645 1234 854 1206"></path></g>
+    <g stroke-width="6.5" opacity=".92"><line x1="645" y1="788" x2="645" y2="1292"></line><ellipse cx="645" cy="1040" rx="94" ry="252"></ellipse><ellipse cx="645" cy="1040" rx="183" ry="252"></ellipse></g>
+  </g>
+  <circle cx="645" cy="1040" r="252" fill="url(#hl)"></circle>
+  <circle cx="645" cy="1040" r="252" fill="none" stroke="#EAF2FF" stroke-width="7" opacity=".9"></circle>
+
+  <g transform="translate(866 818) rotate(42) scale(15)" fill="url(#gold)"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"></path></g>
+
+  <text x="645" y="1700" text-anchor="middle" font-family="'Inter Tight','Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="150" letter-spacing="-4"><tspan fill="#F4EFE5">Globe</tspan><tspan fill="#FFD27A">Skimmers</tspan></text>
+  <text x="645" y="1798" text-anchor="middle" font-family="'Instrument Serif',Georgia,serif" font-style="italic" font-size="62" fill="#8595A8">Travel like you've been there before.</text>
+  <text x="645" y="2580" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="34" letter-spacing="10" fill="#3A4658">GLOBESKIMMERS</text>
+</svg>
