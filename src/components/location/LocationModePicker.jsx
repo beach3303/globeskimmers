@@ -237,7 +237,7 @@ export default function LocationModePicker({ isOpen, onClose }) {
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[9998] overflow-hidden flex items-center justify-center px-3">
+        <div className="fixed inset-0 z-[9998] overflow-hidden flex items-start justify-center px-3 pt-[7vh]">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

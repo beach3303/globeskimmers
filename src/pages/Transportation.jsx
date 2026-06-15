@@ -10,6 +10,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
+import { getCurrentPositionSmart } from "@/lib/geolocation";
 import { isCityLocation } from "../components/location/locationLabel";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
 
@@ -681,6 +682,44 @@ export default function Transportation() {
   const [showAirportPicker, setShowAirportPicker] = useState(false);
   const [showSavedLocations, setShowSavedLocations] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [fromGpsLoading, setFromGpsLoading] = useState(false);
+  const [fromGpsError, setFromGpsError] = useState(null);
+
+  // "Use my current location as the starting point" — updates ONLY the FROM /
+  // origin (never the destination). GPS → reverse geocode → street address +
+  // city; bare coordinates as the last-resort fallback.
+  const handleUseCurrentAsStart = async () => {
+    setFromGpsError(null);
+    setFromGpsLoading(true);
+    try {
+      const pos = await getCurrentPositionSmart();
+      const lat = pos?.coords?.latitude;
+      const lng = pos?.coords?.longitude;
+      if (lat == null || lng == null) throw new Error('No coordinates');
+      let name = 'Current GPS Location';
+      let address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      try {
+        const { data } = await callWorker(ROUTE.reverseGeocode, { latitude: lat, longitude: lng });
+        const fa = data?.formatted_address || '';
+        if (fa) {
+          const idx = fa.indexOf(',');
+          if (idx > 0) { name = fa.slice(0, idx).trim(); address = fa.slice(idx + 1).trim(); }
+          else { name = fa; }
+        } else if (data?.city) {
+          name = data.city;
+          address = [data.state_or_country, data.country].filter(Boolean)[0] || address;
+        }
+      } catch { /* keep the coordinate fallback */ }
+      setOrigin({ name, address, latitude: lat, longitude: lng });
+    } catch (e) {
+      const denied = e?.code === 1 || /denied|permission/i.test(e?.message || '');
+      setFromGpsError(denied
+        ? 'Location access is needed to update your starting point.'
+        : "Couldn't update your starting point. Try again or choose a location manually.");
+    } finally {
+      setFromGpsLoading(false);
+    }
+  };
   
   // Search states
   const [searchQuery, setSearchQuery] = useState("");
@@ -2303,6 +2342,21 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                 <button onClick={() => setShowLocationPicker(true)} className="text-[11.5px] font-semibold mt-1 underline underline-offset-2" style={{ color: TEAL_DEEP }}>
                   Change
                 </button>
+                {/* Subtle secondary action — set the starting point to live GPS.
+                    Compact pill, right-aligned inside the FROM card; updates the
+                    origin only (never the destination). */}
+                <div className="flex justify-end mt-1.5">
+                  <button
+                    onClick={handleUseCurrentAsStart}
+                    disabled={fromGpsLoading}
+                    className="flex items-center gap-1.5 px-3 rounded-full text-[11px] font-semibold disabled:opacity-60 active:scale-[0.98] transition"
+                    style={{ height: '30px', background: '#E6F4F1', color: TEAL_DEEP, border: '1px solid #B6E3DC' }}
+                  >
+                    {fromGpsLoading ? <Loader2 size={12} className="animate-spin" /> : <Navigation size={12} />}
+                    <span>{fromGpsLoading ? 'Updating starting point…' : 'Use my current location as the starting point'}</span>
+                  </button>
+                </div>
+                {fromGpsError && <div className="text-[11px] text-red-600 mt-1 text-right">{fromGpsError}</div>}
               </div>
               {/* TO */}
               <div className="pt-3">

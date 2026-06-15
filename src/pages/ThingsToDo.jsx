@@ -841,11 +841,9 @@ export default function ThingsToDoFinder() {
 
       {/* Filters band */}
       <div className="px-4 max-w-md mx-auto pb-2">
-        <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:radius>25?"6px":"10px",flexWrap:"wrap"}}>
-          <span className="font-mono" style={{fontSize:"10px",color:'#6B7280',fontWeight:600,letterSpacing:"0.14em",textTransform:'uppercase'}}>📏 Radius:</span>
-          <div style={{display:"flex",gap:"5px"}}>{[5,10,15,25,50].map(r=><button key={r} onClick={()=>setRadius(r)} className="font-sans" style={{padding:"6px 12px",borderRadius:"20px",border:radius===r?`2px solid ${CAT.todo.ink}`:"1px solid #F0E9DC",background:radius===r?CAT.todo.ink:"#fff",color:radius===r?"#fff":'#475569',fontWeight:radius===r?"700":"500",fontSize:"12px",cursor:"pointer"}}>{r} mi</button>)}</div>
-          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" style={{marginLeft:"auto"}}/>
-          <span style={{fontSize:"11px",color:'#94A3B8'}}>{loading?"Searching…":`${activities.length} found`}</span>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"8px",marginBottom:radius>25?"6px":"10px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"5px"}}>{[5,10,15,25,50].map(r=><button key={r} onClick={()=>setRadius(r)} className="font-sans" style={{padding:"6px 10px",borderRadius:"20px",border:radius===r?`2px solid ${CAT.todo.ink}`:"1px solid #F0E9DC",background:radius===r?CAT.todo.ink:"#fff",color:radius===r?"#fff":'#475569',fontWeight:radius===r?"700":"500",fontSize:"12px",cursor:"pointer",whiteSpace:"nowrap"}}>{r} mi</button>)}</div>
+          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light"/>
         </div>
         {radius>25 && <div style={{fontSize:"11px",color:'#6B7280',marginBottom:"10px"}}>⭐ Beyond 25mi: showing iconic spots only (landmarks, theme parks, must-see attractions)</div>}
       </div>
