@@ -20,7 +20,8 @@ import LocationModePicker from '@/components/location/LocationModePicker';
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from '@/components/location/locationLabel';
 import { useDistanceUnit } from '@/components/location/distanceUnit';
 import DistanceUnitToggle from '@/components/location/DistanceUnitToggle';
-import { base44 } from '@/api/base44Client';
+import { callWorker } from '@/lib/callWorker';
+import { ROUTE } from '@/lib/workerRoutes';
 import RefreshButton from '@/components/RefreshButton';
 import NameLanguageHelp from '@/components/NameLanguageHelp';
 import MapAppSelector from '@/components/MapAppSelector';
@@ -967,7 +968,7 @@ export default function ConvenienceStorePage() {
     const force = forceNextRef.current; forceNextRef.current = false;
 
     try {
-      const { data: result } = await base44.functions.invoke('getConvenienceStores', {
+      const { data: result, error: workerError } = await callWorker(ROUTE.getConvenienceStores, {
         latitude: location.latitude,
         longitude: location.longitude,
         radius: searchRadius,
@@ -976,10 +977,9 @@ export default function ConvenienceStorePage() {
         ...activeFilters,
         forceRefresh: force,
       });
-      
-      console.log('📦 Store result:', result);
-      
-      let storeList = result.stores || result.places || result.all_stores || [];
+      if (workerError) throw new Error(workerError);
+
+      let storeList = result?.stores || result?.places || result?.all_stores || [];
       console.log(`✅ Loaded ${storeList.length} stores`);
       
       setStores(storeList);

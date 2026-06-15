@@ -5856,6 +5856,328 @@ async function handleAtmLocations(request, env, ctx) {
   }
 }
 
+// ============================================================================
+// SHOPPING FINDER — ported from base44/functions/getShoppingPlaces (v3.0).
+// Food-shopping vs general-shopping split, detectKind classifier, traveler
+// score, highlights. Reuses rrTextSearch / rrCalcDist.
+// ============================================================================
+const SHOP_CATEGORY_QUERIES = {
+  all: ['shopping mall','supermarket','grocery store','farmers market','night market','souvenir market','outlet mall','bazaar','souk','warehouse club','bodega','wet market','craft market','department store','luxury shopping','duty free shop','local market','butcher shop'],
+  food_shopping: ['supermarket','grocery store','hypermarket','food market','farmers market','wet market','produce market','bodega','warehouse club','wholesale club','neighborhood market','butcher shop','fish market','bakery specialty','natural foods store'],
+  supermarkets: ['supermarket','grocery store','hypermarket','supercenter','Whole Foods','Trader Joes','Ralphs','Vons','Albertsons','Kroger','Safeway','Publix','HEB','Aldi','Lidl','Food 4 Less','Sprouts','Wegmans','WinCo','Meijer','Harris Teeter','Giant','natural foods grocery','organic grocery'],
+  warehouse_clubs: ['warehouse club','wholesale club','membership warehouse','Costco','Sams Club','BJs Wholesale','Makro','Metro Cash and Carry'],
+  farmers_markets: ['farmers market',"farmer's market",'open air produce market','weekend food market','fresh produce market','community market food'],
+  wet_markets: ['wet market','public market','fish market','meat market','produce market','fresh market','municipal market','morning market food'],
+  bodegas_corner_stores: ['bodega','corner store','mini market','neighborhood grocer','convenience food store','local food shop','alimentari','sari-sari store','warung','minimarket food'],
+  butcher_shops: ['butcher shop','butcher','meat market','fish market','fishmonger','fish shop','bakery specialty food'],
+  general_shopping: ['shopping mall','outlet mall','department store','souvenir market','boutique district','luxury shopping','craft market','night market','bazaar','souk','duty free shop'],
+  malls: ['shopping mall','shopping center','shopping centre','department store','retail mall'],
+  outlets: ['outlet mall','premium outlet','factory outlet','discount outlet center'],
+  souvenir_shopping: ['souvenir market','souvenir shop','gift shop','local souvenir shopping','tourist souvenirs','handicraft shop'],
+  night_markets: ['night market','pasar malam','evening market','night bazaar'],
+  luxury_shopping: ['luxury shopping','designer boutique','high end shopping','luxury brands','designer brands district'],
+  local_crafts: ['craft market','artisan market','handmade market','local crafts','artisan goods'],
+  markets_bazaars: ['bazaar','souk','mercado','marché','mercato','pasar','talaat','flea market','street market','local market','antique market','vintage market'],
+  duty_free: ['duty free shop','tax free shopping','airport duty free'],
+};
+const SHOP_SIG = {
+  luxury: ['luxury','designer','gucci','louis vuitton','chanel','prada','hermes','burberry','premium','high-end','upscale'],
+  budget: ['budget','affordable','cheap','bargain','discount','value','sale','clearance','outlet','wholesale'],
+  foodCourt: ['food court','dining','restaurants','food hall','hawker','food stalls'],
+  parking: ['free parking','parking available','ample parking','underground parking','valet'],
+  outdoor: ['outdoor','open air','alfresco','street','open-air'],
+  indoor: ['indoor','air conditioned','air-con','covered','climate'],
+  local: ['local','artisan','handmade','craft','traditional','authentic','souvenirs','handicraft'],
+  dutyFree: ['duty free','tax free','duty-free','tax-free'],
+  bargain: ['bargain','haggle','negotiate','wholesale','discount market'],
+  tourist: ['tourist','traveler','popular','iconic','must visit','famous'],
+  fresh: ['fresh produce','fresh food','organic','farm fresh','seasonal'],
+};
+function shopSafeLower(v) { if (typeof v === 'string') return v.toLowerCase(); if (v == null) return ''; if (typeof v === 'object') return (v.text || '').toLowerCase(); return String(v).toLowerCase(); }
+function shopSc(t, k) { return k.filter(w => t.includes(w)).length; }
+function shopDetectKind(name, types = [], rev = '') {
+  const x = `${name} ${types.join(' ')} ${rev}`.toLowerCase();
+  if (/supermarket|grocery|hypermarket|whole foods|trader joe|ralphs|vons|kroger|albertsons|aldi|lidl|publix|safeway|winco|wegmans|sprouts|heb|meijer|food 4 less|natural food/.test(x)) return { shoppingFamily: 'food_shopping', shoppingSubtype: 'supermarket', venueIcon: '🛒', venueLabel: 'Supermarket', venueColor: '#2E7D32' };
+  if (/costco|sam'?s club|bj'?s|warehouse club|wholesale club|makro|metro cash/.test(x)) return { shoppingFamily: 'food_shopping', shoppingSubtype: 'warehouse_club', venueIcon: '📦', venueLabel: 'Warehouse Club', venueColor: '#1565C0' };
+  if (/farmer'?s? market|open air produce|weekend food market/.test(x)) return { shoppingFamily: 'food_shopping', shoppingSubtype: 'farmers_market', venueIcon: '🥕', venueLabel: 'Farmers Market', venueColor: '#689F38' };
+  if (/wet market|fish market|meat market|produce market|public market|municipal market|fishmonger/.test(x)) return { shoppingFamily: 'food_shopping', shoppingSubtype: 'fresh_market', venueIcon: '🍎', venueLabel: 'Fresh Food Market', venueColor: '#D97706' };
+  if (/bodega|corner store|mini market|sari.sari|warung|neighbourhood food|neighborhood food|alimentari/.test(x)) return { shoppingFamily: 'food_shopping', shoppingSubtype: 'bodega', venueIcon: '🏪', venueLabel: 'Neighborhood Food Shop', venueColor: '#059669' };
+  if (/butcher|butcher shop|fishmonger|fish shop/.test(x)) return { shoppingFamily: 'food_shopping', shoppingSubtype: 'butcher_shop', venueIcon: '🥩', venueLabel: 'Butcher / Fish Shop', venueColor: '#B45309' };
+  if (/outlet|factory outlet|premium outlet/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'outlet', venueIcon: '🏷️', venueLabel: 'Outlet', venueColor: '#DC2626' };
+  if (/night market|pasar malam|night bazaar/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'night_market', venueIcon: '🌙', venueLabel: 'Night Market', venueColor: '#1565C0' };
+  if (/souk|bazaar|bazar/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'bazaar', venueIcon: '🏺', venueLabel: 'Souk / Bazaar', venueColor: '#B45309' };
+  if (/souvenir|handicraft|gift shop|tourist shop/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'souvenir', venueIcon: '🎁', venueLabel: 'Souvenir Market', venueColor: '#7C3AED' };
+  if (/craft|artisan|handmade/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'crafts', venueIcon: '🧶', venueLabel: 'Craft Market', venueColor: '#D97706' };
+  if (/luxury|designer boutique|high.end shopping/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'luxury', venueIcon: '💎', venueLabel: 'Luxury Shopping', venueColor: '#BE185D' };
+  if (/duty.free|tax.free/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'duty_free', venueIcon: '✈️', venueLabel: 'Duty Free', venueColor: '#0891B2' };
+  if (/mall|shopping center|shopping centre|department store|nordstrom|macy|saks|selfridge|harrods|galeries/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'mall', venueIcon: '🏬', venueLabel: 'Shopping Mall', venueColor: '#7C3AED' };
+  return { shoppingFamily: 'general_shopping', shoppingSubtype: 'shopping', venueIcon: '🛍️', venueLabel: 'Shopping', venueColor: '#7C3AED' };
+}
+function shopTravelerScore(p, category) {
+  const kind = p.shoppingKind || {};
+  const familyMatch = (category === 'food_shopping' || ['supermarkets','warehouse_clubs','farmers_markets','wet_markets','bodegas_corner_stores','butcher_shops'].includes(category))
+    ? (kind.shoppingFamily === 'food_shopping' ? 40 : 0)
+    : (kind.shoppingFamily === 'general_shopping' ? 30 : 0);
+  const openNow = p.isOpen === true ? 15 : 0;
+  const ratingScore = ((p.rating || 0) / 5) * 15;
+  const distanceScore = Math.max(0, 12 - (p.distanceMiles || 0) * 2);
+  const photoScore = Math.min((p.photos?.length || 0), 5);
+  return familyMatch + openNow + ratingScore + distanceScore + photoScore;
+}
+async function handleShoppingPlaces(request, env, ctx) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { latitude, longitude, radius = 16093, maxResults = 30, category = 'all', forceRefresh = false } = body;
+    if (!latitude || !longitude) return jsonResponse({ error: 'Location required', places: [] }, 400);
+    const origin = new URL(request.url).origin;
+    const queries = SHOP_CATEGORY_QUERIES[category] || SHOP_CATEGORY_QUERIES.all;
+
+    const seen = new Set();
+    const places = [];
+    const batchSize = 8;
+    for (let i = 0; i < queries.length; i += batchSize) {
+      const results = await Promise.all(queries.slice(i, i + batchSize).map(q =>
+        rrTextSearch(env, ctx, origin, { query: q, latitude, longitude, radius, maxResults: 10, forceRefresh }).catch(() => [])
+      ));
+      for (const arr of results) for (const pl of arr) { const id = pl.id || pl.placeId; if (id && !seen.has(id)) { seen.add(id); places.push(pl); } }
+    }
+
+    if (!places.length) return jsonResponse({ places: [], count: 0, error: 'No shopping found nearby.' });
+
+    const out = places.slice(0, maxResults * 2).map(p => {
+      const lat = p.location?.latitude || 0;
+      const lng = p.location?.longitude || 0;
+      const d = rrCalcDist(latitude, longitude, lat, lng);
+      const name = p.displayName?.text || p.name || '';
+      const rev = (p.reviews || []).map(r => shopSafeLower(r?.text?.text ?? r?.text ?? r?.originalText?.text ?? '')).join(' ');
+      const txt = `${name.toLowerCase()} ${(p.types || []).join(' ')} ${rev}`;
+      const photos = (p.photos || []).map(ph => ph.url || ph).filter(Boolean).slice(0, 5);
+      const hours = p.currentOpeningHours?.weekdayDescriptions || p.regularOpeningHours?.weekdayDescriptions || p.hours || [];
+      const shoppingKind = shopDetectKind(name, p.types || [], rev);
+      const highlights = [];
+      if (shoppingKind.shoppingFamily === 'food_shopping') {
+        if (shopSc(txt, SHOP_SIG.fresh) > 0) highlights.push('Fresh Produce');
+        if (/organic/.test(txt)) highlights.push('Organic Options');
+        if (/international/.test(txt)) highlights.push('International Foods');
+        if (/prepared food/.test(txt)) highlights.push('Prepared Foods');
+        if (shopSc(txt, SHOP_SIG.budget) > 0) highlights.push('Budget Friendly');
+        if (shopSc(txt, SHOP_SIG.tourist) > 0) highlights.push('Tourist Friendly');
+        if (/24 hour|open late/.test(txt)) highlights.push('Open Late');
+      } else {
+        if (shopSc(txt, SHOP_SIG.luxury) > 1) highlights.push('Luxury Brands');
+        if (shopSc(txt, SHOP_SIG.dutyFree) > 0) highlights.push('Duty Free');
+        if (shopSc(txt, SHOP_SIG.local) > 1) highlights.push('Local Crafts');
+        if (shopSc(txt, SHOP_SIG.foodCourt) > 0) highlights.push('Food & Dining');
+        if (shopSc(txt, SHOP_SIG.bargain) > 0) highlights.push('Bargain Hunting');
+        if (shopSc(txt, SHOP_SIG.tourist) > 1) highlights.push('Tourist Favorite');
+        if (shopSc(txt, SHOP_SIG.outdoor) > 0) highlights.push('Open Air');
+      }
+      return {
+        id: p.id, placeId: p.id,
+        displayName: p.displayName || { text: name },
+        name, location: { latitude: lat, longitude: lng }, lat, lng,
+        formattedAddress: p.formattedAddress || '', shortFormattedAddress: p.shortFormattedAddress || '',
+        distanceKm: d, distanceMiles: d * 0.621371, distance: `${(d * 0.621371).toFixed(1)} mi`,
+        rating: p.rating || null, userRatingCount: p.userRatingCount || 0,
+        isOpen: p.isOpen ?? null, hours,
+        currentOpeningHours: { openNow: p.isOpen, weekdayDescriptions: hours },
+        photos, photoUrl: photos[0] || null,
+        nationalPhoneNumber: p.nationalPhoneNumber || '', internationalPhoneNumber: p.internationalPhoneNumber || '',
+        websiteUri: p.websiteUri || '', googleMapsUri: p.googleMapsUri || '',
+        types: p.types || [], primaryType: p.primaryType || null,
+        shoppingFamily: shoppingKind.shoppingFamily, shoppingSubtype: shoppingKind.shoppingSubtype,
+        venueIcon: shoppingKind.venueIcon, venueLabel: shoppingKind.venueLabel, venueColor: shoppingKind.venueColor,
+        highlights,
+        props: {
+          isLuxury: shopSc(txt, SHOP_SIG.luxury) > 1,
+          isBudget: shopSc(txt, SHOP_SIG.budget) > 0,
+          hasFoodCourt: shopSc(txt, SHOP_SIG.foodCourt) > 0,
+          hasFreeParking: shopSc(txt, SHOP_SIG.parking) > 0,
+          isOutdoor: shopSc(txt, SHOP_SIG.outdoor) > 0,
+          isIndoor: shopSc(txt, SHOP_SIG.indoor) > 0,
+          hasLocalCrafts: shopSc(txt, SHOP_SIG.local) > 1,
+          isDutyFree: shopSc(txt, SHOP_SIG.dutyFree) > 0,
+          isBargain: shopSc(txt, SHOP_SIG.bargain) > 0,
+          isTouristFav: shopSc(txt, SHOP_SIG.tourist) > 1,
+          isFoodShopping: shoppingKind.shoppingFamily === 'food_shopping',
+          hasFreshProduce: shopSc(txt, SHOP_SIG.fresh) > 0,
+          isOpenLate: /24 hour|open late|midnight/.test(txt),
+          isBudgetFriendly: shopSc(txt, SHOP_SIG.budget) > 0,
+        },
+        shoppingKind,
+      };
+    });
+
+    out.sort((a, b) => shopTravelerScore(b, category) - shopTravelerScore(a, category));
+    const final = out.slice(0, maxResults).map(({ shoppingKind, ...rest }) => rest);
+    return jsonResponse({ places: final, count: final.length, version: 'v3.0-worker' });
+  } catch (e) {
+    return jsonResponse({ error: e.message, places: [] }, 200);
+  }
+}
+
+// ============================================================================
+// CONVENIENCE STORE FINDER — ported from base44/functions/getConvenienceStores.
+// Country/region detection, chain DB, payment analysis, location-context,
+// traveler scoring. Drops the Base44-entity cache (Worker text-search already
+// caches per query). Reuses rrTextSearch / rrCalcDist.
+// ============================================================================
+const CONV_STORE_CATEGORIES = { convenience: { label: 'Convenience Store', icon: '🏪' }, drugstore: { label: 'Drugstore', icon: '💊' }, gas_station: { label: 'Gas Station Mart', icon: '⛽' }, mini_market: { label: 'Mini Market', icon: '🛒' }, grocery_express: { label: 'Grocery Express', icon: '🥬' }, transit_kiosk: { label: 'Transit Kiosk', icon: '🚇' } };
+const CONV_LOCATION_CONTEXTS = { standalone: { label: 'Standalone', icon: '🏬' }, gas_station: { label: 'In Gas Station', icon: '⛽' }, subway: { label: 'Subway/Transit', icon: '🚇' }, airport: { label: 'Airport', icon: '✈️' }, mall: { label: 'Inside Mall', icon: '🛍️' }, highway: { label: 'Highway/Roadside', icon: '🛣️' } };
+const CONV_PAYMENT_NORMS = { US: { cards: 'high', tip: 'Cards and Apple Pay widely accepted' }, CA: { cards: 'high', tip: 'Cards widely accepted' }, GB: { cards: 'high', tip: 'Contactless very common' }, JP: { cards: 'high', tip: 'IC cards work everywhere' }, KR: { cards: 'high', tip: 'Cards accepted everywhere' }, DE: { cards: 'medium', tip: 'Cash still preferred in many places' }, CH: { cards: 'high', tip: 'Cards widely accepted' }, PH: { cards: 'low', tip: 'Cash preferred. GCash/Maya growing' }, TH: { cards: 'medium', tip: 'Big chains accept cards' }, MX: { cards: 'medium', tip: 'OXXO accepts cards' }, CO: { cards: 'medium', tip: 'Cash common at small stores' }, AU: { cards: 'high', tip: 'Tap-to-pay very common' }, AE: { cards: 'high', tip: 'Cards and Apple Pay widely accepted' }, IL: { cards: 'high', tip: 'Cards widely accepted' }, IR: { cards: 'none', tip: 'Cash only. International cards do not work' }, DEFAULT: { cards: 'medium', tip: 'Payment methods may vary' } };
+const CONV_CHAIN_DB = {
+  '7-Eleven': { category: 'convenience', services: ['atm','hot_food','coffee'], open_24h: true, payments: ['visa','mastercard','apple_pay','cash'], score: 95 },
+  'Circle K': { category: 'convenience', services: ['atm','hot_food','fuel'], open_24h: true, payments: ['visa','mastercard','apple_pay','cash'], gas: true, score: 90 },
+  'FamilyMart': { category: 'convenience', services: ['atm','hot_food','coffee'], open_24h: true, payments: ['visa','mastercard','cash'], score: 92 },
+  'Wawa': { category: 'convenience', services: ['atm','hot_food','coffee','fuel'], open_24h: true, payments: ['visa','mastercard','apple_pay','cash'], score: 94 },
+  'Sheetz': { category: 'convenience', services: ['atm','hot_food','fuel'], open_24h: true, payments: ['visa','mastercard','apple_pay','cash'], score: 93 },
+  'CVS': { category: 'drugstore', services: ['atm','pharmacy'], payments: ['visa','mastercard','apple_pay','cash'], score: 88 },
+  'Walgreens': { category: 'drugstore', services: ['atm','pharmacy'], payments: ['visa','mastercard','apple_pay','cash'], score: 87 },
+  'OXXO': { category: 'convenience', services: ['atm','hot_food'], open_24h: true, payments: ['visa','mastercard','cash'], score: 90 },
+  'Lawson': { category: 'convenience', services: ['atm','hot_food','coffee'], open_24h: true, payments: ['visa','mastercard','cash'], score: 93 },
+  'CU': { category: 'convenience', services: ['atm','hot_food'], open_24h: true, payments: ['visa','mastercard','cash'], score: 90 },
+  'GS25': { category: 'convenience', services: ['atm','hot_food'], open_24h: true, payments: ['visa','mastercard','cash'], score: 90 },
+  'Mercury Drug': { category: 'drugstore', services: ['pharmacy'], payments: ['cash','gcash'], score: 85 },
+  'Alfamart': { category: 'convenience', services: [], payments: ['cash','gcash'], score: 75 },
+  'Indomaret': { category: 'convenience', services: ['atm'], payments: ['visa','mastercard','cash'], score: 78 },
+  'Tesco Express': { category: 'grocery_express', services: ['atm'], payments: ['visa','mastercard','apple_pay','cash'], score: 85 },
+  'Boots': { category: 'drugstore', services: ['pharmacy'], payments: ['visa','mastercard','apple_pay','cash'], score: 88 },
+  'Coop Pronto': { category: 'convenience', services: ['atm','coffee'], payments: ['visa','mastercard','cash'], score: 85 },
+  'Migrolino': { category: 'convenience', services: ['atm','hot_food'], payments: ['visa','mastercard','cash'], score: 85 },
+  'Shell': { category: 'gas_station', services: ['atm','fuel'], payments: ['visa','mastercard','cash'], gas: true, score: 82 },
+  'BP': { category: 'gas_station', services: ['atm','fuel'], payments: ['visa','mastercard','cash'], gas: true, score: 80 },
+  'Zoom': { category: 'convenience', services: ['atm'], open_24h: true, payments: ['visa','mastercard','apple_pay','cash'], score: 85 },
+  'AMPM': { category: 'convenience', services: ['atm','hot_food'], open_24h: true, payments: ['visa','mastercard','cash'], score: 88 },
+};
+const CONV_REGIONAL_TERMS = { usa: ['convenience store','7-Eleven','CVS','Walgreens','gas station'], japan: ['convenience store','konbini','Lawson','FamilyMart'], korea: ['convenience store','CU','GS25'], philippines: ['convenience store','Mercury Drug','sari-sari'], europe: ['convenience store','Tesco Express','Spar'], default: ['convenience store','mini mart','drugstore','pharmacy'] };
+function convDetectCountry(lat, lng) {
+  if (lat >= 24 && lat <= 50 && lng >= -130 && lng <= -65) return 'US';
+  if (lat >= 42 && lat <= 83 && lng >= -141 && lng <= -52) return 'CA';
+  if (lat >= 14 && lat <= 33 && lng >= -118 && lng <= -86) return 'MX';
+  if (lat >= -4 && lat <= 13 && lng >= -82 && lng <= -66) return 'CO';
+  if (lat >= 4 && lat <= 21 && lng >= 116 && lng <= 127) return 'PH';
+  if (lat >= 24 && lat <= 46 && lng >= 122 && lng <= 154) return 'JP';
+  if (lat >= 33 && lat <= 43 && lng >= 124 && lng <= 132) return 'KR';
+  if (lat >= 49 && lat <= 61 && lng >= -11 && lng <= 2) return 'GB';
+  if (lat >= 45.5 && lat <= 48 && lng >= 5.5 && lng <= 10.5) return 'CH';
+  if (lat >= 22 && lat <= 27 && lng >= 51 && lng <= 57) return 'AE';
+  if (lat >= 29 && lat <= 34 && lng >= 34 && lng <= 36) return 'IL';
+  if (lat >= -45 && lat <= -10 && lng >= 110 && lng <= 155) return 'AU';
+  return 'DEFAULT';
+}
+function convGetRegion(cc) { return ({ US: 'usa', CA: 'usa', MX: 'usa', JP: 'japan', KR: 'korea', PH: 'philippines', TH: 'philippines', ID: 'philippines', GB: 'europe', DE: 'europe', FR: 'europe', CH: 'europe' })[cc] || 'default'; }
+function convMatchChain(name) { const lower = (name || '').toLowerCase(); for (const cn of Object.keys(CONV_CHAIN_DB)) { if (lower.includes(cn.toLowerCase())) return { name: cn, ...CONV_CHAIN_DB[cn] }; } return null; }
+function convDetectContext(place) {
+  const name = ((place.displayName && place.displayName.text) || place.name || '').toLowerCase();
+  const types = (place.types || []).join(' ');
+  if (name.includes('airport') || name.includes('terminal')) return 'airport';
+  if (name.includes('station') || name.includes('metro') || name.includes('subway')) return 'subway';
+  if (name.includes('mall') || name.includes('plaza')) return 'mall';
+  if (name.includes('highway') || name.includes('truck stop')) return 'highway';
+  if (types.includes('gas_station') || name.includes('gas') || name.includes('petrol')) return 'gas_station';
+  return 'standalone';
+}
+function convAnalyzePayments(chain, cc) {
+  const norms = CONV_PAYMENT_NORMS[cc] || CONV_PAYMENT_NORMS.DEFAULT;
+  if (chain && chain.payments) return { payments: chain.payments, confidence: 'likely', sources: ['Chain standard'], warnings: [], tip: norms.tip, acceptsCards: chain.payments.includes('visa') || chain.payments.includes('mastercard'), acceptsMobile: chain.payments.includes('apple_pay') || chain.payments.includes('google_pay'), cashOnly: chain.payments.length === 1 && chain.payments[0] === 'cash' };
+  if (norms.cards === 'high') return { payments: ['visa','mastercard','cash'], confidence: 'estimated', sources: ['Country norm'], warnings: [], tip: norms.tip, acceptsCards: true, acceptsMobile: false, cashOnly: false };
+  if (norms.cards === 'none') return { payments: ['cash'], confidence: 'estimated', sources: ['Country norm'], warnings: ['International cards do not work'], tip: norms.tip, acceptsCards: false, acceptsMobile: false, cashOnly: true };
+  return { payments: ['cash'], confidence: 'unknown', sources: ['Country norm'], warnings: ['Cards may not be accepted'], tip: norms.tip, acceptsCards: false, acceptsMobile: false, cashOnly: true };
+}
+function convProcessStore(place, userLat, userLng, cc) {
+  const name = (place.displayName && place.displayName.text) || place.name || 'Unknown';
+  const lat = place.location?.latitude;
+  const lng = place.location?.longitude;
+  if (!lat || !lng) return null;
+  const distance = rrCalcDist(userLat, userLng, lat, lng) * 0.621371;
+  const chain = convMatchChain(name);
+  const context = (chain && chain.gas) ? 'gas_station' : convDetectContext(place);
+  const pay = convAnalyzePayments(chain, cc);
+  let category = 'convenience';
+  const types = place.types || [];
+  if (chain) category = chain.category;
+  else if (types.includes('pharmacy') || types.includes('drugstore')) category = 'drugstore';
+  else if (types.includes('gas_station')) category = 'gas_station';
+  else if (types.includes('supermarket')) category = 'mini_market';
+  const hours = place.currentOpeningHours || place.regularOpeningHours || {};
+  const isOpen = hours.openNow != null ? hours.openNow : null;
+  const is24h = (chain && chain.open_24h) || false;
+  const services = (chain && chain.services) || [];
+  const photos = (place.photos || []).slice(0, 3);
+  const catInfo = CONV_STORE_CATEGORIES[category] || { label: 'Store', icon: '🏪' };
+  const locInfo = CONV_LOCATION_CONTEXTS[context] || { label: 'Standalone', icon: '🏬' };
+  return {
+    id: place.id || place.placeId || `store-${lat}-${lng}`, place_id: place.id || place.placeId,
+    name, address: place.formattedAddress || place.vicinity || '',
+    latitude: lat, longitude: lng, distance_miles: Math.round(distance * 100) / 100,
+    rating: place.rating || null, review_count: place.userRatingCount || 0,
+    category, category_label: catInfo.label, category_icon: catInfo.icon,
+    location_context: context, location_context_label: locInfo.label, location_context_icon: locInfo.icon,
+    is_in_gas_station: context === 'gas_station', is_standalone: context === 'standalone',
+    is_open: isOpen, is_24_hours: is24h, hours: hours.weekdayDescriptions || [],
+    has_atm: services.includes('atm'), has_restroom: services.includes('restroom'),
+    has_pharmacy: services.includes('pharmacy') || category === 'drugstore',
+    has_hot_food: services.includes('hot_food'), has_coffee: services.includes('coffee'), has_fuel: services.includes('fuel'),
+    payments: pay.payments, payment_confidence: pay.confidence, payment_sources: pay.sources, payment_warnings: pay.warnings, payment_country_tip: pay.tip,
+    accepts_cards: pay.acceptsCards, accepts_mobile_pay: pay.acceptsMobile, cash_only: pay.cashOnly, foreign_cards_friendly: pay.acceptsCards,
+    is_known_chain: !!chain, matched_chain: chain ? chain.name : null, traveler_score: chain ? chain.score : 50,
+    photos: photos.map((p, i) => ({ name: p.name, type: i === 0 ? 'exterior' : 'interior' })), has_photos: photos.length > 0,
+    phone: place.nationalPhoneNumber || null, website: place.websiteUri || null, google_maps_url: place.googleMapsUri || null,
+  };
+}
+async function handleConvenienceStores(request, env, ctx) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { latitude, longitude, radius = 10, category = 'all', openOnly = false, open24Hours = false, hasHotFood = false, hasATM = false, hasPharmacy = false, hasRestroom = false, hasCoffee = false, acceptsCards = false, acceptsMobilePay = false, hasGas = false, locationType = 'all', sortBy = 'traveler_best', limit = 50, forceRefresh = false } = body;
+    if (!latitude || !longitude) return jsonResponse({ error: 'Latitude and longitude required', stores: [], total_count: 0 }, 400);
+    const radiusMiles = parseFloat(radius);
+    const radiusMeters = radiusMiles * 1609.34;
+    const cc = convDetectCountry(latitude, longitude);
+    const region = convGetRegion(cc);
+    const origin = new URL(request.url).origin;
+
+    const terms = CONV_REGIONAL_TERMS[region] || CONV_REGIONAL_TERMS.default;
+    const seen = new Set();
+    const allStores = [];
+    const batchSize = 8;
+    for (let i = 0; i < terms.length; i += batchSize) {
+      const results = await Promise.all(terms.slice(i, i + batchSize).map(q =>
+        rrTextSearch(env, ctx, origin, { query: q, latitude, longitude, radius: radiusMeters, maxResults: 20, forceRefresh }).catch(() => [])
+      ));
+      for (const arr of results) for (const p of arr) {
+        const id = p.id || p.placeId;
+        if (id && !seen.has(id)) { seen.add(id); const store = convProcessStore(p, latitude, longitude, cc); if (store && store.distance_miles <= radiusMiles) allStores.push(store); }
+      }
+    }
+
+    let filtered = [...allStores];
+    if (category !== 'all') filtered = filtered.filter(s => s.category === category);
+    if (openOnly) filtered = filtered.filter(s => s.is_open === true || s.is_24_hours);
+    if (open24Hours) filtered = filtered.filter(s => s.is_24_hours);
+    if (hasHotFood) filtered = filtered.filter(s => s.has_hot_food);
+    if (hasATM) filtered = filtered.filter(s => s.has_atm);
+    if (hasPharmacy) filtered = filtered.filter(s => s.has_pharmacy);
+    if (hasRestroom) filtered = filtered.filter(s => s.has_restroom);
+    if (hasCoffee) filtered = filtered.filter(s => s.has_coffee);
+    if (hasGas) filtered = filtered.filter(s => s.has_fuel);
+    if (acceptsCards) filtered = filtered.filter(s => s.accepts_cards);
+    if (acceptsMobilePay) filtered = filtered.filter(s => s.accepts_mobile_pay);
+    if (locationType !== 'all') filtered = filtered.filter(s => s.location_context === locationType);
+
+    if (sortBy === 'nearby') filtered.sort((a, b) => a.distance_miles - b.distance_miles);
+    else if (sortBy === 'rating') filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    else if (sortBy === '24h_first') filtered.sort((a, b) => { if (a.is_24_hours && !b.is_24_hours) return -1; if (!a.is_24_hours && b.is_24_hours) return 1; return a.distance_miles - b.distance_miles; });
+    else filtered.sort((a, b) => { const sa = (a.is_known_chain ? 20 : 0) + (a.is_open ? 15 : 0) + (10 - a.distance_miles); const sb = (b.is_known_chain ? 20 : 0) + (b.is_open ? 15 : 0) + (10 - b.distance_miles); return sb - sa; });
+
+    const categoryCounts = { all: filtered.length, convenience: filtered.filter(s => s.category === 'convenience').length, drugstore: filtered.filter(s => s.category === 'drugstore').length, gas_station: filtered.filter(s => s.category === 'gas_station').length, mini_market: filtered.filter(s => s.category === 'mini_market').length };
+    const commonPayments = cc === 'PH' ? ['GCash','Maya','Cash'] : cc === 'JP' ? ['IC Cards','Cash'] : ['Cards','Apple Pay','Cash'];
+
+    return jsonResponse({ stores: filtered.slice(0, limit), all_stores: allStores, total_count: filtered.length, category_counts: categoryCounts, country_code: cc, region, common_payments: commonPayments, from_cache: false });
+  } catch (e) {
+    return jsonResponse({ error: e.message, stores: [] }, 200);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -5893,6 +6215,8 @@ export default {
       if (pathname === '/restroom-locations' && request.method === 'POST') return await handleRestroomSearch(request, env, ctx);
       if (pathname === '/coffee-shops' && request.method === 'POST') return await handleCoffeeShops(request, env, ctx);
       if (pathname === '/atm-locations' && request.method === 'POST') return await handleAtmLocations(request, env, ctx);
+      if (pathname === '/shopping' && request.method === 'POST') return await handleShoppingPlaces(request, env, ctx);
+      if (pathname === '/convenience-stores' && request.method === 'POST') return await handleConvenienceStores(request, env, ctx);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
       if (pathname === '/analyze-price' && request.method === 'POST') return await handleAnalyzePrice(request, env);
       if (pathname === '/scan-text' && request.method === 'POST') return await handleScanText(request, env);
