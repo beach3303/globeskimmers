@@ -2933,6 +2933,148 @@ async function handleCafeWorkProfile(request, env) {
 }
 
 // ============================================================================
+// RESTROOM AI DETAILS — traveler/tourist/elderly/family restroom intel.
+// Dedicated endpoint (not the generic /ai-details restaurant voice). Returns 7
+// honest restroom-specific sections + a structured restroomAmenities object
+// with confidence labels. KV-cached 90d (pay Haiku ~once per place).
+// ============================================================================
+const RESTROOM_AI_PROMPT_VERSION = 'r1';   // bump to regenerate all restroom details
+
+function buildRestroomAIDetailsSystemPrompt() {
+  return `You are GlobeSkimmers' RESTROOM AI Details engine. A traveler, tourist, elderly user, family, or someone with an URGENT restroom need is about to walk to this place. Help them quickly understand what kind of restroom this is, what supplies it may have, and whether it is easy/safe to use. Output STRICT JSON only — no prose, no markdown fences.
+
+PRIORITY ORDER (what matters most): 1) Access 2) Toilet setup 3) Supplies 4) Cleanliness 5) Accessibility 6) Family/elderly comfort 7) Safety.
+
+HONESTY RULES (CRITICAL):
+- Use ONLY what the reviews + place metadata actually support. NEVER guess or present unknown amenities as facts.
+- Amenity confidence values: "confirmed" (hard metadata or repeated explicit reviews), "reported" (a review explicitly mentions it), "likely" (strongly implied by venue type but not stated — use SPARINGLY, only for soap / toilet paper / hand-drying at a normal staffed indoor business), "not_confirmed" (no evidence either way — THE DEFAULT), "unknown" (truly no basis).
+- Prefer "not_confirmed" over inventing. Do NOT claim "has bidet" unless evidence confirms it — mark bidet "not_confirmed".
+- Soft wording for gaps in the section text: "not confirmed", "may need to ask staff", "bring wipes just in case", "confirm at location if needed".
+
+USE THE METADATA YOU ARE GIVEN:
+- If accessibilityOptions.wheelchairAccessibleRestroom is true → restroomAmenities.accessibleStall = "confirmed".
+- Venue category coffee/cafe/restaurant/fast food → purchaseRequired "likely"; in US/Canada/UK/W.Europe/Australia toiletType "western"; soap & toilet paper "likely" at a normal staffed indoor business.
+- Gas station / convenience store → keyOrCodeRequired may be "likely" (ask staff for a key).
+- Squat toilets only appear in parts of Asia / Middle East — only mark "squat"/"both" with regional or review support; otherwise "western" (with support) or "unknown".
+
+SECTION TEXT — each 1-2 short, plain, traveler-friendly sentences (no marketing fluff):
+- verdict: Is this a good restroom option right now? Name WHAT it is (inside a coffee shop / mall / gas station / transit station / public building / hotel / airport, etc.) and any access caveat.
+- toiletSetup: toilet type + bidet / seat-cover status, using "not confirmed" honestly.
+- supplies: toilet paper / soap / hand drying with confidence + a "bring wipes" nudge when there are gaps.
+- accessRules: how to get in (public, customer-only, purchase may be required, ask staff for key/code, inside business/mall/transit, may close with the business).
+- accessibility: wheelchair / stall / grab bars / doorway / stairs / elevator / walker — use confirm-at-location wording when unsure.
+- familyElderly: suitability for elderly travelers, kids, families; baby-changing / family-restroom status (honest); note if it is a staffed indoor location.
+- safety: short comfort/safety note (staffed indoor vs isolated public; best used during open hours).
+
+Return EXACTLY this JSON shape:
+{
+  "verdict": "...",
+  "toiletSetup": "...",
+  "supplies": "...",
+  "accessRules": "...",
+  "accessibility": "...",
+  "familyElderly": "...",
+  "safety": "...",
+  "restroomAmenities": {
+    "toiletType": "western" | "squat" | "both" | "unknown",
+    "bidet": "confirmed" | "reported" | "not_confirmed" | "unknown",
+    "toiletPaper": "confirmed" | "reported" | "likely" | "not_confirmed" | "unknown",
+    "toiletSeatCovers": "confirmed" | "reported" | "not_confirmed" | "unknown",
+    "soap": "confirmed" | "reported" | "likely" | "not_confirmed" | "unknown",
+    "handDryerOrPaperTowels": "confirmed" | "reported" | "likely" | "not_confirmed" | "unknown",
+    "babyChangingTable": "confirmed" | "reported" | "not_confirmed" | "unknown",
+    "familyRestroom": "confirmed" | "reported" | "not_confirmed" | "unknown",
+    "accessibleStall": "confirmed" | "reported" | "not_confirmed" | "unknown",
+    "keyOrCodeRequired": "confirmed" | "reported" | "likely" | "not_confirmed" | "unknown",
+    "purchaseRequired": "confirmed" | "reported" | "likely" | "not_confirmed" | "unknown"
+  }
+}`;
+}
+
+async function handleRestroomAIDetails(request, env) {
+  if (!env.ANTHROPIC_API_KEY) return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
+  let body;
+  try { body = await request.json(); } catch (_e) { return jsonResponse({ error: 'Invalid JSON body' }, 400); }
+  const placeId = body?.placeId;
+  if (!placeId) return jsonResponse({ error: 'placeId required' }, 400);
+  const ctxVenue = body?.venueLabel || body?.venueCategory || null;
+  const ctxAccess = body?.accessType || null;
+
+  // KV 90-day cache — pay Haiku ~once per place.
+  const kvKey = `place:${placeId}:restroom_ai_${RESTROOM_AI_PROMPT_VERSION}`;
+  if (env.GLOBESKIMMERS_KV) {
+    const cached = await env.GLOBESKIMMERS_KV.get(kvKey, { type: 'json' }).catch(() => null);
+    if (cached) return jsonResponse({ restroomDetails: cached, _cache: 'hit-kv' });
+  }
+
+  // Place Details — reuse the details_{placeId} cache (no new Google cost when warm).
+  const detailsCacheKey = `details_${placeId}`;
+  let place;
+  const cachedDetails = await getFromCache(env, detailsCacheKey);
+  if (cachedDetails && cachedDetails.data) {
+    place = cachedDetails.data;
+  } else {
+    try {
+      const detailsRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=en`, {
+        method: 'GET',
+        headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': CONFIG.DETAILS_FIELD_MASK }
+      });
+      if (!detailsRes.ok) return jsonResponse({ error: 'Place details fetch failed', status: detailsRes.status }, 502);
+      place = normalizePlace(await detailsRes.json(), new URL(request.url).origin, true);
+      await setInCache(env, detailsCacheKey, place, CONFIG.CACHE_TTL.DETAILS);
+    } catch (e) {
+      return jsonResponse({ error: 'Place details error: ' + e.message }, 502);
+    }
+  }
+
+  const placeName = place.name || place.displayName?.text || body?.placeName || null;
+  const reviewSnippets = (place.reviews || []).slice(0, 5).map(r => ({ text: r.text || '', rating: r.rating })).filter(r => r.text);
+  const accessibility = place.accessibilityOptions || null;
+
+  const userContent = `PLACE: ${JSON.stringify({
+    name: placeName,
+    venue: ctxVenue,
+    primaryType: place.primaryTypeDisplay || place.primaryType,
+    types: (place.types || []).slice(0, 8),
+    accessFromFinder: ctxAccess,
+    editorialSummary: place.editorialSummary || null,
+    accessibilityOptions: accessibility,
+  })}\n\nREVIEW SNIPPETS (up to 5 from Google):\n${JSON.stringify(reviewSnippets, null, 2)}\n\nReturn the restroom AI Details JSON per the rules. Use "not_confirmed" / "unknown" for anything not supported — never guess.`;
+
+  let restroomDetails;
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1000,
+        system: buildRestroomAIDetailsSystemPrompt(),
+        messages: [{ role: 'user', content: userContent }]
+      })
+    });
+    if (!apiRes.ok) { const t = await apiRes.text(); return jsonResponse({ error: 'Claude API error', status: apiRes.status, details: t }, 502); }
+    const data = await apiRes.json();
+    const raw = data?.content?.[0]?.text?.trim() || '';
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    restroomDetails = JSON.parse(cleaned);
+  } catch (e) {
+    return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
+  }
+
+  // Defensive normalization + hard-metadata override.
+  const A = (restroomDetails && typeof restroomDetails.restroomAmenities === 'object' && restroomDetails.restroomAmenities) || {};
+  const amenityKeys = ['toiletType','bidet','toiletPaper','toiletSeatCovers','soap','handDryerOrPaperTowels','babyChangingTable','familyRestroom','accessibleStall','keyOrCodeRequired','purchaseRequired'];
+  for (const k of amenityKeys) if (!A[k]) A[k] = 'unknown';
+  if (accessibility?.wheelchairAccessibleRestroom === true) A.accessibleStall = 'confirmed';
+  restroomDetails.restroomAmenities = A;
+  restroomDetails.placeName = placeName;
+
+  if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(kvKey, JSON.stringify(restroomDetails), { expirationTtl: 60 * 60 * 24 * 90 }).catch(() => {});
+  return jsonResponse({ restroomDetails, _cache: 'miss' });
+}
+
+// ============================================================================
 // ATM AI DETAILS — ATM Finder redesign, Phase A3.
 // ============================================================================
 // Forked from handleAIDetails / buildAIDetailsSystemPrompt above so the
@@ -5140,6 +5282,385 @@ async function handleAttractionsNearby(request, env, ctx) {
   });
 }
 
+// ============================================================================
+// RESTROOM FINDER — ported from base44/functions/getRestroomLocations (v4.0).
+// Runs the same enrichment over results from the Worker's own /places/text-search
+// (so it works on native with no Base44 platform auth). Output shape matches the
+// Base44 function exactly, so the frontend reads it unchanged ({restrooms,...}).
+// ============================================================================
+const RR_COUNTRY_DATA = {
+  US: { terms:['restroom','bathroom','washroom','toilet'], tip:'Hotel lobbies, Starbucks, Target, and libraries are reliable free options.', expectPaper:true, hasPaidPublicToilets:false },
+  CA: { terms:['washroom','restroom','bathroom','toilet'], tip:'Tim Hortons, libraries, and shopping centers are reliable.', expectPaper:true, hasPaidPublicToilets:false },
+  MX: { terms:['baño','sanitario','WC'], tip:'Tip 5–10 MXN to attendant. Carry tissue.', expectPaper:false, hasPaidPublicToilets:true, currency:'MXN', typicalFee:'5–10 MXN' },
+  GB: { terms:['toilet','loo','WC','lavatory'], tip:'Train stations may charge £0.30–0.50.', expectPaper:true, hasPaidPublicToilets:true, currency:'GBP', typicalFee:'£0.30–0.50' },
+  FR: { terms:['toilettes','WC'], tip:'Cafés may require purchase. Stations charge €0.50–1.', expectPaper:true, hasPaidPublicToilets:true, currency:'EUR', typicalFee:'€0.50–1' },
+  DE: { terms:['Toilette','WC','Klo'], tip:'Sanifair stations charge €0.50–1.', expectPaper:true, hasPaidPublicToilets:true, currency:'EUR', typicalFee:'€0.50–1' },
+  IT: { terms:['bagno','toilette','WC'], tip:'Bars require purchase. Carry €0.50.', expectPaper:true, hasPaidPublicToilets:true, currency:'EUR', typicalFee:'€0.50–1' },
+  ES: { terms:['baño','aseo','servicio','WC'], tip:'Bars free with purchase.', expectPaper:true, hasPaidPublicToilets:false },
+  NL: { terms:['toilet','WC'], tip:'Often €0.50 fee.', expectPaper:true, hasPaidPublicToilets:true, currency:'EUR', typicalFee:'€0.50' },
+  CH: { terms:['Toilette','WC'], tip:'Stations charge CHF 1–2.', expectPaper:true, hasPaidPublicToilets:true, currency:'CHF', typicalFee:'CHF 1–2' },
+  AT: { terms:['Toilette','WC'], tip:'Cafés free with purchase.', expectPaper:true, hasPaidPublicToilets:false },
+  BE: { terms:['toilet','WC'], tip:'Often €0.50.', expectPaper:true, hasPaidPublicToilets:true, currency:'EUR', typicalFee:'€0.50' },
+  PT: { terms:['casa de banho','WC'], tip:'May charge €0.30–0.50.', expectPaper:true, hasPaidPublicToilets:true, currency:'EUR', typicalFee:'€0.30–0.50' },
+  SE: { terms:['toalett','WC'], tip:'Card payment common.', expectPaper:true, hasPaidPublicToilets:false },
+  NO: { terms:['toalett','WC'], tip:'Card payment standard.', expectPaper:true, hasPaidPublicToilets:false },
+  DK: { terms:['toilet','WC'], tip:'Some charge DKK 5.', expectPaper:true, hasPaidPublicToilets:true },
+  FI: { terms:['WC','vessa'], tip:'Malls and libraries free.', expectPaper:true, hasPaidPublicToilets:false },
+  PL: { terms:['toaleta','WC'], tip:'Often PLN 1–2.', expectPaper:true, hasPaidPublicToilets:true, currency:'PLN', typicalFee:'PLN 1–2' },
+  CZ: { terms:['toaleta','WC'], tip:'Usually CZK 10–20.', expectPaper:true, hasPaidPublicToilets:true, currency:'CZK', typicalFee:'CZK 10–20' },
+  HU: { terms:['WC','mosdó'], tip:'HUF 100–200 typical.', expectPaper:true, hasPaidPublicToilets:true, currency:'HUF', typicalFee:'HUF 100–200' },
+  RO: { terms:['toaletă','WC'], tip:'Often RON 1–2.', expectPaper:true, hasPaidPublicToilets:true, currency:'RON', typicalFee:'RON 1–2' },
+  HR: { terms:['zahod','WC'], tip:'€0.30–0.50 in tourist areas.', expectPaper:true, hasPaidPublicToilets:true, currency:'EUR', typicalFee:'€0.30–0.50' },
+  GR: { terms:['τουαλέτα','WC'], tip:"Don't flush paper.", expectPaper:false, hasPaidPublicToilets:false },
+  TR: { terms:['tuvalet','WC'], tip:'Mosques free. Charge TRY 2–5 elsewhere.', expectSquat:true, expectBidet:true, expectPaper:false, hasPaidPublicToilets:true, currency:'TRY', typicalFee:'TRY 2–5' },
+  RU: { terms:['туалет','WC'], tip:'Metro RUB 30–50. Bring tissue.', expectPaper:false, hasPaidPublicToilets:true, currency:'RUB', typicalFee:'RUB 30–50' },
+  AE: { terms:['toilet','restroom','مرحاض'], tip:'Malls excellent. Water hose standard.', expectBidet:true, expectPaper:false, hasPaidPublicToilets:false },
+  SA: { terms:['دورة مياه','toilet'], tip:'Mosques have facilities.', expectBidet:true, expectSquat:true, expectPaper:false, hasPaidPublicToilets:false },
+  IL: { terms:['שירותים','toilet'], tip:'Malls and hotels reliable.', expectPaper:true, hasPaidPublicToilets:false },
+  JP: { terms:['トイレ','お手洗い','toilet'], tip:'Extremely clean. Konbini always have toilets.', expectBidet:true, expectPaper:true, hasPaidPublicToilets:false },
+  KR: { terms:['화장실','toilet'], tip:'Very clean. Subway stations free.', expectBidet:true, expectPaper:true, hasPaidPublicToilets:false },
+  CN: { terms:['厕所','卫生间','toilet'], tip:'Carry tissue. Squat common in older areas.', expectSquat:true, expectPaper:false, hasPaidPublicToilets:false },
+  TW: { terms:['廁所','toilet'], tip:"7-Eleven has toilets. Don't flush paper.", expectPaper:false, hasPaidPublicToilets:false },
+  HK: { terms:['廁所','toilet'], tip:'MTR stations have facilities.', expectPaper:true, hasPaidPublicToilets:false },
+  PH: { terms:['CR','comfort room','toilet'], tip:'Look for "CR" signs. Malls excellent.', expectPaper:false, hasPaidPublicToilets:true, currency:'PHP', typicalFee:'₱5–10' },
+  TH: { terms:['ห้องน้ำ','toilet'], tip:'Squat common. THB 3–5 in some places.', expectSquat:true, expectPaper:false, hasPaidPublicToilets:true, currency:'THB', typicalFee:'THB 3–5' },
+  VN: { terms:['nhà vệ sinh','toilet'], tip:'Carry tissue. 2,000–5,000 VND.', expectSquat:true, expectPaper:false, hasPaidPublicToilets:true, currency:'VND', typicalFee:'2,000–5,000 VND' },
+  ID: { terms:['toilet','kamar mandi'], tip:'IDR 2,000–5,000. Water hose standard.', expectBidet:true, hasPaidPublicToilets:true, currency:'IDR', typicalFee:'IDR 2,000–5,000' },
+  MY: { terms:['tandas','toilet'], tip:'Malls free. Carry tissue elsewhere.', expectPaper:false, hasPaidPublicToilets:false },
+  SG: { terms:['toilet','restroom'], tip:'Extremely clean. Hawker centers have facilities.', expectPaper:true, hasPaidPublicToilets:false },
+  IN: { terms:['toilet','शौचालय'], tip:'Sulabh toilets ₹5–10. Squat common.', expectSquat:true, expectPaper:false, hasPaidPublicToilets:true, currency:'INR', typicalFee:'₹5–10' },
+  PK: { terms:['toilet','bathroom'], tip:'Mosques have facilities.', expectSquat:true, expectPaper:false, hasPaidPublicToilets:false },
+  AU: { terms:['toilet','loo','bathroom'], tip:'Many free public toilets.', expectPaper:true, hasPaidPublicToilets:false },
+  NZ: { terms:['toilet','loo'], tip:'Generally free and clean.', expectPaper:true, hasPaidPublicToilets:false },
+  ZA: { terms:['toilet','bathroom'], tip:'Malls reliable. R2–5 in some places.', expectPaper:true, hasPaidPublicToilets:true, currency:'ZAR', typicalFee:'R2–5' },
+  EG: { terms:['حمام','toilet'], tip:'Tourist sites LE 5–10. Mosques free.', expectPaper:false, hasPaidPublicToilets:true, currency:'EGP', typicalFee:'LE 5–10' },
+  KE: { terms:['toilet','choo'], tip:'KES 10–30 in public.', expectPaper:false, hasPaidPublicToilets:true, currency:'KES', typicalFee:'KES 10–30' },
+  BR: { terms:['banheiro','toalete'], tip:'Shopping centers free.', expectPaper:true, hasPaidPublicToilets:false },
+  AR: { terms:['baño','sanitario'], tip:'Malls reliable.', expectPaper:true, hasPaidPublicToilets:false },
+  PE: { terms:['baño','servicios higiénicos'], tip:'S/.0.50–1 in some places.', hasPaidPublicToilets:true, currency:'PEN', typicalFee:'S/.0.50–1' },
+};
+const RR_VENUE_QUERIES = {
+  all: ['public restroom','public toilet','bathroom','coffee shop','cafe','starbucks','coffee bean','shopping mall','grocery store','supermarket','gas station','convenience store','hotel lobby','hospital','library','subway station','train station','airport','restaurant','fast food'],
+  public: ['public restroom','public toilet','comfort station','park bathroom','beach restroom','rest stop'],
+  transit: ['subway station','metro station','train station','bus terminal','airport terminal','ferry terminal','rail station','transit center'],
+  coffee_food: ['coffee shop','cafe','starbucks','coffee bean','peets coffee','dutch bros','tea house','bakery','restaurant','fast food','food court','diner'],
+  shopping: ['shopping mall','department store','target','walmart','costco','grocery store','supermarket','whole foods','trader joes','marshalls','tj maxx','ross','nordstrom'],
+  medical: ['hospital','clinic','medical center','urgent care'],
+  hospitality: ['hotel lobby','resort','casino','conference center'],
+  attractions: ['museum','zoo','aquarium','theme park','tourist attraction','stadium','arena','gallery'],
+  institutions: ['library','bank','university','school','government building','post office','community center'],
+  fuel: ['gas station','petrol station','truck stop','service plaza','convenience store','7-eleven','ampm','circle k'],
+  outdoor: ['park restroom','trail','campground','beach','recreation area'],
+};
+const RR_PROPERTY_SIGNALS = {
+  free: ['free','no charge','complimentary','free to use'],
+  paid: ['paid','charge','fee','coin','token','costs'],
+  clean: ['clean','spotless','well maintained','sanitary','hygienic','very clean'],
+  dirty: ['dirty','filthy','disgusting','gross','unclean','smells'],
+  squat: ['squat toilet','squat style','floor toilet','hole in floor'],
+  bidet: ['bidet','washlet','water spray','shower toilet','hose','shattaf'],
+  accessible: ['accessible','wheelchair','disabled','ada','handicap','ramp'],
+  family: ['family','baby changing','changing table','infant'],
+  paper: ['toilet paper','tissue','paper provided'],
+  noPaper: ['no paper','bring tissue','no toilet paper'],
+  purchaseRequired: ['customers only','purchase required','buy something','patrons only'],
+  locked: ['locked','key required','code required','ask staff'],
+  stairs: ['stairs','downstairs','upstairs','basement','second floor','lower level'],
+  elevator: ['elevator','lift','escalator'],
+  open24: ['24 hour','24/7','always open','open all night'],
+};
+const RR_NO_SQUAT_COUNTRIES = ['US','CA','GB','AU','NZ','IE','DE','FR','IT','ES','NL','BE','AT','CH','SE','NO','DK','FI'];
+const RR_FEE_REQUIRED_COUNTRIES = ['CH','DE','NL','PL','CZ','HU','PH','TH','VN','IN','ID','EG','KE','ZA','MX','PE','TR','RU','GB','FR','IT','BE','PT','HR','RO','DK'];
+const RR_STRICT_TYPE_MAP = {
+  public:      new Set(['library','city_hall','community_center','local_government_office']),
+  transit:     new Set(['transit_station','bus_station','train_station','subway_station','light_rail_station','airport']),
+  coffee_food: new Set(['cafe','coffee_shop','fast_food_restaurant','restaurant','bakery','meal_takeaway']),
+  shopping:    new Set(['shopping_mall','department_store','supermarket','grocery_store','grocery_or_supermarket']),
+  medical:     new Set(['hospital','doctor','medical_clinic','health']),
+  fuel:        new Set(['gas_station','convenience_store','rest_stop']),
+  outdoor:     new Set(['park','national_park','campground','hiking_area','amusement_park','zoo']),
+};
+// The generic "bathroom" query drags in contractors/showrooms that are NOT
+// usable restrooms — exclude bathroom remodeling / construction / plumbing /
+// home-improvement businesses by name or Google place type.
+const RR_EXCLUDE_NAME = /remodel|renovat|construction|contractor|plumb|countertop|granite|cabinetry|cabinets|home improvement|building (supply|material)|hardware store|bath(room)?\s*(remodel|design|fixture|works|gallery|showroom)|kitchen\s*(&|and|\+)?\s*bath|\bgym\b|fitness|food truck|taco truck/i;
+const RR_EXCLUDE_TYPES = new Set(['general_contractor','plumber','home_improvement_store','hardware_store','roofing_contractor','electrician','painter','gym','fitness_center']);
+function rrDetectCountry(lat, lng) {
+  if (lat >= 24 && lat <= 49 && lng >= -125 && lng <= -66) return 'US';
+  if (lat >= 42 && lat <= 83 && lng >= -141 && lng <= -52) return 'CA';
+  if (lat >= 49 && lat <= 61 && lng >= -10 && lng <= 2)   return 'GB';
+  if (lat >= 41 && lat <= 51 && lng >= -5 && lng <= 10)   return 'FR';
+  if (lat >= 47 && lat <= 55 && lng >= 6 && lng <= 15)    return 'DE';
+  if (lat >= 36 && lat <= 47 && lng >= 6 && lng <= 19)    return 'IT';
+  if (lat >= 36 && lat <= 44 && lng >= -9 && lng <= 5)    return 'ES';
+  if (lat >= 35 && lat <= 42 && lng >= 26 && lng <= 45)   return 'TR';
+  if (lat >= 30 && lat <= 53 && lng >= 73 && lng <= 135)  return 'CN';
+  if (lat >= 31 && lat <= 46 && lng >= 130 && lng <= 146) return 'JP';
+  if (lat >= 34 && lat <= 43 && lng >= 124 && lng <= 130) return 'KR';
+  if (lat >= 5 && lat <= 21 && lng >= 117 && lng <= 127)  return 'PH';
+  if (lat >= 5 && lat <= 21 && lng >= 97 && lng <= 106)   return 'TH';
+  if (lat >= 1 && lat <= 28 && lng >= 68 && lng <= 98)    return 'IN';
+  if (lat >= 1 && lat <= 7 && lng >= 100 && lng <= 104)   return 'SG';
+  if (lat >= -44 && lat <= -10 && lng >= 113 && lng <= 154) return 'AU';
+  if (lat >= -47 && lat <= -34 && lng >= 166 && lng <= 178) return 'NZ';
+  if (lat >= 22 && lat <= 32 && lng >= 50 && lng <= 60)   return 'AE';
+  if (lat >= -35 && lat <= -22 && lng >= 16 && lng <= 33) return 'ZA';
+  if (lat >= 15 && lat <= 37 && lng >= 25 && lng <= 37)   return 'EG';
+  if (lat >= -33 && lat <= 5 && lng >= -73 && lng <= -34) return 'BR';
+  if (lat >= 16 && lat <= 33 && lng >= -118 && lng <= -86)return 'MX';
+  return 'US';
+}
+function rrSafeText(r) {
+  if (!r) return '';
+  if (r.text && typeof r.text === 'object' && r.text.text) return String(r.text.text);
+  if (typeof r.text === 'string') return r.text;
+  if (r.originalText?.text) return String(r.originalText.text);
+  return '';
+}
+function rrScore(text, keywords) { return keywords.filter(k => text.includes(k)).length; }
+function rrDeriveAccessType(props, venueCategory, country, countryData) {
+  if (['museum','theme_park','attraction','stadium','zoo','aquarium'].includes(venueCategory)) return 'ticketed_entry';
+  if (props.isPaid && RR_FEE_REQUIRED_COUNTRIES.includes(country) && countryData?.hasPaidPublicToilets) {
+    if (['public','transit','park'].includes(venueCategory)) return 'fee_required';
+  }
+  if (props.purchaseRequired || ['coffee','restaurant','fastfood'].includes(venueCategory)) return 'customers_only';
+  if (props.isFree) return 'free';
+  if (['grocery','shopping','mall','hotel','library','medical'].includes(venueCategory)) return 'free';
+  return 'unknown';
+}
+function rrDeriveReachability(reviewText) {
+  const hasStairs = rrScore(reviewText, RR_PROPERTY_SIGNALS.stairs) > 0;
+  const hasElevator = rrScore(reviewText, RR_PROPERTY_SIGNALS.elevator) > 0;
+  const hasLocked = rrScore(reviewText, RR_PROPERTY_SIGNALS.locked) > 0;
+  if (hasStairs && !hasElevator) return 'moderate';
+  if (hasLocked) return 'moderate';
+  if (hasStairs && hasElevator) return 'easy';
+  return 'unknown';
+}
+function rrDeriveConfidence(venueCategory, reviewText, types) {
+  const restroomMentioned = /restroom|bathroom|toilet|washroom|loo|wc|cr\b/i.test(reviewText);
+  const isHighConfidenceVenue = ['public','mall','grocery','hotel','medical','transit','airport','coffee','restaurant','fastfood','gas','convenience','library','park','museum'].includes(venueCategory);
+  if (restroomMentioned && isHighConfidenceVenue) return 'high';
+  if (restroomMentioned || isHighConfidenceVenue) return 'medium';
+  return 'low';
+}
+function rrDeriveSmartNote(accessType, venueCategory, reachability, country, countryData) {
+  if (accessType === 'ticketed_entry') return 'Inside ticketed venue';
+  if (accessType === 'fee_required' && countryData?.typicalFee) return `Fee usually ${countryData.typicalFee}`;
+  if (accessType === 'customers_only') {
+    if (['coffee','restaurant','fastfood'].includes(venueCategory)) return 'Purchase may be required';
+    return 'Customers only';
+  }
+  if (reachability === 'moderate') return 'May involve stairs or staff access';
+  if (venueCategory === 'transit') return 'May be inside fare-paid area';
+  return '';
+}
+function rrClassifyVenue(name, types) {
+  const allText = `${name.toLowerCase()} ${types.join(' ').toLowerCase()}`;
+  if (/whole foods|trader joe|target|walmart|costco|ralphs|safeway|kroger|vons|albertsons|publix|heb|wegmans/.test(allText)) return { icon:'🛒', label:'Grocery Store', category:'grocery' };
+  if (/coffee bean|starbucks|peets|dutch bros|dunkin|philz|blue bottle|intelligentsia/.test(allText)) return { icon:'☕', label:'Coffee Shop', category:'coffee' };
+  if (/ampm|7-eleven|7eleven|circle k|wawa|sheetz|quicktrip|racetrac|loves|pilot|flying j/.test(allText)) return { icon:'🏪', label:'Convenience Store', category:'convenience' };
+  if (/marshalls|tj maxx|ross|nordstrom|macys|jcpenney|kohls|burlington/.test(allText)) return { icon:'🛍️', label:'Department Store', category:'shopping' };
+  if (/airport|terminal|aeropuerto|flughafen/.test(allText)) return { icon:'✈️', label:'Airport', category:'airport' };
+  if (/subway|metro|train station|rail station|transit|bus terminal|ferry/.test(allText)) return { icon:'🚇', label:'Transit Station', category:'transit' };
+  if (/hospital|medical|clinic|health|urgent care/.test(allText)) return { icon:'🏥', label:'Hospital/Medical', category:'medical' };
+  if (/hotel|inn|lodge|resort|motel|marriott|hilton|hyatt/.test(allText)) return { icon:'🏨', label:'Hotel', category:'hotel' };
+  if (/mall|shopping center|plaza|shopping/.test(allText) || types.includes('shopping_mall')) return { icon:'🛍️', label:'Shopping Mall', category:'mall' };
+  if (/supermarket|grocery/.test(allText) || types.includes('supermarket') || types.includes('grocery_or_supermarket')) return { icon:'🛒', label:'Grocery Store', category:'grocery' };
+  if (/mcdonald|burger king|kfc|wendy|taco bell|chipotle|chick-fil-a|in-n-out|five guys|popeyes|jack in the box|carl|subway|pizza hut|domino/.test(allText)) return { icon:'🍔', label:'Fast Food', category:'fastfood' };
+  if (/coffee|cafe|tea house|bakery|espresso/.test(allText) || types.includes('cafe')) return { icon:'☕', label:'Coffee Shop', category:'coffee' };
+  if (/restaurant|diner|bistro|eatery|grill/.test(allText) || types.includes('restaurant')) return { icon:'🍽️', label:'Restaurant', category:'restaurant' };
+  if (/gas station|petrol|fuel|shell|chevron|bp|exxon|mobil|arco|76|texaco|valero/.test(allText) || types.includes('gas_station')) return { icon:'⛽', label:'Gas Station', category:'gas' };
+  if (/convenience|mini mart|bodega/.test(allText) || types.includes('convenience_store')) return { icon:'🏪', label:'Convenience Store', category:'convenience' };
+  if (/library/.test(allText) || types.includes('library')) return { icon:'📚', label:'Library', category:'library' };
+  if (/museum|gallery/.test(allText) || types.includes('museum')) return { icon:'🏛️', label:'Museum', category:'museum' };
+  if (/zoo|aquarium/.test(allText) || types.includes('zoo') || types.includes('aquarium')) return { icon:'🦁', label:'Zoo/Aquarium', category:'zoo' };
+  if (/theme park|amusement|disneyland|universal|six flags/.test(allText) || types.includes('amusement_park')) return { icon:'🎢', label:'Theme Park', category:'theme_park' };
+  if (/stadium|arena|ballpark/.test(allText) || types.includes('stadium')) return { icon:'🏟️', label:'Stadium', category:'stadium' };
+  if (/bank/.test(allText) || types.includes('bank')) return { icon:'🏦', label:'Bank', category:'bank' };
+  if (/school|university|college|campus/.test(allText) || types.includes('school') || types.includes('university')) return { icon:'🏫', label:'School/University', category:'school' };
+  if (/park|garden|recreation|beach|trail|campground/.test(allText) || types.includes('park')) return { icon:'🌳', label:'Park/Outdoors', category:'park' };
+  return { icon:'🚻', label:'Public Restroom', category:'public' };
+}
+function rrCalcDist(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+async function rrTextSearch(env, ctx, origin, { query, latitude, longitude, radius, maxResults, forceRefresh }) {
+  const params = new URLSearchParams({
+    query, latitude: String(latitude), longitude: String(longitude),
+    radius: String(radius), maxResults: String(maxResults),
+    ...(forceRefresh ? { forceRefresh: 'true' } : {}),
+  });
+  const req = new Request(`${origin}/places/text-search?${params.toString()}`);
+  const res = await handleTextSearch(req, env, ctx);
+  const data = await res.json();
+  return data.places || [];
+}
+// Shared keep-filter: require an exact address, drop contractors/remodel/
+// plumbers/gyms/food-trucks (the generic "bathroom" query drags them in).
+function rrKeep(p) {
+  if (!(p.formattedAddress || '').trim()) return false;
+  const nm = (p.displayName?.text || p.name || '').toLowerCase();
+  if (RR_EXCLUDE_NAME.test(nm)) return false;
+  if ((p.types || []).some(t => RR_EXCLUDE_TYPES.has(t))) return false;
+  return true;
+}
+// Distance-ranked nearby query over restroom-reliable venue types — used by the
+// fast "quick" pass to surface the literally-closest spots immediately.
+async function rrNearbySearch(env, ctx, origin, { types, latitude, longitude, radius, maxResults, forceRefresh }) {
+  const params = new URLSearchParams({
+    types, latitude: String(latitude), longitude: String(longitude),
+    radius: String(radius), maxResults: String(maxResults), rankBy: 'DISTANCE',
+    ...(forceRefresh ? { forceRefresh: 'true' } : {}),
+  });
+  const req = new Request(`${origin}/places/nearby?${params.toString()}`);
+  const res = await handleNearbySearch(req, env, ctx);
+  const data = await res.json();
+  return data.places || [];
+}
+// Enrich one normalized place into the restroom card shape (venue class,
+// property signals, accessType/reachability/confidence/smartNote, quality).
+function rrProcessPlace(place, latitude, longitude, country, countryData) {
+  const lat = place.location?.latitude || 0;
+  const lng = place.location?.longitude || 0;
+  const distKm = rrCalcDist(latitude, longitude, lat, lng);
+  const weekdayDesc = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
+  const photos = (place.photos || []).map(p => p.url || p).filter(Boolean).slice(0, 2);
+  const name = place.displayName?.text || place.name || '';
+  const types = place.types || [];
+  const venue = rrClassifyVenue(name, types);
+  const reviews = (place.reviews || []).map(r => rrSafeText(r).toLowerCase());
+  const reviewText = reviews.join(' ');
+  const combinedText = `${name.toLowerCase()} ${reviewText}`;
+  const props = {
+    isFree: rrScore(combinedText, RR_PROPERTY_SIGNALS.free) > rrScore(combinedText, RR_PROPERTY_SIGNALS.paid),
+    isPaid: rrScore(combinedText, RR_PROPERTY_SIGNALS.paid) > 0,
+    isClean: rrScore(combinedText, RR_PROPERTY_SIGNALS.clean) > 0,
+    isDirty: rrScore(combinedText, RR_PROPERTY_SIGNALS.dirty) > 0,
+    hasSquat: !RR_NO_SQUAT_COUNTRIES.includes(country) && (rrScore(combinedText, RR_PROPERTY_SIGNALS.squat) > 0 || countryData.expectSquat),
+    hasBidet: rrScore(combinedText, RR_PROPERTY_SIGNALS.bidet) > 0 || countryData.expectBidet,
+    isAccessible: rrScore(combinedText, RR_PROPERTY_SIGNALS.accessible) > 0 || place.accessibilityOptions?.wheelchairAccessibleEntrance,
+    hasFamily: rrScore(combinedText, RR_PROPERTY_SIGNALS.family) > 0,
+    hasPaper: rrScore(combinedText, RR_PROPERTY_SIGNALS.paper) > 0 || (countryData.expectPaper && rrScore(combinedText, RR_PROPERTY_SIGNALS.noPaper) === 0),
+    noPaper: rrScore(combinedText, RR_PROPERTY_SIGNALS.noPaper) > 0 || !countryData.expectPaper,
+    purchaseRequired: rrScore(combinedText, RR_PROPERTY_SIGNALS.purchaseRequired) > 0,
+    hasStairs: rrScore(combinedText, RR_PROPERTY_SIGNALS.stairs) > 0,
+    hasElevator: rrScore(combinedText, RR_PROPERTY_SIGNALS.elevator) > 0,
+    is24Hours: rrScore(combinedText, RR_PROPERTY_SIGNALS.open24) > 0,
+  };
+  const accessType = rrDeriveAccessType(props, venue.category, country, countryData);
+  const reachability = rrDeriveReachability(combinedText);
+  const confidence = rrDeriveConfidence(venue.category, reviewText, types);
+  const smartNote = rrDeriveSmartNote(accessType, venue.category, reachability, country, countryData);
+  let quality = 50;
+  if (props.isClean) quality += 20;
+  if (props.isDirty) quality -= 30;
+  if (accessType === 'free') quality += 15;
+  if (accessType === 'customers_only') quality += 5;
+  if (props.isAccessible) quality += 5;
+  if (props.hasBidet) quality += 5;
+  if (props.hasPaper) quality += 5;
+  if (reachability === 'moderate' || reachability === 'difficult') quality -= 5;
+  if (confidence === 'high') quality += 10;
+  if (confidence === 'low') quality -= 10;
+  quality = Math.max(0, Math.min(100, quality));
+  return {
+    id: place.id, placeId: place.id, name,
+    displayName: place.displayName || { text: name },
+    location: { latitude: lat, longitude: lng }, lat, lng,
+    formattedAddress: place.formattedAddress || '',
+    distanceKm: distKm, distanceMiles: distKm * 0.621371,
+    rating: place.rating || null, userRatingCount: place.userRatingCount || 0,
+    isOpen: place.isOpen ?? null, weekdayDescriptions: weekdayDesc,
+    photos, photoUrl: photos[0] || null,
+    nationalPhoneNumber: place.nationalPhoneNumber || '',
+    internationalPhoneNumber: place.internationalPhoneNumber || '',
+    websiteUri: place.websiteUri || '', googleMapsUri: place.googleMapsUri || '',
+    types, venueIcon: venue.icon, venueLabel: venue.label, venueCategory: venue.category,
+    accessType, reachability, confidence, smartNote,
+    properties: props, qualityScore: quality, country,
+  };
+}
+async function handleRestroomSearch(request, env, ctx) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { latitude, longitude, radius = 8000, maxResults = 30, venueType = 'all', forceRefresh = false, quick = false } = body;
+    if (!latitude || !longitude) {
+      return jsonResponse({ error: 'Latitude and longitude required', restrooms: [] }, 400);
+    }
+    const origin = new URL(request.url).origin;
+    const country = rrDetectCountry(latitude, longitude);
+    const countryData = RR_COUNTRY_DATA[country] || RR_COUNTRY_DATA['US'];
+
+    // QUICK pass: one distance-ranked nearby query over restroom-reliable venue
+    // types → the literally-closest few, returned fast so the UI renders the
+    // first results instantly while the full pass loads. Same card shape.
+    if (quick) {
+      const quickTypes = 'gas_station,convenience_store,cafe,restaurant,fast_food_restaurant,supermarket,grocery_store,shopping_mall,department_store,park,transit_station';
+      const places = await rrNearbySearch(env, ctx, origin, {
+        types: quickTypes, latitude, longitude, radius: Math.min(radius, 50000), maxResults: 20, forceRefresh,
+      });
+      const quickProcessed = places
+        .filter(rrKeep)
+        .map(p => rrProcessPlace(p, latitude, longitude, country, countryData))
+        .sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0))
+        .slice(0, maxResults);
+      return jsonResponse({ restrooms: quickProcessed, count: quickProcessed.length, country, countryTip: countryData.tip, version: 'v4.2-quick', quick: true });
+    }
+
+    const venueQueries = RR_VENUE_QUERIES[venueType] || RR_VENUE_QUERIES['all'];
+    const localTerms = countryData.terms.slice(0, 2);
+    const allQueries = [...new Set([...localTerms, ...venueQueries])];
+
+    const allPlaces = [];
+    const seenIds = new Set();
+    const batchSize = 8;
+    for (let i = 0; i < allQueries.length; i += batchSize) {
+      const batch = allQueries.slice(i, i + batchSize);
+      const results = await Promise.all(batch.map(q =>
+        rrTextSearch(env, ctx, origin, { query: q, latitude, longitude, radius, maxResults: 15, forceRefresh }).catch(() => [])
+      ));
+      for (const places of results) {
+        for (const p of places) {
+          const id = p.id || p.placeId;
+          if (id && !seenIds.has(id)) { seenIds.add(id); allPlaces.push(p); }
+        }
+      }
+    }
+
+    const strictTypes = RR_STRICT_TYPE_MAP[venueType];
+    let filteredPlaces = allPlaces;
+    if (strictTypes && venueType !== 'all') {
+      filteredPlaces = allPlaces.filter(p => (p.types || []).some(t => strictTypes.has(t)));
+      if (filteredPlaces.length === 0) filteredPlaces = allPlaces;
+    }
+
+    filteredPlaces = filteredPlaces.filter(rrKeep);
+
+    if (filteredPlaces.length === 0) {
+      return jsonResponse({ restrooms: [], count: 0, country, countryTip: countryData.tip, error: 'No restrooms found. Try expanding radius.' });
+    }
+
+    // Enrich ALL kept places, then distance-first sort, then take the nearest N
+    // (sorting before the slice guarantees we return the truly-closest set).
+    const processed = filteredPlaces.map(p => rrProcessPlace(p, latitude, longitude, country, countryData));
+    processed.sort((a, b) => {
+      const dDiff = (a.distanceKm || 0) - (b.distanceKm || 0);
+      if (Math.abs(dDiff) > 0.2) return dDiff;
+      return b.qualityScore - a.qualityScore;
+    });
+    const top = processed.slice(0, maxResults);
+
+    return jsonResponse({ restrooms: top, count: top.length, country, countryTip: countryData.tip, version: 'v4.2-worker' });
+  } catch (err) {
+    return jsonResponse({ error: err.message, restrooms: [] }, 200);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -5174,6 +5695,7 @@ export default {
       if (pathname === '/cache/stats') return await handleCacheStats(request, env);
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
+      if (pathname === '/restroom-locations' && request.method === 'POST') return await handleRestroomSearch(request, env, ctx);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
       if (pathname === '/analyze-price' && request.method === 'POST') return await handleAnalyzePrice(request, env);
       if (pathname === '/scan-text' && request.method === 'POST') return await handleScanText(request, env);
@@ -5182,6 +5704,7 @@ export default {
       if (pathname === '/attraction-ai-details' && request.method === 'POST') return await handleAttractionAIDetails(request, env);
       if (pathname === '/atm-ai-details' && request.method === 'POST') return await handleAtmAIDetails(request, env);
       if (pathname === '/cafe-work-profile' && request.method === 'POST') return await handleCafeWorkProfile(request, env);
+      if (pathname === '/restroom-ai-details' && request.method === 'POST') return await handleRestroomAIDetails(request, env);
       if (pathname === '/reverse-geocode' && request.method === 'POST') return await handleReverseGeocode(request, env);
       if (pathname === '/search-location' && request.method === 'POST') return await handleSearchLocation(request, env);
       if (pathname === '/name-info' && request.method === 'POST') return await handleNameInfo(request, env);

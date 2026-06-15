@@ -5,9 +5,10 @@ import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
-import { base44 } from "@/api/base44Client";
+import { callWorker } from "@/lib/callWorker";
+import { ROUTE } from "@/lib/workerRoutes";
 import RefreshButton from "@/components/RefreshButton";
-import AIDetailsSection from "@/components/AIDetailsSection";
+import RestroomAIDetails from "@/components/RestroomAIDetails";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
@@ -329,15 +330,16 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
                     })}
                   </div>
                 )}
-                {/* AI Details — kind="restroom" so the Worker uses restroom-
-                    specific voice (toilet paper / soap / paid/free / squat
-                    vs sit / safety). Can return 0 stars if dirty, red flag
-                    if unsafe. */}
-                <AIDetailsSection
+                {/* Restroom-specific AI Details: 7 honest sections + amenity
+                    chips with confidence labels (toilet setup / supplies /
+                    access / accessibility / family-elderly / safety). Dedicated
+                    Worker route so it never uses the restaurant voice. */}
+                <RestroomAIDetails
                   placeId={r.placeId || r.id}
                   placeName={name}
-                  page="RestroomFinder"
-                  kind="restroom"
+                  venueLabel={r.venueLabel}
+                  venueCategory={r.venueCategory}
+                  accessType={r.accessType}
                 />
                 {(r.websiteUri || r.website) && (
                   <a href={r.websiteUri || r.website} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 10px", background: "#fff", border: "1px solid #E2E8F0", borderRadius: "8px", textDecoration: "none", color: TEAL_DARK, fontSize: "13px", fontWeight: "600" }}>🌐 Visit Website</a>
@@ -490,6 +492,7 @@ function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections, f
 export default function RestroomFinderPage() {
   const [restrooms, setRestrooms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false); // phase-2 (full list) in flight after the quick 3
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("list");
   const [refreshTick, setRefreshTick] = useState(0);
@@ -550,37 +553,64 @@ export default function RestroomFinderPage() {
 
   // Fetch
   useEffect(() => {
-    if (!lat || !lng) { setLoading(false); return; }
+    if (!lat || !lng) { setLoading(false); setLoadingMore(false); return; }
     setLoading(true); setError(null);
     const force = forceNextRef.current; forceNextRef.current = false;
+    const radiusMeters = radius * 1609.34;
+    let ignore = false;
+    let gotQuick = false;
+    const enrich = (raw) => raw.map(r => ({
+      ...r,
+      lat: r.location?.latitude || r.lat || 0,
+      lng: r.location?.longitude || r.lng || 0,
+    }));
+
     (async () => {
+      // Phase 1 — nearest few, FAST (one distance-ranked query) so the first
+      // results paint immediately. Best-effort; failures fall through to phase 2.
       try {
-        const radiusMeters = radius * 1609.34;
-        const { data } = await base44.functions.invoke("getRestroomLocations", {
+        const q = await callWorker(ROUTE.getRestroomLocations, {
+          latitude: lat, longitude: lng, radius: radiusMeters, maxResults: 3, venueType,
+          forceRefresh: force, quick: true,
+        });
+        if (!ignore && q.data?.restrooms?.length) {
+          gotQuick = true;
+          setRestrooms(enrich(q.data.restrooms));
+          setLoading(false);      // show the first results immediately
+          setLoadingMore(true);   // …while the full list loads
+        }
+      } catch { /* full pass below is the source of truth */ }
+
+      // Phase 2 — full comprehensive list; replaces the quick teaser.
+      try {
+        const { data, error: workerError } = await callWorker(ROUTE.getRestroomLocations, {
           latitude: lat, longitude: lng, radius: radiusMeters, maxResults: 30, venueType,
           forceRefresh: force,
         });
+        if (ignore) return;
+        if (workerError) throw new Error(workerError);
         const raw = data?.restrooms || [];
         if (raw.length > 0) {
-          const enriched = raw.map(r => ({
-            ...r,
-            lat: r.location?.latitude || r.lat || 0,
-            lng: r.location?.longitude || r.lng || 0,
-          }));
-          setRestrooms(enriched);
+          setRestrooms(enrich(raw));
           autoExpandRef.current = false;
         } else if (autoExpandRef.current && radius < 10) {
-          // No hits at 5 mi right after "refresh to current location" — auto-widen
-          // to 10 mi once before showing the empty state.
+          // No hits at 5 mi right after a refresh — auto-widen to 10 mi once.
           autoExpandRef.current = false;
           setRadius(10);
-        } else {
+        } else if (!gotQuick) {
           autoExpandRef.current = false;
+          setRestrooms([]);
           setError(data?.error || "No restrooms found. Try expanding radius.");
         }
-      } catch (e) { setError(`Failed to load: ${e.message}`); }
-      finally { setLoading(false); }
+        // else: full came back empty but we already have the quick results — keep them.
+      } catch (e) {
+        if (!ignore && !gotQuick) setError(`Failed to load: ${e.message}`);
+      } finally {
+        if (!ignore) { setLoading(false); setLoadingMore(false); }
+      }
     })();
+
+    return () => { ignore = true; };
   }, [lat, lng, radius, venueType, refreshTick]);
 
   const filtered = useMemo(() => {
@@ -727,28 +757,39 @@ export default function RestroomFinderPage() {
             <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
           </div>
         )}
-        <button
-          onClick={handleUseCurrentLocation}
-          disabled={gpsLoading}
-          className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-[12px] font-semibold text-[13px] transition-transform active:scale-[0.99] disabled:opacity-60"
-          style={{ background: CAT.restroom.ink, color: '#fff' }}
-        >
-          {gpsLoading ? <Loader2 size={15} className="animate-spin" /> : <Crosshair size={15} />}
-          {gpsLoading ? 'Locating…' : 'Refresh to current location'}
-        </button>
+        {/* Two refreshes, side by side: subtle text (re-search the SELECTED
+            location shown above) on the left; the prominent GPS "near me"
+            snap on the right. */}
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            className="text-[12.5px] font-medium underline underline-offset-2 text-left disabled:opacity-50 transition-colors"
+            style={{ color: CAT.restroom.ink }}
+          >
+            {loading ? 'Refreshing…' : 'Refresh search in this location'}
+          </button>
+          <button
+            onClick={handleUseCurrentLocation}
+            disabled={gpsLoading}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-[12px] font-semibold text-[13px] flex-shrink-0 transition-transform active:scale-[0.99] disabled:opacity-60"
+            style={{ background: CAT.restroom.ink, color: '#fff' }}
+          >
+            {gpsLoading ? <Loader2 size={15} className="animate-spin" /> : <Crosshair size={15} />}
+            {gpsLoading ? 'Locating…' : 'Refresh search near me'}
+          </button>
+        </div>
       </div>
 
       {/* Filters band — keeps existing radius/venue tabs structure, restyled to fit warm-ivory */}
       <div className="px-4 max-w-md mx-auto pb-2">
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
-          <span className="font-mono" style={{ fontSize: "10px", color: '#6B7280', fontWeight: 600, letterSpacing: "0.14em", textTransform: 'uppercase' }}>📏 Radius:</span>
-          <div style={{ display: "flex", gap: "5px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
             {RADIUS_OPTIONS.map(r => (
-              <button key={r} onClick={() => setRadius(r)} className="font-sans" style={{ padding: "6px 12px", borderRadius: "20px", border: radius === r ? `2px solid ${CAT.restroom.ink}` : "1px solid #F0E9DC", background: radius === r ? CAT.restroom.ink : "#fff", color: radius === r ? "#fff" : '#475569', fontWeight: radius === r ? "700" : "500", fontSize: "12px", cursor: "pointer" }}>{r} mi</button>
+              <button key={r} onClick={() => setRadius(r)} className="font-sans" style={{ padding: "6px 12px", borderRadius: "20px", border: radius === r ? `2px solid ${CAT.restroom.ink}` : "1px solid #F0E9DC", background: radius === r ? CAT.restroom.ink : "#fff", color: radius === r ? "#fff" : '#475569', fontWeight: radius === r ? "700" : "500", fontSize: "12px", cursor: "pointer", whiteSpace: "nowrap" }}>{r} mi</button>
             ))}
           </div>
-          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" style={{ marginLeft: "auto" }} />
-          <span style={{ fontSize: "11px", color: '#94A3B8' }}>{loading ? "Searching…" : `${restrooms.length} found`}</span>
+          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" />
         </div>
 
         {/* Venue tabs */}
@@ -809,6 +850,11 @@ export default function RestroomFinderPage() {
         </div>
       ) : viewMode === "list" ? (
         <div style={{ padding: "14px 12px 100px", display: "flex", flexDirection: "column", gap: "14px" }}>
+          {loadingMore && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "6px", color: GRAY, fontSize: "13px", fontWeight: 600 }}>
+              <Loader2 className="w-4 h-4 animate-spin" /> Finding more restrooms nearby…
+            </div>
+          )}
           {filtered.length === 0 ? (
             <div style={{ textAlign: "center", padding: "50px 24px", background: "#fff", borderRadius: "20px" }}>
               <div style={{ fontSize: "48px", marginBottom: "14px" }}>🔍</div>

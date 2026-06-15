@@ -28,6 +28,7 @@ export const ROUTE = {
   getConvenienceStores: 'convenience-stores',
   getATMLocations: 'atm-locations',
   getRestroomLocations: 'restroom-locations',
+  getRestroomAIDetails: 'restroom-ai-details',
   getMoneyExchangeLocations: 'money-exchange',
   getActivities: 'activities',
   getRestaurants: 'restaurants-full',
