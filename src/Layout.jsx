@@ -131,7 +131,11 @@ export default function Layout({ children, currentPageName }) {
             className="w-full min-h-screen pb-24"
             style={{
               paddingTop: 'calc(50px + env(safe-area-inset-top))',
-              ...(showFinderAd ? { paddingBottom: 'calc(6rem + 64px)' } : {}),
+              // On finder pages the FloatingNav is lifted (~64-72px) AND an
+              // AdMob banner (~56px) sits below it. Clear both + the home-
+              // indicator safe area so the last card / Directions·Map·Less /
+              // AI DETAILS never end up hidden under the pill at full scroll.
+              ...(showFinderAd ? { paddingBottom: 'calc(6rem + 84px + env(safe-area-inset-bottom))' } : {}),
             }}
           >
             {children}
