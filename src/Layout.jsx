@@ -8,7 +8,17 @@ import { ToastContainer } from "@/components/Toast";
 import { LocationProvider } from "@/components/location/LocationContext";
 import BrandBanner from "@/components/redesign/BrandBanner";
 import FloatingNav from "@/components/redesign/FloatingNav";
+import AdBanner from "@/components/ads/AdBanner";
 import { IVORY } from "@/components/redesign/constants";
+
+// Finder list pages that show a bottom AdMob banner ("per-feature ads").
+// Home is handled separately (it mounts its own banner via Home.jsx), so it's
+// intentionally NOT in this set — keeping Home's proven flow untouched. These
+// keys must match the page keys in pages.config.js (= currentPageName).
+const AD_FINDER_PAGES = new Set([
+  "PlacesToEat", "CoffeeFinder", "ATMFinder", "RestroomFinder",
+  "ConvenienceStore", "ThingsToDo", "Shopping",
+]);
 
 // Generate or retrieve session ID
 const getSessionId = () => {
@@ -46,6 +56,11 @@ const trackEvent = async (eventType, data = {}) => {
 export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
   const { profile, isAuthenticated, isLoadingAuth } = useAuth();
+
+  // Whether the current page should show the bottom banner (finder pages).
+  // Drives the banner mount, the FloatingNav lift, and extra bottom padding so
+  // the last card / radius row clears the overlay.
+  const showFinderAd = AD_FINDER_PAGES.has(currentPageName);
 
   // Account-tied onboarding gate. Drives off the Supabase profile flag, which
   // is set once-ever when onboarding completes (survives reinstall / 2nd
@@ -109,18 +124,28 @@ export default function Layout({ children, currentPageName }) {
 
           {/* App Content — offset by banner height (50px + status-bar safe
               area, so content clears the now-safe-area-aware BrandBanner) +
-              floating nav clearance (pb-24). */}
+              floating nav clearance (pb-24). On finder pages an AdMob banner
+              overlays the bottom edge, so add ~64px extra bottom padding there
+              so the last card / radius row isn't hidden behind it. */}
           <div
             className="w-full min-h-screen pb-24"
-            style={{ paddingTop: 'calc(50px + env(safe-area-inset-top))' }}
+            style={{
+              paddingTop: 'calc(50px + env(safe-area-inset-top))',
+              ...(showFinderAd ? { paddingBottom: 'calc(6rem + 64px)' } : {}),
+            }}
           >
             {children}
           </div>
 
-          {/* Floating pill nav — 3 anchors (Home / Saved / Settings).
-              Lifted above the AdMob banner on Home only (the banner is
-              Home-only and pins to the bottom edge). */}
-          <FloatingNav liftForAd={currentPageName === "Home"} />
+          {/* Per-feature bottom banner on finder pages (Home mounts its own via
+              Home.jsx). Single mount point so only one overlay banner is ever
+              active. */}
+          {showFinderAd && <AdBanner />}
+
+          {/* Floating pill nav — 3 anchors (Home / Saved / Settings). Lifted
+              above the AdMob banner on Home AND the finder pages so the ad can
+              pin to the bottom edge without the pill overlapping it. */}
+          <FloatingNav liftForAd={currentPageName === "Home" || showFinderAd} />
         </div>
       </LocationProvider>
     </>
