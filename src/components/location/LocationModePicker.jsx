@@ -234,10 +234,16 @@ export default function LocationModePicker({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
+  // Modes with a text input bring up the keyboard. Top-anchor those so the
+  // focused field stays visible and the box never gets pushed above the top
+  // margin when the keyboard opens. The picker/info screens have no input, so
+  // center them vertically (the "middle of screen" placement requested).
+  const needsKeyboard = mode === 'search' || mode === 'coords';
+
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[9998] overflow-hidden flex items-start justify-center px-3 pt-[7vh]">
+        <div className={`fixed inset-0 z-[9998] overflow-y-auto flex justify-center px-3 ${needsKeyboard ? 'items-start pt-[8vh] pb-6' : 'items-center py-[7vh]'}`}>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
