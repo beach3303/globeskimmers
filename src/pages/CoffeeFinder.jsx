@@ -136,7 +136,8 @@ function processShop(shop, userLat, userLng) {
   const badges=[];
   if(specialtyFlag)   badges.push({icon:'✨',label:'Specialty',    color:'#E65100',bg:'#FFF3E0'});
   if(chainFlag)       badges.push({icon:'🏪',label:'Chain',        color:'#78909C',bg:'#ECEFF1'});
-  if(hasWifi)         badges.push({icon:'📶',label:'WiFi',         color:'#0288D1',bg:'#E3F2FD'});
+  // No WiFi badge — WiFi now lives only inside the "Good for working" panel.
+  // hasWifi is still computed above for the "Has WiFi" quick filter.
 
   const photos = shop.photos||(shop.photoUrl?[shop.photoUrl]:[]);
   return { ...shop, lat, lng, name, distanceMiles, distance:distanceMiles?`${distanceMiles.toFixed(1)} mi`:null, isOpen:openStatus.isOpen, todayHours:openStatus.todayHours, is24Hours:openStatus.is24Hours, detectedDrinks, amenities, parking, seating, hasIndoorSeating, hasOutdoorSeating, seatingSource, hasWifi, isChain:chainFlag, isSpecialty:specialtyFlag, tier, badges:badges.slice(0,5), photos, photoUrl:photos[0]||null };
@@ -269,21 +270,17 @@ function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance
           </div>
         )}
 
-        {/* Review-detected amenities (always ⚠️ reported) */}
-        {Object.values(shop.amenities||{}).some(a=>a.available)&&(
+        {/* Review-detected amenities (always ⚠️ reported). WiFi is intentionally
+            excluded here — it now lives ONLY inside the "Good for working" panel
+            (CafeWorkProfileSection, under Details) so WiFi isn't shown in three
+            places. The "Has WiFi" quick filter still uses shop.hasWifi. */}
+        {Object.entries(shop.amenities||{}).some(([k,a])=>a.available&&k!=='wifi')&&(
           <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"10px"}}>
-            {Object.entries(shop.amenities).filter(([_,a])=>a.available).map(([k,a])=>(
+            {Object.entries(shop.amenities).filter(([k,a])=>a.available&&k!=='wifi').map(([k,a])=>(
               <span key={k} title="Mentioned in customer reviews — call ahead to confirm" style={{display:"flex",alignItems:"center",gap:"4px",background:"#FFFBF0",border:"1px solid #FED7AA",padding:"3px 9px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",color:"#92400E",cursor:"default"}}>
                 {a.icon} {a.label} <span style={{color:"#D97706",fontSize:"10px"}}>·reported</span>
               </span>
             ))}
-          </div>
-        )}
-
-        {/* WiFi badge */}
-        {shop.hasWifi&&(
-          <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px",padding:"8px 10px",background:"#E3F2FD",borderRadius:"8px",fontSize:"12px"}}>
-            <span>📶</span><span style={{fontWeight:"600",color:"#0288D1"}}>WiFi Available</span>
           </div>
         )}
 
