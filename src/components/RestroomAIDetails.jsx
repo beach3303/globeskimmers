@@ -1,5 +1,5 @@
 /**
- * RestroomAIDetails — collapsible "🚻 RESTROOM DETAILS" panel for restroom
+ * RestroomAIDetails — collapsible "🤖 AI DETAILS" panel for restroom
  * cards. Replaces the generic restaurant-voiced AIDetailsSection for restrooms.
  *
  * Lazy-fetches restroom-specific intel via callWorker(ROUTE.getRestroomAIDetails)
@@ -149,7 +149,7 @@ export default function RestroomAIDetails({ placeId, placeName, venueLabel, venu
   return (
     <div style={{ padding: '12px 14px', background: BG, borderRadius: '10px', border: `1px solid ${BORDER}` }}>
       <button onClick={onToggle} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
-        <span style={{ fontSize: '11px', fontWeight: 700, color: TEAL, letterSpacing: '0.5px' }}>🚻 RESTROOM DETAILS</span>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: TEAL, letterSpacing: '0.5px' }}>🤖 AI DETAILS</span>
         <span style={{ fontSize: '11px', color: TEAL }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && <div style={{ marginTop: '10px' }}><Body loading={loading} error={error} d={data} /></div>}
