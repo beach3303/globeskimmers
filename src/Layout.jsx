@@ -20,6 +20,11 @@ const AD_FINDER_PAGES = new Set([
   "ConvenienceStore", "ThingsToDo", "Shopping",
 ]);
 
+// TEMP DEBUG: tiny on-screen readout of what the onboarding gate sees, so we can
+// diagnose the "new user skips onboarding" report on-device (screenshot it).
+// REMOVE once onboarding is confirmed working.
+const ONBOARDING_DEBUG = true;
+
 // Generate or retrieve session ID
 const getSessionId = () => {
   let sessionId = sessionStorage.getItem('globeskimmers_session_id');
@@ -150,6 +155,13 @@ export default function Layout({ children, currentPageName }) {
               above the AdMob banner on Home AND the finder pages so the ad can
               pin to the bottom edge without the pill overlapping it. */}
           <FloatingNav liftForAd={currentPageName === "Home" || showFinderAd} />
+
+          {/* TEMP DEBUG readout — remove after onboarding is confirmed. */}
+          {ONBOARDING_DEBUG && (
+            <div style={{ position: 'fixed', left: 6, bottom: 6, zIndex: 99999, background: 'rgba(0,0,0,0.82)', color: '#37FF8B', font: '10px/1.3 ui-monospace,monospace', padding: '4px 7px', borderRadius: 6, maxWidth: '94vw', pointerEvents: 'none' }}>
+              {`gate · load=${String(isLoadingAuth)} auth=${String(isAuthenticated)} prof=${profile ? 'y' : 'n'} onb=${String(profile?.onboarding_completed)} page=${currentPageName}`}
+            </div>
+          )}
         </div>
       </LocationProvider>
     </>
