@@ -26,12 +26,15 @@ create table if not exists public.profiles (
   preferred_language   text,
   temp_unit            text check (temp_unit in ('C','F')),
   distance_unit        text check (distance_unit in ('mi','km')),
+  primary_banking_currency text,                     -- ATM withdrawal calculator default
+  show_home_flag         boolean    not null default false,  -- Settings toggle → Home flag card
+  show_home_country_info boolean    not null default false,  -- Settings toggle → Home home-country time
   travel_frequency     text,
   travel_purpose       text[],
-  traveler_type        text,
+  traveler_type        text[],
   frequent_countries   text[],
   next_destination     text,
-  travel_budget        text,
+  travel_budget        text[],
   accommodation_style  text[],
   dietary_prefs        text[],
   accessibility_needs  text[],
@@ -134,3 +137,44 @@ insert into public.profiles (id)
 select id from auth.users
 where id not in (select id from public.profiles)
 on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------------
+-- 6. refresh_access — emails an admin has granted the global "refresh app
+--    cache" button. Admins (hardcoded below) always have it; this is the
+--    admin-managed allow-list for non-admin users.
+-- ---------------------------------------------------------------------
+create table if not exists public.refresh_access (
+  email      text primary key,
+  granted_by text,
+  created_at timestamptz not null default now()
+);
+alter table public.refresh_access enable row level security;
+
+-- A user can read their OWN grant; admins can read all.
+drop policy if exists "refresh_access_select" on public.refresh_access;
+create policy "refresh_access_select"
+  on public.refresh_access for select to authenticated
+  using (
+    lower(email) = lower(auth.jwt() ->> 'email')
+    or lower(auth.jwt() ->> 'email') in (
+      'maizasimeon@gmail.com','yreolsleow@gmail.com',
+      'founder@globeskimmers.io','simeonmaiza@gmail.com'
+    )
+  );
+
+-- Only admins can add/remove grants.
+drop policy if exists "refresh_access_admin_write" on public.refresh_access;
+create policy "refresh_access_admin_write"
+  on public.refresh_access for all to authenticated
+  using (
+    lower(auth.jwt() ->> 'email') in (
+      'maizasimeon@gmail.com','yreolsleow@gmail.com',
+      'founder@globeskimmers.io','simeonmaiza@gmail.com'
+    )
+  )
+  with check (
+    lower(auth.jwt() ->> 'email') in (
+      'maizasimeon@gmail.com','yreolsleow@gmail.com',
+      'founder@globeskimmers.io','simeonmaiza@gmail.com'
+    )
+  );

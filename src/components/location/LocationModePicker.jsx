@@ -262,11 +262,16 @@ export default function LocationModePicker({ isOpen, onClose }) {
             {/* Mode Selection */}
             {mode === 'select' && (
               <>
-                <div className="bg-gradient-to-r from-[#3A6EA5] to-[#1E3150] text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
-                  <h2 className="text-[20px] font-bold">Select Location Mode</h2>
+                <div className="bg-gradient-to-r from-[#3A6EA5] to-[#1E3150] text-white px-5 py-4 flex items-start justify-between flex-shrink-0">
+                  <div className="pr-3">
+                    <h2 className="text-[20px] font-bold">Select Location Mode</h2>
+                    <p className="text-[12.5px] text-white/80 mt-0.5 leading-snug">
+                      Globeskimmers finds places near you. Where should we start?
+                    </p>
+                  </div>
                   <button
                     onClick={onClose}
-                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors flex-shrink-0"
                   >
                     <X className="w-5 h-5" />
                   </button>

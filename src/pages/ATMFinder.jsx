@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
-import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
+import RadiusRow from "@/components/location/RadiusRow";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
@@ -213,7 +213,7 @@ function ATMPhotoStrip({ photos, fallbackIcon = "🏧", onPhotoClick }) {
 
   if (validPhotos.length === 0) {
     return (
-      <div style={{ height:"120px", background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2, #80DEEA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"52px" }}>
+      <div style={{ height:"120px", background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2, #80DEEA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"calc(52px*var(--fs))" }}>
         {fallbackIcon}
       </div>
     );
@@ -223,7 +223,7 @@ function ATMPhotoStrip({ photos, fallbackIcon = "🏧", onPhotoClick }) {
     return (
       <div onClick={() => onPhotoClick?.(0)} style={{ position:"relative", height:"160px", overflow:"hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
         {loading[0] && (
-          <div style={{ position:"absolute", inset:0, background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"36px" }}>🏧</div>
+          <div style={{ position:"absolute", inset:0, background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"calc(36px*var(--fs))" }}>🏧</div>
         )}
         <img src={validPhotos[0]} alt="" onError={() => setErrors(p => ({...p, 0:true}))} onLoad={() => setLoading(p => ({...p, 0:false}))}
           style={{ width:"100%", height:"160px", objectFit:"cover", opacity:loading[0]?0:1, transition:"opacity 0.3s" }} />
@@ -237,7 +237,7 @@ function ATMPhotoStrip({ photos, fallbackIcon = "🏧", onPhotoClick }) {
       {validPhotos.slice(0,2).map((url, i) => (
         <div key={i} onClick={() => onPhotoClick?.(i)} style={{ position:"relative", overflow:"hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
           {loading[i] && (
-            <div style={{ position:"absolute", inset:0, background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"28px" }}>🏧</div>
+            <div style={{ position:"absolute", inset:0, background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"calc(28px*var(--fs))" }}>🏧</div>
           )}
           <img src={url} alt="" onError={() => setErrors(p => ({...p, [i]:true}))} onLoad={() => setLoading(p => ({...p, [i]:false}))}
             style={{ width:"100%", height:"140px", objectFit:"cover", opacity:loading[i]?0:1, transition:"opacity 0.3s" }} />
@@ -302,31 +302,31 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
           onPhotoClick={(i) => setGallery({ open: true, idx: i })}
         />
         {/* Index badge */}
-        <div style={{ position:"absolute", top:"10px", left:"10px", background:TEAL, color:"#fff", width:"28px", height:"28px", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:"800", fontSize:"13px" }}>{index+1}</div>
+        <div style={{ position:"absolute", top:"10px", left:"10px", background:TEAL, color:"#fff", width:"28px", height:"28px", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:"800", fontSize:"calc(13px*var(--fs))" }}>{index+1}</div>
         {/* Network badge */}
         {atm.network && atm.network !== "Independent" && (
-          <div style={{ position:"absolute", top:"10px", right:"10px", background:"rgba(255,255,255,0.95)", padding:"3px 9px", borderRadius:"6px", fontSize:"11px", fontWeight:"700", color:"#1565C0" }}>🏦 {atm.network}</div>
+          <div style={{ position:"absolute", top:"10px", right:"10px", background:"rgba(255,255,255,0.95)", padding:"3px 9px", borderRadius:"6px", fontSize:"calc(11px*var(--fs))", fontWeight:"700", color:"#1565C0" }}>🏦 {atm.network}</div>
         )}
         {/* Venue badge */}
         {atm.venueType && atm.venueType !== "standalone" && atm.venueType !== "bank" && (
-          <div style={{ position:"absolute", bottom:"10px", left:"10px", background:"rgba(0,0,0,0.65)", padding:"3px 9px", borderRadius:"6px", fontSize:"11px", fontWeight:"700", color:"#fff" }}>{atm.venueIcon} {atm.venueType === "airport" ? "Airport" : atm.venueType === "transit" ? "Transit/Metro" : atm.venueType === "gas" ? "Gas Station" : atm.venueType === "hospital" ? "Hospital" : atm.venueType === "hotel" ? "Hotel" : atm.venueType === "convenience" ? "Convenience" : atm.venueType === "mall" ? "Mall" : atm.venueType === "grocery" ? "Grocery" : atm.venueType === "entertainment" ? "Entertainment" : ""}</div>
+          <div style={{ position:"absolute", bottom:"10px", left:"10px", background:"rgba(0,0,0,0.65)", padding:"3px 9px", borderRadius:"6px", fontSize:"calc(11px*var(--fs))", fontWeight:"700", color:"#fff" }}>{atm.venueIcon} {atm.venueType === "airport" ? "Airport" : atm.venueType === "transit" ? "Transit/Metro" : atm.venueType === "gas" ? "Gas Station" : atm.venueType === "hospital" ? "Hospital" : atm.venueType === "hotel" ? "Hotel" : atm.venueType === "convenience" ? "Convenience" : atm.venueType === "mall" ? "Mall" : atm.venueType === "grocery" ? "Grocery" : atm.venueType === "entertainment" ? "Entertainment" : ""}</div>
         )}
       </div>
 
       {/* Card body */}
       <div style={{ padding:"14px 16px" }}>
-        <div style={{ fontWeight:"700", fontSize:"16px", color:DARK, marginBottom:"6px" }}>{name}</div>
+        <div style={{ fontWeight:"700", fontSize:"calc(16px*var(--fs))", color:DARK, marginBottom:"6px" }}>{name}</div>
 
         {/* Address */}
         {address && (
           <div style={{ display:"flex", alignItems:"flex-start", gap:"8px", marginBottom:"10px", padding:"8px 10px", background:"#F8FAFC", borderRadius:"8px" }}>
-            <span style={{ fontSize:"16px", marginTop:"1px" }}>🗺️</span>
-            <span style={{ fontSize:"13px", color:DARK, lineHeight:"1.4" }}>{address}</span>
+            <span style={{ fontSize:"calc(16px*var(--fs))", marginTop:"1px" }}>🗺️</span>
+            <span style={{ fontSize:"calc(13px*var(--fs))", color:DARK, lineHeight:"1.4" }}>{address}</span>
           </div>
         )}
 
         {/* Rating + Distance */}
-        <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap", gap:"10px", fontSize:"13px", color:GRAY, marginBottom:"10px" }}>
+        <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap", gap:"10px", fontSize:"calc(13px*var(--fs))", color:GRAY, marginBottom:"10px" }}>
           {atm.rating && (
             <span>
               <span style={{ color:GOLD }}>★</span>
@@ -341,7 +341,7 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
         {atm.badges?.length > 0 && (
           <div style={{ display:"flex", flexWrap:"wrap", gap:"5px", marginBottom:"10px" }}>
             {atm.badges.map((b, i) => (
-              <span key={i} style={{ background:b.bg, color:b.color, padding:"3px 9px", borderRadius:"6px", fontSize:"11px", fontWeight:"600" }}>{b.icon} {b.label}</span>
+              <span key={i} style={{ background:b.bg, color:b.color, padding:"3px 9px", borderRadius:"6px", fontSize:"calc(11px*var(--fs))", fontWeight:"600" }}>{b.icon} {b.label}</span>
             ))}
           </div>
         )}
@@ -349,7 +349,7 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
         {/* Hours */}
         <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"10px", padding:"10px 12px", background:hoursStatusBg, borderRadius:"10px" }}>
           <span style={{ width:"10px", height:"10px", borderRadius:"50%", background:hoursStatusDot, boxShadow: atm.isOpen===true ? "0 0 6px rgba(76,175,80,0.5)" : "none", flexShrink:0 }} />
-          <div style={{ flex:1, fontSize:"13px" }}>
+          <div style={{ flex:1, fontSize:"calc(13px*var(--fs))" }}>
             <span style={{ fontWeight:"700", color:hoursStatusColor }}>{hoursStatusLabel}</span>
             {atm.todayHours && !atm.is24Hours && (
               <span style={{ color:GRAY, marginLeft:"8px" }}>· {atm.todayHours}</span>
@@ -360,14 +360,14 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
         {/* Phone */}
         {phone ? (
           <a href={`tel:${phone}`} style={{ display:"flex", alignItems:"center", gap:"10px", marginBottom:"12px", padding:"10px 12px", background:"#E3F2FD", borderRadius:"10px", textDecoration:"none", color:"#1565C0" }}>
-            <span style={{ width:"32px", height:"32px", background:"#1565C0", color:"#fff", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"16px", flexShrink:0 }}>📞</span>
+            <span style={{ width:"32px", height:"32px", background:"#1565C0", color:"#fff", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"calc(16px*var(--fs))", flexShrink:0 }}>📞</span>
             <div>
-              <div style={{ fontWeight:"600", fontSize:"14px" }}>{phone}</div>
-              <div style={{ fontSize:"11px", color:GRAY }}>Tap to call</div>
+              <div style={{ fontWeight:"600", fontSize:"calc(14px*var(--fs))" }}>{phone}</div>
+              <div style={{ fontSize:"calc(11px*var(--fs))", color:GRAY }}>Tap to call</div>
             </div>
           </a>
         ) : (
-          <div style={{ display:"flex", alignItems:"center", gap:"10px", marginBottom:"12px", padding:"10px 12px", background:"#F5F5F5", borderRadius:"10px", color:GRAY, fontSize:"13px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:"10px", marginBottom:"12px", padding:"10px 12px", background:"#F5F5F5", borderRadius:"10px", color:GRAY, fontSize:"calc(13px*var(--fs))" }}>
             <span>📞</span><span>Phone not available</span>
           </div>
         )}
@@ -391,8 +391,8 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
                 {atm.weekdayDescriptions?.length > 0 && (
                   <div style={{ padding:"12px", background:"#F8FAFC", borderRadius:"10px" }}>
                     <button onClick={() => setHoursExpanded(h => !h)} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"transparent", border:"none", padding:0, cursor:"pointer", fontFamily:"inherit" }}>
-                      <span style={{ fontSize:"11px", color:GRAY, fontWeight:"700", letterSpacing:"0.5px" }}>🕐 DAILY HOURS</span>
-                      <span style={{ fontSize:"11px", color:GRAY }}>{hoursExpanded ? "▲" : "▼"}</span>
+                      <span style={{ fontSize:"calc(11px*var(--fs))", color:GRAY, fontWeight:"700", letterSpacing:"0.5px" }}>🕐 DAILY HOURS</span>
+                      <span style={{ fontSize:"calc(11px*var(--fs))", color:GRAY }}>{hoursExpanded ? "▲" : "▼"}</span>
                     </button>
                     {hoursExpanded && (
                       <div style={{ marginTop:"8px" }}>
@@ -407,7 +407,7 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
                           return (
                             <div key={i} style={{
                               display:"flex", justifyContent:"space-between",
-                              fontSize:"13px", color: isToday ? TEAL_DARK : DARK,
+                              fontSize:"calc(13px*var(--fs))", color: isToday ? TEAL_DARK : DARK,
                               fontWeight: isToday ? "700" : "400",
                               padding: isToday ? "6px 8px" : "5px 0",
                               background: isToday ? `${TEAL}15` : "transparent",
@@ -436,7 +436,7 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
                   page="ATMFinder"
                 />
                 {(atm.websiteUri || atm.website) && (
-                  <a href={atm.websiteUri || atm.website} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 12px", background:"#fff", border:"1px solid #E2E8F0", borderRadius:"10px", textDecoration:"none", color:TEAL_DARK, fontSize:"13px", fontWeight:"600" }}>🌐 Visit Website</a>
+                  <a href={atm.websiteUri || atm.website} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 12px", background:"#fff", border:"1px solid #E2E8F0", borderRadius:"10px", textDecoration:"none", color:TEAL_DARK, fontSize:"calc(13px*var(--fs))", fontWeight:"600" }}>🌐 Visit Website</a>
                 )}
               </div>
             </motion.div>
@@ -459,7 +459,7 @@ function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpande
 const btn = (bg, color) => ({
   display:"flex", alignItems:"center", gap:"5px",
   padding:"8px 14px", borderRadius:"10px",
-  border:"none", fontSize:"13px", fontWeight:"600",
+  border:"none", fontSize:"calc(13px*var(--fs))", fontWeight:"600",
   cursor:"pointer", background:bg, color, fontFamily:"inherit",
 });
 
@@ -487,14 +487,14 @@ function buildMapPopup(atm, index, fmt) {
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:260px;position:relative;">
   <div style="padding:12px;padding-top:14px;">
     <div style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:#E0F7FA;border-radius:6px;font-size:11px;font-weight:700;color:#00838F;margin-bottom:6px;">${venueIcon} ${network}</div>
-    <div onclick="window._gsViewATM&&window._gsViewATM(${index})" style="font-weight:700;font-size:14px;color:#1A2332;margin-bottom:5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;">${name}</div>
+    <div onclick="window._gsViewATM&&window._gsViewATM(${index})" style="font-weight:700;font-size:calc(14px*var(--fs));color:#1A2332;margin-bottom:5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;">${name}</div>
     <div style="font-size:11px;color:#64748B;margin-bottom:6px;">${address}</div>
-    <div style="font-size:11px;padding:5px 8px;border-radius:6px;background:${hoursBg};margin-bottom:6px;">
+    <div style="font-size:calc(11px*var(--fs));padding:5px 8px;border-radius:6px;background:${hoursBg};margin-bottom:6px;">
       <span style="font-weight:700;color:${hoursColor};">${hoursLabel}</span>
       ${todayHours && !is24H ? `<span style="color:#64748B;"> · ${todayHours}</span>` : ""}
     </div>
     ${rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:6px;">★ <strong style="color:#1A2332;">${rating}</strong> <span style="color:#64748B;">(${ratingCount})</span>${distance?` · <span style="color:#00838F;">${distance}</span>`:''}</div>`:distance?`<div style="font-size:11px;color:#9E9E9E;margin-bottom:6px;">📍 ${distance}</div>`:''}
-    ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#1565C0;font-size:11px;font-weight:600;">📞 ${phone}</a>`:''}
+    ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#1565C0;font-size:calc(11px*var(--fs));font-weight:600;">📞 ${phone}</a>`:''}
     <div style="display:flex;gap:8px;">
       <button onclick="window._gsATMDirs&&window._gsATMDirs(${index})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#00BCD4;color:#fff;font-weight:600;font-size:11px;cursor:pointer;">🧭 Directions</button>
       <button onclick="window._gsViewATM&&window._gsViewATM(${index})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#F1F5F9;color:#1A2332;font-weight:600;font-size:11px;cursor:pointer;">📋 Details</button>
@@ -513,7 +513,7 @@ function FilterPill({ label, active, onClick, emoji }) {
       background: active ? TEAL_LIGHT : "#fff",
       color: active ? TEAL_DARK : GRAY,
       fontWeight: active ? "700" : "500",
-      fontSize:"13px", cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit",
+      fontSize:"calc(13px*var(--fs))", cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit",
       display:"flex", alignItems:"center", gap:"4px",
     }}>
       {emoji && <span>{emoji}</span>}{label}
@@ -650,8 +650,8 @@ export default function ATMFinderPage() {
       const userMode=activeLocation?.mode==='navigate'?'Selected location':'Current location';
       const userLabel=locLabel||'';
       const userTooltipHtml=userPinExpanded
-        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsATMUserPin&&window._gsATMUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:12px;margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:11px;margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:10px;line-height:1.3;">${userLabel}</div></div>`
-        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsATMUserPin&&window._gsATMUserPin()"><span style="font-weight:700;color:#1A2332;font-size:11px;">📍 You are here</span><span style="color:#64748B;font-size:10px;font-weight:700;">⌄</span></div>`;
+        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsATMUserPin&&window._gsATMUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:calc(12px*var(--fs));margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:calc(11px*var(--fs));margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:calc(10px*var(--fs));line-height:1.3;">${userLabel}</div></div>`
+        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsATMUserPin&&window._gsATMUserPin()"><span style="font-weight:700;color:#1A2332;font-size:calc(11px*var(--fs));">📍 You are here</span><span style="color:#64748B;font-size:10px;font-weight:700;">⌄</span></div>`;
       window.L.marker([lat, lng], {
         icon: window.L.divIcon({
           html: `<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>`,
@@ -732,7 +732,7 @@ export default function ATMFinderPage() {
           <button onClick={() => window.history.back()} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]" style={{ background: CAT.atm.bg, color: CAT.atm.ink }}>
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]" style={{ background: CAT.atm.bg, color: CAT.atm.ink }}>
             <CreditCard size={13} color={CAT.atm.ink} strokeWidth={2} />
             ATM Finder
           </div>
@@ -745,17 +745,17 @@ export default function ATMFinderPage() {
         <button onClick={() => setShowLocPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
           <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
           <div className="flex-1 min-w-0">
-            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>
+            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>
               {isCity ? '🏙️ City' : '📍 Location'}
             </div>
-            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
+            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
           </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{ background: CAT.atm.bg, color: CAT.atm.ink }}>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{ background: CAT.atm.bg, color: CAT.atm.ink }}>
             Change
           </span>
         </button>
         {isCity && (
-          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[12px] leading-snug flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
+          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[calc(12px*var(--fs))] leading-snug flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
             <span>💡</span>
             <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
           </div>
@@ -766,16 +766,7 @@ export default function ATMFinderPage() {
       <div className="px-4 max-w-md mx-auto">
 
         {/* Radius buttons */}
-        <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"10px", flexWrap:"wrap" }}>
-          <span className="font-mono" style={{ fontSize:"10px", color:'#6B7280', fontWeight:600, letterSpacing:'0.14em', textTransform:'uppercase', flexShrink:0 }}>📏 Radius:</span>
-          <div style={{ display:"flex", gap:"4px" }}>
-            {[5,10,15,25].map(r => (
-              <button key={r} onClick={() => setRadius(r)} className="font-sans" style={{ padding:"5px 10px", borderRadius:"8px", border: radius===r ? `2px solid ${CAT.atm.ink}` : "1px solid #F0E9DC", background: radius===r ? CAT.atm.bg : "#fff", color: radius===r ? CAT.atm.ink : '#475569', fontWeight: radius===r ? "700" : "500", fontSize:"12px", cursor:"pointer" }}>{r} mi</button>
-            ))}
-          </div>
-          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" style={{ marginLeft:"auto" }} />
-          <span style={{ fontSize:"11px", color:'#94A3B8', flexShrink:0 }}>{loading ? "Loading…" : `${atms.length} found`}</span>
-        </div>
+        <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.atm.ink} unit={unit} setUnit={setUnit} />
 
         {/* Quick filters row */}
         <div style={{ display:"flex", gap:"8px", alignItems:"center", overflowX:"auto", scrollbarWidth:"none", marginBottom:"8px" }}>
@@ -786,7 +777,7 @@ export default function ATMFinderPage() {
             background: openOnly ? "#E8F5E9" : "#fff",
             color: openOnly ? "#2E7D32" : GRAY,
             fontWeight: openOnly ? "700" : "500",
-            fontSize:"12px", cursor:"pointer", fontFamily:"inherit",
+            fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit",
           }}>🟢 Open Only</button>
 
           {/* Bank filter */}
@@ -797,7 +788,7 @@ export default function ATMFinderPage() {
               background: bankFilter!=="all" ? "#E3F2FD" : "#fff",
               color: bankFilter!=="all" ? "#1565C0" : GRAY,
               fontWeight: bankFilter!=="all" ? "700" : "500",
-              fontSize:"12px", cursor:"pointer", fontFamily:"inherit",
+              fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit",
               appearance:"none", paddingRight:"20px",
             }}>
               <option value="all">🏦 All Banks</option>
@@ -808,15 +799,15 @@ export default function ATMFinderPage() {
 
         {/* Stats + View toggle */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:"8px", fontSize:"13px" }}>
-            <span style={{ background:TEAL, color:"#fff", padding:"2px 9px", borderRadius:"10px", fontWeight:"700", fontSize:"12px" }}>{stats.total}</span>
+          <div style={{ display:"flex", alignItems:"center", gap:"8px", fontSize:"calc(13px*var(--fs))" }}>
+            <span style={{ background:TEAL, color:"#fff", padding:"2px 9px", borderRadius:"10px", fontWeight:"700", fontSize:"calc(12px*var(--fs))" }}>{stats.total}</span>
             <span style={{ color:GRAY, fontWeight:"600" }}>ATMs</span>
             {stats.banks > 0 && <span style={{ color:"#1565C0", fontWeight:"600" }}>· {stats.banks} banks</span>}
             {stats.open  > 0 && <span style={{ color:"#2E7D32", fontWeight:"600" }}>· {stats.open} open</span>}
           </div>
           <div style={{ display:"flex", gap:"4px" }}>
             {["list","map"].map(v => (
-              <button key={v} onClick={() => setViewMode(v)} style={{ padding:"6px 12px", borderRadius:"8px", border:"none", background: viewMode===v ? TEAL : "#E2E8F0", color: viewMode===v ? "#fff" : GRAY, fontWeight:"700", fontSize:"12px", cursor:"pointer", fontFamily:"inherit" }}>
+              <button key={v} onClick={() => setViewMode(v)} style={{ padding:"6px 12px", borderRadius:"8px", border:"none", background: viewMode===v ? TEAL : "#E2E8F0", color: viewMode===v ? "#fff" : GRAY, fontWeight:"700", fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit" }}>
                 {v==="list" ? "List View" : "Map View"}
               </button>
             ))}
@@ -827,13 +818,13 @@ export default function ATMFinderPage() {
       {/* ── Content ── */}
       {loading ? (
         <div style={{ textAlign:"center", padding:"60px 20px" }}>
-          <div style={{ fontSize:"48px", marginBottom:"14px", animation:"pulse 1.5s infinite" }}>🏧</div>
-          <div style={{ color:GRAY, fontWeight:"600", fontSize:"15px" }}>Finding ATMs worldwide…</div>
-          <div style={{ color:GRAY, fontSize:"12px", marginTop:"6px" }}>Scanning airports, transit, stores, banks & more</div>
+          <div style={{ fontSize:"calc(48px*var(--fs))", marginBottom:"14px", animation:"pulse 1.5s infinite" }}>🏧</div>
+          <div style={{ color:GRAY, fontWeight:"600", fontSize:"calc(15px*var(--fs))" }}>Finding ATMs worldwide…</div>
+          <div style={{ color:GRAY, fontSize:"calc(12px*var(--fs))", marginTop:"6px" }}>Scanning airports, transit, stores, banks & more</div>
         </div>
       ) : error ? (
         <div style={{ textAlign:"center", padding:"60px 20px" }}>
-          <div style={{ fontSize:"40px", marginBottom:"12px" }}>😕</div>
+          <div style={{ fontSize:"calc(40px*var(--fs))", marginBottom:"12px" }}>😕</div>
           <div style={{ color:CORAL, fontWeight:"600" }}>{error}</div>
           <button onClick={() => setRadius(r => Math.min(r+5,25))} style={{ marginTop:"14px", ...btn(TEAL,"#fff") }}>Try Larger Radius</button>
         </div>
@@ -841,9 +832,9 @@ export default function ATMFinderPage() {
         <div style={{ padding:"0 12px 100px", display:"flex", flexDirection:"column", gap:"12px" }}>
           {filtered.length === 0 ? (
             <div style={{ textAlign:"center", padding:"40px 20px", background:"#fff", borderRadius:"12px" }}>
-              <div style={{ fontSize:"32px", marginBottom:"10px" }}>🔍</div>
+              <div style={{ fontSize:"calc(32px*var(--fs))", marginBottom:"10px" }}>🔍</div>
               <div style={{ fontWeight:"600", color:DARK }}>No matches for this filter</div>
-              <div style={{ color:GRAY, fontSize:"13px", marginTop:"4px" }}>Try expanding your radius or clearing filters</div>
+              <div style={{ color:GRAY, fontSize:"calc(13px*var(--fs))", marginTop:"4px" }}>Try expanding your radius or clearing filters</div>
             </div>
           ) : (
             filtered.map((atm, i) => (
@@ -869,10 +860,10 @@ export default function ATMFinderPage() {
           <div ref={mapRef} style={{ height:"calc(100vh - 300px)", width:"100%" }} />
           {/* Legend — collapsible */}
           {showLegend ? (
-            <div style={{ position:"absolute", bottom:"16px", left:"16px", zIndex:1000, background:"rgba(255,255,255,0.95)", borderRadius:"10px", padding:"8px 12px", fontSize:"11px", boxShadow:"0 2px 8px rgba(0,0,0,0.15)" }}>
+            <div style={{ position:"absolute", bottom:"16px", left:"16px", zIndex:1000, background:"rgba(255,255,255,0.95)", borderRadius:"10px", padding:"8px 12px", fontSize:"calc(11px*var(--fs))", boxShadow:"0 2px 8px rgba(0,0,0,0.15)" }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"4px" }}>
                 <span style={{ fontWeight:"700", color:DARK }}>Pin Colors</span>
-                <button onClick={()=>setShowLegend(false)} style={{ background:"none", border:"none", fontSize:"14px", color:GRAY, cursor:"pointer", padding:"0 0 0 8px", lineHeight:1 }}>✕</button>
+                <button onClick={()=>setShowLegend(false)} style={{ background:"none", border:"none", fontSize:"calc(14px*var(--fs))", color:GRAY, cursor:"pointer", padding:"0 0 0 8px", lineHeight:1 }}>✕</button>
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:"6px", marginBottom:"2px" }}>
                 <span style={{ width:"12px", height:"12px", borderRadius:"50%", background:"#FF6B35", display:"inline-block" }}></span>
@@ -888,10 +879,10 @@ export default function ATMFinderPage() {
               </div>
             </div>
           ) : (
-            <button onClick={()=>setShowLegend(true)} style={{ position:"absolute", bottom:"16px", left:"16px", zIndex:1000, background:"rgba(255,255,255,0.95)", borderRadius:"8px", padding:"6px 10px", fontSize:"11px", fontWeight:"600", color:GRAY, border:"none", boxShadow:"0 2px 8px rgba(0,0,0,0.15)", cursor:"pointer" }}>🎨 Legend</button>
+            <button onClick={()=>setShowLegend(true)} style={{ position:"absolute", bottom:"16px", left:"16px", zIndex:1000, background:"rgba(255,255,255,0.95)", borderRadius:"8px", padding:"6px 10px", fontSize:"calc(11px*var(--fs))", fontWeight:"600", color:GRAY, border:"none", boxShadow:"0 2px 8px rgba(0,0,0,0.15)", cursor:"pointer" }}>🎨 Legend</button>
           )}
           {/* Close button */}
-          <button onClick={() => setViewMode("list")} style={{ position:"absolute", top:"16px", right:"16px", zIndex:1000, background:"#fff", borderRadius:"50%", width:"40px", height:"40px", border:"none", boxShadow:"0 2px 8px rgba(0,0,0,0.2)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", fontSize:"20px", color:DARK }}>✕</button>
+          <button onClick={() => setViewMode("list")} style={{ position:"fixed", top:"calc(50px + env(safe-area-inset-top) + 10px)", right:"14px", zIndex:1200, background:"#fff", borderRadius:"50%", width:"40px", height:"40px", border:"none", boxShadow:"0 2px 8px rgba(0,0,0,0.2)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", fontSize:"calc(20px*var(--fs))", color:DARK }}>✕</button>
         </div>
       )}
 

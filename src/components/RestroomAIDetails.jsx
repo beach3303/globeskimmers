@@ -33,8 +33,10 @@ const TONE = {
 function conf(status) {
   if (status === 'confirmed' || status === 'reported') return { tone: 'pos', suffix: '' };
   if (status === 'likely') return { tone: 'mid', suffix: ' likely' };
-  if (status === 'not_confirmed') return { tone: 'mut', suffix: ' not confirmed' };
-  return null; // unknown → hide chip
+  // not_confirmed / unknown → hide the chip entirely. We only surface amenities
+  // that are confirmed or likely, so the list reads as useful facts, not a wall
+  // of "not confirmed" negatives.
+  return null;
 }
 
 // Build the amenity chip list from the structured restroomAmenities object.

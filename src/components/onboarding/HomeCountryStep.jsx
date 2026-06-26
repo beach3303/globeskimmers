@@ -1,7 +1,6 @@
 import React, { useState } from "react";
-import { Globe, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+import { Globe } from "lucide-react";
+import OnboardingStepLayout from "./OnboardingStepLayout";
 
 // Each entry has a canonical `name` (what gets stored as the user's
 // home_country) and optional `aliases` that the search box ALSO matches.
@@ -9,7 +8,7 @@ import { motion } from "framer-motion";
 // Kingdom", "UAE" find "United Arab Emirates", etc. Without aliases the
 // filter only matched substring of the canonical name, so common short
 // forms came up empty (the reported bug).
-const COUNTRIES = [
+const ALL_COUNTRIES = [
   { name: "Afghanistan" },
   { name: "Albania" },
   { name: "Algeria" },
@@ -66,104 +65,71 @@ const COUNTRIES = [
   { name: "Thailand" },
   { name: "Turkey", aliases: ["Türkiye"] },
   { name: "United Arab Emirates", aliases: ["UAE"] },
-  { name: "United Kingdom", aliases: ["UK", "Britain", "Great Britain", "England"] },
+  { name: "United Kingdom", aliases: ["UK", "Britain", "Great Britain", "England", "Scotland", "Wales", "Northern Ireland"] },
   { name: "United States", aliases: ["USA", "US", "America"] },
   { name: "Vietnam", aliases: ["Viet Nam"] },
 ].sort((a, b) => a.name.localeCompare(b.name));
 
-export default function HomeCountryStep({ onNext, onSkip }) {
-  const [selectedCountry, setSelectedCountry] = useState("");
+// Pin the United States to the very top, then the rest alphabetically.
+const COUNTRIES = [
+  ...ALL_COUNTRIES.filter((c) => c.name === "United States"),
+  ...ALL_COUNTRIES.filter((c) => c.name !== "United States"),
+];
+
+// Single-select → tapping a country advances immediately (no Continue).
+export default function HomeCountryStep({ onNext, onSkip, onBack }) {
   const [searchQuery, setSearchQuery] = useState("");
 
   // Match against canonical name OR any alias. Substring match (not
-  // startsWith) so "states" still finds "United States", "ited king"
-  // still finds "United Kingdom", etc. Empty query → all countries.
-  const filteredCountries = COUNTRIES.filter(country => {
+  // startsWith) so "states" still finds "United States", etc. The pinned
+  // order (US first) is preserved because filter keeps array order.
+  const filteredCountries = COUNTRIES.filter((country) => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return true;
     if (country.name.toLowerCase().includes(q)) return true;
-    if (country.aliases?.some(a => a.toLowerCase().includes(q))) return true;
+    if (country.aliases?.some((a) => a.toLowerCase().includes(q))) return true;
     return false;
   });
 
-  const handleContinue = () => {
-    if (selectedCountry) {
-      onNext({ home_country: selectedCountry });
-    }
-  };
-
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 100 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="flex flex-col items-center justify-center min-h-screen p-6"
-    >
-      <div className="w-full max-w-md">
-        <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-[#088395] to-[#05BFDB] rounded-full flex items-center justify-center">
-          <Globe className="w-10 h-10 text-white" />
-        </div>
-
-        <h2 className="text-3xl font-bold text-[#0A4D68] mb-4 text-center">
-          Where are you from?
-        </h2>
-        
-        <p className="text-gray-600 mb-8 text-center">
-          Select your home country to personalize your experience
-        </p>
-
-        <input
-          type="text"
-          placeholder="Search for your country..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full px-4 py-3 mb-4 border-2 border-gray-300 rounded-xl focus:border-[#088395] focus:outline-none"
-        />
-
-        <div className="max-h-96 overflow-y-auto mb-6 border-2 border-gray-200 rounded-xl">
-          {filteredCountries.map((country) => (
-            <button
-              key={country.name}
-              onClick={() => {
-                // Tapping a result both confirms the selection AND fills the
-                // input box so the user sees their choice land in the textbox.
-                // Mirrors how iOS / Android system pickers work; without the
-                // searchQuery setter the input still shows "USA" or whatever
-                // partial text the user typed and the selection looks
-                // invisible (the reported bug).
-                //
-                // We deliberately store the CANONICAL name (United States)
-                // even when the user typed an alias (USA) — that's what gets
-                // saved as home_country and that's what other surfaces show.
-                setSelectedCountry(country.name);
-                setSearchQuery(country.name);
-              }}
-              className={`w-full px-4 py-3 text-left border-b border-gray-200 hover:bg-blue-50 transition-colors ${
-                selectedCountry === country.name
-                  ? 'bg-[#088395] text-white hover:bg-[#088395]'
-                  : 'text-gray-800'
-              }`}
-            >
-              {country.name}
-            </button>
-          ))}
-        </div>
-
-        <Button
-          onClick={handleContinue}
-          disabled={!selectedCountry}
-          className="w-full bg-gradient-to-r from-[#088395] to-[#05BFDB] hover:opacity-90 text-white h-12 text-lg font-semibold disabled:opacity-50"
-        >
-          Continue
-          <ChevronRight className="w-5 h-5 ml-2" />
-        </Button>
-
+    <OnboardingStepLayout
+      icon={<Globe className="w-8 h-8 text-white" />}
+      title="Where are you from?"
+      subtitle="Select your home country to personalize your experience"
+      onBack={onBack}
+      footer={
         <button
           onClick={() => onSkip()}
-          className="w-full mt-4 text-gray-500 hover:text-gray-700 text-sm"
+          className="w-full text-gray-500 hover:text-gray-700 text-sm"
         >
           Skip for now
         </button>
+      }
+    >
+      <input
+        type="text"
+        placeholder="Search for your country..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="w-full px-4 py-3 mb-4 border-2 border-gray-300 rounded-xl focus:border-[#088395] focus:outline-none"
+      />
+
+      <div className="max-h-96 overflow-y-auto mb-6 border-2 border-gray-200 rounded-xl">
+        {filteredCountries.map((country) => (
+          <button
+            key={country.name}
+            onClick={() => onNext({ home_country: country.name })}
+            className="w-full px-4 py-3 text-left border-b border-gray-200 hover:bg-blue-50 transition-colors text-gray-800"
+          >
+            {country.name}
+          </button>
+        ))}
+        {filteredCountries.length === 0 && (
+          <div className="px-4 py-6 text-center text-gray-500">
+            No countries match &quot;{searchQuery}&quot; 🔍
+          </div>
+        )}
       </div>
-    </motion.div>
+    </OnboardingStepLayout>
   );
 }

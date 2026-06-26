@@ -486,7 +486,7 @@ export default function CultureInformationPage() {
           <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]" style={{ background: CAT.culture.bg, color: CAT.culture.ink }}>
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]" style={{ background: CAT.culture.bg, color: CAT.culture.ink }}>
             <Compass size={13} color={CAT.culture.ink} strokeWidth={2} />
             Culture
           </div>
@@ -498,12 +498,12 @@ export default function CultureInformationPage() {
 
       {/* COUNTRY TITLE */}
       <div className="px-4 max-w-md mx-auto pb-3 text-center">
-        <h1 className="text-[30px] font-extrabold tracking-tight text-[#0F1419]">
+        <h1 className="text-[calc(30px*var(--fs))] font-extrabold tracking-tight text-[#0F1419]">
           <span className="font-serif italic font-normal" style={{ color: CAT.culture.ink }}>{cultureData?.country?.country_name || 'Loading...'}</span>
         </h1>
-        <p className="font-mono text-[10.5px] tracking-[0.16em] uppercase font-semibold mt-1" style={{ color: '#6B7280' }}>Country Information</p>
+        <p className="font-mono text-[calc(10.5px*var(--fs))] tracking-[0.16em] uppercase font-semibold mt-1" style={{ color: '#6B7280' }}>Country Information</p>
         {isFromCache && (
-          <p className="text-[11px] text-[#94A3B8] mt-1">📦 Using cached data · tap refresh for latest</p>
+          <p className="text-[calc(11px*var(--fs))] text-[#94A3B8] mt-1">📦 Using cached data · tap refresh for latest</p>
         )}
       </div>
 

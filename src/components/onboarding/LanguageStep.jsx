@@ -1,7 +1,6 @@
 import React, { useState } from "react";
-import { Languages, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+import { Languages } from "lucide-react";
+import OnboardingStepLayout from "./OnboardingStepLayout";
 
 // Language list — no country flags. The "flag for English" question
 // (American? British? Australian? Indian?) doesn't have a clean answer,
@@ -67,80 +66,62 @@ const LANGUAGES = [
   { code: "vi",    name: "Vietnamese",              native: "Tiếng Việt" },
 ];
 
-export default function LanguageStep({ onNext, onSkip }) {
-  const [selectedLanguage, setSelectedLanguage] = useState("");
+// Single-select → tapping a language advances immediately (no Continue).
+export default function LanguageStep({ onNext, onSkip, onBack }) {
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const handleContinue = () => {
-    if (selectedLanguage) {
-      onNext({ preferred_language: selectedLanguage });
-    }
-  };
+  const filteredLanguages = LANGUAGES.filter((language) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    if (language.name.toLowerCase().includes(q)) return true;
+    if (language.native && language.native.toLowerCase().includes(q)) return true;
+    return false;
+  });
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 100 }}
-      animate={{ opacity: 1, x: 0 }}
-      // Compact top-aligned layout — same approach as the redesigned
-      // ReferralSourceStep so 35 languages fit on a Galaxy S10 viewport
-      // without the Continue button getting buried below the fold.
-      className="flex flex-col items-center px-5 pt-5 pb-4 min-h-screen"
-    >
-      <div className="w-full max-w-md flex flex-col">
-        {/* Compact header — inline icon + tight title */}
-        <div className="flex items-center justify-center gap-2.5 mb-2.5">
-          <div className="w-10 h-10 bg-gradient-to-br from-[#088395] to-[#05BFDB] rounded-full flex items-center justify-center flex-shrink-0">
-            <Languages className="w-5 h-5 text-white" />
-          </div>
-          <h2 className="text-[20px] font-bold text-[#0A4D68] leading-tight">
-            Preferred Language
-          </h2>
-        </div>
-
-        <p className="text-gray-600 text-[12.5px] mb-3 text-center leading-snug">
-          Choose your preferred language for the app
-        </p>
-
-        {/* Scrollable list. max-h sized to leave room for Continue +
-            Skip footer on a Galaxy S10 (~640pt viewport). */}
-        <div className="max-h-[58vh] overflow-y-auto mb-3 border-2 border-gray-200 rounded-xl">
-          {LANGUAGES.map((language) => (
-            <button
-              key={language.code}
-              onClick={() => setSelectedLanguage(language.code)}
-              className={`w-full px-4 py-2.5 text-left border-b border-gray-200 last:border-b-0 hover:bg-blue-50 transition-colors flex items-center justify-between gap-3 ${
-                selectedLanguage === language.code
-                  ? 'bg-[#088395] text-white hover:bg-[#088395]'
-                  : 'text-gray-800'
-              }`}
-            >
-              <span className="font-semibold text-[14px]">{language.name}</span>
-              {language.native && (
-                <span className={`text-[13px] ${
-                  selectedLanguage === language.code ? 'text-white/85' : 'text-gray-500'
-                }`}>
-                  {language.native}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        <Button
-          onClick={handleContinue}
-          disabled={!selectedLanguage}
-          className="w-full bg-gradient-to-r from-[#088395] to-[#05BFDB] hover:opacity-90 text-white h-11 text-[15px] font-semibold disabled:opacity-50"
-        >
-          Continue
-          <ChevronRight className="w-4 h-4 ml-1.5" />
-        </Button>
-
+    <OnboardingStepLayout
+      icon={<Languages className="w-8 h-8 text-white" />}
+      title="Preferred Language"
+      subtitle="Choose your preferred language for the app"
+      onBack={onBack}
+      footer={
         <button
           onClick={() => onSkip()}
-          className="w-full mt-2 text-gray-500 hover:text-gray-700 text-[12px]"
+          className="w-full text-gray-500 hover:text-gray-700 text-[12px]"
         >
           Skip for now
         </button>
+      }
+    >
+      <input
+        type="text"
+        placeholder="Search for a language..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="w-full px-4 py-3 mb-4 border-2 border-gray-300 rounded-xl focus:border-[#088395] focus:outline-none"
+      />
+
+      {/* Scrollable list. max-h sized to leave room for the search box +
+          Skip footer on a Galaxy S10 (~640pt viewport). */}
+      <div className="max-h-[52vh] overflow-y-auto border-2 border-gray-200 rounded-xl">
+        {filteredLanguages.map((language) => (
+          <button
+            key={language.code}
+            onClick={() => onNext({ preferred_language: language.code })}
+            className="w-full px-4 py-2.5 text-left border-b border-gray-200 last:border-b-0 hover:bg-blue-50 transition-colors flex items-center justify-between gap-3 text-gray-800"
+          >
+            <span className="font-semibold text-[14px]">{language.name}</span>
+            {language.native && (
+              <span className="text-[13px] text-gray-500">{language.native}</span>
+            )}
+          </button>
+        ))}
+        {filteredLanguages.length === 0 && (
+          <div className="px-4 py-6 text-center text-gray-500">
+            No languages match &quot;{searchQuery}&quot; 🔍
+          </div>
+        )}
       </div>
-    </motion.div>
+    </OnboardingStepLayout>
   );
 }

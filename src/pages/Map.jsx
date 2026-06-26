@@ -108,10 +108,10 @@ export default function MapPage() {
       >
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-[18px] font-extrabold tracking-tight leading-tight">
+            <h1 className="text-[calc(18px*var(--fs))] font-extrabold tracking-tight leading-tight">
               <span className="font-serif italic font-normal">{locationName}</span>
             </h1>
-            <p className="text-[11.5px] opacity-90 mt-0.5">
+            <p className="text-[calc(11.5px*var(--fs))] opacity-90 mt-0.5">
               {locationMode === 'current' ? 'Your current location' : 'Selected location'}
             </p>
           </div>

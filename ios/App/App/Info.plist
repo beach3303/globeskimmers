@@ -59,15 +59,17 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Globeskimmers uses your photo library so you can save translation screenshots and scanned prices for offline reference.</string>
 
-	<!-- App Tracking Transparency (iOS 14+). Required when an SDK in the
-	     app could request the IDFA to personalize ads. The Google Mobile
-	     Ads SDK calls ATTrackingManager when this string is present;
-	     without it, the App Store can reject the build for "missing ATT
-	     usage description even though an ad SDK is bundled." The text
-	     here is shown verbatim in the system prompt the first time
-	     personalized ads are about to be served. -->
-	<key>NSUserTrackingUsageDescription</key>
-	<string>Globeskimmers uses this to show ads that are more relevant to you. Choosing "Ask App Not to Track" still shows ads — just less personalized ones.</string>
+	<!-- App Tracking Transparency: NSUserTrackingUsageDescription intentionally
+	     REMOVED for the v1.0 submission. The app never calls
+	     ATTrackingManager.requestTrackingAuthorization (verified: zero ATT
+	     references in src) and serves only NON-personalized AdMob ads, so it
+	     does NOT track users. Shipping the ATT string while declaring
+	     "Tracking = No" in App Store Connect's App Privacy makes Apple block
+	     the submission for an inconsistent tracking declaration. Re-add this
+	     key — AND actually call requestTrackingAuthorization, AND flip the
+	     App Privacy "used for tracking" answers to Yes — only if/when
+	     personalized (e.g. location-based) ads are implemented later. -->
+	<!-- (NSUserTrackingUsageDescription removed — see note above.) -->
 
 	<!-- Google Mobile Ads SDK — App ID (Globeskimmers iOS). NOT secret;
 	     this identifier ships in every installed binary and is how
@@ -126,5 +128,7 @@
 			</array>
 		</dict>
 	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

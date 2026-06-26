@@ -1,5 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
+import { AdMob } from "@capacitor-community/admob";
 import { createPageUrl } from "@/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
@@ -57,6 +59,20 @@ export default function OnboardingPage() {
   const [data, setData] = useState({});
   const [saving, setSaving] = useState(false);
 
+  // No ads during onboarding. The native AdMob banner is a system overlay that
+  // can linger from the brief Home mount that precedes the onboarding redirect,
+  // so clear it on entry. Ads resume on Home once onboarding_completed is true.
+  useEffect(() => {
+    if (Capacitor.getPlatform() === "web") return;
+    AdMob.hideBanner().catch(() => {});
+    AdMob.removeBanner().catch(() => {});
+  }, []);
+
+  // Step back to revise an earlier answer. Answers persist in `data`, and each
+  // step re-seeds its local state from its `value` prop, so the previous
+  // selection is preserved when the user returns.
+  const backward = () => setStepIndex((i) => Math.max(0, i - 1));
+
   const finish = async (collected) => {
     if (saving) return;
     setSaving(true);
@@ -73,10 +89,10 @@ export default function OnboardingPage() {
     if (collected.distance_unit) update.distance_unit = collected.distance_unit;
     if (collected.travel_frequency) update.travel_frequency = collected.travel_frequency;
     if (collected.travel_purpose?.length) update.travel_purpose = collected.travel_purpose;
-    if (collected.traveler_type) update.traveler_type = collected.traveler_type;
+    if (collected.traveler_type?.length) update.traveler_type = collected.traveler_type;
     if (collected.frequent_countries?.length) update.frequent_countries = collected.frequent_countries;
     if (collected.next_destination) update.next_destination = collected.next_destination;
-    if (collected.travel_budget) update.travel_budget = collected.travel_budget;
+    if (collected.travel_budget?.length) update.travel_budget = collected.travel_budget;
     if (collected.accommodation_style?.length) update.accommodation_style = collected.accommodation_style;
 
     try {
@@ -107,10 +123,12 @@ export default function OnboardingPage() {
   };
 
   const key = steps[stepIndex];
+  // Back is available on every step except the very first.
+  const onBack = stepIndex > 0 ? backward : undefined;
   let content = null;
   switch (key) {
     case "first_name":
-      content = <FirstNameStep defaultValue={initialFirstName} onNext={(d) => advance(d)} />;
+      content = <FirstNameStep defaultValue={initialFirstName} onNext={(d) => advance(d)} onBack={onBack} />;
       break;
     case "location":
       content = (
@@ -118,44 +136,45 @@ export default function OnboardingPage() {
           onNext={() => advance()}
           onLocationGranted={() => {}}
           onExit={() => advance()}
+          onBack={onBack}
         />
       );
       break;
     case "home_country":
-      content = <HomeCountryStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      content = <HomeCountryStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.home_country} />;
       break;
     case "currency":
-      content = <CurrencyStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      content = <CurrencyStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.preferred_currency} />;
       break;
     case "language":
-      content = <LanguageStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      content = <LanguageStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.preferred_language} />;
       break;
     case "temperature":
-      content = <TemperatureStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      content = <TemperatureStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.preferred_temperature_scale} />;
       break;
     case "distance":
-      content = <DistanceUnitStep onNext={(d) => advance(d)} />;
+      content = <DistanceUnitStep onNext={(d) => advance(d)} onBack={onBack} value={data.distance_unit} />;
       break;
     case "frequency":
-      content = <TravelFrequencyStep onNext={(d) => advance(d)} />;
+      content = <TravelFrequencyStep onNext={(d) => advance(d)} onBack={onBack} value={data.travel_frequency} />;
       break;
     case "purpose":
-      content = <TravelPurposeStep onNext={(d) => advance(d)} />;
+      content = <TravelPurposeStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.travel_purpose} />;
       break;
     case "traveler":
-      content = <TravelerTypeStep onNext={(d) => advance(d)} />;
+      content = <TravelerTypeStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.traveler_type} />;
       break;
     case "favorites":
-      content = <FavoriteCountriesStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      content = <FavoriteCountriesStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.frequent_countries} />;
       break;
     case "next_destination":
-      content = <NextDestinationStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      content = <NextDestinationStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.next_destination} />;
       break;
     case "budget":
-      content = <TravelBudgetStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      content = <TravelBudgetStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.travel_budget} />;
       break;
     case "accommodation":
-      content = <AccommodationStyleStep onNext={(d) => advance(d)} onSkip={() => advance()} />;
+      content = <AccommodationStyleStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.accommodation_style} />;
       break;
     default:
       content = null;

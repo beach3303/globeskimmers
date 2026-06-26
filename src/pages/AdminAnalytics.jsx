@@ -12,11 +12,11 @@
  */
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
+import { useAuth } from '@/lib/AuthContext';
+import { callWorker } from '@/lib/callWorker';
 import { createPageUrl } from '@/utils';
 import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap } from 'lucide-react';
-
-const ADMIN_EMAILS = ['maizasimeon@gmail.com', 'founder@globeskimmers.io'];
+import { isAdminEmail } from '@/lib/admins';
 
 const COLORS = {
   bg: '#F0F4F8',
@@ -76,6 +76,7 @@ function Section({ title, icon: Icon, children, empty }) {
 
 export default function AdminAnalytics() {
   const navigate = useNavigate();
+  const { user: authUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
@@ -85,20 +86,22 @@ export default function AdminAnalytics() {
     setLoading(true);
     setError(null);
     try {
-      const isAuthed = await base44.auth.isAuthenticated();
-      if (!isAuthed) {
-        setLoading(false);
-        return;
-      }
-      const me = await base44.auth.me();
-      if (!ADMIN_EMAILS.includes(String(me.email || '').toLowerCase())) {
+      // Admin gate via Supabase (native-safe). The app-wide AuthGate guarantees a
+      // signed-in user; non-admins are redirected home.
+      if (!isAdminEmail(authUser?.email)) {
         navigate(createPageUrl('Home'));
         return;
       }
-      const { data: resp } = await base44.functions.invoke('getAnalytics', {});
-      if (resp?.error) throw new Error(resp.error);
-      setData(resp?.data || {});
-      setGeneratedAt(resp?.generatedAt || null);
+      // Fan out over the live Worker /analytics-query route (one D1 query per
+      // type), assembling the bundle the renderer expects. Native-safe via
+      // callWorker — replaces the Base44 getAnalytics function (403s on device).
+      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d'];
+      const pairs = await Promise.all(TYPES.map(async (type) => {
+        const { data: qd, error: qe } = await callWorker(`analytics-query?type=${encodeURIComponent(type)}`, {});
+        return [type, { results: qd?.results || [], error: qe || qd?.error || null }];
+      }));
+      setData(Object.fromEntries(pairs));
+      setGeneratedAt(new Date().toISOString());
     } catch (e) {
       setError(e?.message || 'Failed to load analytics');
     } finally {

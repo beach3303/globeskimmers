@@ -229,8 +229,8 @@ export default function ActivityDetailPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-5">
         <AlertCircle className="w-16 h-16 text-gray-400 mb-3" />
-        <p className="text-[18px] font-bold text-gray-900 mb-2">Activity Not Found</p>
-        <p className="text-[14px] text-gray-600 mb-4">We couldn't find this activity.</p>
+        <p className="text-[calc(18px*var(--fs))] font-bold text-gray-900 mb-2">Activity Not Found</p>
+        <p className="text-[calc(14px*var(--fs))] text-gray-600 mb-4">We couldn't find this activity.</p>
         <button
           onClick={() => navigate(-1)}
           className="px-6 py-3 bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white rounded-xl font-semibold"
@@ -319,7 +319,7 @@ export default function ActivityDetailPage() {
                     <ChevronRight className="w-6 h-6" />
                   </button>
 
-                  <div className="absolute bottom-3 right-3 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm text-white text-[12px] font-semibold z-10">
+                  <div className="absolute bottom-3 right-3 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm text-white text-[calc(12px*var(--fs))] font-semibold z-10">
                     {currentImageIndex + 1} / {photos.length}
                   </div>
                 </>
@@ -327,7 +327,7 @@ export default function ActivityDetailPage() {
 
               <button
                 onClick={() => setShowFullGallery(true)}
-                className="absolute bottom-3 left-3 px-4 py-2 rounded-full bg-white/90 backdrop-blur-sm text-gray-900 text-[13px] font-semibold flex items-center gap-2 hover:bg-white transition-colors shadow-lg z-10"
+                className="absolute bottom-3 left-3 px-4 py-2 rounded-full bg-white/90 backdrop-blur-sm text-gray-900 text-[calc(13px*var(--fs))] font-semibold flex items-center gap-2 hover:bg-white transition-colors shadow-lg z-10"
               >
                 <Camera className="w-4 h-4" />
                 View All {photos.length} Photo{photos.length > 1 ? 's' : ''}
@@ -376,13 +376,13 @@ export default function ActivityDetailPage() {
         {/* Title & Info */}
         <div className="bg-white rounded-b-[24px] shadow-md px-5 py-5 -mt-6 relative z-10">
           <div className="flex items-start justify-between gap-3 mb-2">
-            <h1 className="text-[24px] font-bold text-gray-900 leading-tight">
+            <h1 className="text-[calc(24px*var(--fs))] font-bold text-gray-900 leading-tight">
               {activity.name}
             </h1>
             {activity.popular && (
               <div className="flex items-center gap-1 px-2.5 py-1 bg-orange-100 rounded-full flex-shrink-0">
                 <TrendingUp className="w-4 h-4 text-orange-600" />
-                <span className="text-[11px] font-bold text-orange-600">Popular</span>
+                <span className="text-[calc(11px*var(--fs))] font-bold text-orange-600">Popular</span>
               </div>
             )}
           </div>
@@ -390,13 +390,13 @@ export default function ActivityDetailPage() {
           <div className="flex items-center gap-3 mb-3 flex-wrap">
             <div className="flex items-center gap-1.5">
               <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-              <span className="font-bold text-[16px] text-gray-900">{activity.rating}</span>
-              <span className="text-[14px] text-gray-600">({activity.reviews_count})</span>
+              <span className="font-bold text-[calc(16px*var(--fs))] text-gray-900">{activity.rating}</span>
+              <span className="text-[calc(14px*var(--fs))] text-gray-600">({activity.reviews_count})</span>
             </div>
 
             <span className="text-gray-400">•</span>
 
-            <div className="flex items-center gap-1.5 text-[14px] font-semibold text-gray-700">
+            <div className="flex items-center gap-1.5 text-[calc(14px*var(--fs))] font-semibold text-gray-700">
               <DollarSign className="w-4 h-4" />
               <span>{getPriceDisplay(activity.price_level)}</span>
             </div>
@@ -404,7 +404,7 @@ export default function ActivityDetailPage() {
 
           {/* Distance with toggle */}
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2 text-[14px] text-gray-700">
+            <div className="flex items-center gap-2 text-[calc(14px*var(--fs))] text-gray-700">
               <MapPin className="w-4 h-4 text-purple-600" />
               <span className="font-semibold">
                 {displayDistance(activity.distance_km)} away
@@ -415,7 +415,7 @@ export default function ActivityDetailPage() {
               onClick={toggleDistanceUnit}
               className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-1.5"
             >
-              <span className="text-[13px] font-semibold text-gray-700">
+              <span className="text-[calc(13px*var(--fs))] font-semibold text-gray-700">
                 Switch to {distanceUnit === 'km' ? 'miles' : 'km'}
               </span>
             </button>
@@ -432,9 +432,9 @@ export default function ActivityDetailPage() {
               <div className="relative z-10">
                 <div className="flex items-center gap-2 mb-1">
                   <Clock className="w-4 h-4 text-white" />
-                  <span className="text-[11px] text-white/80 font-semibold uppercase">Duration</span>
+                  <span className="text-[calc(11px*var(--fs))] text-white/80 font-semibold uppercase">Duration</span>
                 </div>
-                <p className="text-[18px] font-bold text-white">
+                <p className="text-[calc(18px*var(--fs))] font-bold text-white">
                   {activity.duration || '2-3 hours'}
                 </p>
               </div>
@@ -449,17 +449,17 @@ export default function ActivityDetailPage() {
               <div className="relative z-10">
                 <div className="flex items-center gap-2 mb-1">
                   <Sun className="w-4 h-4 text-white" />
-                  <span className="text-[11px] text-white/80 font-semibold uppercase">Best Time</span>
+                  <span className="text-[calc(11px*var(--fs))] text-white/80 font-semibold uppercase">Best Time</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <p className="text-[18px] font-bold text-white">
+                  <p className="text-[calc(18px*var(--fs))] font-bold text-white">
                     {activity.best_time || 'Morning'}
                   </p>
                   <button
                     onClick={() => setShowTimeExplanation(!showTimeExplanation)}
                     className="w-5 h-5 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center hover:bg-white/40 transition-colors"
                   >
-                    <span className="text-[11px] font-bold text-white">?</span>
+                    <span className="text-[calc(11px*var(--fs))] font-bold text-white">?</span>
                   </button>
                 </div>
               </div>
@@ -475,11 +475,11 @@ export default function ActivityDetailPage() {
                 exit={{ opacity: 0, height: 0 }}
                 className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 overflow-hidden"
               >
-                <h4 className="text-[14px] font-bold text-blue-900 mb-2 flex items-center gap-2">
+                <h4 className="text-[calc(14px*var(--fs))] font-bold text-blue-900 mb-2 flex items-center gap-2">
                   <Info className="w-4 h-4" />
                   Why {activity.best_time || 'Morning'} is Best
                 </h4>
-                <ul className="space-y-2 text-[13px] text-blue-800">
+                <ul className="space-y-2 text-[calc(13px*var(--fs))] text-blue-800">
                   {(activity.best_time_reasons || getDefaultTimeReasons(activity.best_time || 'Morning')).map((reason, index) => (
                     <li key={index} className="flex gap-2">
                       <span className="text-blue-500">•</span>
@@ -493,7 +493,7 @@ export default function ActivityDetailPage() {
 
           {activity.opening_hours && (
             <div className="mb-4">
-              <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] font-bold ${
+              <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[calc(13px*var(--fs))] font-bold ${
                 activity.opening_hours.open_now
                   ? 'bg-green-100 text-green-700'
                   : 'bg-red-100 text-red-700'
@@ -514,7 +514,7 @@ export default function ActivityDetailPage() {
                   setShowMapSelector(true);
                 }
               }}
-              className="flex-1 bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white py-3 rounded-xl font-bold text-[15px] flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-md"
+              className="flex-1 bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white py-3 rounded-xl font-bold text-[calc(15px*var(--fs))] flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-md"
             >
               <Navigation className="w-5 h-5" />
               Get Directions
@@ -528,7 +528,7 @@ export default function ActivityDetailPage() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-5 py-2.5 rounded-xl font-semibold text-[14px] whitespace-nowrap transition-all ${
+              className={`px-5 py-2.5 rounded-xl font-semibold text-[calc(14px*var(--fs))] whitespace-nowrap transition-all ${
                 activeTab === tab
                   ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white shadow-md'
                   : 'bg-white text-gray-700 border border-gray-300 hover:border-purple-500'
@@ -543,27 +543,27 @@ export default function ActivityDetailPage() {
         {activeTab === 'overview' && (
           <div className="space-y-4">
             <div className="bg-white rounded-xl shadow-md p-5">
-              <h3 className="text-[17px] font-bold text-gray-900 mb-3 flex items-center gap-2">
+              <h3 className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-3 flex items-center gap-2">
                 <Info className="w-5 h-5 text-purple-600" />
                 About
               </h3>
-              <p className="text-[15px] text-gray-700 leading-relaxed">
+              <p className="text-[calc(15px*var(--fs))] text-gray-700 leading-relaxed">
                 {activity.description}
               </p>
             </div>
 
             <div className="bg-white rounded-xl shadow-md p-5">
-              <h3 className="text-[17px] font-bold text-gray-900 mb-3 flex items-center gap-2">
+              <h3 className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-3 flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-purple-600" />
                 Location
               </h3>
-              <p className="text-[14px] text-gray-700">{activity.address}</p>
+              <p className="text-[calc(14px*var(--fs))] text-gray-700">{activity.address}</p>
             </div>
 
             {/* Opening Hours Section */}
             {activity.opening_hours && activity.opening_hours.weekday_text && activity.opening_hours.weekday_text.length > 0 && (
               <div className="bg-white rounded-xl shadow-md p-5">
-                <h3 className="text-[17px] font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <h3 className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-3 flex items-center gap-2">
                   <Clock className="w-5 h-5 text-purple-600" />
                   Opening Hours
                 </h3>
@@ -593,12 +593,12 @@ export default function ActivityDetailPage() {
                           isToday ? 'bg-purple-50 border border-purple-200' : 'bg-gray-50'
                         }`}
                       >
-                        <span className={`text-[14px] font-semibold ${
+                        <span className={`text-[calc(14px*var(--fs))] font-semibold ${
                           isToday ? 'text-purple-700' : 'text-gray-700'
                         }`}>
                           {day}
                         </span>
-                        <span className={`text-[14px] ${
+                        <span className={`text-[calc(14px*var(--fs))] ${
                           isToday ? 'text-purple-600 font-semibold' : 'text-gray-600'
                         }`}>
                           {hours}
@@ -612,17 +612,17 @@ export default function ActivityDetailPage() {
 
             {/* Pricing Section */}
             <div className="bg-white rounded-xl shadow-md p-5">
-              <h3 className="text-[17px] font-bold text-gray-900 mb-3 flex items-center gap-2">
+              <h3 className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-3 flex items-center gap-2">
                 <DollarSign className="w-5 h-5 text-green-600" />
                 Pricing
               </h3>
 
               <div className="text-center py-4">
                 <DollarSign className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                <p className="text-[14px] text-gray-600 mb-2">
+                <p className="text-[calc(14px*var(--fs))] text-gray-600 mb-2">
                   Price Level: {getPriceDisplay(activity.price_level)}
                 </p>
-                <p className="text-[13px] text-gray-500">
+                <p className="text-[calc(13px*var(--fs))] text-gray-500">
                   Contact venue for detailed pricing information
                 </p>
               </div>
@@ -630,19 +630,19 @@ export default function ActivityDetailPage() {
 
             {(enhancedDetails?.tips || activity.tip) && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
-                <h3 className="text-[16px] font-bold text-blue-900 mb-2 flex items-center gap-2">
+                <h3 className="text-[calc(16px*var(--fs))] font-bold text-blue-900 mb-2 flex items-center gap-2">
                   <Info className="w-5 h-5" />
                   Good to Know
                 </h3>
                 <ul className="space-y-2">
                   {activity.tip && (
-                    <li className="text-[14px] text-blue-800 flex gap-2">
+                    <li className="text-[calc(14px*var(--fs))] text-blue-800 flex gap-2">
                       <span className="text-blue-500">•</span>
                       <span>{activity.tip}</span>
                     </li>
                   )}
                   {enhancedDetails?.tips && enhancedDetails.tips.map((tip, index) => (
-                    <li key={index} className="text-[14px] text-blue-800 flex gap-2">
+                    <li key={index} className="text-[calc(14px*var(--fs))] text-blue-800 flex gap-2">
                       <span className="text-blue-500">•</span>
                       <span>{tip}</span>
                     </li>
@@ -658,7 +658,7 @@ export default function ActivityDetailPage() {
             <div className="bg-white rounded-xl shadow-md p-5">
               <div className="flex items-center gap-4">
                 <div className="text-center">
-                  <div className="text-[48px] font-bold text-gray-900">{activity.rating}</div>
+                  <div className="text-[calc(48px*var(--fs))] font-bold text-gray-900">{activity.rating}</div>
                   <div className="flex items-center justify-center gap-1 mb-1">
                     {[...Array(5)].map((_, i) => (
                       <Star
@@ -671,7 +671,7 @@ export default function ActivityDetailPage() {
                       />
                     ))}
                   </div>
-                  <div className="text-[12px] text-gray-600">{activity.reviews_count} reviews</div>
+                  <div className="text-[calc(12px*var(--fs))] text-gray-600">{activity.reviews_count} reviews</div>
                 </div>
               </div>
             </div>
@@ -680,13 +680,13 @@ export default function ActivityDetailPage() {
               reviews.map((review, index) => (
                 <div key={index} className="bg-white rounded-xl shadow-md p-5">
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-[14px] flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-[calc(14px*var(--fs))] flex-shrink-0">
                       {review.author_name.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
-                        <p className="font-bold text-[15px] text-gray-900">{review.author_name}</p>
-                        <span className="text-[12px] text-gray-500">
+                        <p className="font-bold text-[calc(15px*var(--fs))] text-gray-900">{review.author_name}</p>
+                        <span className="text-[calc(12px*var(--fs))] text-gray-500">
                           {new Date(review.time * 1000).toLocaleDateString()}
                         </span>
                       </div>
@@ -700,8 +700,8 @@ export default function ActivityDetailPage() {
                           />
                         ))}
                       </div>
-                      <p className="text-[14px] text-gray-700 leading-relaxed">{review.text}</p>
-                      <button className="flex items-center gap-2 mt-3 text-[13px] text-gray-600 hover:text-purple-600 transition-colors">
+                      <p className="text-[calc(14px*var(--fs))] text-gray-700 leading-relaxed">{review.text}</p>
+                      <button className="flex items-center gap-2 mt-3 text-[calc(13px*var(--fs))] text-gray-600 hover:text-purple-600 transition-colors">
                         <ThumbsUp className="w-4 h-4" />
                         <span>Helpful ({review.helpful_count})</span>
                       </button>
@@ -712,7 +712,7 @@ export default function ActivityDetailPage() {
             ) : (
               <div className="bg-white rounded-xl shadow-md p-8 text-center">
                 <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-[15px] text-gray-600">No reviews yet</p>
+                <p className="text-[calc(15px*var(--fs))] text-gray-600">No reviews yet</p>
               </div>
             )}
           </div>
@@ -738,7 +738,7 @@ export default function ActivityDetailPage() {
               className="bg-white rounded-t-[24px] w-full max-w-[600px] p-5 pb-8"
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[18px] font-bold text-gray-900">Share Activity</h3>
+                <h3 className="text-[calc(18px*var(--fs))] font-bold text-gray-900">Share Activity</h3>
                 <button
                   onClick={() => setShowShareModal(false)}
                   className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center"
@@ -761,7 +761,7 @@ export default function ActivityDetailPage() {
                 <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
                   <Share2 className="w-5 h-5 text-purple-600" />
                 </div>
-                <span className="font-semibold text-[15px] text-gray-900">Copy Link</span>
+                <span className="font-semibold text-[calc(15px*var(--fs))] text-gray-900">Copy Link</span>
               </button>
             </motion.div>
           </motion.div>

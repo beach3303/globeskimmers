@@ -124,8 +124,8 @@ export default function SavedLocationsPage() {
             <ArrowLeft className="w-5 h-5" />
             <span className="font-medium">Back</span>
           </button>
-          <h1 className="text-[24px] font-bold mb-1">📍 Saved Locations</h1>
-          <p className="text-[14px] opacity-90">Manage your frequently visited places</p>
+          <h1 className="text-[calc(24px*var(--fs))] font-bold mb-1">📍 Saved Locations</h1>
+          <p className="text-[calc(14px*var(--fs))] opacity-90">Manage your frequently visited places</p>
         </div>
       </div>
 

@@ -6,11 +6,13 @@ import { X, Users, CheckCircle, TrendingUp, TrendingDown, Calendar, Search, Down
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdminEmail } from "@/lib/admins";
 
-const ADMIN_EMAILS = ['maizasimeon@gmail.com', 'founder@globeskimmers.io'];
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
+  const { user: authUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const [events, setEvents] = useState([]);
@@ -62,16 +64,12 @@ export default function AdminDashboardPage() {
 
   const loadDashboardData = async () => {
     try {
-      // Auth is guaranteed by the app-wide sign-in gate; never redirect here.
-      const userData = await base44.auth.me();
-      
-      // Check if user is admin
-      if (!ADMIN_EMAILS.includes(userData.email.toLowerCase())) {
+      // Admin gate via Supabase (native-safe); non-admins go home.
+      if (!isAdminEmail(authUser?.email)) {
         navigate(createPageUrl("Home"));
         return;
       }
-
-      setCurrentUser(userData);
+      setCurrentUser({ email: authUser?.email });
 
       // Fetch all data via backend function with service role
       const { data } = await base44.functions.invoke('getAdminDashboardData');
@@ -118,10 +116,11 @@ export default function AdminDashboardPage() {
 
       setLoading(false);
     } catch (error) {
-      // No Base44 admin session (e.g. native) — send home instead of redirecting
-      // to the Base44 login. The admin dashboard is a web/desktop tool.
+      // The dashboard's data still comes from Base44 (User/UserEvent/etc.), which
+      // 403s on native. Don't bounce the admin out — render the page with empty
+      // state. (Real user data needs a Supabase admin route — tracked follow-up.)
       console.error("Error loading dashboard:", error);
-      navigate(createPageUrl("Home"));
+      setLoading(false);
     }
   };
 

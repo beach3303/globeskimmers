@@ -9,6 +9,7 @@ import { LocationProvider } from "@/components/location/LocationContext";
 import BrandBanner from "@/components/redesign/BrandBanner";
 import FloatingNav from "@/components/redesign/FloatingNav";
 import AdBanner from "@/components/ads/AdBanner";
+import FontScaleButton from "@/components/a11y/FontScaleButton";
 import { IVORY } from "@/components/redesign/constants";
 
 // Finder list pages that show a bottom AdMob banner ("per-feature ads").
@@ -19,11 +20,6 @@ const AD_FINDER_PAGES = new Set([
   "PlacesToEat", "CoffeeFinder", "ATMFinder", "RestroomFinder",
   "ConvenienceStore", "ThingsToDo", "Shopping",
 ]);
-
-// TEMP DEBUG: tiny on-screen readout of what the onboarding gate sees, so we can
-// diagnose the "new user skips onboarding" report on-device (screenshot it).
-// REMOVE once onboarding is confirmed working.
-const ONBOARDING_DEBUG = true;
 
 // Generate or retrieve session ID
 const getSessionId = () => {
@@ -66,6 +62,21 @@ export default function Layout({ children, currentPageName }) {
   // Drives the banner mount, the FloatingNav lift, and extra bottom padding so
   // the last card / radius row clears the overlay.
   const showFinderAd = AD_FINDER_PAGES.has(currentPageName);
+  // Onboarding fills the screen itself (each step sizes to viewport − banner and
+  // pins its own footer), so it must NOT get the FloatingNav bottom padding —
+  // that extra 96px pushes the step taller than the viewport and scrolls the
+  // icon/Back up under the banner.
+  const isOnboarding = currentPageName === "Onboarding";
+
+  // Global text-size (glasses) control in the banner — available on every page
+  // so the user can resize text from ANYWHERE (the size is global + persisted).
+  // Home has its own glasses inside the hello card; the camera scanners use a
+  // full-screen dark UI, so skip those.
+  const showGlobalFontBtn =
+    !isOnboarding &&
+    currentPageName !== "Home" &&
+    currentPageName !== "SmartTextScanner" &&
+    currentPageName !== "SmartPriceScanner";
 
   // Account-tied onboarding gate. Drives off the Supabase profile flag, which
   // is set once-ever when onboarding completes (survives reinstall / 2nd
@@ -119,13 +130,23 @@ export default function Layout({ children, currentPageName }) {
       <PWASetup />
       <ToastContainer />
       <LocationProvider>
-        <div className="min-h-screen font-sans" style={{ background: IVORY }}>
+        <div className="min-h-screen font-sans gs-app-bg" style={{ background: IVORY }}>
           {/* Brand banner — teal gradient (redesign primitive). Fixed top
               so it stays above scrolled content; content offset by pt-[50px]
-              below to clear it. */}
-          <div className="fixed top-0 left-0 right-0 z-50">
+              below to clear it. The gs-app-banner class lets the native camera
+              hide it (it would otherwise block the camera preview behind the
+              transparent webview). */}
+          <div className="fixed top-0 left-0 right-0 z-50 gs-app-banner">
             <BrandBanner />
           </div>
+
+          {/* Global text-size (glasses) control, pinned in the banner's right
+              side so text can be resized from any page. */}
+          {showGlobalFontBtn && (
+            <div style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 9px)', right: 12, zIndex: 60 }}>
+              <FontScaleButton />
+            </div>
+          )}
 
           {/* App Content — offset by banner height (50px + status-bar safe
               area, so content clears the now-safe-area-aware BrandBanner) +
@@ -133,7 +154,7 @@ export default function Layout({ children, currentPageName }) {
               overlays the bottom edge, so add ~64px extra bottom padding there
               so the last card / radius row isn't hidden behind it. */}
           <div
-            className="w-full min-h-screen pb-24"
+            className={`w-full max-w-full overflow-x-clip min-h-screen ${isOnboarding ? "" : "pb-24"}`}
             style={{
               paddingTop: 'calc(50px + env(safe-area-inset-top))',
               // On finder pages the FloatingNav is lifted (~64-72px) AND an
@@ -155,13 +176,6 @@ export default function Layout({ children, currentPageName }) {
               above the AdMob banner on Home AND the finder pages so the ad can
               pin to the bottom edge without the pill overlapping it. */}
           <FloatingNav liftForAd={currentPageName === "Home" || showFinderAd} />
-
-          {/* TEMP DEBUG readout — remove after onboarding is confirmed. */}
-          {ONBOARDING_DEBUG && (
-            <div style={{ position: 'fixed', left: 6, bottom: 6, zIndex: 99999, background: 'rgba(0,0,0,0.82)', color: '#37FF8B', font: '10px/1.3 ui-monospace,monospace', padding: '4px 7px', borderRadius: 6, maxWidth: '94vw', pointerEvents: 'none' }}>
-              {`gate · load=${String(isLoadingAuth)} auth=${String(isAuthenticated)} prof=${profile ? 'y' : 'n'} onb=${String(profile?.onboarding_completed)} page=${currentPageName}`}
-            </div>
-          )}
         </div>
       </LocationProvider>
     </>

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { callWorker } from "@/lib/callWorker";
+import { ROUTE } from "@/lib/workerRoutes";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { ArrowLeft, Loader2, Cloud, MapPin, ChevronDown, ChevronUp, Clock, ChevronLeft, CloudSun } from "lucide-react";
+import { Loader2, Cloud, MapPin, ChevronDown, ChevronUp, Clock, ChevronLeft, CloudSun } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
@@ -81,20 +83,17 @@ export default function WeatherPage() {
   const loadWeatherData = async (location, forceRefresh = false) => {
     setError(null);
     try {
-      const result = await base44.functions.invoke('getWeatherForecast', {
+      const { data, error } = await callWorker(ROUTE.getWeatherForecast, {
         latitude: location.coordinates.latitude,
         longitude: location.coordinates.longitude,
         forceRefresh,
       });
 
-      // Base44 wraps response in 'data' property
-      const weatherResult = result.data || result;
-      
-      if (weatherResult.error) {
-        throw new Error(weatherResult.error);
+      if (error || !data || data.error) {
+        throw new Error(error || data?.error || 'Weather unavailable');
       }
 
-      setWeatherData(weatherResult);
+      setWeatherData(data);
     } catch (error) {
       console.error("Error loading weather:", error);
       setError("Unable to load weather data. Please try again.");
@@ -128,7 +127,7 @@ export default function WeatherPage() {
           <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
             <CloudSun size={13} color={CAT.weather.ink} strokeWidth={2} />
             Weather
           </div>
@@ -141,16 +140,16 @@ export default function WeatherPage() {
         <button onClick={() => setShowLocationPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left mb-3 transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
           <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
           <div className="flex-1 min-w-0">
-            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>
+            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>
               📍 Location
             </div>
-            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">
+            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">
               {locationMode === 'current'
                 ? (activeLocation?.placeName || activeLocation?.address?.city || 'Current Location')
                 : (activeLocation?.placeName || activeLocation?.address?.formatted || 'Select Location')}
             </div>
           </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
             Change
           </span>
         </button>
@@ -202,19 +201,19 @@ export default function WeatherPage() {
               <div className="text-center">
                 <div className="text-xs text-white/70 mb-1">💧</div>
                 <div className="text-sm font-bold">{current.humidity}%</div>
-                <div className="text-[10px] text-white/70">Humidity</div>
+                <div className="text-[calc(10px*var(--fs))] text-white/70">Humidity</div>
               </div>
               <div className="text-center">
                 <div className="text-xs text-white/70 mb-1">💨</div>
                 <div className="text-sm font-bold">
                   {displayScale === 'celsius' ? current.wind_speed_kmh : current.wind_speed_mph}
                 </div>
-                <div className="text-[10px] text-white/70">Wind</div>
+                <div className="text-[calc(10px*var(--fs))] text-white/70">Wind</div>
               </div>
               <div className="text-center">
                 <div className="text-xs text-white/70 mb-1">☀️</div>
                 <div className="text-sm font-bold">{current.uv_index}</div>
-                <div className="text-[10px] text-white/70">UV Index</div>
+                <div className="text-[calc(10px*var(--fs))] text-white/70">UV Index</div>
               </div>
               <div className="text-center">
                 <div className="text-xs text-white/70 mb-1">🌡️</div>
@@ -223,7 +222,7 @@ export default function WeatherPage() {
                     ? `${forecast[0]?.low_celsius}°` 
                     : `${forecast[0]?.low_fahrenheit}°`}
                 </div>
-                <div className="text-[10px] text-white/70">Low</div>
+                <div className="text-[calc(10px*var(--fs))] text-white/70">Low</div>
               </div>
             </div>
           </div>
@@ -289,7 +288,7 @@ export default function WeatherPage() {
                           <p className="text-sm font-bold text-gray-900">{day.day_of_week}</p>
                         )}
                         {!day.is_today && (
-                          <p className="text-[10px] text-gray-500">{day.date}</p>
+                          <p className="text-[calc(10px*var(--fs))] text-gray-500">{day.date}</p>
                         )}
                       </div>
                     </div>
@@ -308,7 +307,7 @@ export default function WeatherPage() {
                               : day.low_fahrenheit}°
                           </p>
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-0.5">{day.condition}</p>
+                        <p className="text-[calc(10px*var(--fs))] text-gray-500 mt-0.5">{day.condition}</p>
                       </div>
                       
                       <div className="text-gray-400">
@@ -358,7 +357,7 @@ export default function WeatherPage() {
                       <div className="px-3 pb-3 pt-1 border-t border-gray-100">
                         <div className="flex items-center gap-1 mb-2">
                           <Clock className="w-3 h-3 text-gray-400" />
-                          <span className="text-[10px] text-gray-500 font-semibold">HOURLY FORECAST</span>
+                          <span className="text-[calc(10px*var(--fs))] text-gray-500 font-semibold">HOURLY FORECAST</span>
                         </div>
                         
                         {/* Scrollable hourly forecast */}
@@ -373,7 +372,7 @@ export default function WeatherPage() {
                                     : 'bg-gradient-to-b from-indigo-50 to-indigo-100'
                                 }`}
                               >
-                                <p className="text-[10px] font-bold text-gray-600 mb-1">
+                                <p className="text-[calc(10px*var(--fs))] font-bold text-gray-600 mb-1">
                                   {hour.time}
                                 </p>
                                 <div className="text-lg mb-1">
@@ -385,7 +384,7 @@ export default function WeatherPage() {
                                     : hour.temperature_fahrenheit}°
                                 </p>
                                 {hour.precipitation_probability > 0 && (
-                                  <p className="text-[9px] text-blue-600 font-semibold mt-0.5">
+                                  <p className="text-[calc(9px*var(--fs))] text-blue-600 font-semibold mt-0.5">
                                     💧{hour.precipitation_probability}%
                                   </p>
                                 )}
@@ -401,7 +400,7 @@ export default function WeatherPage() {
                               <div className="flex items-center gap-1.5">
                                 <span className="text-sm">🌅</span>
                                 <div>
-                                  <p className="text-[9px] text-gray-500">Sunrise</p>
+                                  <p className="text-[calc(9px*var(--fs))] text-gray-500">Sunrise</p>
                                   <p className="text-xs font-bold text-gray-700">{day.sunrise}</p>
                                 </div>
                               </div>
@@ -410,7 +409,7 @@ export default function WeatherPage() {
                               <div className="flex items-center gap-1.5">
                                 <span className="text-sm">🌇</span>
                                 <div>
-                                  <p className="text-[9px] text-gray-500">Sunset</p>
+                                  <p className="text-[calc(9px*var(--fs))] text-gray-500">Sunset</p>
                                   <p className="text-xs font-bold text-gray-700">{day.sunset}</p>
                                 </div>
                               </div>

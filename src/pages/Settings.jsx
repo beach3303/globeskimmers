@@ -1,213 +1,19 @@
-import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import React, { useState, useEffect, useRef } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
+import { searchCountries } from "@/lib/countries";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { X, User, Mail, Edit3, Check, Globe, DollarSign, Languages, Thermometer, Shield, Loader2, MessageCircle, MapPin, ChevronRight, BarChart3, CreditCard, LogOut } from "lucide-react";
+import { X, User, Mail, Edit3, Check, Globe, DollarSign, Languages, Thermometer, Shield, Loader2, MessageCircle, MapPin, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut } from "lucide-react";
 import ContactUsModal from "../components/ContactUsModal";
+import RefreshAccessModal from "../components/RefreshAccessModal";
+import { ADMIN_EMAILS } from "@/lib/admins";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const ADMIN_EMAILS = ['maizasimeon@gmail.com', 'founder@globeskimmers.io'];
+// ADMIN_EMAILS now imported from @/lib/admins (single source of truth, 4 admins).
 
-// ═══ ALL 194 COUNTRIES (193 UN members + Vatican City) ═══
-const COUNTRIES = [
-  { code: "AF", name: "Afghanistan" },
-  { code: "AL", name: "Albania" },
-  { code: "DZ", name: "Algeria" },
-  { code: "AD", name: "Andorra" },
-  { code: "AO", name: "Angola" },
-  { code: "AG", name: "Antigua and Barbuda" },
-  { code: "AR", name: "Argentina" },
-  { code: "AM", name: "Armenia" },
-  { code: "AU", name: "Australia" },
-  { code: "AT", name: "Austria" },
-  { code: "AZ", name: "Azerbaijan" },
-  { code: "BS", name: "Bahamas" },
-  { code: "BH", name: "Bahrain" },
-  { code: "BD", name: "Bangladesh" },
-  { code: "BB", name: "Barbados" },
-  { code: "BY", name: "Belarus" },
-  { code: "BE", name: "Belgium" },
-  { code: "BZ", name: "Belize" },
-  { code: "BJ", name: "Benin" },
-  { code: "BT", name: "Bhutan" },
-  { code: "BO", name: "Bolivia" },
-  { code: "BA", name: "Bosnia and Herzegovina" },
-  { code: "BW", name: "Botswana" },
-  { code: "BR", name: "Brazil" },
-  { code: "BN", name: "Brunei" },
-  { code: "BG", name: "Bulgaria" },
-  { code: "BF", name: "Burkina Faso" },
-  { code: "BI", name: "Burundi" },
-  { code: "CV", name: "Cape Verde" },
-  { code: "KH", name: "Cambodia" },
-  { code: "CM", name: "Cameroon" },
-  { code: "CA", name: "Canada" },
-  { code: "CF", name: "Central African Republic" },
-  { code: "TD", name: "Chad" },
-  { code: "CL", name: "Chile" },
-  { code: "CN", name: "China" },
-  { code: "CO", name: "Colombia" },
-  { code: "KM", name: "Comoros" },
-  { code: "CR", name: "Costa Rica" },
-  { code: "HR", name: "Croatia" },
-  { code: "CU", name: "Cuba" },
-  { code: "CY", name: "Cyprus" },
-  { code: "CZ", name: "Czech Republic" },
-  { code: "CD", name: "Democratic Republic of the Congo" },
-  { code: "DK", name: "Denmark" },
-  { code: "DJ", name: "Djibouti" },
-  { code: "DM", name: "Dominica" },
-  { code: "DO", name: "Dominican Republic" },
-  { code: "EC", name: "Ecuador" },
-  { code: "EG", name: "Egypt" },
-  { code: "SV", name: "El Salvador" },
-  { code: "GQ", name: "Equatorial Guinea" },
-  { code: "ER", name: "Eritrea" },
-  { code: "EE", name: "Estonia" },
-  { code: "SZ", name: "Eswatini" },
-  { code: "ET", name: "Ethiopia" },
-  { code: "FJ", name: "Fiji" },
-  { code: "FI", name: "Finland" },
-  { code: "FR", name: "France" },
-  { code: "GA", name: "Gabon" },
-  { code: "GM", name: "Gambia" },
-  { code: "GE", name: "Georgia" },
-  { code: "DE", name: "Germany" },
-  { code: "GH", name: "Ghana" },
-  { code: "GR", name: "Greece" },
-  { code: "GD", name: "Grenada" },
-  { code: "GT", name: "Guatemala" },
-  { code: "GN", name: "Guinea" },
-  { code: "GW", name: "Guinea-Bissau" },
-  { code: "GY", name: "Guyana" },
-  { code: "HT", name: "Haiti" },
-  { code: "HN", name: "Honduras" },
-  { code: "HU", name: "Hungary" },
-  { code: "IS", name: "Iceland" },
-  { code: "IN", name: "India" },
-  { code: "ID", name: "Indonesia" },
-  { code: "IR", name: "Iran" },
-  { code: "IQ", name: "Iraq" },
-  { code: "IE", name: "Ireland" },
-  { code: "IL", name: "Israel" },
-  { code: "IT", name: "Italy" },
-  { code: "CI", name: "Ivory Coast" },
-  { code: "JM", name: "Jamaica" },
-  { code: "JP", name: "Japan" },
-  { code: "JO", name: "Jordan" },
-  { code: "KZ", name: "Kazakhstan" },
-  { code: "KE", name: "Kenya" },
-  { code: "KI", name: "Kiribati" },
-  { code: "KW", name: "Kuwait" },
-  { code: "KG", name: "Kyrgyzstan" },
-  { code: "LA", name: "Laos" },
-  { code: "LV", name: "Latvia" },
-  { code: "LB", name: "Lebanon" },
-  { code: "LS", name: "Lesotho" },
-  { code: "LR", name: "Liberia" },
-  { code: "LY", name: "Libya" },
-  { code: "LI", name: "Liechtenstein" },
-  { code: "LT", name: "Lithuania" },
-  { code: "LU", name: "Luxembourg" },
-  { code: "MG", name: "Madagascar" },
-  { code: "MW", name: "Malawi" },
-  { code: "MY", name: "Malaysia" },
-  { code: "MV", name: "Maldives" },
-  { code: "ML", name: "Mali" },
-  { code: "MT", name: "Malta" },
-  { code: "MH", name: "Marshall Islands" },
-  { code: "MR", name: "Mauritania" },
-  { code: "MU", name: "Mauritius" },
-  { code: "MX", name: "Mexico" },
-  { code: "FM", name: "Micronesia" },
-  { code: "MD", name: "Moldova" },
-  { code: "MC", name: "Monaco" },
-  { code: "MN", name: "Mongolia" },
-  { code: "ME", name: "Montenegro" },
-  { code: "MA", name: "Morocco" },
-  { code: "MZ", name: "Mozambique" },
-  { code: "MM", name: "Myanmar" },
-  { code: "NA", name: "Namibia" },
-  { code: "NR", name: "Nauru" },
-  { code: "NP", name: "Nepal" },
-  { code: "NL", name: "Netherlands" },
-  { code: "NZ", name: "New Zealand" },
-  { code: "NI", name: "Nicaragua" },
-  { code: "NE", name: "Niger" },
-  { code: "NG", name: "Nigeria" },
-  { code: "KP", name: "North Korea" },
-  { code: "MK", name: "North Macedonia" },
-  { code: "NO", name: "Norway" },
-  { code: "OM", name: "Oman" },
-  { code: "PK", name: "Pakistan" },
-  { code: "PW", name: "Palau" },
-  { code: "PA", name: "Panama" },
-  { code: "PG", name: "Papua New Guinea" },
-  { code: "PY", name: "Paraguay" },
-  { code: "PE", name: "Peru" },
-  { code: "PH", name: "Philippines" },
-  { code: "PL", name: "Poland" },
-  { code: "PT", name: "Portugal" },
-  { code: "QA", name: "Qatar" },
-  { code: "CG", name: "Republic of the Congo" },
-  { code: "RO", name: "Romania" },
-  { code: "RU", name: "Russia" },
-  { code: "RW", name: "Rwanda" },
-  { code: "KN", name: "Saint Kitts and Nevis" },
-  { code: "LC", name: "Saint Lucia" },
-  { code: "VC", name: "Saint Vincent and the Grenadines" },
-  { code: "WS", name: "Samoa" },
-  { code: "SM", name: "San Marino" },
-  { code: "ST", name: "Sao Tome and Principe" },
-  { code: "SA", name: "Saudi Arabia" },
-  { code: "SN", name: "Senegal" },
-  { code: "RS", name: "Serbia" },
-  { code: "SC", name: "Seychelles" },
-  { code: "SL", name: "Sierra Leone" },
-  { code: "SG", name: "Singapore" },
-  { code: "SK", name: "Slovakia" },
-  { code: "SI", name: "Slovenia" },
-  { code: "SB", name: "Solomon Islands" },
-  { code: "SO", name: "Somalia" },
-  { code: "ZA", name: "South Africa" },
-  { code: "KR", name: "South Korea" },
-  { code: "SS", name: "South Sudan" },
-  { code: "ES", name: "Spain" },
-  { code: "LK", name: "Sri Lanka" },
-  { code: "SD", name: "Sudan" },
-  { code: "SR", name: "Suriname" },
-  { code: "SE", name: "Sweden" },
-  { code: "CH", name: "Switzerland" },
-  { code: "SY", name: "Syria" },
-  { code: "TJ", name: "Tajikistan" },
-  { code: "TZ", name: "Tanzania" },
-  { code: "TH", name: "Thailand" },
-  { code: "TL", name: "Timor-Leste" },
-  { code: "TG", name: "Togo" },
-  { code: "TO", name: "Tonga" },
-  { code: "TT", name: "Trinidad and Tobago" },
-  { code: "TN", name: "Tunisia" },
-  { code: "TR", name: "Turkey" },
-  { code: "TM", name: "Turkmenistan" },
-  { code: "TV", name: "Tuvalu" },
-  { code: "UG", name: "Uganda" },
-  { code: "UA", name: "Ukraine" },
-  { code: "AE", name: "United Arab Emirates" },
-  { code: "GB", name: "United Kingdom" },
-  { code: "US", name: "United States" },
-  { code: "UY", name: "Uruguay" },
-  { code: "UZ", name: "Uzbekistan" },
-  { code: "VU", name: "Vanuatu" },
-  { code: "VA", name: "Vatican City" },
-  { code: "VE", name: "Venezuela" },
-  { code: "VN", name: "Vietnam" },
-  { code: "YE", name: "Yemen" },
-  { code: "ZM", name: "Zambia" },
-  { code: "ZW", name: "Zimbabwe" },
-].sort((a, b) => a.name.localeCompare(b.name));
 
 const CURRENCIES = [
   { code: "USD", name: "US Dollar", symbol: "$", flag: "🇺🇸" },
@@ -452,7 +258,10 @@ const showToast = (message, type) => {
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-  const { logout } = useAuth(); // Supabase sign-out (clears session → AuthGate)
+  const { logout, profile, user: authUser, refreshProfile } = useAuth(); // Supabase
+  const countryBoxRef = useRef(null);
+  const [countryOpen, setCountryOpen] = useState(false);
+  const [countryQuery, setCountryQuery] = useState("");
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -471,50 +280,78 @@ export default function SettingsPage() {
   const [preferredTempScale, setPreferredTempScale] = useState("fahrenheit");
   const [preferredDistanceUnit, setPreferredDistanceUnit] = useState("km");
   const [showContactUs, setShowContactUs] = useState(false);
+  const [showRefreshAccess, setShowRefreshAccess] = useState(false);
 
-  useEffect(() => { loadUser(); }, []);
+  // Profile lives in the Supabase `profiles` row (loaded by AuthContext). Reshape
+  // it into the Base44-style `user` object the display JSX already reads, and seed
+  // the editable fields. Re-runs whenever the profile changes (e.g. after a save
+  // calls refreshProfile()), so Home and Settings stay in sync. Field-seeding is
+  // skipped while editing so an async refresh can't clobber in-progress edits.
+  useEffect(() => {
+    if (!profile && !authUser) return;
+    setUser({
+      email: authUser?.email || "",
+      first_name: profile?.first_name || "",
+      full_name: profile?.first_name || "",
+      home_country: profile?.home_country || "",
+      show_home_flag: !!profile?.show_home_flag,
+      show_home_country_info: !!profile?.show_home_country_info,
+      preferred_currencies: [profile?.preferred_currency || "USD"],
+      primary_banking_currency: profile?.primary_banking_currency || profile?.preferred_currency || "USD",
+      preferred_language: profile?.preferred_language || "en",
+      preferred_temperature_scale: profile?.temp_unit === "C" ? "celsius" : "fahrenheit",
+      preferred_distance_unit: profile?.distance_unit === "mi" ? "miles" : "km",
+    });
+    if (!editing) {
+      setFirstName(profile?.first_name || "");
+      setHomeCountry(profile?.home_country || "");
+      setPreferredCurrency(profile?.preferred_currency || "USD");
+      setPrimaryBankingCurrency(profile?.primary_banking_currency || profile?.preferred_currency || "USD");
+      setPreferredLanguage(profile?.preferred_language || "en");
+      setPreferredTempScale(profile?.temp_unit === "C" ? "celsius" : "fahrenheit");
+      setPreferredDistanceUnit(profile?.distance_unit === "mi" ? "miles" : "km");
+      setShowHomeCountryInfo(!!profile?.show_home_country_info);
+      setShowHomeFlag(!!profile?.show_home_flag);
+    }
+    setLoading(false);
+  }, [profile, authUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const loadUser = async () => {
-    try {
-      const isAuthenticated = await base44.auth.isAuthenticated();
-      if (!isAuthenticated) { setLoading(false); return; }
-      const userData = await base44.auth.me();
-      setUser(userData);
-      if (userData.first_name) { setFirstName(userData.first_name); }
-      else if (userData.full_name) { setFirstName(userData.full_name.split(" ")[0] || ""); }
-      else { setFirstName(""); }
-      setHomeCountry(userData.home_country || "");
-      setPreferredCurrency(userData.preferred_currencies?.[0] || "USD");
-      // Fall back to preferred currency for users who set up before this
-      // field existed; they can override it explicitly when editing.
-      setPrimaryBankingCurrency(userData.primary_banking_currency || userData.preferred_currencies?.[0] || "USD");
-      setPreferredLanguage(userData.preferred_language || "en");
-      setPreferredTempScale(userData.preferred_temperature_scale || "fahrenheit");
-      setPreferredDistanceUnit(userData.preferred_distance_unit || "km");
-      setShowHomeCountryInfo(userData.show_home_country_info || false);
-      setShowHomeFlag(userData.show_home_flag || false);
-      setLoading(false);
-    } catch (error) { console.error("Error loading user:", error); setLoading(false); }
-  };
+  // Close the home-country dropdown when tapping outside it.
+  useEffect(() => {
+    if (!countryOpen) return;
+    const onDoc = (e) => { if (countryBoxRef.current && !countryBoxRef.current.contains(e.target)) setCountryOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("touchstart", onDoc);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("touchstart", onDoc); };
+  }, [countryOpen]);
 
   const handleSave = async () => {
+    if (!authUser?.id) { showToast("Not signed in.", "error"); return; }
     setSaving(true);
     try {
-      const updates = {
-        first_name: firstName.trim(), home_country: homeCountry,
-        show_home_country_info: showHomeCountryInfo, show_home_flag: showHomeFlag,
-        preferred_currencies: [preferredCurrency], preferred_language: preferredLanguage,
-        preferred_temperature_scale: preferredTempScale, preferred_distance_unit: preferredDistanceUnit,
+      // Write to the Supabase profiles row using the SCHEMA's column names/values
+      // (singular preferred_currency; temp_unit 'C'/'F'; distance_unit 'mi'/'km')
+      // — exactly what Home + the ATM calculator read, so the home page updates.
+      const update = {
+        first_name: firstName.trim(),
+        home_country: homeCountry,
+        show_home_flag: showHomeFlag,
+        show_home_country_info: showHomeCountryInfo,
+        preferred_currency: preferredCurrency,
         primary_banking_currency: primaryBankingCurrency,
+        preferred_language: preferredLanguage,
+        temp_unit: preferredTempScale === "celsius" ? "C" : "F",
+        distance_unit: preferredDistanceUnit === "miles" ? "mi" : "km",
       };
-      await base44.auth.updateMe(updates);
-      window.dispatchEvent(new CustomEvent('globeskimmers:profileUpdated'));
-      window.dispatchEvent(new CustomEvent('globeskimmers:homeCountryChanged', { detail: { homeCountry, showHomeCountryInfo } }));
-      showToast("✅ Profile updated successfully!", "success");
+      const { error } = await supabase.from("profiles").update(update).eq("id", authUser.id);
+      if (error) throw error;
       setEditing(false);
-      const updatedUser = await base44.auth.me();
-      setUser(updatedUser);
-    } catch (error) { console.error("Error saving profile:", error); showToast("Failed to update profile. Please try again.", "error"); }
+      await refreshProfile(); // re-pull profile → Home + Settings reflect the change
+      showToast("✅ Profile updated successfully!", "success");
+    } catch (error) {
+      console.error("Error saving profile:", error);
+      showToast("Failed to update profile. Please try again.", "error");
+    }
     setSaving(false);
   };
 
@@ -539,9 +376,9 @@ export default function SettingsPage() {
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full blur-2xl"></div>
         <div className="relative z-10 flex items-center justify-between mb-4">
           <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 flex items-center justify-center transition-all shadow-lg active:scale-95"><X className="w-6 h-6" /></button>
-          <button onClick={logout} className="flex items-center gap-2 px-4 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white font-semibold text-[13px] transition-all shadow-lg active:scale-95"><LogOut className="w-4 h-4" />Sign Out</button>
+          <button onClick={logout} className="flex items-center gap-2 px-4 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white font-semibold text-[calc(13px*var(--fs))] transition-all shadow-lg active:scale-95"><LogOut className="w-4 h-4" />Sign Out</button>
         </div>
-        <div className="relative z-10"><h1 className="text-[32px] font-extrabold mb-2 tracking-tight">Settings</h1><p className="text-[15px] text-white/90">Manage your account and preferences</p></div>
+        <div className="relative z-10"><h1 className="text-[calc(32px*var(--fs))] font-extrabold mb-2 tracking-tight">Settings</h1><p className="text-[calc(15px*var(--fs))] text-white/90">Manage your account and preferences</p></div>
       </div>
 
       <div className="max-w-2xl mx-auto px-5 py-6 pb-8">
@@ -549,7 +386,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#667eea] to-[#764ba2] flex items-center justify-center shadow-lg"><User className="w-6 h-6 text-white" /></div>
-              <h2 className="text-[22px] font-bold text-gray-900">Profile</h2>
+              <h2 className="text-[calc(22px*var(--fs))] font-bold text-gray-900">Profile</h2>
             </div>
             {!editing ? (
               <button onClick={() => setEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white font-semibold rounded-xl hover:opacity-90 transition-all shadow-md"><Edit3 className="w-4 h-4" />Edit</button>
@@ -569,12 +406,36 @@ export default function SettingsPage() {
             </div>
 
             <div><label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2"><Globe className="w-4 h-4" />Home Country</label>
-              {editing ? (<Select value={homeCountry} onValueChange={setHomeCountry}><SelectTrigger className="h-12 rounded-xl border-gray-300"><SelectValue placeholder="Select your home country" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{COUNTRIES.map((country) => (<SelectItem key={country.code} value={country.name}>{country.name}</SelectItem>))}</SelectContent></Select>) : (<div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl text-gray-900 font-medium border border-gray-200">{user?.home_country || "Not set"}</div>)}
+              {editing ? (
+                <div className="relative" ref={countryBoxRef}>
+                  <button type="button" onClick={() => setCountryOpen((o) => !o)} className="w-full h-12 px-4 rounded-xl border border-gray-300 bg-white flex items-center justify-between text-left">
+                    <span className={homeCountry ? "text-gray-900 font-medium" : "text-gray-400"}>{homeCountry || "Select your home country"}</span>
+                    <ChevronDown className="w-5 h-5 text-gray-400" />
+                  </button>
+                  {countryOpen && (
+                    <div className="absolute z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+                        <Search className="w-4 h-4 text-gray-400" />
+                        <input autoFocus value={countryQuery} onChange={(e) => setCountryQuery(e.target.value)} placeholder="Type a country (e.g. US, USA)…" className="flex-1 outline-none bg-transparent text-gray-900 text-[calc(14px*var(--fs))]" />
+                      </div>
+                      <div className="max-h-[260px] overflow-y-auto">
+                        {searchCountries(countryQuery).map((c) => (
+                          <button key={c.code} type="button" onClick={() => { setHomeCountry(c.name); setCountryOpen(false); setCountryQuery(""); }} className={`w-full text-left px-4 py-2.5 hover:bg-indigo-50 flex items-center justify-between ${c.name === homeCountry ? "bg-indigo-50" : ""}`}>
+                            <span className="text-gray-900 text-[calc(14px*var(--fs))]">{c.name}</span>
+                            {c.name === homeCountry && <Check className="w-4 h-4 text-indigo-600" />}
+                          </button>
+                        ))}
+                        {searchCountries(countryQuery).length === 0 && (<div className="px-4 py-3 text-gray-400 text-[calc(13px*var(--fs))]">No match</div>)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (<div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl text-gray-900 font-medium border border-gray-200">{user?.home_country || "Not set"}</div>)}
             </div>
 
-            {editing && (<div className="flex items-center justify-between p-5 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl border border-indigo-200 shadow-sm"><div><p className="font-bold text-gray-900 text-[15px]">Show Home Country Time</p><p className="text-sm text-gray-600 mt-0.5">Display home country time on home page</p></div><button onClick={() => setShowHomeCountryInfo(!showHomeCountryInfo)} className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all duration-300 shadow-lg ${showHomeCountryInfo ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2]' : 'bg-gray-300'}`}><span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-300 ${showHomeCountryInfo ? 'translate-x-7' : 'translate-x-1'}`} /></button></div>)}
+            {editing && (<div className="flex items-center justify-between p-5 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl border border-indigo-200 shadow-sm"><div><p className="font-bold text-gray-900 text-[calc(15px*var(--fs))]">Show Home Country Time</p><p className="text-sm text-gray-600 mt-0.5">Display home country time on home page</p></div><button onClick={() => setShowHomeCountryInfo(!showHomeCountryInfo)} className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all duration-300 shadow-lg ${showHomeCountryInfo ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2]' : 'bg-gray-300'}`}><span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-300 ${showHomeCountryInfo ? 'translate-x-7' : 'translate-x-1'}`} /></button></div>)}
 
-            {editing && (<div className="flex items-center justify-between p-5 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl border border-indigo-200 shadow-sm"><div><p className="font-bold text-gray-900 text-[15px]">Show Home Country Flag</p><p className="text-sm text-gray-600 mt-0.5">Display your flag on the home page card</p></div><button onClick={() => setShowHomeFlag(!showHomeFlag)} className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all duration-300 shadow-lg ${showHomeFlag ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2]' : 'bg-gray-300'}`}><span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-300 ${showHomeFlag ? 'translate-x-7' : 'translate-x-1'}`} /></button></div>)}
+            {editing && (<div className="flex items-center justify-between p-5 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl border border-indigo-200 shadow-sm"><div><p className="font-bold text-gray-900 text-[calc(15px*var(--fs))]">Show Home Country Flag</p><p className="text-sm text-gray-600 mt-0.5">Display your flag on the home page card</p></div><button onClick={() => setShowHomeFlag(!showHomeFlag)} className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all duration-300 shadow-lg ${showHomeFlag ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2]' : 'bg-gray-300'}`}><span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-300 ${showHomeFlag ? 'translate-x-7' : 'translate-x-1'}`} /></button></div>)}
 
             <div><label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2"><DollarSign className="w-4 h-4" />Preferred Currency</label>
               <p className="text-xs text-gray-500 -mt-1 mb-2">How prices are displayed across the app.</p>
@@ -611,10 +472,11 @@ export default function SettingsPage() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="space-y-3 mb-6">
-          <button onClick={() => navigate(createPageUrl("SavedLocations"))} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><MapPin className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[15px] font-bold text-white">Saved Locations</p><p className="text-[13px] text-white/90">Manage your favorite places</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>
-          {isAdmin && (<button onClick={() => navigate(createPageUrl("AdminDashboard"))} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><Shield className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[15px] font-bold text-white">Admin Portal</p><p className="text-[13px] text-white/90">Manage app and users</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>)}
-          {isAdmin && (<button onClick={() => navigate(createPageUrl("AdminAnalytics"))} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-indigo-600 to-slate-800 hover:from-indigo-700 hover:to-slate-900 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><BarChart3 className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[15px] font-bold text-white">Analytics</p><p className="text-[13px] text-white/90">Page views, searches, zero-results</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>)}
-          <button onClick={() => setShowContactUs(true)} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><MessageCircle className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[15px] font-bold text-white">Contact Us</p><p className="text-[13px] text-white/90">Get in touch with our team</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>
+          <button onClick={() => navigate(createPageUrl("SavedLocations"))} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><MapPin className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[calc(15px*var(--fs))] font-bold text-white">Saved Locations</p><p className="text-[calc(13px*var(--fs))] text-white/90">Manage your favorite places</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>
+          {isAdmin && (<button onClick={() => navigate(createPageUrl("AdminDashboard"))} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><Shield className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[calc(15px*var(--fs))] font-bold text-white">Admin Portal</p><p className="text-[calc(13px*var(--fs))] text-white/90">Manage app and users</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>)}
+          {isAdmin && (<button onClick={() => navigate(createPageUrl("AdminAnalytics"))} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-indigo-600 to-slate-800 hover:from-indigo-700 hover:to-slate-900 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><BarChart3 className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[calc(15px*var(--fs))] font-bold text-white">Analytics</p><p className="text-[calc(13px*var(--fs))] text-white/90">Page views, searches, zero-results</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>)}
+          {isAdmin && (<button onClick={() => setShowRefreshAccess(true)} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><RefreshCw className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[calc(15px*var(--fs))] font-bold text-white">Refresh Access</p><p className="text-[calc(13px*var(--fs))] text-white/90">Grant the refresh button to users</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>)}
+          <button onClick={() => setShowContactUs(true)} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><MessageCircle className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[calc(15px*var(--fs))] font-bold text-white">Contact Us</p><p className="text-[calc(13px*var(--fs))] text-white/90">Get in touch with our team</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>
           <button onClick={logout} className="w-full flex items-center justify-center gap-3 p-4 bg-gray-100 hover:bg-gray-200 rounded-2xl transition-all text-gray-700 font-medium"><LogOut className="w-5 h-5" /><span>Sign Out</span></button>
         </motion.div>
 
@@ -622,6 +484,7 @@ export default function SettingsPage() {
       </div>
 
       <ContactUsModal isOpen={showContactUs} onClose={() => setShowContactUs(false)} />
+      <RefreshAccessModal isOpen={showRefreshAccess} onClose={() => setShowRefreshAccess(false)} />
     </div>
   );
 }

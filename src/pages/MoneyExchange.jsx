@@ -39,8 +39,8 @@ const MILES_COUNTRIES = [
 ];
 
 const RADIUS_VALUES = {
-  km: [1, 2, 5, 10, 25, 50, 100],
-  mi: [0.5, 1, 3, 5, 10, 25, 50]
+  km: [1, 2, 5, 10, 25],
+  mi: [0.5, 1, 3, 5, 10, 25]
 };
 
 const DEFAULT_RADIUS = {
@@ -544,7 +544,7 @@ export default function MoneyExchangePage() {
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
           <div
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
             style={{background:CAT.money.bg,color:CAT.money.ink}}
           >
             <DollarSign size={13} color={CAT.money.ink} strokeWidth={2} />
@@ -602,7 +602,7 @@ export default function MoneyExchangePage() {
             </div>
           </div>
           {activeLocation?.granularity === 'city' && (
-            <div className="mt-2 p-2 bg-amber-50 border border-amber-300 rounded-lg text-[11px] text-amber-900 leading-snug">
+            <div className="mt-2 p-2 bg-amber-50 border border-amber-300 rounded-lg text-[calc(11px*var(--fs))] text-amber-900 leading-snug">
               💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
             </div>
           )}
@@ -611,7 +611,7 @@ export default function MoneyExchangePage() {
         {/* Currency Converter */}
         <div className="bg-white rounded-[16px] shadow-md mb-3">
           <div className="flex items-center justify-between p-4 pb-3">
-            <h2 className="text-[15px] font-semibold">Currency Conversion Calculator</h2>
+            <h2 className="text-[calc(15px*var(--fs))] font-semibold">Currency Conversion Calculator</h2>
             <button
               onClick={() => setConverterCollapsed(!converterCollapsed)}
               className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
@@ -628,7 +628,7 @@ export default function MoneyExchangePage() {
           {!converterCollapsed && (
             <div className="px-4 pb-4">
           <div className="mb-3">
-            <label className="text-[11px] uppercase text-gray-500 mb-1 block">From</label>
+            <label className="text-[calc(11px*var(--fs))] uppercase text-gray-500 mb-1 block">From</label>
             <div className="flex gap-2">
               <Input
                 type="number"
@@ -678,7 +678,7 @@ export default function MoneyExchangePage() {
           </div>
 
           <div className="mb-2">
-            <label className="text-[11px] uppercase text-gray-500 mb-1 block">To</label>
+            <label className="text-[calc(11px*var(--fs))] uppercase text-gray-500 mb-1 block">To</label>
             <div className="flex gap-2">
               <div className="flex-1 h-[48px] px-3 bg-gray-50 border rounded flex items-center font-bold">
                 {converting ? <Loader2 className="w-4 h-4 animate-spin" /> : (convertedAmount || "0.00")}
@@ -689,7 +689,7 @@ export default function MoneyExchangePage() {
                     <div className="flex items-center gap-2">
                       <span>{getCurrencyFlag(toCurrency)}</span>
                       <span className="font-semibold">{toCurrency}</span>
-                      {toCurrency === localCurrency && <span className="text-[10px]">📍</span>}
+                      {toCurrency === localCurrency && <span className="text-[calc(10px*var(--fs))]">📍</span>}
                     </div>
                   ) : (
                     <span className="text-gray-500">Select...</span>
@@ -710,7 +710,7 @@ export default function MoneyExchangePage() {
                         <span>{curr.flag}</span>
                         <span className="font-medium">{curr.code}</span>
                         {curr.code === localCurrency && (
-                          <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">📍 Local</span>
+                          <span className="text-[calc(10px*var(--fs))] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">📍 Local</span>
                         )}
                         <span className="text-xs text-gray-500">- {curr.name}</span>
                       </div>
@@ -731,7 +731,7 @@ export default function MoneyExchangePage() {
                     1 {fromCurrency} = {exchangeRate?.toFixed(4)} {toCurrency}
                   </p>
                   {rateTimestamp && (
-                    <p className="text-[11px] text-blue-700 mt-0.5">
+                    <p className="text-[calc(11px*var(--fs))] text-blue-700 mt-0.5">
                       Rate updated: {rateTimestamp}
                     </p>
                   )}
@@ -739,7 +739,7 @@ export default function MoneyExchangePage() {
               </div>
               <div className="flex items-start gap-2 mt-2 pt-2 border-t border-blue-200">
                 <Info className="w-3.5 h-3.5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <p className="text-[11px] text-blue-700 leading-relaxed">
+                <p className="text-[calc(11px*var(--fs))] text-blue-700 leading-relaxed">
                   Mid-market rate. Exchange stores may charge 2-5% fees.
                 </p>
               </div>
@@ -795,7 +795,7 @@ export default function MoneyExchangePage() {
             <div className="relative mx-4">
               <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
                 <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
-                  <span className="text-[16px] font-bold text-transparent bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text">
+                  <span className="text-[calc(16px*var(--fs))] font-bold text-transparent bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text">
                     OR
                   </span>
                 </div>
@@ -813,14 +813,14 @@ export default function MoneyExchangePage() {
 
         {/* Currency Availability Section - WITH GRADIENT BANNER */}
         <div className="bg-white rounded-[16px] shadow-md p-4 mb-3">
-          <h3 className="text-[15px] font-semibold mb-3">Money Exchange Near You</h3>
+          <h3 className="text-[calc(15px*var(--fs))] font-semibold mb-3">Money Exchange Near You</h3>
           
           {/* Gradient Banner + Currency Lookup Dropdown */}
           <div className="mb-4">
             <div className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl p-4 mb-3 shadow-md">
               <div className="flex items-center gap-2 text-white">
                 <Search className="w-5 h-5 flex-shrink-0" />
-                <p className="text-[16px] font-bold">
+                <p className="text-[calc(16px*var(--fs))] font-bold">
                   What currency are you looking for?
                 </p>
               </div>
@@ -849,8 +849,8 @@ export default function MoneyExchangePage() {
                     <div className="flex items-center gap-2">
                       <span className="text-xl">{curr.flag}</span>
                       <div className="flex-1">
-                        <p className="font-semibold text-[14px]">{curr.code} - {curr.name}</p>
-                        <p className="text-[11px] text-green-600">✓ Usually Available</p>
+                        <p className="font-semibold text-[calc(14px*var(--fs))]">{curr.code} - {curr.name}</p>
+                        <p className="text-[calc(11px*var(--fs))] text-green-600">✓ Usually Available</p>
                       </div>
                     </div>
                   </SelectItem>
@@ -864,8 +864,8 @@ export default function MoneyExchangePage() {
                     <div className="flex items-center gap-2">
                       <span className="text-xl">{curr.flag}</span>
                       <div className="flex-1">
-                        <p className="font-semibold text-[14px]">{curr.code} - {curr.name}</p>
-                        <p className="text-[11px] text-green-600">✓ Commonly Available</p>
+                        <p className="font-semibold text-[calc(14px*var(--fs))]">{curr.code} - {curr.name}</p>
+                        <p className="text-[calc(11px*var(--fs))] text-green-600">✓ Commonly Available</p>
                       </div>
                     </div>
                   </SelectItem>
@@ -879,8 +879,8 @@ export default function MoneyExchangePage() {
                     <div className="flex items-center gap-2">
                       <span className="text-xl">{curr.flag}</span>
                       <div className="flex-1">
-                        <p className="font-semibold text-[14px]">{curr.code} - {curr.name}</p>
-                        <p className="text-[11px] text-orange-600">⏱ Order Required (1-3 days)</p>
+                        <p className="font-semibold text-[calc(14px*var(--fs))]">{curr.code} - {curr.name}</p>
+                        <p className="text-[calc(11px*var(--fs))] text-orange-600">⏱ Order Required (1-3 days)</p>
                       </div>
                     </div>
                   </SelectItem>
@@ -894,16 +894,16 @@ export default function MoneyExchangePage() {
             <div className="mt-6 pt-4 border-t border-gray-100">
               <div className="flex items-center gap-2 mb-2 opacity-60">
                 <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Your Local Currency</h4>
+                <h4 className="text-[calc(11px*var(--fs))] font-semibold text-gray-500 uppercase tracking-wide">Your Local Currency</h4>
               </div>
               <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl opacity-70">{localCurrencyData.flag}</span>
                   <div className="flex-1">
-                    <p className="font-semibold text-[13px] text-gray-700">
+                    <p className="font-semibold text-[calc(13px*var(--fs))] text-gray-700">
                       {localCurrencyData.code} - {localCurrencyData.name}
                     </p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
+                    <p className="text-[calc(11px*var(--fs))] text-gray-500 mt-0.5">
                       ✓ Usually available in stock
                     </p>
                   </div>
@@ -916,19 +916,19 @@ export default function MoneyExchangePage() {
         {/* Exchange Stores Section */}
         {activeLocation?.coordinates && toCurrency && fromCurrency && (
           <div id="exchange-stores-map" className="bg-white rounded-[16px] shadow-md p-4 mb-6">
-            <h3 className="text-[16px] font-bold mb-1">Exchange Stores for {toCurrency}</h3>
-            <p className="text-[12px] text-gray-600 mb-4">
+            <h3 className="text-[calc(16px*var(--fs))] font-bold mb-1">Exchange Stores for {toCurrency}</h3>
+            <p className="text-[calc(12px*var(--fs))] text-gray-600 mb-4">
               Showing stores that exchange {fromCurrency} to {toCurrency}
             </p>
 
             {/* View Mode Tabs + Refresh Button */}
             <div className="mb-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[11px] font-semibold text-gray-600">VIEW MODE</p>
+                <p className="text-[calc(11px*var(--fs))] font-semibold text-gray-600">VIEW MODE</p>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-[11px] px-3"
+                  className="h-7 text-[calc(11px*var(--fs))] px-3"
                   onClick={() => loadExchangeStores(true)}
                   disabled={loadingStores}
                 >
@@ -941,7 +941,7 @@ export default function MoneyExchangePage() {
                     setViewMode("list");
                     setSelectedStoreIndex(null);
                   }}
-                  className={`pb-2 px-3 text-[13px] font-semibold transition-colors ${
+                  className={`pb-2 px-3 text-[calc(13px*var(--fs))] font-semibold transition-colors ${
                     viewMode === "list"
                       ? "text-[#667eea] border-b-2 border-[#667eea]"
                       : "text-gray-500"
@@ -951,7 +951,7 @@ export default function MoneyExchangePage() {
                 </button>
                 <button
                   onClick={() => setViewMode("map")}
-                  className={`pb-2 px-3 text-[13px] font-semibold transition-colors ${
+                  className={`pb-2 px-3 text-[calc(13px*var(--fs))] font-semibold transition-colors ${
                     viewMode === "map"
                       ? "text-[#667eea] border-b-2 border-[#667eea]"
                       : "text-gray-500"
@@ -965,11 +965,11 @@ export default function MoneyExchangePage() {
             {/* Sort By Tabs - Only show in list view */}
             {viewMode === "list" && (
               <div className="mb-4">
-                <p className="text-[11px] font-semibold text-gray-600 mb-2">SORT BY</p>
+                <p className="text-[calc(11px*var(--fs))] font-semibold text-gray-600 mb-2">SORT BY</p>
                 <div className="flex gap-2 border-b border-gray-200">
                   <button
                     onClick={() => setSortBy("distance")}
-                    className={`pb-2 px-3 text-[13px] font-semibold transition-colors ${
+                    className={`pb-2 px-3 text-[calc(13px*var(--fs))] font-semibold transition-colors ${
                       sortBy === "distance"
                         ? "text-[#667eea] border-b-2 border-[#667eea]"
                         : "text-gray-500"
@@ -979,7 +979,7 @@ export default function MoneyExchangePage() {
                   </button>
                   <button
                     onClick={() => setSortBy("rate")}
-                    className={`pb-2 px-3 text-[13px] font-semibold transition-colors ${
+                    className={`pb-2 px-3 text-[calc(13px*var(--fs))] font-semibold transition-colors ${
                       sortBy === "rate"
                         ? "text-[#667eea] border-b-2 border-[#667eea]"
                         : "text-gray-500"
@@ -1000,14 +1000,14 @@ export default function MoneyExchangePage() {
                   onChange={(e) => setOpenOnly(e.target.checked)}
                   className="w-4 h-4 text-[#667eea] bg-gray-100 border-gray-300 rounded focus:ring-[#667eea] cursor-pointer"
                 />
-                <span className="text-[13px] font-semibold text-gray-700">Show only open stores</span>
+                <span className="text-[calc(13px*var(--fs))] font-semibold text-gray-700">Show only open stores</span>
               </label>
             </div>
 
             {/* Radius Slider */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-                <p className="text-[12px] font-semibold text-gray-700">Search Radius</p>
+                <p className="text-[calc(12px*var(--fs))] font-semibold text-gray-700">Search Radius</p>
                 <div className="flex items-center gap-2">
                   <DistanceUnitToggle
                     unit={usesMiles ? 'mi' : 'km'}
@@ -1022,7 +1022,7 @@ export default function MoneyExchangePage() {
                     }}
                     variant="light"
                   />
-                  <span className="text-[12px] font-bold text-[#667eea]">{searchRadius} {distanceUnit}</span>
+                  <span className="text-[calc(12px*var(--fs))] font-bold text-[#667eea]">{searchRadius} {distanceUnit}</span>
                 </div>
               </div>
               <input
@@ -1033,7 +1033,7 @@ export default function MoneyExchangePage() {
                 onChange={(e) => handleRadiusChange(parseInt(e.target.value))}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#667eea]"
               />
-              <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+              <div className="flex justify-between text-[calc(10px*var(--fs))] text-gray-500 mt-1">
                 <span>{radiusArray[0]}{distanceUnit}</span>
                 <span>{radiusArray[Math.floor(radiusArray.length / 2)]}{distanceUnit}</span>
                 <span>{radiusArray[radiusArray.length - 1]}{distanceUnit}</span>
@@ -1056,35 +1056,35 @@ export default function MoneyExchangePage() {
                           <span className="text-white font-bold text-sm">{index + 1}</span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-bold text-[14px] text-gray-900 mb-1">{store.name}</h4>
+                          <h4 className="font-bold text-[calc(14px*var(--fs))] text-gray-900 mb-1">{store.name}</h4>
                           <NameLanguageHelp placeId={store.place_id || store.placeId || store.id} name={store.name} />
 
                           {store.exchange_rate && (
-                            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-[13px] font-bold px-2 py-1 rounded inline-block mb-2">
+                            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-[calc(13px*var(--fs))] font-bold px-2 py-1 rounded inline-block mb-2">
                               1 {fromCurrency} = {store.exchange_rate.toFixed(4)} {toCurrency}
                             </div>
                           )}
 
                           <div className="flex items-center gap-2 mb-1">
                             <MapPin className="w-3 h-3 text-gray-500" />
-                            <span className="text-[12px] font-semibold text-[#667eea]">
+                            <span className="text-[calc(12px*var(--fs))] font-semibold text-[#667eea]">
                               📍 {formatDistance(store.distance_miles)} away
                             </span>
                           </div>
 
-                          <p className="text-[11px] text-gray-600 mb-2">{store.address}</p>
+                          <p className="text-[calc(11px*var(--fs))] text-gray-600 mb-2">{store.address}</p>
 
                           <div className="flex items-center gap-3 mb-2 flex-wrap">
                             {store.is_open !== undefined && (
-                              <span className={`text-[11px] font-semibold ${store.is_open ? 'text-green-600' : 'text-red-600'}`}>
+                              <span className={`text-[calc(11px*var(--fs))] font-semibold ${store.is_open ? 'text-green-600' : 'text-red-600'}`}>
                                 {store.is_open ? '● Open Now' : '● Closed'}
                               </span>
                             )}
                             {store.hours_today && (
-                              <span className="text-[11px] text-gray-700">🕐 {store.hours_today.split(':').slice(1).join(':').trim()}</span>
+                              <span className="text-[calc(11px*var(--fs))] text-gray-700">🕐 {store.hours_today.split(':').slice(1).join(':').trim()}</span>
                             )}
                             {store.phone && (
-                              <a href={`tel:${store.phone}`} className="text-[11px] text-gray-600 flex items-center gap-1 hover:text-[#667eea]">
+                              <a href={`tel:${store.phone}`} className="text-[calc(11px*var(--fs))] text-gray-600 flex items-center gap-1 hover:text-[#667eea]">
                                 <Phone className="w-3 h-3" />
                                 {store.phone}
                               </a>
@@ -1095,7 +1095,7 @@ export default function MoneyExchangePage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="flex-1 h-8 text-[11px] border-[#667eea] text-[#667eea] hover:bg-gray-100"
+                              className="flex-1 h-8 text-[calc(11px*var(--fs))] border-[#667eea] text-[#667eea] hover:bg-gray-100"
                               onClick={() => handleGetDirections(store)}
                             >
                               <Navigation className="w-3 h-3 mr-1" />
@@ -1103,7 +1103,7 @@ export default function MoneyExchangePage() {
                             </Button>
                             <Button
                               size="sm"
-                              className="flex-1 h-8 text-[11px] bg-[#667eea] hover:bg-[#5568d3]"
+                              className="flex-1 h-8 text-[calc(11px*var(--fs))] bg-[#667eea] hover:bg-[#5568d3]"
                               onClick={() => handleShowOnMap(index)}
                             >
                               <Map className="w-3 h-3 mr-1" />
@@ -1113,7 +1113,7 @@ export default function MoneyExchangePage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="flex-1 h-8 text-[11px] border-gray-300 text-gray-700 hover:bg-gray-100"
+                                className="flex-1 h-8 text-[calc(11px*var(--fs))] border-gray-300 text-gray-700 hover:bg-gray-100"
                                 onClick={() => setExpandedStoreIndex(expandedStoreIndex === index ? null : index)}
                               >
                                 {expandedStoreIndex === index ? '▲ Less' : '▼ Details'}
@@ -1125,7 +1125,7 @@ export default function MoneyExchangePage() {
                             <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-200">
                               {store.hours && store.hours.length > 0 && (
                                 <>
-                                  <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">🕐 Weekly Hours</div>
+                                  <div className="text-[calc(10px*var(--fs))] font-bold text-gray-500 uppercase tracking-wide mb-1">🕐 Weekly Hours</div>
                                   {store.hours.map((h, di) => {
                                     const today = new Date().getDay();
                                     const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -1135,7 +1135,7 @@ export default function MoneyExchangePage() {
                                     const dayName = parts[0];
                                     const hrs = parts.slice(1).join(':').trim();
                                     return (
-                                      <div key={di} className={`flex justify-between text-[11px] py-0.5 ${isToday ? 'font-bold text-[#667eea]' : 'text-gray-700'}`}>
+                                      <div key={di} className={`flex justify-between text-[calc(11px*var(--fs))] py-0.5 ${isToday ? 'font-bold text-[#667eea]' : 'text-gray-700'}`}>
                                         <span>{dayName}{isToday && ' (Today)'}</span>
                                         <span className={hrs.toLowerCase() === 'closed' ? 'text-red-600' : ''}>{hrs}</span>
                                       </div>
@@ -1148,7 +1148,7 @@ export default function MoneyExchangePage() {
                                   href={store.website}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className={`block text-[11px] text-[#667eea] font-semibold ${store.hours && store.hours.length > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}`}
+                                  className={`block text-[calc(11px*var(--fs))] text-[#667eea] font-semibold ${store.hours && store.hours.length > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}`}
                                 >
                                   🌐 Visit Website
                                 </a>
@@ -1171,7 +1171,8 @@ export default function MoneyExchangePage() {
                 {/* Exit Map Button */}
                 <button
                   onClick={() => setViewMode('list')}
-                  className="absolute top-4 right-4 z-[1000] w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+                  className="fixed right-4 z-[1200] w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+                  style={{ top: 'calc(50px + env(safe-area-inset-top) + 10px)' }}
                   aria-label="Close Map"
                 >
                   <X className="w-5 h-5 text-gray-700" />
@@ -1211,19 +1212,19 @@ export default function MoneyExchangePage() {
                               <button
                                 onClick={(e)=>{e.stopPropagation();setUserPinExpanded(false);}}
                                 aria-label="Collapse"
-                                style={{position:"absolute",top:"0",right:"0",width:"22px",height:"22px",borderRadius:"50%",background:"rgba(0,0,0,0.08)",border:"none",cursor:"pointer",color:"#1A2332",fontSize:"10px",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}
+                                style={{position:"absolute",top:"0",right:"0",width:"22px",height:"22px",borderRadius:"50%",background:"rgba(0,0,0,0.08)",border:"none",cursor:"pointer",color:"#1A2332",fontSize:"calc(10px*var(--fs))",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}
                               >⌃</button>
-                              <div style={{fontWeight:800,color:"#1A2332",fontSize:"12px",marginBottom:"2px",paddingRight:"22px"}}>📍 You are here</div>
-                              <div style={{fontWeight:700,color:"#4285F4",fontSize:"11px",marginBottom:"2px"}}>{activeLocation.mode === 'navigate' ? 'Selected location' : 'Current location'}</div>
-                              <div style={{color:"#64748B",fontSize:"10px",lineHeight:1.3}}>{getLocationLabel(activeLocation) || ''}</div>
+                              <div style={{fontWeight:800,color:"#1A2332",fontSize:"calc(12px*var(--fs))",marginBottom:"2px",paddingRight:"22px"}}>📍 You are here</div>
+                              <div style={{fontWeight:700,color:"#4285F4",fontSize:"calc(11px*var(--fs))",marginBottom:"2px"}}>{activeLocation.mode === 'navigate' ? 'Selected location' : 'Current location'}</div>
+                              <div style={{color:"#64748B",fontSize:"calc(10px*var(--fs))",lineHeight:1.3}}>{getLocationLabel(activeLocation) || ''}</div>
                             </div>
                           ) : (
                             <div
                               onClick={(e)=>{e.stopPropagation();setUserPinExpanded(true);}}
                               style={{fontFamily:"-apple-system,sans-serif",padding:"3px 7px",display:"flex",alignItems:"center",gap:"6px",cursor:"pointer"}}
                             >
-                              <span style={{fontWeight:700,color:"#1A2332",fontSize:"11px"}}>📍 You are here</span>
-                              <span style={{color:"#64748B",fontSize:"10px",fontWeight:700}}>⌄</span>
+                              <span style={{fontWeight:700,color:"#1A2332",fontSize:"calc(11px*var(--fs))"}}>📍 You are here</span>
+                              <span style={{color:"#64748B",fontSize:"calc(10px*var(--fs))",fontWeight:700}}>⌄</span>
                             </div>
                           )}
                         </Tooltip>
@@ -1243,7 +1244,7 @@ export default function MoneyExchangePage() {
                       >
                         <Popup>
                           <div className="p-2" style={{ minWidth: '200px' }}>
-                            <h4 className="font-bold text-sm mb-1">{store.name}</h4>
+                            <h4 className="font-bold mb-1" style={{ fontSize: 'calc(14px*var(--fs))' }}>{store.name}</h4>
                             {store.exchange_rate && (
                               <p className="text-xs font-semibold text-blue-600 mb-1">
                                 1 {fromCurrency} = {store.exchange_rate.toFixed(4)} {toCurrency}
@@ -1254,12 +1255,12 @@ export default function MoneyExchangePage() {
                               📍 {formatDistance(store.distance_miles)} away
                             </p>
                             {store.phone && (
-                              <p className="text-xs text-gray-600 mb-2">
+                              <p className="text-gray-600 mb-2" style={{ fontSize: 'calc(12px*var(--fs))' }}>
                                 📞 {store.phone}
                               </p>
                             )}
                             {store.is_open !== undefined && (
-                              <p className={`text-xs font-semibold mb-2 ${store.is_open ? 'text-green-600' : 'text-red-600'}`}>
+                              <p className={`font-semibold mb-2 ${store.is_open ? 'text-green-600' : 'text-red-600'}`} style={{ fontSize: 'calc(12px*var(--fs))' }}>
                                 {store.is_open ? '● Open Now' : '● Closed'}
                                 {store.hours_today && (
                                   <span className="text-gray-600 font-normal ml-1">

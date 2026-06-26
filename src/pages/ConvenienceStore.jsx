@@ -19,7 +19,7 @@ import { useLocation } from '@/components/location/LocationContext';
 import LocationModePicker from '@/components/location/LocationModePicker';
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from '@/components/location/locationLabel';
 import { useDistanceUnit } from '@/components/location/distanceUnit';
-import DistanceUnitToggle from '@/components/location/DistanceUnitToggle';
+import RadiusRow from '@/components/location/RadiusRow';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import RefreshButton from '@/components/RefreshButton';
@@ -253,7 +253,7 @@ function PhotoGallery({ photos, storeName, onClose }) {
           border: 'none',
           background: 'rgba(255,255,255,0.2)',
           color: '#fff',
-          fontSize: '24px',
+          fontSize: "calc(24px*var(--fs))",
           cursor: 'pointer',
           zIndex: 10
         }}
@@ -289,7 +289,7 @@ function PhotoGallery({ photos, storeName, onClose }) {
               border: 'none',
               background: 'rgba(255,255,255,0.2)',
               color: '#fff',
-              fontSize: '22px',
+              fontSize: "calc(22px*var(--fs))",
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -323,7 +323,7 @@ function PhotoGallery({ photos, storeName, onClose }) {
               border: 'none',
               background: 'rgba(255,255,255,0.2)',
               color: '#fff',
-              fontSize: '22px',
+              fontSize: "calc(22px*var(--fs))",
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -368,7 +368,7 @@ function PhotoGallery({ photos, storeName, onClose }) {
       <p style={{
         color: 'rgba(255,255,255,0.7)',
         marginTop: '12px',
-        fontSize: '14px'
+        fontSize: "calc(14px*var(--fs))"
       }}>
         {currentIndex + 1} / {photos.length}
       </p>
@@ -490,7 +490,7 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
                 background: '#fff',
                 padding: '6px 12px',
                 borderRadius: '20px',
-                fontSize: '13px',
+                fontSize: "calc(13px*var(--fs))",
                 fontWeight: '600',
                 display: 'flex',
                 alignItems: 'center',
@@ -512,7 +512,7 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
                 color: '#fff',
                 padding: '4px 10px',
                 borderRadius: '12px',
-                fontSize: '12px',
+                fontSize: "calc(12px*var(--fs))",
                 fontWeight: '500'
               }}>
                 📷 {currentPhotoIndex + 1}/{photos.length}
@@ -563,7 +563,7 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '24px',
+                fontSize: "calc(24px*var(--fs))",
                 flexShrink: 0
               }}>
                 {chainInfo.icon}
@@ -572,7 +572,7 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
             
             <div style={{ flex: 1, minWidth: 0 }}>
               <h3 style={{
-                fontSize: '17px',
+                fontSize: "calc(17px*var(--fs))",
                 fontWeight: '600',
                 color: COLORS.text,
                 margin: 0,
@@ -584,7 +584,7 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
 
               {/* Address - Always visible */}
               <p style={{
-                fontSize: '13px',
+                fontSize: "calc(13px*var(--fs))",
                 color: COLORS.textLight,
                 margin: '4px 0 0',
                 display: 'flex',
@@ -604,7 +604,7 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
             <div style={{
               padding: '4px 10px',
               borderRadius: '12px',
-              fontSize: '12px',
+              fontSize: "calc(12px*var(--fs))",
               fontWeight: '600',
               background: store.isOpen ? '#DCFCE7' : store.isOpen === false ? '#FEE2E2' : '#F1F5F9',
               color: store.isOpen ? '#166534' : store.isOpen === false ? '#991B1B' : '#64748B',
@@ -625,12 +625,12 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
             {/* Rating */}
             {store.rating && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ color: '#FBBF24', fontSize: '14px' }}>★</span>
-                <span style={{ fontSize: '14px', fontWeight: '600', color: COLORS.text }}>
+                <span style={{ color: '#FBBF24', fontSize: "calc(14px*var(--fs))" }}>★</span>
+                <span style={{ fontSize: "calc(14px*var(--fs))", fontWeight: '600', color: COLORS.text }}>
                   {store.rating.toFixed(1)}
                 </span>
                 {store.reviewCount > 0 && (
-                  <span style={{ fontSize: '13px', color: COLORS.textLight }}>
+                  <span style={{ fontSize: "calc(13px*var(--fs))", color: COLORS.textLight }}>
                     ({store.reviewCount})
                   </span>
                 )}
@@ -646,7 +646,7 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
                   display: 'flex',
                   alignItems: 'center',
                   gap: '4px',
-                  fontSize: '13px',
+                  fontSize: "calc(13px*var(--fs))",
                   color: COLORS.secondary,
                   textDecoration: 'none',
                   fontWeight: '500'
@@ -666,7 +666,7 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
               padding: '6px 10px',
               background: store.is24Hours ? '#E3F2FD' : store.isOpen ? '#F0FDF4' : '#FEF2F2',
               borderRadius: '8px',
-              fontSize: '12px',
+              fontSize: "calc(12px*var(--fs))",
               marginBottom: '10px'
             }}>
               <span style={{ fontWeight: '700', color: store.is24Hours ? '#1565C0' : store.isOpen ? '#15803D' : '#B91C1C' }}>🕐 Today</span>
@@ -727,9 +727,9 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
 
         {/* Action Buttons Row — always visible, outside clickable area */}
         <div style={{ display:'flex', gap:'8px', padding:'0 16px 12px' }} onClick={e=>e.stopPropagation()}>
-          <button onClick={()=>setShowDirs(true)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', padding:'10px', borderRadius:'10px', border:'none', background:COLORS.primary, color:'#fff', fontWeight:'700', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>🧭 Directions</button>
-          {store.lat&&store.lng&&<button onClick={()=>onShowOnMap?.(index)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'5px', padding:'10px', borderRadius:'10px', border:'none', background:'#EDE9FE', color:'#7C3AED', fontWeight:'700', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>📍 Map</button>}
-          <button onClick={()=>setShowHours(h=>!h)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'10px', borderRadius:'10px', border:'none', background:showHours?COLORS.dark:'#F1F5F9', color:showHours?'#fff':COLORS.dark, fontWeight:'700', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>{showHours?'▲ Less':'▼ Details'}</button>
+          <button onClick={()=>setShowDirs(true)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', padding:'10px', borderRadius:'10px', border:'none', background:COLORS.primary, color:'#fff', fontWeight:'700', fontSize:"calc(13px*var(--fs))", cursor:'pointer', fontFamily:'inherit' }}>🧭 Directions</button>
+          {store.lat&&store.lng&&<button onClick={()=>onShowOnMap?.(index)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'5px', padding:'10px', borderRadius:'10px', border:'none', background:'#EDE9FE', color:'#7C3AED', fontWeight:'700', fontSize:"calc(13px*var(--fs))", cursor:'pointer', fontFamily:'inherit' }}>📍 Map</button>}
+          <button onClick={()=>setShowHours(h=>!h)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'10px', borderRadius:'10px', border:'none', background:showHours?COLORS.dark:'#F1F5F9', color:showHours?'#fff':COLORS.dark, fontWeight:'700', fontSize:"calc(13px*var(--fs))", cursor:'pointer', fontFamily:'inherit' }}>{showHours?'▲ Less':'▼ Details'}</button>
         </div>
 
         {/* Inline Details (toggle): website + weekly hours */}
@@ -738,12 +738,12 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
             <div style={{ background:'#F8FAFC', borderRadius:'10px', padding:'12px', border:`1px solid ${COLORS.border}` }}>
               {store.hours?.length>0&&(
                 <>
-                  <div style={{ fontSize:'11px', color:COLORS.textLight, fontWeight:'700', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.5px' }}>🕐 Weekly Hours</div>
-                  {store.hours.map((h,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(d=>h.toLowerCase().startsWith(d.toLowerCase()));const isT=di===today;const pts=h.split(':');const dn2=pts[0];const hrs=pts.slice(1).join(':').trim();return(<div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:'13px',color:isT?COLORS.primary:COLORS.text,fontWeight:isT?'700':'400',padding:isT?'6px 8px':'4px 0',background:isT?`${COLORS.primary}10`:'transparent',borderRadius:isT?'6px':'0',borderLeft:isT?`3px solid ${COLORS.primary}`:'3px solid transparent'}}><span>{dn2}{isT&&<span style={{fontSize:'10px',color:COLORS.primary,marginLeft:'5px',fontWeight:'800'}}>TODAY</span>}</span><span style={{color:hrs.toLowerCase()==='closed'?COLORS.error:isT?COLORS.primary:COLORS.textLight}}>{hrs}</span></div>);})}
+                  <div style={{ fontSize:"calc(11px*var(--fs))", color:COLORS.textLight, fontWeight:'700', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.5px' }}>🕐 Weekly Hours</div>
+                  {store.hours.map((h,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(d=>h.toLowerCase().startsWith(d.toLowerCase()));const isT=di===today;const pts=h.split(':');const dn2=pts[0];const hrs=pts.slice(1).join(':').trim();return(<div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:"calc(13px*var(--fs))",color:isT?COLORS.primary:COLORS.text,fontWeight:isT?'700':'400',padding:isT?'6px 8px':'4px 0',background:isT?`${COLORS.primary}10`:'transparent',borderRadius:isT?'6px':'0',borderLeft:isT?`3px solid ${COLORS.primary}`:'3px solid transparent'}}><span>{dn2}{isT&&<span style={{fontSize:"calc(10px*var(--fs))",color:COLORS.primary,marginLeft:'5px',fontWeight:'800'}}>TODAY</span>}</span><span style={{color:hrs.toLowerCase()==='closed'?COLORS.error:isT?COLORS.primary:COLORS.textLight}}>{hrs}</span></div>);})}
                 </>
               )}
               {store.website&&(
-                <a href={store.website} target="_blank" rel="noopener noreferrer" style={{ display:'flex', alignItems:'center', gap:'8px', marginTop: store.hours?.length>0 ? '10px' : '0', padding:'8px 10px', background:'#fff', border:`1px solid ${COLORS.border}`, borderRadius:'8px', textDecoration:'none', color:COLORS.primary, fontSize:'13px', fontWeight:'600' }}>🌐 Visit Website</a>
+                <a href={store.website} target="_blank" rel="noopener noreferrer" style={{ display:'flex', alignItems:'center', gap:'8px', marginTop: store.hours?.length>0 ? '10px' : '0', padding:'8px 10px', background:'#fff', border:`1px solid ${COLORS.border}`, borderRadius:'8px', textDecoration:'none', color:COLORS.primary, fontSize:"calc(13px*var(--fs))", fontWeight:'600' }}>🌐 Visit Website</a>
               )}
             </div>
           </div>
@@ -760,7 +760,7 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
             {store.hours && store.hours.length > 0 && (
               <div style={{ marginBottom: '16px' }}>
                 <h4 style={{
-                  fontSize: '14px',
+                  fontSize: "calc(14px*var(--fs))",
                   fontWeight: '600',
                   color: COLORS.text,
                   marginBottom: '8px',
@@ -770,7 +770,7 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
                 }}>
                   🕐 Hours
                 </h4>
-                <div style={{ fontSize: '13px', color: COLORS.textLight, lineHeight: 1.6 }}>
+                <div style={{ fontSize: "calc(13px*var(--fs))", color: COLORS.textLight, lineHeight: 1.6 }}>
                   {store.hours.slice(0, 4).map((h, i) => (
                     <div key={i}>{h}</div>
                   ))}
@@ -784,7 +784,7 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
                 background: '#FEF3C7',
                 padding: '10px 12px',
                 borderRadius: '10px',
-                fontSize: '13px',
+                fontSize: "calc(13px*var(--fs))",
                 color: '#92400E',
                 marginBottom: '16px',
                 display: 'flex',
@@ -798,9 +798,9 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
             
             {/* Action Buttons */}
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={()=>setShowDirs(true)} style={{ flex:1, background:COLORS.primary, color:'#fff', padding:'12px', borderRadius:'10px', border:'none', fontSize:'14px', fontWeight:'600', cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:'6px' }}>🧭 Directions</button>
+              <button onClick={()=>setShowDirs(true)} style={{ flex:1, background:COLORS.primary, color:'#fff', padding:'12px', borderRadius:'10px', border:'none', fontSize:"calc(14px*var(--fs))", fontWeight:'600', cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:'6px' }}>🧭 Directions</button>
               {store.phone && (
-                <a href={`tel:${store.phone}`} style={{ flex:1, background:COLORS.secondary, color:'#fff', padding:'12px', borderRadius:'10px', textAlign:'center', textDecoration:'none', fontSize:'14px', fontWeight:'600', display:'flex', alignItems:'center', justifyContent:'center', gap:'6px' }}>📞 Call</a>
+                <a href={`tel:${store.phone}`} style={{ flex:1, background:COLORS.secondary, color:'#fff', padding:'12px', borderRadius:'10px', textAlign:'center', textDecoration:'none', fontSize:"calc(14px*var(--fs))", fontWeight:'600', display:'flex', alignItems:'center', justifyContent:'center', gap:'6px' }}>📞 Call</a>
               )}
             </div>
           </div>
@@ -814,7 +814,7 @@ function StoreCard({ store: rawStore, onSelect, isExpanded, userLat, userLng, on
 const featureBadgeStyle = {
   background: '#F1F5F9',
   color: '#475569',
-  fontSize: '12px',
+  fontSize: "calc(12px*var(--fs))",
   padding: '4px 10px',
   borderRadius: '8px',
   fontWeight: '500'
@@ -823,7 +823,7 @@ const featureBadgeStyle = {
 const paymentBadgeStyle = (bg, color) => ({
   background: bg,
   color: color,
-  fontSize: '12px',
+  fontSize: "calc(12px*var(--fs))",
   padding: '4px 10px',
   borderRadius: '8px',
   fontWeight: '500',
@@ -846,7 +846,7 @@ function FilterChip({ filter, isActive, onToggle }) {
         border: isActive ? 'none' : `1px solid ${COLORS.border}`,
         padding: '10px 16px',
         borderRadius: '24px',
-        fontSize: '14px',
+        fontSize: "calc(14px*var(--fs))",
         fontWeight: '500',
         whiteSpace: 'nowrap',
         cursor: 'pointer',
@@ -881,13 +881,13 @@ function buildStoreMapPopup(store, index, fmt = formatDistanceMi) {
   return `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:260px;position:relative;">
       <div style="padding:12px;padding-top:14px;">
-        <div onclick="window.viewStoreDetails&&window.viewStoreDetails(${index})" style="font-weight:700;font-size:15px;color:#1A2332;margin-bottom:6px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding-right:26px;">${name}</div>
+        <div onclick="window.viewStoreDetails&&window.viewStoreDetails(${index})" style="font-weight:700;font-size:calc(15px*var(--fs));color:#1A2332;margin-bottom:6px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding-right:26px;">${name}</div>
         <div style="font-size:12px;color:#64748B;margin-bottom:6px;padding:6px 8px;background:#F8FAFC;border-radius:6px;">📍 ${address}${dist ? ` · ${dist}` : ''}</div>
-        <div style="font-size:12px;margin-bottom:6px;padding:6px 10px;border-radius:6px;background:${statusBg};">
+        <div style="font-size:calc(12px*var(--fs));margin-bottom:6px;padding:6px 10px;border-radius:6px;background:${statusBg};">
           <span style="font-weight:700;color:${statusColor};">${statusLabel}</span>
           ${todayHrs && !is24 ? `<span style="color:#64748B;"> · ${todayHrs}</span>` : ''}
         </div>
-        ${phone ? `<a href="tel:${phone}" style="display:flex;align-items:center;gap:8px;margin:8px 0;padding:7px 10px;background:#E3F2FD;border-radius:6px;text-decoration:none;color:#1565C0;font-size:12px;"><span>📞</span><span style="font-weight:600;">${phone}</span></a>` : ''}
+        ${phone ? `<a href="tel:${phone}" style="display:flex;align-items:center;gap:8px;margin:8px 0;padding:7px 10px;background:#E3F2FD;border-radius:6px;text-decoration:none;color:#1565C0;font-size:calc(12px*var(--fs));"><span>📞</span><span style="font-weight:600;">${phone}</span></a>` : ''}
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button onclick="window.openDirectionsFromStoreMap&&window.openDirectionsFromStoreMap(${index})" style="flex:1;padding:9px;border:none;border-radius:8px;background:#1E3A5F;color:#fff;font-weight:600;font-size:12px;cursor:pointer;">🧭 Directions</button>
           <button onclick="window.viewStoreDetails&&window.viewStoreDetails(${index})" style="flex:1;padding:9px;border:none;border-radius:8px;background:#F1F5F9;color:#1A2332;font-weight:600;font-size:12px;cursor:pointer;">📋 Details</button>
@@ -1051,8 +1051,8 @@ export default function ConvenienceStorePage() {
       const userMode = activeLocation?.mode === 'navigate' ? 'Selected location' : 'Current location';
       const userLabel = locLabel || '';
       const userTooltipHtml = userPinExpanded
-        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsCSUserPin&&window._gsCSUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:12px;margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:11px;margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:10px;line-height:1.3;">${userLabel}</div></div>`
-        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsCSUserPin&&window._gsCSUserPin()"><span style="font-weight:700;color:#1A2332;font-size:11px;">📍 You are here</span><span style="color:#64748B;font-size:10px;font-weight:700;">⌄</span></div>`;
+        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsCSUserPin&&window._gsCSUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:calc(10px*var(--fs));font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:calc(12px*var(--fs));margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:calc(11px*var(--fs));margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:calc(10px*var(--fs));line-height:1.3;">${userLabel}</div></div>`
+        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsCSUserPin&&window._gsCSUserPin()"><span style="font-weight:700;color:#1A2332;font-size:calc(11px*var(--fs));">📍 You are here</span><span style="color:#64748B;font-size:calc(10px*var(--fs));font-weight:700;">⌄</span></div>`;
       window.L.marker([lat, lng], {
         icon: window.L.divIcon({
           html: '<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',
@@ -1125,7 +1125,7 @@ export default function ConvenienceStorePage() {
           <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]" style={{ background: CAT.convenience.bg, color: CAT.convenience.ink }}>
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]" style={{ background: CAT.convenience.bg, color: CAT.convenience.ink }}>
             <Store size={13} color={CAT.convenience.ink} strokeWidth={2} />
             Convenience Stores
           </div>
@@ -1138,17 +1138,17 @@ export default function ConvenienceStorePage() {
         <button onClick={() => setShowLocPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
           <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
           <div className="flex-1 min-w-0">
-            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>
+            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>
               {isCity ? '🏙️ City' : '📍 Location'}
             </div>
-            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
+            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
           </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{ background: CAT.convenience.bg, color: CAT.convenience.ink }}>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{ background: CAT.convenience.bg, color: CAT.convenience.ink }}>
             Change
           </span>
         </button>
         {isCity && (
-          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[12px] leading-snug flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
+          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[calc(12px*var(--fs))] leading-snug flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
             <span>💡</span>
             <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
           </div>
@@ -1157,15 +1157,7 @@ export default function ConvenienceStorePage() {
 
       {/* RADIUS */}
       <div className="px-4 max-w-md mx-auto pb-2">
-        <div className="flex items-center justify-between mb-2">
-          <div className="font-mono" style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.14em', color: '#6B7280', textTransform: 'uppercase' }}>📏 Radius</div>
-          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" />
-        </div>
-        <div className="grid grid-cols-4 gap-1.5 rounded-[12px] p-1" style={{ background: '#F7F4EC' }}>
-          {[5, 10, 15, 25].map(r => (
-            <button key={r} onClick={() => setSearchRadius(r)} className="font-sans" style={{ padding: '10px 0', borderRadius: '9px', border: 'none', background: searchRadius === r ? CAT.convenience.ink : 'transparent', color: searchRadius === r ? '#fff' : '#475569', fontWeight: searchRadius === r ? '800' : '600', fontSize: '13px', cursor: 'pointer' }}>{r} mi</button>
-          ))}
-        </div>
+        <RadiusRow options={[5, 10, 15, 25]} value={searchRadius} onChange={setSearchRadius} ink={CAT.convenience.ink} unit={unit} setUnit={setUnit} />
       </div>
 
       {/* Quick Filters */}
@@ -1202,7 +1194,7 @@ export default function ConvenienceStorePage() {
         {/* No location set yet */}
         {!location && !loading && (
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📍</div>
+            <div style={{ fontSize: "calc(48px*var(--fs))", marginBottom: '16px' }}>📍</div>
             <p style={{ color: COLORS.textLight, marginBottom: '16px' }}>
               Pick a location to find nearby convenience stores.
             </p>
@@ -1214,7 +1206,7 @@ export default function ConvenienceStorePage() {
                 border: 'none',
                 padding: '12px 24px',
                 borderRadius: '10px',
-                fontSize: '14px',
+                fontSize: "calc(14px*var(--fs))",
                 fontWeight: '600',
                 cursor: 'pointer'
               }}
@@ -1241,7 +1233,7 @@ export default function ConvenienceStorePage() {
               animation: 'spin 1s linear infinite'
             }} />
             <style>{`@keyframes spin { to { transform: rotate(360deg); } } .gs-popup .leaflet-popup-content-wrapper{border-radius:12px;padding:0;overflow:hidden}.gs-popup .leaflet-popup-content{margin:0}`}</style>
-            <p style={{ fontSize: '15px' }}>Finding stores nearby...</p>
+            <p style={{ fontSize: "calc(15px*var(--fs))" }}>Finding stores nearby...</p>
           </div>
         )}
         
@@ -1251,7 +1243,7 @@ export default function ConvenienceStorePage() {
             textAlign: 'center',
             padding: '60px 20px'
           }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>😕</div>
+            <div style={{ fontSize: "calc(48px*var(--fs))", marginBottom: '16px' }}>😕</div>
             <p style={{ color: COLORS.error, marginBottom: '16px' }}>{error}</p>
             <button
               onClick={fetchStores}
@@ -1261,7 +1253,7 @@ export default function ConvenienceStorePage() {
                 border: 'none',
                 padding: '12px 24px',
                 borderRadius: '10px',
-                fontSize: '14px',
+                fontSize: "calc(14px*var(--fs))",
                 fontWeight: '600',
                 cursor: 'pointer'
               }}
@@ -1282,7 +1274,7 @@ export default function ConvenienceStorePage() {
             flexWrap: 'wrap'
           }}>
             <p style={{
-              fontSize: '14px',
+              fontSize: "calc(14px*var(--fs))",
               color: COLORS.textLight,
               margin: 0,
               display: 'flex',
@@ -1312,7 +1304,7 @@ export default function ConvenienceStorePage() {
                     background: viewMode === v ? COLORS.primary : 'transparent',
                     color: viewMode === v ? '#fff' : COLORS.textLight,
                     fontWeight: '700',
-                    fontSize: '12px',
+                    fontSize: "calc(12px*var(--fs))",
                     cursor: 'pointer',
                     fontFamily: 'inherit'
                   }}
@@ -1347,10 +1339,10 @@ export default function ConvenienceStorePage() {
             <button
               onClick={() => setViewMode('list')}
               style={{
-                position: 'absolute',
-                top: '16px',
-                right: '16px',
-                zIndex: 1000,
+                position: 'fixed',
+                top: 'calc(50px + env(safe-area-inset-top) + 10px)',
+                right: '14px',
+                zIndex: 1200,
                 background: '#fff',
                 borderRadius: '50%',
                 width: '40px',
@@ -1361,7 +1353,7 @@ export default function ConvenienceStorePage() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                fontSize: '20px',
+                fontSize: "calc(20px*var(--fs))",
                 color: COLORS.dark
               }}
             >
@@ -1392,7 +1384,7 @@ export default function ConvenienceStorePage() {
             textAlign: 'center',
             padding: '60px 20px'
           }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
+            <div style={{ fontSize: "calc(48px*var(--fs))", marginBottom: '16px' }}>🔍</div>
             <p style={{ color: COLORS.textLight, marginBottom: '16px' }}>
               No stores found matching your filters
             </p>
@@ -1404,7 +1396,7 @@ export default function ConvenienceStorePage() {
                 border: 'none',
                 padding: '12px 24px',
                 borderRadius: '10px',
-                fontSize: '14px',
+                fontSize: "calc(14px*var(--fs))",
                 fontWeight: '600',
                 cursor: 'pointer'
               }}

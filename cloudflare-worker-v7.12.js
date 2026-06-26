@@ -4291,6 +4291,97 @@ async function handlePriceScan(request, env) {
 }
 
 // ============================================================================
+// DESCRIBE ITEM — Smart Price Scanner vision pass.
+// ============================================================================
+// Given a photo of a retail/product item, return a SHORT generic item
+// description (3–8 words, no brand names unless visibly printed, including
+// material/type/category) that the frontend feeds into /analyze-price for a
+// price comparison. Mirrors handlePriceScan's auth / endpoint / CORS / parse
+// pattern exactly; only the prompt and max_tokens differ.
+// ============================================================================
+async function handleDescribeItem(request, env) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured', itemDescription: '' }, 500);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (_e) {
+    return jsonResponse({ error: 'Invalid JSON body', itemDescription: '' }, 400);
+  }
+
+  const imageBase64 = body.image;
+  if (!imageBase64 || typeof imageBase64 !== 'string') {
+    return jsonResponse({ error: 'image (base64 string) is required', itemDescription: '' }, 400);
+  }
+  const mediaType = body.mediaType || 'image/jpeg';
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 150,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: mediaType,
+                  data: imageBase64
+                }
+              },
+              {
+                type: 'text',
+                text: 'Identify the main retail/product item in this photo for a price comparison. Return ONLY a JSON object: {"itemDescription": "<short generic description, 3-8 words, no brand names unless visibly printed, include material/type/category>"}. Examples: "women\'s sleeveless A-line cotton dress", "stainless steel water bottle 750ml". Respond with JSON only, no prose, no markdown fences.'
+              }
+            ]
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      return jsonResponse({ error: `Anthropic API error ${response.status}`, details: errText, itemDescription: '' }, 200);
+    }
+
+    const data = await response.json();
+    const textBlock = (data.content || []).find(b => b.type === 'text');
+    const raw = textBlock?.text || '';
+
+    let parsed = { itemDescription: '' };
+    try {
+      // Strip any accidental markdown fences, then slice the first { to the
+      // last } so leading/trailing prose doesn't break JSON.parse.
+      let cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+      const first = cleaned.indexOf('{');
+      const last = cleaned.lastIndexOf('}');
+      if (first !== -1 && last !== -1 && last > first) {
+        cleaned = cleaned.slice(first, last + 1);
+      }
+      parsed = JSON.parse(cleaned);
+    } catch (_e) {
+      return jsonResponse({ error: 'Model returned non-JSON', raw, itemDescription: '' }, 200);
+    }
+
+    const itemDescription = typeof parsed.itemDescription === 'string' ? parsed.itemDescription.trim() : '';
+    return jsonResponse({ itemDescription, usage: data.usage || null });
+  } catch (error) {
+    return jsonResponse({ error: error.message, itemDescription: '' }, 200);
+  }
+}
+
+// ============================================================================
 // ANALYZE PRICE — Price Scanner Phase P2.
 // ============================================================================
 // Given an OCR'd item description + a price + the country where the user is
@@ -4452,7 +4543,11 @@ Produce the Price Analysis JSON per the rules above. Remember: price RANGES only
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        // Sonnet (not Haiku) for the price analysis — more precise verdicts and
+        // similar-item estimates. Matches scan-prices + describe-item. Results
+        // are cached per (item + currency + price bucket + country), so the
+        // higher per-call cost is paid once per product type.
+        model: 'claude-sonnet-4-6',
         max_tokens: 1200,
         system: buildAnalyzePricePrompt(),
         messages: [{ role: 'user', content: userContent }],
@@ -6984,18 +7079,25 @@ async function handleActivities(request, env, ctx) {
     const d1Marquees = d1Mapped.filter(a => a.props?.isBucketList);
     const d1Regulars = d1Mapped.filter(a => !a.props?.isBucketList);
 
+    // Prefer the LIVE Google-Places stage for the marquee tiers. It carries real
+    // photos, street address, phone, hours and website (built by processPlaceH);
+    // the D1 seed rows carry none of those, so a D1-only tier renders as emoji
+    // placeholders with "Phone not available". stageB is already fetched on every
+    // call (no extra Google cost), so we use it and fall back to the D1 cache
+    // ONLY when the live stage returned nothing for the tiers.
+    const stageBNat = stageB.nationalIcons || [];
+    const stageBReg = stageB.regionalGems || [];
     let nationalIcons;
     let regionalGems;
-    if (d1Mapped.length >= 8) {
+    if (stageBNat.length > 0 || stageBReg.length > 0) {
+      nationalIcons = stageBNat.slice(0, 40);
+      regionalGems = stageBReg.slice(0, 30);
+    } else if (d1Mapped.length > 0) {
       nationalIcons = d1Marquees.slice(0, 40);
       regionalGems = d1Regulars.slice(0, 30);
-    } else if (d1Mapped.length > 0) {
-      const stageBIds = new Set(d1Mapped.map(a => a.id));
-      nationalIcons = [...d1Marquees, ...stageB.nationalIcons.filter(a => !stageBIds.has(a.id))].slice(0, 40);
-      regionalGems = [...d1Regulars, ...stageB.regionalGems.filter(a => !stageBIds.has(a.id))].slice(0, 30);
     } else {
-      nationalIcons = stageB.nationalIcons;
-      regionalGems = stageB.regionalGems;
+      nationalIcons = stageBNat;
+      regionalGems = stageBReg;
     }
 
     // Deduplicate nearby against Tier 1 & 2 (icons get priority)
@@ -7471,6 +7573,8 @@ const DISH_MAP = [
   { pattern: /\bsushi\b/, tier1: ["sushi_restaurant"], tier2: ["japanese_restaurant"], label: "sushi", nameKeywords: ["sushi", "sashimi", "maki", "nigiri", "omakase"] },
   { pattern: /\bramen\b/, tier1: ["ramen_restaurant"], tier2: ["japanese_restaurant"], label: "ramen", nameKeywords: ["ramen", "ramenya", "jinya", "daikokuya", "tsujita", "tatsu"] },
   { pattern: /\budon\b/, tier1: ["japanese_restaurant"], tier2: ["noodle_restaurant"], label: "udon", nameKeywords: ["udon", "udonya", "marugame"] },
+  { pattern: /\bteriyaki\b/, tier1: ["japanese_restaurant"], tier2: ["asian_restaurant"], label: "teriyaki", nameKeywords: ["teriyaki", "teriyaki bowl", "teriyaki house", "yoshinoya", "waba grill", "teriyaki madness"] },
+  { pattern: /\bdonburi\b|\bgyudon\b|\bkatsudon\b|\boyakodon\b|\bchirashi\b/, tier1: ["japanese_restaurant"], tier2: ["asian_restaurant"], label: "donburi", nameKeywords: ["donburi", "gyudon", "katsudon", "oyakodon", "rice bowl", "yoshinoya"] },
   { pattern: /\btempura\b/, tier1: ["japanese_restaurant"], tier2: [], label: "tempura", nameKeywords: ["tempura"] },
   { pattern: /\bokonomiyaki\b/, tier1: ["japanese_restaurant"], tier2: [], label: "okonomiyaki", nameKeywords: ["okonomiyaki"] },
   { pattern: /\btonkatsu\b/, tier1: ["japanese_restaurant"], tier2: [], label: "tonkatsu", nameKeywords: ["tonkatsu", "katsu", "wakana"] },
@@ -7531,7 +7635,7 @@ const DISH_MAP = [
   { pattern: /\bpad\s*see\s*ew\b|\bpad\s*kra\s*pao\b/, tier1: ["thai_restaurant"], tier2: [], label: "Thai noodles", nameKeywords: ["pad see ew", "pad kra pao", "pad kee mao"] },
   { pattern: /\bsom\s*tam\b|\bpapaya\s*salad\b/, tier1: ["thai_restaurant"], tier2: [], label: "som tam", nameKeywords: ["som tam", "papaya salad"] },
   { pattern: /\btom\s*yum\b/, tier1: ["thai_restaurant"], tier2: [], label: "tom yum", nameKeywords: ["tom yum", "tom yum goong"] },
-  { pattern: /\bgreen\s*curry\b|\bred\s*curry\b|\bmassaman\b|\bkhao\s*soi\b/, tier1: ["thai_restaurant"], tier2: [], label: "Thai curry", nameKeywords: ["green curry", "red curry", "massaman", "khao soi", "thai curry"] },
+  { pattern: /\bthai\s*curry\b|\bgreen\s*curry\b|\bred\s*curry\b|\byellow\s*curry\b|\bpanang\b|\bmassaman\b|\bkhao\s*soi\b/, tier1: ["thai_restaurant"], tier2: [], label: "Thai curry", nameKeywords: ["thai curry", "green curry", "red curry", "yellow curry", "panang", "massaman", "khao soi"] },
   { pattern: /\bthai\s*iced\s*tea\b|\bthai\s*tea\b/, tier1: ["thai_restaurant"], tier2: [], label: "Thai tea", nameKeywords: ["thai tea", "thai iced tea", "cha yen"] },
   { pattern: /\bmango\s*sticky\s*rice\b/, tier1: ["thai_restaurant"], tier2: ["dessert_shop"], label: "mango sticky rice", nameKeywords: ["mango sticky rice", "khao niao mamuang"] },
   { pattern: /\blarb\b/, tier1: ["thai_restaurant"], tier2: [], label: "larb", nameKeywords: ["larb", "laap", "laab"] },
@@ -7580,6 +7684,7 @@ const DISH_MAP = [
   { pattern: /\bkebab\b|\bdoner\b/, tier1: ["middle_eastern_restaurant", "turkish_restaurant"], tier2: [], label: "kebab", nameKeywords: ["kebab", "doner", "shish kebab", "adana kebab", "kabob"] },
   { pattern: /\bfalafel\b/, tier1: ["middle_eastern_restaurant", "greek_restaurant"], tier2: ["mediterranean_restaurant"], label: "falafel", nameKeywords: ["falafel", "falafel king", "maoz"] },
   { pattern: /\bhummus\b/, tier1: ["middle_eastern_restaurant", "mediterranean_restaurant"], tier2: [], label: "hummus", nameKeywords: ["hummus", "hummus bar", "cava"] },
+  { pattern: /\bkofta\b|\bkefta\b|\bkafta\b/, tier1: ["middle_eastern_restaurant", "turkish_restaurant"], tier2: ["indian_restaurant", "mediterranean_restaurant"], label: "kofta", nameKeywords: ["kofta", "kefta", "kafta"] },
   { pattern: /\bshakshuka\b/, tier1: ["middle_eastern_restaurant", "israeli_restaurant"], tier2: ["mediterranean_restaurant", "brunch_restaurant"], label: "shakshuka", nameKeywords: ["shakshuka"] },
   { pattern: /\btabb?ouleh\b|\bbaba\s*ganoush\b|\bmezz?e\b/, tier1: ["middle_eastern_restaurant"], tier2: ["mediterranean_restaurant"], label: "mezze", nameKeywords: ["mezze", "meze", "tabbouleh", "baba ganoush"] },
   { pattern: /\bbaklava\b/, tier1: ["middle_eastern_restaurant", "turkish_restaurant", "dessert_shop"], tier2: ["pastry_shop", "bakery"], label: "baklava", nameKeywords: ["baklava"] },
@@ -7592,7 +7697,7 @@ const DISH_MAP = [
   { pattern: /\bborek\b|\bbörek\b/, tier1: ["turkish_restaurant", "bakery"], tier2: [], label: "b\xF6rek", nameKeywords: ["borek", "b\xF6rek"] },
   { pattern: /\bmeze\b|\bmezeler\b/, tier1: ["turkish_restaurant", "middle_eastern_restaurant"], tier2: ["mediterranean_restaurant"], label: "meze", nameKeywords: ["meze", "mezeler"] },
   // ── European ────────────────────────────────────────────────────────────────
-  { pattern: /\bpasta\b|\blasagna\b|\brigatoni\b|\bpenne\b|\bspaghetti\b|\bcarbonara\b|\bcacio\s*e\s*pepe\b/, tier1: ["italian_restaurant"], tier2: ["mediterranean_restaurant"], label: "pasta", nameKeywords: ["pasta", "spaghetti", "lasagna", "carbonara", "olive garden", "spaghetti factory", "buca di beppo", "maggiano", "sbarro", "noodles & company"] },
+  { pattern: /\bpasta\b|\blasagna\b|\brigatoni\b|\bpenne\b|\bspaghetti\b|\bcarbonara\b|\bcacio\s*e\s*pepe\b|\bfettuccine\b|\balfredo\b/, tier1: ["italian_restaurant"], tier2: ["mediterranean_restaurant"], label: "pasta", nameKeywords: ["pasta", "spaghetti", "lasagna", "carbonara", "fettuccine", "alfredo", "olive garden", "spaghetti factory", "buca di beppo", "maggiano", "sbarro", "noodles & company"] },
   { pattern: /\bneapolitan\s*pizza\b|\bnew\s*york\s*style\s*pizza\b|\bdeep\s*dish\b|\bpizza\b/, tier1: ["pizza_restaurant"], tier2: ["italian_restaurant"], label: "pizza", nameKeywords: ["pizza", "pizzeria", "blaze pizza", "mod pizza", "pizza hut", "domino", "papa john", "little caesars", "round table", "sbarro", "&pizza", "marco's"] },
   { pattern: /\barancini\b|\bsupplì\b|\bsuppli\b/, tier1: ["italian_restaurant"], tier2: [], label: "arancini", nameKeywords: ["arancini", "suppli"] },
   { pattern: /\baperitivo\b/, tier1: ["italian_restaurant", "wine_bar", "cafe"], tier2: ["bar"], label: "aperitivo", nameKeywords: ["aperitivo", "aperol", "spritz"] },
@@ -7701,7 +7806,7 @@ const DISH_MAP = [
   { pattern: /\bbreakfast\b/, tier1: ["breakfast_restaurant"], tier2: ["diner", "cafe"], label: "breakfast", nameKeywords: ["breakfast", "breakfast club", "breakfast republic", "first watch", "snooze"], mealTime: "breakfast", strict: true, strictPrimaryTypes: ["breakfast_restaurant", "brunch_restaurant", "diner"] },
   { pattern: /\beggs\s*benedict\b|\bbenedict\b/, tier1: ["brunch_restaurant", "breakfast_restaurant"], tier2: ["cafe", "diner"], label: "eggs benedict", nameKeywords: ["eggs benedict", "benedict", "egg slut", "eggslut"], mealTime: "brunch", strict: true, strictPrimaryTypes: ["brunch_restaurant", "breakfast_restaurant", "cafe", "diner"] },
   { pattern: /\bomelet(te)?\b|\bfrittata\b/, tier1: ["breakfast_restaurant", "brunch_restaurant"], tier2: ["diner", "cafe"], label: "omelette", nameKeywords: ["omelet", "omelette", "frittata"], mealTime: "breakfast", strict: true, strictPrimaryTypes: ["breakfast_restaurant", "brunch_restaurant", "diner", "cafe"] },
-  { pattern: /\bavocado\s*toast\b|\bacai\s*bowl\b|\baçaí\s*bowl\b/, tier1: ["brunch_restaurant", "cafe"], tier2: ["juice_bar", "vegan_restaurant"], label: "brunch bowl", nameKeywords: ["avocado toast", "acai bowl", "a\xE7a\xED bowl", "vitality bowls"], mealTime: "brunch", strict: true, strictPrimaryTypes: ["brunch_restaurant", "cafe", "juice_shop", "vegan_restaurant"] },
+  { pattern: /\bavocado\s*toast\b|\bacai\b|\baçaí\s*bowl\b/, tier1: ["brunch_restaurant", "cafe"], tier2: ["juice_bar", "vegan_restaurant"], label: "brunch bowl", nameKeywords: ["avocado toast", "acai bowl", "a\xE7a\xED bowl", "vitality bowls"], mealTime: "brunch", strict: true, strictPrimaryTypes: ["brunch_restaurant", "cafe", "juice_shop", "vegan_restaurant"] },
   { pattern: /\bfrench\s*toast\b/, tier1: ["breakfast_restaurant", "brunch_restaurant"], tier2: ["cafe", "diner"], label: "French toast", nameKeywords: ["french toast"], mealTime: "breakfast", strict: true, strictPrimaryTypes: ["breakfast_restaurant", "brunch_restaurant", "cafe", "diner"] },
   { pattern: /\bbreakfast\s*burrito\b/, tier1: ["mexican_restaurant", "breakfast_restaurant"], tier2: [], label: "breakfast burrito", nameKeywords: ["breakfast burrito"], mealTime: "breakfast", strict: true, strictPrimaryTypes: ["mexican_restaurant", "breakfast_restaurant"] },
   // ── Australian ────────────────────────────────────────────────────────────
@@ -7750,6 +7855,7 @@ const DISH_MAP = [
   { pattern: /\bice\s*cream\b|\bgelato\b|\bsorbet\b/, tier1: ["ice_cream_shop", "gelato_shop"], tier2: ["dessert_shop", "cafe"], label: "ice cream", nameKeywords: ["ice cream", "gelato", "sorbet", "baskin robbins", "ben & jerry", "cold stone", "salt & straw", "jeni's", "h\xE4agen-dazs", "dairy queen", "mcconnell", "rite aid", "handel's"] },
   { pattern: /\bcrepes?\b/, tier1: ["creperie", "french_restaurant"], tier2: ["dessert_shop", "cafe"], label: "crepes", nameKeywords: ["crepe", "crepes", "creperie"] },
   { pattern: /\bboba\b|\bbubble\s*tea\b/, tier1: ["bubble_tea_shop", "tea_house"], tier2: ["cafe"], label: "boba", nameKeywords: ["boba", "bubble tea", "tpumps", "7 leaves", "sharetea", "kung fu tea", "85c", "happy lemon", "tiger sugar", "yi fang", "coco fresh"] },
+  { pattern: /\bbakery\b|\bboulangerie\b|\bpatisserie\b/, tier1: ["bakery", "bakery_cafe"], tier2: ["pastry_shop", "cafe"], label: "bakery", nameKeywords: ["bakery", "boulangerie", "patisserie", "panaderia"] },
   // coffee: STRICT. Coffee/espresso/latte restricted to actual coffee
   // venues. Drops restaurants that happen to mention coffee in reviews.
   { pattern: /\bcoffee\b|\bespresso\b|\blatte\b/, tier1: ["coffee_shop", "cafe"], tier2: ["bakery", "bakery_cafe", "tea_house"], label: "coffee", nameKeywords: ["coffee", "espresso", "latte", "starbucks", "peet", "blue bottle", "dutch bros", "dunkin", "la colombe", "intelligentsia", "philz", "stumptown", "caribou", "tim hortons", "coffee bean", "verve"], strict: true, strictPrimaryTypes: ["coffee_shop", "cafe", "bakery", "bakery_cafe", "tea_house"] },
@@ -8557,6 +8663,36 @@ function parseSearchIntentInner(q) {
   }
   return { kind: "GENERAL" };
 }
+// Known restaurant chains — used ONLY to (a) stop a chain's brand name from
+// earning a top "specialist" tier just because it appears in a dish's
+// nameKeywords, and (b) demote chains BELOW independents within the same tier
+// when ranking. Nothing is ever excluded by this list (not a blacklist) — chains
+// still appear, just below authentic/specialist places. Lowercase substrings.
+const KNOWN_CHAINS = [
+  // pizza
+  "domino", "pizza hut", "papa john", "little caesars", "sbarro", "california pizza kitchen", "blaze pizza", "mod pizza", "papa murphy", "round table pizza", "marco's pizza", "jet's pizza",
+  // italian / pasta
+  "olive garden", "buca di beppo", "maggiano", "old spaghetti factory", "spaghetti factory", "fazoli", "carrabba", "macaroni grill", "noodles & company", "noodles and company",
+  // fried chicken / wings
+  "kfc", "popeyes", "chick-fil-a", "chick fil a", "raising cane", "zaxby", "bojangles", "church's chicken", "churchs chicken", "jollibee", "pollo campero", "el pollo loco", "wingstop", "buffalo wild wings",
+  // burgers
+  "mcdonald", "burger king", "wendy's", "five guys", "in-n-out", "in n out", "shake shack", "whataburger", "carl's jr", "carls jr", "hardee", "jack in the box", "sonic drive", "white castle", "culver", "smashburger", "the habit", "fatburger", "checkers",
+  // mexican
+  "chipotle", "qdoba", "taco bell", "del taco", "moe's southwest", "rubio", "baja fresh",
+  // asian
+  "panda express", "p.f. chang", "pf chang", "pei wei",
+  // sandwich / deli
+  "subway", "jimmy john", "jersey mike", "firehouse subs", "potbelly", "quiznos", "arby", "panera",
+  // coffee / donuts / dessert
+  "starbucks", "dunkin", "krispy kreme", "peet's coffee", "dutch bros", "tim hortons", "baskin-robbins", "baskin robbins", "cold stone", "dairy queen",
+  // casual dining
+  "applebee", "chili's", "tgi friday", "denny's", "ihop", "cracker barrel", "red lobster", "outback", "texas roadhouse", "cheesecake factory", "red robin", "ruby tuesday", "golden corral", "bj's restaurant",
+];
+const isKnownChain = (name) => {
+  const n = (name || "").toLowerCase();
+  return KNOWN_CHAINS.some((c) => n.includes(c));
+};
+
 function getTierForPlace(place, intent) {
   if (intent.kind === "GENERAL") return 1;
   const types = new Set([...place.types || [], place.primaryType || ""].map((t) => t.toLowerCase()));
@@ -8579,7 +8715,11 @@ function getTierForPlace(place, intent) {
     ].filter(Boolean)));
     const isBreakfasty = intent.mealTime === "breakfast" || intent.mealTime === "brunch";
     const hasBreakfastPlausibleType = !isBreakfasty || (BREAKFAST_PLAUSIBLE_TYPES.has(place.primaryType || "") || [...types].some((t) => BREAKFAST_PLAUSIBLE_TYPES.has(t)));
-    if (dishWords.some((w) => name.includes(w))) return 1;
+    // Tier 1 = genuine dish specialist (dish word in the name). A KNOWN chain
+    // does NOT earn Tier 1 just because its brand is in nameKeywords — it falls
+    // through to type-based tiers (so Olive Garden → "Authentic Match" via
+    // italian_restaurant, not "Dish Specialist"), then gets demoted in the sort.
+    if (!isKnownChain(name) && dishWords.some((w) => name.includes(w))) return 1;
     const isStrict = intent.strict === true && Array.isArray(intent.strictPrimaryTypes) && intent.strictPrimaryTypes.length > 0;
     if (isStrict) {
       const primary = (place.primaryType || "").toString();
@@ -8619,12 +8759,12 @@ function getTierForPlace(place, intent) {
   return 1;
 }
 const TIER_LABELS = {
-  1: "Namesake",
-  // name match — place name contains the dish word
-  2: "Specialist",
-  // place type matches the dish's primary cuisine type
-  3: "Related Cuisine",
-  // place type matches secondary cultural cuisine
+  1: "Dish Specialist",
+  // dish word in the place name AND not a known chain → the most expected match
+  2: "Authentic Match",
+  // place type matches the dish's primary cuisine type (e.g. italian_restaurant)
+  3: "Related",
+  // place type matches a secondary/cultural cuisine
   4: "Serves It"
   // editorialSummary / cached reviews / menu OCR mention the dish
   // 5 = noise (not in TIER_LABELS by design — filtered out before reaching the frontend)
@@ -9231,7 +9371,8 @@ async function handleRestaurantsFull(request, env, ctx) {
         // Intent-aware tiering (1=Authentic, 2=Good Match, 3=Has It, 4=Other)
         // Overrides any Worker-pass-through tier with our richer client-side logic
         tier: getTierForPlace(place, intent),
-        tierLabel: TIER_LABELS[getTierForPlace(place, intent)] || "Match"
+        tierLabel: TIER_LABELS[getTierForPlace(place, intent)] || "Match",
+        isChain: isKnownChain(place.displayName?.text || place.name || "")
       };
     }).filter((p) => p.distanceMiles <= effectiveRadiusMiles + 1);
     const DIETARY_FILTER_TYPES = ["halal", "kosher", "vegan", "vegetarian", "glutenFree"];
@@ -9270,16 +9411,22 @@ async function handleRestaurantsFull(request, env, ctx) {
         }
       });
     } else if (intent.kind !== "GENERAL" && searchQuery?.trim()) {
-      const wantsBest = /\bbest\b/i.test(searchQuery);
+      // TIER-FIRST dish ranking: the most authentic/expected place leads
+      // regardless of distance — so a farther authentic Italian outranks a closer
+      // chain for "pasta". (Previously banded-by-distance, which surfaced close
+      // chains/related spots ABOVE farther authentic ones — not what we want.)
+      //   1) dish tier       → Dish Specialist → Authentic → Related → Serves It
+      //   2) non-chain first → independents above chains within the same tier
+      //   3) quality         → rating × log10(reviews) (hidden-gem de-weights mega)
+      //   4) distance        → final tiebreak only
       finalPlaces.sort((a, b) => {
         if ((a.tier || 4) !== (b.tier || 4)) return (a.tier || 4) - (b.tier || 4);
-        if (wantsBest || wantsHiddenGem) {
-          const qa0 = (a.rating || 0) * Math.log10(Math.max(a.userRatingCount || 1, 1));
-          const qb0 = (b.rating || 0) * Math.log10(Math.max(b.userRatingCount || 1, 1));
-          const qa = wantsHiddenGem && (a.userRatingCount || 0) > 5e3 ? qa0 * 0.5 : qa0;
-          const qb = wantsHiddenGem && (b.userRatingCount || 0) > 5e3 ? qb0 * 0.5 : qb0;
-          return qb - qa;
-        }
+        if (!!a.isChain !== !!b.isChain) return a.isChain ? 1 : -1;
+        const qa0 = (a.rating || 0) * Math.log10(Math.max(a.userRatingCount || 1, 1));
+        const qb0 = (b.rating || 0) * Math.log10(Math.max(b.userRatingCount || 1, 1));
+        const qa = wantsHiddenGem && (a.userRatingCount || 0) > 5e3 ? qa0 * 0.5 : qa0;
+        const qb = wantsHiddenGem && (b.userRatingCount || 0) > 5e3 ? qb0 * 0.5 : qb0;
+        if (Math.abs(qb - qa) > 0.05) return qb - qa;
         return (a.distanceKm || 999) - (b.distanceKm || 999);
       });
     } else if (cuisine === "sports_bar" || sportsBarVibeActive) {
@@ -9429,6 +9576,210 @@ function detectBestTime(reviews) {
   return null;
 }
 
+// ── Weather (Open-Meteo, free, no API key) ──────────────────────────────────
+// Replaces the old Base44 InvokeLLM weather, which 403s on the native app (no
+// Base44 session). Returns a shape consumed by BOTH the Home weather chip
+// (current.*) and the Weather page (current.* + 7-day forecast[] with hourly).
+// 30-min KV cache keyed to ~1km coords; forceRefresh bypasses it.
+const WX_WMO = {
+  0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+  45: 'Fog', 48: 'Fog',
+  51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle',
+  56: 'Freezing drizzle', 57: 'Freezing drizzle',
+  61: 'Light rain', 63: 'Rain', 65: 'Heavy rain',
+  66: 'Freezing rain', 67: 'Freezing rain',
+  71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 77: 'Snow grains',
+  80: 'Rain showers', 81: 'Rain showers', 82: 'Violent rain showers',
+  85: 'Snow showers', 86: 'Snow showers',
+  95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Thunderstorm with hail',
+};
+function wxCondition(code) { return WX_WMO[code] || 'Clear sky'; }
+function wxIcon(code) {
+  if (code === 0 || code === 1) return '☀️';
+  if (code === 2) return '⛅';
+  if (code === 3) return '☁️';
+  if (code === 45 || code === 48) return '🌫️';
+  if (code >= 51 && code <= 57) return '🌦️';
+  if (code >= 61 && code <= 67) return code === 65 ? '🌧️' : '🌦️';
+  if (code >= 71 && code <= 77) return '❄️';
+  if (code >= 80 && code <= 82) return code === 82 ? '🌧️' : '🌦️';
+  if (code >= 85 && code <= 86) return '❄️';
+  if (code >= 95) return '⛈️';
+  return '🌤️';
+}
+const wxCtoF = (c) => Math.round((Number(c) * 9) / 5 + 32);
+const wxKmhToMph = (k) => Math.round(Number(k) * 0.621371);
+function wxClock(iso) {
+  // iso like "2026-06-17T05:42" (already local to the location). Format 12h.
+  const t = String(iso).split('T')[1] || '';
+  const [hStr, mStr] = t.split(':');
+  let h = parseInt(hStr, 10);
+  if (Number.isNaN(h)) return '';
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if (h === 0) h = 12;
+  return `${h}:${mStr || '00'} ${ampm}`;
+}
+function wxHourLabel(h) {
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  let hh = h % 12; if (hh === 0) hh = 12;
+  return `${hh} ${ampm}`;
+}
+
+async function handleWeatherForecast(request, env) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const lat = parseFloat(body.latitude);
+    const lng = parseFloat(body.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return jsonResponse({ error: 'latitude and longitude are required' }, 400);
+    }
+    const forceRefresh = body.forceRefresh === true;
+
+    const cacheKey = `wx:v1:${roundCoordinate(lat, 2)}:${roundCoordinate(lng, 2)}`;
+    const kv = env.GLOBESKIMMERS_KV;
+    if (kv && !forceRefresh) {
+      const hit = await kv.get(cacheKey, 'json').catch(() => null);
+      if (hit) return jsonResponse(hit);
+    }
+
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
+      `&timezone=auto&forecast_days=7&temperature_unit=celsius&wind_speed_unit=kmh` +
+      `&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,uv_index` +
+      `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,uv_index_max,sunrise,sunset` +
+      `&hourly=temperature_2m,weather_code,precipitation_probability`;
+
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) {
+      const details = await res.text().catch(() => '');
+      return jsonResponse({ error: `Weather API returned ${res.status}`, details }, 502);
+    }
+    const d = await res.json();
+
+    const cur = d.current || {};
+    const curCode = Number(cur.weather_code);
+    const current = {
+      temperature_celsius: Math.round(Number(cur.temperature_2m)),
+      temperature_fahrenheit: wxCtoF(cur.temperature_2m),
+      feels_like_celsius: Math.round(Number(cur.apparent_temperature)),
+      feels_like_fahrenheit: wxCtoF(cur.apparent_temperature),
+      condition: wxCondition(curCode),
+      icon: wxIcon(curCode),
+      humidity: Math.round(Number(cur.relative_humidity_2m)) || 0,
+      wind_speed_kmh: Math.round(Number(cur.wind_speed_10m)) || 0,
+      wind_speed_mph: wxKmhToMph(cur.wind_speed_10m || 0),
+      uv_index: Math.round(Number(cur.uv_index)) || 0,
+    };
+
+    const daily = d.daily || {};
+    const hourly = d.hourly || {};
+    const numDays = Array.isArray(daily.time) ? daily.time.length : 0;
+    const forecast = [];
+    for (let i = 0; i < numDays; i++) {
+      const code = Number(daily.weather_code[i]);
+      const dateObj = new Date(`${daily.time[i]}T00:00:00`);
+      const hours = [];
+      const base = i * 24;
+      if (Array.isArray(hourly.time)) {
+        for (let h = 0; h < 24; h++) {
+          const idx = base + h;
+          if (idx >= hourly.time.length) break;
+          const hc = Number(hourly.weather_code[idx]);
+          hours.push({
+            hour: h,
+            time: wxHourLabel(h),
+            temperature_celsius: Math.round(Number(hourly.temperature_2m[idx])),
+            temperature_fahrenheit: wxCtoF(hourly.temperature_2m[idx]),
+            condition: wxCondition(hc),
+            icon: wxIcon(hc),
+            precipitation_probability: Math.round(Number(hourly.precipitation_probability?.[idx])) || 0,
+          });
+        }
+      }
+      forecast.push({
+        is_today: i === 0,
+        day_of_week: dateObj.toLocaleDateString('en-US', { weekday: 'long' }),
+        date: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        high_celsius: Math.round(Number(daily.temperature_2m_max[i])),
+        high_fahrenheit: wxCtoF(daily.temperature_2m_max[i]),
+        low_celsius: Math.round(Number(daily.temperature_2m_min[i])),
+        low_fahrenheit: wxCtoF(daily.temperature_2m_min[i]),
+        condition: wxCondition(code),
+        icon: wxIcon(code),
+        precipitation_probability: Math.round(Number(daily.precipitation_probability_max?.[i])) || 0,
+        wind_speed_kmh: Math.round(Number(daily.wind_speed_10m_max?.[i])) || 0,
+        wind_speed_mph: wxKmhToMph(daily.wind_speed_10m_max?.[i] || 0),
+        uv_index: Math.round(Number(daily.uv_index_max?.[i])) || 0,
+        sunrise: wxClock(daily.sunrise?.[i]),
+        sunset: wxClock(daily.sunset?.[i]),
+        hourly: hours,
+      });
+    }
+
+    const payload = { timezone: d.timezone || 'UTC', current, forecast };
+
+    if (kv) {
+      await kv.put(cacheKey, JSON.stringify(payload), { expirationTtl: 1800 }).catch(() => {});
+    }
+    return jsonResponse(payload);
+  } catch (e) {
+    return jsonResponse({ error: 'Internal server error', details: e.message }, 500);
+  }
+}
+
+// Generic LLM proxy (Anthropic) — replaces Base44's InvokeLLM, which 403s on the
+// native app. Accepts { prompt, response_json_schema? }. With a schema, Claude is
+// instructed to return ONLY a JSON object and we parse + return it directly (the
+// same shape Base44's InvokeLLM returned). Used by Basic Phrases translation.
+async function handleInvokeLLM(request, env) {
+  try {
+    if (!env.ANTHROPIC_API_KEY) return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
+    const body = await request.json().catch(() => ({}));
+    const prompt = body.prompt;
+    if (!prompt || typeof prompt !== 'string') return jsonResponse({ error: 'prompt is required' }, 400);
+    const schema = body.response_json_schema || null;
+    const system = schema
+      ? 'You return ONLY a single valid JSON object that conforms to this JSON schema. No markdown, no code fences, no commentary. Schema: ' + JSON.stringify(schema)
+      : 'You are a helpful assistant.';
+
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 8000,
+        system,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (!apiRes.ok) {
+      const details = await apiRes.text().catch(() => '');
+      return jsonResponse({ error: `Anthropic returned ${apiRes.status}`, details }, 502);
+    }
+    const data = await apiRes.json();
+    const text = (data.content && data.content[0] && data.content[0].text) || '';
+    if (!schema) return jsonResponse({ text });
+
+    // Extract the JSON object from the response (strip fences / stray prose).
+    let jsonStr = text.trim();
+    const fence = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fence) jsonStr = fence[1].trim();
+    const first = jsonStr.indexOf('{');
+    const last = jsonStr.lastIndexOf('}');
+    if (first !== -1 && last !== -1) jsonStr = jsonStr.slice(first, last + 1);
+    try {
+      return jsonResponse(JSON.parse(jsonStr));
+    } catch (e) {
+      return jsonResponse({ error: 'Failed to parse LLM JSON', details: e.message }, 502);
+    }
+  } catch (e) {
+    return jsonResponse({ error: 'Internal server error', details: e.message }, 500);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -9469,10 +9820,13 @@ export default {
       if (pathname === '/shopping' && request.method === 'POST') return await handleShoppingPlaces(request, env, ctx);
       if (pathname === '/convenience-stores' && request.method === 'POST') return await handleConvenienceStores(request, env, ctx);
       if (pathname === '/exchange-rate' && request.method === 'POST') return await handleExchangeRate(request, env);
+      if (pathname === '/weather-forecast' && request.method === 'POST') return await handleWeatherForecast(request, env);
+      if (pathname === '/invoke-llm' && request.method === 'POST') return await handleInvokeLLM(request, env);
       if (pathname === '/money-exchange' && request.method === 'POST') return await handleMoneyExchange(request, env, ctx);
       if (pathname === '/activities' && request.method === 'POST') return await handleActivities(request, env, ctx);
       if (pathname === '/restaurants-full' && request.method === 'POST') return await handleRestaurantsFull(request, env, ctx);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
+      if (pathname === '/describe-item' && request.method === 'POST') return await handleDescribeItem(request, env);
       if (pathname === '/analyze-price' && request.method === 'POST') return await handleAnalyzePrice(request, env);
       if (pathname === '/scan-text' && request.method === 'POST') return await handleScanText(request, env);
       if (pathname === '/label-photos' && request.method === 'POST') return await handleLabelPhotos(request, env);

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
-import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
+import RadiusRow from "@/components/location/RadiusRow";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
@@ -128,12 +128,12 @@ function PhotoStrip({ photos, fallbackIcon = "🚻", onPhotoClick }) {
 
   if (!valid.length) return (
     <div style={{ height: "140px", background: `linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <span style={{ fontSize: "48px" }}>{fallbackIcon}</span>
+      <span style={{ fontSize: "calc(48px*var(--fs))" }}>{fallbackIcon}</span>
     </div>
   );
   if (valid.length === 1) return (
     <div onClick={() => onPhotoClick?.(0)} style={{ position: "relative", height: "160px", overflow: "hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
-      {loading[0] && <div style={{ position: "absolute", inset: 0, background: TEAL_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "36px" }}>{fallbackIcon}</div>}
+      {loading[0] && <div style={{ position: "absolute", inset: 0, background: TEAL_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "calc(36px*var(--fs))" }}>{fallbackIcon}</div>}
       <img src={valid[0]} alt="" onError={() => setErrors(p => ({ ...p, 0: true }))} onLoad={() => setLoading(p => ({ ...p, 0: false }))}
         style={{ width: "100%", height: "160px", objectFit: "cover", opacity: loading[0] ? 0 : 1, transition: "opacity 0.4s" }} />
     </div>
@@ -142,7 +142,7 @@ function PhotoStrip({ photos, fallbackIcon = "🚻", onPhotoClick }) {
     <div style={{ display: "grid", gridTemplateColumns: "60% 40%", height: "140px", overflow: "hidden" }}>
       {valid.slice(0, 2).map((url, i) => (
         <div key={i} onClick={() => onPhotoClick?.(i)} style={{ position: "relative", overflow: "hidden", borderRight: i === 0 ? "2px solid #fff" : "none", cursor: onPhotoClick ? "pointer" : "default" }}>
-          {loading[i] && <div style={{ position: "absolute", inset: 0, background: TEAL_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "28px" }}>{fallbackIcon}</div>}
+          {loading[i] && <div style={{ position: "absolute", inset: 0, background: TEAL_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "calc(28px*var(--fs))" }}>{fallbackIcon}</div>}
           <img src={url} alt="" onError={() => setErrors(p => ({ ...p, [i]: true }))} onLoad={() => setLoading(p => ({ ...p, [i]: false }))}
             style={{ width: "100%", height: "140px", objectFit: "cover", opacity: loading[i] ? 0 : 1, transition: "opacity 0.4s" }} />
         </div>
@@ -195,11 +195,11 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
           background: index === 0 ? "linear-gradient(135deg,#FFD700,#FFA000)" : index === 1 ? "linear-gradient(135deg,#B0BEC5,#78909C)" : index === 2 ? "linear-gradient(135deg,#FFAB40,#F57C00)" : TEAL,
           color: "#fff", width: "28px", height: "28px", borderRadius: "50%",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontWeight: "800", fontSize: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.25)"
+          fontWeight: "800", fontSize: "calc(12px*var(--fs))", boxShadow: "0 2px 8px rgba(0,0,0,0.25)"
         }}>{index + 1}</div>
 
         {/* Venue pill */}
-        <div style={{ position: "absolute", bottom: "12px", left: "12px", background: "rgba(255,255,255,0.95)", backdropFilter: "blur(6px)", padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "700", color: DARK }}>
+        <div style={{ position: "absolute", bottom: "12px", left: "12px", background: "rgba(255,255,255,0.95)", backdropFilter: "blur(6px)", padding: "4px 10px", borderRadius: "20px", fontSize: "calc(11px*var(--fs))", fontWeight: "700", color: DARK }}>
           {r.venueIcon} {r.venueLabel}
         </div>
 
@@ -208,7 +208,7 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
           position: "absolute", top: "12px", right: "12px",
           background: openSt.isOpen === true || openSt.is24H ? "rgba(5,150,105,0.95)" : openSt.isOpen === false ? "rgba(220,38,38,0.95)" : "rgba(100,116,139,0.9)",
           backdropFilter: "blur(6px)", color: "#fff", padding: "4px 10px", borderRadius: "20px",
-          fontSize: "11px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px"
+          fontSize: "calc(11px*var(--fs))", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px"
         }}>
           <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: openSt.isOpen === true || openSt.is24H ? "#69F0AE" : "#fff" }} />
           {openSt.label}
@@ -220,9 +220,9 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
 
         {/* Row 1: Name + Distance */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "2px" }}>
-          <div style={{ fontWeight: "800", fontSize: "18px", color: DARK, lineHeight: "1.25", flex: 1 }}>{name}</div>
+          <div style={{ fontWeight: "800", fontSize: "calc(18px*var(--fs))", color: DARK, lineHeight: "1.25", flex: 1 }}>{name}</div>
           {r.distanceMiles!=null && (
-            <div style={{ background: `${TEAL}15`, color: TEAL_DARK, padding: "4px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: "700", flexShrink: 0 }}>
+            <div style={{ background: `${TEAL}15`, color: TEAL_DARK, padding: "4px 10px", borderRadius: "20px", fontSize: "calc(12px*var(--fs))", fontWeight: "700", flexShrink: 0 }}>
               📍 {formatDistance(r.distanceMiles)}
             </div>
           )}
@@ -231,7 +231,7 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
 
         {/* Row 2: Rating */}
         {r.rating && (
-          <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "10px", fontSize: "13px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "10px", fontSize: "calc(13px*var(--fs))" }}>
             <span style={{ color: GOLD }}>★</span>
             <span style={{ fontWeight: "700", color: DARK }}>{r.rating}</span>
             {r.userRatingCount > 0 && <span style={{ color: GRAY }}>({r.userRatingCount.toLocaleString()})</span>}
@@ -242,7 +242,7 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
         {chips.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "10px" }}>
             {chips.map(chip => (
-              <span key={chip.key} style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: chip.bg, color: chip.color, padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "600" }}>
+              <span key={chip.key} style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: chip.bg, color: chip.color, padding: "4px 10px", borderRadius: "20px", fontSize: "calc(11px*var(--fs))", fontWeight: "600" }}>
                 {chip.icon} {chip.label}
               </span>
             ))}
@@ -252,16 +252,16 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
         {/* Row 5: Address */}
         {address && (
           <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "10px", padding: "10px 12px", background: "#F8FAFC", borderRadius: "12px", border: "1px solid #E8EDF2" }}>
-            <span style={{ fontSize: "16px", flexShrink: 0 }}>📍</span>
-            <span style={{ fontSize: "13px", color: DARK, lineHeight: "1.45" }}>{address}</span>
+            <span style={{ fontSize: "calc(16px*var(--fs))", flexShrink: 0 }}>📍</span>
+            <span style={{ fontSize: "calc(13px*var(--fs))", color: DARK, lineHeight: "1.45" }}>{address}</span>
           </div>
         )}
 
         {/* Row 6: Smart note (only if exists) */}
         {r.smartNote && (
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", padding: "10px 12px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: "12px" }}>
-            <span style={{ fontSize: "14px" }}>💡</span>
-            <span style={{ fontSize: "12px", color: "#92400E", fontWeight: "500" }}>{r.smartNote}</span>
+            <span style={{ fontSize: "calc(14px*var(--fs))" }}>💡</span>
+            <span style={{ fontSize: "calc(12px*var(--fs))", color: "#92400E", fontWeight: "500" }}>{r.smartNote}</span>
           </div>
         )}
 
@@ -272,37 +272,37 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
             background: openSt.is24H ? BLUE_LIGHT : openSt.isOpen === true ? GREEN_LIGHT : openSt.isOpen === false ? "#FEE2E2" : "#F5F5F5"
           }}>
             <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: openSt.isOpen === true || openSt.is24H ? GREEN : openSt.isOpen === false ? CORAL : GRAY }} />
-            <span style={{ fontWeight: "700", fontSize: "13px", color: openSt.isOpen === true || openSt.is24H ? GREEN : openSt.isOpen === false ? "#DC2626" : GRAY }}>{openSt.label}</span>
-            {openSt.todayHours && !openSt.is24H && <span style={{ color: GRAY, fontSize: "12px" }}>· {openSt.todayHours}</span>}
+            <span style={{ fontWeight: "700", fontSize: "calc(13px*var(--fs))", color: openSt.isOpen === true || openSt.is24H ? GREEN : openSt.isOpen === false ? "#DC2626" : GRAY }}>{openSt.label}</span>
+            {openSt.todayHours && !openSt.is24H && <span style={{ color: GRAY, fontSize: "calc(12px*var(--fs))" }}>· {openSt.todayHours}</span>}
           </div>
         )}
 
         {/* Phone */}
         {phone ? (
           <a href={`tel:${phone}`} style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px", padding: "10px 14px", background: BLUE_LIGHT, borderRadius: "12px", textDecoration: "none", border: "1px solid #BBDEFB" }}>
-            <div style={{ width: "34px", height: "34px", background: BLUE, color: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>📞</div>
+            <div style={{ width: "34px", height: "34px", background: BLUE, color: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "calc(16px*var(--fs))" }}>📞</div>
             <div>
-              <div style={{ fontWeight: "700", fontSize: "14px", color: BLUE }}>{phone}</div>
-              <div style={{ fontSize: "11px", color: GRAY }}>Tap to call</div>
+              <div style={{ fontWeight: "700", fontSize: "calc(14px*var(--fs))", color: BLUE }}>{phone}</div>
+              <div style={{ fontSize: "calc(11px*var(--fs))", color: GRAY }}>Tap to call</div>
             </div>
-            <span style={{ marginLeft: "auto", color: BLUE, fontSize: "18px" }}>›</span>
+            <span style={{ marginLeft: "auto", color: BLUE, fontSize: "calc(18px*var(--fs))" }}>›</span>
           </a>
         ) : null}
 
         {/* Buttons */}
         <div style={{ display: "flex", gap: "8px" }}>
           <button onClick={() => setShowDirs(true)}
-            style={{ flex: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "12px", borderRadius: "12px", border: "none", fontSize: "14px", fontWeight: "700", cursor: "pointer", background: `linear-gradient(135deg,${TEAL_DARK},${TEAL})`, color: "#fff", fontFamily: "inherit" }}>
+            style={{ flex: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "12px", borderRadius: "12px", border: "none", fontSize: "calc(14px*var(--fs))", fontWeight: "700", cursor: "pointer", background: `linear-gradient(135deg,${TEAL_DARK},${TEAL})`, color: "#fff", fontFamily: "inherit" }}>
             🧭 Directions
           </button>
           <button onClick={() => onShowOnMap?.(index)}
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "12px", borderRadius: "12px", border: "none", fontSize: "13px", fontWeight: "700", cursor: "pointer", background: "#EDE7F6", color: PURPLE, fontFamily: "inherit" }}>
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "12px", borderRadius: "12px", border: "none", fontSize: "calc(13px*var(--fs))", fontWeight: "700", cursor: "pointer", background: "#EDE7F6", color: PURPLE, fontFamily: "inherit" }}>
             🗺️ Map
           </button>
           {/* Details button always renders so AI Details is reachable
               even on restrooms without hours or website. */}
           <button onClick={() => { const n = !expanded; setExpanded(n); onExpandChange?.(n); }}
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", borderRadius: "12px", border: "none", fontSize: "13px", fontWeight: "700", cursor: "pointer", background: expanded ? DARK : GRAY_LIGHT, color: expanded ? "#fff" : DARK, fontFamily: "inherit" }}>
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", borderRadius: "12px", border: "none", fontSize: "calc(13px*var(--fs))", fontWeight: "700", cursor: "pointer", background: expanded ? DARK : GRAY_LIGHT, color: expanded ? "#fff" : DARK, fontFamily: "inherit" }}>
             {expanded ? "▲ Less" : "▼ Details"}
           </button>
         </div>
@@ -314,7 +314,7 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
               <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
                 {weekdayDesc.length > 0 && (
                   <div style={{ padding: "12px", background: "#F8FAFC", borderRadius: "12px", border: "1px solid #E8EDF2" }}>
-                    <div style={{ fontSize: "11px", color: GRAY, fontWeight: "700", marginBottom: "8px", textTransform: "uppercase" }}>🕐 Daily Hours</div>
+                    <div style={{ fontSize: "calc(11px*var(--fs))", color: GRAY, fontWeight: "700", marginBottom: "8px", textTransform: "uppercase" }}>🕐 Daily Hours</div>
                     {weekdayDesc.map((day, i) => {
                       const today = new Date().getDay();
                       const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -322,8 +322,8 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
                       const isToday = dayIdx === today;
                       const parts = (day || "").split(":"); const dayName = parts[0]; const hrs = parts.slice(1).join(":").trim();
                       return (
-                        <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: isToday ? TEAL_DARK : DARK, fontWeight: isToday ? "700" : "400", padding: isToday ? "6px 8px" : "4px 0", background: isToday ? `${TEAL}12` : "transparent", borderRadius: isToday ? "6px" : "0" }}>
-                          <span>{dayName}{isToday && <span style={{ fontSize: "9px", color: TEAL, marginLeft: "4px" }}>TODAY</span>}</span>
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "calc(12px*var(--fs))", color: isToday ? TEAL_DARK : DARK, fontWeight: isToday ? "700" : "400", padding: isToday ? "6px 8px" : "4px 0", background: isToday ? `${TEAL}12` : "transparent", borderRadius: isToday ? "6px" : "0" }}>
+                          <span>{dayName}{isToday && <span style={{ fontSize: "calc(9px*var(--fs))", color: TEAL, marginLeft: "4px" }}>TODAY</span>}</span>
                           <span style={{ color: hrs.toLowerCase() === "closed" ? CORAL : isToday ? TEAL_DARK : GRAY }}>{hrs}</span>
                         </div>
                       );
@@ -342,7 +342,7 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
                   accessType={r.accessType}
                 />
                 {(r.websiteUri || r.website) && (
-                  <a href={r.websiteUri || r.website} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 10px", background: "#fff", border: "1px solid #E2E8F0", borderRadius: "8px", textDecoration: "none", color: TEAL_DARK, fontSize: "13px", fontWeight: "600" }}>🌐 Visit Website</a>
+                  <a href={r.websiteUri || r.website} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 10px", background: "#fff", border: "1px solid #E2E8F0", borderRadius: "8px", textDecoration: "none", color: TEAL_DARK, fontSize: "calc(13px*var(--fs))", fontWeight: "600" }}>🌐 Visit Website</a>
                 )}
               </div>
             </motion.div>
@@ -404,8 +404,8 @@ function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections, f
         {/* Row 1: Name + distance + open */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "10px", marginBottom: "10px" }}>
           <div>
-            <div style={{ fontWeight: "800", fontSize: "20px", color: DARK, lineHeight: "1.2" }}>{name}</div>
-            <div style={{ fontSize: "13px", color: GRAY, marginTop: "2px" }}>
+            <div style={{ fontWeight: "800", fontSize: "calc(20px*var(--fs))", color: DARK, lineHeight: "1.2" }}>{name}</div>
+            <div style={{ fontSize: "calc(13px*var(--fs))", color: GRAY, marginTop: "2px" }}>
               📍 {formatDistance(r.distanceMiles)}
               {r.venueLabel && <span> · {r.venueIcon} {r.venueLabel}</span>}
             </div>
@@ -413,7 +413,7 @@ function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections, f
           <div style={{
             background: openSt.isOpen === true || openSt.is24H ? GREEN_LIGHT : openSt.isOpen === false ? "#FEE2E2" : GRAY_LIGHT,
             color: openSt.isOpen === true || openSt.is24H ? GREEN : openSt.isOpen === false ? "#DC2626" : GRAY,
-            padding: "6px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "700", flexShrink: 0
+            padding: "6px 12px", borderRadius: "20px", fontSize: "calc(12px*var(--fs))", fontWeight: "700", flexShrink: 0
           }}>
             {openSt.label}
           </div>
@@ -423,7 +423,7 @@ function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections, f
         {chips.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "12px" }}>
             {chips.map(chip => (
-              <span key={chip.key} style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: chip.bg, color: chip.color, padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "600" }}>
+              <span key={chip.key} style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: chip.bg, color: chip.color, padding: "4px 10px", borderRadius: "20px", fontSize: "calc(11px*var(--fs))", fontWeight: "600" }}>
                 {chip.icon} {chip.label}
               </span>
             ))}
@@ -435,7 +435,7 @@ function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections, f
           <>
             {/* Rating */}
             {r.rating && (
-              <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "10px", fontSize: "13px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "10px", fontSize: "calc(13px*var(--fs))" }}>
                 <span style={{ color: GOLD }}>★</span>
                 <span style={{ fontWeight: "700", color: DARK }}>{r.rating}</span>
                 {r.userRatingCount > 0 && <span style={{ color: GRAY }}>({r.userRatingCount})</span>}
@@ -444,14 +444,14 @@ function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections, f
 
             {/* Address */}
             {r.formattedAddress && (
-              <div style={{ padding: "10px 12px", background: "#F8FAFC", borderRadius: "12px", border: "1px solid #E8EDF2", marginBottom: "10px", fontSize: "13px", color: DARK }}>
+              <div style={{ padding: "10px 12px", background: "#F8FAFC", borderRadius: "12px", border: "1px solid #E8EDF2", marginBottom: "10px", fontSize: "calc(13px*var(--fs))", color: DARK }}>
                 📍 {r.formattedAddress}
               </div>
             )}
 
             {/* Smart note */}
             {r.smartNote && (
-              <div style={{ padding: "10px 12px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: "12px", marginBottom: "10px", fontSize: "12px", color: "#92400E" }}>
+              <div style={{ padding: "10px 12px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: "12px", marginBottom: "10px", fontSize: "calc(12px*var(--fs))", color: "#92400E" }}>
                 💡 {r.smartNote}
               </div>
             )}
@@ -460,10 +460,10 @@ function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections, f
             {(r.nationalPhoneNumber || r.internationalPhoneNumber) && (
               <a href={`tel:${r.nationalPhoneNumber || r.internationalPhoneNumber}`}
                 style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px", padding: "10px 12px", background: BLUE_LIGHT, borderRadius: "12px", textDecoration: "none" }}>
-                <span style={{ width: "32px", height: "32px", background: BLUE, color: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px" }}>📞</span>
+                <span style={{ width: "32px", height: "32px", background: BLUE, color: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "calc(14px*var(--fs))" }}>📞</span>
                 <div>
-                  <div style={{ fontWeight: "700", fontSize: "14px", color: BLUE }}>{r.nationalPhoneNumber || r.internationalPhoneNumber}</div>
-                  <div style={{ fontSize: "11px", color: GRAY }}>Tap to call</div>
+                  <div style={{ fontWeight: "700", fontSize: "calc(14px*var(--fs))", color: BLUE }}>{r.nationalPhoneNumber || r.internationalPhoneNumber}</div>
+                  <div style={{ fontSize: "calc(11px*var(--fs))", color: GRAY }}>Tap to call</div>
                 </div>
               </a>
             )}
@@ -473,12 +473,12 @@ function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections, f
         {/* Buttons */}
         <div style={{ display: "flex", gap: "8px" }}>
           <button onClick={onDirections}
-            style={{ flex: 2, padding: "14px", borderRadius: "14px", border: "none", background: `linear-gradient(135deg,${TEAL_DARK},${TEAL})`, color: "#fff", fontWeight: "700", fontSize: "14px", cursor: "pointer", fontFamily: "inherit" }}>
+            style={{ flex: 2, padding: "14px", borderRadius: "14px", border: "none", background: `linear-gradient(135deg,${TEAL_DARK},${TEAL})`, color: "#fff", fontWeight: "700", fontSize: "calc(14px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>
             🧭 Directions
           </button>
           {(r.nationalPhoneNumber || r.internationalPhoneNumber) && (
             <a href={`tel:${r.nationalPhoneNumber || r.internationalPhoneNumber}`}
-              style={{ flex: 1, padding: "14px", borderRadius: "14px", background: "#EDE7F6", color: PURPLE, fontWeight: "700", fontSize: "14px", textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              style={{ flex: 1, padding: "14px", borderRadius: "14px", background: "#EDE7F6", color: PURPLE, fontWeight: "700", fontSize: "calc(14px*var(--fs))", textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
               📞 Call
             </a>
           )}
@@ -648,8 +648,8 @@ export default function RestroomFinderPage() {
       const userMode = activeLocation?.mode === 'navigate' ? 'Selected location' : 'Current location';
       const userLabel = locLabel || '';
       const userTooltipHtml = userPinExpanded
-        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsRFUserPin&&window._gsRFUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:12px;margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:11px;margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:10px;line-height:1.3;">${userLabel}</div></div>`
-        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsRFUserPin&&window._gsRFUserPin()"><span style="font-weight:700;color:#1A2332;font-size:11px;">📍 You are here</span><span style="color:#64748B;font-size:10px;font-weight:700;">⌄</span></div>`;
+        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsRFUserPin&&window._gsRFUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:calc(10px*var(--fs));font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:calc(12px*var(--fs));margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:calc(11px*var(--fs));margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:calc(10px*var(--fs));line-height:1.3;">${userLabel}</div></div>`
+        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsRFUserPin&&window._gsRFUserPin()"><span style="font-weight:700;color:#1A2332;font-size:calc(11px*var(--fs));">📍 You are here</span><span style="color:#64748B;font-size:calc(10px*var(--fs));font-weight:700;">⌄</span></div>`;
       window.L.marker([lat, lng], { icon: window.L.divIcon({ html: `<div style="width:14px;height:14px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>`, iconSize: [14, 14], className: "" }) }).addTo(map).bindTooltip(userTooltipHtml, {permanent: true, direction: 'bottom', opacity: 1, offset: [0, 12], className: 'gs-user-tooltip', interactive: true});
 
       // Restroom markers
@@ -673,14 +673,14 @@ export default function RestroomFinderPage() {
           <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:260px;">
             <div style="padding:12px 14px;">
               <div style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:${accCfg.bg};border-radius:6px;font-size:11px;font-weight:700;color:${accCfg.color};margin-bottom:6px;">${accCfg.icon} ${accCfg.label}</div>
-              <div style="font-weight:700;font-size:14px;color:#1A2332;margin-bottom:4px;">${r.name||'Restroom'}</div>
+              <div style="font-weight:700;font-size:calc(14px*var(--fs));color:#1A2332;margin-bottom:4px;">${r.name||'Restroom'}</div>
               <div style="font-size:11px;color:#64748B;margin-bottom:6px;">${r.formattedAddress||''}</div>
-              <div style="font-size:11px;padding:5px 8px;border-radius:6px;background:${openSt.is24H?'#E3F2FD':openSt.isOpen===true?'#F0FDF4':openSt.isOpen===false?'#FEF2F2':'#F5F5F5'};margin-bottom:6px;">
+              <div style="font-size:calc(11px*var(--fs));padding:5px 8px;border-radius:6px;background:${openSt.is24H?'#E3F2FD':openSt.isOpen===true?'#F0FDF4':openSt.isOpen===false?'#FEF2F2':'#F5F5F5'};margin-bottom:6px;">
                 <span style="font-weight:700;color:${openSt.is24H?'#1565C0':openSt.isOpen===true?'#15803D':openSt.isOpen===false?'#DC2626':'#9E9E9E'};">${openSt.label}</span>
               </div>
               ${r.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:6px;">★ <strong style="color:#1A2332;">${r.rating}</strong> <span style="color:#64748B;">(${r.userRatingCount||0})</span> · <span style="color:#0D9488;">📍 ${formatDistance(r.distanceMiles)||'?'}</span></div>`:''}
               ${chips?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${chips}</div>`:''}
-              ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#3B82F6;font-size:11px;font-weight:600;">📞 ${phone}</a>`:''}
+              ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#3B82F6;font-size:calc(11px*var(--fs));font-weight:600;">📞 ${phone}</a>`:''}
               <div style="display:flex;gap:8px;">
                 <button onclick="window._gsRRDirs&&window._gsRRDirs(${i})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#0D9488;color:#fff;font-weight:600;font-size:11px;cursor:pointer;">🧭 Directions</button>
                 <button onclick="window._gsRRView&&window._gsRRView(${i})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#F1F5F9;color:#1A2332;font-weight:600;font-size:11px;cursor:pointer;">📋 Details</button>
@@ -724,7 +724,7 @@ export default function RestroomFinderPage() {
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
           <div
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
             style={{ background: CAT.restroom.bg, color: CAT.restroom.ink }}
           >
             🚻 Restroom Finder
@@ -742,17 +742,17 @@ export default function RestroomFinderPage() {
         >
           <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
           <div className="flex-1 min-w-0">
-            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color: '#94A3B8' }}>
+            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: '#94A3B8' }}>
               {isCity ? '🏙️ City' : '📍 Location'}
             </div>
-            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
+            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
           </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{ background: CAT.restroom.bg, color: CAT.restroom.ink }}>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{ background: CAT.restroom.bg, color: CAT.restroom.ink }}>
             Change
           </span>
         </button>
         {isCity && (
-          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[12px] leading-snug flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
+          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[calc(12px*var(--fs))] leading-snug flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
             <span>💡</span>
             <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
           </div>
@@ -764,7 +764,7 @@ export default function RestroomFinderPage() {
           <button
             onClick={handleRefresh}
             disabled={loading}
-            className="text-[12.5px] font-medium underline underline-offset-2 text-left disabled:opacity-50 transition-colors"
+            className="text-[calc(12.5px*var(--fs))] font-medium underline underline-offset-2 text-left disabled:opacity-50 transition-colors"
             style={{ color: CAT.restroom.ink }}
           >
             {loading ? 'Refreshing…' : 'Refresh search in this location'}
@@ -772,7 +772,7 @@ export default function RestroomFinderPage() {
           <button
             onClick={handleUseCurrentLocation}
             disabled={gpsLoading}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-[12px] font-semibold text-[13px] flex-shrink-0 transition-transform active:scale-[0.99] disabled:opacity-60"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-[12px] font-semibold text-[calc(13px*var(--fs))] flex-shrink-0 transition-transform active:scale-[0.99] disabled:opacity-60"
             style={{ background: CAT.restroom.ink, color: '#fff' }}
           >
             {gpsLoading ? <Loader2 size={15} className="animate-spin" /> : <Crosshair size={15} />}
@@ -783,21 +783,14 @@ export default function RestroomFinderPage() {
 
       {/* Filters band — keeps existing radius/venue tabs structure, restyled to fit warm-ivory */}
       <div className="px-4 max-w-md mx-auto pb-2">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-            {RADIUS_OPTIONS.map(r => (
-              <button key={r} onClick={() => setRadius(r)} className="font-sans" style={{ padding: "6px 12px", borderRadius: "20px", border: radius === r ? `2px solid ${CAT.restroom.ink}` : "1px solid #F0E9DC", background: radius === r ? CAT.restroom.ink : "#fff", color: radius === r ? "#fff" : '#475569', fontWeight: radius === r ? "700" : "500", fontSize: "12px", cursor: "pointer", whiteSpace: "nowrap" }}>{r} mi</button>
-            ))}
-          </div>
-          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" />
-        </div>
+        <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.restroom.ink} unit={unit} setUnit={setUnit} />
 
         {/* Venue tabs */}
         <div style={{ overflowX: "auto", scrollbarWidth: "none" }}>
           <div style={{ display: "flex", gap: "6px", paddingBottom: "10px" }}>
             {VENUE_TYPES.map(vt => (
-              <button key={vt.id} onClick={() => setVenueType(vt.id)} className="font-sans" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", padding: "8px 12px", borderRadius: "12px", flexShrink: 0, border: venueType === vt.id ? `2px solid ${vt.color}` : "1px solid #F0E9DC", background: venueType === vt.id ? `${vt.color}22` : "#fff", color: venueType === vt.id ? vt.color : '#475569', fontWeight: venueType === vt.id ? "700" : "500", fontSize: "10px", cursor: "pointer", minWidth: "64px" }}>
-                <span style={{ fontSize: "18px" }}>{vt.icon}</span>
+              <button key={vt.id} onClick={() => setVenueType(vt.id)} className="font-sans" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", padding: "8px 12px", borderRadius: "12px", flexShrink: 0, border: venueType === vt.id ? `2px solid ${vt.color}` : "1px solid #F0E9DC", background: venueType === vt.id ? `${vt.color}22` : "#fff", color: venueType === vt.id ? vt.color : '#475569', fontWeight: venueType === vt.id ? "700" : "500", fontSize: "calc(10px*var(--fs))", cursor: "pointer", minWidth: "64px" }}>
+                <span style={{ fontSize: "calc(18px*var(--fs))" }}>{vt.icon}</span>
                 <span>{vt.label}</span>
               </button>
             ))}
@@ -807,18 +800,18 @@ export default function RestroomFinderPage() {
 
       {/* Controls bar */}
       <div style={{ background: "#fff", padding: "10px 14px", borderBottom: "1px solid #E8EDF2", display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", scrollbarWidth: "none" }}>
-        <button onClick={() => setOpenOnly(o => !o)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", borderRadius: "20px", flexShrink: 0, border: openOnly ? `2px solid ${GREEN}` : "1px solid #E2E8F0", background: openOnly ? GREEN_LIGHT : "#fff", color: openOnly ? GREEN : GRAY, fontWeight: openOnly ? "700" : "500", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>
+        <button onClick={() => setOpenOnly(o => !o)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", borderRadius: "20px", flexShrink: 0, border: openOnly ? `2px solid ${GREEN}` : "1px solid #E2E8F0", background: openOnly ? GREEN_LIGHT : "#fff", color: openOnly ? GREEN : GRAY, fontWeight: openOnly ? "700" : "500", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>
           <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: openOnly ? GREEN : "#CBD5E1" }} /> Open Now
         </button>
-        <button onClick={() => setAccessOnly(a => !a)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", borderRadius: "20px", flexShrink: 0, border: accessOnly ? `2px solid ${BLUE}` : "1px solid #E2E8F0", background: accessOnly ? BLUE_LIGHT : "#fff", color: accessOnly ? BLUE : GRAY, fontWeight: accessOnly ? "700" : "500", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>
+        <button onClick={() => setAccessOnly(a => !a)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", borderRadius: "20px", flexShrink: 0, border: accessOnly ? `2px solid ${BLUE}` : "1px solid #E2E8F0", background: accessOnly ? BLUE_LIGHT : "#fff", color: accessOnly ? BLUE : GRAY, fontWeight: accessOnly ? "700" : "500", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>
           ♿ Accessible
         </button>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-          <span style={{ background: TEAL, color: "#fff", padding: "2px 8px", borderRadius: "10px", fontWeight: "800", fontSize: "12px" }}>{stats.total}</span>
+          <span style={{ background: TEAL, color: "#fff", padding: "2px 8px", borderRadius: "10px", fontWeight: "800", fontSize: "calc(12px*var(--fs))" }}>{stats.total}</span>
           <div style={{ display: "flex", gap: "3px" }}>
             {["list", "map"].map(v => (
-              <button key={v} onClick={() => setViewMode(v)} style={{ padding: "6px 10px", borderRadius: "8px", border: "none", background: viewMode === v ? TEAL : "#E2E8F0", color: viewMode === v ? "#fff" : GRAY, fontWeight: "700", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>
+              <button key={v} onClick={() => setViewMode(v)} style={{ padding: "6px 10px", borderRadius: "8px", border: "none", background: viewMode === v ? TEAL : "#E2E8F0", color: viewMode === v ? "#fff" : GRAY, fontWeight: "700", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>
                 {v === "list" ? "List View" : "Map View"}
               </button>
             ))}
@@ -829,37 +822,37 @@ export default function RestroomFinderPage() {
       {/* Content */}
       {(!lat || !lng) ? (
         <div style={{ textAlign: "center", padding: "60px 24px" }}>
-          <div style={{ fontSize: "48px", marginBottom: "14px" }}>📍</div>
-          <div style={{ color: DARK, fontWeight: "700", fontSize: "16px", marginBottom: "6px" }}>Set your location to find restrooms</div>
-          <div style={{ color: GRAY, fontSize: "13px", marginBottom: "18px", maxWidth: "300px", marginLeft: "auto", marginRight: "auto" }}>Find the nearest restroom right now — use your current location, or tap “Change” above to pick a place.</div>
-          <button onClick={handleUseCurrentLocation} disabled={gpsLoading} style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "12px 24px", borderRadius: "12px", border: "none", background: `linear-gradient(135deg,${TEAL_DARK},${TEAL})`, color: "#fff", fontWeight: "700", fontSize: "14px", cursor: gpsLoading ? "default" : "pointer", fontFamily: "inherit", opacity: gpsLoading ? 0.6 : 1 }}>
+          <div style={{ fontSize: "calc(48px*var(--fs))", marginBottom: "14px" }}>📍</div>
+          <div style={{ color: DARK, fontWeight: "700", fontSize: "calc(16px*var(--fs))", marginBottom: "6px" }}>Set your location to find restrooms</div>
+          <div style={{ color: GRAY, fontSize: "calc(13px*var(--fs))", marginBottom: "18px", maxWidth: "300px", marginLeft: "auto", marginRight: "auto" }}>Find the nearest restroom right now — use your current location, or tap “Change” above to pick a place.</div>
+          <button onClick={handleUseCurrentLocation} disabled={gpsLoading} style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "12px 24px", borderRadius: "12px", border: "none", background: `linear-gradient(135deg,${TEAL_DARK},${TEAL})`, color: "#fff", fontWeight: "700", fontSize: "calc(14px*var(--fs))", cursor: gpsLoading ? "default" : "pointer", fontFamily: "inherit", opacity: gpsLoading ? 0.6 : 1 }}>
             {gpsLoading ? "Locating…" : "📍 Refresh to current location"}
           </button>
         </div>
       ) : loading ? (
         <div style={{ textAlign: "center", padding: "60px 24px" }}>
-          <motion.div animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }} transition={{ repeat: Infinity, duration: 1.5 }} style={{ fontSize: "48px", marginBottom: "16px", display: "inline-block" }}>🚻</motion.div>
-          <div style={{ color: DARK, fontWeight: "700", fontSize: "16px", marginBottom: "6px" }}>Finding restrooms nearby…</div>
-          <div style={{ color: GRAY, fontSize: "13px" }}>Coffee · Malls · Transit · Parks · More</div>
+          <motion.div animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }} transition={{ repeat: Infinity, duration: 1.5 }} style={{ fontSize: "calc(48px*var(--fs))", marginBottom: "16px", display: "inline-block" }}>🚻</motion.div>
+          <div style={{ color: DARK, fontWeight: "700", fontSize: "calc(16px*var(--fs))", marginBottom: "6px" }}>Finding restrooms nearby…</div>
+          <div style={{ color: GRAY, fontSize: "calc(13px*var(--fs))" }}>Coffee · Malls · Transit · Parks · More</div>
         </div>
       ) : error ? (
         <div style={{ textAlign: "center", padding: "60px 24px" }}>
-          <div style={{ fontSize: "44px", marginBottom: "14px" }}>😕</div>
-          <div style={{ color: CORAL, fontWeight: "700", fontSize: "16px", marginBottom: "6px" }}>{error}</div>
-          <button onClick={() => setRadius(r => Math.min(r + 5, 25))} style={{ marginTop: "14px", padding: "12px 24px", borderRadius: "12px", border: "none", background: `linear-gradient(135deg,${TEAL_DARK},${TEAL})`, color: "#fff", fontWeight: "700", fontSize: "14px", cursor: "pointer", fontFamily: "inherit" }}>Try Larger Radius</button>
+          <div style={{ fontSize: "calc(44px*var(--fs))", marginBottom: "14px" }}>😕</div>
+          <div style={{ color: CORAL, fontWeight: "700", fontSize: "calc(16px*var(--fs))", marginBottom: "6px" }}>{error}</div>
+          <button onClick={() => setRadius(r => Math.min(r + 5, 25))} style={{ marginTop: "14px", padding: "12px 24px", borderRadius: "12px", border: "none", background: `linear-gradient(135deg,${TEAL_DARK},${TEAL})`, color: "#fff", fontWeight: "700", fontSize: "calc(14px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>Try Larger Radius</button>
         </div>
       ) : viewMode === "list" ? (
         <div style={{ padding: "14px 12px 100px", display: "flex", flexDirection: "column", gap: "14px" }}>
           {loadingMore && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "6px", color: GRAY, fontSize: "13px", fontWeight: 600 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "6px", color: GRAY, fontSize: "calc(13px*var(--fs))", fontWeight: 600 }}>
               <Loader2 className="w-4 h-4 animate-spin" /> Finding more restrooms nearby…
             </div>
           )}
           {filtered.length === 0 ? (
             <div style={{ textAlign: "center", padding: "50px 24px", background: "#fff", borderRadius: "20px" }}>
-              <div style={{ fontSize: "48px", marginBottom: "14px" }}>🔍</div>
-              <div style={{ fontWeight: "800", fontSize: "18px", color: DARK, marginBottom: "6px" }}>No matches</div>
-              <div style={{ color: GRAY, fontSize: "13px" }}>Try removing filters or switching category</div>
+              <div style={{ fontSize: "calc(48px*var(--fs))", marginBottom: "14px" }}>🔍</div>
+              <div style={{ fontWeight: "800", fontSize: "calc(18px*var(--fs))", color: DARK, marginBottom: "6px" }}>No matches</div>
+              <div style={{ color: GRAY, fontSize: "calc(13px*var(--fs))" }}>Try removing filters or switching category</div>
             </div>
           ) : filtered.map((r, i) => (
             <RestroomCard key={r.id || i} r={r} index={i}
@@ -879,10 +872,10 @@ export default function RestroomFinderPage() {
           <div ref={mapRef} style={{ height: "100%", width: "100%" }} />
 
           {/* Close map button */}
-          <button onClick={() => setViewMode("list")} style={{ position: "absolute", top: "14px", right: "14px", zIndex: 1000, background: "#fff", borderRadius: "50%", width: "40px", height: "40px", border: "none", boxShadow: "0 2px 10px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: "18px", color: DARK }}>✕</button>
+          <button onClick={() => setViewMode("list")} style={{ position: "fixed", top: "calc(50px + env(safe-area-inset-top) + 10px)", right: "14px", zIndex: 1200, background: "#fff", borderRadius: "50%", width: "40px", height: "40px", border: "none", boxShadow: "0 2px 10px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: "calc(18px*var(--fs))", color: DARK }}>✕</button>
 
           {/* Legend */}
-          <div style={{ position: "absolute", top: "14px", left: "14px", zIndex: 1000, background: "rgba(255,255,255,0.95)", borderRadius: "10px", padding: "8px 12px", fontSize: "10px", boxShadow: "0 2px 10px rgba(0,0,0,0.1)" }}>
+          <div style={{ position: "absolute", top: "14px", left: "14px", zIndex: 1000, background: "rgba(255,255,255,0.95)", borderRadius: "10px", padding: "8px 12px", fontSize: "calc(10px*var(--fs))", boxShadow: "0 2px 10px rgba(0,0,0,0.1)" }}>
             <div style={{ fontWeight: "700", marginBottom: "4px", color: DARK }}>Legend</div>
             {[{ color: GREEN, label: "Free" }, { color: AMBER, label: "Customers only" }, { color: TEAL_DARK, label: "Other" }].map(item => (
               <div key={item.label} style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "2px" }}>

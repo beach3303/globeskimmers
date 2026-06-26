@@ -18,6 +18,7 @@ import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { supabase } from '@/lib/supabaseClient';
+import { isAdminEmail } from '@/lib/admins';
 import {
   startProviderSignIn,
   signInWithApple,
@@ -39,6 +40,8 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [authError, setAuthError] = useState(null);
+  // Whether this user sees the global "refresh app cache" button in the nav.
+  const [canRefresh, setCanRefresh] = useState(false);
 
   const loadProfile = useCallback(async (userId) => {
     if (!userId) { setProfile(null); return null; }
@@ -162,9 +165,27 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(async () => {
     try { await authSignOut(); } finally {
-      setSession(null); setUser(null); setProfile(null);
+      setSession(null); setUser(null); setProfile(null); setCanRefresh(false);
     }
   }, []);
+
+  // canRefresh = admin email (always) OR an email an admin granted in the
+  // Supabase `refresh_access` table. Re-evaluated whenever the user changes, so
+  // revoking access takes effect on the user's next sign-in.
+  useEffect(() => {
+    let cancelled = false;
+    const email = (user?.email || '').toLowerCase();
+    if (!email) { setCanRefresh(false); return; }
+    if (isAdminEmail(email)) { setCanRefresh(true); return; }
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('refresh_access').select('email').eq('email', email).maybeSingle();
+        if (!cancelled) setCanRefresh(!!data);
+      } catch { if (!cancelled) setCanRefresh(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
 
   const value = useMemo(() => ({
     // Supabase auth state
@@ -174,6 +195,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: !!session?.user,
     isLoadingAuth,
     authError,
+    canRefresh,
     // actions
     signInWithProvider,
     signInWithApple: signInApple,
@@ -189,7 +211,7 @@ export const AuthProvider = ({ children }) => {
     checkUserAuth: refreshProfile,
     navigateToLogin: () => {}, // gate is rendered by App.jsx now; no redirect
   }), [
-    session, user, profile, isLoadingAuth, authError,
+    session, user, profile, isLoadingAuth, authError, canRefresh,
     signInWithProvider, signInApple, signInWithEmail, signUpWithEmail,
     verifyEmailOtp, refreshProfile, logout,
   ]);

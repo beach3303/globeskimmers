@@ -2304,7 +2304,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
             <ArrowLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
           <div
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px] font-sans"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))] font-sans"
             style={{ background: CAT.transit.bg, color: CAT.transit.ink }}
           >
             <Bus size={13} color={CAT.transit.ink} strokeWidth={2} />
@@ -2336,10 +2336,10 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
             <div className="flex-1 min-w-0">
               {/* FROM */}
               <div className="pb-3 border-b border-dashed" style={{ borderColor: '#E5DDC8' }}>
-                <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color: '#94A3B8' }}>FROM</div>
-                <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">{origin?.name || 'Set your location'}</div>
-                {origin?.address && <div className="text-[11px] text-[#6B7280] mt-0.5 truncate">{origin.address}</div>}
-                <button onClick={() => setShowLocationPicker(true)} className="text-[11.5px] font-semibold mt-1 underline underline-offset-2" style={{ color: TEAL_DEEP }}>
+                <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: '#94A3B8' }}>FROM</div>
+                <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">{origin?.name || 'Set your location'}</div>
+                {origin?.address && <div className="text-[calc(11px*var(--fs))] text-[#6B7280] mt-0.5 truncate">{origin.address}</div>}
+                <button onClick={() => setShowLocationPicker(true)} className="text-[calc(11.5px*var(--fs))] font-semibold mt-1 underline underline-offset-2" style={{ color: TEAL_DEEP }}>
                   Change
                 </button>
                 {/* Subtle secondary action — set the starting point to live GPS.
@@ -2349,34 +2349,34 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                   <button
                     onClick={handleUseCurrentAsStart}
                     disabled={fromGpsLoading}
-                    className="flex items-center gap-1.5 px-3 rounded-full text-[11px] font-semibold disabled:opacity-60 active:scale-[0.98] transition"
+                    className="flex items-center gap-1.5 px-3 rounded-full text-[calc(11px*var(--fs))] font-semibold disabled:opacity-60 active:scale-[0.98] transition"
                     style={{ height: '30px', background: '#E6F4F1', color: TEAL_DEEP, border: '1px solid #B6E3DC' }}
                   >
                     {fromGpsLoading ? <Loader2 size={12} className="animate-spin" /> : <Navigation size={12} />}
                     <span>{fromGpsLoading ? 'Updating starting point…' : 'Use my current location as the starting point'}</span>
                   </button>
                 </div>
-                {fromGpsError && <div className="text-[11px] text-red-600 mt-1 text-right">{fromGpsError}</div>}
+                {fromGpsError && <div className="text-[calc(11px*var(--fs))] text-red-600 mt-1 text-right">{fromGpsError}</div>}
               </div>
               {/* TO */}
               <div className="pt-3">
-                <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color: '#94A3B8' }}>TO</div>
+                <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: '#94A3B8' }}>TO</div>
                 {destination ? (
                   <>
-                    <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 flex items-center gap-1.5">
+                    <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 flex items-center gap-1.5">
                       {destination.type === 'airport' && <Plane size={13} color={CAT.atm.ink} />}
                       {destination.type === 'hotel' && <Hotel size={13} color={CAT.food.ink} />}
                       {destination.type === 'saved' && <Star size={13} color={CAT.todo.ink} />}
                       {destination.type === 'search' && <Navigation size={13} color={TEAL_DEEP} />}
                       <span className="truncate">{destination.name}</span>
                     </div>
-                    {destination.address && <div className="text-[11px] text-[#6B7280] mt-0.5 truncate">{destination.address}</div>}
-                    <button onClick={() => { setDestination(null); setRouteInfo(null); }} className="text-[11.5px] font-semibold mt-1 underline underline-offset-2" style={{ color: TEAL_DEEP }}>
+                    {destination.address && <div className="text-[calc(11px*var(--fs))] text-[#6B7280] mt-0.5 truncate">{destination.address}</div>}
+                    <button onClick={() => { setDestination(null); setRouteInfo(null); }} className="text-[calc(11.5px*var(--fs))] font-semibold mt-1 underline underline-offset-2" style={{ color: TEAL_DEEP }}>
                       Clear
                     </button>
                   </>
                 ) : (
-                  <div className="text-[13px] text-[#94A3B8] mt-1">Pick a destination below</div>
+                  <div className="text-[calc(13px*var(--fs))] text-[#94A3B8] mt-1">Pick a destination below</div>
                 )}
               </div>
             </div>
@@ -2385,11 +2385,11 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
           {/* Meta chips when destination set: distance + traffic + local time */}
           {destination && transportData && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-1 rounded-full text-[11.5px] font-semibold" style={{ background: '#F7F4EC', color: '#374151' }}>
+              <span className="px-2.5 py-1 rounded-full text-[calc(11.5px*var(--fs))] font-semibold" style={{ background: '#F7F4EC', color: '#374151' }}>
                 📍 {transportData.distance.miles} mi · {transportData.distance.km} km
               </span>
               {trafficStatus && (
-                <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold ${trafficStatus.bg} ${trafficStatus.color}`}>
+                <span className={`px-2.5 py-1 rounded-full text-[calc(11.5px*var(--fs))] font-semibold ${trafficStatus.bg} ${trafficStatus.color}`}>
                   {trafficStatus.icon} {trafficStatus.text}
                 </span>
               )}
@@ -2398,7 +2398,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                 const timezone = getTimezone(countryCode, activeLocation);
                 const localTime = getLocalTimeForTimezone(timezone, activeLocation);
                 return (
-                  <span className="px-2.5 py-1 rounded-full text-[11.5px] font-semibold" style={{ background: '#F7F4EC', color: '#374151' }}>
+                  <span className="px-2.5 py-1 rounded-full text-[calc(11.5px*var(--fs))] font-semibold" style={{ background: '#F7F4EC', color: '#374151' }}>
                     🕐 {localTime.time}
                   </span>
                 );
@@ -2416,7 +2416,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
               style={{ background: CAT.atm.bg, color: CAT.atm.ink }}
             >
               <Plane size={20} color={CAT.atm.ink} strokeWidth={2} />
-              <span className="font-bold text-[12px]">Airport</span>
+              <span className="font-bold text-[calc(12px*var(--fs))]">Airport</span>
             </button>
             <button
               onClick={() => setShowDestinationSearch(true)}
@@ -2424,7 +2424,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
               style={{ background: CAT.todo.bg, color: CAT.todo.ink }}
             >
               <Search size={20} color={CAT.todo.ink} strokeWidth={2} />
-              <span className="font-bold text-[12px]">Search</span>
+              <span className="font-bold text-[calc(12px*var(--fs))]">Search</span>
             </button>
             {user?.hotel && (
               <button
@@ -2433,7 +2433,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                 style={{ background: CAT.food.bg, color: CAT.food.ink }}
               >
                 <Hotel size={20} color={CAT.food.ink} strokeWidth={2} />
-                <span className="font-bold text-[12px]">My Hotel</span>
+                <span className="font-bold text-[calc(12px*var(--fs))]">My Hotel</span>
               </button>
             )}
             {savedLocations.length > 0 && (
@@ -2443,7 +2443,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                 style={{ background: CAT.shopping.bg, color: CAT.shopping.ink }}
               >
                 <Star size={20} color={CAT.shopping.ink} strokeWidth={2} />
-                <span className="font-bold text-[12px]">Saved</span>
+                <span className="font-bold text-[calc(12px*var(--fs))]">Saved</span>
               </button>
             )}
           </div>
@@ -2451,7 +2451,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
 
         {/* CITY WARNING — when active location is a broad city pin, not an address */}
         {destination && isCityLocation(activeLocation) && (
-          <div className="px-3.5 py-3 rounded-[14px] text-[12.5px] font-medium flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
+          <div className="px-3.5 py-3 rounded-[14px] text-[calc(12.5px*var(--fs))] font-medium flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
             <span>⚠️</span>
             <span>For more accurate directions, use a full address or a well-known place (like a hotel or airport).</span>
           </div>
@@ -2460,7 +2460,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
         {/* WAYS TO GET THERE — unified transit options list (replaces old Trip Summary + fare table) */}
         {destination && transportData && (
           <>
-            <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase font-semibold mt-2 mb-1" style={{ color: '#6B7280' }}>
+            <div className="font-mono text-[calc(10.5px*var(--fs))] tracking-[0.16em] uppercase font-semibold mt-2 mb-1" style={{ color: '#6B7280' }}>
               Ways to get there
             </div>
             <div className="space-y-2.5">
@@ -2501,22 +2501,22 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-1.5">
-                          <span className="font-bold text-[16px]">{m.label}</span>
-                          {isBest && <span className="font-mono text-[10px] tracking-[0.12em] uppercase opacity-85">· best</span>}
+                          <span className="font-bold text-[calc(16px*var(--fs))]">{m.label}</span>
+                          {isBest && <span className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase opacity-85">· best</span>}
                         </div>
-                        <div className="text-[12.5px] mt-0.5" style={{ color: isBest ? 'rgba(255,255,255,0.85)' : '#6B7280' }}>
+                        <div className="text-[calc(12.5px*var(--fs))] mt-0.5" style={{ color: isBest ? 'rgba(255,255,255,0.85)' : '#6B7280' }}>
                           {m.tag} · {option.time.trafficLevel} traffic
                         </div>
                       </div>
                       <div className="text-right flex-none">
-                        <div className="font-serif italic text-[22px] leading-none">
+                        <div className="font-serif italic text-[calc(22px*var(--fs))] leading-none">
                           {option.mode === 'walk' ? 'Free' : `${option.fare.symbol}${option.fare.low}-${option.fare.high}`}
                         </div>
-                        <div className="mt-1 text-[12px] font-semibold" style={{ color: isBest ? 'rgba(255,255,255,0.9)' : CAT.money.ink }}>
+                        <div className="mt-1 text-[calc(12px*var(--fs))] font-semibold" style={{ color: isBest ? 'rgba(255,255,255,0.9)' : CAT.money.ink }}>
                           ~{option.time.minutes} min
                         </div>
                         {option.mode !== 'walk' && option.fare.currency !== 'USD' && option.usdFare && (
-                          <div className="text-[10px] font-medium mt-0.5 opacity-70">
+                          <div className="text-[calc(10px*var(--fs))] font-medium mt-0.5 opacity-70">
                             ~${option.usdFare.low}-${option.usdFare.high} USD
                           </div>
                         )}
@@ -2532,11 +2532,11 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
         {/* BOOK A RIDE — rideshare providers (region-aware) */}
         {destination && transportData && availableProviders.length > 0 && (
           <>
-            <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase font-semibold mt-3 mb-1" style={{ color: '#6B7280' }}>
+            <div className="font-mono text-[calc(10.5px*var(--fs))] tracking-[0.16em] uppercase font-semibold mt-3 mb-1" style={{ color: '#6B7280' }}>
               Book a ride
             </div>
             {routeInfo?.rideshare?.pickup_instructions && (
-              <div className="px-3.5 py-2.5 rounded-[12px] text-[12.5px] mb-2" style={{ background: CAT.shopping.bg, color: CAT.shopping.ink }}>
+              <div className="px-3.5 py-2.5 rounded-[12px] text-[calc(12.5px*var(--fs))] mb-2" style={{ background: CAT.shopping.bg, color: CAT.shopping.ink }}>
                 <span className="font-semibold">📍 Pickup:</span> {routeInfo.rideshare.pickup_instructions}
                 {routeInfo.rideshare.estimated_wait && (
                   <span> · <span className="font-semibold">⏱️ Wait:</span> {routeInfo.rideshare.estimated_wait}</span>
@@ -2563,14 +2563,14 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                       {provider.logo}
                     </div>
                     <div className="flex-1 text-left min-w-0">
-                      <div className="font-bold text-[15px] text-[#0F1419]">{provider.name}</div>
+                      <div className="font-bold text-[calc(15px*var(--fs))] text-[#0F1419]">{provider.name}</div>
                       {taxiOption && (
-                        <div className="text-[11.5px] text-[#6B7280] mt-0.5">
+                        <div className="text-[calc(11.5px*var(--fs))] text-[#6B7280] mt-0.5">
                           ~{taxiOption.fare.symbol}{taxiOption.fare.low}-{taxiOption.fare.high} · ~{taxiOption.time.minutes} min
                         </div>
                       )}
                     </div>
-                    <div className="px-3.5 py-2 rounded-[10px] text-white font-bold text-[12.5px] flex-none flex items-center gap-1" style={{ background: '#0F1419' }}>
+                    <div className="px-3.5 py-2 rounded-[10px] text-white font-bold text-[calc(12.5px*var(--fs))] flex-none flex items-center gap-1" style={{ background: '#0F1419' }}>
                       Open <ExternalLink size={12} color="#fff" strokeWidth={2.4} />
                     </div>
                   </button>
@@ -2578,7 +2578,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
               })}
             </div>
             {availableProviders.length === 1 && (
-              <div className="text-[11.5px] text-[#6B7280] text-center mt-1">
+              <div className="text-[calc(11.5px*var(--fs))] text-[#6B7280] text-center mt-1">
                 {availableProviders[0].name} is the primary rideshare service in this region
               </div>
             )}
@@ -2588,7 +2588,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
         {/* CALL A TAXI — country-specific hotlines */}
         {destination && taxiServices.length > 0 && taxiServices.some(t => t.phone) && (
           <>
-            <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase font-semibold mt-3 mb-1" style={{ color: '#6B7280' }}>
+            <div className="font-mono text-[calc(10.5px*var(--fs))] tracking-[0.16em] uppercase font-semibold mt-3 mb-1" style={{ color: '#6B7280' }}>
               Call a taxi
             </div>
             <div className="space-y-2">
@@ -2603,20 +2603,20 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                     <Phone size={18} color="#fff" strokeWidth={2} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-[14.5px]">{taxi.name}</div>
-                    <div className="text-[12px] mt-0.5 opacity-85">{taxi.phone}</div>
+                    <div className="font-bold text-[calc(14.5px*var(--fs))]">{taxi.name}</div>
+                    <div className="text-[calc(12px*var(--fs))] mt-0.5 opacity-85">{taxi.phone}</div>
                   </div>
-                  <span className="font-mono text-[10px] tracking-[0.14em] uppercase font-bold opacity-80">Tap to call</span>
+                  <span className="font-mono text-[calc(10px*var(--fs))] tracking-[0.14em] uppercase font-bold opacity-80">Tap to call</span>
                 </a>
               ))}
             </div>
             {routeInfo?.taxi?.where_to_find && (
-              <div className="px-3.5 py-2.5 rounded-[12px] mt-2 text-[12px]" style={{ background: '#F7F4EC', color: '#374151' }}>
+              <div className="px-3.5 py-2.5 rounded-[12px] mt-2 text-[calc(12px*var(--fs))]" style={{ background: '#F7F4EC', color: '#374151' }}>
                 <span className="font-semibold">📍 Where to find:</span> {routeInfo.taxi.where_to_find}
               </div>
             )}
             {routeInfo?.taxi?.safety_tips && (
-              <div className="px-3.5 py-2.5 rounded-[12px] mt-2 text-[12px]" style={{ background: CAT.food.bg, color: CAT.food.ink }}>
+              <div className="px-3.5 py-2.5 rounded-[12px] mt-2 text-[calc(12px*var(--fs))]" style={{ background: CAT.food.bg, color: CAT.food.ink }}>
                 <span className="font-semibold">⚠️ Safety:</span> {routeInfo.taxi.safety_tips}
               </div>
             )}
@@ -2632,7 +2632,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                 const url = `https://www.google.com/maps/dir/?api=1&origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&travelmode=transit`;
                 window.open(url, '_blank');
               }}
-              className="flex items-center justify-center gap-2 py-3 rounded-[14px] font-semibold text-[13px]"
+              className="flex items-center justify-center gap-2 py-3 rounded-[14px] font-semibold text-[calc(13px*var(--fs))]"
               style={{ background: CAT.atm.bg, color: CAT.atm.ink }}
             >
               🗺️ Google Maps
@@ -2642,7 +2642,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                 const url = `http://maps.apple.com/?saddr=${origin.latitude},${origin.longitude}&daddr=${destination.latitude},${destination.longitude}&dirflg=r`;
                 window.open(url, '_blank');
               }}
-              className="flex items-center justify-center gap-2 py-3 rounded-[14px] font-semibold text-[13px]"
+              className="flex items-center justify-center gap-2 py-3 rounded-[14px] font-semibold text-[calc(13px*var(--fs))]"
               style={{ background: '#F7F4EC', color: '#374151' }}
             >
               🍎 Apple Maps
@@ -2653,14 +2653,14 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
         {/* BEST PUBLIC-TRANSIT ROUTE — AI-fetched route info with step-by-step */}
         {destination && (loadingRouteInfo || routeInfo?.public_transport?.best_option) && (
           <>
-            <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase font-semibold mt-3 mb-1" style={{ color: '#6B7280' }}>
+            <div className="font-mono text-[calc(10.5px*var(--fs))] tracking-[0.16em] uppercase font-semibold mt-3 mb-1" style={{ color: '#6B7280' }}>
               Best transit route
             </div>
             <div className="px-4 py-3.5 rounded-[16px]" style={{ background: CAT.transit.bg, color: CAT.transit.ink }}>
               {loadingRouteInfo ? (
                 <div className="flex items-center justify-center gap-2 py-3">
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span className="text-[13px] font-medium">Finding best route...</span>
+                  <span className="text-[calc(13px*var(--fs))] font-medium">Finding best route...</span>
                 </div>
               ) : (
                 <>
@@ -2669,30 +2669,30 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                       {routeInfo.public_transport.best_option.type === 'train' ? '🚇' : routeInfo.public_transport.best_option.type === 'bus' ? '🚌' : '🚐'}
                     </span>
                     <div className="flex-1">
-                      <div className="font-bold text-[14.5px]">{routeInfo.public_transport.best_option.name || `Take the ${routeInfo.public_transport.best_option.type}`}</div>
+                      <div className="font-bold text-[calc(14.5px*var(--fs))]">{routeInfo.public_transport.best_option.name || `Take the ${routeInfo.public_transport.best_option.type}`}</div>
                       {routeInfo.public_transport.best_option.from_station && (
-                        <div className="text-[12px] mt-0.5 opacity-90">From {routeInfo.public_transport.best_option.from_station}</div>
+                        <div className="text-[calc(12px*var(--fs))] mt-0.5 opacity-90">From {routeInfo.public_transport.best_option.from_station}</div>
                       )}
                     </div>
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     {routeInfo.public_transport.best_option.travel_time_minutes && (
-                      <span className="px-2.5 py-1 rounded-full text-[11.5px] font-semibold bg-white/40">⏱️ {routeInfo.public_transport.best_option.travel_time_minutes} min</span>
+                      <span className="px-2.5 py-1 rounded-full text-[calc(11.5px*var(--fs))] font-semibold bg-white/40">⏱️ {routeInfo.public_transport.best_option.travel_time_minutes} min</span>
                     )}
                     {routeInfo.public_transport.best_option.fare_local && (
-                      <span className="px-2.5 py-1 rounded-full text-[11.5px] font-semibold bg-white/40">💰 {routeInfo.public_transport.best_option.fare_local}</span>
+                      <span className="px-2.5 py-1 rounded-full text-[calc(11.5px*var(--fs))] font-semibold bg-white/40">💰 {routeInfo.public_transport.best_option.fare_local}</span>
                     )}
                     {routeInfo.public_transport.best_option.frequency && (
-                      <span className="px-2.5 py-1 rounded-full text-[11.5px] font-semibold bg-white/40">🕐 {routeInfo.public_transport.best_option.frequency}</span>
+                      <span className="px-2.5 py-1 rounded-full text-[calc(11.5px*var(--fs))] font-semibold bg-white/40">🕐 {routeInfo.public_transport.best_option.frequency}</span>
                     )}
                   </div>
                   {routeInfo.public_transport.steps && routeInfo.public_transport.steps.length > 0 && (
                     <div className="mt-3 pt-3 border-t" style={{ borderColor: 'rgba(63,73,212,0.2)' }}>
-                      <div className="font-semibold text-[12px] mb-2">📋 Step-by-step:</div>
+                      <div className="font-semibold text-[calc(12px*var(--fs))] mb-2">📋 Step-by-step:</div>
                       <div className="space-y-1.5">
                         {routeInfo.public_transport.steps.map((step, i) => (
-                          <div key={i} className="flex items-start gap-2 text-[12.5px]">
-                            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold flex-none" style={{ background: CAT.transit.ink, color: '#fff' }}>{step.step}</div>
+                          <div key={i} className="flex items-start gap-2 text-[calc(12.5px*var(--fs))]">
+                            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[calc(11px*var(--fs))] font-bold flex-none" style={{ background: CAT.transit.ink, color: '#fff' }}>{step.step}</div>
                             <div className="flex-1">
                               {step.instruction}
                               {step.duration && <span className="opacity-75"> · ⏱️ {step.duration}</span>}
@@ -2703,10 +2703,10 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                     </div>
                   )}
                   {routeInfo.public_transport.best_option.ticket_info && (
-                    <div className="mt-2 text-[11.5px] opacity-90">🎫 {routeInfo.public_transport.best_option.ticket_info}</div>
+                    <div className="mt-2 text-[calc(11.5px*var(--fs))] opacity-90">🎫 {routeInfo.public_transport.best_option.ticket_info}</div>
                   )}
                   {routeInfo.public_transport.alternative && (
-                    <div className="mt-3 pt-3 border-t text-[12px]" style={{ borderColor: 'rgba(63,73,212,0.2)' }}>
+                    <div className="mt-3 pt-3 border-t text-[calc(12px*var(--fs))]" style={{ borderColor: 'rgba(63,73,212,0.2)' }}>
                       <span className="font-semibold">Alternative:</span> {routeInfo.public_transport.alternative.description}
                     </div>
                   )}
@@ -2720,7 +2720,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
         {destination && routeInfo?.recommendation && (
           <div className="px-3.5 py-3 rounded-[14px] flex items-start gap-2 mt-3" style={{ background: CAT.transit.bg, color: CAT.transit.ink }}>
             <span className="text-base">💡</span>
-            <div className="text-[12.5px] leading-relaxed font-medium">{routeInfo.recommendation.reason}</div>
+            <div className="text-[calc(12.5px*var(--fs))] leading-relaxed font-medium">{routeInfo.recommendation.reason}</div>
           </div>
         )}
 

@@ -1,8 +1,10 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
-import { Home as HomeIcon, Bookmark, Settings as SettingsIcon } from 'lucide-react';
+import { Home as HomeIcon, Bookmark, Settings as SettingsIcon, RefreshCw } from 'lucide-react';
 import { createPageUrl } from '@/utils';
+import { useAuth } from '@/lib/AuthContext';
+import { clearAppCache } from '@/lib/clearAppCache';
 
 // Floating pill nav — fixed, centered, 22px above bottom safe area.
 // Per the Claude-design spec: 3 anchors only (Home, Saved, Settings).
@@ -18,6 +20,16 @@ import { createPageUrl } from '@/utils';
 export default function FloatingNav({ active, dark = false, liftForAd = false }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { canRefresh } = useAuth();
+
+  // Global refresh (admins + admin-granted users only): wipe cached RESULTS so
+  // the user gets fresh data, then reload to refetch. Never touches auth, prefs,
+  // or saved locations (see clearAppCache).
+  const handleRefresh = () => {
+    if (typeof window !== 'undefined' && !window.confirm('Refresh all cached results? The app will reload with fresh data.')) return;
+    clearAppCache();
+    setTimeout(() => { try { window.location.reload(); } catch { /* ignore */ } }, 60);
+  };
 
   const items = [
     { id: 'home',     ico: HomeIcon,     route: 'Home' },
@@ -120,6 +132,32 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
           </button>
         );
       })}
+
+      {/* 4th icon: global refresh / clear-cache. Only for admins + granted users
+          (canRefresh). Runs an action, not a route. */}
+      {canRefresh && (
+        <button
+          onClick={handleRefresh}
+          aria-label="refresh"
+          title="Refresh app (clear cached results)"
+          style={{
+            width: 52,
+            height: 44,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'transparent',
+            border: 'none',
+            borderRadius: 9999,
+            color: fg,
+            opacity: 0.7,
+            cursor: 'pointer',
+            transition: 'background 120ms, opacity 120ms',
+          }}
+        >
+          <RefreshCw size={20} strokeWidth={1.8} />
+        </button>
+      )}
     </div>
   );
 }

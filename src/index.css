@@ -77,6 +77,50 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Prevent horizontal document overflow — the "leaning"/sideways-pan bug on
+     mobile. Without this, any child that's even slightly wider than the screen
+     makes the whole document horizontally scrollable, so mx-auto content drifts
+     off-center while the fixed top banner stays put. Clipping overflow-x at the
+     viewport keeps every page centered. */
+  html, body {
+    overflow-x: hidden;
+    max-width: 100%;
+    width: 100%;
+    /* Kill horizontal rubber-band/overscroll so the page can't be dragged
+       sideways even if a sub-pixel overflow sneaks in. */
+    overscroll-behavior-x: none;
+  }
+  /* iOS WebView quirk: overflow-x:hidden on html/body alone often still lets the
+     page pan sideways (a too-wide child, or hidden forcing a nested scroller on
+     the mount node). Clip the actual app containers too. `clip` (not `hidden`)
+     does NOT create a scroll container or force overflow-y:auto, so vertical
+     scroll + sticky headers keep working — it just hard-stops sideways drift so
+     every page stays centered. Use 100% (NOT 100vw): under viewport-fit=cover,
+     100vw is the full edge-to-edge layout width and can sit a hair wider than the
+     content box, which is enough to let the visual viewport pan. */
+  #root, .gs-app-bg {
+    overflow-x: clip;
+    max-width: 100%;
+    width: 100%;
+    overscroll-behavior-x: none;
+  }
+}
+
+/* Native camera preview transparency. @capacitor-community/camera-preview
+   renders the live camera in a NATIVE layer BEHIND the WebView. For it to show
+   through, the page itself must be transparent while a scanner camera is open.
+   The scanner toggles `gs-camera-open` on <html> on mount and removes it on
+   leave (which also restores the normal opaque background). */
+html.gs-camera-open,
+html.gs-camera-open body,
+html.gs-camera-open #root,
+html.gs-camera-open .gs-app-bg {
+  background: transparent !important;
+}
+/* Hide the fixed brand banner while the native camera is live — it sits behind
+   the transparent webview and would otherwise block the camera preview. */
+html.gs-camera-open .gs-app-banner {
+  display: none !important;
 }
 
 /* ============================================================================
@@ -85,6 +129,9 @@
 
 /* Globeskimmers CSS Variables */
 :root {
+  /* Global text-size multiplier driven by the eyeglass control. Text sizes on
+     scaled pages are written as calc(<px> * var(--fs)); default 1 = no change. */
+  --fs: 1;
   --gs-primary: #2A9D8F;
   --gs-secondary: #3B82F6;
   --gs-accent: #F59E0B;

@@ -342,6 +342,10 @@ function ZoneVerdict({ details, showVerdictHelper, sourceFor }) {
 // fresh per app load, which is conservative for accuracy.
 const RATE_CACHE = new Map();
 const RATE_TTL_MS = 60 * 60 * 1000;  // 1 hour
+// Live rate via the Cloudflare Worker POST /exchange-rate (the same handler the
+// Money Exchange page uses; returns { exchange_rate }). Base44's getExchangeRate
+// 403s on native (no Base44 session), which left rate=null → "Gross estimate —".
+// callWorker works on web AND native (CapacitorHttp).
 async function fetchRate(from, to) {
   if (!from || !to) return null;
   if (from === to) return 1;
@@ -349,8 +353,8 @@ async function fetchRate(from, to) {
   const hit = RATE_CACHE.get(key);
   if (hit && (Date.now() - hit.ts) < RATE_TTL_MS) return hit.rate;
   try {
-    const { data } = await base44.functions.invoke('getExchangeRate', { from, to, amount: 1 });
-    if (data?.error) return null;
+    const { data, error } = await callWorker(ROUTE.getExchangeRate, { from, to, amount: 1 });
+    if (error || data?.error) return null;
     const rate = typeof data?.exchange_rate === 'number' ? data.exchange_rate : null;
     if (rate != null) RATE_CACHE.set(key, { rate, ts: Date.now() });
     return rate;

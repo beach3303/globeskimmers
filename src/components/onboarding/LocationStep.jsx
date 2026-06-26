@@ -359,7 +359,7 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
     <motion.div
       initial={{ opacity: 0, x: 100 }}
       animate={{ opacity: 1, x: 0 }}
-      className="flex flex-col items-center justify-center min-h-screen p-6 relative"
+      className="flex flex-col items-center min-h-screen px-6 pt-6 pb-8 relative"
     >
       <button
         onClick={onExit}

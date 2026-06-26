@@ -30,13 +30,14 @@
 // ============================================================================
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
-import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
+import RadiusRow from "@/components/location/RadiusRow";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
@@ -368,14 +369,18 @@ function processRest(place, userLat, userLng) {
   if (place.sportsBadge === 'Best Sports Bar')   badges.push({ icon:'🏆', label:'Best Sports Bar',   color:'#B45309', bg:'#FEF3C7' });
   if (place.sportsBadge === 'Sports-Friendly')   badges.push({ icon:'📺', label:'Sports-Friendly',    color:'#0277BD', bg:'#E1F5FE' });
   if (place.sportsBadge === 'Casual Watch Spot') badges.push({ icon:'🍺', label:'Casual Watch Spot',  color:'#64748B', bg:'#F1F5F9' });
-  // Intent tier badges — match backend TIER_LABELS (Step 5 rename, 2026-05-26):
-  //   1 = Namesake (place name contains the dish word)
-  //   2 = Specialist (place type matches the dish's primary cuisine type) — no badge, expected result
-  //   3 = Related Cuisine (place type matches secondary cultural cuisine)
+  // Intent tier badges — match backend TIER_LABELS:
+  //   1 = Dish Specialist (dish word in name, NOT a chain) — most expected
+  //   2 = Authentic Match (place type matches the dish's primary cuisine type)
+  //   3 = Related (secondary/cultural cuisine type)
   //   4 = Serves It (editorialSummary / reviews / menu OCR mention the dish)
-  if (place.tier === 1) badges.push({ icon:'✓', label:'Namesake',        color:'#15803D', bg:'#DCFCE7' });
-  if (place.tier === 3) badges.push({ icon:'~', label:'Related Cuisine', color:'#A16207', bg:'#FEF9C3' });
-  if (place.tier === 4) badges.push({ icon:'?', label:'Serves It',       color:'#6B7280', bg:'#F3F4F6' });
+  // Chains are demoted in ranking and flagged "Chain Option" so the trust signal
+  // is explicit (e.g. Olive Garden = Authentic Match · Chain Option).
+  if (place.tier === 1) badges.push({ icon:'✓', label:'Dish Specialist', color:'#15803D', bg:'#DCFCE7' });
+  if (place.tier === 2) badges.push({ icon:'✓', label:'Authentic Match', color:'#0E7490', bg:'#CFFAFE' });
+  if (place.tier === 3) badges.push({ icon:'~', label:'Related',         color:'#A16207', bg:'#FEF9C3' });
+  if (place.tier === 4) badges.push({ icon:'·', label:'Serves It',       color:'#6B7280', bg:'#F3F4F6' });
+  if (place.isChain)    badges.push({ icon:'🏬', label:'Chain Option',   color:'#6B7280', bg:'#F3F4F6' });
   if (place.hasDriveThru)             badges.push({ icon:'🚗', label:'Drive-Thru',  color:'#0277BD', bg:'#E1F5FE' });
   if (place.isTakeoutOnly)            badges.push({ icon:'📦', label:'Takeout Only',color:'#E65100', bg:'#FFF3E0' });
   if (open.is24Hours||vibes.lateNight)badges.push({ icon:'🌙', label:'Late Night',  color:'#1565C0', bg:'#E3F2FD' });
@@ -458,25 +463,69 @@ function processRest(place, userLat, userLng) {
 // ─── PHOTO CAROUSEL ──────────────────────────────────────────────────────────
 function PhotoCarousel({ photos=[], rank, badges=[] }) {
   const [cur,setCur]=useState(0); const [errs,setErrs]=useState({}); const ref=useRef(null);
+  const [lightbox,setLightbox]=useState(false);   // tap-to-enlarge full-screen viewer
+  const [lbCur,setLbCur]=useState(0);
+  const lbRef=useRef(null);
   const valid=photos.filter((_,i)=>!errs[i]);
   const medalColors = ['#FFD700','#C0C0C0','#CD7F32'];
   const rankLabel   = rank<=3 ? ['🥇','🥈','🥉'][rank-1] : `#${rank}`;
+  // On open, jump the lightbox to the photo the user was viewing in the card.
+  useEffect(()=>{
+    if(lightbox && lbRef.current){
+      lbRef.current.scrollLeft = cur * lbRef.current.offsetWidth;
+      setLbCur(cur);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[lightbox]);
   return (
     <div style={{position:"relative",background:"#F1F5F9"}}>
       {valid.length>0?(
         <div ref={ref} onScroll={()=>ref.current&&setCur(Math.round(ref.current.scrollLeft/ref.current.offsetWidth))} style={{display:"flex",overflowX:"auto",scrollSnapType:"x mandatory",scrollbarWidth:"none",height:"180px"}}>
-          {valid.map((p,i)=><img key={i} src={p} onError={()=>setErrs(e=>({...e,[photos.indexOf(p)]:true}))} style={{minWidth:"100%",height:"180px",objectFit:"cover",scrollSnapAlign:"start",flexShrink:0}} alt=""/>)}
+          {valid.map((p,i)=><img key={i} src={p} onError={()=>setErrs(e=>({...e,[photos.indexOf(p)]:true}))} onClick={()=>setLightbox(true)} style={{minWidth:"100%",height:"180px",objectFit:"cover",scrollSnapAlign:"start",flexShrink:0,cursor:"zoom-in"}} alt=""/>)}
         </div>
       ):(
-        <div style={{height:"120px",background:"linear-gradient(135deg,#EFF6FF,#DBEAFE)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"48px"}}>🍽️</div>
+        <div style={{height:"120px",background:"linear-gradient(135deg,#EFF6FF,#DBEAFE)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(48px*var(--fs))"}}>🍽️</div>
       )}
       {/* Rank badge */}
       <div style={{position:"absolute",top:"10px",left:"10px",width:"36px",height:"36px",borderRadius:"50%",background:rank<=3?medalColors[rank-1]:BLUE,color:rank<=3?"#fff":"#fff",fontWeight:"800",fontSize:rank<=3?"18px":"13px",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{rankLabel}</div>
       {/* Smart badges */}
-      {badges.length>0&&<div style={{position:"absolute",top:"10px",right:"10px",display:"flex",flexDirection:"column",gap:"4px",alignItems:"flex-end"}}>{badges.slice(0,2).map((b,i)=><span key={i} style={{background:"rgba(255,255,255,0.95)",color:b.color,padding:"3px 8px",borderRadius:"6px",fontSize:"11px",fontWeight:"700",boxShadow:"0 1px 4px rgba(0,0,0,0.1)"}}>{b.icon} {b.label}</span>)}</div>}
-      {valid.length>1&&<div style={{position:"absolute",bottom:"8px",right:"10px",background:"rgba(0,0,0,0.6)",color:"#fff",padding:"3px 8px",borderRadius:"20px",fontSize:"11px",fontWeight:"600"}}>📷 {cur+1}/{valid.length}</div>}
+      {badges.length>0&&<div style={{position:"absolute",top:"10px",right:"10px",display:"flex",flexDirection:"column",gap:"4px",alignItems:"flex-end"}}>{badges.slice(0,2).map((b,i)=><span key={i} style={{background:"rgba(255,255,255,0.95)",color:b.color,padding:"3px 8px",borderRadius:"6px",fontSize:"calc(11px*var(--fs))",fontWeight:"700",boxShadow:"0 1px 4px rgba(0,0,0,0.1)"}}>{b.icon} {b.label}</span>)}</div>}
+      {/* Tap-to-enlarge hint */}
+      {valid.length>0&&<div style={{position:"absolute",bottom:"8px",left:"10px",background:"rgba(0,0,0,0.55)",color:"#fff",padding:"3px 8px",borderRadius:"20px",fontSize:"calc(10.5px*var(--fs))",fontWeight:"600",pointerEvents:"none"}}>🔍 Tap to enlarge</div>}
+      {valid.length>1&&<div style={{position:"absolute",bottom:"8px",right:"10px",background:"rgba(0,0,0,0.6)",color:"#fff",padding:"3px 8px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"600"}}>📷 {cur+1}/{valid.length}</div>}
       {/* Dot indicators */}
       {valid.length>1&&<div style={{position:"absolute",bottom:"10px",left:"50%",transform:"translateX(-50%)",display:"flex",gap:"5px"}}>{valid.map((_,i)=><div key={i} style={{width:"5px",height:"5px",borderRadius:"50%",background:i===cur?"#fff":"rgba(255,255,255,0.5)"}}/>)}</div>}
+
+      {/* FULL-SCREEN LIGHTBOX — swipe between photos, contain-fit so the whole
+          photo is visible enlarged. Tap the dark area or ✕ to close. */}
+      {lightbox && createPortal(
+        <div
+          onClick={()=>setLightbox(false)}
+          style={{position:"fixed",inset:0,zIndex:100000,background:"rgba(0,0,0,0.94)",display:"flex",flexDirection:"column"}}
+        >
+          <button
+            onClick={(e)=>{e.stopPropagation();setLightbox(false);}}
+            aria-label="Close"
+            style={{position:"absolute",top:"calc(env(safe-area-inset-top) + 12px)",right:"14px",zIndex:2,width:"40px",height:"40px",borderRadius:"50%",background:"rgba(255,255,255,0.18)",backdropFilter:"blur(8px)",border:"none",color:"#fff",fontSize:"20px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}
+          >✕</button>
+          <div
+            ref={lbRef}
+            onClick={(e)=>e.stopPropagation()}
+            onScroll={()=>lbRef.current&&setLbCur(Math.round(lbRef.current.scrollLeft/lbRef.current.offsetWidth))}
+            style={{flex:1,display:"flex",overflowX:"auto",scrollSnapType:"x mandatory",scrollbarWidth:"none"}}
+          >
+            {valid.map((p,i)=>(
+              <div key={i} style={{minWidth:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",scrollSnapAlign:"center",flexShrink:0,padding:"0 8px",boxSizing:"border-box"}}>
+                <img src={p} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+              </div>
+            ))}
+          </div>
+          {valid.length>1&&(
+            <div style={{position:"absolute",bottom:"calc(env(safe-area-inset-bottom) + 18px)",left:"50%",transform:"translateX(-50%)",background:"rgba(0,0,0,0.6)",color:"#fff",padding:"4px 12px",borderRadius:"20px",fontSize:"13px",fontWeight:"600"}}>{lbCur+1} / {valid.length}</div>
+          )}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -484,7 +533,7 @@ function PhotoCarousel({ photos=[], rank, badges=[] }) {
 // ─── TRUST TAG ────────────────────────────────────────────────────────────────
 function TrustTag({ confirmed }) {
   return (
-    <span style={{fontSize:"10px",fontWeight:"700",color:confirmed?"#2E7D32":"#E65100",background:confirmed?"#E8F5E9":"#FFF3E0",padding:"1px 6px",borderRadius:"4px",marginLeft:"4px"}}>
+    <span style={{fontSize:"calc(10px*var(--fs))",fontWeight:"700",color:confirmed?"#2E7D32":"#E65100",background:confirmed?"#E8F5E9":"#FFF3E0",padding:"1px 6px",borderRadius:"4px",marginLeft:"4px"}}>
       {confirmed ? "✅ Confirmed" : "⚠️ Reviews"}
     </span>
   );
@@ -502,22 +551,22 @@ function FallbackDisclaimer({ fallbackInfo, onExpandRadius }) {
       style={{ padding:"14px 16px", background:"#FFFBEB", borderRadius:"12px",
                border:"1px solid #FDE68A", marginBottom:"12px" }}
     >
-      <div style={{ fontWeight:"800", color:"#92400E", fontSize:"14px", marginBottom:"6px" }}>
+      <div style={{ fontWeight:"800", color:"#92400E", fontSize:"calc(14px*var(--fs))", marginBottom:"6px" }}>
         🔍 No {label} restaurants found nearby
       </div>
-      <div style={{ fontSize:"13px", color:"#B45309", marginBottom:"10px", lineHeight:"1.5" }}>
+      <div style={{ fontSize:"calc(13px*var(--fs))", color:"#B45309", marginBottom:"10px", lineHeight:"1.5" }}>
         These are the closest available options — they may serve {label} but aren't dedicated {label} restaurants.
       </div>
       <div style={{ display:"flex", gap:"8px", flexWrap:"wrap" }}>
         <button onClick={onExpandRadius}
           style={{ padding:"8px 14px", borderRadius:"8px", border:"none",
                    background:"#F59E0B", color:"#fff", fontWeight:"700",
-                   fontSize:"12px", cursor:"pointer", fontFamily:"inherit" }}>
+                   fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit" }}>
           📏 Expand Search Radius
         </button>
         {fallbackInfo.nearestAuthenticName && (
           <div style={{ padding:"8px 12px", borderRadius:"8px", background:"#FEF3C7",
-                        fontSize:"12px", color:"#92400E", display:"flex", alignItems:"center", gap:"4px" }}>
+                        fontSize:"calc(12px*var(--fs))", color:"#92400E", display:"flex", alignItems:"center", gap:"4px" }}>
             📍 Nearest {label}: <strong>{fallbackInfo.nearestAuthenticName}</strong>
             {fallbackInfo.nearestAuthenticDistanceMiles &&
               <span style={{ color:"#B45309" }}>({fallbackInfo.nearestAuthenticDistanceMiles} mi)</span>
@@ -542,16 +591,16 @@ function AlsoServesBanner({ banner, onExpandRadius }) {
       style={{ padding:"14px 16px", background:"#EFF6FF", borderRadius:"12px",
                border:"1px solid #BFDBFE", marginBottom:"12px" }}
     >
-      <div style={{ fontWeight:"800", color:"#1E40AF", fontSize:"14px", marginBottom:"6px" }}>
+      <div style={{ fontWeight:"800", color:"#1E40AF", fontSize:"calc(14px*var(--fs))", marginBottom:"6px" }}>
         No exact {banner.queryLabel ? `"${banner.queryLabel}"` : 'match'} nearby
       </div>
-      <div style={{ fontSize:"13px", color:"#1E3A8A", marginBottom:"10px", lineHeight:"1.5" }}>
+      <div style={{ fontSize:"calc(13px*var(--fs))", color:"#1E3A8A", marginBottom:"10px", lineHeight:"1.5" }}>
         Showing nearby <strong>{banner.cuisine}</strong> restaurants you might like instead.
       </div>
       <button onClick={onExpandRadius}
         style={{ padding:"8px 14px", borderRadius:"8px", border:"none",
                  background:"#2563EB", color:"#fff", fontWeight:"700",
-                 fontSize:"12px", cursor:"pointer", fontFamily:"inherit" }}>
+                 fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit" }}>
         📏 Expand Search Radius
       </button>
     </motion.div>
@@ -585,16 +634,16 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
       <div style={{padding:"14px 16px"}}>
         {/* Name + cuisine */}
         <div style={{marginBottom:"4px"}}>
-          {cuisineLabel&&<div style={{fontSize:"11px",fontWeight:"700",color:BLUE,letterSpacing:"0.5px",marginBottom:"2px"}}>{cuisineLabel}</div>}
-          <div style={{fontWeight:"800",fontSize:"17px",color:DARK,lineHeight:"1.2"}}>{name}</div>
+          {cuisineLabel&&<div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:BLUE,letterSpacing:"0.5px",marginBottom:"2px"}}>{cuisineLabel}</div>}
+          <div style={{fontWeight:"800",fontSize:"calc(17px*var(--fs))",color:DARK,lineHeight:"1.2"}}>{name}</div>
           <NameLanguageHelp placeId={restaurant.placeId||restaurant.id} name={name}/>
         </div>
 
         {/* Address */}
-        <div style={{fontSize:"12px",color:GRAY,marginBottom:"7px"}}>{address}</div>
+        <div style={{fontSize:"calc(12px*var(--fs))",color:GRAY,marginBottom:"7px"}}>{address}</div>
 
         {/* Rating / distance / price */}
-        <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:"8px",fontSize:"13px",marginBottom:"8px"}}>
+        <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:"8px",fontSize:"calc(13px*var(--fs))",marginBottom:"8px"}}>
           {restaurant.rating>0&&<span><span style={{color:GOLD}}>★</span> <span style={{fontWeight:"700",color:DARK}}>{restaurant.rating.toFixed(1)}</span><span style={{color:GRAY}}> ({(restaurant.userRatingCount||0).toLocaleString()})</span></span>}
           {restaurant.distanceMiles!=null&&<><span style={{color:"#CBD5E1"}}>·</span><span style={{fontWeight:"600",color:BLUE}}>📍 {formatDistance(restaurant.distanceMiles)}</span></>}
           {restaurant.priceStr&&<><span style={{color:"#CBD5E1"}}>·</span><span style={{fontWeight:"600",color:GRAY}}>{restaurant.priceStr}</span></>}
@@ -603,17 +652,17 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
 
         {/* Service tags */}
         <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"9px"}}>
-          {restaurant.dineIn&&<span style={{background:"#EFF6FF",color:BLUE,padding:"3px 9px",borderRadius:"6px",fontSize:"11px",fontWeight:"600"}}>🍽️ Dine-in</span>}
-          {restaurant.takeout&&<span style={{background:"#F0FDF4",color:"#15803D",padding:"3px 9px",borderRadius:"6px",fontSize:"11px",fontWeight:"600"}}>📦 Takeout</span>}
-          {restaurant.delivery&&<span style={{background:"#FFF7ED",color:ORANGE,padding:"3px 9px",borderRadius:"6px",fontSize:"11px",fontWeight:"600"}}>🛵 Delivery</span>}
-          {restaurant.hasDriveThru&&<span style={{background:"#E0F2FE",color:"#0277BD",padding:"3px 9px",borderRadius:"6px",fontSize:"11px",fontWeight:"600"}}>🚗 Drive-Thru</span>}
-          {restaurant.reservable&&<span style={{background:"#F3E8FF",color:PURPLE,padding:"3px 9px",borderRadius:"6px",fontSize:"11px",fontWeight:"600"}}>📅 Reservable</span>}
-          {restaurant.isCashOnly&&<span style={{background:"#FEF2F2",color:"#DC2626",padding:"3px 9px",borderRadius:"6px",fontSize:"11px",fontWeight:"600"}}>💵 Cash{restaurant.cashSource==='reviews'?' (reported)':''}</span>}
+          {restaurant.dineIn&&<span style={{background:"#EFF6FF",color:BLUE,padding:"3px 9px",borderRadius:"6px",fontSize:"calc(11px*var(--fs))",fontWeight:"600"}}>🍽️ Dine-in</span>}
+          {restaurant.takeout&&<span style={{background:"#F0FDF4",color:"#15803D",padding:"3px 9px",borderRadius:"6px",fontSize:"calc(11px*var(--fs))",fontWeight:"600"}}>📦 Takeout</span>}
+          {restaurant.delivery&&<span style={{background:"#FFF7ED",color:ORANGE,padding:"3px 9px",borderRadius:"6px",fontSize:"calc(11px*var(--fs))",fontWeight:"600"}}>🛵 Delivery</span>}
+          {restaurant.hasDriveThru&&<span style={{background:"#E0F2FE",color:"#0277BD",padding:"3px 9px",borderRadius:"6px",fontSize:"calc(11px*var(--fs))",fontWeight:"600"}}>🚗 Drive-Thru</span>}
+          {restaurant.reservable&&<span style={{background:"#F3E8FF",color:PURPLE,padding:"3px 9px",borderRadius:"6px",fontSize:"calc(11px*var(--fs))",fontWeight:"600"}}>📅 Reservable</span>}
+          {restaurant.isCashOnly&&<span style={{background:"#FEF2F2",color:"#DC2626",padding:"3px 9px",borderRadius:"6px",fontSize:"calc(11px*var(--fs))",fontWeight:"600"}}>💵 Cash{restaurant.cashSource==='reviews'?' (reported)':''}</span>}
         </div>
 
         {/* Open status */}
         {restaurant.isOpen!==null&&(
-          <div style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 10px",background:restaurant.isOpen?"#F0FDF4":"#FEF2F2",borderRadius:"8px",marginBottom:"10px",fontSize:"13px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 10px",background:restaurant.isOpen?"#F0FDF4":"#FEF2F2",borderRadius:"8px",marginBottom:"10px",fontSize:"calc(13px*var(--fs))"}}>
             <span style={{width:"8px",height:"8px",borderRadius:"50%",background:restaurant.is24Hours?"#00BCD4":(restaurant.isOpen?GREEN:CORAL),flexShrink:0}}/>
             <span style={{fontWeight:"700",color:restaurant.is24Hours?"#006064":(restaurant.isOpen?"#15803D":"#DC2626")}}>{restaurant.is24Hours?'Open 24/7':(restaurant.isOpen?'Open':'Closed')}</span>
             {restaurant.todayHours&&!restaurant.is24Hours&&<span style={{color:GRAY}}>· {restaurant.todayHours}</span>}
@@ -622,22 +671,22 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
 
         {/* Best time note */}
         {restaurant.bestTimeNote&&(
-          <div style={{display:"flex",alignItems:"flex-start",gap:"8px",padding:"9px 12px",background:"#F0FDF4",borderRadius:"8px",marginBottom:"10px",fontSize:"12px"}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:"8px",padding:"9px 12px",background:"#F0FDF4",borderRadius:"8px",marginBottom:"10px",fontSize:"calc(12px*var(--fs))"}}>
             <span style={{flexShrink:0}}>🕐</span>
-            <div><span style={{fontWeight:"700",color:"#15803D",fontSize:"11px",textTransform:"uppercase",letterSpacing:"0.4px"}}>Best Time to Visit  </span><span style={{color:"#166534"}}>{restaurant.bestTimeNote}</span></div>
+            <div><span style={{fontWeight:"700",color:"#15803D",fontSize:"calc(11px*var(--fs))",textTransform:"uppercase",letterSpacing:"0.4px"}}>Best Time to Visit  </span><span style={{color:"#166534"}}>{restaurant.bestTimeNote}</span></div>
           </div>
         )}
 
         {/* Customer favorites */}
         {restaurant.customerFavorites?.length>0&&(
           <div style={{padding:"10px 12px",background:"#FEF9EE",borderRadius:"10px",border:"1px solid #FDE68A",marginBottom:"10px"}}>
-            <div style={{fontSize:"11px",fontWeight:"700",color:"#D97706",letterSpacing:"0.5px",marginBottom:"7px"}}>❤️ CUSTOMER FAVORITES</div>
+            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:"#D97706",letterSpacing:"0.5px",marginBottom:"7px"}}>❤️ CUSTOMER FAVORITES</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>
               {restaurant.customerFavorites.slice(0,5).map((f,i)=>{
                 const label = f.dish || f.name || '';
                 if (!label) return null;
                 return (
-                  <span key={i} style={{background:"#FDE68A",color:"#92400E",padding:"3px 10px",borderRadius:"20px",fontSize:"12px",fontWeight:"600"}}>
+                  <span key={i} style={{background:"#FDE68A",color:"#92400E",padding:"3px 10px",borderRadius:"20px",fontSize:"calc(12px*var(--fs))",fontWeight:"600"}}>
                     {label.charAt(0).toUpperCase()+label.slice(1)}{f.mentions>2?` ×${f.mentions}`:''}
                   </span>
                 );
@@ -649,17 +698,17 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
         {/* ── SEATING ── */}
         {hasAnySeating&&(
           <div style={{display:"flex",alignItems:"flex-start",gap:"8px",padding:"10px 12px",background:"#F8FAFC",borderRadius:"10px",border:"1px solid #E8EDF2",marginBottom:"10px"}}>
-            <span style={{fontSize:"15px",marginTop:"1px"}}>🪑</span>
+            <span style={{fontSize:"calc(15px*var(--fs))",marginTop:"1px"}}>🪑</span>
             <div style={{flex:1}}>
               <div style={{display:"flex",alignItems:"center",marginBottom:"4px"}}>
-                <span style={{fontSize:"13px",fontWeight:"700",color:DARK}}>Seating</span>
+                <span style={{fontSize:"calc(13px*var(--fs))",fontWeight:"700",color:DARK}}>Seating</span>
                 <TrustTag confirmed={seatingConfirmed}/>
               </div>
               <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
-                {restaurant.hasIndoorSeating&&<span style={{fontSize:"12px",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🏠 Indoor</span>}
-                {restaurant.hasOutdoorSeating&&<span style={{fontSize:"12px",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🌿 Outdoor/Patio</span>}
-                {restaurant.seating?.hasLoungeSeating&&<span style={{fontSize:"12px",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🛋️ Lounge</span>}
-                {restaurant.seating?.capacityNote&&<span style={{fontSize:"12px",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>📐 {restaurant.seating.capacityNote}</span>}
+                {restaurant.hasIndoorSeating&&<span style={{fontSize:"calc(12px*var(--fs))",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🏠 Indoor</span>}
+                {restaurant.hasOutdoorSeating&&<span style={{fontSize:"calc(12px*var(--fs))",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🌿 Outdoor/Patio</span>}
+                {restaurant.seating?.hasLoungeSeating&&<span style={{fontSize:"calc(12px*var(--fs))",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🛋️ Lounge</span>}
+                {restaurant.seating?.capacityNote&&<span style={{fontSize:"calc(12px*var(--fs))",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>📐 {restaurant.seating.capacityNote}</span>}
               </div>
             </div>
           </div>
@@ -668,20 +717,20 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
         {/* ── PARKING ── */}
         {parking&&(
           <div style={{display:"flex",alignItems:"flex-start",gap:"8px",padding:"10px 12px",background:"#F8FAFC",borderRadius:"10px",border:"1px solid #E8EDF2",marginBottom:"10px"}}>
-            <span style={{fontSize:"15px",marginTop:"1px"}}>🅿️</span>
+            <span style={{fontSize:"calc(15px*var(--fs))",marginTop:"1px"}}>🅿️</span>
             <div style={{flex:1}}>
               <div style={{display:"flex",alignItems:"center",marginBottom:"4px"}}>
-                <span style={{fontSize:"13px",fontWeight:"700",color:DARK}}>Parking</span>
+                <span style={{fontSize:"calc(13px*var(--fs))",fontWeight:"700",color:DARK}}>Parking</span>
                 <TrustTag confirmed={parkingConfirmed}/>
               </div>
               {parking.noParking?(
-                <div style={{fontSize:"12px",color:CORAL}}>{parking.noParkingNote}</div>
+                <div style={{fontSize:"calc(12px*var(--fs))",color:CORAL}}>{parking.noParkingNote}</div>
               ):(
                 <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
                   {parking.details?.length>0?parking.details.map((d,i)=>(
-                    <span key={i} style={{fontSize:"12px",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>{d.icon} {d.label}</span>
-                  )):<span style={{fontSize:"12px",color:GRAY}}>Parking available</span>}
-                  {parking.valetCost&&<span style={{fontSize:"12px",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🎩 Valet {parking.valetCost}</span>}
+                    <span key={i} style={{fontSize:"calc(12px*var(--fs))",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>{d.icon} {d.label}</span>
+                  )):<span style={{fontSize:"calc(12px*var(--fs))",color:GRAY}}>Parking available</span>}
+                  {parking.valetCost&&<span style={{fontSize:"calc(12px*var(--fs))",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🎩 Valet {parking.valetCost}</span>}
                 </div>
               )}
             </div>
@@ -691,16 +740,16 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
         {/* Phone */}
         {phone&&(
           <a href={`tel:${phone}`} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 12px",background:"#EFF6FF",borderRadius:"10px",marginBottom:"10px",textDecoration:"none",color:BLUE}}>
-            <span style={{width:"34px",height:"34px",background:BLUE,color:"#fff",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"15px",flexShrink:0}}>📞</span>
-            <div><div style={{fontWeight:"600",fontSize:"14px"}}>{phone}</div><div style={{fontSize:"11px",color:GRAY}}>Tap to call</div></div>
+            <span style={{width:"34px",height:"34px",background:BLUE,color:"#fff",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(15px*var(--fs))",flexShrink:0}}>📞</span>
+            <div><div style={{fontWeight:"600",fontSize:"calc(14px*var(--fs))"}}>{phone}</div><div style={{fontSize:"calc(11px*var(--fs))",color:GRAY}}>Tap to call</div></div>
           </a>
         )}
 
         {/* Action buttons */}
         <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
-          <button onClick={onDirections} style={{flex:1,padding:"10px",borderRadius:"10px",border:"none",background:BLUE,color:"#fff",fontWeight:"700",fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
-          <button onClick={onShowOnMap} style={{padding:"10px 14px",borderRadius:"10px",border:"1px solid #E2E8F0",background:"#F8FAFC",color:DARK,fontWeight:"600",fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>📍 Map</button>
-          <button onClick={()=>setExpanded(!expanded)} style={{padding:"10px 14px",borderRadius:"10px",border:"none",background:expanded?DARK:"#F1F5F9",color:expanded?"#fff":DARK,fontWeight:"600",fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>{expanded?"▲ Less":"▼ More"}</button>
+          <button onClick={onDirections} style={{flex:1,padding:"10px",borderRadius:"10px",border:"none",background:BLUE,color:"#fff",fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
+          <button onClick={onShowOnMap} style={{padding:"10px 14px",borderRadius:"10px",border:"1px solid #E2E8F0",background:"#F8FAFC",color:DARK,fontWeight:"600",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>📍 Map</button>
+          <button onClick={()=>setExpanded(!expanded)} style={{padding:"10px 14px",borderRadius:"10px",border:"none",background:expanded?DARK:"#F1F5F9",color:expanded?"#fff":DARK,fontWeight:"600",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{expanded?"▲ Less":"▼ More"}</button>
         </div>
 
         {/* Expanded: hours, reviews, website */}
@@ -712,18 +761,18 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
                 {/* About This Place — editorial summary from Google */}
                 {restaurant.editorialSummary&&(
                   <div style={{padding:"12px",background:"#F0F9FF",borderRadius:"10px",border:"1px solid #BAE6FD"}}>
-                    <div style={{fontSize:"11px",fontWeight:"700",color:"#0369A1",letterSpacing:"0.5px",marginBottom:"6px"}}>📖 ABOUT THIS PLACE</div>
-                    <p style={{fontSize:"13px",lineHeight:"1.6",color:"#0C4A6E",margin:0}}>{restaurant.editorialSummary}</p>
+                    <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:"#0369A1",letterSpacing:"0.5px",marginBottom:"6px"}}>📖 ABOUT THIS PLACE</div>
+                    <p style={{fontSize:"calc(13px*var(--fs))",lineHeight:"1.6",color:"#0C4A6E",margin:0}}>{restaurant.editorialSummary}</p>
                   </div>
                 )}
 
                 {/* AI Venue Summary — Gemini-generated overview from Google Places (New) */}
                 {restaurant.generativeSummary?.overview?.text && (
                   <div style={{padding:"12px",background:"#EFF6FF",borderRadius:"10px",border:"1px solid #BFDBFE"}}>
-                    <div style={{fontSize:"11px",fontWeight:"700",color:"#1E40AF",letterSpacing:"0.5px",marginBottom:"6px"}}>
+                    <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:"#1E40AF",letterSpacing:"0.5px",marginBottom:"6px"}}>
                       ✨ AI VENUE SUMMARY ({restaurant.generativeSummary.disclosureText?.text || "Summarized with Gemini"})
                     </div>
-                    <p style={{fontSize:"13px",lineHeight:"1.6",color:"#1E3A8A",margin:0}}>
+                    <p style={{fontSize:"calc(13px*var(--fs))",lineHeight:"1.6",color:"#1E3A8A",margin:0}}>
                       {restaurant.generativeSummary.overview.text}
                     </p>
                   </div>
@@ -736,15 +785,15 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
                       onClick={()=>setHoursExpanded(h=>!h)}
                       style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}
                     >
-                      <span style={{fontSize:"11px",fontWeight:"700",color:GRAY,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
-                      <span style={{fontSize:"11px",color:GRAY}}>{hoursExpanded?'▲':'▼'}</span>
+                      <span style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
+                      <span style={{fontSize:"calc(11px*var(--fs))",color:GRAY}}>{hoursExpanded?'▲':'▼'}</span>
                     </button>
                     {hoursExpanded&&(
                       <div style={{marginTop:"8px"}}>
                         {restaurant.currentOpeningHours.weekdayDescriptions.map((/** @type {string} */ day,/** @type {number} */ i)=>{
                           const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
                           const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
-                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:"12px",fontWeight:isToday?"700":"400",color:isToday?BLUE:DARK,borderBottom:i<6?"1px solid #F1F5F9":"none"}}>
+                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:"calc(12px*var(--fs))",fontWeight:isToday?"700":"400",color:isToday?BLUE:DARK,borderBottom:i<6?"1px solid #F1F5F9":"none"}}>
                             <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
                           </div>;
                         })}
@@ -770,7 +819,7 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
                     href={restaurant.googleMapsUri}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{display:"block",fontSize:"11px",color:GRAY,textAlign:"center",textDecoration:"underline",padding:"4px"}}
+                    style={{display:"block",fontSize:"calc(11px*var(--fs))",color:GRAY,textAlign:"center",textDecoration:"underline",padding:"4px"}}
                   >
                     view reviews on Google Maps →
                   </a>
@@ -779,8 +828,8 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
                 {/* Website */}
                 {restaurant.websiteUri&&(
                   <a href={restaurant.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:"10px",padding:"12px",background:"#F3E8FF",borderRadius:"10px",textDecoration:"none",color:PURPLE}}>
-                    <div style={{width:"36px",height:"36px",background:PURPLE,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px",flexShrink:0}}>🌐</div>
-                    <div><div style={{fontWeight:"600",fontSize:"13px"}}>Visit Website</div><div style={{fontSize:"11px",color:GRAY}}>Menu & reservations</div></div>
+                    <div style={{width:"36px",height:"36px",background:PURPLE,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(16px*var(--fs))",flexShrink:0}}>🌐</div>
+                    <div><div style={{fontWeight:"600",fontSize:"calc(13px*var(--fs))"}}>Visit Website</div><div style={{fontSize:"calc(11px*var(--fs))",color:GRAY}}>Menu & reservations</div></div>
                   </a>
                 )}
               </div>
@@ -794,7 +843,7 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
 
 // ─── FILTER CHIP ─────────────────────────────────────────────────────────────
 function Chip({ label, active, onClick, icon, color="#3B82F6" }) {
-  return <button onClick={onClick} style={{display:"flex",alignItems:"center",gap:"4px",padding:"6px 12px",borderRadius:"20px",border:active?`2px solid ${color}`:"1.5px solid #E2E8F0",background:active?`${color}12`:"#fff",color:active?color:GRAY,fontWeight:active?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit",flexShrink:0,whiteSpace:"nowrap"}}>{icon&&<span>{icon}</span>}{label}</button>;
+  return <button onClick={onClick} style={{display:"flex",alignItems:"center",gap:"4px",padding:"6px 12px",borderRadius:"20px",border:active?`2px solid ${color}`:"1.5px solid #E2E8F0",background:active?`${color}12`:"#fff",color:active?color:GRAY,fontWeight:active?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit",flexShrink:0,whiteSpace:"nowrap"}}>{icon&&<span>{icon}</span>}{label}</button>;
 }
 
 // ─── MAP POPUP ────────────────────────────────────────────────────────────────
@@ -807,14 +856,14 @@ function buildPopup(r, idx) {
   return `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:260px;position:relative;">
       <div style="padding:12px;padding-top:14px;">
-        <div style="font-weight:700;font-size:14px;color:#1A2332;margin-bottom:5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;" onclick="window.viewRestDetails&&window.viewRestDetails(${idx})">${name}</div>
+        <div style="font-weight:700;font-size:calc(14px*var(--fs));color:#1A2332;margin-bottom:5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;" onclick="window.viewRestDetails&&window.viewRestDetails(${idx})">${name}</div>
         <div style="font-size:11px;color:#64748B;margin-bottom:6px;">${address}</div>
-        <div style="font-size:11px;padding:5px 8px;border-radius:6px;background:${is24Hours?'#E3F2FD':isOpen===true?'#F0FDF4':isOpen===false?'#FEF2F2':'#F5F5F5'};margin-bottom:6px;">
+        <div style="font-size:calc(11px*var(--fs));padding:5px 8px;border-radius:6px;background:${is24Hours?'#E3F2FD':isOpen===true?'#F0FDF4':isOpen===false?'#FEF2F2':'#F5F5F5'};margin-bottom:6px;">
           <span style="font-weight:700;color:${is24Hours?'#1565C0':isOpen===true?'#15803D':isOpen===false?'#DC2626':'#9E9E9E'};">${is24Hours?'🔄 Open 24/7':isOpen===true?'● Open':isOpen===false?'● Closed':'● Hours N/A'}</span>
           ${todayHours&&!is24Hours?`<span style="color:#64748B;"> · ${todayHours}</span>`:''}
         </div>
         ${r.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:8px;">★ <strong style="color:#1A2332;">${r.rating.toFixed(1)}</strong> <span style="color:#64748B;">(${(r.userRatingCount||0).toLocaleString()})</span>${r.distance?` · <span style="color:#3B82F6;">${r.distance}</span>`:''}</div>`:''}
-        ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#3B82F6;font-size:11px;font-weight:600;">📞 ${phone}</a>`:''}
+        ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#3B82F6;font-size:calc(11px*var(--fs));font-weight:600;">📞 ${phone}</a>`:''}
         <div style="display:flex;gap:8px;">
           <button onclick="window.openDirFromMap&&window.openDirFromMap(${idx})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#3B82F6;color:#fff;font-weight:600;font-size:11px;cursor:pointer;">🧭 Directions</button>
           <button onclick="window.viewRestDetails&&window.viewRestDetails(${idx})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#F1F5F9;color:#1A2332;font-weight:600;font-size:11px;cursor:pointer;">📋 Details</button>
@@ -857,7 +906,6 @@ export default function PlacesToEat() {
   };
   const [viewMode, setViewMode]         = useState("list");
   const [selectedCuisines, setSelectedCuisines] = useState(new Set(["all"]));
-  const [sortBy, setSortBy]             = useState("nearby");
   const [searchText, setSearchText]     = useState("");
   const [searchInput, setSearchInput]   = useState("");
   const [radius, setRadius]             = useState(10);
@@ -1159,35 +1207,18 @@ export default function PlacesToEat() {
     const hasActiveSearch = !!searchText?.trim();
     if (filterVibes['sportsBar']) {
       r.sort((a,b) => (b.sportsScore||0) - (a.sportsScore||0));
-    } else if (sortBy==="nearby") {
-      // Pure distance, no tier weighting. The tier classification is still
-      // computed and shown via badges on each card (Authentic / Specialist /
-      // Serves It / Related Cuisine), but it does not affect ordering — a
-      // closer non-namesake place ranks above a farther Tier 1 namesake.
-      // Use sortBy="best" when you want tier-then-quality ranking.
+    } else if (hasActiveSearch && r.some(x => x.backendRank)) {
+      // Single unified ranking (the Nearby/Best toggle was removed). For an
+      // active dish search the worker already ordered results by
+      // distance-band → dish tier (Dish Specialist / Authentic) → non-chain
+      // before chain → quality, and stamped backendRank — trust it directly.
+      r.sort((a,b) => (a.backendRank||999) - (b.backendRank||999));
+    } else {
+      // Browsing / no active dish search → nearest first.
       r.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
-    } else if (sortBy==="best") {
-      if (hasActiveSearch && r[0]?.backendRank) {
-        // Backend already sorted by tier then quality — trust it directly.
-        r.sort((a,b) => (a.backendRank||999) - (b.backendRank||999));
-      } else if (hasActiveSearch) {
-        r.sort((a,b) => {
-          const ta = a.tier || 4, tb = b.tier || 4;
-          if (ta !== tb) return ta - tb;
-          const sa=(a.rating||0)*Math.log10(Math.max(a.userRatingCount||1,1));
-          const sb=(b.rating||0)*Math.log10(Math.max(b.userRatingCount||1,1));
-          return sb-sa;
-        });
-      } else {
-        r.sort((a,b)=>{
-          const sa=(a.rating||0)*Math.log10(Math.max(a.userRatingCount||1,1));
-          const sb=(b.rating||0)*Math.log10(Math.max(b.userRatingCount||1,1));
-          return sb-sa;
-        });
-      }
     }
     return r;
-  }, [restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, sortBy, searchText]);
+  }, [restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, searchText]);
 
   const clearFilters = () => {
     setFilterOpenNow(false); setFilterVibes({}); setFilterDietary({});
@@ -1283,8 +1314,8 @@ export default function PlacesToEat() {
       const userMode = activeLocation?.mode === 'navigate' ? 'Selected location' : 'Current location';
       const userLabel = locationText || '';
       const userTooltipHtml = userPinExpanded
-        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsPTEUserPin&&window._gsPTEUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:12px;margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:11px;margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:10px;line-height:1.3;">${userLabel}</div></div>`
-        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsPTEUserPin&&window._gsPTEUserPin()"><span style="font-weight:700;color:#1A2332;font-size:11px;">📍 You are here</span><span style="color:#64748B;font-size:10px;font-weight:700;">⌄</span></div>`;
+        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsPTEUserPin&&window._gsPTEUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:calc(10px*var(--fs));font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:calc(12px*var(--fs));margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:calc(11px*var(--fs));margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:calc(10px*var(--fs));line-height:1.3;">${userLabel}</div></div>`
+        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsPTEUserPin&&window._gsPTEUserPin()"><span style="font-weight:700;color:#1A2332;font-size:calc(11px*var(--fs));">📍 You are here</span><span style="color:#64748B;font-size:calc(10px*var(--fs));font-weight:700;">⌄</span></div>`;
       window.L.marker([lat,lng],{icon:window.L.divIcon({html:'<div style="width:14px;height:14px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',iconSize:[14,14],className:""})}).addTo(map).bindTooltip(userTooltipHtml,{permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip',interactive:true});
       filtered.slice(0,displayCount).forEach((r,i)=>{
         if(!r.lat||!r.lng)return;
@@ -1326,7 +1357,7 @@ export default function PlacesToEat() {
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
           <div
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
             style={{background:CAT.food.bg,color:CAT.food.ink}}
           >
             <Utensils size={13} color={CAT.food.ink} strokeWidth={2} />
@@ -1345,17 +1376,17 @@ export default function PlacesToEat() {
         >
           <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
           <div className="flex-1 min-w-0">
-            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{color:'#94A3B8'}}>
+            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{color:'#94A3B8'}}>
               {isCity ? '🏙️ City' : '📍 Location'}
             </div>
-            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">{locationText}</div>
+            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">{locationText}</div>
           </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{background:CAT.food.bg,color:CAT.food.ink}}>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{background:CAT.food.bg,color:CAT.food.ink}}>
             Change
           </span>
         </button>
         {isCity && (
-          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[12px] leading-snug flex items-start gap-2" style={{background:CAT.weather.bg,color:CAT.weather.ink}}>
+          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[calc(12px*var(--fs))] leading-snug flex items-start gap-2" style={{background:CAT.weather.bg,color:CAT.weather.ink}}>
             <span>💡</span>
             <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
           </div>
@@ -1372,54 +1403,40 @@ export default function PlacesToEat() {
             onKeyDown={e=>e.key==='Enter'&&handleSearch()}
             placeholder="🔎  Search dish or restaurant..."
             className="font-sans"
-            style={{flex:1,padding:"14px 16px",borderRadius:"14px",border:"1px solid #F0E9DC",fontSize:"15px",outline:"none",color:"#0F1419",background:"#fff",boxShadow:"0 1px 3px rgba(15,20,25,0.04)"}}
+            style={{flex:1,padding:"14px 16px",borderRadius:"14px",border:"1px solid #F0E9DC",fontSize:"calc(15px*var(--fs))",outline:"none",color:"#0F1419",background:"#fff",boxShadow:"0 1px 3px rgba(15,20,25,0.04)"}}
           />
           <button
             onClick={handleSearch}
             className="font-sans"
-            style={{padding:"14px 18px",borderRadius:"14px",border:"none",background:CAT.food.ink,color:"#fff",fontWeight:"800",fontSize:"16px",cursor:"pointer",boxShadow:`0 6px 18px -6px ${CAT.food.ink}80`}}
+            style={{padding:"14px 18px",borderRadius:"14px",border:"none",background:CAT.food.ink,color:"#fff",fontWeight:"800",fontSize:"calc(16px*var(--fs))",cursor:"pointer",boxShadow:`0 6px 18px -6px ${CAT.food.ink}80`}}
           >→</button>
           {searchText && (
             <button
               onClick={()=>{setSearchInput("");setSearchText("");}}
               className="font-sans"
-              style={{padding:"14px 14px",borderRadius:"14px",border:"1px solid #F0E9DC",background:"#fff",color:"#475569",fontWeight:"700",fontSize:"14px",cursor:"pointer"}}
+              style={{padding:"14px 14px",borderRadius:"14px",border:"1px solid #F0E9DC",background:"#fff",color:"#475569",fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer"}}
             >✕</button>
           )}
         </div>
 
-        {/* Radius: labeled segmented control (equal widths) */}
-        <div style={{marginBottom:"14px"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
-            <div className="font-mono" style={{fontSize:"10px",fontWeight:600,letterSpacing:"0.14em",color:'#6B7280',textTransform:'uppercase'}}>📏 Radius</div>
-            <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light"/>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"6px",background:"#F7F4EC",padding:"4px",borderRadius:"12px"}}>
-            {RADIUS_OPTIONS.map(o=>(
-              <button key={o.v} onClick={()=>setRadius(o.v)} className="font-sans" style={{padding:"10px 0",borderRadius:"9px",border:"none",background:radius===o.v?CAT.food.ink:"transparent",color:radius===o.v?"#fff":'#475569',fontWeight:radius===o.v?"800":"600",fontSize:"13px",cursor:"pointer"}}>{o.l}</button>
-            ))}
-          </div>
-        </div>
+        <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.food.ink} unit={unit} setUnit={setUnit} />
 
-        {/* Sort + view toggle — sibling pill groups */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"8px",marginBottom:"14px"}}>
-          <div style={{display:"flex",background:"#F7F4EC",borderRadius:"10px",padding:"3px"}}>
-            {[{v:"nearby",l:"📍 Nearby"},{v:"best",l:"⭐ Best"}].map(({v,l})=>(
-              <button key={v} onClick={()=>setSortBy(v)} className="font-sans" style={{padding:"7px 14px",borderRadius:"8px",border:"none",background:sortBy===v?CAT.food.ink:"transparent",color:sortBy===v?"#fff":'#475569',fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>{l}</button>
-            ))}
-          </div>
+        {/* View toggle (List / Map). The Nearby/Best sort toggle was removed —
+            results now use one unified ranking (distance-band → dish tier →
+            non-chain → quality), so there's nothing to toggle. */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:"8px",marginBottom:"14px"}}>
           <div style={{display:"flex",background:"#F7F4EC",borderRadius:"10px",padding:"3px"}}>
             {["list","map"].map(v=>(
-              <button key={v} onClick={()=>setViewMode(v)} className="font-sans" style={{padding:"7px 14px",borderRadius:"8px",border:"none",background:viewMode===v?CAT.food.ink:"transparent",color:viewMode===v?"#fff":'#475569',fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>{v==="list"?"List View":"Map View"}</button>
+              <button key={v} onClick={()=>setViewMode(v)} className="font-sans" style={{padding:"7px 14px",borderRadius:"8px",border:"none",background:viewMode===v?CAT.food.ink:"transparent",color:viewMode===v?"#fff":'#475569',fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer"}}>{v==="list"?"List View":"Map View"}</button>
             ))}
           </div>
         </div>
 
         {/* Advanced Filters + result summary (single merged row) */}
-        <button onClick={()=>setShowAdvanced(!showAdvanced)} className="font-sans" style={{display:"flex",alignItems:"center",gap:"10px",width:"100%",padding:"12px 14px",borderRadius:"14px",border:`1px solid ${showAdvanced||activeFilterCount>0?CAT.food.ink:"#F0E9DC"}`,background:showAdvanced||activeFilterCount>0?CAT.food.bg:"#fff",color:showAdvanced||activeFilterCount>0?CAT.food.ink:'#0F1419',fontWeight:"700",fontSize:"13px",cursor:"pointer",marginBottom:"10px"}}>
+        <button onClick={()=>setShowAdvanced(!showAdvanced)} className="font-sans" style={{display:"flex",alignItems:"center",gap:"10px",width:"100%",padding:"12px 14px",borderRadius:"14px",border:`1px solid ${showAdvanced||activeFilterCount>0?CAT.food.ink:"#F0E9DC"}`,background:showAdvanced||activeFilterCount>0?CAT.food.bg:"#fff",color:showAdvanced||activeFilterCount>0?CAT.food.ink:'#0F1419',fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",marginBottom:"10px"}}>
           <span>⚙️ Advanced Filters</span>
-          {activeFilterCount>0&&<span style={{background:CAT.food.ink,color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"11px",fontWeight:"800"}}>{activeFilterCount}</span>}
-          <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"10px",color:'#6B7280',fontSize:"12px",fontWeight:"600"}}>
+          {activeFilterCount>0&&<span style={{background:CAT.food.ink,color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"calc(11px*var(--fs))",fontWeight:"800"}}>{activeFilterCount}</span>}
+          <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"10px",color:'#6B7280',fontSize:"calc(12px*var(--fs))",fontWeight:"600"}}>
             {loading?"Loading…":<><span>{stats.total} results</span>{stats.open>0&&<span style={{color:CAT.convenience.ink}}>· {stats.open} open</span>}</>}
             <span style={{color:'#94A3B8'}}>{showAdvanced?"▲":"▼"}</span>
           </span>
@@ -1434,14 +1451,14 @@ export default function PlacesToEat() {
                 {/* All Foods — cuisine multi-select (dietary types excluded; they live in Dietary section) */}
                 <div>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
-                    <span style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px"}}>🍽️ All Foods</span>
-                    {activeFilterCount>0&&<button onClick={clearFilters} style={{background:"none",border:"none",padding:"0",color:CORAL,fontSize:"11px",fontWeight:"600",cursor:"pointer",fontFamily:"inherit",opacity:0.8}}>Clear Filters</button>}
+                    <span style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px"}}>🍽️ All Foods</span>
+                    {activeFilterCount>0&&<button onClick={clearFilters} style={{background:"none",border:"none",padding:"0",color:CORAL,fontSize:"calc(11px*var(--fs))",fontWeight:"600",cursor:"pointer",fontFamily:"inherit",opacity:0.8}}>Clear Filters</button>}
                   </div>
                   <div ref={cuisineScrollRef} style={{display:"flex",gap:"6px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none",marginBottom:"8px"}}>
                     {CUISINES.filter(c=>!['vegetarian','vegan','halal','kosher'].includes(c.id)).map(c=>{
                       const active = selectedCuisines.has(c.id);
                       return (
-                        <button key={c.id} onClick={()=>toggleCuisine(c.id)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:"4px",padding:"6px 12px",borderRadius:"20px",border:active?`2px solid ${c.special?GOLD:BLUE}`:"1.5px solid #E2E8F0",background:active?(c.special?`${GOLD}15`:BLUE_LT):"#fff",color:active?(c.special?ORANGE:BLUE):GRAY,fontWeight:active?"700":"500",fontSize:"12px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                        <button key={c.id} onClick={()=>toggleCuisine(c.id)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:"4px",padding:"6px 12px",borderRadius:"20px",border:active?`2px solid ${c.special?GOLD:BLUE}`:"1.5px solid #E2E8F0",background:active?(c.special?`${GOLD}15`:BLUE_LT):"#fff",color:active?(c.special?ORANGE:BLUE):GRAY,fontWeight:active?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                           <span>{c.icon}</span><span>{c.label}</span>
                         </button>
                       );
@@ -1454,19 +1471,19 @@ export default function PlacesToEat() {
                 </div>
 
                 <div>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>⏰ Status</div>
+                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>⏰ Status</div>
                   <Chip label="Open Now" active={filterOpenNow} onClick={()=>setFilterOpenNow(!filterOpenNow)} icon="🟢" color={GREEN}/>
                 </div>
 
                 <div>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>✨ Vibe</div>
+                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>✨ Vibe</div>
                   <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
                     {VIBE_OPTIONS.map(v=><Chip key={v.id} label={v.label} icon={v.icon} active={!!filterVibes[v.id]} onClick={()=>setFilterVibes(p=>({...p,[v.id]:!p[v.id]}))} color={PURPLE}/>)}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>🥦 Dietary</div>
+                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>🥦 Dietary</div>
                   <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
                     {DIETARY_OPTIONS.map(d=><Chip key={d.id} label={d.label} icon={d.icon} active={!!filterDietary[d.id]} onClick={()=>setFilterDietary(p=>({...p,[d.id]:!p[d.id]}))} color={GREEN}/>)}
                   </div>
@@ -1474,14 +1491,14 @@ export default function PlacesToEat() {
 
 
                 <div>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>⭐ Min Rating</div>
+                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>⭐ Min Rating</div>
                   <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
                     {[{v:0,l:"Any"},{v:3.5,l:"3.5+"},{v:4.0,l:"4.0+"},{v:4.5,l:"4.5+"}].map(({v,l})=><Chip key={v} label={l} active={filterMinRating===v} onClick={()=>setFilterMinRating(v)}/>)}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>💰 Max Price</div>
+                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>💰 Max Price</div>
                   <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
                     {[{v:0,l:"Any"},{v:1,l:"$"},{v:2,l:"$$"},{v:3,l:"$$$"},{v:4,l:"$$$$"}].map(({v,l})=><Chip key={v} label={l} active={filterMaxPrice===v} onClick={()=>setFilterMaxPrice(v)}/>)}
                   </div>
@@ -1489,14 +1506,14 @@ export default function PlacesToEat() {
 
                 {/* Data trust legend */}
                 <div style={{padding:"10px 12px",background:"#F8FAFC",borderRadius:"8px",border:"1px solid #E8EDF2"}}>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:GRAY,marginBottom:"5px"}}>DATA TRUST GUIDE</div>
-                  <div style={{fontSize:"11px",color:DARK,lineHeight:"1.7"}}>
+                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,marginBottom:"5px"}}>DATA TRUST GUIDE</div>
+                  <div style={{fontSize:"calc(11px*var(--fs))",color:DARK,lineHeight:"1.7"}}>
                     <div>✅ <strong>Confirmed</strong> — Google Places API data (reliable)</div>
                     <div>⚠️ <strong>Reviews</strong> — Customer-reported, may have changed</div>
                   </div>
                 </div>
 
-                {activeFilterCount>0&&<button onClick={clearFilters} style={{padding:"9px",borderRadius:"8px",border:`1.5px solid ${CORAL}`,background:"#FFF5F5",color:CORAL,fontWeight:"700",fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>✕ Clear All Filters ({activeFilterCount})</button>}
+                {activeFilterCount>0&&<button onClick={clearFilters} style={{padding:"9px",borderRadius:"8px",border:`1.5px solid ${CORAL}`,background:"#FFF5F5",color:CORAL,fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>✕ Clear All Filters ({activeFilterCount})</button>}
               </div>
             </motion.div>
           )}
@@ -1506,7 +1523,7 @@ export default function PlacesToEat() {
       {/* ── CONTENT ── */}
       {loading?(
         <div style={{textAlign:"center",padding:"60px 20px"}}>
-          <div style={{fontSize:"40px",marginBottom:"12px",animation:"spin 2s linear infinite"}}>🍽️</div>
+          <div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px",animation:"spin 2s linear infinite"}}>🍽️</div>
           <div style={{color:GRAY,fontWeight:"600"}}>
             {Object.values(filterDietary).some(Boolean)
               ? `Searching for ${Object.entries(filterDietary).filter(([_,v])=>v).map(([k])=>k.charAt(0).toUpperCase()+k.slice(1)).join(' & ')} restaurants...`
@@ -1515,18 +1532,18 @@ export default function PlacesToEat() {
         </div>
       ):error?(
         <div style={{textAlign:"center",padding:"60px 20px"}}>
-          <div style={{fontSize:"40px",marginBottom:"12px"}}>😕</div>
+          <div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px"}}>😕</div>
           <div style={{color:CORAL,fontWeight:"600",marginBottom:"12px"}}>{error}</div>
-          <button onClick={()=>setRadius(r=>Math.min(r+5,25))} style={{padding:"10px 20px",borderRadius:"10px",border:`2px solid ${BLUE}`,background:BLUE_LT,color:BLUE,fontWeight:"700",fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>Expand Radius</button>
+          <button onClick={()=>setRadius(r=>Math.min(r+5,25))} style={{padding:"10px 20px",borderRadius:"10px",border:`2px solid ${BLUE}`,background:BLUE_LT,color:BLUE,fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Expand Radius</button>
         </div>
       ):viewMode==="list"?(
         <div style={{padding:"0 12px 100px",display:"flex",flexDirection:"column",gap:"12px"}}>
           {filtered.length===0?(
             <div style={{textAlign:"center",padding:"40px 20px",background:"#fff",borderRadius:"12px",border:"1px solid #E2E8F0"}}>
-              <div style={{fontSize:"32px",marginBottom:"10px"}}>🔍</div>
+              <div style={{fontSize:"calc(32px*var(--fs))",marginBottom:"10px"}}>🔍</div>
               <div style={{fontWeight:"700",color:DARK,marginBottom:"6px"}}>No matches</div>
-              <div style={{fontSize:"13px",color:GRAY,marginBottom:"14px"}}>Try adjusting filters or expanding the radius</div>
-              {activeFilterCount>0&&<button onClick={clearFilters} style={{padding:"9px 18px",borderRadius:"8px",border:"none",background:BLUE,color:"#fff",fontWeight:"600",fontSize:"13px",cursor:"pointer",fontFamily:"inherit"}}>Clear Filters</button>}
+              <div style={{fontSize:"calc(13px*var(--fs))",color:GRAY,marginBottom:"14px"}}>Try adjusting filters or expanding the radius</div>
+              {activeFilterCount>0&&<button onClick={clearFilters} style={{padding:"9px 18px",borderRadius:"8px",border:"none",background:BLUE,color:"#fff",fontWeight:"600",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Clear Filters</button>}
             </div>
           ):(<>
             <FallbackDisclaimer
@@ -1542,7 +1559,7 @@ export default function PlacesToEat() {
                 Re-evaluates on every searchText change so a new (non-coffee)
                 search automatically removes the hint. */}
             {/\b(coffee|espresso|latte|cappuccino|mocha)\b/i.test(searchText || '') && (
-              <div style={{padding:"8px 12px",background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:"8px",fontSize:"12px",color:"#92400E",display:"flex",alignItems:"center",gap:"6px"}}>
+              <div style={{padding:"8px 12px",background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:"8px",fontSize:"calc(12px*var(--fs))",color:"#92400E",display:"flex",alignItems:"center",gap:"6px"}}>
                 <span>☕</span>
                 <span>Looking for more coffee spots? <button onClick={() => navigate(createPageUrl("CoffeeFinder"), { state: { from: 'PlacesToEat' } })} style={{background:"transparent",border:"none",padding:0,color:"#92400E",fontWeight:"700",textDecoration:"underline",cursor:"pointer",fontFamily:"inherit",fontSize:"inherit"}}>Try the Coffee Finder feature in this app</button></span>
               </div>
@@ -1558,7 +1575,7 @@ export default function PlacesToEat() {
               </div>
             ))}
             {displayCount<filtered.length&&(
-              <button onClick={handleLoadMore} style={{padding:"14px",borderRadius:"12px",border:`2px solid ${BLUE}`,background:"#fff",color:BLUE,fontWeight:"700",fontSize:"14px",cursor:"pointer",fontFamily:"inherit",marginTop:"4px"}}>
+              <button onClick={handleLoadMore} style={{padding:"14px",borderRadius:"12px",border:`2px solid ${BLUE}`,background:"#fff",color:BLUE,fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit",marginTop:"4px"}}>
                 Load More · {filtered.length-displayCount} remaining
               </button>
             )}
@@ -1567,7 +1584,7 @@ export default function PlacesToEat() {
       ):(
         <div style={{position:"relative"}}>
           <div ref={mapRef} style={{height:"calc(100vh - 200px)",width:"100%"}}/>
-          <button onClick={()=>setViewMode("list")} style={{position:"absolute",top:"12px",right:"12px",zIndex:1000,background:"#fff",borderRadius:"50%",width:"38px",height:"38px",border:"none",boxShadow:"0 2px 8px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"18px",color:DARK}}>✕</button>
+          <button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"38px",height:"38px",border:"none",boxShadow:"0 2px 8px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(18px*var(--fs))",color:DARK}}>✕</button>
         </div>
       )}
 
@@ -1575,10 +1592,10 @@ export default function PlacesToEat() {
 
       {/* Floating close button for advanced filter — follows page scroll */}
       {showAdvanced&&(
-        <button onClick={()=>setShowAdvanced(false)} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9999,width:"40px",height:"40px",borderRadius:"50%",border:"none",background:BLUE,color:"#fff",fontWeight:"700",fontSize:"18px",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        <button onClick={()=>setShowAdvanced(false)} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9999,width:"40px",height:"40px",borderRadius:"50%",border:"none",background:BLUE,color:"#fff",fontWeight:"700",fontSize:"calc(18px*var(--fs))",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       )}
       {/* Scroll-to-top — appears after scrolling down */}
-      {displayCount>20&&<button onClick={()=>window.scrollTo({top:0,behavior:'smooth'})} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9998,display:"flex",alignItems:"center",gap:"4px",padding:"8px 14px",borderRadius:"24px",border:"none",background:DARK,color:"#fff",fontWeight:"700",fontSize:"12px",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.3)",fontFamily:"inherit",opacity:0.9}}>↑ Top</button>}
+      {displayCount>20&&<button onClick={()=>window.scrollTo({top:0,behavior:'smooth'})} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9998,display:"flex",alignItems:"center",gap:"4px",padding:"8px 14px",borderRadius:"24px",border:"none",background:DARK,color:"#fff",fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.3)",fontFamily:"inherit",opacity:0.9}}>↑ Top</button>}
       <LocationModePicker isOpen={showLocPicker} onClose={()=>setShowLocPicker(false)}/>
       <MapAppSelector
         isOpen={dirModal.open}

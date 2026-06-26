@@ -11,9 +11,10 @@
 
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { invokeLLM } from "@/lib/callWorker";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { ArrowLeft, ChevronDown, ChevronUp, Globe, Loader2, Navigation, Volume2, Languages, Search, X, ChevronLeft, MapPin } from "lucide-react";
+import { ChevronDown, ChevronUp, Globe, Loader2, Volume2, Languages, Search, X, ChevronLeft, MapPin } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
@@ -574,24 +575,45 @@ const ENGLISH_SPEAKING_COUNTRIES = [
   "Canada", "Australia", "New Zealand", "Ireland"
 ];
 
+// Languages a user can translate FROM (to English) while in an English region —
+// covers the 2026 World Cup host/contestant nations' languages plus widely-used
+// travel languages. Audio always plays the English equivalent, so any language
+// here works regardless of TTS voice support. Sorted by name.
 const AVAILABLE_LANGUAGES = [
   { code: "ar", name: "Arabic", flag: "🇸🇦" },
-  { code: "zh", name: "Mandarin Chinese", flag: "🇨🇳" },
+  { code: "bs", name: "Bosnian", flag: "🇧🇦" },
+  { code: "kea", name: "Cape Verdean Creole", flag: "🇨🇻" },
+  { code: "zh", name: "Chinese (Mandarin)", flag: "🇨🇳" },
+  { code: "hr", name: "Croatian", flag: "🇭🇷" },
+  { code: "cs", name: "Czech", flag: "🇨🇿" },
+  { code: "nl", name: "Dutch", flag: "🇳🇱" },
+  { code: "tl", name: "Filipino (Tagalog)", flag: "🇵🇭" },
   { code: "fr", name: "French", flag: "🇫🇷" },
   { code: "de", name: "German", flag: "🇩🇪" },
+  { code: "gn", name: "Guaraní", flag: "🇵🇾" },
+  { code: "ht", name: "Haitian Creole", flag: "🇭🇹" },
   { code: "hi", name: "Hindi", flag: "🇮🇳" },
   { code: "id", name: "Indonesian", flag: "🇮🇩" },
   { code: "it", name: "Italian", flag: "🇮🇹" },
   { code: "ja", name: "Japanese", flag: "🇯🇵" },
   { code: "ko", name: "Korean", flag: "🇰🇷" },
+  { code: "ku", name: "Kurdish", flag: "🇮🇶" },
+  { code: "lo", name: "Lao", flag: "🇱🇦" },
+  { code: "ln", name: "Lingala", flag: "🇨🇩" },
   { code: "ms", name: "Malay", flag: "🇲🇾" },
+  { code: "mi", name: "Māori", flag: "🇳🇿" },
+  { code: "no", name: "Norwegian", flag: "🇳🇴" },
+  { code: "pap", name: "Papiamento", flag: "🇨🇼" },
+  { code: "fa", name: "Persian (Farsi)", flag: "🇮🇷" },
   { code: "pt", name: "Portuguese", flag: "🇵🇹" },
   { code: "ru", name: "Russian", flag: "🇷🇺" },
   { code: "es", name: "Spanish", flag: "🇪🇸" },
-  { code: "tl", name: "Tagalog/Filipino", flag: "🇵🇭" },
+  { code: "sv", name: "Swedish", flag: "🇸🇪" },
   { code: "th", name: "Thai", flag: "🇹🇭" },
   { code: "tr", name: "Turkish", flag: "🇹🇷" },
-  { code: "vi", name: "Vietnamese", flag: "🇻🇳" }
+  { code: "uz", name: "Uzbek", flag: "🇺🇿" },
+  { code: "vi", name: "Vietnamese", flag: "🇻🇳" },
+  { code: "wo", name: "Wolof", flag: "🇸🇳" }
 ];
 
 export default function BasicPhrasesPage() {
@@ -878,7 +900,16 @@ export default function BasicPhrasesPage() {
     return languageInfo?.country_language_code || 'en';
   };
 
-  const getCacheKey = (categoryId, languageCode) => `phrases_v14_${categoryId}_${languageCode}`; // v14: o like oracle
+  const getCacheKey = (categoryId, languageCode) => {
+    // Reverse mode (English region, translating TO a foreign language) is
+    // generated with a lean translation-only payload, so tag its cache key with
+    // _rev. This keeps the lean reverse data from overwriting (or being served
+    // in place of) the full normal-mode data — phonetic/casual/romanization —
+    // for the same language code. Both read and write go through here, so the
+    // tag stays consistent.
+    const rev = (isInEnglishCountry && wantsTranslation) ? '_rev' : '';
+    return `phrases_v14_${categoryId}_${languageCode}${rev}`; // v14: o like oracle
+  };
 
   // Try localStorage first (instant), then Cloudflare KV
   const getCachedPhrases = async (categoryId, languageCode) => {
@@ -965,7 +996,7 @@ export default function BasicPhrasesPage() {
       return;
     }
 
-    const isEnglishOnly = languageInfo.is_english_only_mode || (isInEnglishCountry && !wantsTranslation);
+    const isEnglishOnly = isInEnglishCountry && !wantsTranslation;
     const languageCode = getActiveLanguageCode();
     const languageName = getActiveLanguageName();
 
@@ -995,6 +1026,70 @@ export default function BasicPhrasesPage() {
       return;
     }
 
+    // ── REVERSE MODE FAST PATH ──────────────────────────────────────────────
+    // English region + user picked a foreign language to translate TO. The
+    // reverse UI only renders the foreign translation + the English line (no
+    // phonetic / casual / romanization), so we ask Haiku for ONLY
+    // {english, translation} per phrase instead of the full 7-field payload.
+    // That is ~5-7x fewer output tokens — and output-token generation is the
+    // entire cold-start latency — so the translations pop up far faster. The
+    // unused fields are filled blank to keep the existing phrase shape intact.
+    const isReverseMode = isInEnglishCountry && wantsTranslation && selectedTranslationLanguage;
+    if (isReverseMode) {
+      console.log(`⚡ Reverse mode: lean translation for ${categoryId} → ${languageName}`);
+      const presetPhrases = PRESET_PHRASES[categoryId];
+      try {
+        const result = await invokeLLM({
+          prompt: `Translate each English phrase into ${languageName} (${languageCode}). Return a JSON object {"phrases":[{"english","translation"}]} with EXACTLY one entry per input phrase, in the SAME ORDER. Keep any placeholders like [Name], [Destination] and _____ blanks unchanged inside the translation. Do not add notes or pronunciation.
+
+PHRASES:
+${presetPhrases.map((p, i) => `${i + 1}. ${p}`).join('\n')}`,
+          response_json_schema: {
+            type: "object",
+            properties: {
+              phrases: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    english: { type: "string" },
+                    translation: { type: "string" }
+                  },
+                  required: ["english", "translation"]
+                }
+              }
+            },
+            required: ["phrases"]
+          }
+        });
+        const arr = Array.isArray(result?.phrases) ? result.phrases : [];
+        const byEnglish = new Map(arr.map(x => [(x.english || '').trim(), x.translation]));
+        const translatedPhrases = presetPhrases.map((p, i) => {
+          const translation = byEnglish.get(p.trim()) || arr[i]?.translation || p;
+          return {
+            english: p,
+            formal_translation: translation,
+            formal_phonetic: "",
+            casual_translation: translation,
+            casual_phonetic: "",
+            same_formality: true,
+            romanization: ""
+          };
+        });
+        setPhrases(prev => ({ ...prev, [categoryId]: translatedPhrases }));
+        await saveCachedPhrases(categoryId, languageCode, translatedPhrases);
+      } catch (error) {
+        console.error(`❌ Reverse translation error for ${categoryId}:`, error);
+        const fallbackPhrases = presetPhrases.map(phrase => ({
+          english: phrase, formal_translation: phrase, formal_phonetic: "",
+          casual_translation: phrase, casual_phonetic: "", same_formality: true, romanization: ""
+        }));
+        setPhrases(prev => ({ ...prev, [categoryId]: fallbackPhrases }));
+      }
+      setLoadingPhrases(prev => ({ ...prev, [categoryId]: false }));
+      return;
+    }
+
     console.log(`❌ No cache found - Translating with AI (one-time)...`);
 
     // Translate with AI (only happens once per language, then cached globally)
@@ -1008,7 +1103,7 @@ export default function BasicPhrasesPage() {
           languageCode.toLowerCase().startsWith(code)
         );
       
-      const result = await base44.integrations.Core.InvokeLLM({
+      const result = await invokeLLM({
         prompt: `Translate these English phrases to ${languageName} (${languageCode}).
 
 PHRASES TO TRANSLATE:
@@ -1343,10 +1438,10 @@ Return a JSON object with "phrases" array. Each phrase object needs:
 
   const renderPhrases = (categoryPhrases) => {
     if (!categoryPhrases || categoryPhrases.length === 0) {
-      return <p className="text-sm text-gray-500 p-4">No phrases available</p>;
+      return <p className="text-[calc(14px*var(--fs))] text-gray-500 p-4">No phrases available</p>;
     }
 
-    const isEnglishOnly = languageInfo?.is_english_only_mode || (isInEnglishCountry && !wantsTranslation);
+    const isEnglishOnly = isInEnglishCountry && !wantsTranslation;
     const isReverseMode = isInEnglishCountry && wantsTranslation && selectedTranslationLanguage;
     const ttsCode = getActiveTTSCode();
 
@@ -1388,10 +1483,10 @@ Return a JSON object with "phrases" array. Each phrase object needs:
               {isReverseMode ? (
                 // Reverse mode: User in English country, wants to see their native language
                 <>
-                  <p className="text-sm text-gray-600 mb-1">{phrase.formal_translation || phrase.translation}</p>
+                  <p className="text-[calc(14px*var(--fs))] text-gray-600 mb-1">{phrase.formal_translation || phrase.translation}</p>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
-                      <p className="text-base font-bold text-[#088395]">{phrase.english}</p>
+                      <p className="text-[calc(16px*var(--fs))] font-bold text-[#088395]">{phrase.english}</p>
                     </div>
                     <button
                       onClick={() => speakPhrase(phrase.english, 'en', `${expandedCategory}_${index}`)}
@@ -1410,7 +1505,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                 // Normal mode: User traveling, needs local language
                 <>
                   {/* English phrase */}
-                  <p className="text-sm text-gray-600 mb-3">{phrase.english}</p>
+                  <p className="text-[calc(14px*var(--fs))] text-gray-600 mb-3">{phrase.english}</p>
                   
                   {!isEnglishOnly && (phrase.formal_translation || phrase.translation) && (
                     <div className="space-y-3">
@@ -1419,17 +1514,17 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                       {!showBothVersions && (
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1">
-                            <p className="text-base font-bold text-[#088395]">
+                            <p className="text-[calc(16px*var(--fs))] font-bold text-[#088395]">
                               {phrase.formal_translation || phrase.translation}
                             </p>
                             
                             {/* Phonetic */}
                             {(phrase.formal_phonetic || phrase.phonetic) && (
                               <div className="flex items-center gap-1.5 mt-1">
-                                <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
+                                <span className="text-[calc(12px*var(--fs))] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
                                   Say it:
                                 </span>
-                                <p className="text-sm text-amber-700">
+                                <p className="text-[calc(14px*var(--fs))] text-amber-700">
                                   {cleanPhonetic(phrase.formal_phonetic || phrase.phonetic)}
                                 </p>
                               </div>
@@ -1437,7 +1532,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                             
                             {/* Romanization */}
                             {phrase.romanization && (
-                              <p className="text-xs text-gray-500 italic mt-1">
+                              <p className="text-[calc(12px*var(--fs))] text-gray-500 italic mt-1">
                                 Romanized: {phrase.romanization}
                               </p>
                             )}
@@ -1467,19 +1562,19 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full font-medium">
+                                  <span className="text-[calc(12px*var(--fs))] bg-green-600 text-white px-2 py-0.5 rounded-full font-medium">
                                     Formal / Polite
                                   </span>
                                 </div>
-                                <p className="text-base font-bold text-green-800">
+                                <p className="text-[calc(16px*var(--fs))] font-bold text-green-800">
                                   {phrase.formal_translation || phrase.translation}
                                 </p>
                                 
                                 {/* Formal phonetic */}
                                 {(phrase.formal_phonetic || phrase.phonetic) && (
                                   <div className="flex items-center gap-1.5 mt-1">
-                                    <span className="text-xs text-green-600 font-medium">Say it:</span>
-                                    <p className="text-sm text-green-700">
+                                    <span className="text-[calc(12px*var(--fs))] text-green-600 font-medium">Say it:</span>
+                                    <p className="text-[calc(14px*var(--fs))] text-green-700">
                                       {cleanPhonetic(phrase.formal_phonetic || phrase.phonetic)}
                                     </p>
                                   </div>
@@ -1487,7 +1582,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                                 
                                 {/* Romanization */}
                                 {phrase.romanization && (
-                                  <p className="text-xs text-green-600/70 italic mt-1">
+                                  <p className="text-[calc(12px*var(--fs))] text-green-600/70 italic mt-1">
                                     Romanized: {phrase.romanization}
                                   </p>
                                 )}
@@ -1514,19 +1609,19 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full font-medium">
+                                  <span className="text-[calc(12px*var(--fs))] bg-orange-500 text-white px-2 py-0.5 rounded-full font-medium">
                                     Casual
                                   </span>
                                 </div>
-                                <p className="text-base font-bold text-orange-800">
+                                <p className="text-[calc(16px*var(--fs))] font-bold text-orange-800">
                                   {phrase.casual_translation || phrase.formal_translation || phrase.translation}
                                 </p>
                                 
                                 {/* Casual phonetic */}
                                 {(phrase.casual_phonetic || phrase.formal_phonetic || phrase.phonetic) && (
                                   <div className="flex items-center gap-1.5 mt-1">
-                                    <span className="text-xs text-orange-600 font-medium">Say it:</span>
-                                    <p className="text-sm text-orange-700">
+                                    <span className="text-[calc(12px*var(--fs))] text-orange-600 font-medium">Say it:</span>
+                                    <p className="text-[calc(14px*var(--fs))] text-orange-700">
                                       {cleanPhonetic(phrase.casual_phonetic || phrase.formal_phonetic || phrase.phonetic)}
                                     </p>
                                   </div>
@@ -1567,7 +1662,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                       >
                         <Volume2 className="w-4 h-4" />
                       </button>
-                      <span className="text-xs text-gray-400">Tap to hear</span>
+                      <span className="text-[calc(12px*var(--fs))] text-gray-400">Tap to hear</span>
                     </div>
                   )}
                 </>
@@ -1595,7 +1690,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
           <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[12.5px]" style={{ background: CAT.phrases.bg, color: CAT.phrases.ink }}>
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]" style={{ background: CAT.phrases.bg, color: CAT.phrases.ink }}>
             <Languages size={13} color={CAT.phrases.ink} strokeWidth={2} />
             Basic Phrases
           </div>
@@ -1608,15 +1703,15 @@ Return a JSON object with "phrases" array. Each phrase object needs:
         <button onClick={() => setShowLocationPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left mb-4 transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
           <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
           <div className="flex-1 min-w-0">
-            <div className="font-mono text-[9.5px] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>📍 Location</div>
-            <div className="font-bold text-[14.5px] text-[#0F1419] mt-0.5 truncate">
+            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>📍 Location</div>
+            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">
               {activeLocation?.placeName || activeLocation?.address?.city}
             </div>
-            <div className="text-[11px] text-[#6B7280] mt-0.5 truncate">
+            <div className="text-[calc(11px*var(--fs))] text-[#6B7280] mt-0.5 truncate">
               {activeLocation?.address?.city}, {activeLocation?.address?.country}
             </div>
           </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[11.5px] flex-none" style={{ background: CAT.phrases.bg, color: CAT.phrases.ink }}>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{ background: CAT.phrases.bg, color: CAT.phrases.ink }}>
             Change
           </span>
         </button>
@@ -1625,11 +1720,12 @@ Return a JSON object with "phrases" array. Each phrase object needs:
           <div className="bg-white rounded-xl p-4 mb-4 shadow-sm border border-gray-100">
             <div className="flex items-center gap-2 mb-3">
               <Globe className="w-5 h-5 text-[#088395]" />
-              <p className="font-bold text-gray-900">
-                {languageInfo.is_english_only_mode 
-                  ? "Language: English" 
-                  : `Translating to: ${useDialect ? languageInfo.city_language : languageInfo.country_language}`
-                }
+              <p className="font-bold text-gray-900 text-[calc(16px*var(--fs))]">
+                {isInEnglishCountry
+                  ? (wantsTranslation && selectedTranslationLanguage
+                      ? `${selectedTranslationLanguage.name} → English`
+                      : "Phrases in English")
+                  : `Translating to: ${useDialect ? languageInfo.city_language : languageInfo.country_language}`}
               </p>
             </div>
 
@@ -1637,38 +1733,36 @@ Return a JSON object with "phrases" array. Each phrase object needs:
             {ttsWarning && useDialect && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-start gap-2">
                 <Languages className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-800">{ttsWarning.message}</p>
+                <p className="text-[calc(12px*var(--fs))] text-amber-800">{ttsWarning.message}</p>
               </div>
             )}
 
-            {/* English-speaking country - user is also English speaker */}
-            {languageInfo.is_english_only_mode && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                <p className="text-sm text-green-800">✓ English-speaking location. Phrases shown in English.</p>
-              </div>
-            )}
-
-            {/* English-speaking country - user wants to translate to their language */}
-            {isInEnglishCountry && !languageInfo.is_english_only_mode && (
+            {/* English region — offer "Translate from another language": pick a
+                non-English language to see that language on top with the English
+                equivalent below (audio plays the English). Built for native
+                speakers of that language who want to practice/learn English.
+                Available to EVERYONE in an English region, not just non-English
+                home-country users. */}
+            {isInEnglishCountry && (
               <div className="space-y-3">
                 {wantsTranslation && selectedTranslationLanguage ? (
                   <div className="bg-[#E0F7FA] border border-[#00BCD4]/30 rounded-lg p-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm text-[#088395]">
-                        ✓ Showing <strong>{selectedTranslationLanguage.flag} {selectedTranslationLanguage.name}</strong> translations
+                      <p className="text-[calc(14px*var(--fs))] text-[#088395]">
+                        ✓ Translating <strong>{selectedTranslationLanguage.flag} {selectedTranslationLanguage.name}</strong> → English
                       </p>
-                      <button onClick={handleDisableTranslation} className="text-xs text-gray-500 hover:text-gray-700 underline">
+                      <button onClick={handleDisableTranslation} className="text-[calc(12px*var(--fs))] text-gray-500 hover:text-gray-700 underline">
                         Show English only
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <button 
-                    onClick={() => setShowLanguageDropdown(!showLanguageDropdown)} 
-                    className="w-full px-4 py-2.5 bg-white border border-[#088395] text-[#088395] hover:bg-[#E0F7FA] rounded-lg font-medium flex items-center justify-center gap-2"
+                  <button
+                    onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
+                    className="w-full px-4 py-2.5 bg-white border border-[#088395] text-[#088395] hover:bg-[#E0F7FA] rounded-lg font-medium text-[calc(16px*var(--fs))] flex items-center justify-center gap-2"
                   >
                     <Languages className="w-4 h-4" />
-                    Translate to another language
+                    Translate from another language
                   </button>
                 )}
                 
@@ -1678,7 +1772,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                       <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto space-y-1">
                         {AVAILABLE_LANGUAGES.map(language => (
                           <button key={language.code} onClick={() => handleLanguageSelect(language)}
-                            className="w-full px-3 py-2 text-left hover:bg-white rounded-lg flex items-center gap-2 text-sm">
+                            className="w-full px-3 py-2 text-left hover:bg-white rounded-lg flex items-center gap-2 text-[calc(14px*var(--fs))]">
                             <span>{language.flag}</span>
                             <span>{language.name}</span>
                           </button>
@@ -1693,7 +1787,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
             {/* Non-English country WITH dialect options - show toggle */}
             {!isInEnglishCountry && languageInfo.show_toggle && (
               <div className="space-y-3">
-                <p className="text-xs text-gray-600 font-medium uppercase tracking-wide">Choose language:</p>
+                <p className="text-[calc(12px*var(--fs))] text-gray-600 font-medium uppercase tracking-wide">Choose language:</p>
                 
                 {/* Two-option toggle */}
                 <div className="grid grid-cols-1 gap-2">
@@ -1713,10 +1807,10 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                   >
                     <span className="text-2xl">{languageInfo.country_flag || '🌍'}</span>
                     <div className="flex-1">
-                      <p className={`font-semibold ${!useDialect ? 'text-white' : 'text-gray-900'}`}>
+                      <p className={`text-[calc(16px*var(--fs))] font-semibold ${!useDialect ? 'text-white' : 'text-gray-900'}`}>
                         {languageInfo.country_language}
                       </p>
-                      <p className={`text-xs ${!useDialect ? 'text-white/80' : 'text-gray-500'}`}>
+                      <p className={`text-[calc(12px*var(--fs))] ${!useDialect ? 'text-white/80' : 'text-gray-500'}`}>
                         Official language of {languageInfo.country}
                       </p>
                     </div>
@@ -1739,10 +1833,10 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                   >
                     <span className="text-2xl">📍</span>
                     <div className="flex-1">
-                      <p className={`font-semibold ${useDialect ? 'text-white' : 'text-gray-900'}`}>
+                      <p className={`text-[calc(16px*var(--fs))] font-semibold ${useDialect ? 'text-white' : 'text-gray-900'}`}>
                         {languageInfo.city_language}
                       </p>
-                      <p className={`text-xs ${useDialect ? 'text-white/80' : 'text-gray-500'}`}>
+                      <p className={`text-[calc(12px*var(--fs))] ${useDialect ? 'text-white/80' : 'text-gray-500'}`}>
                         Local dialect in {languageInfo.city || 'this area'}
                       </p>
                     </div>
@@ -1752,7 +1846,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                 
                 {/* Dialect note if available */}
                 {languageInfo.dialect_note && useDialect && (
-                  <p className="text-xs text-gray-500 italic px-1">
+                  <p className="text-[calc(12px*var(--fs))] text-gray-500 italic px-1">
                     ℹ️ {languageInfo.dialect_note}
                   </p>
                 )}
@@ -1764,10 +1858,10 @@ Return a JSON object with "phrases" array. Each phrase object needs:
               <div className="bg-[#E0F7FA] border border-[#00BCD4]/30 rounded-lg p-3 flex items-center gap-3">
                 <span className="text-2xl">{languageInfo.country_flag || '🌍'}</span>
                 <div>
-                  <p className="text-sm font-medium text-[#088395]">
+                  <p className="text-[calc(14px*var(--fs))] font-medium text-[#088395]">
                     {languageInfo.city_language || languageInfo.country_language}
                   </p>
-                  <p className="text-xs text-[#088395]/70">
+                  <p className="text-[calc(12px*var(--fs))] text-[#088395]/70">
                     Phrases will be translated to this language
                   </p>
                 </div>
@@ -1785,7 +1879,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search for words or phrases..."
-                  className="w-full pl-10 pr-20 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#088395] focus:border-transparent text-sm"
+                  className="w-full pl-10 pr-20 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#088395] focus:border-transparent text-[calc(14px*var(--fs))]"
                 />
                 <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
                   {searchQuery && (
@@ -1810,12 +1904,12 @@ Return a JSON object with "phrases" array. Each phrase object needs:
             {isSearching && searchResults.length > 0 && (
             <div className="mb-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold text-gray-700">
+              <p className="text-[calc(14px*var(--fs))] font-semibold text-gray-700">
                 {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found
               </p>
               <button
                 onClick={clearSearch}
-                className="flex items-center gap-1 text-sm text-[#088395] hover:text-[#06BCC1] font-semibold"
+                className="flex items-center gap-1 text-[calc(14px*var(--fs))] text-[#088395] hover:text-[#06BCC1] font-semibold"
               >
                 <X className="w-4 h-4" />
                 Clear
@@ -1839,8 +1933,8 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                     className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm"
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <p className="text-sm text-gray-600 flex-1">{result.english}</p>
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full ml-2">
+                      <p className="text-[calc(14px*var(--fs))] text-gray-600 flex-1">{result.english}</p>
+                      <span className="text-[calc(12px*var(--fs))] bg-gray-100 text-gray-600 px-2 py-1 rounded-full ml-2">
                         {result.categoryName}
                       </span>
                     </div>
@@ -1849,15 +1943,15 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                       // Single version
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
-                          <p className="text-base font-bold text-[#088395]">
+                          <p className="text-[calc(16px*var(--fs))] font-bold text-[#088395]">
                             {result.formal_translation || result.translation}
                           </p>
                           {(result.formal_phonetic || result.phonetic) && (
                             <div className="flex items-center gap-1.5 mt-1">
-                              <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
+                              <span className="text-[calc(12px*var(--fs))] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
                                 Say it:
                               </span>
-                              <p className="text-sm text-amber-700">
+                              <p className="text-[calc(14px*var(--fs))] text-amber-700">
                                 {cleanPhonetic(result.formal_phonetic || result.phonetic)}
                               </p>
                             </div>
@@ -1881,14 +1975,14 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                         <div className="bg-gradient-to-r from-[#E8F5E9] to-[#F1F8E9] rounded-lg p-2 border border-green-200">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1">
-                              <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full font-medium">
+                              <span className="text-[calc(12px*var(--fs))] bg-green-600 text-white px-2 py-0.5 rounded-full font-medium">
                                 Formal
                               </span>
-                              <p className="text-sm font-bold text-green-800 mt-1">
+                              <p className="text-[calc(14px*var(--fs))] font-bold text-green-800 mt-1">
                                 {result.formal_translation}
                               </p>
                               {result.formal_phonetic && (
-                                <p className="text-xs text-green-700 mt-0.5">
+                                <p className="text-[calc(12px*var(--fs))] text-green-700 mt-0.5">
                                   {cleanPhonetic(result.formal_phonetic)}
                                 </p>
                               )}
@@ -1909,14 +2003,14 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                         <div className="bg-gradient-to-r from-[#FFF3E0] to-[#FFF8E1] rounded-lg p-2 border border-orange-200">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1">
-                              <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full font-medium">
+                              <span className="text-[calc(12px*var(--fs))] bg-orange-500 text-white px-2 py-0.5 rounded-full font-medium">
                                 Casual
                               </span>
-                              <p className="text-sm font-bold text-orange-800 mt-1">
+                              <p className="text-[calc(14px*var(--fs))] font-bold text-orange-800 mt-1">
                                 {result.casual_translation}
                               </p>
                               {result.casual_phonetic && (
-                                <p className="text-xs text-orange-700 mt-0.5">
+                                <p className="text-[calc(12px*var(--fs))] text-orange-700 mt-0.5">
                                   {cleanPhonetic(result.casual_phonetic)}
                                 </p>
                               )}
@@ -1945,10 +2039,10 @@ Return a JSON object with "phrases" array. Each phrase object needs:
 
             {isSearching && searchResults.length === 0 && searchQuery.trim() && (
             <div className="bg-gray-50 rounded-xl p-6 mb-4 text-center">
-            <p className="text-gray-600">No results found for "{searchQuery}"</p>
+            <p className="text-[calc(16px*var(--fs))] text-gray-600">No results found for "{searchQuery}"</p>
             <button
               onClick={clearSearch}
-              className="mt-2 text-sm text-[#088395] hover:text-[#06BCC1] font-semibold"
+              className="mt-2 text-[calc(14px*var(--fs))] text-[#088395] hover:text-[#06BCC1] font-semibold"
             >
               Clear search
             </button>
@@ -1963,8 +2057,8 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                 <div className="flex items-center gap-3">
                   <span className="text-3xl">{category.icon}</span>
                   <div className="text-left">
-                    <p className="font-bold text-gray-900">{category.name}</p>
-                    <p className="text-xs text-gray-600">{category.subtitle}</p>
+                    <p className="font-bold text-gray-900 text-[calc(16px*var(--fs))]">{category.name}</p>
+                    <p className="text-[calc(12px*var(--fs))] text-gray-600">{category.subtitle}</p>
                   </div>
                 </div>
                 {expandedCategory === category.id ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
@@ -1976,7 +2070,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                     {loadingPhrases[category.id] ? (
                       <div className="p-8 flex flex-col items-center">
                         <Loader2 className="w-6 h-6 text-[#088395] animate-spin mb-2" />
-                        <p className="text-sm text-gray-600">Translating to {getActiveLanguageName()}...</p>
+                        <p className="text-[calc(14px*var(--fs))] text-gray-600">Translating to {getActiveLanguageName()}...</p>
                       </div>
                     ) : renderPhrases(phrases[category.id])}
                   </motion.div>
