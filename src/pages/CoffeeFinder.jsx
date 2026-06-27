@@ -18,6 +18,12 @@ import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import MapAppSelector from "@/components/MapAppSelector";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import CafeWorkProfileSection from "@/components/CafeWorkProfileSection";
+import { useIsTablet } from "@/lib/useIsTablet";
+
+// iPad editorial design tokens (design handoff — modeled on "Places to Eat · iPad").
+const ED_SERIF = '"Instrument Serif", Georgia, serif';
+const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
+const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
 
 // ─── COLORS ────────────────────────────────────────────────────────────────
 const BROWN      = "#6F4E37";
@@ -361,6 +367,200 @@ function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance
   );
 }
 
+// ─── COFFEE CARD · iPad EDITORIAL ────────────────────────────────────────────
+// iPad-only editorial variant of CoffeeCard. Same props, same fields, same
+// handlers (drinks / amenities / seating / parking / phone / directions via the
+// internal MapAppSelector / CafeWorkProfileSection / AIDetailsSection / website).
+// Rendered ONLY at tablet width (CoffeeFinder branches on useIsTablet) so the
+// phone card is untouched. Tokens/structure mirror RestaurantCardTablet exactly;
+// only the café domain content differs.
+function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDistance }) {
+  const [expanded,setExpanded]=useState(false);
+  const [hoursExpanded,setHoursExpanded]=useState(false);
+  const [showDir,setShowDir]=useState(false);
+  const fs=(n)=>`calc(${n}px*var(--fs))`;
+  // Category accent — this finder's OWN color world (canonical CAT.coffee.ink),
+  // NOT the Places-to-Eat coral. Used for the editorial kicker, the primary
+  // Directions button, the rank badge, and the Specialty tag, so the card reads
+  // as one coherent warm accent. The green "Open" bar and blue "phone" bar stay
+  // as-is (semantic colors shared across finders).
+  const ACCENT = CAT.coffee.ink; // #A85A2E
+
+  const name    = shop.displayName?.text || shop.name || "Coffee Shop";
+  const address = shop.shortFormattedAddress || shop.formattedAddress || "";
+  const photos  = shop.photos||(shop.photoUrl?[shop.photoUrl]:[]);
+  const phone   = shop.nationalPhoneNumber || shop.internationalPhoneNumber || "";
+  const parking = shop.parking;
+  const parkingConfirmed = parking?.source==='api';
+  const hasAnySeating = shop.hasIndoorSeating||shop.hasOutdoorSeating||shop.seating?.hasLoungeSeating||shop.seating?.hasBarSeating;
+  const seatingConfirmed = shop.seatingSource==='api';
+  // Café category kicker — coffee accent, same role as the cuisine kicker on Eat.
+  const kicker = shop.isSpecialty ? 'Specialty Coffee'
+    : shop.isChain ? 'Coffee Chain'
+    : (shop.primaryType
+        ? shop.primaryType.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())
+        : 'Café');
+  const openText = shop.is24Hours ? 'Open 24/7' : (shop.isOpen ? 'Open' : 'Closed');
+
+  const Tag=({bg,color,children})=>(
+    <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(9)} ${fs(16)}`,fontSize:fs(15.5),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
+  );
+
+  return (
+    <motion.div initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(index,8)*0.03}}
+      style={{background:"#fff",borderRadius:"28px",overflow:"hidden",boxShadow:"0 24px 50px -30px rgba(22,17,13,.4)",border:`1px solid ${ED_RULE}`}}>
+
+      {/* Photo — editorial height, with rank badge + Specialty tag */}
+      <div style={{position:"relative"}}>
+        <PhotoCarousel photos={photos} height="360px"/>
+        <div style={{position:"absolute",top:fs(14),left:fs(14),background:ACCENT,color:"#fff",width:fs(38),height:fs(38),borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:fs(16),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
+        {shop.tier===1&&<div style={{position:"absolute",top:fs(14),right:fs(14),background:"rgba(255,255,255,0.95)",padding:`${fs(4)} ${fs(11)}`,borderRadius:"8px",fontSize:fs(14),fontWeight:700,color:ACCENT,boxShadow:"0 1px 4px rgba(0,0,0,0.12)"}}>✨ Specialty</div>}
+      </div>
+
+      <div style={{padding:`${fs(28)} ${fs(32)} ${fs(32)}`}}>
+        <div style={{color:ACCENT,fontWeight:600,fontSize:fs(17),letterSpacing:"0.2px"}}>{kicker}</div>
+        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(38),lineHeight:1.04,color:ED_INK,margin:`${fs(4)} 0 0`}}>{name}</h3>
+        {address&&<div style={{fontSize:fs(15.5),color:ED_INK3,marginTop:fs(6)}}>{address}</div>}
+
+        {/* Say it / Translate / rating / distance / price */}
+        <div style={{display:"flex",gap:fs(16),alignItems:"center",flexWrap:"wrap",marginTop:fs(12),fontSize:fs(17),color:ED_INK3}}>
+          <NameLanguageHelp placeId={shop.placeId||shop.id} name={name}/>
+          {shop.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{shop.rating}</span>{shop.userRatingCount>0&&<span> ({shop.userRatingCount.toLocaleString()})</span>}</span>}
+          {shop.distanceMiles!=null&&<span>· {formatDistance(shop.distanceMiles)}</span>}
+          {shop.priceLevel&&<span>· {'$'.repeat(shop.priceLevel)}</span>}
+        </div>
+
+        {/* Drink + status pill tags */}
+        {(Object.keys(shop.detectedDrinks||{}).length>0||shop.badges?.some(b=>b.label!=='Specialty'))&&(
+          <div style={{display:"flex",gap:fs(10),flexWrap:"wrap",marginTop:fs(16)}}>
+            {Object.entries(shop.detectedDrinks||{}).slice(0,4).map(([type])=>{const p=DRINK_PATTERNS[type];return p?<Tag key={type} bg={p.bg} color={p.color}>{p.icon} {p.label}</Tag>:null;})}
+            {shop.badges?.filter(b=>b.label!=='Specialty').map((b,i)=><Tag key={i} bg={b.bg} color={b.color}>{b.icon} {b.label}</Tag>)}
+          </div>
+        )}
+
+        {/* Open bar */}
+        {shop.isOpen!==null&&(
+          <div style={{marginTop:fs(18),background:shop.isOpen?"#E7F3EA":"#FBE0DC",borderRadius:"16px",padding:`${fs(16)} ${fs(20)}`,fontSize:fs(18),fontWeight:600,color:shop.isOpen?"#2E7D46":"#C2392F",display:"flex",alignItems:"center",gap:fs(11)}}>
+            <span style={{width:fs(10),height:fs(10),borderRadius:"50%",background:shop.is24Hours?"#00BCD4":(shop.isOpen?"#2E7D46":"#C2392F"),flexShrink:0}}/>
+            <span>{openText}</span>
+            {shop.todayHours&&!shop.is24Hours&&<span style={{color:ED_INK3,fontWeight:500}}>· {shop.todayHours}</span>}
+          </div>
+        )}
+
+        {/* Phone bar */}
+        {phone&&(
+          <a href={`tel:${phone}`} style={{marginTop:fs(14),background:"#EFF4FB",borderRadius:"16px",padding:`${fs(18)} ${fs(20)}`,display:"flex",alignItems:"center",gap:fs(14),textDecoration:"none"}}>
+            <span style={{fontSize:fs(24)}}>📞</span>
+            <span><span style={{display:"block",fontSize:fs(20),fontWeight:600,color:"#2E6FE0"}}>{phone}</span><span style={{fontSize:fs(15),color:ED_INK3}}>Tap to call</span></span>
+          </a>
+        )}
+
+        {/* Actions */}
+        <div style={{display:"flex",gap:fs(12),marginTop:fs(20)}}>
+          <button onClick={()=>setShowDir(true)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ACCENT,color:"#fff"}}>Directions</button>
+          <button onClick={()=>onShowOnMap?.(index)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
+          <button onClick={()=>setExpanded(e=>!e)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:expanded?ED_INK:ED_IVORY2,color:expanded?"#fff":ED_INK2}}>{expanded?"Less ▴":"More ▾"}</button>
+        </div>
+
+        {/* Expanded details */}
+        <AnimatePresence>
+          {expanded&&(
+            <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
+              <div style={{marginTop:fs(20),display:"flex",flexDirection:"column",gap:fs(14)}}>
+
+                {(hasAnySeating||parking)&&(
+                  <div style={{display:"flex",gap:fs(14),flexWrap:"wrap"}}>
+                    {hasAnySeating&&(
+                      <div style={{flex:"1 1 240px",padding:fs(16),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
+                        <div style={{display:"flex",alignItems:"center",gap:fs(8),marginBottom:fs(8)}}>
+                          <span style={{fontSize:fs(17),fontWeight:700,color:ED_INK}}>🪑 Seating</span>
+                          <span style={{fontSize:fs(12),fontWeight:700,color:seatingConfirmed?"#2E7D32":"#E65100",background:seatingConfirmed?"#E8F5E9":"#FFF3E0",padding:`${fs(1)} ${fs(7)}`,borderRadius:"6px"}}>{seatingConfirmed?"✅ Google confirmed":"⚠️ Not confirmed"}</span>
+                        </div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:fs(6)}}>
+                          {shop.hasIndoorSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🏠 Indoor</span>}
+                          {shop.hasOutdoorSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🌿 Outdoor</span>}
+                          {shop.seating?.hasLoungeSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🛋️ Lounge</span>}
+                          {shop.seating?.hasBarSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🪑 Bar seats</span>}
+                          {shop.seating?.capacityNote&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>📐 {shop.seating.capacityNote}</span>}
+                        </div>
+                      </div>
+                    )}
+                    {parking&&(
+                      <div style={{flex:"1 1 240px",padding:fs(16),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
+                        <div style={{display:"flex",alignItems:"center",gap:fs(8),marginBottom:fs(8)}}>
+                          <span style={{fontSize:fs(17),fontWeight:700,color:ED_INK}}>🅿️ Parking</span>
+                          <span style={{fontSize:fs(12),fontWeight:700,color:parkingConfirmed?"#2E7D32":"#E65100",background:parkingConfirmed?"#E8F5E9":"#FFF3E0",padding:`${fs(1)} ${fs(7)}`,borderRadius:"6px"}}>{parkingConfirmed?"✅ Google confirmed":"⚠️ Mentioned in reviews"}</span>
+                        </div>
+                        {parking.noParking?(
+                          <div style={{fontSize:fs(15),color:"#C2392F"}}>{parking.noParkingNote}</div>
+                        ):(
+                          <div style={{display:"flex",flexWrap:"wrap",gap:fs(6)}}>
+                            {parking.details?.length>0?parking.details.map((d,i)=>(
+                              <span key={i} style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>{d.icon} {d.label}{d.free===true?' · Free':d.free===false&&!d.cost?' · Paid':''}</span>
+                            )):<span style={{fontSize:fs(15),color:ED_INK3}}>Parking available nearby</span>}
+                            {parking.valetCost&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🎩 Valet {parking.valetCost}</span>}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Review-detected amenities (always ⚠️ reported); WiFi lives in the work panel only */}
+                {Object.entries(shop.amenities||{}).some(([k,a])=>a.available&&k!=='wifi')&&(
+                  <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
+                    {Object.entries(shop.amenities).filter(([k,a])=>a.available&&k!=='wifi').map(([k,a])=>(
+                      <span key={k} title="Mentioned in customer reviews — call ahead to confirm" style={{display:"flex",alignItems:"center",gap:fs(5),background:"#FFFBF0",border:"1px solid #FED7AA",padding:`${fs(4)} ${fs(12)}`,borderRadius:"8px",fontSize:fs(15),fontWeight:600,color:"#92400E",cursor:"default"}}>
+                        {a.icon} {a.label} <span style={{color:"#D97706",fontSize:fs(13)}}>·reported</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Daily hours — collapsed by default */}
+                {shop.currentOpeningHours?.weekdayDescriptions?.length>0&&(
+                  <div style={{padding:fs(16),background:"#FAF7F0",borderRadius:"16px"}}>
+                    <button onClick={()=>setHoursExpanded(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
+                      <span style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
+                      <span style={{fontSize:fs(13),color:ED_INK3}}>{hoursExpanded?'▲':'▼'}</span>
+                    </button>
+                    {hoursExpanded&&(
+                      <div style={{marginTop:fs(8)}}>
+                        {shop.currentOpeningHours.weekdayDescriptions.map((day,i)=>{
+                          const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                          const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
+                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?TEAL_DEEP:ED_INK2,borderBottom:i<6?`1px solid ${ED_RULE}`:"none"}}>
+                            <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
+                          </div>;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Good for working — wifi/outlets/seating/noise signals */}
+                <CafeWorkProfileSection placeId={shop.placeId || shop.id} placeName={name}/>
+
+                {/* AI Details — shared component */}
+                <AIDetailsSection placeId={shop.placeId || shop.id} placeName={name} page="CoffeeFinder" kind="coffee"/>
+
+                {/* Website */}
+                {(shop.websiteUri||shop.website)&&(
+                  <a href={shop.websiteUri||shop.website} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(16),background:"#F3E8FF",borderRadius:"16px",textDecoration:"none",color:"#7C3AED"}}>
+                    <span style={{fontSize:fs(22)}}>🌐</span>
+                    <span><span style={{display:"block",fontWeight:600,fontSize:fs(16)}}>Visit Website</span><span style={{fontSize:fs(14),color:ED_INK3}}>Menu &amp; info</span></span>
+                  </a>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      <MapAppSelector isOpen={showDir} onClose={()=>setShowDir(false)} destination={{name, address, latitude:shop.lat, longitude:shop.lng}} userLat={userLat} userLng={userLng}/>
+    </motion.div>
+  );
+}
+
 // ─── FILTER PILL ───────────────────────────────────────────────────────────
 function FilterPill({ label, active, onClick, emoji }) {
   return <button onClick={onClick} style={{padding:"7px 14px",borderRadius:"20px",border:active?`2px solid ${BROWN}`:"1.5px solid #E2E8F0",background:active?`${BROWN}15`:"#fff",color:active?BROWN:GRAY,fontWeight:active?"700":"500",fontSize:"calc(13px*var(--fs))",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",flexShrink:0}}>{emoji&&<span style={{marginRight:"4px"}}>{emoji}</span>}{label}</button>;
@@ -401,6 +601,9 @@ function buildMapPopup(shop, index) {
 // ─── MAIN ──────────────────────────────────────────────────────────────────
 export default function CoffeeFinderPage() {
   const navigate = useNavigate();
+  // iPad: wider centered column + editorial coffee cards (design handoff).
+  const isTablet = useIsTablet();
+  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
   // If user arrived via the "Try the Coffee Finder feature in this app"
   // link from PlacesToEat, the router state carries { from: 'PlacesToEat' }.
   // When that's present we render an extra "← Back to Places to Eat"
@@ -528,7 +731,7 @@ export default function CoffeeFinderPage() {
     <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
       {/* HEADER — redesign pattern (chevron back + Coffee pill + refresh) */}
       <div className="px-4 pt-2 pb-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
           <button
             onClick={()=>fromPlacesToEat ? navigate(-1) : navigate(createPageUrl("Home"))}
             className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]"
@@ -549,7 +752,7 @@ export default function CoffeeFinderPage() {
       </div>
 
       {/* LOCATION CARD */}
-      <div className="px-4 max-w-md mx-auto pb-3">
+      <div className={`px-4 ${colWrap} mx-auto pb-3`}>
         <button
           onClick={()=>setShowLocPicker(true)}
           className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]"
@@ -568,7 +771,7 @@ export default function CoffeeFinderPage() {
         </button>
       </div>
 
-      <div style={{padding:"0 16px"}}>
+      <div className={`${colWrap} mx-auto`} style={{padding:"0 16px"}}>
         <div style={{display:"none"}}>{/* legacy spacer removed */}</div>
 
         {isCity && (
@@ -656,7 +859,9 @@ export default function CoffeeFinderPage() {
       ):error?(
         <div style={{textAlign:"center",padding:"60px 20px"}}><div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px"}}>😕</div><div style={{color:CORAL,fontWeight:"600"}}>{error}</div></div>
       ):viewMode==="list"?(
-        <div style={{padding:"0 12px 100px",display:"flex",flexDirection:"column",gap:"12px"}}>
+        <div style={isTablet
+          ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
+          : {padding:"0 12px 100px",display:"flex",flexDirection:"column",gap:"12px"}}>
           {filtered.length===0?(
             <div style={{textAlign:"center",padding:"40px 20px",background:"#fff",borderRadius:"12px"}}>
               <div style={{fontSize:"calc(32px*var(--fs))",marginBottom:"10px"}}>🔍</div>
@@ -664,9 +869,11 @@ export default function CoffeeFinderPage() {
               <div style={{fontSize:"calc(13px*var(--fs))",color:GRAY,marginBottom:"14px"}}>Try adjusting filters or expanding the radius</div>
               {activeFilterCount>0&&<button onClick={clearFilters} style={{padding:"9px 18px",borderRadius:"8px",border:"none",background:BROWN,color:"#fff",fontWeight:"600",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Clear Filters</button>}
             </div>
-          ):filtered.map((shop,i)=>(
-            <div key={shop.id||i} ref={el=>cardRefs.current[i]=el}><CoffeeCard shop={shop} index={i} onShowOnMap={handleShowOnMap} userLat={lat} userLng={lng} formatDistance={formatDistance}/></div>
-          ))}
+          ):filtered.map((shop,i)=>{
+            const Card = isTablet ? CoffeeCardTablet : CoffeeCard;
+            return (
+            <div key={shop.id||i} ref={el=>cardRefs.current[i]=el}><Card shop={shop} index={i} onShowOnMap={handleShowOnMap} userLat={lat} userLng={lng} formatDistance={formatDistance}/></div>
+          );})}
         </div>
       ):(
         <div style={{position:"relative"}}>

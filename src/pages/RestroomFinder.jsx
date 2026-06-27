@@ -14,6 +14,12 @@ import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
 import { ChevronLeft, MapPin, Crosshair, Loader2 } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import { useIsTablet } from "@/lib/useIsTablet";
+
+// iPad editorial design tokens (design handoff — matches "Places to Eat · iPad").
+const ED_SERIF = '"Instrument Serif", Georgia, serif';
+const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
+const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
 
 // ─── THEME ─────────────────────────────────────────────────────────────────
 const TEAL = "#00BCD4";
@@ -121,30 +127,34 @@ function toM(s) {
 }
 
 // ─── PHOTO STRIP ───────────────────────────────────────────────────────────
-function PhotoStrip({ photos, fallbackIcon = "🚻", onPhotoClick }) {
+function PhotoStrip({ photos, fallbackIcon = "🚻", onPhotoClick, height = null }) {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState({ 0: true, 1: true });
   const valid = (photos || []).filter((p, i) => p && !errors[i]);
+  // Optional editorial height (iPad). When unset, keep the original per-branch
+  // phone heights exactly (no-photo/2-up = 140px, single = 160px) so the phone
+  // layout is byte-identical.
+  const H = (n) => (height != null ? `${height}px` : `${n}px`);
 
   if (!valid.length) return (
-    <div style={{ height: "140px", background: `linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ height: H(140), background: `linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <span style={{ fontSize: "calc(48px*var(--fs))" }}>{fallbackIcon}</span>
     </div>
   );
   if (valid.length === 1) return (
-    <div onClick={() => onPhotoClick?.(0)} style={{ position: "relative", height: "160px", overflow: "hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
+    <div onClick={() => onPhotoClick?.(0)} style={{ position: "relative", height: H(160), overflow: "hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
       {loading[0] && <div style={{ position: "absolute", inset: 0, background: TEAL_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "calc(36px*var(--fs))" }}>{fallbackIcon}</div>}
       <img src={valid[0]} alt="" onError={() => setErrors(p => ({ ...p, 0: true }))} onLoad={() => setLoading(p => ({ ...p, 0: false }))}
-        style={{ width: "100%", height: "160px", objectFit: "cover", opacity: loading[0] ? 0 : 1, transition: "opacity 0.4s" }} />
+        style={{ width: "100%", height: H(160), objectFit: "cover", opacity: loading[0] ? 0 : 1, transition: "opacity 0.4s" }} />
     </div>
   );
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "60% 40%", height: "140px", overflow: "hidden" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "60% 40%", height: H(140), overflow: "hidden" }}>
       {valid.slice(0, 2).map((url, i) => (
         <div key={i} onClick={() => onPhotoClick?.(i)} style={{ position: "relative", overflow: "hidden", borderRight: i === 0 ? "2px solid #fff" : "none", cursor: onPhotoClick ? "pointer" : "default" }}>
           {loading[i] && <div style={{ position: "absolute", inset: 0, background: TEAL_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "calc(28px*var(--fs))" }}>{fallbackIcon}</div>}
           <img src={url} alt="" onError={() => setErrors(p => ({ ...p, [i]: true }))} onLoad={() => setLoading(p => ({ ...p, [i]: false }))}
-            style={{ width: "100%", height: "140px", objectFit: "cover", opacity: loading[i] ? 0 : 1, transition: "opacity 0.4s" }} />
+            style={{ width: "100%", height: H(140), objectFit: "cover", opacity: loading[i] ? 0 : 1, transition: "opacity 0.4s" }} />
         </div>
       ))}
     </div>
@@ -362,6 +372,213 @@ function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpa
   );
 }
 
+// ─── RESTROOM CARD · TABLET ────────────────────────────────────────────────
+// iPad-only editorial card. Mirrors PlacesToEat's RestaurantCardTablet 1:1
+// (28px radius, soft shadow, ED_* tokens, serif name, coral kicker, tinted
+// pills, green/blue bars, More ▾ panel). Takes the SAME props as the phone
+// RestroomCard and reuses the SAME fields + handlers + shared sub-components
+// (PhotoStrip, NameLanguageHelp, getFeatureChips, computeOpenStatus,
+// RestroomAIDetails, PhotoGalleryModal, MapAppSelector). Domain content only:
+// access (free/customers/fee), clean/accessible/family/bidet chips, place type
+// kicker. No phone bar unless a phone exists; no open bar unless hours exist.
+// Rendered ONLY at tablet width so the phone card stays byte-identical.
+function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng, formatDistance }) {
+  const [showDirs, setShowDirs] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [hoursExpanded, setHoursExpanded] = useState(false);
+  const [gallery, setGallery] = useState({ open: false, idx: 0 });
+  const fs = (n) => `calc(${n}px*var(--fs))`;
+
+  useEffect(() => { if (forceExpanded) setExpanded(true); }, [forceExpanded]);
+
+  const name = r.name || "Restroom";
+  const address = r.formattedAddress || "";
+  const phone = r.nationalPhoneNumber || r.internationalPhoneNumber || "";
+  const openSt = computeOpenStatus(r);
+  const chips = getFeatureChips(r);
+  const weekdayDesc = r.weekdayDescriptions || [];
+  const accCfg = ACCESS_CONFIG[r.accessType] || ACCESS_CONFIG.unknown;
+  const hasOpen = openSt.todayHours || openSt.isOpen !== null;
+
+  const Tag = ({ bg, color, children }) => (
+    <span style={{ background: bg, color, borderRadius: "999px", padding: `${fs(9)} ${fs(16)}`, fontSize: fs(15.5), fontWeight: 600, whiteSpace: "nowrap" }}>{children}</span>
+  );
+
+  return (
+    <motion.div
+      ref={cardRef}
+      initial={{ opacity: 0, y: 22 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(index, 8) * 0.03, type: "spring", stiffness: 280, damping: 22 }}
+      style={{
+        background: "#fff", borderRadius: "28px", overflow: "hidden",
+        boxShadow: isHighlighted ? `0 0 0 3px ${TEAL}, 0 24px 50px -30px rgba(0,188,212,0.5)` : "0 24px 50px -30px rgba(22,17,13,.4)",
+        border: isHighlighted ? `2px solid ${TEAL}` : `1px solid ${ED_RULE}`,
+      }}
+    >
+      {/* Photo — editorial height, reuses the same PhotoStrip (rank + venue pill + open status overlays) */}
+      <div style={{ position: "relative" }}>
+        <PhotoStrip
+          photos={r.photos}
+          fallbackIcon={r.venueIcon || "🚻"}
+          height={360}
+          onPhotoClick={(i) => setGallery({ open: true, idx: i })}
+        />
+
+        {/* Rank — top-3 medal gradients; rest use the restroom accent #0F8A82 for a single coherent color world */}
+        <div style={{
+          position: "absolute", top: "16px", left: "16px",
+          background: index === 0 ? "linear-gradient(135deg,#FFD700,#FFA000)" : index === 1 ? "linear-gradient(135deg,#B0BEC5,#78909C)" : index === 2 ? "linear-gradient(135deg,#FFAB40,#F57C00)" : CAT.restroom.ink,
+          color: "#fff", width: "36px", height: "36px", borderRadius: "50%",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontWeight: "800", fontSize: fs(15), boxShadow: "0 2px 8px rgba(0,0,0,0.25)", border: "2px solid #fff"
+        }}>{index + 1}</div>
+
+        {/* Access tag (the "Dish Specialist"-style trust tag for restrooms) */}
+        <div style={{ position: "absolute", top: "16px", right: "16px", background: "rgba(255,255,255,0.95)", backdropFilter: "blur(6px)", padding: `${fs(5)} ${fs(12)}`, borderRadius: "999px", fontSize: fs(13), fontWeight: 700, color: accCfg.color, boxShadow: "0 1px 4px rgba(0,0,0,0.12)" }}>
+          {accCfg.icon} {accCfg.label}
+        </div>
+
+        {/* Open status pill */}
+        {hasOpen && (
+          <div style={{
+            position: "absolute", bottom: "16px", right: "16px",
+            background: openSt.isOpen === true || openSt.is24H ? "rgba(5,150,105,0.95)" : openSt.isOpen === false ? "rgba(220,38,38,0.95)" : "rgba(100,116,139,0.9)",
+            backdropFilter: "blur(6px)", color: "#fff", padding: `${fs(5)} ${fs(12)}`, borderRadius: "999px",
+            fontSize: fs(13), fontWeight: 700, display: "flex", alignItems: "center", gap: "5px"
+          }}>
+            <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: openSt.isOpen === true || openSt.is24H ? "#69F0AE" : "#fff" }} />
+            {openSt.label}
+          </div>
+        )}
+      </div>
+
+      <div style={{ padding: `${fs(28)} ${fs(32)} ${fs(32)}` }}>
+        {/* Category kicker — place type (restroom accent #0F8A82) */}
+        {r.venueLabel && <div style={{ color: CAT.restroom.ink, fontWeight: 600, fontSize: fs(17), letterSpacing: "0.2px" }}>{r.venueIcon} {r.venueLabel}</div>}
+        <h3 style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(38), lineHeight: 1.04, color: ED_INK, margin: `${fs(4)} 0 0` }}>{name}</h3>
+
+        {/* Say it / Translate / rating / distance */}
+        <div style={{ display: "flex", gap: fs(16), alignItems: "center", flexWrap: "wrap", marginTop: fs(12), fontSize: fs(17), color: ED_INK3 }}>
+          <NameLanguageHelp placeId={r.placeId || r.id} name={name} />
+          {r.rating && <span><span style={{ color: "#E0922F" }}>★</span> <span style={{ fontWeight: 700, color: ED_INK2 }}>{r.rating}</span>{r.userRatingCount > 0 ? ` (${r.userRatingCount.toLocaleString()})` : ''}</span>}
+          {r.distanceMiles != null && <span>· {formatDistance(r.distanceMiles)}</span>}
+        </div>
+
+        {/* Pill tags — clean / accessible / family / bidet / 24-7 / squat / stairs */}
+        {chips.length > 0 && (
+          <div style={{ display: "flex", gap: fs(10), flexWrap: "wrap", marginTop: fs(16) }}>
+            {chips.map(chip => (
+              <Tag key={chip.key} bg={chip.bg} color={chip.color}>{chip.icon} {chip.label}</Tag>
+            ))}
+          </div>
+        )}
+
+        {/* Address */}
+        {address && (
+          <div style={{ marginTop: fs(16), display: "flex", alignItems: "flex-start", gap: fs(10), padding: fs(16), background: "#FAF7F0", borderRadius: "16px", border: `1px solid ${ED_RULE}` }}>
+            <span style={{ fontSize: fs(18), flexShrink: 0 }}>📍</span>
+            <span style={{ fontSize: fs(16), color: ED_INK2, lineHeight: 1.5 }}>{address}</span>
+          </div>
+        )}
+
+        {/* Smart note */}
+        {r.smartNote && (
+          <div style={{ marginTop: fs(14), display: "flex", alignItems: "center", gap: fs(10), padding: fs(16), background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: "16px", fontSize: fs(16), color: "#92400E" }}>
+            <span style={{ fontSize: fs(18) }}>💡</span>
+            <span>{r.smartNote}</span>
+          </div>
+        )}
+
+        {/* Open bar */}
+        {hasOpen && (
+          <div style={{
+            marginTop: fs(14), borderRadius: "16px", padding: `${fs(16)} ${fs(20)}`, fontSize: fs(18), fontWeight: 600,
+            background: openSt.is24H ? "#EAF0FB" : openSt.isOpen === true ? "#E7F3EA" : openSt.isOpen === false ? "#FBE0DC" : ED_IVORY2,
+            color: openSt.is24H ? "#2E6FE0" : openSt.isOpen === true ? "#2E7D46" : openSt.isOpen === false ? "#C2392F" : ED_INK3,
+            display: "flex", alignItems: "center", gap: fs(11)
+          }}>
+            <span style={{ width: fs(10), height: fs(10), borderRadius: "50%", background: openSt.isOpen === true || openSt.is24H ? "#2E7D46" : openSt.isOpen === false ? "#C2392F" : GRAY, flexShrink: 0 }} />
+            <span>{openSt.label}</span>
+            {openSt.todayHours && !openSt.is24H && <span style={{ color: ED_INK3, fontWeight: 500 }}>· {openSt.todayHours}</span>}
+          </div>
+        )}
+
+        {/* Phone bar */}
+        {phone && (
+          <a href={`tel:${phone}`} style={{ marginTop: fs(14), background: "#EFF4FB", borderRadius: "16px", padding: `${fs(18)} ${fs(20)}`, display: "flex", alignItems: "center", gap: fs(14), textDecoration: "none" }}>
+            <span style={{ fontSize: fs(24) }}>📞</span>
+            <span><span style={{ display: "block", fontSize: fs(20), fontWeight: 600, color: "#2E6FE0" }}>{phone}</span><span style={{ fontSize: fs(15), color: ED_INK3 }}>Tap to call</span></span>
+          </a>
+        )}
+
+        {/* Actions */}
+        <div style={{ display: "flex", gap: fs(12), marginTop: fs(20) }}>
+          <button onClick={() => setShowDirs(true)} style={{ flex: 1, borderRadius: "16px", padding: fs(15), fontSize: fs(18), fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: CAT.restroom.ink, color: "#fff" }}>Directions</button>
+          <button onClick={() => onShowOnMap?.(index)} style={{ flex: 1, borderRadius: "16px", padding: fs(15), fontSize: fs(18), fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: ED_IVORY2, color: ED_INK2 }}>📍 Map</button>
+          <button onClick={() => { const n = !expanded; setExpanded(n); onExpandChange?.(n); }} style={{ flex: 1, borderRadius: "16px", padding: fs(15), fontSize: fs(18), fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: expanded ? ED_INK : ED_IVORY2, color: expanded ? "#fff" : ED_INK2 }}>{expanded ? "Less ▴" : "More ▾"}</button>
+        </div>
+
+        {/* Expanded details: daily hours + AI Details + website */}
+        <AnimatePresence>
+          {expanded && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: "hidden" }}>
+              <div style={{ marginTop: fs(20), display: "flex", flexDirection: "column", gap: fs(14) }}>
+                {weekdayDesc.length > 0 && (
+                  <div style={{ padding: fs(16), background: "#FAF7F0", borderRadius: "16px" }}>
+                    <button onClick={() => setHoursExpanded(h => !h)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "transparent", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
+                      <span style={{ fontSize: fs(13), fontWeight: 700, color: ED_INK3, letterSpacing: "0.5px" }}>🕐 DAILY HOURS</span>
+                      <span style={{ fontSize: fs(13), color: ED_INK3 }}>{hoursExpanded ? '▲' : '▼'}</span>
+                    </button>
+                    {hoursExpanded && (
+                      <div style={{ marginTop: fs(8) }}>
+                        {weekdayDesc.map((day, i) => {
+                          const today = new Date().getDay();
+                          const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+                          const isToday = dayNames.findIndex(d => day?.toLowerCase?.().startsWith(d.toLowerCase())) === today;
+                          const parts = (day || "").split(":"); const dayName = parts[0]; const hrs = parts.slice(1).join(":").trim();
+                          return (
+                            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: `${fs(4)} 0`, fontSize: fs(15), fontWeight: isToday ? 700 : 400, color: isToday ? TEAL_DEEP : ED_INK2, borderBottom: i < weekdayDesc.length - 1 ? `1px solid ${ED_RULE}` : "none" }}>
+                              <span>{dayName}</span><span style={{ color: hrs.toLowerCase() === "closed" ? "#C2392F" : isToday ? TEAL_DEEP : ED_INK3 }}>{hrs}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Restroom-specific AI Details — dedicated Worker route, restroom voice */}
+                <RestroomAIDetails
+                  placeId={r.placeId || r.id}
+                  placeName={name}
+                  venueLabel={r.venueLabel}
+                  venueCategory={r.venueCategory}
+                  accessType={r.accessType}
+                />
+                {(r.websiteUri || r.website) && (
+                  <a href={r.websiteUri || r.website} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: fs(12), padding: fs(16), background: "#F3E8FF", borderRadius: "16px", textDecoration: "none", color: "#7C3AED" }}>
+                    <span style={{ fontSize: fs(22) }}>🌐</span>
+                    <span style={{ display: "block", fontWeight: 600, fontSize: fs(16) }}>Visit Website</span>
+                  </a>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <MapAppSelector
+        isOpen={showDirs}
+        onClose={() => setShowDirs(false)}
+        destination={{ name, address: r.formattedAddress || r.vicinity || r.address || "", latitude: r.lat, longitude: r.lng }}
+        userLat={userLat}
+        userLng={userLng}
+      />
+      <PhotoGalleryModal photos={r.photos || []} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
+    </motion.div>
+  );
+}
+
 // ─── MAP BOTTOM SHEET (ChatGPT #5) ─────────────────────────────────────────
 function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections, formatDistance }) {
   if (!restroom) return null;
@@ -527,6 +744,11 @@ export default function RestroomFinderPage() {
   const locLabel = getLocationLabel(activeLocation);
   const isCity = isCityLocation(activeLocation);
   const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
+
+  // iPad: wider centered column + editorial restroom cards (design handoff).
+  // Phone layout is untouched.
+  const isTablet = useIsTablet();
+  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
 
   // Snap to live GPS. Restroom Finder is urgent ("I need one NOW"), so we give a
   // one-tap way to jump from a stale/city location to the user's exact current
@@ -714,7 +936,7 @@ export default function RestroomFinderPage() {
 
       {/* HEADER — redesign pattern */}
       <div className="px-4 pt-2 pb-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
           <button
             onClick={() => window.history.back()}
             className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]"
@@ -734,7 +956,7 @@ export default function RestroomFinderPage() {
       </div>
 
       {/* LOCATION CARD */}
-      <div className="px-4 max-w-md mx-auto pb-3">
+      <div className={`px-4 ${colWrap} mx-auto pb-3`}>
         <button
           onClick={() => setShowLocPicker(true)}
           className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]"
@@ -782,7 +1004,7 @@ export default function RestroomFinderPage() {
       </div>
 
       {/* Filters band — keeps existing radius/venue tabs structure, restyled to fit warm-ivory */}
-      <div className="px-4 max-w-md mx-auto pb-2">
+      <div className={`px-4 ${colWrap} mx-auto pb-2`}>
         <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.restroom.ink} unit={unit} setUnit={setUnit} />
 
         {/* Venue tabs */}
@@ -798,23 +1020,25 @@ export default function RestroomFinderPage() {
         </div>
       </div>
 
-      {/* Controls bar */}
-      <div style={{ background: "#fff", padding: "10px 14px", borderBottom: "1px solid #E8EDF2", display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", scrollbarWidth: "none" }}>
-        <button onClick={() => setOpenOnly(o => !o)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", borderRadius: "20px", flexShrink: 0, border: openOnly ? `2px solid ${GREEN}` : "1px solid #E2E8F0", background: openOnly ? GREEN_LIGHT : "#fff", color: openOnly ? GREEN : GRAY, fontWeight: openOnly ? "700" : "500", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>
-          <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: openOnly ? GREEN : "#CBD5E1" }} /> Open Now
-        </button>
-        <button onClick={() => setAccessOnly(a => !a)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", borderRadius: "20px", flexShrink: 0, border: accessOnly ? `2px solid ${BLUE}` : "1px solid #E2E8F0", background: accessOnly ? BLUE_LIGHT : "#fff", color: accessOnly ? BLUE : GRAY, fontWeight: accessOnly ? "700" : "500", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>
-          ♿ Accessible
-        </button>
+      {/* Controls bar — white background stays full-bleed; inner row is centered in the tablet column (mirrors the header wrappers) */}
+      <div style={{ background: "#fff", borderBottom: "1px solid #E8EDF2" }}>
+        <div className={`${colWrap} mx-auto`} style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", scrollbarWidth: "none" }}>
+          <button onClick={() => setOpenOnly(o => !o)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", borderRadius: "20px", flexShrink: 0, border: openOnly ? `2px solid ${GREEN}` : "1px solid #E2E8F0", background: openOnly ? GREEN_LIGHT : "#fff", color: openOnly ? GREEN : GRAY, fontWeight: openOnly ? "700" : "500", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: openOnly ? GREEN : "#CBD5E1" }} /> Open Now
+          </button>
+          <button onClick={() => setAccessOnly(a => !a)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", borderRadius: "20px", flexShrink: 0, border: accessOnly ? `2px solid ${BLUE}` : "1px solid #E2E8F0", background: accessOnly ? BLUE_LIGHT : "#fff", color: accessOnly ? BLUE : GRAY, fontWeight: accessOnly ? "700" : "500", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>
+            ♿ Accessible
+          </button>
 
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-          <span style={{ background: TEAL, color: "#fff", padding: "2px 8px", borderRadius: "10px", fontWeight: "800", fontSize: "calc(12px*var(--fs))" }}>{stats.total}</span>
-          <div style={{ display: "flex", gap: "3px" }}>
-            {["list", "map"].map(v => (
-              <button key={v} onClick={() => setViewMode(v)} style={{ padding: "6px 10px", borderRadius: "8px", border: "none", background: viewMode === v ? TEAL : "#E2E8F0", color: viewMode === v ? "#fff" : GRAY, fontWeight: "700", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>
-                {v === "list" ? "List View" : "Map View"}
-              </button>
-            ))}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+            <span style={{ background: TEAL, color: "#fff", padding: "2px 8px", borderRadius: "10px", fontWeight: "800", fontSize: "calc(12px*var(--fs))" }}>{stats.total}</span>
+            <div style={{ display: "flex", gap: "3px" }}>
+              {["list", "map"].map(v => (
+                <button key={v} onClick={() => setViewMode(v)} style={{ padding: "6px 10px", borderRadius: "8px", border: "none", background: viewMode === v ? TEAL : "#E2E8F0", color: viewMode === v ? "#fff" : GRAY, fontWeight: "700", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>
+                  {v === "list" ? "List View" : "Map View"}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -842,7 +1066,9 @@ export default function RestroomFinderPage() {
           <button onClick={() => setRadius(r => Math.min(r + 5, 25))} style={{ marginTop: "14px", padding: "12px 24px", borderRadius: "12px", border: "none", background: `linear-gradient(135deg,${TEAL_DARK},${TEAL})`, color: "#fff", fontWeight: "700", fontSize: "calc(14px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>Try Larger Radius</button>
         </div>
       ) : viewMode === "list" ? (
-        <div style={{ padding: "14px 12px 100px", display: "flex", flexDirection: "column", gap: "14px" }}>
+        <div style={isTablet
+          ? { maxWidth: 1024, margin: "0 auto", padding: "0 24px 170px", display: "flex", flexDirection: "column", gap: "30px" }
+          : { padding: "14px 12px 100px", display: "flex", flexDirection: "column", gap: "14px" }}>
           {loadingMore && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "6px", color: GRAY, fontSize: "calc(13px*var(--fs))", fontWeight: 600 }}>
               <Loader2 className="w-4 h-4 animate-spin" /> Finding more restrooms nearby…
@@ -854,8 +1080,10 @@ export default function RestroomFinderPage() {
               <div style={{ fontWeight: "800", fontSize: "calc(18px*var(--fs))", color: DARK, marginBottom: "6px" }}>No matches</div>
               <div style={{ color: GRAY, fontSize: "calc(13px*var(--fs))" }}>Try removing filters or switching category</div>
             </div>
-          ) : filtered.map((r, i) => (
-            <RestroomCard key={r.id || i} r={r} index={i}
+          ) : filtered.map((r, i) => {
+            const Card = isTablet ? RestroomCardTablet : RestroomCard;
+            return (
+            <Card key={r.id || i} r={r} index={i}
               onShowOnMap={handleShowOnMap}
               isHighlighted={highlightIdx === i}
               cardRef={el => cardRefs.current[i] = el}
@@ -865,7 +1093,7 @@ export default function RestroomFinderPage() {
               userLng={lng}
               formatDistance={formatDistance}
             />
-          ))}
+          );})}
         </div>
       ) : (
         <div style={{ position: "relative", height: "calc(100vh - 280px)" }}>

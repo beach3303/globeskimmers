@@ -19,8 +19,22 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { ChevronLeft, X, Volume2, ScanLine, ArrowRight, ChevronDown, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CAT, IVORY } from "@/components/redesign/constants";
+import { CAT, IVORY, TEAL_DEEP } from "@/components/redesign/constants";
 import { useCameraPreview } from "@/lib/useCameraPreview";
+import { useIsTablet } from "@/lib/useIsTablet";
+
+// ─── iPad editorial tokens (tablet-only chrome) ──────────────────────────────
+// Mirrors the shipped PlacesToEat / CultureInformation editorial system:
+// Instrument Serif headings, JetBrains Mono uppercase kickers, ivory cards with
+// a hairline rule. Phone layout never reads these. Accent = the text-scanner
+// purple (#6D28D9); CAT/TEAL_DEEP imported per the redesign token contract.
+const ED_SERIF = '"Instrument Serif", Georgia, serif';
+const ED_MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
+const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
+const ED_IVORY2 = "#F7F4EC", ED_RULE = "rgba(22,17,13,.10)";
+const ED_SCAN = "#6D28D9"; // text-scanner accent (purple)
+// Text-scale helper — applied to every tablet-only text size we add.
+const fs = (n) => `calc(${n}px*var(--fs))`;
 
 const WORKER_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
 const DAILY_LIMIT = 10;
@@ -86,6 +100,11 @@ function incrementDailyCount() {
 
 export default function SmartTextScannerPage() {
   const navigate = useNavigate();
+  // Tablet-only editorial chrome. Phone path is byte-identical (isTablet=false
+  // leaves every original className/style untouched). colWrap widens + centers
+  // the editorial card columns on iPad, matching PlacesToEat/CultureInformation.
+  const isTablet = useIsTablet();
+  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
   // canvasRef holds the captured still so the draw-to-crop region select can
   // read sub-rects from it. (No <video>/stream refs — the live preview is the
   // native camera-preview layer, not a DOM element.)
@@ -337,7 +356,7 @@ export default function SmartTextScannerPage() {
             boxShadow: '0 14px 30px -16px rgba(124,58,237,.55)',
           }}
         >
-          <div className="max-w-md mx-auto flex items-center justify-between">
+          <div className={`${colWrap} mx-auto flex items-center justify-between`}>
             <button
               onClick={() => navigate(createPageUrl('Home'))}
               className="flex items-center gap-1.5 hover:opacity-80 transition-opacity font-semibold text-[calc(14px*var(--fs))]"
@@ -346,13 +365,24 @@ export default function SmartTextScannerPage() {
               <span>Back</span>
             </button>
           </div>
-          <div className="max-w-md mx-auto mt-2 text-[calc(22px*var(--fs))] font-extrabold tracking-tight leading-tight">
-            Smart <span className="font-serif italic font-normal">Text Scanner</span>
-          </div>
+          {isTablet ? (
+            <div className={`${colWrap} mx-auto mt-2`}>
+              <div className="uppercase font-semibold" style={{ fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".18em", color: "rgba(255,255,255,.78)" }}>
+                Live camera translator
+              </div>
+              <div className="leading-none mt-1" style={{ fontFamily: ED_SERIF, fontSize: fs(40), color: "#fff" }}>
+                Smart <span className="italic">Text Scanner</span>
+              </div>
+            </div>
+          ) : (
+            <div className="max-w-md mx-auto mt-2 text-[calc(22px*var(--fs))] font-extrabold tracking-tight leading-tight">
+              Smart <span className="font-serif italic font-normal">Text Scanner</span>
+            </div>
+          )}
         </div>
 
         {/* Intro body — compact so the icon, copy and CTA all fit one screen */}
-        <div className="max-w-md mx-auto px-5 pt-4 pb-5">
+        <div className={`${colWrap} mx-auto px-5 pt-4 pb-5`}>
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="text-center">
             <div
               className="w-[60px] h-[60px] mx-auto rounded-[18px] flex items-center justify-center"
@@ -363,45 +393,84 @@ export default function SmartTextScannerPage() {
             >
               <ScanLine size={30} color="#fff" strokeWidth={1.8} />
             </div>
-            <div className="mt-3 text-[calc(23px*var(--fs))] font-extrabold text-[#0F1419] tracking-tight leading-tight">
-              Translate anything, <span className="font-serif italic font-normal text-[#7C3AED]">instantly.</span>
-            </div>
-            <div className="mt-1.5 text-[calc(14px*var(--fs))] text-[#475569] leading-snug">
-              Point your camera at a sign, menu, or product label — we read it and translate it.
-            </div>
+            {isTablet ? (
+              <>
+                <div className="mt-4 leading-none" style={{ fontFamily: ED_SERIF, fontSize: fs(44), color: ED_INK }}>
+                  Translate anything, <span className="italic" style={{ color: ED_SCAN }}>instantly.</span>
+                </div>
+                <div className="mt-3 mx-auto" style={{ maxWidth: 560, fontSize: fs(16), lineHeight: 1.5, color: ED_INK3 }}>
+                  Point your camera at a sign, menu, or product label — we read it and translate it.
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mt-3 text-[calc(23px*var(--fs))] font-extrabold text-[#0F1419] tracking-tight leading-tight">
+                  Translate anything, <span className="font-serif italic font-normal text-[#7C3AED]">instantly.</span>
+                </div>
+                <div className="mt-1.5 text-[calc(14px*var(--fs))] text-[#475569] leading-snug">
+                  Point your camera at a sign, menu, or product label — we read it and translate it.
+                </div>
+              </>
+            )}
           </motion.div>
 
           {/* What you get */}
-          <div className="mt-4 px-4 py-3 rounded-[16px]" style={{ background: '#fff', border: '1px solid #F0E9DC' }}>
-            <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.16em] uppercase font-semibold text-[#6B7280] mb-1.5">What's in your pocket</div>
-            <ul className="space-y-1.5 text-[calc(13px*var(--fs))] text-[#0F1419]">
-              <li className="flex gap-2"><span>•</span><span><strong>25 languages</strong> with pronunciation for Japanese, Thai, Korean, Arabic, Chinese and more</span></li>
-              <li className="flex gap-2"><span>•</span><span><strong>All your travel tools in one app</strong> — no app-switching mid-trip</span></li>
-              <li className="flex gap-2"><span>•</span><span><strong>10 free translations daily</strong></span></li>
+          <div
+            className={isTablet ? "mt-6 px-6 py-5 rounded-[22px]" : "mt-4 px-4 py-3 rounded-[16px]"}
+            style={isTablet
+              ? { background: '#fff', border: `1px solid ${ED_RULE}`, boxShadow: '0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }
+              : { background: '#fff', border: '1px solid #F0E9DC' }}
+          >
+            <div
+              className="uppercase font-semibold mb-1.5"
+              style={isTablet
+                ? { fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".16em", color: ED_INK3 }
+                : undefined}
+            >
+              <span className={isTablet ? "" : "font-mono text-[calc(10px*var(--fs))] tracking-[0.16em] uppercase font-semibold text-[#6B7280]"}>What's in your pocket</span>
+            </div>
+            <ul className={isTablet ? "space-y-2.5" : "space-y-1.5 text-[calc(13px*var(--fs))] text-[#0F1419]"} style={isTablet ? { fontSize: fs(15), color: ED_INK2, lineHeight: 1.5 } : undefined}>
+              <li className="flex gap-2"><span style={isTablet ? { color: ED_SCAN } : undefined}>•</span><span><strong>25 languages</strong> with pronunciation for Japanese, Thai, Korean, Arabic, Chinese and more</span></li>
+              <li className="flex gap-2"><span style={isTablet ? { color: ED_SCAN } : undefined}>•</span><span><strong>All your travel tools in one app</strong> — no app-switching mid-trip</span></li>
+              <li className="flex gap-2"><span style={isTablet ? { color: ED_SCAN } : undefined}>•</span><span><strong>10 free translations daily</strong></span></li>
             </ul>
           </div>
 
           {/* Screenshot tip */}
-          <div className="mt-2.5 px-4 py-3 rounded-[14px] text-[calc(12.5px*var(--fs))] leading-snug" style={{ background: CAT.todo.bg, color: CAT.todo.ink }}>
+          <div
+            className={isTablet ? "mt-3 px-5 py-4 rounded-[18px] leading-snug" : "mt-2.5 px-4 py-3 rounded-[14px] text-[calc(12.5px*var(--fs))] leading-snug"}
+            style={isTablet
+              ? { background: CAT.todo.bg, color: CAT.todo.ink, fontSize: fs(14) }
+              : { background: CAT.todo.bg, color: CAT.todo.ink }}
+          >
             <div className="font-bold mb-0.5">📸 Want to remember a translation?</div>
             Feel free to take a screenshot to save it on your device.
           </div>
 
           {/* Start button + secondary escape */}
-          <button
-            onClick={handleStartScanning}
-            className="mt-5 w-full h-[52px] rounded-[16px] text-white flex items-center justify-center gap-2 font-bold text-[calc(15.5px*var(--fs))]"
-            style={{ background: '#0F1419', boxShadow: '0 12px 28px -14px rgba(15,20,25,.4)' }}
-          >
-            Got it, let's translate
-            <ArrowRight size={18} color="#fff" strokeWidth={2.4} />
-          </button>
-          <button
-            onClick={() => navigate(createPageUrl('Home'))}
-            className="w-full mt-2 text-[#94A3B8] hover:text-[#475569] text-[calc(11.5px*var(--fs))] font-normal transition-colors"
-          >
-            Back to Home
-          </button>
+          <div className={isTablet ? "mx-auto" : ""} style={isTablet ? { maxWidth: 460 } : undefined}>
+            <button
+              onClick={handleStartScanning}
+              className={isTablet
+                ? "mt-7 w-full rounded-[18px] text-white flex items-center justify-center gap-2"
+                : "mt-5 w-full h-[52px] rounded-[16px] text-white flex items-center justify-center gap-2 font-bold text-[calc(15.5px*var(--fs))]"}
+              style={isTablet
+                ? { background: ED_INK, boxShadow: '0 14px 30px -16px rgba(22,17,13,.5)', height: 'calc(58px*var(--fs))', fontSize: fs(17), fontWeight: 700 }
+                : { background: '#0F1419', boxShadow: '0 12px 28px -14px rgba(15,20,25,.4)' }}
+            >
+              Got it, let's translate
+              <ArrowRight size={18} color="#fff" strokeWidth={2.4} />
+            </button>
+            <button
+              onClick={() => navigate(createPageUrl('Home'))}
+              className={isTablet
+                ? "w-full mt-3 transition-colors"
+                : "w-full mt-2 text-[#94A3B8] hover:text-[#475569] text-[calc(11.5px*var(--fs))] font-normal transition-colors"}
+              style={isTablet ? { fontSize: fs(13), color: ED_INK3, fontFamily: ED_MONO, letterSpacing: ".06em" } : undefined}
+            >
+              Back to Home
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -414,18 +483,39 @@ export default function SmartTextScannerPage() {
   if (step === 'limit') {
     return (
       <div className="min-h-screen font-sans flex flex-col items-center justify-center px-5" style={{ background: IVORY }}>
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full text-center">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className={isTablet ? "w-full text-center" : "max-w-md w-full text-center"} style={isTablet ? { maxWidth: 560 } : undefined}>
           <div className="text-[calc(64px*var(--fs))] leading-none">🎯</div>
-          <div className="mt-4 text-[calc(28px*var(--fs))] font-extrabold text-[#0F1419] tracking-tight">
-            You've used all <span className="font-serif italic font-normal text-[#C5197A]">10 free</span> translations today.
-          </div>
-          <div className="mt-3 text-[calc(14.5px*var(--fs))] text-[#475569] leading-relaxed">
-            Your free daily translations reset at <strong>midnight your local time</strong>. Or unlock unlimited with <strong>Globeskimmers Premium, launching soon</strong>.
-          </div>
+          {isTablet ? (
+            <>
+              <div className="mt-5 leading-tight" style={{ fontFamily: ED_SERIF, fontSize: fs(40), color: ED_INK }}>
+                You've used all <span className="italic" style={{ color: ED_SCAN }}>10 free</span> translations today.
+              </div>
+              <div className="mt-4 leading-relaxed" style={{ fontSize: fs(16), color: ED_INK3 }}>
+                Your free daily translations reset at <strong style={{ color: ED_INK2 }}>midnight your local time</strong>. Or unlock unlimited with <strong style={{ color: ED_INK2 }}>Globeskimmers Premium, launching soon</strong>.
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mt-4 text-[calc(28px*var(--fs))] font-extrabold text-[#0F1419] tracking-tight">
+                You've used all <span className="font-serif italic font-normal text-[#C5197A]">10 free</span> translations today.
+              </div>
+              <div className="mt-3 text-[calc(14.5px*var(--fs))] text-[#475569] leading-relaxed">
+                Your free daily translations reset at <strong>midnight your local time</strong>. Or unlock unlimited with <strong>Globeskimmers Premium, launching soon</strong>.
+              </div>
+            </>
+          )}
 
-          <div className="mt-5 px-4 py-4 rounded-[14px] text-left" style={{ background: CAT.todo.bg, color: CAT.todo.ink }}>
-            <div className="font-bold text-[calc(13.5px*var(--fs))] mb-1">✨ Quick travel tip</div>
-            <div className="text-[calc(12.5px*var(--fs))] leading-relaxed">
+          <div
+            className={isTablet ? "mt-6 px-5 py-5 rounded-[18px] text-left" : "mt-5 px-4 py-4 rounded-[14px] text-left"}
+            style={{ background: CAT.todo.bg, color: CAT.todo.ink }}
+          >
+            <div
+              className={isTablet ? "uppercase font-semibold mb-1.5" : "font-bold text-[calc(13.5px*var(--fs))] mb-1"}
+              style={isTablet ? { fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".14em" } : undefined}
+            >
+              ✨ Quick travel tip
+            </div>
+            <div className={isTablet ? "leading-relaxed" : "text-[calc(12.5px*var(--fs))] leading-relaxed"} style={isTablet ? { fontSize: fs(14) } : undefined}>
               Screenshot your most-needed translations as you go — they'll be saved on your phone forever, even offline.
             </div>
           </div>
@@ -433,21 +523,30 @@ export default function SmartTextScannerPage() {
           {/* Premium CTA — non-functional placeholder until the subscription
               flow lands. Same "coming soon" framing as the Price Scanner
               cap-hit modal so the user hears a consistent message. */}
-          <button
-            type="button"
-            onClick={() => { /* Premium flow lands later */ }}
-            className="mt-5 w-full h-[54px] rounded-[16px] text-white font-bold text-[calc(15.5px*var(--fs))] transition-opacity hover:opacity-90"
-            style={{ background: 'linear-gradient(135deg,#7C3AED 0%,#EC4899 100%)' }}
-          >
-            ✨ Get Globeskimmers Premium — coming soon
-          </button>
+          <div className={isTablet ? "mx-auto" : ""} style={isTablet ? { maxWidth: 460 } : undefined}>
+            <button
+              type="button"
+              onClick={() => { /* Premium flow lands later */ }}
+              className={isTablet
+                ? "mt-6 w-full rounded-[18px] text-white transition-opacity hover:opacity-90"
+                : "mt-5 w-full h-[54px] rounded-[16px] text-white font-bold text-[calc(15.5px*var(--fs))] transition-opacity hover:opacity-90"}
+              style={isTablet
+                ? { background: 'linear-gradient(135deg,#7C3AED 0%,#EC4899 100%)', height: 'calc(58px*var(--fs))', fontSize: fs(16.5), fontWeight: 700 }
+                : { background: 'linear-gradient(135deg,#7C3AED 0%,#EC4899 100%)' }}
+            >
+              ✨ Get Globeskimmers Premium — coming soon
+            </button>
 
-          <button
-            onClick={() => navigate(createPageUrl('Home'))}
-            className="mt-2 w-full text-gray-500 text-[calc(13px*var(--fs))] font-medium py-2.5 hover:text-gray-700"
-          >
-            🏠 Back to Home
-          </button>
+            <button
+              onClick={() => navigate(createPageUrl('Home'))}
+              className={isTablet
+                ? "mt-3 w-full py-2.5 transition-colors"
+                : "mt-2 w-full text-gray-500 text-[calc(13px*var(--fs))] font-medium py-2.5 hover:text-gray-700"}
+              style={isTablet ? { fontSize: fs(13), color: ED_INK3, fontFamily: ED_MONO, letterSpacing: ".06em" } : undefined}
+            >
+              🏠 Back to Home
+            </button>
+          </div>
         </motion.div>
       </div>
     );
@@ -484,7 +583,7 @@ export default function SmartTextScannerPage() {
         className="absolute top-0 left-0 right-0 z-30 px-4 pb-4 bg-gradient-to-b from-black/60 to-transparent pointer-events-auto"
         style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))' }}
       >
-        <div className="max-w-md mx-auto flex items-center justify-between gap-2">
+        <div className={`${colWrap} mx-auto flex items-center justify-between gap-2`}>
           {/* Back / Dismiss */}
           {step === 'frozen' || step === 'translating' ? (
             <button
@@ -608,15 +707,21 @@ export default function SmartTextScannerPage() {
         <motion.div
           initial={{ y: 30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="absolute bottom-0 left-0 right-0 z-20 rounded-t-[24px] px-5 pt-5 pb-7 text-[#0F1419] pointer-events-auto"
-          style={{ background: '#FFFCF7', maxHeight: '70vh', overflowY: 'auto', boxShadow: '0 -10px 40px rgba(0,0,0,0.3)' }}
+          className={isTablet
+            ? "absolute bottom-0 left-1/2 z-20 rounded-t-[28px] px-7 pt-7 pb-8 text-[#0F1419] pointer-events-auto"
+            : "absolute bottom-0 left-0 right-0 z-20 rounded-t-[24px] px-5 pt-5 pb-7 text-[#0F1419] pointer-events-auto"}
+          style={isTablet
+            ? { background: IVORY, width: 'min(620px, 92vw)', transform: 'translateX(-50%)', maxHeight: '78vh', overflowY: 'auto', border: `1px solid ${ED_RULE}`, borderBottom: 'none', boxShadow: '0 -18px 60px -20px rgba(22,17,13,.45)' }
+            : { background: '#FFFCF7', maxHeight: '70vh', overflowY: 'auto', boxShadow: '0 -10px 40px rgba(0,0,0,0.3)' }}
         >
           {/* Card-level dismiss X — top-right, always reachable.
               Tapping returns to the live camera (same as Scan another). */}
           <button
             onClick={handleDismissTranslation}
-            className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center z-10 transition-colors hover:bg-[#EFE8D6]"
-            style={{ background: '#F7F4EC' }}
+            className={isTablet
+              ? "absolute top-4 right-4 w-9 h-9 rounded-full flex items-center justify-center z-10 transition-colors hover:brightness-95"
+              : "absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center z-10 transition-colors hover:bg-[#EFE8D6]"}
+            style={{ background: ED_IVORY2 }}
             aria-label="Close translation"
           >
             <X size={18} color="#0F1419" strokeWidth={2.2} />
@@ -624,12 +729,25 @@ export default function SmartTextScannerPage() {
 
           {errorMessage ? (
             <>
-              <div className="text-[calc(18px*var(--fs))] font-bold mb-1">Couldn't read the text</div>
-              <div className="text-[calc(14px*var(--fs))] text-[#475569] mb-4">{errorMessage}</div>
+              {isTablet ? (
+                <>
+                  <div className="leading-tight mb-1.5" style={{ fontFamily: ED_SERIF, fontSize: fs(26), color: ED_INK }}>Couldn't read the text</div>
+                  <div className="mb-5" style={{ fontSize: fs(15), color: ED_INK3, lineHeight: 1.5 }}>{errorMessage}</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-[calc(18px*var(--fs))] font-bold mb-1">Couldn't read the text</div>
+                  <div className="text-[calc(14px*var(--fs))] text-[#475569] mb-4">{errorMessage}</div>
+                </>
+              )}
               <button
                 onClick={handleDismissTranslation}
-                className="w-full h-[48px] rounded-[14px] text-white font-bold text-[calc(14px*var(--fs))]"
-                style={{ background: '#0F1419' }}
+                className={isTablet
+                  ? "w-full rounded-[16px] text-white flex items-center justify-center"
+                  : "w-full h-[48px] rounded-[14px] text-white font-bold text-[calc(14px*var(--fs))]"}
+                style={isTablet
+                  ? { background: ED_INK, height: 'calc(54px*var(--fs))', fontSize: fs(15.5), fontWeight: 700 }
+                  : { background: '#0F1419' }}
               >
                 Try again
               </button>
@@ -638,7 +756,10 @@ export default function SmartTextScannerPage() {
             <>
               {/* Source language label */}
               {translation.sourceLanguageName && (
-                <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.16em] uppercase font-semibold text-[#94A3B8] mb-1">
+                <div
+                  className={isTablet ? "uppercase font-semibold mb-1.5" : "font-mono text-[calc(10px*var(--fs))] tracking-[0.16em] uppercase font-semibold text-[#94A3B8] mb-1"}
+                  style={isTablet ? { fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".16em", color: ED_INK3 } : undefined}
+                >
                   From {translation.sourceLanguageName}
                   {translation.textCategory && translation.textCategory !== 'other' && (
                     <span> · {translation.textCategory.replace(/_/g, ' ')}</span>
@@ -647,19 +768,35 @@ export default function SmartTextScannerPage() {
               )}
 
               {/* Original text */}
-              <div className="text-[calc(14.5px*var(--fs))] text-[#3A3128] leading-relaxed whitespace-pre-wrap mb-3">
+              <div
+                className={isTablet ? "whitespace-pre-wrap mb-4" : "text-[calc(14.5px*var(--fs))] text-[#3A3128] leading-relaxed whitespace-pre-wrap mb-3"}
+                style={isTablet ? { fontFamily: ED_SERIF, fontSize: fs(26), lineHeight: 1.22, color: ED_INK } : undefined}
+              >
                 {translation.originalText}
               </div>
 
               {/* Romanization (only for non-Latin scripts) */}
               {translation.romanization && (
-                <div className="mb-3 px-3 py-2 rounded-[10px] flex items-start gap-2" style={{ background: '#F7F4EC' }}>
-                  <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold text-[#6B7280] mt-0.5 flex-none">Say it</div>
-                  <div className="text-[calc(13px*var(--fs))] italic text-[#3A3128] flex-1">{translation.romanization}</div>
+                <div
+                  className={isTablet ? "mb-4 px-4 py-3 rounded-[14px] flex items-start gap-3" : "mb-3 px-3 py-2 rounded-[10px] flex items-start gap-2"}
+                  style={isTablet ? { background: ED_IVORY2, border: `1px solid ${ED_RULE}` } : { background: '#F7F4EC' }}
+                >
+                  <div
+                    className={isTablet ? "uppercase font-semibold mt-1 flex-none" : "font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold text-[#6B7280] mt-0.5 flex-none"}
+                    style={isTablet ? { fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".14em", color: ED_INK3 } : undefined}
+                  >
+                    Say it
+                  </div>
+                  <div
+                    className={isTablet ? "italic flex-1" : "text-[calc(13px*var(--fs))] italic text-[#3A3128] flex-1"}
+                    style={isTablet ? { fontFamily: ED_SERIF, fontSize: fs(18), color: ED_INK2, lineHeight: 1.35 } : undefined}
+                  >
+                    {translation.romanization}
+                  </div>
                   <button
                     onClick={handleSpeak}
                     className="w-8 h-8 rounded-full flex items-center justify-center flex-none"
-                    style={{ background: '#0E7C73', color: '#fff' }}
+                    style={{ background: TEAL_DEEP, color: '#fff' }}
                     aria-label="Speak"
                   >
                     <Volume2 size={14} color="#fff" strokeWidth={2.2} />
@@ -668,25 +805,41 @@ export default function SmartTextScannerPage() {
               )}
 
               {/* Translation */}
-              <div className="px-4 py-3.5 rounded-[14px] mb-3" style={{ background: CAT.todo.bg }}>
-                <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.16em] uppercase font-semibold mb-1" style={{ color: CAT.todo.ink }}>
+              <div
+                className={isTablet ? "px-5 py-4 rounded-[18px] mb-4" : "px-4 py-3.5 rounded-[14px] mb-3"}
+                style={isTablet ? { background: CAT.todo.bg, border: `1px solid ${ED_RULE}` } : { background: CAT.todo.bg }}
+              >
+                <div
+                  className={isTablet ? "uppercase font-semibold mb-1.5" : "font-mono text-[calc(10px*var(--fs))] tracking-[0.16em] uppercase font-semibold mb-1"}
+                  style={isTablet ? { fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".16em", color: CAT.todo.ink } : { color: CAT.todo.ink }}
+                >
                   {currentLang.flag} {currentLang.label}
                 </div>
-                <div className="text-[calc(17px*var(--fs))] font-bold leading-relaxed whitespace-pre-wrap" style={{ color: CAT.todo.ink }}>
+                <div
+                  className={isTablet ? "whitespace-pre-wrap" : "text-[calc(17px*var(--fs))] font-bold leading-relaxed whitespace-pre-wrap"}
+                  style={isTablet ? { fontFamily: ED_SERIF, fontSize: fs(30), lineHeight: 1.18, color: CAT.todo.ink } : { color: CAT.todo.ink }}
+                >
                   {translation.translation}
                 </div>
               </div>
 
               {/* Screenshot hint */}
-              <div className="text-[calc(12px*var(--fs))] text-[#6B7280] text-center mt-2 mb-3">
+              <div
+                className={isTablet ? "text-center mt-3 mb-4" : "text-[calc(12px*var(--fs))] text-[#6B7280] text-center mt-2 mb-3"}
+                style={isTablet ? { fontFamily: ED_MONO, fontSize: fs(11.5), letterSpacing: ".04em", color: ED_INK3 } : undefined}
+              >
                 📸 Feel free to take a screenshot to save it on your device.
               </div>
 
               {/* Scan-another quick action */}
               <button
                 onClick={handleDismissTranslation}
-                className="w-full h-[48px] rounded-[14px] flex items-center justify-center gap-2 font-bold text-[calc(14px*var(--fs))]"
-                style={{ background: '#0F1419', color: '#fff' }}
+                className={isTablet
+                  ? "w-full rounded-[16px] flex items-center justify-center gap-2"
+                  : "w-full h-[48px] rounded-[14px] flex items-center justify-center gap-2 font-bold text-[calc(14px*var(--fs))]"}
+                style={isTablet
+                  ? { background: ED_INK, color: '#fff', height: 'calc(54px*var(--fs))', fontSize: fs(15.5), fontWeight: 700 }
+                  : { background: '#0F1419', color: '#fff' }}
               >
                 <ScanLine size={16} color="#fff" strokeWidth={2.2} />
                 Scan another
@@ -695,7 +848,10 @@ export default function SmartTextScannerPage() {
               {/* Tertiary escape — exit the scanner back to Home. */}
               <button
                 onClick={() => navigate(createPageUrl('Home'))}
-                className="w-full mt-2 text-[#64748B] hover:text-[#0F1419] text-[calc(13px*var(--fs))] font-medium py-2 transition-colors"
+                className={isTablet
+                  ? "w-full mt-3 py-2 transition-colors"
+                  : "w-full mt-2 text-[#64748B] hover:text-[#0F1419] text-[calc(13px*var(--fs))] font-medium py-2 transition-colors"}
+                style={isTablet ? { fontFamily: ED_MONO, fontSize: fs(13), letterSpacing: ".06em", color: ED_INK3 } : undefined}
               >
                 🏠 Back to Home
               </button>
@@ -710,7 +866,7 @@ export default function SmartTextScannerPage() {
           className="absolute bottom-0 left-0 right-0 z-20 px-5 pt-6 bg-gradient-to-t from-black/60 to-transparent pointer-events-auto"
           style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
         >
-          <div className="max-w-md mx-auto">
+          <div className={isTablet ? "mx-auto" : "max-w-md mx-auto"} style={isTablet ? { maxWidth: 480 } : undefined}>
             <button
               onClick={handleFreezeAndTranslate}
               className="w-full h-[58px] rounded-[18px] flex items-center justify-center gap-2 font-bold text-[calc(16px*var(--fs))] text-white"
@@ -738,7 +894,7 @@ export default function SmartTextScannerPage() {
           className="absolute bottom-0 left-0 right-0 z-20 px-5 pt-6 bg-gradient-to-t from-black/70 to-transparent pointer-events-auto"
           style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
         >
-          <div className="max-w-md mx-auto">
+          <div className={isTablet ? "mx-auto" : "max-w-md mx-auto"} style={isTablet ? { maxWidth: 480 } : undefined}>
             <button
               onClick={handleTranslateSelection}
               disabled={!selRect || selRect.w < 12 || selRect.h < 12}
@@ -768,34 +924,52 @@ export default function SmartTextScannerPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-40 flex items-end pointer-events-auto"
+            className={isTablet
+              ? "absolute inset-0 z-40 flex items-center justify-center px-6 pointer-events-auto"
+              : "absolute inset-0 z-40 flex items-end pointer-events-auto"}
             style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
             onClick={() => setShowLangPicker(false)}
           >
             <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
+              initial={isTablet ? { opacity: 0, scale: 0.96, y: 12 } : { y: '100%' }}
+              animate={isTablet ? { opacity: 1, scale: 1, y: 0 } : { y: 0 }}
+              exit={isTablet ? { opacity: 0, scale: 0.96, y: 12 } : { y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              className="w-full rounded-t-[24px] max-h-[70vh] overflow-y-auto"
-              style={{ background: '#FFFCF7' }}
+              className={isTablet
+                ? "w-full max-w-[520px] rounded-[28px] max-h-[78vh] overflow-y-auto"
+                : "w-full rounded-t-[24px] max-h-[70vh] overflow-y-auto"}
+              style={isTablet
+                ? { background: IVORY, border: `1px solid ${ED_RULE}`, boxShadow: '0 30px 80px -30px rgba(22,17,13,.55)' }
+                : { background: '#FFFCF7' }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="sticky top-0 px-5 pt-4 pb-3 flex items-center justify-between" style={{ background: '#FFFCF7', borderBottom: '1px solid #F0E9DC' }}>
+              <div
+                className={isTablet ? "sticky top-0 px-6 pt-5 pb-4 flex items-center justify-between" : "sticky top-0 px-5 pt-4 pb-3 flex items-center justify-between"}
+                style={isTablet ? { background: IVORY, borderBottom: `1px solid ${ED_RULE}` } : { background: '#FFFCF7', borderBottom: '1px solid #F0E9DC' }}
+              >
                 <div>
-                  <div className="text-[calc(18px*var(--fs))] font-extrabold text-[#0F1419]">Translate into…</div>
-                  <div className="text-[calc(12px*var(--fs))] text-[#6B7280] mt-0.5">{LANGUAGES.length} languages</div>
+                  {isTablet ? (
+                    <>
+                      <div style={{ fontFamily: ED_SERIF, fontSize: fs(28), lineHeight: 1.05, color: ED_INK }}>Translate into…</div>
+                      <div className="uppercase font-semibold mt-1.5" style={{ fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".16em", color: ED_INK3 }}>{LANGUAGES.length} languages</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-[calc(18px*var(--fs))] font-extrabold text-[#0F1419]">Translate into…</div>
+                      <div className="text-[calc(12px*var(--fs))] text-[#6B7280] mt-0.5">{LANGUAGES.length} languages</div>
+                    </>
+                  )}
                 </div>
                 <button
                   onClick={() => setShowLangPicker(false)}
                   className="w-9 h-9 rounded-full flex items-center justify-center"
-                  style={{ background: '#F7F4EC' }}
+                  style={{ background: ED_IVORY2 }}
                   aria-label="Close picker"
                 >
                   <X size={18} color="#0F1419" strokeWidth={2.2} />
                 </button>
               </div>
-              <div className="px-2 py-2">
+              <div className={isTablet ? "px-3 py-3" : "px-2 py-2"}>
                 {LANGUAGES.map((lang) => {
                   const isSelected = lang.code === targetLang;
                   return (
@@ -805,17 +979,34 @@ export default function SmartTextScannerPage() {
                         setTargetLang(lang.code);
                         setShowLangPicker(false);
                       }}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-[12px] text-left transition-colors"
+                      className={isTablet
+                        ? "w-full flex items-center gap-3 px-4 py-3.5 rounded-[14px] text-left transition-colors"
+                        : "w-full flex items-center gap-3 px-4 py-3 rounded-[12px] text-left transition-colors"}
                       style={{ background: isSelected ? CAT.todo.bg : 'transparent' }}
                     >
-                      <span className="text-[calc(22px*var(--fs))] flex-none">{lang.flag}</span>
+                      <span className={isTablet ? "flex-none" : "text-[calc(22px*var(--fs))] flex-none"} style={isTablet ? { fontSize: fs(24) } : undefined}>{lang.flag}</span>
                       <div className="flex-1">
-                        <div className="font-bold text-[calc(14.5px*var(--fs))]" style={{ color: isSelected ? CAT.todo.ink : '#0F1419' }}>
+                        <div
+                          className={isTablet ? "" : "font-bold text-[calc(14.5px*var(--fs))]"}
+                          style={isTablet ? { fontFamily: ED_SERIF, fontSize: fs(20), lineHeight: 1.1, color: isSelected ? CAT.todo.ink : ED_INK } : { color: isSelected ? CAT.todo.ink : '#0F1419' }}
+                        >
                           {lang.label}
                         </div>
-                        <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.08em] text-[#94A3B8]">{lang.code}</div>
+                        <div
+                          className={isTablet ? "uppercase mt-0.5" : "font-mono text-[calc(10px*var(--fs))] tracking-[0.08em] text-[#94A3B8]"}
+                          style={isTablet ? { fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".1em", color: ED_INK3 } : undefined}
+                        >
+                          {lang.code}
+                        </div>
                       </div>
-                      {isSelected && <span className="font-mono text-[calc(10px*var(--fs))] tracking-[0.14em] font-bold" style={{ color: CAT.todo.ink }}>✓ SELECTED</span>}
+                      {isSelected && (
+                        <span
+                          className={isTablet ? "uppercase font-bold" : "font-mono text-[calc(10px*var(--fs))] tracking-[0.14em] font-bold"}
+                          style={isTablet ? { fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".14em", color: CAT.todo.ink } : { color: CAT.todo.ink }}
+                        >
+                          ✓ SELECTED
+                        </span>
+                      )}
                     </button>
                   );
                 })}

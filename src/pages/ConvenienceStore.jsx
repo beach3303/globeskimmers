@@ -14,6 +14,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useLocation } from '@/components/location/LocationContext';
 import LocationModePicker from '@/components/location/LocationModePicker';
@@ -27,6 +28,15 @@ import NameLanguageHelp from '@/components/NameLanguageHelp';
 import MapAppSelector from '@/components/MapAppSelector';
 import { ChevronLeft, MapPin, Store } from 'lucide-react';
 import { CAT, TEAL_DEEP, IVORY } from '@/components/redesign/constants';
+import { useIsTablet } from '@/lib/useIsTablet';
+
+// iPad editorial design tokens (design handoff: "Places to Eat · iPad").
+// Shared verbatim across finders so every tablet card matches.
+const ED_SERIF = '"Instrument Serif", Georgia, serif';
+const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
+const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
+// Convenience-finder accent (green) — domain analog to ED_EAT on PlacesToEat.
+const ED_CONV = CAT.convenience.ink;
 
 // ============================================================================
 // THEME - Matching PlacesToEat warm brown aesthetic
@@ -833,6 +843,256 @@ const paymentBadgeStyle = (bg, color) => ({
 });
 
 // ============================================================================
+// COMPONENT: Store Card — iPad editorial layout (design handoff)
+// ============================================================================
+// Full-width editorial card mirroring RestaurantCardTablet exactly: big ~360px
+// photo (rank badge + chain tag), green domain kicker (store type / chain),
+// serif name, Say-it/Translate (NameLanguageHelp) + ★rating(count) + · distance
+// row, tinted pill tags (24hr/ATM/Hot Food/Coffee/Gas/Pharmacy/chain features),
+// a green Open bar, a blue phone bar, Directions/Map/More action buttons, and a
+// "More ▾" expand panel (payment row, payment tip, daily hours, website).
+// Same props/handlers as StoreCard; reuses normalizeStore / detectChain /
+// getTodayHours / getPhotoUrl / PhotoGallery / MapAppSelector / NameLanguageHelp.
+// Rendered ONLY at tablet width (the page branches on useIsTablet) so the phone
+// card is untouched.
+function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShowOnMap, index, formatDistance = formatDistanceMi }) {
+  const [expanded, setExpanded] = useState(false);
+  const [hoursExpanded, setHoursExpanded] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
+  const [photoError, setPhotoError] = useState(false);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [showDirs, setShowDirs] = useState(false);
+  const touchStartX = useRef(0);
+  const fs = (n) => `calc(${n}px*var(--fs))`;
+
+  // Normalize the store data (same as StoreCard)
+  const store = normalizeStore(rawStore);
+  const chainInfo = detectChain(store.name);
+  const photos = store.photos || [];
+  const mainPhotoUrl = photos.length > 0 && !photoError ? getPhotoUrl(photos[0], 800) : null;
+  const todayHrs = getTodayHours(store.hours, store.is24Hours);
+
+  // Kicker = store type / chain
+  const kicker = chainInfo.chain || (store.category
+    ? store.category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+    : 'Convenience Store');
+  const openText = store.is24Hours ? 'Open 24/7' : (store.isOpen ? 'Open' : 'Closed');
+
+  // Swipe handlers for the inline photo carousel
+  const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
+  const handleTouchEnd = (e) => {
+    if (photos.length <= 1) return;
+    const diff = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0 && currentPhotoIndex < photos.length - 1) setCurrentPhotoIndex(currentPhotoIndex + 1);
+      else if (diff < 0 && currentPhotoIndex > 0) setCurrentPhotoIndex(currentPhotoIndex - 1);
+    }
+  };
+
+  const rank = (index ?? 0) + 1;
+  const rankLabel = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : `#${rank}`;
+  const medalColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
+
+  const Tag = ({ bg, color, children }) => (
+    <span style={{ background: bg, color, borderRadius: "999px", padding: `${fs(9)} ${fs(16)}`, fontSize: fs(15.5), fontWeight: 600, whiteSpace: "nowrap" }}>{children}</span>
+  );
+
+  // Extra chain features not already covered by the boolean pills above.
+  const extraFeatures = chainInfo.features.filter(
+    (feat) => !['ATM', 'Pharmacy', 'Hot Food', 'Coffee', 'Gas'].some(f => feat.toLowerCase().includes(f.toLowerCase()))
+  );
+
+  return (
+    <>
+      {/* Fullscreen Gallery */}
+      {showGallery && (
+        <PhotoGallery
+          photos={photos}
+          storeName={store.name}
+          onClose={() => setShowGallery(false)}
+        />
+      )}
+      <MapAppSelector
+        isOpen={showDirs}
+        onClose={() => setShowDirs(false)}
+        destination={{
+          name: store.name,
+          address: store.address || store.shortAddress || '',
+          latitude: store.lat,
+          longitude: store.lng,
+        }}
+        userLat={userLat}
+        userLng={userLng}
+      />
+
+      <motion.div initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(rank, 8) * 0.03 }}
+        style={{ background: "#fff", borderRadius: "28px", overflow: "hidden", boxShadow: "0 24px 50px -30px rgba(22,17,13,.4)", border: isExpanded ? `1px solid ${ED_CONV}` : `1px solid ${ED_RULE}` }}>
+
+        {/* Photo — editorial ~360px height, rank badge + chain tag */}
+        <div
+          style={{ position: "relative", height: fs(360), overflow: "hidden", cursor: mainPhotoUrl ? "pointer" : "default", background: "#F1F5F9" }}
+          onClick={() => photos.length > 0 && setShowGallery(true)}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          {mainPhotoUrl ? (
+            <img
+              src={getPhotoUrl(photos[currentPhotoIndex], 800)}
+              alt={store.name}
+              style={{ width: "100%", height: "100%", objectFit: "cover", transition: "opacity 0.3s" }}
+              onError={() => setPhotoError(true)}
+            />
+          ) : (
+            <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#EFF6FF,#DBEAFE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: fs(64) }}>
+              {chainInfo.icon}
+            </div>
+          )}
+
+          {/* Rank badge */}
+          <div style={{ position: "absolute", top: "14px", left: "14px", minWidth: fs(40), height: fs(40), padding: `0 ${fs(8)}`, borderRadius: "999px", background: rank <= 3 ? medalColors[rank - 1] : ED_CONV, color: "#fff", fontWeight: 800, fontSize: rank <= 3 ? fs(20) : fs(15), display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.25)", border: "2px solid #fff" }}>{rankLabel}</div>
+
+          {/* Chain tag (the "Dish Specialist"-style tag analog) */}
+          {chainInfo.chain && (
+            <div style={{ position: "absolute", top: "14px", right: "14px", background: "rgba(255,255,255,0.95)", padding: `${fs(6)} ${fs(13)}`, borderRadius: "999px", fontSize: fs(14), fontWeight: 700, display: "flex", alignItems: "center", gap: fs(6), boxShadow: "0 1px 4px rgba(0,0,0,0.1)" }}>
+              <span>{chainInfo.icon}</span>
+              <span style={{ color: chainInfo.color }}>{chainInfo.chain}</span>
+            </div>
+          )}
+
+          {/* Photo counter + dots */}
+          {photos.length > 1 && mainPhotoUrl && (
+            <div style={{ position: "absolute", bottom: "14px", right: "14px", background: "rgba(0,0,0,0.6)", color: "#fff", padding: `${fs(4)} ${fs(10)}`, borderRadius: "999px", fontSize: fs(13), fontWeight: 600 }}>📷 {currentPhotoIndex + 1}/{photos.length}</div>
+          )}
+          {photos.length > 1 && mainPhotoUrl && (
+            <div style={{ position: "absolute", bottom: "16px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "6px" }}>
+              {photos.slice(0, 5).map((_, idx) => (
+                <div key={idx} style={{ width: idx === currentPhotoIndex ? "16px" : "6px", height: "6px", borderRadius: "3px", background: idx === currentPhotoIndex ? "#fff" : "rgba(255,255,255,0.5)", transition: "all 0.2s" }} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: `${fs(28)} ${fs(32)} ${fs(32)}` }}>
+          {/* Kicker (store type / chain) */}
+          <div style={{ color: ED_CONV, fontWeight: 600, fontSize: fs(17), letterSpacing: "0.2px" }}>{kicker}</div>
+          {/* Serif name */}
+          <h3 style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(38), lineHeight: 1.04, color: ED_INK, margin: `${fs(4)} 0 0` }}>{store.name}</h3>
+
+          {/* Say it / Translate / rating / distance */}
+          <div style={{ display: "flex", gap: fs(16), alignItems: "center", flexWrap: "wrap", marginTop: fs(12), fontSize: fs(17), color: ED_INK3 }}>
+            <NameLanguageHelp placeId={store.placeId || store.id} name={store.name} />
+            {store.rating > 0 && <span><span style={{ color: "#E0922F" }}>★</span> <span style={{ fontWeight: 700, color: ED_INK2 }}>{store.rating.toFixed(1)}</span>{store.reviewCount > 0 ? ` (${store.reviewCount.toLocaleString()})` : ''}</span>}
+            {store.distance != null && <span>· {formatDistance(store.distance)}</span>}
+          </div>
+
+          {/* Address */}
+          {(store.shortAddress || store.address) && (
+            <div style={{ marginTop: fs(8), fontSize: fs(16), color: ED_INK3 }}>📍 {store.shortAddress || store.address?.split(',').slice(0, 2).join(',')}</div>
+          )}
+
+          {/* Pill tags */}
+          <div style={{ display: "flex", gap: fs(10), flexWrap: "wrap", marginTop: fs(16) }}>
+            {store.is24Hours && <Tag bg="#E3F2FD" color="#1565C0">🌙 24 Hours</Tag>}
+            {store.hasATM && <Tag bg="#EAF0FB" color="#2E6FE0">🏧 ATM</Tag>}
+            {store.hasHotFood && <Tag bg="#FDEBD7" color="#C57A1F">🍔 Hot Food</Tag>}
+            {store.hasPharmacy && <Tag bg="#FBE0DC" color="#C2392F">💊 Pharmacy</Tag>}
+            {store.hasCoffee && <Tag bg="#F2DDC4" color="#A85A2E">☕ Coffee</Tag>}
+            {store.hasFuel && <Tag bg="#FEF9EE" color="#92400E">⛽ Gas</Tag>}
+            {extraFeatures.slice(0, 3).map((feat, idx) => (
+              <Tag key={idx} bg={ED_IVORY2} color={ED_INK2}>{feat}</Tag>
+            ))}
+          </div>
+
+          {/* Open bar */}
+          {store.isOpen !== null && (
+            <div style={{ marginTop: fs(18), background: store.isOpen ? "#E7F3EA" : "#FBE0DC", borderRadius: "16px", padding: `${fs(16)} ${fs(20)}`, fontSize: fs(18), fontWeight: 600, color: store.isOpen ? "#2E7D46" : "#C2392F", display: "flex", alignItems: "center", gap: fs(11) }}>
+              <span style={{ width: fs(10), height: fs(10), borderRadius: "50%", background: store.is24Hours ? "#00BCD4" : (store.isOpen ? "#2E7D46" : "#C2392F"), flexShrink: 0 }} />
+              <span>{openText}</span>
+              {todayHrs && !store.is24Hours && <span style={{ color: ED_INK3, fontWeight: 500 }}>· {todayHrs}</span>}
+            </div>
+          )}
+
+          {/* Phone bar */}
+          {store.phone && (
+            <a href={`tel:${store.phone}`} style={{ marginTop: fs(14), background: "#EFF4FB", borderRadius: "16px", padding: `${fs(18)} ${fs(20)}`, display: "flex", alignItems: "center", gap: fs(14), textDecoration: "none" }}>
+              <span style={{ fontSize: fs(24) }}>📞</span>
+              <span><span style={{ display: "block", fontSize: fs(20), fontWeight: 600, color: "#2E6FE0" }}>{store.phone}</span><span style={{ fontSize: fs(15), color: ED_INK3 }}>Tap to call</span></span>
+            </a>
+          )}
+
+          {/* Actions */}
+          <div style={{ display: "flex", gap: fs(12), marginTop: fs(20) }}>
+            <button onClick={() => setShowDirs(true)} style={{ flex: 1, borderRadius: "16px", padding: fs(15), fontSize: fs(18), fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: ED_CONV, color: "#fff" }}>Directions</button>
+            {store.lat && store.lng && <button onClick={() => onShowOnMap?.(index)} style={{ flex: 1, borderRadius: "16px", padding: fs(15), fontSize: fs(18), fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: ED_IVORY2, color: ED_INK2 }}>📍 Map</button>}
+            <button onClick={() => setExpanded(e => !e)} style={{ flex: 1, borderRadius: "16px", padding: fs(15), fontSize: fs(18), fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: expanded ? ED_INK : ED_IVORY2, color: expanded ? "#fff" : ED_INK2 }}>{expanded ? "Less ▴" : "More ▾"}</button>
+          </div>
+
+          {/* Expanded details */}
+          <AnimatePresence>
+            {expanded && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: "hidden" }}>
+                <div style={{ marginTop: fs(20), display: "flex", flexDirection: "column", gap: fs(14) }}>
+
+                  {/* Payment row */}
+                  <div style={{ padding: fs(16), background: "#FAF7F0", borderRadius: "16px", border: `1px solid ${ED_RULE}` }}>
+                    <div style={{ fontSize: fs(13), fontWeight: 700, color: ED_INK3, letterSpacing: "0.5px", marginBottom: fs(9) }}>💳 PAYMENT</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: fs(8) }}>
+                      {store.acceptsCards && <span style={{ background: "#E7F3EA", color: "#166534", padding: `${fs(5)} ${fs(13)}`, borderRadius: "999px", fontSize: fs(15), fontWeight: 600 }}>💳 Cards</span>}
+                      {store.acceptsMobilePay && <span style={{ background: "#EAF0FB", color: "#1E40AF", padding: `${fs(5)} ${fs(13)}`, borderRadius: "999px", fontSize: fs(15), fontWeight: 600 }}>📱 Apple Pay</span>}
+                      {!store.cashOnly && <span style={{ background: "#E7F3EA", color: "#166534", padding: `${fs(5)} ${fs(13)}`, borderRadius: "999px", fontSize: fs(15), fontWeight: 600 }}>💵 Cash</span>}
+                      {store.cashOnly && <span style={{ background: "#FEF9EE", color: "#92400E", padding: `${fs(5)} ${fs(13)}`, borderRadius: "999px", fontSize: fs(15), fontWeight: 600 }}>⚠️ Cash Only</span>}
+                    </div>
+                  </div>
+
+                  {/* Payment tip */}
+                  {store.paymentTip && (
+                    <div style={{ padding: fs(16), background: "#FEF9EE", borderRadius: "16px", border: "1px solid #FDE68A", fontSize: fs(16), color: "#92400E", display: "flex", alignItems: "flex-start", gap: fs(8) }}>
+                      <span>💡</span>
+                      <span>{store.paymentTip}</span>
+                    </div>
+                  )}
+
+                  {/* Daily hours */}
+                  {store.hours?.length > 0 && (
+                    <div style={{ padding: fs(16), background: "#FAF7F0", borderRadius: "16px" }}>
+                      <button onClick={() => setHoursExpanded(h => !h)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "transparent", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
+                        <span style={{ fontSize: fs(13), fontWeight: 700, color: ED_INK3, letterSpacing: "0.5px" }}>🕐 DAILY HOURS</span>
+                        <span style={{ fontSize: fs(13), color: ED_INK3 }}>{hoursExpanded ? '▲' : '▼'}</span>
+                      </button>
+                      {hoursExpanded && (
+                        <div style={{ marginTop: fs(8) }}>
+                          {store.hours.map((h, i) => {
+                            const DAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                            const isToday = DAY.findIndex(d => h.toLowerCase().startsWith(d.toLowerCase())) === new Date().getDay();
+                            const dn = h.split(':')[0];
+                            const hrs = h.split(':').slice(1).join(':').trim();
+                            return <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: `${fs(4)} 0`, fontSize: fs(15), fontWeight: isToday ? 700 : 400, color: isToday ? TEAL_DEEP : ED_INK2, borderBottom: i < store.hours.length - 1 ? `1px solid ${ED_RULE}` : "none" }}>
+                              <span>{dn}</span><span style={{ color: hrs.toLowerCase() === 'closed' ? "#C2392F" : (isToday ? TEAL_DEEP : ED_INK2) }}>{hrs}</span>
+                            </div>;
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Website */}
+                  {store.website && (
+                    <a href={store.website} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: fs(12), padding: fs(16), background: "#F3E8FF", borderRadius: "16px", textDecoration: "none", color: "#7C3AED" }}>
+                      <span style={{ fontSize: fs(22) }}>🌐</span>
+                      <span><span style={{ display: "block", fontWeight: 600, fontSize: fs(16) }}>Visit Website</span><span style={{ fontSize: fs(14), color: ED_INK3 }}>Hours &amp; more</span></span>
+                    </a>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
+// ============================================================================
 // COMPONENT: Filter Chip
 // ============================================================================
 
@@ -903,6 +1163,10 @@ function buildStoreMapPopup(store, index, fmt = formatDistanceMi) {
 
 export default function ConvenienceStorePage() {
   const navigate = useNavigate();
+  // iPad: wider centered column + editorial store cards (design handoff).
+  // Phone layout is unchanged — every tablet branch is gated on this.
+  const isTablet = useIsTablet();
+  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
   const { activeLocation } = useLocation();
 
   // Coordinates pulled from the shared LocationContext (set via the Home location bar
@@ -1121,7 +1385,7 @@ export default function ConvenienceStorePage() {
     <div className="font-sans" style={{ minHeight: '100vh', background: IVORY, paddingBottom: '100px' }}>
       {/* HEADER */}
       <div className="px-4 pt-2 pb-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
           <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
@@ -1134,7 +1398,7 @@ export default function ConvenienceStorePage() {
       </div>
 
       {/* LOCATION CARD */}
-      <div className="px-4 max-w-md mx-auto pb-3">
+      <div className={`px-4 ${colWrap} mx-auto pb-3`}>
         <button onClick={() => setShowLocPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
           <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
           <div className="flex-1 min-w-0">
@@ -1156,7 +1420,7 @@ export default function ConvenienceStorePage() {
       </div>
 
       {/* RADIUS */}
-      <div className="px-4 max-w-md mx-auto pb-2">
+      <div className={`px-4 ${colWrap} mx-auto pb-2`}>
         <RadiusRow options={[5, 10, 15, 25]} value={searchRadius} onChange={setSearchRadius} ink={CAT.convenience.ink} unit={unit} setUnit={setUnit} />
       </div>
 
@@ -1176,7 +1440,8 @@ export default function ConvenienceStorePage() {
           overflowX: 'auto',
           paddingBottom: '4px',
           msOverflowStyle: 'none',
-          scrollbarWidth: 'none'
+          scrollbarWidth: 'none',
+          ...(isTablet ? { maxWidth: 1024, margin: '0 auto' } : null)
         }}>
           {QUICK_FILTERS.map(filter => (
             <FilterChip
@@ -1190,7 +1455,9 @@ export default function ConvenienceStorePage() {
       </div>
       
       {/* Results */}
-      <div style={{ padding: '16px' }}>
+      <div style={isTablet
+        ? { maxWidth: 1024, margin: '0 auto', padding: '16px 24px 170px' }
+        : { padding: '16px' }}>
         {/* No location set yet */}
         {!location && !loading && (
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
@@ -1317,9 +1584,11 @@ export default function ConvenienceStorePage() {
         )}
 
         {/* Store Cards */}
-        {!loading && !error && viewMode === 'list' && normalizedStores.map((store, idx) => (
-          <div key={store.id || store.placeId || idx} ref={el => cardRefs.current[idx] = el}>
-            <StoreCard
+        {!loading && !error && viewMode === 'list' && normalizedStores.map((store, idx) => {
+          const Card = isTablet ? StoreCardTablet : StoreCard;
+          return (
+          <div key={store.id || store.placeId || idx} ref={el => cardRefs.current[idx] = el} style={isTablet ? { marginBottom: '30px' } : null}>
+            <Card
               store={store}
               index={idx}
               onSelect={(s) => setSelectedStore(selectedStore?.id === s.id ? null : s)}
@@ -1330,7 +1599,7 @@ export default function ConvenienceStorePage() {
               formatDistance={formatDistance}
             />
           </div>
-        ))}
+        );})}
 
         {/* Map View */}
         {!loading && !error && viewMode === 'map' && stores.length > 0 && (

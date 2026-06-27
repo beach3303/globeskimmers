@@ -16,6 +16,18 @@ import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 import { ChevronLeft, MapPin, Star } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import { useIsTablet } from "@/lib/useIsTablet";
+
+// iPad editorial design tokens (design handoff: matches "Places to Eat · iPad").
+const ED_SERIF = '"Instrument Serif", Georgia, serif';
+const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
+const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
+// Things-To-Do category accent — this finder's own color world. Replaces the
+// Places-to-Eat coral (#D8443C) on the iPad editorial cards so the kicker /
+// Directions button / tier accents read as part of THIS finder, not Eat.
+// Sourced from CAT.todo.ink (#C5197A) — kept as a local const so the editorial
+// tokens cluster reads in one place.
+const ED_TODO = CAT.todo.ink; // #C5197A
 
 const T={teal:"#00BCD4",tealD:"#00838F",dark:"#1A2332",dark2:"#243447",gray:"#64748B",grayL:"#F1F5F9",green:"#4CAF50",blue:"#1565C0",blueL:"#E3F2FD",coral:"#FF6B6B",gold:"#FFB74D",
   accent:"#F59E0B",accentD:"#D97706",accentL:"#FFFBEB"};
@@ -573,11 +585,178 @@ function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat
   );
 }
 
+// ─── ACTIVITY CARD — iPad editorial layout (design handoff) ──────────────────
+// Full-width editorial card: big ~360px photo + rank badge + category tag,
+// coral attraction-category kicker, serif name, Say-it/Translate/rating/distance
+// row, tinted pill tags, green Open bar, blue phone bar, three action buttons,
+// and a "More ▾" expand panel (badges / property tags / what-people-love / heads-up
+// / best-time / address / daily hours / AttractionAIDetails / website).
+// Same props/handlers as ActivityCard; reuses PhotoGalleryModal / NameLanguageHelp /
+// AttractionAIDetails / MapAppSelector / openStatus / PROP_TAGS / TOUR_MODE_LABELS.
+// Rendered ONLY at tablet width (the page branches on useIsTablet) so the phone
+// card is untouched.
+function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance}){
+  const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false); const [hoursExp,setHoursExp]=useState(false); const [gallery,setGallery]=useState({open:false,idx:0});
+  const fs=(n)=>`calc(${n}px*var(--fs))`;
+  useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
+  const name=a.displayName?.text||a.name||"Activity"; const st=openStatus(a);
+  const activeTags=PROP_TAGS.filter(t=>a.props?.[t.key]);
+  const aColor=a.activityColor||T.accent;
+  const photos=(a.photos||[]).filter(Boolean);
+  const medalGrad=index===0?"linear-gradient(135deg,#FFD700,#FFA000)":index===1?"linear-gradient(135deg,#B0BEC5,#78909C)":index===2?"linear-gradient(135deg,#FFAB40,#F57C00)":aColor;
+  const openText=st.label;
+
+  const Tag=({bg,color,children})=>(
+    <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(9)} ${fs(16)}`,fontSize:fs(15.5),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
+  );
+
+  return(
+    <motion.div ref={cardRef} initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(index,8)*0.03}}
+      style={{background:"#fff",borderRadius:"28px",overflow:"hidden",boxShadow:isHighlighted?`0 0 0 3px ${T.accent},0 24px 50px -30px rgba(22,17,13,.4)`:"0 24px 50px -30px rgba(22,17,13,.4)",border:isHighlighted?`2px solid ${T.accent}`:`1px solid ${ED_RULE}`,transition:"box-shadow 0.3s,border 0.3s"}}>
+
+      {/* Photo — editorial 360px block; reuse photos + gallery, rank + category tag overlays */}
+      <div style={{position:"relative",height:fs(360),background:`linear-gradient(135deg,${aColor}ee,${aColor}99)`}}>
+        {photos.length>0?(
+          <img src={photos[0]} alt="" onClick={()=>setGallery({open:true,idx:0})} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"zoom-in"}}/>
+        ):(
+          <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:fs(96)}}>{a.activityIcon||"⭐"}</div>
+        )}
+        {/* Rank badge */}
+        <div style={{position:"absolute",top:fs(14),left:fs(14),background:medalGrad,color:"#fff",width:fs(40),height:fs(40),borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:fs(16),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
+        {/* Category tag */}
+        {a.activityLabel&&<div style={{position:"absolute",top:fs(14),right:fs(14),background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:`${fs(5)} ${fs(13)}`,borderRadius:"999px",fontSize:fs(14),fontWeight:700,color:aColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{a.activityIcon} {a.activityLabel}</div>}
+        {photos.length>1&&<div style={{position:"absolute",bottom:fs(12),right:fs(12),background:"rgba(0,0,0,0.6)",color:"#fff",padding:`${fs(4)} ${fs(11)}`,borderRadius:"999px",fontSize:fs(13),fontWeight:600,cursor:"pointer"}} onClick={()=>setGallery({open:true,idx:0})}>📷 {photos.length} photos</div>}
+      </div>
+
+      <div style={{padding:`${fs(28)} ${fs(32)} ${fs(32)}`}}>
+        {/* Attraction-category kicker — Things-To-Do magenta accent (not Eat coral) */}
+        {a.activityLabel&&<div style={{color:ED_TODO,fontWeight:600,fontSize:fs(17),letterSpacing:"0.2px"}}>{a.activityIcon} {a.activityLabel}</div>}
+        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(38),lineHeight:1.04,color:ED_INK,margin:`${fs(4)} 0 0`}}>{name}</h3>
+
+        {/* Tour mode chip */}
+        {a.tourMode && TOUR_MODE_LABELS[a.tourMode] && (
+          <div style={{display:"inline-flex",alignItems:"center",gap:fs(5),padding:`${fs(4)} ${fs(12)}`,marginTop:fs(10),background:"#F1F5F9",color:"#334155",borderRadius:"999px",fontSize:fs(15),fontWeight:600}}>
+            <span>{TOUR_MODE_LABELS[a.tourMode].icon}</span>{TOUR_MODE_LABELS[a.tourMode].label}
+          </div>
+        )}
+
+        {/* Say it / Translate / rating / distance */}
+        <div style={{display:"flex",gap:fs(16),alignItems:"center",flexWrap:"wrap",marginTop:fs(12),fontSize:fs(17),color:ED_INK3}}>
+          <NameLanguageHelp placeId={a.placeId||a.id} name={name}/>
+          {a.rating&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{a.rating}</span>{a.userRatingCount>0&&<span> ({a.userRatingCount.toLocaleString()})</span>}</span>}
+          {a.distanceMiles!=null&&<span>· {formatDistance(a.distanceMiles)}</span>}
+        </div>
+
+        {/* Pill tags — traveler badges + property tags */}
+        {(a.badges?.length>0||activeTags.length>0||a.outdoorContext)&&(
+          <div style={{display:"flex",gap:fs(10),flexWrap:"wrap",marginTop:fs(16)}}>
+            {a.badges?.map((b,i)=><Tag key={`b${i}`} bg={T.accentL} color={T.accentD}>{b}</Tag>)}
+            {a.outdoorContext&&<Tag bg="#FEF3C7" color="#92400E">🏛️ {a.outdoorContext}</Tag>}
+            {activeTags.map((t,i)=><Tag key={`t${i}`} bg={t.bg} color={t.color}>{t.icon} {t.label}</Tag>)}
+          </div>
+        )}
+
+        {/* Open bar */}
+        {(st.today||st.isOpen!==null)&&(
+          <div style={{marginTop:fs(18),background:st.isOpen===true?"#E7F3EA":st.isOpen===false?"#FBE0DC":ED_IVORY2,borderRadius:"16px",padding:`${fs(16)} ${fs(20)}`,fontSize:fs(18),fontWeight:600,color:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK2,display:"flex",alignItems:"center",gap:fs(11)}}>
+            <span style={{width:fs(10),height:fs(10),borderRadius:"50%",background:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK3,flexShrink:0}}/>
+            <span>{openText}</span>
+            {st.today&&<span style={{color:ED_INK3,fontWeight:500}}>· {st.today}</span>}
+          </div>
+        )}
+
+        {/* Phone bar */}
+        {a.nationalPhoneNumber&&(
+          <a href={`tel:${a.nationalPhoneNumber}`} style={{marginTop:fs(14),background:"#EFF4FB",borderRadius:"16px",padding:`${fs(18)} ${fs(20)}`,display:"flex",alignItems:"center",gap:fs(14),textDecoration:"none"}}>
+            <span style={{fontSize:fs(24)}}>📞</span>
+            <span><span style={{display:"block",fontSize:fs(20),fontWeight:600,color:"#2E6FE0"}}>{a.nationalPhoneNumber}</span><span style={{fontSize:fs(15),color:ED_INK3}}>Tap to call / book</span></span>
+          </a>
+        )}
+
+        {/* Actions */}
+        <div style={{display:"flex",gap:fs(12),marginTop:fs(20)}}>
+          <button onClick={()=>setDirs(true)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_TODO,color:"#fff"}}>Directions</button>
+          <button onClick={()=>onMap?.(index)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
+          <button onClick={()=>setExp(e=>!e)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:exp?ED_INK:ED_IVORY2,color:exp?"#fff":ED_INK2}}>{exp?"Less ▴":"More ▾"}</button>
+        </div>
+
+        {/* Expanded details */}
+        <AnimatePresence>
+          {exp&&(
+            <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
+              <div style={{marginTop:fs(20),display:"flex",flexDirection:"column",gap:fs(14)}}>
+
+                {a.highlights?.length>0&&(
+                  <div style={{padding:fs(16),background:"#F0FDF4",borderRadius:"16px",border:"1px solid #BBF7D0"}}>
+                    <div style={{fontSize:fs(13),fontWeight:700,color:"#059669",letterSpacing:"0.5px",marginBottom:fs(9),textTransform:"uppercase"}}>💚 What People Love</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
+                      {a.highlights.map((h,i)=><span key={i} style={{background:"#D1FAE5",color:"#065F46",padding:`${fs(5)} ${fs(13)}`,borderRadius:"999px",fontSize:fs(15),fontWeight:600,textTransform:"capitalize"}}>{h}</span>)}
+                    </div>
+                  </div>
+                )}
+
+                {a.warnings?.length>0&&(
+                  <div style={{padding:fs(16),background:"#FFF7ED",borderRadius:"16px",border:"1px solid #FED7AA"}}>
+                    <div style={{fontSize:fs(13),fontWeight:700,color:"#D97706",letterSpacing:"0.5px",marginBottom:fs(9),textTransform:"uppercase"}}>⚠️ Heads Up</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
+                      {a.warnings.map((w,i)=><span key={i} style={{background:"#FEF3C7",color:"#92400E",padding:`${fs(5)} ${fs(13)}`,borderRadius:"999px",fontSize:fs(15),fontWeight:600,textTransform:"capitalize"}}>{w}</span>)}
+                    </div>
+                  </div>
+                )}
+
+                {a.bestTime&&(
+                  <div style={{padding:fs(16),background:"#EFF6FF",borderRadius:"16px",border:"1px solid #BFDBFE",fontSize:fs(16),color:"#1E40AF"}}>
+                    <span style={{fontWeight:700}}>🕐 Best time · </span>{a.bestTime}
+                  </div>
+                )}
+
+                {a.formattedAddress&&(
+                  <div style={{display:"flex",alignItems:"flex-start",gap:fs(10),padding:fs(16),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
+                    <span style={{fontSize:fs(20),flexShrink:0}}>📍</span>
+                    <span style={{fontSize:fs(16),color:ED_INK2,lineHeight:1.5,fontWeight:500}}>{a.formattedAddress}</span>
+                  </div>
+                )}
+
+                {a.hours?.length>0&&(
+                  <div style={{padding:fs(16),background:"#FAF7F0",borderRadius:"16px"}}>
+                    <button onClick={()=>setHoursExp(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
+                      <span style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
+                      <span style={{fontSize:fs(13),color:ED_INK3}}>{hoursExp?"▲":"▼"}</span>
+                    </button>
+                    {hoursExp&&(
+                      <div style={{marginTop:fs(8)}}>
+                        {a.hours.map((d,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(n=>d.toLowerCase().startsWith(n.toLowerCase()));const isT=di===today;const pts=d.split(":");const dn2=pts[0];const hrs=pts.slice(1).join(":").trim();return(<div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isT?700:400,color:isT?T.accentD:ED_INK2,borderBottom:i<a.hours.length-1?`1px solid ${ED_RULE}`:"none"}}><span>{dn2}</span><span style={{color:hrs.toLowerCase()==="closed"?"#C2392F":isT?T.accentD:ED_INK3}}>{hrs}</span></div>);})}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <AttractionAIDetails placeId={a.placeId||a.id} placeName={name} page="ThingsToDo"/>
+
+                {a.websiteUri&&(
+                  <a href={a.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(16),background:T.accentL,borderRadius:"16px",textDecoration:"none",color:T.accentD,border:`1px solid ${T.accent}40`}}>
+                    <span style={{fontSize:fs(22)}}>🌐</span>
+                    <span><span style={{display:"block",fontWeight:600,fontSize:fs(16)}}>Visit Website / Book</span><span style={{fontSize:fs(14),color:ED_INK3}}>Tickets &amp; details</span></span>
+                  </a>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",latitude:a.lat,longitude:a.lng}} userLat={userLat} userLng={userLng}/>
+      <PhotoGalleryModal photos={a.photos||[]} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
+    </motion.div>
+  );
+}
+
 const TRAVEL_COLORS={'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'},'📍 Nearby':{bg:'#D1FAE5',color:'#059669'}};
 
-function TierCard({a,userLat,userLng}){
+function TierCard({a,userLat,userLng,isTablet}){
   const [dirs,setDirs]=useState(false);
   const [gallery,setGallery]=useState({open:false,idx:0});
+  // fs()-style scaler for the iPad editorial variant. Phone path ignores this.
+  const fs=(n)=>`calc(${n}px*var(--fs))`;
   // Tapping the compact card body opens a fullscreen modal rendering the
   // full ActivityCard (the same component used under "Near You"). Inner
   // buttons (Directions / Website / photo) stopPropagation so they don't
@@ -598,40 +777,82 @@ function TierCard({a,userLat,userLng}){
   // wired to the parent's useDistanceUnit hook, so use a simple miles
   // formatter (matches the compact card's "X.X mi" rendering).
   const fmtDist=(d)=>`${d.toFixed(1)} mi`;
-  return(
-    <>
-      <div onClick={()=>setExpanded(true)} style={{flexShrink:0,width:"220px",background:"#fff",borderRadius:"16px",boxShadow:"0 2px 12px rgba(0,0,0,0.08)",overflow:"hidden",border:"1px solid #E8EDF2",cursor:"pointer"}}>
-        <div style={{position:"relative",height:"130px",background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
-          {/* 3 photos: 50/25/25 grid (large left, two stacked right). 2: 50/50. 1: full. */}
-          {photo1&&photo2&&photo3?(
-            <div style={{display:"grid",gridTemplateColumns:"50% 50%",gridTemplateRows:"65px 65px",height:"130px",gap:"2px",background:"#fff"}}>
-              <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",gridRow:"span 2",minWidth:0}}/>
-              <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
-              <img src={photo3} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:2});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
-            </div>
-          ):photo1&&photo2?(
-            <div style={{display:"flex",height:"130px"}}>
-              <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{flex:1,height:"130px",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
-              <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{flex:1,height:"130px",objectFit:"cover",cursor:"pointer",borderLeft:"2px solid #fff",minWidth:0}}/>
-            </div>
-          ):photo1?(
-            <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"130px",objectFit:"cover",cursor:"pointer"}}/>
-          ):(
-            <div style={{height:"130px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(40px*var(--fs))"}}>{a.activityIcon||"⭐"}</div>
-          )}
-        </div>
-        <div style={{padding:"10px 12px"}}>
-          <div style={{fontWeight:"700",fontSize:"calc(13px*var(--fs))",color:T.dark,lineHeight:"1.3",marginBottom:"6px",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
-          {a.travelType&&<div style={{marginBottom:"6px"}}><span style={{background:tc.bg,color:tc.color,padding:"3px 8px",borderRadius:"12px",fontSize:"calc(10px*var(--fs))",fontWeight:"700",display:"inline-block"}}>{a.travelType} · {a.distance}</span></div>}
-          {a.rating&&<div style={{display:"flex",alignItems:"center",gap:"4px",marginBottom:"6px"}}><span style={{color:T.gold,fontSize:"calc(12px*var(--fs))"}}>★</span><span style={{fontWeight:"700",color:T.dark,fontSize:"calc(12px*var(--fs))"}}>{a.rating}</span><span style={{color:T.gray,fontSize:"calc(11px*var(--fs))"}}>({(a.userRatingCount||0).toLocaleString()})</span></div>}
-          {a.activityLabel&&<div style={{fontSize:"calc(10px*var(--fs))",fontWeight:"600",color:a.activityColor||T.accent,marginBottom:"4px"}}>{a.activityIcon} {a.activityLabel}</div>}
-          {a.formattedAddress&&<div style={{fontSize:"calc(10px*var(--fs))",color:T.gray,marginBottom:"6px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress.split(',').slice(-3,-1).join(',').trim()}</div>}
-          <div style={{display:"flex",gap:"6px"}}>
-            <button onClick={(e)=>{e.stopPropagation();setDirs(true);}} style={{flex:1,padding:"8px",borderRadius:"8px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(11px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
-            {a.websiteUri&&<button onClick={(e)=>{e.stopPropagation();window.open(a.websiteUri,'_blank');}} style={{flex:1,padding:"8px",borderRadius:"8px",border:"1px solid #E8EDF2",background:"#F8FAFC",color:T.dark,fontWeight:"700",fontSize:"calc(11px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>🌐 Website</button>}
+  // ── iPad editorial tier card ────────────────────────────────────────────
+  // Same DATA + handlers as the phone card (open-modal onClick, photo-gallery
+  // taps, Directions, Website) — only enlarged + restyled with the editorial
+  // tokens (serif name, ED_* inks, fs()-scaled type, magenta ED_TODO accent)
+  // so it reads as part of the same system as the ActivityCardTablet cards.
+  // No width:220px flex-strip child — the grid in TierSection sizes it 2-up.
+  const editorialBody=(
+    <div onClick={()=>setExpanded(true)} style={{background:"#fff",borderRadius:"24px",boxShadow:"0 18px 40px -26px rgba(22,17,13,.4)",overflow:"hidden",border:`1px solid ${ED_RULE}`,cursor:"pointer"}}>
+      <div style={{position:"relative",height:fs(220),background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
+        {photo1&&photo2&&photo3?(
+          <div style={{display:"grid",gridTemplateColumns:"50% 50%",gridTemplateRows:`${fs(110)} ${fs(110)}`,height:fs(220),gap:"2px",background:"#fff"}}>
+            <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",gridRow:"span 2",minWidth:0}}/>
+            <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
+            <img src={photo3} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:2});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
           </div>
+        ):photo1&&photo2?(
+          <div style={{display:"flex",height:fs(220)}}>
+            <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{flex:1,height:fs(220),objectFit:"cover",cursor:"pointer",minWidth:0}}/>
+            <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{flex:1,height:fs(220),objectFit:"cover",cursor:"pointer",borderLeft:"2px solid #fff",minWidth:0}}/>
+          </div>
+        ):photo1?(
+          <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:fs(220),objectFit:"cover",cursor:"pointer"}}/>
+        ):(
+          <div style={{height:fs(220),display:"flex",alignItems:"center",justifyContent:"center",fontSize:fs(72)}}>{a.activityIcon||"⭐"}</div>
+        )}
+      </div>
+      <div style={{padding:`${fs(20)} ${fs(22)} ${fs(22)}`}}>
+        {a.activityLabel&&<div style={{fontSize:fs(14),fontWeight:600,color:ED_TODO,letterSpacing:"0.2px",marginBottom:fs(4)}}>{a.activityIcon} {a.activityLabel}</div>}
+        <div style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(26),lineHeight:1.08,color:ED_INK,marginBottom:fs(10),display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
+        {a.travelType&&<div style={{marginBottom:fs(8)}}><span style={{background:tc.bg,color:tc.color,padding:`${fs(5)} ${fs(12)}`,borderRadius:"999px",fontSize:fs(13),fontWeight:700,display:"inline-block"}}>{a.travelType} · {a.distance}</span></div>}
+        {a.rating&&<div style={{display:"flex",alignItems:"center",gap:fs(6),marginBottom:fs(8)}}><span style={{color:"#E0922F",fontSize:fs(16)}}>★</span><span style={{fontWeight:700,color:ED_INK2,fontSize:fs(16)}}>{a.rating}</span><span style={{color:ED_INK3,fontSize:fs(14)}}>({(a.userRatingCount||0).toLocaleString()})</span></div>}
+        {a.formattedAddress&&<div style={{fontSize:fs(14),color:ED_INK3,marginBottom:fs(12),whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress.split(',').slice(-3,-1).join(',').trim()}</div>}
+        <div style={{display:"flex",gap:fs(10)}}>
+          <button onClick={(e)=>{e.stopPropagation();setDirs(true);}} style={{flex:1,padding:fs(13),borderRadius:"14px",border:"none",background:ED_TODO,color:"#fff",fontWeight:600,fontSize:fs(16),cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
+          {a.websiteUri&&<button onClick={(e)=>{e.stopPropagation();window.open(a.websiteUri,'_blank');}} style={{flex:1,padding:fs(13),borderRadius:"14px",border:"none",background:ED_IVORY2,color:ED_INK2,fontWeight:600,fontSize:fs(16),cursor:"pointer",fontFamily:"inherit"}}>🌐 Website</button>}
         </div>
       </div>
+    </div>
+  );
+  const phoneBody=(
+    <div onClick={()=>setExpanded(true)} style={{flexShrink:0,width:"220px",background:"#fff",borderRadius:"16px",boxShadow:"0 2px 12px rgba(0,0,0,0.08)",overflow:"hidden",border:"1px solid #E8EDF2",cursor:"pointer"}}>
+      <div style={{position:"relative",height:"130px",background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
+        {/* 3 photos: 50/25/25 grid (large left, two stacked right). 2: 50/50. 1: full. */}
+        {photo1&&photo2&&photo3?(
+          <div style={{display:"grid",gridTemplateColumns:"50% 50%",gridTemplateRows:"65px 65px",height:"130px",gap:"2px",background:"#fff"}}>
+            <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",gridRow:"span 2",minWidth:0}}/>
+            <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
+            <img src={photo3} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:2});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
+          </div>
+        ):photo1&&photo2?(
+          <div style={{display:"flex",height:"130px"}}>
+            <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{flex:1,height:"130px",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
+            <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{flex:1,height:"130px",objectFit:"cover",cursor:"pointer",borderLeft:"2px solid #fff",minWidth:0}}/>
+          </div>
+        ):photo1?(
+          <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"130px",objectFit:"cover",cursor:"pointer"}}/>
+        ):(
+          <div style={{height:"130px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(40px*var(--fs))"}}>{a.activityIcon||"⭐"}</div>
+        )}
+      </div>
+      <div style={{padding:"10px 12px"}}>
+        <div style={{fontWeight:"700",fontSize:"calc(13px*var(--fs))",color:T.dark,lineHeight:"1.3",marginBottom:"6px",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
+        {a.travelType&&<div style={{marginBottom:"6px"}}><span style={{background:tc.bg,color:tc.color,padding:"3px 8px",borderRadius:"12px",fontSize:"calc(10px*var(--fs))",fontWeight:"700",display:"inline-block"}}>{a.travelType} · {a.distance}</span></div>}
+        {a.rating&&<div style={{display:"flex",alignItems:"center",gap:"4px",marginBottom:"6px"}}><span style={{color:T.gold,fontSize:"calc(12px*var(--fs))"}}>★</span><span style={{fontWeight:"700",color:T.dark,fontSize:"calc(12px*var(--fs))"}}>{a.rating}</span><span style={{color:T.gray,fontSize:"calc(11px*var(--fs))"}}>({(a.userRatingCount||0).toLocaleString()})</span></div>}
+        {a.activityLabel&&<div style={{fontSize:"calc(10px*var(--fs))",fontWeight:"600",color:a.activityColor||T.accent,marginBottom:"4px"}}>{a.activityIcon} {a.activityLabel}</div>}
+        {a.formattedAddress&&<div style={{fontSize:"calc(10px*var(--fs))",color:T.gray,marginBottom:"6px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress.split(',').slice(-3,-1).join(',').trim()}</div>}
+        <div style={{display:"flex",gap:"6px"}}>
+          <button onClick={(e)=>{e.stopPropagation();setDirs(true);}} style={{flex:1,padding:"8px",borderRadius:"8px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(11px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
+          {a.websiteUri&&<button onClick={(e)=>{e.stopPropagation();window.open(a.websiteUri,'_blank');}} style={{flex:1,padding:"8px",borderRadius:"8px",border:"1px solid #E8EDF2",background:"#F8FAFC",color:T.dark,fontWeight:"700",fontSize:"calc(11px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>🌐 Website</button>}
+        </div>
+      </div>
+    </div>
+  );
+  return(
+    <>
+      {isTablet?editorialBody:phoneBody}
       <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",latitude:a.lat,longitude:a.lng}} userLat={userLat} userLng={userLng}/>
       <PhotoGalleryModal photos={a.photos||[]} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
       <AnimatePresence>
@@ -659,18 +880,37 @@ function TierCard({a,userLat,userLng}){
   );
 }
 
-function TierSection({title,icon,items,userLat,userLng}){
+function TierSection({title,icon,items,userLat,userLng,isTablet}){
   const [collapsed,setCollapsed]=useState(false);
   if(!items?.length) return null;
+  // On iPad the tier strip becomes part of the editorial system: serif header
+  // in the Things-To-Do magenta accent, bigger header type, and a 2-up grid of
+  // enlarged editorial TierCards (instead of the small phone scroll strip that
+  // clashed above the large ActivityCardTablet cards below). Phone path is the
+  // original horizontal scroll strip — untouched.
+  const itemsLayout = isTablet
+    ? {display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:"20px",paddingBottom:"6px"}
+    : {display:"flex",gap:"12px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none"};
   return(
-    <div style={{marginBottom:"16px"}}>
-      <div onClick={()=>setCollapsed(c=>!c)} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:collapsed?"0":"10px",padding:"0 4px",cursor:"pointer"}}>
-        <span style={{fontSize:"calc(18px*var(--fs))"}}>{icon}</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>{title}</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({items.length})</span>
-        <span style={{marginLeft:"auto",fontSize:"calc(12px*var(--fs))",color:T.gray,fontWeight:"700"}}>{collapsed?"▶":"▼"}</span>
+    <div style={{marginBottom:isTablet?"30px":"16px"}}>
+      <div onClick={()=>setCollapsed(c=>!c)} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:collapsed?"0":(isTablet?"16px":"10px"),padding:"0 4px",cursor:"pointer"}}>
+        {isTablet?(
+          <>
+            <span style={{fontSize:"calc(24px*var(--fs))"}}>{icon}</span>
+            <span style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:"calc(28px*var(--fs))",color:ED_INK,lineHeight:1.1}}>{title}</span>
+            <span style={{fontSize:"calc(15px*var(--fs))",color:ED_TODO,fontWeight:700}}>({items.length})</span>
+            <span style={{marginLeft:"auto",fontSize:"calc(15px*var(--fs))",color:ED_INK3,fontWeight:"700"}}>{collapsed?"▶":"▼"}</span>
+          </>
+        ):(
+          <>
+            <span style={{fontSize:"calc(18px*var(--fs))"}}>{icon}</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>{title}</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({items.length})</span>
+            <span style={{marginLeft:"auto",fontSize:"calc(12px*var(--fs))",color:T.gray,fontWeight:"700"}}>{collapsed?"▶":"▼"}</span>
+          </>
+        )}
       </div>
       <AnimatePresence>{!collapsed&&(
         <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-          <div style={{display:"flex",gap:"12px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none"}}>{items.map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng}/>)}</div>
+          <div style={itemsLayout}>{items.map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} isTablet={isTablet}/>)}</div>
         </motion.div>
       )}</AnimatePresence>
     </div>
@@ -680,6 +920,11 @@ function TierSection({title,icon,items,userLat,userLng}){
 export default function ThingsToDoFinder() {
   // Analytics: log a page_view once on mount.
   useEffect(() => { logEvent('page_view', {}, 'ThingsToDo'); }, []);
+  // iPad: wider centered column + editorial activity cards (design handoff,
+  // modeled on PlacesToEat). Phone layout is unchanged — every tablet branch
+  // is gated on this.
+  const isTablet = useIsTablet();
+  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
   const [activities,setActivities]=useState([]);
   const [nationalIcons,setNationalIcons]=useState([]);
   const [regionalGems,setRegionalGems]=useState([]);
@@ -815,7 +1060,7 @@ export default function ThingsToDoFinder() {
     <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
       {/* HEADER — redesign pattern */}
       <div className="px-4 pt-2 pb-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
           <button onClick={()=>window.history.back()} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{background:'#FFFFFF',border:'1px solid #F0E9DC'}} aria-label="Back">
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
@@ -828,7 +1073,7 @@ export default function ThingsToDoFinder() {
       </div>
 
       {/* LOCATION CARD */}
-      <div className="px-4 max-w-md mx-auto pb-3">
+      <div className={`px-4 ${colWrap} mx-auto pb-3`}>
         <button onClick={()=>setLocPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{background:'#FFFFFF',border:'1px solid #F0E9DC',boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)'}}>
           <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
           <div className="flex-1 min-w-0">
@@ -850,11 +1095,12 @@ export default function ThingsToDoFinder() {
       </div>
 
       {/* Filters band */}
-      <div className="px-4 max-w-md mx-auto pb-2">
+      <div className={`px-4 ${colWrap} mx-auto pb-2`}>
         <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.todo.ink} unit={unit} setUnit={setUnit} />
       </div>
 
       <div style={{background:"#fff",padding:"10px 14px",borderBottom:"1px solid #E8EDF2"}}>
+       <div className={`${colWrap} mx-auto`}>
         <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:showAdvanced?"10px":0}}>
           <button onClick={()=>setShowAdvanced(!showAdvanced)} style={{display:"flex",alignItems:"center",gap:"8px",flex:1,padding:"9px 14px",borderRadius:"10px",border:`1.5px solid ${showAdvanced||advFilterCount>0?T.accent:"#E2E8F0"}`,background:showAdvanced||advFilterCount>0?T.accentL:"#fff",color:showAdvanced||advFilterCount>0?T.accentD:T.gray,fontWeight:"600",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>
             <span>🔧 Advanced Filters</span>
@@ -890,6 +1136,7 @@ export default function ThingsToDoFinder() {
             </motion.div>
           )}
         </AnimatePresence>
+       </div>
       </div>
 
       {/* Cold-load state: no cached results AND nothing fetched yet
@@ -902,12 +1149,17 @@ export default function ThingsToDoFinder() {
           ongoing background refresh state. */}
       {loading&&activities.length===0&&nationalIcons.length===0?(<TtdSkeleton/>)
       :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"calc(16px*var(--fs))"}}>{error}</div><button onClick={()=>setRadius(r=>Math.min(r+5,25))} style={{marginTop:"14px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Expand Radius</button></div>)
-      :viewMode==="list"?(<div style={{padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"4px"}}>
-        <TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng}/>
-        <TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng}/>
+      :viewMode==="list"?(<div style={isTablet
+        ? {maxWidth:1024,margin:"0 auto",padding:"14px 24px 170px",display:"flex",flexDirection:"column",gap:"4px"}
+        : {padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"4px"}}>
+        <TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet}/>
+        <TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet}/>
         {(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Near You</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
         {filtered.length===0&&nationalIcons.length===0&&regionalGems.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Try a different category or expand your radius</div></div>:null}
-        <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>{filtered.map((a,i)=><ActivityCard key={a.id||i} a={a} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance}/>)}</div>
+        <div style={{display:"flex",flexDirection:"column",gap:isTablet?"30px":"14px"}}>{filtered.map((a,i)=>{
+          const Card = isTablet ? ActivityCardTablet : ActivityCard;
+          return <Card key={a.id||i} a={a} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance}/>;
+        })}</div>
       </div>)
       :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:T.dark}}>✕</button></div>)}
 

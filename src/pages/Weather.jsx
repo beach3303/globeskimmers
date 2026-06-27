@@ -5,11 +5,22 @@ import { ROUTE } from "@/lib/workerRoutes";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Loader2, Cloud, MapPin, ChevronDown, ChevronUp, Clock, ChevronLeft, CloudSun } from "lucide-react";
-import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import { CAT, TEAL_DEEP, IVORY, SHADOW_CARD_SOFT } from "@/components/redesign/constants";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import RefreshButton from "@/components/RefreshButton";
+import { useIsTablet } from "@/lib/useIsTablet";
+
+// iPad editorial design tokens (design handoff: "Weather · iPad"). Mirrors the
+// shipped PlacesToEat / CultureInformation editorial system. Phone layout never
+// touches these — every tablet branch is gated behind useIsTablet().
+const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
+const ED_MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
+const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
+const ED_IVORY2 = "#F7F4EC", ED_RULE = "rgba(22,17,13,.10)";
+// Text-scaling helper — respects the app-wide --fs variable with a safe 1 fallback.
+const fs = (n) => `calc(${n}px*var(--fs,1))`;
 
 // Weather icon mapping
 const getWeatherIcon = (condition, code) => {
@@ -29,6 +40,181 @@ const getWeatherIcon = (condition, code) => {
   
   return '🌤️';
 };
+
+// ─── iPad EDITORIAL PRESENTATION (tablet-only) ──────────────────────────────
+// Pure presentation. No data fetching/state/handlers live here — they receive
+// already-shaped values from WeatherPage so the data layer stays untouched.
+const WEATHER_INK = CAT.weather.ink; // #D4861A amber accent
+
+// Mono UPPERCASE eyebrow used to label sections (HOURLY / 7-DAY / DETAILS).
+const EdKicker = ({ children }) => (
+  <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: ".14em", margin: 0 }}>
+    {children}
+  </p>
+);
+
+// Big serif current-conditions hero (handoff temperature treatment).
+function EdCurrentHero({ current, forecast, displayScale, placeLabel, dateLabel }) {
+  const isC = displayScale === 'celsius';
+  const temp = isC ? current.temperature_celsius : current.temperature_fahrenheit;
+  const feels = isC ? current.feels_like_celsius : current.feels_like_fahrenheit;
+  const wind = isC ? current.wind_speed_kmh : current.wind_speed_mph;
+  const low = isC ? forecast[0]?.low_celsius : forecast[0]?.low_fahrenheit;
+  const detail = [
+    { k: 'Humidity', v: `${current.humidity}%` },
+    { k: 'Wind', v: `${wind}${isC ? ' km/h' : ' mph'}` },
+    { k: 'UV Index', v: current.uv_index },
+    { k: 'Low', v: low != null ? `${low}°` : '—' },
+  ];
+  return (
+    <div className="bg-white rounded-[24px] overflow-hidden" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${ED_RULE}` }}>
+      <div style={{ padding: "30px 34px" }}>
+        <EdKicker>Now</EdKicker>
+        {placeLabel && (
+          <p className="flex items-center gap-1.5" style={{ color: ED_INK3, fontSize: fs(13.5), marginTop: fs(6) }}>
+            <MapPin size={13} color={WEATHER_INK} strokeWidth={2} />{placeLabel}
+          </p>
+        )}
+        <div className="flex items-start justify-between" style={{ marginTop: fs(14), gap: fs(20) }}>
+          <div className="min-w-0">
+            <div className="leading-none" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(96), letterSpacing: "-0.02em" }}>
+              {temp}<span style={{ fontSize: fs(44), color: WEATHER_INK }}>°{isC ? 'C' : 'F'}</span>
+            </div>
+            <p style={{ color: ED_INK2, fontSize: fs(20), fontFamily: ED_SERIF, marginTop: fs(4) }}>{current.condition}</p>
+            <p style={{ color: ED_INK3, fontSize: fs(13.5), marginTop: fs(2) }}>
+              Feels like {feels}°{isC ? 'C' : 'F'}
+            </p>
+            {dateLabel && (
+              <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: ".1em", marginTop: fs(10) }}>{dateLabel}</p>
+            )}
+          </div>
+          <div className="shrink-0" style={{ fontSize: fs(84), lineHeight: 1 }}>{current.icon || getWeatherIcon(current.condition)}</div>
+        </div>
+        <div className="grid grid-cols-4" style={{ marginTop: fs(24), paddingTop: fs(20), borderTop: `1px solid ${ED_RULE}`, gap: fs(16) }}>
+          {detail.map((d) => (
+            <div key={d.k}>
+              <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".1em", margin: 0 }}>{d.k}</p>
+              <p className="font-semibold" style={{ color: ED_INK, fontSize: fs(20), fontFamily: ED_SERIF, marginTop: fs(3) }}>{d.v}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// One day in the 7-day list — soft white rounded card with hairline rule,
+// expandable into a scrollable hourly strip + DETAILS block.
+function EdForecastDay({ day, index, expanded, onToggle, displayScale }) {
+  const isC = displayScale === 'celsius';
+  const high = isC ? day.high_celsius : day.high_fahrenheit;
+  const low = isC ? day.low_celsius : day.low_fahrenheit;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.04 }}
+      className="bg-white rounded-[20px] overflow-hidden"
+      style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${ED_RULE}` }}
+    >
+      <button onClick={() => onToggle(index)} className="w-full text-left" style={{ padding: "18px 22px" }}>
+        <div className="flex items-center justify-between" style={{ gap: fs(16) }}>
+          <div className="flex items-center" style={{ gap: fs(16) }}>
+            <div style={{ fontSize: fs(40), lineHeight: 1 }}>{day.icon || getWeatherIcon(day.condition)}</div>
+            <div>
+              <h3 className="leading-tight" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(24) }}>
+                {day.is_today ? 'Today' : day.day_of_week}
+              </h3>
+              <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".08em", marginTop: fs(2) }}>
+                {day.is_today ? day.day_of_week : day.date}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center" style={{ gap: fs(16) }}>
+            <div className="text-right">
+              <div className="flex items-baseline justify-end" style={{ gap: fs(6) }}>
+                <span style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(30) }}>{high}°</span>
+                <span style={{ color: ED_INK3, fontFamily: ED_SERIF, fontSize: fs(20) }}>{low}°</span>
+              </div>
+              <p style={{ color: ED_INK3, fontSize: fs(12.5), marginTop: fs(2) }}>{day.condition}</p>
+            </div>
+            <div style={{ color: WEATHER_INK }}>
+              {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center flex-wrap" style={{ gap: fs(18), marginTop: fs(12) }}>
+          <span style={{ color: ED_INK2, fontSize: fs(12.5) }}>💧 <b style={{ color: ED_INK }}>{day.precipitation_probability}%</b></span>
+          <span style={{ color: ED_INK2, fontSize: fs(12.5) }}>💨 <b style={{ color: ED_INK }}>{isC ? `${day.wind_speed_kmh} km/h` : `${day.wind_speed_mph} mph`}</b></span>
+          <span style={{ color: ED_INK2, fontSize: fs(12.5) }}>☀️ <b style={{ color: WEATHER_INK }}>UV {day.uv_index}</b></span>
+          {day.sunrise && <span style={{ color: ED_INK2, fontSize: fs(12.5) }}>🌅 <b style={{ color: ED_INK }}>{day.sunrise}</b></span>}
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {expanded && day.hourly && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <div style={{ padding: "16px 22px 22px", borderTop: `1px solid ${ED_RULE}` }}>
+              <div className="flex items-center" style={{ gap: fs(6), marginBottom: fs(12) }}>
+                <Clock className="w-3.5 h-3.5" style={{ color: WEATHER_INK }} />
+                <EdKicker>Hourly</EdKicker>
+              </div>
+              <div className="overflow-x-auto -mx-1 px-1">
+                <div className="flex pb-1" style={{ gap: fs(10), minWidth: "max-content" }}>
+                  {day.hourly.map((hour, hIndex) => (
+                    <div key={hIndex} className="flex-shrink-0 text-center rounded-[14px]" style={{ width: fs(72), padding: fs(12), background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}>
+                      <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".06em", margin: 0 }}>{hour.time}</p>
+                      <div style={{ fontSize: fs(22), margin: `${fs(6)} 0` }}>{hour.icon || getWeatherIcon(hour.condition)}</div>
+                      <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(17) }}>
+                        {isC ? hour.temperature_celsius : hour.temperature_fahrenheit}°
+                      </p>
+                      {hour.precipitation_probability > 0 && (
+                        <p style={{ color: WEATHER_INK, fontSize: fs(10), fontWeight: 600, marginTop: fs(2) }}>💧{hour.precipitation_probability}%</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {(day.sunrise || day.sunset) && (
+                <div style={{ marginTop: fs(16), paddingTop: fs(14), borderTop: `1px solid ${ED_RULE}` }}>
+                  <EdKicker>Details</EdKicker>
+                  <div className="flex" style={{ gap: fs(28), marginTop: fs(8) }}>
+                    {day.sunrise && (
+                      <div className="flex items-center" style={{ gap: fs(8) }}>
+                        <span style={{ fontSize: fs(18) }}>🌅</span>
+                        <div>
+                          <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".06em", margin: 0 }}>Sunrise</p>
+                          <p className="font-semibold" style={{ color: ED_INK, fontSize: fs(14) }}>{day.sunrise}</p>
+                        </div>
+                      </div>
+                    )}
+                    {day.sunset && (
+                      <div className="flex items-center" style={{ gap: fs(8) }}>
+                        <span style={{ fontSize: fs(18) }}>🌇</span>
+                        <div>
+                          <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".06em", margin: 0 }}>Sunset</p>
+                          <p className="font-semibold" style={{ color: ED_INK, fontSize: fs(14) }}>{day.sunset}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
 
 export default function WeatherPage() {
   const navigate = useNavigate();
@@ -104,6 +290,9 @@ export default function WeatherPage() {
     setExpandedDay(expandedDay === index ? null : index);
   };
 
+  const isTablet = useIsTablet();
+  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
+
   if (loading || !initialized) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#E3F2FD] to-[#BBDEFB] flex items-center justify-center">
@@ -123,7 +312,7 @@ export default function WeatherPage() {
     <div className="min-h-screen font-sans" style={{ background: IVORY }}>
       {/* HEADER — redesign pattern */}
       <div className="px-4 pt-2 pb-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
           <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
@@ -135,7 +324,7 @@ export default function WeatherPage() {
         </div>
       </div>
 
-      <div className="max-w-md mx-auto px-4">
+      <div className={`${colWrap} mx-auto px-4`}>
         {/* LOCATION CARD */}
         <button onClick={() => setShowLocationPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left mb-3 transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
           <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
@@ -163,6 +352,77 @@ export default function WeatherPage() {
         </div>
       </div>
 
+      {isTablet ? (
+        /* ── iPad EDITORIAL CONTENT COLUMN ── */
+        <div style={{ maxWidth: 1024, margin: "0 auto", padding: "0 24px 170px", display: "flex", flexDirection: "column", gap: fs(30) }}>
+          {error && (
+            <div className="bg-white rounded-[22px]" style={{ padding: "26px 30px", boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${ED_RULE}` }}>
+              <div className="flex items-start" style={{ gap: fs(14) }}>
+                <div style={{ fontSize: fs(28) }}>⚠️</div>
+                <div className="flex-1">
+                  <p className="font-bold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(22), marginBottom: fs(6) }}>Weather Data Unavailable</p>
+                  <p style={{ color: ED_INK2, fontSize: fs(14), marginBottom: fs(16) }}>{error}</p>
+                  <button
+                    onClick={() => { setError(null); if (activeLocation?.coordinates) { loadWeatherData(activeLocation); } }}
+                    className="rounded-full font-bold text-white transition-transform active:scale-[0.98]"
+                    style={{ padding: "10px 20px", background: WEATHER_INK, fontSize: fs(14) }}
+                  >
+                    Try Again
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!error && current && (
+            <EdCurrentHero
+              current={current}
+              forecast={forecast}
+              displayScale={displayScale}
+              placeLabel={locationMode === 'navigate' ? activeLocation?.placeName : activeLocation?.address?.city}
+              dateLabel={`Today · ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`}
+            />
+          )}
+
+          {!error && (
+            <div>
+              <div className="flex items-end justify-between" style={{ marginBottom: fs(16) }}>
+                <div>
+                  <EdKicker>7-Day</EdKicker>
+                  <h2 className="leading-none" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(34), marginTop: fs(4) }}>Forecast</h2>
+                </div>
+                <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: ".1em" }}>Tap for hourly</p>
+              </div>
+
+              {isLoading ? (
+                <div className="bg-white rounded-[22px] flex flex-col items-center justify-center" style={{ padding: fs(56), boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${ED_RULE}` }}>
+                  <Loader2 className="animate-spin" style={{ width: fs(36), height: fs(36), color: WEATHER_INK, marginBottom: fs(12) }} />
+                  <p style={{ color: ED_INK3, fontSize: fs(14) }}>Fetching weather data…</p>
+                </div>
+              ) : forecast.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: fs(12) }}>
+                  {forecast.map((day, index) => (
+                    <EdForecastDay
+                      key={index}
+                      day={day}
+                      index={index}
+                      expanded={expandedDay === index}
+                      onToggle={toggleDayExpansion}
+                      displayScale={displayScale}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-[22px] text-center" style={{ padding: fs(44), boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${ED_RULE}` }}>
+                  <Cloud style={{ width: fs(56), height: fs(56), color: ED_INK3, margin: `0 auto ${fs(12)}` }} />
+                  <p style={{ color: ED_INK2, fontSize: fs(15), marginBottom: fs(4) }}>No weather data available</p>
+                  <p style={{ color: ED_INK3, fontSize: fs(13) }}>Unable to fetch forecast</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="max-w-md mx-auto px-5 pb-6">
         {/* Current Weather Card */}
         {!error && current && (
@@ -431,6 +691,7 @@ export default function WeatherPage() {
           </div>
         )}
       </div>
+      )}
 
       <LocationModePicker
         isOpen={showLocationPicker}

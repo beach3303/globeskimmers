@@ -15,6 +15,8 @@ import { ROUTE } from "@/lib/workerRoutes";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
 import { countryCode } from "@/lib/countries";
+import { useIsTablet } from "@/lib/useIsTablet";
+import HomeTablet from "@/components/home/HomeTablet";
 
 // Translation mapping for greetings — shown next to "Hello 👋"
 // when the active location's country has a non-English primary language.
@@ -64,6 +66,8 @@ export default function HomePage() {
   // keep the full labels whole at a bigger font (chosen design: widen-when-large).
   const { step: fontStep } = useFontScale();
   const twoUp = fontStep >= 1;
+  // iPad gets a dedicated tablet layout (HomeTablet); phone is untouched.
+  const isTablet = useIsTablet();
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -381,6 +385,24 @@ export default function HomePage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen font-sans" style={{ background: IVORY }}>
+      {isTablet ? (
+        <HomeTablet
+          firstName={getFirstName()}
+          cityName={cityName}
+          placeText={placeText}
+          localGreeting={localGreeting}
+          weatherInfo={weatherInfo}
+          tempUnit={tempUnit}
+          toggleTempUnit={toggleTempUnit}
+          dateText={formatLocalDate(currentTime, timezone)}
+          timeText={formatLocalTime(currentTime, timezone)}
+          flagActive={flagActive}
+          homeFlagUrl={homeFlagUrl}
+          onLocation={() => setShowLocationPicker(true)}
+          onAction={handleQuickAction}
+        />
+      ) : (
+      <>
       {/* HERO GREETING CARD ----------------------------------------------- */}
       <div className="px-4 pt-2 pb-4">
         <div
@@ -619,6 +641,8 @@ export default function HomePage() {
           sits behind them. ~180px = ad height (~60px) + lifted-nav
           extent (~64px) + a small visual gutter. */}
       <div aria-hidden style={{ height: 180 }} />
+      </>
+      )}
 
       {/* AdMob banner — iOS/Android only (no-op on web). Mount last
           so showBanner runs after the rest of Home has rendered and

@@ -48,6 +48,12 @@ import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
 import { ChevronLeft, MapPin, Utensils } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import { useIsTablet } from "@/lib/useIsTablet";
+
+// iPad editorial design tokens (design handoff: "Places to Eat · iPad").
+const ED_SERIF = '"Instrument Serif", Georgia, serif';
+const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
+const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)", ED_EAT = "#D8443C";
 
 const WORKER_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
 
@@ -461,8 +467,9 @@ function processRest(place, userLat, userLng) {
 }
 
 // ─── PHOTO CAROUSEL ──────────────────────────────────────────────────────────
-function PhotoCarousel({ photos=[], rank, badges=[] }) {
+function PhotoCarousel({ photos=[], rank, badges=[], height=180 }) {
   const [cur,setCur]=useState(0); const [errs,setErrs]=useState({}); const ref=useRef(null);
+  const H = typeof height==='number'?`${height}px`:height;
   const [lightbox,setLightbox]=useState(false);   // tap-to-enlarge full-screen viewer
   const [lbCur,setLbCur]=useState(0);
   const lbRef=useRef(null);
@@ -480,8 +487,8 @@ function PhotoCarousel({ photos=[], rank, badges=[] }) {
   return (
     <div style={{position:"relative",background:"#F1F5F9"}}>
       {valid.length>0?(
-        <div ref={ref} onScroll={()=>ref.current&&setCur(Math.round(ref.current.scrollLeft/ref.current.offsetWidth))} style={{display:"flex",overflowX:"auto",scrollSnapType:"x mandatory",scrollbarWidth:"none",height:"180px"}}>
-          {valid.map((p,i)=><img key={i} src={p} onError={()=>setErrs(e=>({...e,[photos.indexOf(p)]:true}))} onClick={()=>setLightbox(true)} style={{minWidth:"100%",height:"180px",objectFit:"cover",scrollSnapAlign:"start",flexShrink:0,cursor:"zoom-in"}} alt=""/>)}
+        <div ref={ref} onScroll={()=>ref.current&&setCur(Math.round(ref.current.scrollLeft/ref.current.offsetWidth))} style={{display:"flex",overflowX:"auto",scrollSnapType:"x mandatory",scrollbarWidth:"none",height:H}}>
+          {valid.map((p,i)=><img key={i} src={p} onError={()=>setErrs(e=>({...e,[photos.indexOf(p)]:true}))} onClick={()=>setLightbox(true)} style={{minWidth:"100%",height:H,objectFit:"cover",scrollSnapAlign:"start",flexShrink:0,cursor:"zoom-in"}} alt=""/>)}
         </div>
       ):(
         <div style={{height:"120px",background:"linear-gradient(135deg,#EFF6FF,#DBEAFE)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(48px*var(--fs))"}}>🍽️</div>
@@ -841,6 +848,191 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
   );
 }
 
+// ─── RESTAURANT CARD — iPad editorial layout (design handoff) ────────────────
+// Full-width editorial card: big photo + rank + Dish-Specialist tag, serif name,
+// Say-it/Translate/rating row, pill tags, green Open bar, blue phone bar, three
+// action buttons. Same props/handlers as RestaurantCard; reuses PhotoCarousel /
+// NameLanguageHelp / AIDetailsSection / TrustTag. Rendered ONLY at tablet width
+// (PlacesToEat branches on useIsTablet) so the phone card is untouched.
+function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, formatDistance }) {
+  const [expanded,setExpanded]=useState(false);
+  const [hoursExpanded,setHoursExpanded]=useState(false);
+  const fs=(n)=>`calc(${n}px*var(--fs))`;
+
+  const name    = restaurant.displayName?.text || restaurant.name || "Restaurant";
+  const phone   = restaurant.nationalPhoneNumber || restaurant.internationalPhoneNumber || "";
+  const parking = restaurant.parking;
+  const parkingConfirmed = parking?.source==='api';
+  const hasAnySeating = restaurant.hasIndoorSeating || restaurant.hasOutdoorSeating;
+  const seatingConfirmed = restaurant.seatingSource==='api';
+  const cuisineLabel = restaurant.primaryType
+    ? restaurant.primaryType.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())
+    : restaurant.types?.[0]?.replace(/_/g,' ')?.replace(/\b\w/g,l=>l.toUpperCase()) || null;
+  const openText = restaurant.is24Hours ? 'Open 24/7' : (restaurant.isOpen ? 'Open' : 'Closed');
+
+  const Tag=({bg,color,children})=>(
+    <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(9)} ${fs(16)}`,fontSize:fs(15.5),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
+  );
+
+  return (
+    <motion.div initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(rank,8)*0.03}}
+      style={{background:"#fff",borderRadius:"28px",overflow:"hidden",boxShadow:"0 24px 50px -30px rgba(22,17,13,.4)",border:`1px solid ${ED_RULE}`}}>
+
+      {/* Photo — reuse the carousel (rank badge + smart badges incl. Dish Specialist) at editorial height */}
+      <PhotoCarousel photos={restaurant.photos||(restaurant.photoUrl?[restaurant.photoUrl]:[])} rank={rank} badges={restaurant.badges||[]} height={360}/>
+
+      <div style={{padding:`${fs(28)} ${fs(32)} ${fs(32)}`}}>
+        {cuisineLabel&&<div style={{color:ED_EAT,fontWeight:600,fontSize:fs(17),letterSpacing:"0.2px"}}>{cuisineLabel}</div>}
+        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(38),lineHeight:1.04,color:ED_INK,margin:`${fs(4)} 0 0`}}>{name}</h3>
+
+        {/* Say it / Translate / rating / distance */}
+        <div style={{display:"flex",gap:fs(16),alignItems:"center",flexWrap:"wrap",marginTop:fs(12),fontSize:fs(17),color:ED_INK3}}>
+          <NameLanguageHelp placeId={restaurant.placeId||restaurant.id} name={name}/>
+          {restaurant.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{restaurant.rating.toFixed(1)}</span> ({(restaurant.userRatingCount||0).toLocaleString()})</span>}
+          {restaurant.distanceMiles!=null&&<span>· {formatDistance(restaurant.distanceMiles)}</span>}
+          {restaurant.priceStr&&<span>· {restaurant.priceStr}</span>}
+        </div>
+
+        {/* Pill tags */}
+        <div style={{display:"flex",gap:fs(10),flexWrap:"wrap",marginTop:fs(16)}}>
+          {restaurant.dineIn&&<Tag bg="#EAF0FB" color="#2E6FE0">🍴 Dine-in</Tag>}
+          {restaurant.takeout&&<Tag bg="#E7F3EA" color="#2E7D46">📦 Takeout</Tag>}
+          {restaurant.delivery&&<Tag bg="#FDEBD7" color="#C57A1F">🛵 Delivery</Tag>}
+          {restaurant.hasDriveThru&&<Tag bg="#E0F2FE" color="#0277BD">🚗 Drive-Thru</Tag>}
+          {restaurant.reservable&&<Tag bg="#FBE0DC" color="#C2392F">📅 Reservable</Tag>}
+          {restaurant.isCashOnly&&<Tag bg="#FEF2F2" color="#DC2626">💵 Cash{restaurant.cashSource==='reviews'?' (reported)':''}</Tag>}
+        </div>
+
+        {/* Open bar */}
+        {restaurant.isOpen!==null&&(
+          <div style={{marginTop:fs(18),background:restaurant.isOpen?"#E7F3EA":"#FBE0DC",borderRadius:"16px",padding:`${fs(16)} ${fs(20)}`,fontSize:fs(18),fontWeight:600,color:restaurant.isOpen?"#2E7D46":"#C2392F",display:"flex",alignItems:"center",gap:fs(11)}}>
+            <span style={{width:fs(10),height:fs(10),borderRadius:"50%",background:restaurant.is24Hours?"#00BCD4":(restaurant.isOpen?"#2E7D46":"#C2392F"),flexShrink:0}}/>
+            <span>{openText}</span>
+            {restaurant.todayHours&&!restaurant.is24Hours&&<span style={{color:ED_INK3,fontWeight:500}}>· {restaurant.todayHours}</span>}
+          </div>
+        )}
+
+        {/* Phone bar */}
+        {phone&&(
+          <a href={`tel:${phone}`} style={{marginTop:fs(14),background:"#EFF4FB",borderRadius:"16px",padding:`${fs(18)} ${fs(20)}`,display:"flex",alignItems:"center",gap:fs(14),textDecoration:"none"}}>
+            <span style={{fontSize:fs(24)}}>📞</span>
+            <span><span style={{display:"block",fontSize:fs(20),fontWeight:600,color:"#2E6FE0"}}>{phone}</span><span style={{fontSize:fs(15),color:ED_INK3}}>Tap to call</span></span>
+          </a>
+        )}
+
+        {/* Actions */}
+        <div style={{display:"flex",gap:fs(12),marginTop:fs(20)}}>
+          <button onClick={onDirections} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_EAT,color:"#fff"}}>Directions</button>
+          <button onClick={onShowOnMap} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
+          <button onClick={()=>setExpanded(e=>!e)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:expanded?ED_INK:ED_IVORY2,color:expanded?"#fff":ED_INK2}}>{expanded?"Less ▴":"More ▾"}</button>
+        </div>
+
+        {/* Expanded details */}
+        <AnimatePresence>
+          {expanded&&(
+            <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
+              <div style={{marginTop:fs(20),display:"flex",flexDirection:"column",gap:fs(14)}}>
+
+                {restaurant.customerFavorites?.length>0&&(
+                  <div style={{padding:fs(16),background:"#FEF9EE",borderRadius:"16px",border:"1px solid #FDE68A"}}>
+                    <div style={{fontSize:fs(13),fontWeight:700,color:"#D97706",letterSpacing:"0.5px",marginBottom:fs(9)}}>❤️ CUSTOMER FAVORITES</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
+                      {restaurant.customerFavorites.slice(0,6).map((f,i)=>{const l=f.dish||f.name||'';return l?(
+                        <span key={i} style={{background:"#FDE68A",color:"#92400E",padding:`${fs(5)} ${fs(13)}`,borderRadius:"999px",fontSize:fs(15),fontWeight:600}}>{l.charAt(0).toUpperCase()+l.slice(1)}{f.mentions>2?` ×${f.mentions}`:''}</span>
+                      ):null;})}
+                    </div>
+                  </div>
+                )}
+
+                {restaurant.bestTimeNote&&(
+                  <div style={{padding:fs(16),background:"#E7F3EA",borderRadius:"16px",fontSize:fs(16),color:"#166534"}}>
+                    <span style={{fontWeight:700,color:"#2E7D46"}}>🕐 Best time to visit · </span>{restaurant.bestTimeNote}
+                  </div>
+                )}
+
+                {(hasAnySeating||parking)&&(
+                  <div style={{display:"flex",gap:fs(14),flexWrap:"wrap"}}>
+                    {hasAnySeating&&(
+                      <div style={{flex:"1 1 240px",padding:fs(16),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
+                        <div style={{display:"flex",alignItems:"center",marginBottom:fs(8)}}><span style={{fontSize:fs(17),fontWeight:700,color:ED_INK}}>🪑 Seating</span><TrustTag confirmed={seatingConfirmed}/></div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:fs(6)}}>
+                          {restaurant.hasIndoorSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🏠 Indoor</span>}
+                          {restaurant.hasOutdoorSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🌿 Outdoor</span>}
+                          {restaurant.seating?.hasLoungeSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🛋️ Lounge</span>}
+                        </div>
+                      </div>
+                    )}
+                    {parking&&(
+                      <div style={{flex:"1 1 240px",padding:fs(16),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
+                        <div style={{display:"flex",alignItems:"center",marginBottom:fs(8)}}><span style={{fontSize:fs(17),fontWeight:700,color:ED_INK}}>🅿️ Parking</span><TrustTag confirmed={parkingConfirmed}/></div>
+                        {parking.noParking?(
+                          <div style={{fontSize:fs(15),color:"#C2392F"}}>{parking.noParkingNote}</div>
+                        ):(
+                          <div style={{display:"flex",flexWrap:"wrap",gap:fs(6)}}>
+                            {parking.details?.length>0?parking.details.map((d,i)=>(
+                              <span key={i} style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>{d.icon} {d.label}</span>
+                            )):<span style={{fontSize:fs(15),color:ED_INK3}}>Parking available</span>}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {restaurant.editorialSummary&&(
+                  <div style={{padding:fs(16),background:"#F0F9FF",borderRadius:"16px",border:"1px solid #BAE6FD"}}>
+                    <div style={{fontSize:fs(13),fontWeight:700,color:"#0369A1",letterSpacing:"0.5px",marginBottom:fs(6)}}>📖 ABOUT THIS PLACE</div>
+                    <p style={{fontSize:fs(16),lineHeight:1.6,color:"#0C4A6E",margin:0}}>{restaurant.editorialSummary}</p>
+                  </div>
+                )}
+
+                {restaurant.generativeSummary?.overview?.text&&(
+                  <div style={{padding:fs(16),background:"#EFF6FF",borderRadius:"16px",border:"1px solid #BFDBFE"}}>
+                    <div style={{fontSize:fs(13),fontWeight:700,color:"#1E40AF",letterSpacing:"0.5px",marginBottom:fs(6)}}>✨ AI VENUE SUMMARY ({restaurant.generativeSummary.disclosureText?.text||"Summarized with Gemini"})</div>
+                    <p style={{fontSize:fs(16),lineHeight:1.6,color:"#1E3A8A",margin:0}}>{restaurant.generativeSummary.overview.text}</p>
+                  </div>
+                )}
+
+                {restaurant.currentOpeningHours?.weekdayDescriptions?.length>0&&(
+                  <div style={{padding:fs(16),background:"#FAF7F0",borderRadius:"16px"}}>
+                    <button onClick={()=>setHoursExpanded(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
+                      <span style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
+                      <span style={{fontSize:fs(13),color:ED_INK3}}>{hoursExpanded?'▲':'▼'}</span>
+                    </button>
+                    {hoursExpanded&&(
+                      <div style={{marginTop:fs(8)}}>
+                        {restaurant.currentOpeningHours.weekdayDescriptions.map((day,i)=>{
+                          const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                          const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
+                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?TEAL_DEEP:ED_INK2,borderBottom:i<6?`1px solid ${ED_RULE}`:"none"}}>
+                            <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
+                          </div>;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <AIDetailsSection placeId={restaurant.placeId||restaurant.id} placeName={name} page="PlacesToEat" kind="restaurant"/>
+
+                {restaurant.googleMapsUri&&(
+                  <a href={restaurant.googleMapsUri} target="_blank" rel="noopener noreferrer" style={{fontSize:fs(14),color:ED_INK3,textAlign:"center",textDecoration:"underline",padding:fs(4)}}>view reviews on Google Maps →</a>
+                )}
+                {restaurant.websiteUri&&(
+                  <a href={restaurant.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(16),background:"#F3E8FF",borderRadius:"16px",textDecoration:"none",color:"#7C3AED"}}>
+                    <span style={{fontSize:fs(22)}}>🌐</span>
+                    <span><span style={{display:"block",fontWeight:600,fontSize:fs(16)}}>Visit Website</span><span style={{fontSize:fs(14),color:ED_INK3}}>Menu &amp; reservations</span></span>
+                  </a>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── FILTER CHIP ─────────────────────────────────────────────────────────────
 function Chip({ label, active, onClick, icon, color="#3B82F6" }) {
   return <button onClick={onClick} style={{display:"flex",alignItems:"center",gap:"4px",padding:"6px 12px",borderRadius:"20px",border:active?`2px solid ${color}`:"1.5px solid #E2E8F0",background:active?`${color}12`:"#fff",color:active?color:GRAY,fontWeight:active?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit",flexShrink:0,whiteSpace:"nowrap"}}>{icon&&<span>{icon}</span>}{label}</button>;
@@ -889,6 +1081,10 @@ let placesToEatSessionCache = null;
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function PlacesToEat() {
   const navigate = useNavigate();
+  // iPad: wider centered column + editorial restaurant cards (design handoff).
+  // Phone layout is unchanged — every tablet branch is gated on this.
+  const isTablet = useIsTablet();
+  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
   const [restaurants, setRestaurants]   = useState([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState(null);
@@ -1347,7 +1543,7 @@ export default function PlacesToEat() {
 
       {/* ── HEADER — chevron back + Places to Eat pill (redesign) ── */}
       <div className="px-4 pt-2 pb-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
           <button
             onClick={()=>window.history.back()}
             className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]"
@@ -1368,7 +1564,7 @@ export default function PlacesToEat() {
       </div>
 
       {/* ── LOCATION CARD ── */}
-      <div className="px-4 pb-3 max-w-md mx-auto">
+      <div className={`px-4 pb-3 ${colWrap} mx-auto`}>
         <button
           onClick={()=>setShowLocPicker(true)}
           className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]"
@@ -1394,7 +1590,7 @@ export default function PlacesToEat() {
       </div>
 
       {/* ── SEARCH + FILTERS PANEL ── */}
-      <div className="px-4 max-w-md mx-auto pb-2">
+      <div className={`px-4 ${colWrap} mx-auto pb-2`}>
         {/* Search bar — food-coral submit button */}
         <div style={{display:"flex",gap:"8px",marginBottom:"14px"}}>
           <input
@@ -1537,7 +1733,9 @@ export default function PlacesToEat() {
           <button onClick={()=>setRadius(r=>Math.min(r+5,25))} style={{padding:"10px 20px",borderRadius:"10px",border:`2px solid ${BLUE}`,background:BLUE_LT,color:BLUE,fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Expand Radius</button>
         </div>
       ):viewMode==="list"?(
-        <div style={{padding:"0 12px 100px",display:"flex",flexDirection:"column",gap:"12px"}}>
+        <div style={isTablet
+          ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
+          : {padding:"0 12px 100px",display:"flex",flexDirection:"column",gap:"12px"}}>
           {filtered.length===0?(
             <div style={{textAlign:"center",padding:"40px 20px",background:"#fff",borderRadius:"12px",border:"1px solid #E2E8F0"}}>
               <div style={{fontSize:"calc(32px*var(--fs))",marginBottom:"10px"}}>🔍</div>
@@ -1564,16 +1762,18 @@ export default function PlacesToEat() {
                 <span>Looking for more coffee spots? <button onClick={() => navigate(createPageUrl("CoffeeFinder"), { state: { from: 'PlacesToEat' } })} style={{background:"transparent",border:"none",padding:0,color:"#92400E",fontWeight:"700",textDecoration:"underline",cursor:"pointer",fontFamily:"inherit",fontSize:"inherit"}}>Try the Coffee Finder feature in this app</button></span>
               </div>
             )}
-            {filtered.slice(0,displayCount).map((r,i)=>(
+            {filtered.slice(0,displayCount).map((r,i)=>{
+              const Card = isTablet ? RestaurantCardTablet : RestaurantCard;
+              return (
               <div key={r.id||i} ref={el=>cardRefs.current[i]=el}>
-                <RestaurantCard
+                <Card
                   restaurant={r} rank={i+1}
                   onDirections={()=>setDirModal({open:true,lat:r.lat,lng:r.lng,name:r.name,address:r.formattedAddress||r.shortFormattedAddress||r.vicinity||r.address||''})}
                   onShowOnMap={()=>handleShowOnMap(i)}
                   formatDistance={formatDistance}
                 />
               </div>
-            ))}
+            );})}
             {displayCount<filtered.length&&(
               <button onClick={handleLoadMore} style={{padding:"14px",borderRadius:"12px",border:`2px solid ${BLUE}`,background:"#fff",color:BLUE,fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit",marginTop:"4px"}}>
                 Load More · {filtered.length-displayCount} remaining

@@ -7,6 +7,7 @@ import { base44 } from '@/api/base44Client';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { useLocation } from './LocationContext';
+import { useIsTablet } from '@/lib/useIsTablet';
 
 // Preset cities for one-tap testing in the coordinate-entry mode.
 // Order is roughly by global familiarity / common test scenarios so
@@ -42,6 +43,10 @@ export default function LocationModePicker({ isOpen, onClose }) {
     switchToNavigateMode,
     getCurrentLocation
   } = useLocation();
+  // iPad: scale the whole picker up so its (phone-sized) text + controls read
+  // comfortably on the large canvas. zoom scales uniformly; the max-height is
+  // pulled in to compensate so the zoomed card still fits the viewport.
+  const isTablet = useIsTablet();
 
   const [mode, setMode] = useState('select'); // 'select', 'search', 'coords', 'info'
   const [searchQuery, setSearchQuery] = useState('');
@@ -258,6 +263,7 @@ export default function LocationModePicker({ isOpen, onClose }) {
             exit={{ y: 40, opacity: 0, scale: 0.96 }}
             transition={{ type: 'spring', damping: 28, stiffness: 320 }}
             className="relative w-full max-w-md bg-white rounded-[24px] shadow-2xl max-h-[85vh] overflow-hidden flex flex-col"
+            style={isTablet ? { zoom: 1.3, maxHeight: '64vh' } : undefined}
           >
             {/* Mode Selection */}
             {mode === 'select' && (

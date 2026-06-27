@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
-import { Home as HomeIcon, Bookmark, Settings as SettingsIcon, RefreshCw } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 import { useAuth } from '@/lib/AuthContext';
 import { clearAppCache } from '@/lib/clearAppCache';
+import { useIsTablet } from '@/lib/useIsTablet';
 
 // Floating pill nav — fixed, centered, 22px above bottom safe area.
 // Per the Claude-design spec: 3 anchors only (Home, Saved, Settings).
@@ -21,20 +21,27 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
   const navigate = useNavigate();
   const location = useLocation();
   const { canRefresh } = useAuth();
+  const [refreshing, setRefreshing] = useState(false);
+  const isTablet = useIsTablet();
 
   // Global refresh (admins + admin-granted users only): wipe cached RESULTS so
   // the user gets fresh data, then reload to refetch. Never touches auth, prefs,
-  // or saved locations (see clearAppCache).
+  // or saved locations (see clearAppCache). The 🔄 icon spins from the moment
+  // the button is hit until the reload, so clearing the cache is visibly confirmed.
   const handleRefresh = () => {
     if (typeof window !== 'undefined' && !window.confirm('Refresh all cached results? The app will reload with fresh data.')) return;
+    setRefreshing(true);
     clearAppCache();
-    setTimeout(() => { try { window.location.reload(); } catch { /* ignore */ } }, 60);
+    // Short delay so the spin is visible before the reload swaps the page out.
+    setTimeout(() => { try { window.location.reload(); } catch { /* ignore */ } }, 600);
   };
 
+  // Emoji nav icons (matches the iPad redesign spec). Shown on BOTH phone and
+  // iPad so the chrome is consistent — each item is a real emoji + label.
   const items = [
-    { id: 'home',     ico: HomeIcon,     route: 'Home' },
-    { id: 'saved',    ico: Bookmark,     route: 'SavedLocations' },
-    { id: 'settings', ico: SettingsIcon, route: 'Settings' },
+    { id: 'home',     emoji: '🏠', label: 'Home',     route: 'Home' },
+    { id: 'saved',    emoji: '🔖', label: 'Saved',    route: 'SavedLocations' },
+    { id: 'settings', emoji: '⚙️', label: 'Settings', route: 'Settings' },
   ];
 
   // Auto-detect active tab from route. Mirrors the BottomNav logic so swapping
@@ -87,7 +94,12 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
         // and the AdMob banner sits lower, so the pill needs a bigger base
         // lift there to clear the ad. iOS keeps the tighter value + its inset.
         bottom: liftForAd
-          ? `calc(${Capacitor.getPlatform() === 'android' ? 72 : 64}px + env(safe-area-inset-bottom))`
+          // iPad serves a taller AdMob adaptive banner (~90px, sitting above the
+          // home-indicator inset) than phones (~50px), so the pill needs a bigger
+          // lift on tablet to clear it instead of hiding behind it.
+          ? (isTablet
+              ? 'calc(108px + env(safe-area-inset-bottom))'
+              : `calc(${Capacitor.getPlatform() === 'android' ? 72 : 64}px + env(safe-area-inset-bottom))`)
           : 'calc(22px + env(safe-area-inset-bottom))',
         left: '50%',
         transform: 'translateX(-50%)',
@@ -106,7 +118,6 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
       }}
     >
       {items.map((it) => {
-        const Icon = it.ico;
         const isActive = activeTab === it.id;
         return (
           <button
@@ -114,21 +125,24 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
             onClick={() => navigate(createPageUrl(it.route))}
             aria-label={it.id}
             style={{
-              width: 52,
-              height: 44,
+              minWidth: 62,
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              background: isActive ? 'rgba(255,255,255,.14)' : 'transparent',
+              gap: 3,
+              padding: '7px 10px',
+              background: isActive ? 'linear-gradient(180deg,#1AA093,#0E6E66)' : 'transparent',
               border: 'none',
-              borderRadius: 9999,
+              borderRadius: 18,
               color: fg,
-              opacity: isActive ? 1 : 0.7,
+              opacity: isActive ? 1 : 0.62,
               cursor: 'pointer',
               transition: 'background 120ms, opacity 120ms',
             }}
           >
-            <Icon size={20} strokeWidth={1.8} />
+            <span style={{ fontSize: 22, lineHeight: 1 }}>{it.emoji}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.2, lineHeight: 1 }}>{it.label}</span>
           </button>
         );
       })}
@@ -141,21 +155,24 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
           aria-label="refresh"
           title="Refresh app (clear cached results)"
           style={{
-            width: 52,
-            height: 44,
+            minWidth: 62,
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
+            gap: 3,
+            padding: '7px 10px',
             background: 'transparent',
             border: 'none',
-            borderRadius: 9999,
+            borderRadius: 18,
             color: fg,
-            opacity: 0.7,
+            opacity: 0.62,
             cursor: 'pointer',
             transition: 'background 120ms, opacity 120ms',
           }}
         >
-          <RefreshCw size={20} strokeWidth={1.8} />
+          <span className={refreshing ? 'animate-spin' : ''} style={{ fontSize: 22, lineHeight: 1, display: 'inline-block' }}>🔄</span>
+          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.2, lineHeight: 1 }}>Refresh</span>
         </button>
       )}
     </div>

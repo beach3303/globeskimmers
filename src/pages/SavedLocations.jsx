@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
-import { ArrowLeft, MapPin, Trash2, Check, Loader2, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, MapPin, Trash2, Check, Loader2, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from '../components/location/LocationContext';
 import AddLocationDialog from '../components/location/AddLocationDialog';
 import { showToast } from '../components/Toast';
+import { CAT, TEAL_DEEP, IVORY } from '@/components/redesign/constants';
+import { useIsTablet } from '@/lib/useIsTablet';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,6 +19,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+
+// iPad editorial design tokens (copied from PlacesToEat / CultureInformation
+// so this page can render the shipped editorial treatment on tablet without
+// touching the phone layout). The phone path below is byte-identical.
+const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
+const ED_MONO  = '"JetBrains Mono", ui-monospace, Menlo, monospace';
+const ED_INK   = '#16110D', ED_INK2 = '#3A3128', ED_INK3 = '#736657';
+const ED_IVORY2 = '#EFE8D9', ED_RULE = 'rgba(22,17,13,.10)';
 
 const PLACE_TYPE_ICONS = {
   airport: '✈️',
@@ -32,6 +42,10 @@ const PLACE_TYPE_ICONS = {
 
 export default function SavedLocationsPage() {
   const navigate = useNavigate();
+  const isTablet = useIsTablet();
+  // Text-scaling helper (mirrors PlacesToEat): every editorial text size flows
+  // through fs() so the iPad layout honors the app-wide --fs accessibility scale.
+  const fs = (n) => `calc(${n}px*var(--fs))`;
   const { switchToNavigateMode, deleteLocation: contextDeleteLocation, saveLocation } = useLocation();
   const [loading, setLoading] = useState(true);
   const [savedLocations, setSavedLocations] = useState([]);
@@ -106,9 +120,192 @@ export default function SavedLocationsPage() {
   };
 
   if (loading) {
+    if (isTablet) {
+      return (
+        <div className="min-h-screen flex items-center justify-center" style={{ background: IVORY }}>
+          <Loader2 className="w-12 h-12 animate-spin" style={{ color: TEAL_DEEP }} />
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#f5f7fa] to-[#e2e8f0] flex items-center justify-center">
         <Loader2 className="w-12 h-12 text-[#3A6EA5] animate-spin" />
+      </div>
+    );
+  }
+
+  // ── iPad editorial layout (tablet-only). Same data + handlers as the phone
+  //    path below; only the presentation differs. Phone stays byte-identical. ──
+  if (isTablet) {
+    const colWrap = 'max-w-[1024px]';
+    return (
+      <div className="min-h-screen" style={{ background: IVORY }}>
+        {/* HEADER — chevron back + Saved pill (redesign) */}
+        <div className="px-4 pt-2 pb-3">
+          <div className={`${colWrap} mx-auto flex items-center justify-between`}>
+            <button
+              onClick={() => navigate(createPageUrl('Home'))}
+              className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-black/5"
+              style={{ background: '#FFFFFF', border: `1px solid ${ED_RULE}` }}
+              aria-label="Back"
+            >
+              <ChevronLeft size={18} color={ED_INK} strokeWidth={2.2} />
+            </button>
+            <div
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full uppercase font-medium"
+              style={{ background: CAT.restroom.bg, color: TEAL_DEEP, fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: '.08em' }}
+            >
+              <MapPin size={13} color={TEAL_DEEP} strokeWidth={2} /> Saved
+            </div>
+            <div className="w-10 h-10" aria-hidden="true" />
+          </div>
+        </div>
+
+        {/* TITLE — serif headline + mono kicker */}
+        <div className={`px-4 ${colWrap} mx-auto pb-2 text-center`}>
+          <h1 className="italic leading-none" style={{ fontFamily: ED_SERIF, fontSize: fs(38), color: TEAL_DEEP }}>
+            Saved Locations
+          </h1>
+          <p className="uppercase mt-2 font-semibold" style={{ fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: '0.16em', color: ED_INK3 }}>
+            Your frequently visited places
+          </p>
+        </div>
+
+        <div className={`${colWrap} mx-auto px-4 pb-10 pt-4`}>
+          {saveSuccess && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="mb-5 p-4 rounded-[18px] flex items-center gap-3"
+              style={{ background: '#FFFFFF', border: `1px solid ${ED_RULE}`, boxShadow: '0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}
+            >
+              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-none" style={{ background: TEAL_DEEP }}>
+                <Check className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="font-semibold" style={{ fontFamily: ED_SERIF, fontSize: fs(18), color: ED_INK }}>Location saved</p>
+                <p style={{ color: ED_INK3, fontSize: fs(13) }}>You can now quickly navigate to this location anytime</p>
+              </div>
+            </motion.div>
+          )}
+
+          <button
+            onClick={() => setShowAddDialog(true)}
+            className="w-full mb-6 p-4 rounded-[18px] flex items-center justify-center gap-3 transition-colors hover:bg-black/[0.02]"
+            style={{ background: '#FFFFFF', border: `1.5px dashed ${TEAL_DEEP}` }}
+          >
+            <Plus className="w-5 h-5" style={{ color: TEAL_DEEP }} />
+            <span className="font-semibold uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(11.5), letterSpacing: '.08em', color: TEAL_DEEP }}>Add New Location</span>
+          </button>
+
+          {savedLocations.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ background: ED_IVORY2 }}>
+                <MapPin className="w-10 h-10" style={{ color: ED_INK3 }} />
+              </div>
+              <p className="mb-1" style={{ fontFamily: ED_SERIF, fontSize: fs(22), color: ED_INK }}>No saved locations yet</p>
+              <p style={{ color: ED_INK3, fontSize: fs(13.5) }}>
+                Save locations to quickly navigate to them anytime
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <AnimatePresence>
+                {savedLocations.map((location, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -100 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="rounded-[18px] overflow-hidden"
+                    style={{ background: '#FFFFFF', border: `1px solid ${ED_RULE}`, boxShadow: '0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}
+                  >
+                    <div className="p-5">
+                      <div className="flex items-start gap-3 mb-4">
+                        <span className="text-3xl flex-shrink-0 leading-none">
+                          {PLACE_TYPE_ICONS[location.placeType] || '📍'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="leading-tight" style={{ fontFamily: ED_SERIF, fontSize: fs(23), color: ED_INK }}>
+                            {location.nickname || location.placeName}
+                          </h3>
+                          <p className="mt-1" style={{ color: ED_INK2, fontFamily: ED_MONO, fontSize: fs(12), lineHeight: 1.45 }}>
+                            {location.address.formatted}
+                          </p>
+                          {location.savedAt && (
+                            <p className="mt-1.5 uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: '.06em' }}>
+                              Saved {new Date(location.savedAt).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2.5 pt-1" style={{ borderTop: `1px solid ${ED_RULE}` }}>
+                        <button
+                          onClick={() => handleSelect(location)}
+                          className="flex items-center justify-center gap-2 py-2.5 mt-3 rounded-[12px] font-semibold transition-transform active:scale-[0.98]"
+                          style={{ background: TEAL_DEEP, color: '#FFFFFF', fontSize: fs(13.5), boxShadow: `0 6px 18px -6px ${TEAL_DEEP}80` }}
+                        >
+                          <MapPin className="w-4 h-4" />
+                          Navigate Here
+                        </button>
+
+                        <button
+                          onClick={() => setPendingDelete(location)}
+                          disabled={deleting === location}
+                          className="flex items-center justify-center gap-2 py-2.5 mt-3 rounded-[12px] font-semibold transition-colors hover:bg-black/[0.02] disabled:opacity-50"
+                          style={{ background: '#FFFFFF', border: `1px solid ${ED_RULE}`, color: ED_INK2, fontSize: fs(13.5) }}
+                        >
+                          {deleting === location ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
+
+        <AddLocationDialog
+          isOpen={showAddDialog}
+          onAdd={handleAddLocation}
+          onClose={() => setShowAddDialog(false)}
+        />
+
+        <AlertDialog
+          open={!!pendingDelete}
+          onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove from saved locations?</AlertDialogTitle>
+              <AlertDialogDescription>
+                <strong>{pendingDelete?.nickname || pendingDelete?.placeName}</strong> will be removed from your list. You can save it again anytime by searching for it.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  const target = pendingDelete;
+                  setPendingDelete(null);
+                  if (target) handleDelete(target);
+                }}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Remove
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }

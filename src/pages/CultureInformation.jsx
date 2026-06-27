@@ -7,6 +7,7 @@ import { CAT, IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/r
 import { motion } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
+import { useIsTablet } from "@/lib/useIsTablet";
 
 // ============================================================================
 // Cultural Info — two-layer (Country / City / Nearby Region) traveler guide.
@@ -760,11 +761,22 @@ function Divider({ icon, label, sublabel, layer = "country" }) {
   );
 }
 
+// On tablet, group a layer's SectionCards into a 2-column CSS grid so the wide
+// editorial column reads well; on phone, render them bare so they stay direct
+// children of the parent `space-y-4` stack (phone layout byte-identical).
+// `items-start` keeps unequal-height cards top-aligned instead of stretching.
+function CardGrid({ isTablet, children }) {
+  if (!isTablet) return <>{children}</>;
+  return <div className="grid grid-cols-2 gap-5 items-start">{children}</div>;
+}
+
 // ============================================================================
 // PAGE
 // ============================================================================
 export default function CultureInformationPage() {
   const navigate = useNavigate();
+  const isTablet = useIsTablet();
+  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
   const { activeLocation, locationMode, initialized, switchToCurrentLocation } = useLocation();
   const [loading, setLoading] = useState(true);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
@@ -870,7 +882,7 @@ export default function CultureInformationPage() {
     <div className="min-h-screen" style={{ background: IVORY, fontFamily: SANS }}>
       {/* HEADER */}
       <div className="px-4 pt-2 pb-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
           <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-black/5" style={{ background: "#FFFFFF", border: `1px solid ${RULE}` }} aria-label="Back">
             <ChevronLeft size={18} color={INK} strokeWidth={2.2} />
           </button>
@@ -884,12 +896,12 @@ export default function CultureInformationPage() {
       </div>
 
       {/* COUNTRY TITLE */}
-      <div className="px-4 max-w-md mx-auto pb-2 text-center">
+      <div className={`px-4 ${colWrap} mx-auto pb-2 text-center`}>
         <h1 className="italic leading-none" style={{ fontFamily: SERIF, fontSize: fs(38), color: CAT.culture.ink }}>{geo.country || "Your destination"}</h1>
         <p className="uppercase mt-2 font-semibold" style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: "0.16em", color: INK3 }}>Traveler's Culture Guide</p>
       </div>
 
-      <div className="max-w-md mx-auto">
+      <div className={`${colWrap} mx-auto`}>
         {/* Location display */}
         <div className="px-4 mb-3">
           <div className="bg-white rounded-[22px] p-4" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
@@ -916,32 +928,38 @@ export default function CultureInformationPage() {
         <div className="px-4 py-4 space-y-4 pb-24">
           {/* 🌎 COUNTRY ESSENTIALS */}
           <Divider icon="🌎" label="Country Essentials" layer="country" sublabel={`The big picture of ${geo.country || "the country"}.`} />
-          {COUNTRY_BUNDLES.flatMap((bundle) =>
-            bundle.cards.map((card) => (
-              <SectionCard key={`${bundle.id}_${card.id}`} card={card} bundle={bundle} layer="country"
-                state={results[bundle.id]} onRefresh={() => refreshSection(bundle, "country")} />
-            ))
-          )}
+          <CardGrid isTablet={isTablet}>
+            {COUNTRY_BUNDLES.flatMap((bundle) =>
+              bundle.cards.map((card) => (
+                <SectionCard key={`${bundle.id}_${card.id}`} card={card} bundle={bundle} layer="country"
+                  state={results[bundle.id]} onRefresh={() => refreshSection(bundle, "country")} />
+              ))
+            )}
+          </CardGrid>
 
           {/* 📍 CITY LOCAL GUIDE */}
           <Divider icon="📍" label="City Local Guide" layer="city" sublabel={`Specific to ${cityName}.`} />
-          {CITY_BUNDLES.flatMap((bundle) =>
-            bundle.cards.map((card) => (
-              <SectionCard key={`${bundle.id}_${card.id}`} card={card} bundle={bundle} layer="city"
-                state={results[bundle.id]} onRefresh={() => refreshSection(bundle, "city")} />
-            ))
-          )}
+          <CardGrid isTablet={isTablet}>
+            {CITY_BUNDLES.flatMap((bundle) =>
+              bundle.cards.map((card) => (
+                <SectionCard key={`${bundle.id}_${card.id}`} card={card} bundle={bundle} layer="city"
+                  state={results[bundle.id]} onRefresh={() => refreshSection(bundle, "city")} />
+              ))
+            )}
+          </CardGrid>
 
           {/* 🧭 NEARBY REGION (fallback) */}
           {regionFallbacksToShow.length > 0 && (
             <>
               <Divider icon="🧭" label="Nearby Region" layer="region" sublabel={`Not specific to ${cityName} — shown for the surrounding region.`} />
-              {regionFallbacksToShow.flatMap((bundle) =>
-                bundle.cards.map((card) => (
-                  <SectionCard key={`region_${bundle.id}_${card.id}`} card={card} bundle={bundle} layer="region"
-                    state={regionResults[bundle.id]} onRefresh={() => refreshSection(bundle, "region")} />
-                ))
-              )}
+              <CardGrid isTablet={isTablet}>
+                {regionFallbacksToShow.flatMap((bundle) =>
+                  bundle.cards.map((card) => (
+                    <SectionCard key={`region_${bundle.id}_${card.id}`} card={card} bundle={bundle} layer="region"
+                      state={regionResults[bundle.id]} onRefresh={() => refreshSection(bundle, "region")} />
+                  ))
+                )}
+              </CardGrid>
             </>
           )}
         </div>

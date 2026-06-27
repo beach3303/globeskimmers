@@ -13,6 +13,13 @@ import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import MapAppSelector from "@/components/MapAppSelector";
 import { ChevronLeft, MapPin, CreditCard } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import { useIsTablet } from "@/lib/useIsTablet";
+
+// iPad editorial design tokens (design handoff: "Places to Eat · iPad").
+// Verbatim copy from PlacesToEat so every finder's tablet layout matches.
+const ED_SERIF = '"Instrument Serif", Georgia, serif';
+const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
+const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)", ED_EAT = "#D8443C";
 
 // ─── THEME ─────────────────────────────────────────────────────────────────
 const TEAL      = "#00BCD4";
@@ -205,15 +212,20 @@ function rankATMs(list) {
 }
 
 // ─── PHOTO STRIP (up to 2 photos) ──────────────────────────────────────────
-function ATMPhotoStrip({ photos, fallbackIcon = "🏧", onPhotoClick }) {
+// `height` is optional — phone layout passes nothing (defaults preserved); the
+// iPad editorial card passes ~360 so the photo reads at editorial scale.
+function ATMPhotoStrip({ photos, fallbackIcon = "🏧", onPhotoClick, height }) {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState({ 0: true, 1: true });
 
   const validPhotos = (photos || []).filter((p, i) => p && !errors[i]);
+  const emptyH  = height ? `${height}px` : "120px";
+  const singleH = height ? `${height}px` : "160px";
+  const dualH   = height ? `${height}px` : "140px";
 
   if (validPhotos.length === 0) {
     return (
-      <div style={{ height:"120px", background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2, #80DEEA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"calc(52px*var(--fs))" }}>
+      <div style={{ height:emptyH, background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2, #80DEEA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"calc(52px*var(--fs))" }}>
         {fallbackIcon}
       </div>
     );
@@ -221,26 +233,26 @@ function ATMPhotoStrip({ photos, fallbackIcon = "🏧", onPhotoClick }) {
 
   if (validPhotos.length === 1) {
     return (
-      <div onClick={() => onPhotoClick?.(0)} style={{ position:"relative", height:"160px", overflow:"hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
+      <div onClick={() => onPhotoClick?.(0)} style={{ position:"relative", height:singleH, overflow:"hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
         {loading[0] && (
           <div style={{ position:"absolute", inset:0, background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"calc(36px*var(--fs))" }}>🏧</div>
         )}
         <img src={validPhotos[0]} alt="" onError={() => setErrors(p => ({...p, 0:true}))} onLoad={() => setLoading(p => ({...p, 0:false}))}
-          style={{ width:"100%", height:"160px", objectFit:"cover", opacity:loading[0]?0:1, transition:"opacity 0.3s" }} />
+          style={{ width:"100%", height:singleH, objectFit:"cover", opacity:loading[0]?0:1, transition:"opacity 0.3s" }} />
       </div>
     );
   }
 
   // Two photos side by side
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:"140px", overflow:"hidden", gap:"2px" }}>
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:dualH, overflow:"hidden", gap:"2px" }}>
       {validPhotos.slice(0,2).map((url, i) => (
         <div key={i} onClick={() => onPhotoClick?.(i)} style={{ position:"relative", overflow:"hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
           {loading[i] && (
             <div style={{ position:"absolute", inset:0, background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"calc(28px*var(--fs))" }}>🏧</div>
           )}
           <img src={url} alt="" onError={() => setErrors(p => ({...p, [i]:true}))} onLoad={() => setLoading(p => ({...p, [i]:false}))}
-            style={{ width:"100%", height:"140px", objectFit:"cover", opacity:loading[i]?0:1, transition:"opacity 0.3s" }} />
+            style={{ width:"100%", height:dualH, objectFit:"cover", opacity:loading[i]?0:1, transition:"opacity 0.3s" }} />
         </div>
       ))}
     </div>
@@ -463,6 +475,178 @@ const btn = (bg, color) => ({
   cursor:"pointer", background:bg, color, fontFamily:"inherit",
 });
 
+// ─── ATM CARD — iPad editorial layout (design handoff) ───────────────────────
+// Full-width editorial card mirroring RestaurantCardTablet: big photo (or a
+// tasteful placeholder) + index badge + network tag, bank/network kicker,
+// serif name, rating/distance sub-row, tinted pill tags (24/7, fee-free,
+// venue), green Open bar, blue phone bar (only when a phone exists), and three
+// action buttons with a "More ▾" expand panel (badges / daily hours /
+// AtmAIDetails / website). Same props/handlers as ATMCard; reuses
+// ATMPhotoStrip / AtmAIDetails / MapAppSelector / PhotoGalleryModal. Rendered
+// ONLY at tablet width (ATMFinder branches on useIsTablet) so the phone card is
+// untouched. ATMs may have NO phone and NO photo — both are handled gracefully.
+function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng, formatDistance }) {
+  const [showDirs, setShowDirs] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [hoursExpanded, setHoursExpanded] = useState(false);
+  const [gallery, setGallery] = useState({ open: false, idx: 0 });
+  const fs = (n) => `calc(${n}px*var(--fs))`;
+
+  useEffect(() => { if (forceExpanded) setExpanded(true); }, [forceExpanded]);
+
+  const name    = atm.displayName?.text || atm.name || "ATM";
+  const address = atm.formattedAddress || atm.shortFormattedAddress || "";
+  const phone   = atm.nationalPhoneNumber || atm.internationalPhoneNumber || "";
+  const network = atm.network && atm.network !== "Independent" ? atm.network : null;
+  const venueLabels = { airport:"Airport", transit:"Transit/Metro", hospital:"Hospital", hotel:"Hotel", gas:"Gas Station", convenience:"Convenience", mall:"Shopping Mall", grocery:"Grocery", entertainment:"Entertainment", bank:"Bank Branch", education:"School/Campus", community:"Community", liquor:"Liquor/Corner Shop", theme_park:"Theme Park", casino:"Casino" };
+  // Kicker = bank / network (falls back to a generic ATM label when independent).
+  const kicker  = network ? `🏦 ${network}` : `${atm.venueIcon || "🏧"} ${venueLabels[atm.venueType] || "ATM"}`;
+  const openText = atm.is24Hours ? "Open 24/7" : (atm.isOpen === true ? "Open" : atm.isOpen === false ? "Closed" : "Hours Unknown");
+
+  const Tag = ({ bg, color, children }) => (
+    <span style={{ background:bg, color, borderRadius:"999px", padding:`${fs(9)} ${fs(16)}`, fontSize:fs(15.5), fontWeight:600, whiteSpace:"nowrap" }}>{children}</span>
+  );
+
+  return (
+    <motion.div
+      ref={cardRef}
+      initial={{ opacity:0, y:22 }}
+      animate={{ opacity:1, y:0 }}
+      transition={{ delay: Math.min(index, 8) * 0.03 }}
+      style={{
+        background:"#fff", borderRadius:"28px", overflow:"hidden",
+        boxShadow: isHighlighted
+          ? `0 0 0 3px ${TEAL}, 0 24px 50px -30px rgba(22,17,13,.4)`
+          : "0 24px 50px -30px rgba(22,17,13,.4)",
+        border: isHighlighted ? `2px solid ${TEAL}` : `1px solid ${ED_RULE}`,
+        transition:"box-shadow 0.3s, border 0.3s",
+      }}
+    >
+      {/* Photo (editorial height) — index badge + network tag chrome layered
+          over the photo or, when no photo exists, over the placeholder. */}
+      <div style={{ position:"relative" }}>
+        <ATMPhotoStrip
+          photos={atm.photos}
+          fallbackIcon={atm.venueIcon || "🏧"}
+          onPhotoClick={(i) => setGallery({ open: true, idx: i })}
+          height={360}
+        />
+        <div style={{ position:"absolute", top:fs(14), left:fs(14), width:fs(36), height:fs(36), borderRadius:"50%", background:TEAL, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:fs(16), boxShadow:"0 2px 8px rgba(0,0,0,0.25)", border:"2px solid #fff" }}>{index+1}</div>
+        {network && (
+          <div style={{ position:"absolute", top:fs(14), right:fs(14), background:"rgba(255,255,255,0.95)", padding:`${fs(4)} ${fs(11)}`, borderRadius:"10px", fontSize:fs(14), fontWeight:700, color:"#1565C0", boxShadow:"0 1px 4px rgba(0,0,0,0.12)" }}>🏦 {network}</div>
+        )}
+        {atm.venueType && atm.venueType !== "standalone" && atm.venueType !== "bank" && venueLabels[atm.venueType] && (
+          <div style={{ position:"absolute", bottom:fs(14), left:fs(14), background:"rgba(0,0,0,0.65)", padding:`${fs(4)} ${fs(11)}`, borderRadius:"10px", fontSize:fs(14), fontWeight:700, color:"#fff" }}>{atm.venueIcon} {venueLabels[atm.venueType]}</div>
+        )}
+      </div>
+
+      <div style={{ padding:`${fs(28)} ${fs(32)} ${fs(32)}` }}>
+        {/* Kicker (bank / network) — finder's own category accent (ATM = CAT.atm.ink #1F5BD6). */}
+        <div style={{ color:CAT.atm.ink, fontWeight:600, fontSize:fs(17), letterSpacing:"0.2px" }}>{kicker}</div>
+        {/* Serif name */}
+        <h3 style={{ fontFamily:ED_SERIF, fontWeight:400, fontSize:fs(38), lineHeight:1.04, color:ED_INK, margin:`${fs(4)} 0 0` }}>{name}</h3>
+
+        {/* Address */}
+        {address && <div style={{ marginTop:fs(8), fontSize:fs(16), color:ED_INK3, lineHeight:1.4 }}>🗺️ {address}</div>}
+
+        {/* Rating / distance sub-row */}
+        <div style={{ display:"flex", gap:fs(16), alignItems:"center", flexWrap:"wrap", marginTop:fs(12), fontSize:fs(17), color:ED_INK3 }}>
+          {atm.rating && <span><span style={{ color:"#E0922F" }}>★</span> <span style={{ fontWeight:700, color:ED_INK2 }}>{atm.rating}</span>{atm.userRatingCount > 0 && <span> ({atm.userRatingCount})</span>}</span>}
+          {atm.distanceMiles!=null && <span>{atm.rating ? "· " : ""}📍 {formatDistance(atm.distanceMiles)}</span>}
+        </div>
+
+        {/* Pill tags */}
+        {atm.badges?.length > 0 && (
+          <div style={{ display:"flex", gap:fs(10), flexWrap:"wrap", marginTop:fs(16) }}>
+            {atm.badges.map((b, i) => <Tag key={i} bg={b.bg} color={b.color}>{b.icon} {b.label}</Tag>)}
+          </div>
+        )}
+
+        {/* Open bar — always shown (matches phone ATMCard). When isOpen === null
+            (no hours data, very common for ATMs) it falls through to the gray-dot
+            "Hours Unknown" state; openText already supplies that label. */}
+        <div style={{ marginTop:fs(18), background:atm.is24Hours ? "#EAF0FB" : atm.isOpen === true ? "#E7F3EA" : atm.isOpen === false ? "#FBE0DC" : "#F1F2F4", borderRadius:"16px", padding:`${fs(16)} ${fs(20)}`, fontSize:fs(18), fontWeight:600, color:atm.is24Hours ? "#1565C0" : atm.isOpen === true ? "#2E7D46" : atm.isOpen === false ? "#C2392F" : GRAY, display:"flex", alignItems:"center", gap:fs(11) }}>
+          <span style={{ width:fs(10), height:fs(10), borderRadius:"50%", background:atm.is24Hours ? BLUE : atm.isOpen === true ? "#2E7D46" : atm.isOpen === false ? "#C2392F" : GRAY, flexShrink:0 }} />
+          <span>{openText}</span>
+          {atm.todayHours && !atm.is24Hours && <span style={{ color:ED_INK3, fontWeight:500 }}>· {atm.todayHours}</span>}
+        </div>
+
+        {/* Phone bar — skip entirely when no phone (ATMs often have none) */}
+        {phone && (
+          <a href={`tel:${phone}`} style={{ marginTop:fs(14), background:"#EFF4FB", borderRadius:"16px", padding:`${fs(18)} ${fs(20)}`, display:"flex", alignItems:"center", gap:fs(14), textDecoration:"none" }}>
+            <span style={{ fontSize:fs(24) }}>📞</span>
+            <span><span style={{ display:"block", fontSize:fs(20), fontWeight:600, color:"#2E6FE0" }}>{phone}</span><span style={{ fontSize:fs(15), color:ED_INK3 }}>Tap to call</span></span>
+          </a>
+        )}
+
+        {/* Actions */}
+        <div style={{ display:"flex", gap:fs(12), marginTop:fs(20) }}>
+          <button onClick={() => setShowDirs(true)} style={{ flex:1, borderRadius:"16px", padding:fs(15), fontSize:fs(18), fontWeight:600, border:"none", cursor:"pointer", fontFamily:"inherit", background:CAT.atm.ink, color:"#fff" }}>Directions</button>
+          <button onClick={() => onShowOnMap?.(index)} style={{ flex:1, borderRadius:"16px", padding:fs(15), fontSize:fs(18), fontWeight:600, border:"none", cursor:"pointer", fontFamily:"inherit", background:ED_IVORY2, color:ED_INK2 }}>📍 Map</button>
+          <button onClick={() => { const n=!expanded; setExpanded(n); onExpandChange?.(n); }} style={{ flex:1, borderRadius:"16px", padding:fs(15), fontSize:fs(18), fontWeight:600, border:"none", cursor:"pointer", fontFamily:"inherit", background:expanded ? ED_INK : ED_IVORY2, color:expanded ? "#fff" : ED_INK2 }}>{expanded ? "Less ▴" : "More ▾"}</button>
+        </div>
+
+        {/* Expanded details */}
+        <AnimatePresence>
+          {expanded && (
+            <motion.div initial={{ height:0, opacity:0 }} animate={{ height:"auto", opacity:1 }} exit={{ height:0, opacity:0 }} style={{ overflow:"hidden" }}>
+              <div style={{ marginTop:fs(20), display:"flex", flexDirection:"column", gap:fs(14) }}>
+                {atm.weekdayDescriptions?.length > 0 && (
+                  <div style={{ padding:fs(16), background:"#FAF7F0", borderRadius:"16px" }}>
+                    <button onClick={() => setHoursExpanded(h => !h)} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"transparent", border:"none", padding:0, cursor:"pointer", fontFamily:"inherit" }}>
+                      <span style={{ fontSize:fs(13), fontWeight:700, color:ED_INK3, letterSpacing:"0.5px" }}>🕐 DAILY HOURS</span>
+                      <span style={{ fontSize:fs(13), color:ED_INK3 }}>{hoursExpanded ? "▲" : "▼"}</span>
+                    </button>
+                    {hoursExpanded && (
+                      <div style={{ marginTop:fs(8) }}>
+                        {atm.weekdayDescriptions.map((day, i) => {
+                          const today = new Date().getDay();
+                          const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+                          const dayIdx = dayNames.findIndex(d => day.toLowerCase().startsWith(d.toLowerCase()));
+                          const isToday = dayIdx === today;
+                          const parts = day.split(":");
+                          const dayName = parts[0];
+                          const hrs = parts.slice(1).join(":").trim();
+                          return (
+                            <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:`${fs(4)} 0`, fontSize:fs(15), fontWeight:isToday ? 700 : 400, color:isToday ? TEAL_DEEP : ED_INK2, borderBottom:i<6 ? `1px solid ${ED_RULE}` : "none" }}>
+                              <span>{dayName}{isToday && " (Today)"}</span>
+                              <span>{hrs}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <AtmAIDetails
+                  placeId={atm.placeId || atm.id}
+                  placeName={name}
+                  page="ATMFinder"
+                />
+                {(atm.websiteUri || atm.website) && (
+                  <a href={atm.websiteUri || atm.website} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", gap:fs(12), padding:fs(16), background:"#F3E8FF", borderRadius:"16px", textDecoration:"none", color:"#7C3AED" }}>
+                    <span style={{ fontSize:fs(22) }}>🌐</span>
+                    <span style={{ fontWeight:600, fontSize:fs(16) }}>Visit Website</span>
+                  </a>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <MapAppSelector
+        isOpen={showDirs}
+        onClose={() => setShowDirs(false)}
+        destination={{ name, address: address || atm.vicinity || "", latitude: atm.lat, longitude: atm.lng }}
+        userLat={userLat}
+        userLng={userLng}
+      />
+      <PhotoGalleryModal photos={atm.photos || []} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
+    </motion.div>
+  );
+}
+
 // ─── MAP POPUP HTML ─────────────────────────────────────────────────────────
 // Requirements: clickable name, address, phone (call), type, rating, distance, hours, directions picker, X button, no photo
 function buildMapPopup(atm, index, fmt) {
@@ -523,6 +707,10 @@ function FilterPill({ label, active, onClick, emoji }) {
 
 // ─── MAIN PAGE ──────────────────────────────────────────────────────────────
 export default function ATMFinderPage() {
+  // iPad: wider centered column + editorial ATM cards (design handoff).
+  // Phone layout is unchanged — every tablet branch is gated on this.
+  const isTablet = useIsTablet();
+  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
   const [atms,           setATMs]           = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState(null);
@@ -728,7 +916,7 @@ export default function ATMFinderPage() {
 
       {/* HEADER — redesign pattern */}
       <div className="px-4 pt-2 pb-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
           <button onClick={() => window.history.back()} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
@@ -741,7 +929,7 @@ export default function ATMFinderPage() {
       </div>
 
       {/* LOCATION CARD */}
-      <div className="px-4 max-w-md mx-auto pb-3">
+      <div className={`px-4 ${colWrap} mx-auto pb-3`}>
         <button onClick={() => setShowLocPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
           <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
           <div className="flex-1 min-w-0">
@@ -763,7 +951,7 @@ export default function ATMFinderPage() {
       </div>
 
       {/* Filter band */}
-      <div className="px-4 max-w-md mx-auto">
+      <div className={`px-4 ${colWrap} mx-auto`}>
 
         {/* Radius buttons */}
         <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.atm.ink} unit={unit} setUnit={setUnit} />
@@ -829,7 +1017,9 @@ export default function ATMFinderPage() {
           <button onClick={() => setRadius(r => Math.min(r+5,25))} style={{ marginTop:"14px", ...btn(TEAL,"#fff") }}>Try Larger Radius</button>
         </div>
       ) : viewMode === "list" ? (
-        <div style={{ padding:"0 12px 100px", display:"flex", flexDirection:"column", gap:"12px" }}>
+        <div style={isTablet
+          ? { maxWidth:1024, margin:"0 auto", padding:"0 24px 170px", display:"flex", flexDirection:"column", gap:"30px" }
+          : { padding:"0 12px 100px", display:"flex", flexDirection:"column", gap:"12px" }}>
           {filtered.length === 0 ? (
             <div style={{ textAlign:"center", padding:"40px 20px", background:"#fff", borderRadius:"12px" }}>
               <div style={{ fontSize:"calc(32px*var(--fs))", marginBottom:"10px" }}>🔍</div>
@@ -837,8 +1027,10 @@ export default function ATMFinderPage() {
               <div style={{ color:GRAY, fontSize:"calc(13px*var(--fs))", marginTop:"4px" }}>Try expanding your radius or clearing filters</div>
             </div>
           ) : (
-            filtered.map((atm, i) => (
-              <ATMCard
+            filtered.map((atm, i) => {
+              const Card = isTablet ? ATMCardTablet : ATMCard;
+              return (
+              <Card
                 key={atm.id || i}
                 atm={atm}
                 index={i}
@@ -851,7 +1043,7 @@ export default function ATMFinderPage() {
                 userLng={lng}
                 formatDistance={formatDistance}
               />
-            ))
+            );})
           )}
         </div>
       ) : (

@@ -11,6 +11,13 @@ import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
 import { ChevronLeft, MapPin, ShoppingBag } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import { useIsTablet } from "@/lib/useIsTablet";
+
+// iPad editorial design tokens (design handoff — shared across all finders).
+const ED_SERIF = '"Instrument Serif", Georgia, serif';
+const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
+const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
+const fs=(n)=>`calc(${n}px*var(--fs))`;
 
 const T={teal:"#00BCD4",tealD:"#00838F",dark:"#1A2332",dark2:"#243447",gray:"#64748B",grayL:"#F1F5F9",green:"#4CAF50",blue:"#1565C0",blueL:"#E3F2FD",coral:"#FF6B6B",gold:"#FFB74D",
   accent:"#7C3AED",accentD:"#6D28D9",accentL:"#EDE9FE"};
@@ -78,10 +85,19 @@ function openStatus(p){
 // Directions handled by the shared <MapAppSelector> (address-aware destination +
 // "from my location / other address" origin picker) — see src/components/MapAppSelector.jsx
 
-function PhotoStrip({photos,fallback="🛍️",bg}){
+function PhotoStrip({photos,fallback="🛍️",bg,height}){
   const [err,setErr]=useState({}); const [ld,setLd]=useState({0:true,1:true});
   const valid=(photos||[]).filter((_,i)=>_&&!err[i]);
   const fbBg=bg||`linear-gradient(135deg,${T.accentL},#C4B5FD)`;
+  // Optional fixed-height override (used by the iPad editorial card). When set,
+  // every layout collapses to a single full-width photo at that height so the
+  // tall editorial hero reads cleanly; the phone layout passes no height and is
+  // byte-identical to before.
+  if(height!=null){
+    const H=typeof height==="number"?`${height}px`:height;
+    if(!valid.length) return <div style={{height:H,background:fbBg,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:"calc(72px*var(--fs))",filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.15))"}}>{fallback}</span></div>;
+    return(<div style={{position:"relative",height:H,overflow:"hidden"}}>{ld[0]&&<div style={{position:"absolute",inset:0,background:fbBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(56px*var(--fs))"}}>{fallback}</div>}<img src={valid[0]} alt="" onError={()=>setErr((p)=>({...p,0:true}))} onLoad={()=>setLd((p)=>({...p,0:false}))} style={{width:"100%",height:H,objectFit:"cover",opacity:ld[0]?0:1,transition:"opacity 0.4s"}}/></div>);
+  }
   if(!valid.length) return <div style={{height:"130px",background:fbBg,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:"calc(52px*var(--fs))",filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.15))"}}>{fallback}</span></div>;
   if(valid.length===1) return(<div style={{position:"relative",height:"170px",overflow:"hidden"}}>{ld[0]&&<div style={{position:"absolute",inset:0,background:fbBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(40px*var(--fs))"}}>{fallback}</div>}<img src={valid[0]} alt="" onError={()=>setErr((p)=>({...p,0:true}))} onLoad={()=>setLd((p)=>({...p,0:false}))} style={{width:"100%",height:"170px",objectFit:"cover",opacity:ld[0]?0:1,transition:"opacity 0.4s"}}/></div>);
   return(<div style={{display:"grid",gridTemplateColumns:"60% 40%",height:"150px",overflow:"hidden"}}>{valid.slice(0,2).map((url,i)=>(<div key={i} style={{position:"relative",overflow:"hidden",borderRight:i===0?"2px solid #fff":"none"}}>{ld[i]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(30px*var(--fs))"}}>{fallback}</div>}<img src={url} alt="" onError={()=>setErr((p)=>({...p,[i]:true}))} onLoad={()=>setLd((p)=>({...p,[i]:false}))} style={{width:"100%",height:"150px",objectFit:"cover",opacity:ld[i]?0:1,transition:"opacity 0.4s"}}/></div>))}</div>);
@@ -165,6 +181,131 @@ function ShopCard({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,use
   );
 }
 
+// ─── SHOP CARD — iPad EDITORIAL ──────────────────────────────────────────────
+// Same props + fields + handlers as ShopCard. Editorial structure cloned from
+// RestaurantCardTablet (PlacesToEat); only the domain content differs. Domain:
+// shop category kicker (venueLabel), mall-vs-market hours, rating. No best-time /
+// seating / parking / customer-favorites panels — this finder doesn't have them.
+function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance}){
+  const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false);
+  const [hoursExpanded,setHoursExpanded]=useState(false);
+  useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
+  const name=p.displayName?.text||p.name||"Shop";
+  const st=openStatus(p);
+  const openText=st.label;
+  const activeTags=PROP_TAGS.filter(t=>p.props?.[t.key]);
+  const vColor=p.venueColor||T.accent;
+  const phone=p.nationalPhoneNumber||p.internationalPhoneNumber||"";
+
+  const Tag=({bg,color,children})=>(
+    <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(9)} ${fs(16)}`,fontSize:fs(15.5),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
+  );
+
+  return(
+    <motion.div ref={cardRef} initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(index,8)*0.03}}
+      style={{background:"#fff",borderRadius:"28px",overflow:"hidden",boxShadow:isHighlighted?`0 0 0 3px ${T.accent},0 24px 50px -30px rgba(22,17,13,.4)`:"0 24px 50px -30px rgba(22,17,13,.4)",border:isHighlighted?`2px solid ${T.accent}`:`1px solid ${ED_RULE}`,transition:"box-shadow 0.3s,border 0.3s"}}>
+
+      {/* Photo — editorial hero with rank badge + venue category tag */}
+      <div style={{position:"relative"}}>
+        <PhotoStrip photos={p.photos} fallback={p.venueIcon||"🛍️"} bg={`linear-gradient(135deg,${vColor}dd,${vColor}99)`} height={360}/>
+        <div style={{position:"absolute",top:fs(14),left:fs(14),width:fs(38),height:fs(38),borderRadius:"50%",background:index===0?"linear-gradient(135deg,#FFD700,#FFA000)":index===1?"linear-gradient(135deg,#B0BEC5,#78909C)":index===2?"linear-gradient(135deg,#FFAB40,#F57C00)":T.accent,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",fontSize:fs(16),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
+        {p.venueLabel&&<div style={{position:"absolute",top:fs(14),right:fs(14),background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:`${fs(5)} ${fs(12)}`,borderRadius:"999px",fontSize:fs(14),fontWeight:"800",color:vColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{p.venueIcon} {p.venueLabel}</div>}
+      </div>
+
+      <div style={{padding:`${fs(28)} ${fs(32)} ${fs(32)}`}}>
+        {/* Coral kicker — shop category */}
+        {p.venueLabel&&<div style={{color:CAT.shopping.ink,fontWeight:600,fontSize:fs(17),letterSpacing:"0.2px"}}>{p.venueLabel}</div>}
+        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(38),lineHeight:1.04,color:ED_INK,margin:`${fs(4)} 0 0`}}>{name}</h3>
+
+        {/* Say it / Translate / rating / distance */}
+        <div style={{display:"flex",gap:fs(16),alignItems:"center",flexWrap:"wrap",marginTop:fs(12),fontSize:fs(17),color:ED_INK3}}>
+          <NameLanguageHelp placeId={p.placeId||p.id} name={name}/>
+          {p.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{p.rating.toFixed?p.rating.toFixed(1):p.rating}</span>{p.userRatingCount>0&&<> ({p.userRatingCount.toLocaleString()})</>}</span>}
+          {p.distanceMiles!=null&&<span>· {formatDistance(p.distanceMiles)}</span>}
+        </div>
+
+        {/* Pill tags — editorial highlights + property tags */}
+        {(p.highlights?.length>0||activeTags.length>0)&&(
+          <div style={{display:"flex",gap:fs(10),flexWrap:"wrap",marginTop:fs(16)}}>
+            {p.highlights?.map((h,i)=><Tag key={`h${i}`} bg={T.accentL} color={T.accentD}>{h}</Tag>)}
+            {activeTags.map((t,i)=><Tag key={`t${i}`} bg={t.bg} color={t.color}>{t.icon} {t.label}</Tag>)}
+          </div>
+        )}
+
+        {/* Open bar */}
+        {(st.today||st.isOpen!==null)&&(
+          <div style={{marginTop:fs(18),background:st.isOpen===true?"#E7F3EA":st.isOpen===false?"#FBE0DC":"#FAF7F0",borderRadius:"16px",padding:`${fs(16)} ${fs(20)}`,fontSize:fs(18),fontWeight:600,color:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK2,display:"flex",alignItems:"center",gap:fs(11)}}>
+            <span style={{width:fs(10),height:fs(10),borderRadius:"50%",background:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK3,flexShrink:0}}/>
+            <span>{openText}</span>
+            {st.today&&<span style={{color:ED_INK3,fontWeight:500}}>· {st.today}</span>}
+          </div>
+        )}
+
+        {/* Phone bar */}
+        {phone&&(
+          <a href={`tel:${phone}`} style={{marginTop:fs(14),background:"#EFF4FB",borderRadius:"16px",padding:`${fs(18)} ${fs(20)}`,display:"flex",alignItems:"center",gap:fs(14),textDecoration:"none"}}>
+            <span style={{fontSize:fs(24)}}>📞</span>
+            <span><span style={{display:"block",fontSize:fs(20),fontWeight:600,color:"#2E6FE0"}}>{phone}</span><span style={{fontSize:fs(15),color:ED_INK3}}>Tap to call</span></span>
+          </a>
+        )}
+
+        {/* Actions */}
+        <div style={{display:"flex",gap:fs(12),marginTop:fs(20)}}>
+          <button onClick={()=>setDirs(true)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:CAT.shopping.ink,color:"#fff"}}>Directions</button>
+          <button onClick={()=>onMap?.(index)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
+          <button onClick={()=>setExp(e=>!e)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:exp?ED_INK:ED_IVORY2,color:exp?"#fff":ED_INK2}}>{exp?"Less ▴":"More ▾"}</button>
+        </div>
+
+        {/* Expanded details */}
+        <AnimatePresence>
+          {exp&&(
+            <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
+              <div style={{marginTop:fs(20),display:"flex",flexDirection:"column",gap:fs(14)}}>
+
+                {p.formattedAddress&&(
+                  <div style={{display:"flex",alignItems:"flex-start",gap:fs(11),padding:fs(16),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
+                    <span style={{fontSize:fs(20),flexShrink:0}}>📍</span>
+                    <span style={{fontSize:fs(16),lineHeight:1.5,color:ED_INK2}}>{p.formattedAddress}</span>
+                  </div>
+                )}
+
+                {p.hours?.length>0&&(
+                  <div style={{padding:fs(16),background:"#FAF7F0",borderRadius:"16px"}}>
+                    <button onClick={()=>setHoursExpanded(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
+                      <span style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 WEEKLY HOURS</span>
+                      <span style={{fontSize:fs(13),color:ED_INK3}}>{hoursExpanded?'▲':'▼'}</span>
+                    </button>
+                    {hoursExpanded&&(
+                      <div style={{marginTop:fs(8)}}>
+                        {p.hours.map((day,i)=>{
+                          const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                          const isToday=DAY.findIndex(d=>day.toLowerCase().startsWith(d.toLowerCase()))===new Date().getDay();
+                          const hrs=day.split(':').slice(1).join(':').trim();
+                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?T.accentD:ED_INK2,borderBottom:i<p.hours.length-1?`1px solid ${ED_RULE}`:"none"}}>
+                            <span>{day.split(':')[0]}</span><span style={{color:hrs.toLowerCase()==="closed"?"#C2392F":isToday?T.accentD:ED_INK3}}>{hrs}</span>
+                          </div>;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {p.websiteUri&&(
+                  <a href={p.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(16),background:"#F3E8FF",borderRadius:"16px",textDecoration:"none",color:"#7C3AED"}}>
+                    <span style={{fontSize:fs(22)}}>🌐</span>
+                    <span><span style={{display:"block",fontWeight:600,fontSize:fs(16)}}>Visit Website</span><span style={{fontSize:fs(14),color:ED_INK3}}>Store info &amp; hours</span></span>
+                  </a>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:p.formattedAddress||p.shortFormattedAddress||p.vicinity||p.address||"",latitude:p.lat,longitude:p.lng}} userLat={userLat} userLng={userLng}/>
+    </motion.div>
+  );
+}
+
 export default function ShoppingFinder() {
   const [places,setPlaces]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -187,6 +328,10 @@ export default function ShoppingFinder() {
   const locLabel=getLocationLabel(activeLocation);
   const isCity=isCityLocation(activeLocation);
   const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
+  // iPad: wider centered column + editorial shop cards (design handoff).
+  // Phone layout is unchanged — every tablet branch is gated on this.
+  const isTablet = useIsTablet();
+  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
 
   useEffect(()=>{ setRadius(activeLocation?.suggestedRadius ?? 10); }, [activeLocation?.placeId]);
 
@@ -248,7 +393,7 @@ export default function ShoppingFinder() {
     <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
       {/* HEADER */}
       <div className="px-4 pt-2 pb-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
           <button onClick={()=>window.history.back()} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{background:'#FFFFFF',border:'1px solid #F0E9DC'}} aria-label="Back">
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
@@ -261,7 +406,7 @@ export default function ShoppingFinder() {
       </div>
 
       {/* LOCATION CARD */}
-      <div className="px-4 max-w-md mx-auto pb-3">
+      <div className={`px-4 ${colWrap} mx-auto pb-3`}>
         <button onClick={()=>setLocPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{background:'#FFFFFF',border:'1px solid #F0E9DC',boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)'}}>
           <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
           <div className="flex-1 min-w-0">
@@ -283,7 +428,7 @@ export default function ShoppingFinder() {
       </div>
 
       {/* Filters band */}
-      <div className="px-4 max-w-md mx-auto pb-2">
+      <div className={`px-4 ${colWrap} mx-auto pb-2`}>
         <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.shopping.ink} unit={unit} setUnit={setUnit} />
         <div style={{overflowX:"auto",scrollbarWidth:"none"}}><div style={{display:"flex",gap:"7px",paddingBottom:"10px"}}>{CATEGORIES.map(c=><motion.button key={c.id} whileTap={{scale:0.94}} onClick={()=>setCategory(c.id)} className="font-sans" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",padding:"8px 12px",borderRadius:"14px",flexShrink:0,border:category===c.id?`2px solid ${c.color}`:"1px solid #F0E9DC",background:category===c.id?`${c.color}18`:"#fff",color:category===c.id?c.color:'#475569',fontWeight:category===c.id?"700":"500",fontSize:"calc(11px*var(--fs))",cursor:"pointer",minWidth:"64px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>{c.icon}</span><span>{c.label}</span></motion.button>)}</div></div>
       </div>
@@ -296,7 +441,9 @@ export default function ShoppingFinder() {
       </div>
       {loading?(<div style={{textAlign:"center",padding:"70px 24px"}}><motion.div animate={{scale:[1,1.1,1],rotate:[0,5,-5,0]}} transition={{repeat:Infinity,duration:1.8}} style={{fontSize:"calc(52px*var(--fs))",marginBottom:"16px",display:"inline-block"}}>🛍️</motion.div><div style={{color:T.dark,fontWeight:"700",fontSize:"calc(16px*var(--fs))",marginBottom:"6px"}}>Finding shopping nearby…</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))"}}>Malls · Markets · Boutiques · Souks · Night Markets</div><div style={{display:"flex",justifyContent:"center",gap:"6px",marginTop:"18px"}}>{[0,1,2].map(i=><motion.div key={i} animate={{opacity:[0.3,1,0.3]}} transition={{repeat:Infinity,duration:1.2,delay:i*0.2}} style={{width:"8px",height:"8px",borderRadius:"50%",background:T.accent}}/>)}</div></div>)
       :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"calc(16px*var(--fs))"}}>{error}</div><button onClick={()=>setRadius(r=>Math.min(r+5,25))} style={{marginTop:"14px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Expand Radius</button></div>)
-      :viewMode==="list"?(<div style={{padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"14px"}}>{filtered.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div></div>:filtered.map((p,i)=><ShopCard key={p.id||i} p={p} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance}/>)}</div>)
+      :viewMode==="list"?(<div style={isTablet
+        ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
+        : {padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"14px"}}>{filtered.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div></div>:filtered.map((p,i)=>{const Card=isTablet?ShopCardTablet:ShopCard;return <Card key={p.id||i} p={p} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance}/>;})}</div>)
       :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:T.dark}}>✕</button></div>)}
       <style>{`::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:16px;padding:0;overflow:hidden;}.gs-popup .leaflet-popup-content{margin:0;}.gs-popup .leaflet-popup-tip-container{display:none;}`}</style>
       <MapAppSelector isOpen={!!dirsP} onClose={()=>setDirsP(null)} destination={dirsP?{name:dirsP.displayName?.text||dirsP.name,address:dirsP.formattedAddress||dirsP.shortFormattedAddress||dirsP.vicinity||dirsP.address||"",latitude:dirsP.lat,longitude:dirsP.lng}:null} userLat={lat} userLng={lng}/>

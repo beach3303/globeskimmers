@@ -176,8 +176,8 @@ export default function AIDetailsSection({ placeId, placeName, page, kind }) {
         onClick={onToggle}
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}
       >
-        <span style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.5px' }}>🤖 AI DETAILS</span>
-        <span style={{ fontSize: '11px', color: PURPLE }}>{open ? '▲' : '▼'}</span>
+        <span style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.5px' }}>🤖 AI DETAILS</span>
+        <span style={{ fontSize: 'calc(11px * var(--fs))', color: PURPLE }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
         <div style={{ marginTop: '10px' }}>
@@ -212,7 +212,7 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
     );
   }
   if (error) {
-    return <div style={{ fontSize: '12px', color: '#B91C1C' }}>AI Details unavailable right now. {error}</div>;
+    return <div style={{ fontSize: 'calc(12px * var(--fs))', color: '#B91C1C' }}>AI Details unavailable right now. {error}</div>;
   }
   if (!details) return null;
 
@@ -224,10 +224,10 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
   const row = (icon, label, value) =>
     value ? (
       <div style={{ marginBottom: '8px' }}>
-        <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>
+        <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>
           {icon} {label}
         </div>
-        <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>{h(value)}</div>
+        <div style={{ fontSize: 'calc(13px * var(--fs))', lineHeight: '1.5', color: DARK }}>{h(value)}</div>
       </div>
     ) : null;
 
@@ -245,7 +245,7 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
   // Bulleted outline renderer for arrays of { name, context } objects
   // (bestDish wrapped into a 1-item array; alsoRecommended already is one).
   const renderDishList = (items) => (
-    <ul style={{ margin: 0, paddingLeft: '0', listStyle: 'none', fontSize: '13px', lineHeight: '1.55', color: DARK }}>
+    <ul style={{ margin: 0, paddingLeft: '0', listStyle: 'none', fontSize: 'calc(13px * var(--fs))', lineHeight: '1.55', color: DARK }}>
       {items.map((it, i) => (
         <li key={i} style={{ marginBottom: '6px', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
           <span style={{ flexShrink: 0, color: PURPLE, fontWeight: '700' }}>•</span>
@@ -272,9 +272,9 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
           subtitle explains what GS Verdict means; after that it's hidden. */}
       {hasVerdict && (
         <div style={{ marginBottom: '12px', paddingBottom: '10px', borderBottom: `1px solid ${PURPLE_LIGHT}` }}>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: showVerdictHelper ? '2px' : '6px' }}>💯 GS VERDICT</div>
+          <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: showVerdictHelper ? '2px' : '6px' }}>💯 GS VERDICT</div>
           {showVerdictHelper && (
-            <div style={{ fontSize: '11px', color: GRAY, fontStyle: 'italic', marginBottom: '8px' }}>
+            <div style={{ fontSize: 'calc(11px * var(--fs))', color: GRAY, fontStyle: 'italic', marginBottom: '8px' }}>
               Globeskimmers' traveler-fit take on this place.
             </div>
           )}
@@ -282,7 +282,7 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
             <div style={{ marginBottom: '8px' }}>
               <span style={{
                 display: 'inline-block',
-                fontSize: '12px',
+                fontSize: 'calc(12px * var(--fs))',
                 fontWeight: '600',
                 padding: '3px 10px',
                 background: worthTag.bg,
@@ -294,7 +294,7 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
             </div>
           )}
           {(details.gsStars != null && details.gsStars > 0) || details.gsRedFlag ? (
-            <div style={{ fontSize: '13px', marginBottom: '4px' }}>
+            <div style={{ fontSize: 'calc(13px * var(--fs))', marginBottom: '4px' }}>
               {details.gsRedFlag ? (
                 <strong>🚩</strong>
               ) : (
@@ -303,7 +303,7 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
             </div>
           ) : null}
           {details.gsVerdict && (
-            <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+            <div style={{ fontSize: 'calc(13px * var(--fs))', lineHeight: '1.5', color: DARK }}>
               {h(details.gsVerdict)}
             </div>
           )}
@@ -318,7 +318,7 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
           alsoRecommended list for visual consistency). */}
       {bestDishItems.length > 0 && (
         <div style={{ marginBottom: '8px' }}>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>🥘 BEST DISH</div>
+          <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>🥘 BEST DISH</div>
           {renderDishList(bestDishItems)}
         </div>
       )}
@@ -327,7 +327,7 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
           v5 schema: array of {name, context} objects. */}
       {details.alsoRecommended?.length > 0 && (
         <div style={{ marginBottom: '8px' }}>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>👍 ALSO RECOMMENDED</div>
+          <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>👍 ALSO RECOMMENDED</div>
           {renderDishList(details.alsoRecommended)}
         </div>
       )}
@@ -349,8 +349,8 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
         if (rows.length === 0) return null;
         return (
           <div style={{ marginBottom: '8px' }}>
-            <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>📋 PRACTICAL</div>
-            <ul style={{ margin: 0, paddingLeft: '0', listStyle: 'none', fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+            <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>📋 PRACTICAL</div>
+            <ul style={{ margin: 0, paddingLeft: '0', listStyle: 'none', fontSize: 'calc(13px * var(--fs))', lineHeight: '1.5', color: DARK }}>
               {rows.map(r => (
                 <li key={r.key} style={{ marginBottom: '4px', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
                   <span style={{ flexShrink: 0 }}>{r.icon}</span>
@@ -375,8 +375,8 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
 
       {details.goodToKnow?.length > 0 && (
         <div style={{ marginBottom: '8px' }}>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>📌 GOOD TO KNOW</div>
-          <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+          <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>📌 GOOD TO KNOW</div>
+          <ul style={{ margin: 0, paddingLeft: '18px', fontSize: 'calc(13px * var(--fs))', lineHeight: '1.5', color: DARK }}>
             {details.goodToKnow.map((g, i) => (
               <li key={i}>{h(g)}</li>
             ))}
@@ -387,7 +387,7 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
       {row('🌍', 'TRAVELER', details.travelerNotes)}
 
       {details.websiteUri && (
-        <div style={{ marginTop: '10px', fontSize: '12px', color: GRAY }}>
+        <div style={{ marginTop: '10px', fontSize: 'calc(12px * var(--fs))', color: GRAY }}>
           For more information, visit{' '}
           <a href={details.websiteUri} target="_blank" rel="noopener noreferrer" style={{ color: PURPLE, textDecoration: 'underline' }}>
             {details.websiteUri.replace(/^https?:\/\//, '').replace(/\/$/, '')}
