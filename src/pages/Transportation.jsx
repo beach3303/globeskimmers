@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { callWorker } from "@/lib/callWorker";
+import { callWorker, invokeLLM } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -13,6 +13,13 @@ import LocationModePicker from "../components/location/LocationModePicker";
 import { getCurrentPositionSmart } from "@/lib/geolocation";
 import { isCityLocation } from "../components/location/locationLabel";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
+import { useIsTablet } from "@/lib/useIsTablet";
+
+// iPad editorial design tokens (design handoff: ivory canvas + 1024 column).
+// Phone layout is untouched; these only feed the `useIsTablet()` branch below.
+const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
+const ED_INK = "#16110D";
+const fs = (n) => `calc(${n}px*var(--fs))`;
 
 // ============================================================================
 // FIX: CACHING CONFIGURATION - Saves ~$55-165/month
@@ -667,7 +674,24 @@ const getCachedExchangeRate = async (toCurrency) => {
 export default function Transportation() {
   const navigate = useNavigate();
   const { activeLocation, locationMode, initialized } = useLocation();
-  
+  // iPad editorial branch — widen the centered column, swap kickers for serif
+  // section headings. Phone layout (below 768px) stays byte-identical.
+  const isTablet = useIsTablet();
+  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
+  // Section label: phone keeps the mono UPPERCASE kicker byte-for-byte; tablet
+  // promotes it to an Instrument Serif editorial heading (with a thin rule).
+  const SectionLabel = ({ children, mt = "mt-3" }) =>
+    isTablet ? (
+      <div className={`${mt} mb-2`}>
+        <h2 className="leading-none" style={{ fontFamily: ED_SERIF, fontSize: fs(25), color: ED_INK }}>{children}</h2>
+        <div className="mt-2" style={{ height: 1, background: "rgba(22,17,13,.10)" }} />
+      </div>
+    ) : (
+      <div className={`font-mono text-[calc(10.5px*var(--fs))] tracking-[0.16em] uppercase font-semibold ${mt} mb-1`} style={{ color: '#6B7280' }}>
+        {children}
+      </div>
+    );
+
   // State
   const [loading, setLoading] = useState(true);
   const [destination, setDestination] = useState(null);
@@ -2113,7 +2137,7 @@ export default function Transportation() {
       }
       
       // Fetch fresh from LLM
-      const result = await base44.integrations.Core.InvokeLLM({
+      const result = await invokeLLM({
         prompt: `You are a local transportation expert for ${city}, ${activeLocation.address?.country || ''}.
 
 Provide detailed transportation options from "${origin.name}" to "${destination.name}" (approximately ${distanceKm.toFixed(1)} km).
@@ -2289,7 +2313,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
     <div className="min-h-screen font-sans pb-28" style={{ background: IVORY }}>
       {/* HEADER — chevron back + Transportation pill (redesign) */}
       <div className="px-4 pt-2 pb-4">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
           <button
             onClick={() => {
               // P2: if user arrived from ThingsToDo map (?fromMap=true), pop the stack.
@@ -2314,7 +2338,10 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
         </div>
       </div>
 
-      <div className="px-4 max-w-md mx-auto space-y-3">
+      <div
+        className={`px-4 ${colWrap} mx-auto space-y-3`}
+        style={isTablet ? { paddingBottom: "170px" } : undefined}
+      >
         {/* ROUTE CARD — From → To with timeline rail (redesign) */}
         <div
           className="rounded-[20px] p-4"
@@ -2460,9 +2487,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
         {/* WAYS TO GET THERE — unified transit options list (replaces old Trip Summary + fare table) */}
         {destination && transportData && (
           <>
-            <div className="font-mono text-[calc(10.5px*var(--fs))] tracking-[0.16em] uppercase font-semibold mt-2 mb-1" style={{ color: '#6B7280' }}>
-              Ways to get there
-            </div>
+            <SectionLabel mt="mt-2">Ways to get there</SectionLabel>
             <div className="space-y-2.5">
               {(() => {
                 const modeMap = {
@@ -2532,9 +2557,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
         {/* BOOK A RIDE — rideshare providers (region-aware) */}
         {destination && transportData && availableProviders.length > 0 && (
           <>
-            <div className="font-mono text-[calc(10.5px*var(--fs))] tracking-[0.16em] uppercase font-semibold mt-3 mb-1" style={{ color: '#6B7280' }}>
-              Book a ride
-            </div>
+            <SectionLabel>Book a ride</SectionLabel>
             {routeInfo?.rideshare?.pickup_instructions && (
               <div className="px-3.5 py-2.5 rounded-[12px] text-[calc(12.5px*var(--fs))] mb-2" style={{ background: CAT.shopping.bg, color: CAT.shopping.ink }}>
                 <span className="font-semibold">📍 Pickup:</span> {routeInfo.rideshare.pickup_instructions}
@@ -2588,9 +2611,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
         {/* CALL A TAXI — country-specific hotlines */}
         {destination && taxiServices.length > 0 && taxiServices.some(t => t.phone) && (
           <>
-            <div className="font-mono text-[calc(10.5px*var(--fs))] tracking-[0.16em] uppercase font-semibold mt-3 mb-1" style={{ color: '#6B7280' }}>
-              Call a taxi
-            </div>
+            <SectionLabel>Call a taxi</SectionLabel>
             <div className="space-y-2">
               {taxiServices.filter(t => t.phone).map((taxi, i) => (
                 <a
@@ -2653,9 +2674,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
         {/* BEST PUBLIC-TRANSIT ROUTE — AI-fetched route info with step-by-step */}
         {destination && (loadingRouteInfo || routeInfo?.public_transport?.best_option) && (
           <>
-            <div className="font-mono text-[calc(10.5px*var(--fs))] tracking-[0.16em] uppercase font-semibold mt-3 mb-1" style={{ color: '#6B7280' }}>
-              Best transit route
-            </div>
+            <SectionLabel>Best transit route</SectionLabel>
             <div className="px-4 py-3.5 rounded-[16px]" style={{ background: CAT.transit.bg, color: CAT.transit.ink }}>
               {loadingRouteInfo ? (
                 <div className="flex items-center justify-center gap-2 py-3">

@@ -10,7 +10,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPageUrl } from "@/utils";
 import MapAppSelector from '../components/MapAppSelector';
-import { base44 } from "@/api/base44Client";
+import { invokeLLM } from "@/lib/callWorker";
 import { showToast } from "../components/Toast";
 
 export default function ActivityDetailPage() {
@@ -126,7 +126,7 @@ export default function ActivityDetailPage() {
   const loadEnhancedDetails = async (activityData) => {
     setLoadingDetails(true);
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
+      const result = await invokeLLM({
         prompt: `Provide 3-5 visitor tips for: ${activityData.name}. Return JSON.`,
         response_json_schema: {
           type: "object",
