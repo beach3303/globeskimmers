@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Globeskimmers — App Redesign</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<style>
+:root{
+  --ivory:#F6F1E7;
+  --ivory-2:#EFE8D9;
+  --ink:#16110D;
+  --ink-2:#3A3128;
+  --ink-3:#6B6055;
+  --rule:rgba(22,17,13,.12);
+  --rule-strong:rgba(22,17,13,.22);
+  --teal:#0E6E66;
+  --serif:"Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --sans:"Inter Tight", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+html,body{margin:0;padding:0;background:#EBE7DD;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit}
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script>
+// Token-aware JSX loader (preview serves files behind a query token)
+(async () => {
+  const token = new URLSearchParams(location.search).get("t");
+  const q = token ? "?t=" + token : "";
+  async function load(path) {
+    const r = await fetch(path + q, { credentials: "include" });
+    if (!r.ok) throw new Error(path + " → " + r.status);
+    const src = await r.text();
+    const { code } = Babel.transform(src, { presets: ["react"], filename: path });
+    const s = document.createElement("script");
+    s.text = code;
+    document.body.appendChild(s);
+  }
+  try {
+    for (const f of [
+      "design-canvas.jsx",
+      "ios-frame.jsx",
+      "redesign-system.jsx",
+      "redesign-bold.jsx",
+      "redesign-home-variations.jsx",
+      "redesign-home-final.jsx",
+      "redesign-more-screens.jsx",
+      "redesign-screens-2.jsx",
+      "redesign-canvas.jsx",
+    ]) await load(f);
+  } catch (e) {
+    document.body.insertAdjacentHTML("beforeend",
+      `<pre style="padding:20px;color:#c00;font-family:monospace;white-space:pre-wrap">${e.stack || e.message}</pre>`);
+  }
+})();
+</script>
+
+</body>
+</html>
