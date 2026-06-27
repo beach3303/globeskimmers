@@ -3,7 +3,7 @@ import { fetchCulture } from "@/lib/callWorker";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Loader2, Navigation, RefreshCw, ChevronLeft, Compass, AlertTriangle, ExternalLink } from "lucide-react";
-import { CAT, IVORY, TEAL_GRADIENT } from "@/components/redesign/constants";
+import { CAT, IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesign/constants";
 import { motion } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
@@ -24,6 +24,35 @@ import LocationModePicker from "../components/location/LocationModePicker";
 // ============================================================================
 
 const CACHE_VERSION = "v2";
+
+// ---- redesign design tokens (handoff: iPad redesign) -----------------------
+// The font stack is loaded in index.html (Instrument Serif / Inter Tight /
+// JetBrains Mono). Apply inline so fidelity never depends on tailwind config.
+const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
+const SANS = '"Inter Tight", ui-sans-serif, system-ui, -apple-system, sans-serif';
+const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
+const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13,.10)";
+// Respect the app-wide text-scale variable, with a safe 1 fallback.
+const fs = (px) => `calc(${px}px * var(--fs, 1))`;
+
+// Per-layer color world: Country = culture brown, City = teal, Region = emerald.
+const LAYER = {
+  country: { ink: CAT.culture.ink, bg: CAT.culture.bg },
+  city: { ink: TEAL_DEEP, bg: "#D2EFEC" },
+  region: { ink: "#2E7D46", bg: "#E7F3EA" },
+};
+
+// Badge / chip palette — soft tint background + saturated text (handoff pills).
+// Foregrounds darkened so small badge text clears WCAG 4.5:1 on its own tint.
+const TONE = {
+  teal: ["#D2EFEC", "#0B6A62"], amber: ["#FCEAC9", "#8A5410"],
+  green: ["#E7F3EA", "#266A3B"], rose: ["#FBE0DC", "#A82C24"],
+  violet: ["#EAE0FA", "#6D29D9"], slate: ["#EFE8D9", "#736657"],
+  blue: ["#EAF0FB", "#205FCF"],
+};
+// Amber "note" surface for warnings / disclaimers (handoff .note). ink darkened
+// to clear 4.5:1 on the tint — it carries safety / advisory copy.
+const NOTE = { bg: "#FBEFD7", border: "#EBD9AE", ink: "#7E601F" };
 
 // ---- small utils -----------------------------------------------------------
 const slug = (s) =>
@@ -456,22 +485,32 @@ const CITY_BUNDLES = [
 // Presentational components
 // ============================================================================
 function Badge({ children, tone = "teal" }) {
-  const tones = {
-    teal: "bg-teal-50 text-teal-700", amber: "bg-amber-50 text-amber-700",
-    green: "bg-green-50 text-green-700", rose: "bg-rose-50 text-rose-700",
-    violet: "bg-violet-50 text-violet-700", slate: "bg-slate-100 text-slate-600",
-  };
-  return <span className={`px-2 py-0.5 rounded-full text-[calc(10px*var(--fs))] font-semibold ${tones[tone] || tones.teal}`}>{children}</span>;
+  const [bg, color] = TONE[tone] || TONE.teal;
+  return (
+    <span style={{ background: bg, color, fontSize: fs(10.5), fontFamily: SANS }}
+      className="px-2.5 py-0.5 rounded-full font-semibold leading-tight">{children}</span>
+  );
 }
 
-function ChipRow({ items, tone = "teal" }) {
-  const tones = { teal: "bg-teal-50 text-teal-700", green: "bg-green-50 text-green-700", amber: "bg-amber-50 text-amber-700" };
+function ChipRow({ items, tone }) {
+  const [bg, color] = tone ? (TONE[tone] || TONE.slate) : [IVORY_2, INK2];
   return (
     <div className="flex flex-wrap gap-1.5">
       {items.filter(hasData).map((it, i) => (
-        <span key={i} className={`px-2.5 py-1 rounded-full text-[calc(11px*var(--fs))] ${tones[tone] || tones.teal}`}>{it}</span>
+        <span key={i} style={{ background: bg, color, fontSize: fs(11.5), fontFamily: SANS }}
+          className="px-2.5 py-1 rounded-full font-medium">{it}</span>
       ))}
     </div>
+  );
+}
+
+// Small inline meta line used throughout ItemCard (📍 where, 💡 tip, ⚠️ safety…).
+function Meta({ show, color, icon, italic, children }) {
+  if (!show) return null;
+  return (
+    <p className={`mt-1 ${italic ? "italic" : ""}`} style={{ color, fontSize: fs(12), lineHeight: 1.45 }}>
+      {icon ? `${icon} ` : ""}{children}
+    </p>
   );
 }
 
@@ -510,33 +549,38 @@ function ItemCard({ it }) {
   const photo = it.photo_tip || it.creator_photo_tip;
   const badges = itemBadges(it);
   return (
-    <div className="pb-3 border-b border-gray-100 last:border-0 last:pb-0">
+    <div className="pb-3.5 last:pb-0" style={{ borderBottom: `1px solid ${RULE}` }}>
       <div className="flex items-baseline gap-2 flex-wrap">
-        {hasData(it.rank) && <span className="text-xs font-bold text-gray-400">#{it.rank}</span>}
-        <p className="font-semibold text-gray-900">{title}</p>
-        {hasData(it.local_name) && it.local_name !== title && <span className="text-sm italic text-gray-500">{it.local_name}</span>}
+        {hasData(it.rank) && <span className="font-bold" style={{ color: INK3, fontFamily: MONO, fontSize: fs(11) }}>#{it.rank}</span>}
+        <p className="font-semibold" style={{ color: INK, fontFamily: SANS, fontSize: fs(15) }}>{title}</p>
+        {hasData(it.local_name) && it.local_name !== title && <span className="italic" style={{ color: INK3, fontFamily: SERIF, fontSize: fs(15.5) }}>{it.local_name}</span>}
       </div>
-      {hasData(desc) && <p className="text-sm text-gray-600 mt-0.5">{desc}</p>}
-      {badges.length > 0 && <div className="flex flex-wrap gap-1.5 mt-1.5">{badges.map(([t, tone], i) => <Badge key={i} tone={tone}>{t}</Badge>)}</div>}
-      {scalarChips.length > 0 && <p className="text-[calc(11px*var(--fs))] text-gray-500 mt-1.5">{scalarChips.join(" · ")}</p>}
-      {chips.length > 0 && <div className="mt-1.5"><ChipRow items={chips} /></div>}
+      {hasData(desc) && <p className="mt-1" style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.45 }}>{desc}</p>}
+      {badges.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{badges.map(([t, tone], i) => <Badge key={i} tone={tone}>{t}</Badge>)}</div>}
+      {scalarChips.length > 0 && <p className="mt-2" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".02em" }}>{scalarChips.join("  ·  ")}</p>}
+      {chips.length > 0 && <div className="mt-2"><ChipRow items={chips} /></div>}
       {Array.isArray(it.accomplishments) && it.accomplishments.filter(hasData).length > 0 && (
-        <ul className="mt-1.5 space-y-1">{it.accomplishments.filter(hasData).map((a, i) => (
-          <li key={i} className="text-xs text-gray-600 flex gap-1.5"><span className="text-teal-600 font-bold">•</span><span>{a}</span></li>
+        <ul className="mt-2 space-y-1">{it.accomplishments.filter(hasData).map((a, i) => (
+          <li key={i} className="flex gap-1.5" style={{ color: INK2, fontSize: fs(12.5) }}><span className="font-bold" style={{ color: TEAL_DEEP }}>•</span><span>{a}</span></li>
         ))}</ul>
       )}
-      {hasData(it.significance) && <p className="text-xs text-teal-600 mt-1">{it.significance}</p>}
-      {hasData(it.fun_fact) && <p className="text-xs text-amber-600 mt-1 italic">💡 {it.fun_fact}</p>}
-      {hasData(where) && <p className="text-xs text-gray-500 mt-1">📍 {where}</p>}
-      {hasData(it.ticket_or_reservation_note) && <p className="text-xs text-gray-500 mt-0.5">🎟 {it.ticket_or_reservation_note}</p>}
-      {hasData(it.hours_note) && <p className="text-xs text-gray-500 mt-0.5">🕘 {it.hours_note}</p>}
-      {hasData(it.conservation_note) && <p className="text-xs text-green-700 mt-0.5">🌱 {it.conservation_note}</p>}
-      {hasData(safety) && <p className="text-xs text-rose-600 mt-1">⚠️ {safety}</p>}
-      {hasData(photo) && <p className="text-xs text-violet-600 mt-0.5">📸 {photo}</p>}
-      {hasData(tip) && <p className="text-xs text-gray-600 mt-1 italic">💡 {tip}</p>}
+      <Meta show={hasData(it.significance)} color={TEAL_DEEP}>{it.significance}</Meta>
+      <Meta show={hasData(it.fun_fact)} color={NOTE.ink} icon="💡" italic>{it.fun_fact}</Meta>
+      <Meta show={hasData(where)} color={INK3} icon="📍">{where}</Meta>
+      <Meta show={hasData(it.ticket_or_reservation_note)} color={INK3} icon="🎟">{it.ticket_or_reservation_note}</Meta>
+      <Meta show={hasData(it.hours_note)} color={INK3} icon="🕘">{it.hours_note}</Meta>
+      <Meta show={hasData(it.conservation_note)} color="#2E7D46" icon="🌱">{it.conservation_note}</Meta>
+      <Meta show={hasData(safety)} color="#C2392F" icon="⚠️">{safety}</Meta>
+      <Meta show={hasData(photo)} color="#7C3AED" icon="📸">{photo}</Meta>
+      <Meta show={hasData(tip)} color={INK2} icon="💡" italic>{tip}</Meta>
     </div>
   );
 }
+
+// A mono uppercase eyebrow used to label blocks (handoff kicker treatment).
+const Kicker = ({ children }) => (
+  <p className="mb-2 uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em" }}>{children}</p>
+);
 
 // Renders one block within a card. Returns null when the block has no data.
 function Block({ block, data }) {
@@ -545,70 +589,85 @@ function Block({ block, data }) {
     const rows = (block.fields || []).filter((f) => hasData(data[f.field]));
     if (!rows.length) return null;
     return (
-      <div className="space-y-1.5">
+      <div className="space-y-2.5">
         {rows.map((f, i) => (
-          <div key={i} className="text-sm"><span className="text-gray-500">{f.label}: </span><span className="font-medium text-gray-900">{data[f.field]}</span></div>
+          <div key={i}>
+            <span className="uppercase block" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>{f.label}</span>
+            <span className="font-medium" style={{ color: INK, fontSize: fs(13.5) }}>{data[f.field]}</span>
+          </div>
         ))}
       </div>
     );
   }
   const val = data[field];
   if (!hasData(val)) return null;
-  const Label = label ? <p className="text-[calc(10.5px*var(--fs))] uppercase tracking-wide font-semibold text-gray-400 mb-1.5">{label}</p> : null;
+  const Label = label ? <Kicker>{label}</Kicker> : null;
   switch (kind) {
     case "text":
-      return <div>{Label}<p className="text-sm text-gray-700">{val}</p></div>;
+      return <div>{Label}<p style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.5 }}>{val}</p></div>;
     case "motto":
-      return <div><p className="text-sm text-gray-700 italic">“{val}”</p>{hasData(data.motto_english) && <p className="text-xs text-gray-500 mt-0.5">{data.motto_english}</p>}</div>;
+      return <div><p className="italic" style={{ color: INK, fontFamily: SERIF, fontSize: fs(19) }}>“{val}”</p>{hasData(data.motto_english) && <p className="mt-0.5" style={{ color: INK3, fontSize: fs(12) }}>{data.motto_english}</p>}</div>;
     case "stat":
-      return <div className="text-sm"><span className="text-gray-500">{label}: </span><span className="font-semibold text-gray-900">{val}</span></div>;
+      return (
+        <div className="inline-flex items-baseline gap-2.5 rounded-2xl px-3.5 py-2.5" style={{ background: IVORY_2 }}>
+          <span className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>{label}</span>
+          <span className="font-bold" style={{ color: INK, fontFamily: SERIF, fontSize: fs(20) }}>{val}</span>
+        </div>
+      );
     case "warn":
-      return <div className="flex items-start gap-2 bg-rose-50 rounded-lg p-2.5"><AlertTriangle size={14} className="text-rose-500 mt-0.5 shrink-0" /><p className="text-xs text-rose-700">{label ? <b>{label}: </b> : null}{val}</p></div>;
+      return (
+        <div className="flex items-start gap-2 rounded-2xl p-3" style={{ background: NOTE.bg, border: `1px solid ${NOTE.border}` }}>
+          <AlertTriangle size={14} style={{ color: NOTE.ink, marginTop: 2 }} className="shrink-0" />
+          <p style={{ color: NOTE.ink, fontSize: fs(12), lineHeight: 1.45 }}>{label ? <b>{label}: </b> : null}{val}</p>
+        </div>
+      );
     case "chips":
       return <div>{Label}<ChipRow items={val} /></div>;
     case "bullets":
       return <div>{Label}<ul className="space-y-1.5">{val.filter(hasData).map((b, i) => (
-        <li key={i} className="text-sm text-gray-700 flex items-start gap-2"><span className="text-teal-500 font-bold text-xs mt-0.5">•</span><span>{b}</span></li>
+        <li key={i} className="flex items-start gap-2" style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.45 }}><span className="font-bold mt-0.5" style={{ color: TEAL_DEEP }}>•</span><span>{b}</span></li>
       ))}</ul></div>;
     case "pairs":
       return <div>{Label}<div className="space-y-2">{val.filter(hasData).map((p, i) => (
-        <div key={i} className="flex justify-between items-center text-sm"><span className="text-gray-700">{p.name || p.term || p.label}</span><span className="font-semibold text-gray-900">{p.percentage || p.value}</span></div>
+        <div key={i} className="flex justify-between items-center" style={{ fontSize: fs(13.5) }}><span style={{ color: INK2 }}>{p.name || p.term || p.label}</span><span className="font-bold" style={{ color: INK, fontFamily: MONO, fontSize: fs(12.5) }}>{p.percentage || p.value}</span></div>
       ))}</div></div>;
     case "phrases":
-      return <div>{Label}<div className="space-y-1.5">{val.filter((p) => hasData(p.phrase)).map((p, i) => (
-        <div key={i} className="text-sm"><span className="font-semibold text-gray-900">{p.phrase}</span>{hasData(p.meaning) && <span className="text-gray-500"> — {p.meaning}</span>}</div>
+      return <div>{Label}<div className="space-y-2">{val.filter((p) => hasData(p.phrase)).map((p, i) => (
+        <div key={i}><span className="font-semibold" style={{ color: INK, fontFamily: SERIF, fontSize: fs(17) }}>{p.phrase}</span>{hasData(p.meaning) && <span style={{ color: INK3, fontSize: fs(13.5) }}> — {p.meaning}</span>}</div>
       ))}</div></div>;
     case "dodont":
       return (
         <div className="space-y-3">
-          {hasData(val.do) && <div><p className="font-semibold text-green-600 mb-1.5 text-sm">✅ DO</p><ul className="space-y-1.5">{val.do.filter(hasData).map((r, i) => (
-            <li key={i} className="text-sm text-gray-700 flex items-start gap-2"><span className="text-green-500 font-bold text-xs mt-0.5">•</span><span>{r}</span></li>
-          ))}</ul></div>}
-          {hasData(val.dont) && <div className="pt-2 border-t border-gray-100"><p className="font-semibold text-rose-600 mb-1.5 text-sm">❌ DON'T</p><ul className="space-y-1.5">{val.dont.filter(hasData).map((r, i) => (
-            <li key={i} className="text-sm text-gray-700 flex items-start gap-2"><span className="text-rose-500 font-bold text-xs mt-0.5">•</span><span>{r}</span></li>
-          ))}</ul></div>}
+          {hasData(val.do) && <div className="rounded-2xl p-3.5" style={{ background: TONE.green[0] }}>
+            <p className="font-bold mb-2 uppercase" style={{ color: TONE.green[1], fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".06em" }}>✅ Do</p>
+            <ul className="space-y-1.5">{val.do.filter(hasData).map((r, i) => (
+              <li key={i} className="flex items-start gap-2" style={{ fontSize: fs(13) }}><span className="font-bold mt-0.5" style={{ color: TONE.green[1] }}>•</span><span style={{ color: INK2 }}>{r}</span></li>
+            ))}</ul></div>}
+          {hasData(val.dont) && <div className="rounded-2xl p-3.5" style={{ background: TONE.rose[0] }}>
+            <p className="font-bold mb-2 uppercase" style={{ color: TONE.rose[1], fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".06em" }}>🚫 Don't</p>
+            <ul className="space-y-1.5">{val.dont.filter(hasData).map((r, i) => (
+              <li key={i} className="flex items-start gap-2" style={{ fontSize: fs(13) }}><span className="font-bold mt-0.5" style={{ color: TONE.rose[1] }}>•</span><span style={{ color: INK2 }}>{r}</span></li>
+            ))}</ul></div>}
         </div>
       );
     case "leaders":
       return <div>{Label}<div className="space-y-2.5">{val.filter((l) => hasData(l.name)).map((l, i) => (
-        <div key={i}><p className="text-xs text-gray-500">{l.position || l.title}</p><p className="font-semibold text-gray-900">{l.name}{hasData(l.title) && l.position ? ` · ${l.title}` : ""}</p></div>
+        <div key={i}><p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>{l.position || l.title}</p><p className="font-semibold" style={{ color: INK, fontSize: fs(14.5) }}>{l.name}{hasData(l.title) && l.position ? ` · ${l.title}` : ""}</p></div>
       ))}</div></div>;
     case "cards":
-      return <div>{Label}<div className="space-y-3">{val.filter((x) => hasData(x?.name)).map((it, i) => <ItemCard key={i} it={it} />)}</div></div>;
+      return <div>{Label}<div className="space-y-3.5">{val.filter((x) => hasData(x?.name)).map((it, i) => <ItemCard key={i} it={it} />)}</div></div>;
     default:
       return null;
   }
 }
 
-const ACCENT = { country: "from-amber-400 to-amber-500", city: "linear", region: "from-emerald-400 to-emerald-500" };
-
 function FreshnessLine({ meta, volatile }) {
   if (!meta) return null;
   const updated = fmtDate(meta.last_verified_at);
   if (meta.stale && volatile) {
-    return <p className="text-[calc(11px*var(--fs))] text-amber-600 font-medium mt-0.5">⚠️ May have changed — tap refresh</p>;
+    return <p className="mt-1 font-semibold" style={{ color: NOTE.ink, fontFamily: MONO, fontSize: fs(10) }}>⚠ May have changed — tap refresh</p>;
   }
-  if (updated) return <p className="text-[calc(11px*var(--fs))] text-gray-400 mt-0.5">Updated {updated}</p>;
+  if (updated) return <p className="mt-1 uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>Updated {updated}</p>;
   return null;
 }
 
@@ -620,29 +679,33 @@ function SectionCard({ card, bundle, state, onRefresh, layer }) {
   );
   if (card.kind !== "advisory" && blocksWithData.length === 0 && state?.status !== "loading") return null;
 
-  const isCity = layer === "city" || layer === "region";
+  const world = LAYER[layer] || LAYER.country;
   return (
-    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      {isCity ? <div className="h-1.5" style={{ background: TEAL_GRADIENT }} /> : <div className={`h-1.5 bg-gradient-to-r ${ACCENT[layer] || ACCENT.country}`} />}
+    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-[22px] overflow-hidden"
+      style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
       <div className="p-5">
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="min-w-0">
-            <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2"><span className="text-xl">{card.icon}</span>{card.title}</h3>
-            {card.summaryField && hasData(bundle.summary) && <p className="text-sm text-gray-500 mt-0.5">{bundle.summary}</p>}
-            {card.noteField && hasData(bundle.note) && <p className="text-xs text-gray-500 italic mt-0.5">{bundle.note}</p>}
-            {hasData(bundle.cadenceNote) && <p className="text-[calc(11px*var(--fs))] text-gray-500 mt-0.5">🔄 {bundle.cadenceNote}</p>}
+        <div className="flex items-start gap-3 mb-3.5">
+          <div className="shrink-0 rounded-2xl flex items-center justify-center"
+            style={{ width: 44, height: 44, background: world.bg, fontSize: 22, lineHeight: 1 }}>{card.icon}</div>
+          <div className="min-w-0 flex-1">
+            <h3 className="leading-tight" style={{ color: INK, fontFamily: SERIF, fontSize: fs(23) }}>{card.title}</h3>
+            {card.summaryField && hasData(bundle.summary) && <p className="mt-0.5" style={{ color: INK3, fontSize: fs(13) }}>{bundle.summary}</p>}
+            {card.noteField && hasData(bundle.note) && <p className="mt-0.5 italic" style={{ color: INK3, fontSize: fs(12) }}>{bundle.note}</p>}
+            {hasData(bundle.cadenceNote) && <p className="mt-1" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10) }}>🔄 {bundle.cadenceNote}</p>}
             <FreshnessLine meta={state?.meta} volatile={bundle.volatile} />
           </div>
           <button onClick={onRefresh} disabled={state?.status === "loading"} title="Refresh this section"
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 shrink-0">
-            <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${state?.status === "loading" ? "animate-spin" : ""}`} />
+            className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-black/5"
+            style={{ border: `1px solid ${RULE}` }}>
+            <RefreshCw className={`w-3.5 h-3.5 ${state?.status === "loading" ? "animate-spin" : ""}`} style={{ color: INK3 }} />
           </button>
         </div>
 
         {card.kind === "advisory" ? (
           <AdvisoryBody data={data} state={state} />
         ) : state?.status === "loading" && blocksWithData.length === 0 ? (
-          <div className="flex items-center gap-2 text-sm text-gray-400 py-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+          <div className="flex items-center gap-2 py-2" style={{ color: INK3, fontSize: fs(13) }}><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
         ) : (
           <div className="space-y-4">{blocksWithData.map((b, i) => <Block key={i} block={b} data={data} />)}</div>
         )}
@@ -654,26 +717,27 @@ function SectionCard({ card, bundle, state, onRefresh, layer }) {
 function AdvisoryBody({ data, state }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-lg p-3">
-        <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" />
-        <p className="text-xs text-amber-800">
+      <div className="flex items-start gap-2 rounded-2xl p-3" style={{ background: NOTE.bg, border: `1px solid ${NOTE.border}` }}>
+        <AlertTriangle size={16} style={{ color: NOTE.ink, marginTop: 2 }} className="shrink-0" />
+        <p style={{ color: NOTE.ink, fontSize: fs(12), lineHeight: 1.5 }}>
           <b>Advisories can change daily.</b> This summary refreshes only about once a day and may be behind today's situation. Before and during your trip, always check official travel guidance online — your government's travel advisory, linked below — for day-to-day accuracy.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
         {ADVISORY_SOURCES.map((s) => (
           <a key={s.label} href={s.url} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-50 hover:bg-gray-100 text-xs text-gray-700 border border-gray-200">
-            <span>{s.flag}</span>{s.label}<ExternalLink size={10} className="text-gray-400" />
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium transition-colors"
+            style={{ background: IVORY_2, color: INK2, border: `1px solid ${RULE}`, fontSize: fs(12) }}>
+            <span>{s.flag}</span>{s.label}<ExternalLink size={10} style={{ color: INK3 }} />
           </a>
         ))}
       </div>
       {state?.status === "loading" && !hasData(data.summary) ? (
-        <div className="flex items-center gap-2 text-sm text-gray-400 py-1"><Loader2 className="w-4 h-4 animate-spin" /> Loading summary…</div>
+        <div className="flex items-center gap-2 py-1" style={{ color: INK3, fontSize: fs(13) }}><Loader2 className="w-4 h-4 animate-spin" /> Loading summary…</div>
       ) : (
         <>
-          {hasData(data.overall_level) && <p className="text-sm font-semibold text-gray-900">{data.overall_level}</p>}
-          {hasData(data.summary) && <p className="text-sm text-gray-600">{data.summary}</p>}
+          {hasData(data.overall_level) && <p className="font-bold" style={{ color: INK, fontFamily: SERIF, fontSize: fs(19) }}>{data.overall_level}</p>}
+          {hasData(data.summary) && <p style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.5 }}>{data.summary}</p>}
           {hasData(data.key_risks) && <Block block={{ kind: "bullets", field: "key_risks", label: "Key risks" }} data={data} />}
           {hasData(data.areas_to_avoid) && <Block block={{ kind: "chips", field: "areas_to_avoid", label: "Areas to avoid" }} data={data} />}
           {hasData(data.entry_exit_notes) && <Block block={{ kind: "text", field: "entry_exit_notes", label: "Entry / exit" }} data={data} />}
@@ -683,14 +747,15 @@ function AdvisoryBody({ data, state }) {
   );
 }
 
-function Divider({ icon, label, sublabel }) {
+function Divider({ icon, label, sublabel, layer = "country" }) {
+  const world = LAYER[layer] || LAYER.country;
   return (
-    <div className="pt-4 pb-1">
-      <div className="flex items-center gap-2">
-        <span className="text-xl">{icon}</span>
-        <h2 className="text-[calc(16px*var(--fs))] font-extrabold tracking-tight text-[#0F1419]">{label}</h2>
+    <div className="pt-5 pb-1">
+      <div className="flex items-center gap-2.5">
+        <span className="rounded-xl flex items-center justify-center" style={{ width: 34, height: 34, background: world.bg, fontSize: 18, lineHeight: 1 }}>{icon}</span>
+        <h2 className="leading-none" style={{ color: INK, fontFamily: SERIF, fontSize: fs(25) }}>{label}</h2>
       </div>
-      {sublabel && <p className="text-xs text-gray-500 mt-0.5">{sublabel}</p>}
+      {sublabel && <p className="mt-2 uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em" }}>{sublabel}</p>}
     </div>
   );
 }
@@ -789,10 +854,10 @@ export default function CultureInformationPage() {
 
   if (!initialized || (loading && Object.keys(results).length === 0)) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: IVORY }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: IVORY, fontFamily: SANS }}>
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-[#088395] animate-spin mx-auto mb-4" />
-          <p className="text-[#0A4D68] font-semibold">Loading culture information…</p>
+          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: TEAL_DEEP }} />
+          <p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(11), letterSpacing: ".1em" }}>Loading culture guide…</p>
         </div>
       </div>
     );
@@ -802,49 +867,47 @@ export default function CultureInformationPage() {
   const regionFallbacksToShow = CITY_BUNDLES.filter((b) => b.fallback && regionResults[b.id]?.status === "ok");
 
   return (
-    <div className="min-h-screen font-sans" style={{ background: IVORY }}>
+    <div className="min-h-screen" style={{ background: IVORY, fontFamily: SANS }}>
       {/* HEADER */}
       <div className="px-4 pt-2 pb-3">
         <div className="max-w-md mx-auto flex items-center justify-between">
-          <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }} aria-label="Back">
-            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
+          <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-black/5" style={{ background: "#FFFFFF", border: `1px solid ${RULE}` }} aria-label="Back">
+            <ChevronLeft size={18} color={INK} strokeWidth={2.2} />
           </button>
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]" style={{ background: CAT.culture.bg, color: CAT.culture.ink }}>
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full uppercase" style={{ background: CAT.culture.bg, color: CAT.culture.ink, fontFamily: MONO, fontSize: fs(11), letterSpacing: ".08em", fontWeight: 500 }}>
             <Compass size={13} color={CAT.culture.ink} strokeWidth={2} /> Culture
           </div>
-          <button onClick={() => loadAll(true)} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }} title="Refresh all">
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} color="#0F1419" strokeWidth={2} />
+          <button onClick={() => loadAll(true)} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-black/5" style={{ background: "#FFFFFF", border: `1px solid ${RULE}` }} title="Refresh all">
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} color={INK} strokeWidth={2} />
           </button>
         </div>
       </div>
 
       {/* COUNTRY TITLE */}
       <div className="px-4 max-w-md mx-auto pb-2 text-center">
-        <h1 className="text-[calc(30px*var(--fs))] font-extrabold tracking-tight text-[#0F1419]">
-          <span className="font-serif italic font-normal" style={{ color: CAT.culture.ink }}>{geo.country || "Your destination"}</span>
-        </h1>
-        <p className="font-mono text-[calc(10.5px*var(--fs))] tracking-[0.16em] uppercase font-semibold mt-1" style={{ color: "#6B7280" }}>Traveler's Culture Guide</p>
+        <h1 className="italic leading-none" style={{ fontFamily: SERIF, fontSize: fs(38), color: CAT.culture.ink }}>{geo.country || "Your destination"}</h1>
+        <p className="uppercase mt-2 font-semibold" style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: "0.16em", color: INK3 }}>Traveler's Culture Guide</p>
       </div>
 
       <div className="max-w-md mx-auto">
         {/* Location display */}
-        <div className="px-6 mb-2">
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between">
+        <div className="px-4 mb-3">
+          <div className="bg-white rounded-[22px] p-4" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="text-2xl flex-shrink-0">{locationMode === "current" ? "📍" : "🧭"}</div>
+                <div className="shrink-0 rounded-2xl flex items-center justify-center" style={{ width: 42, height: 42, background: LAYER.city.bg, fontSize: 20, lineHeight: 1 }}>{locationMode === "current" ? "📍" : "🧭"}</div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-base font-bold text-gray-900 truncate">{cityName}</p>
-                  {hasData(geo.country) && <p className="text-sm text-gray-600 truncate">{geo.country}</p>}
+                  <p className="truncate" style={{ fontFamily: SERIF, fontSize: fs(22), color: INK, lineHeight: 1.1 }}>{cityName}</p>
+                  {hasData(geo.country) && <p className="truncate uppercase mt-0.5" style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".06em", color: INK3 }}>{geo.country}</p>}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 {locationMode === "navigate" && (
-                  <button onClick={() => switchToCurrentLocation()} className="p-2 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors" title="Use Current Location">
-                    <Navigation className="w-4 h-4 text-blue-600" />
+                  <button onClick={() => switchToCurrentLocation()} className="p-2 rounded-xl transition-colors hover:brightness-95" style={{ background: LAYER.city.bg }} title="Use Current Location">
+                    <Navigation className="w-4 h-4" style={{ color: TEAL_DEEP }} />
                   </button>
                 )}
-                <button onClick={() => setShowLocationPicker(true)} className="text-sm font-bold text-blue-600 hover:text-blue-700 underline underline-offset-2 flex-shrink-0">Change</button>
+                <button onClick={() => setShowLocationPicker(true)} className="font-bold underline underline-offset-2 shrink-0" style={{ color: TEAL_DEEP, fontSize: fs(13) }}>Change</button>
               </div>
             </div>
           </div>
@@ -852,7 +915,7 @@ export default function CultureInformationPage() {
 
         <div className="px-4 py-4 space-y-4 pb-24">
           {/* 🌎 COUNTRY ESSENTIALS */}
-          <Divider icon="🌎" label="Country Essentials" sublabel={`The big picture of ${geo.country || "the country"}.`} />
+          <Divider icon="🌎" label="Country Essentials" layer="country" sublabel={`The big picture of ${geo.country || "the country"}.`} />
           {COUNTRY_BUNDLES.flatMap((bundle) =>
             bundle.cards.map((card) => (
               <SectionCard key={`${bundle.id}_${card.id}`} card={card} bundle={bundle} layer="country"
@@ -861,7 +924,7 @@ export default function CultureInformationPage() {
           )}
 
           {/* 📍 CITY LOCAL GUIDE */}
-          <Divider icon="📍" label="City Local Guide" sublabel={`Specific to ${cityName}.`} />
+          <Divider icon="📍" label="City Local Guide" layer="city" sublabel={`Specific to ${cityName}.`} />
           {CITY_BUNDLES.flatMap((bundle) =>
             bundle.cards.map((card) => (
               <SectionCard key={`${bundle.id}_${card.id}`} card={card} bundle={bundle} layer="city"
@@ -872,7 +935,7 @@ export default function CultureInformationPage() {
           {/* 🧭 NEARBY REGION (fallback) */}
           {regionFallbacksToShow.length > 0 && (
             <>
-              <Divider icon="🧭" label="Nearby Region" sublabel={`Not specific to ${cityName} — shown for the surrounding region.`} />
+              <Divider icon="🧭" label="Nearby Region" layer="region" sublabel={`Not specific to ${cityName} — shown for the surrounding region.`} />
               {regionFallbacksToShow.flatMap((bundle) =>
                 bundle.cards.map((card) => (
                   <SectionCard key={`region_${bundle.id}_${card.id}`} card={card} bundle={bundle} layer="region"
