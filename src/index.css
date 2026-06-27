@@ -104,6 +104,21 @@
     width: 100%;
     overscroll-behavior-x: none;
   }
+  /* Media safety net — the #1 cause of sideways-pan on phones is an image (a
+     place photo, flag, or hero) rendering at its intrinsic pixel width and
+     blowing past its container. Cap ALL replaced media to its container so no
+     single asset can ever make a page wider than the viewport. */
+  img, picture, video, svg, canvas {
+    max-width: 100%;
+    height: auto;
+  }
+  /* Belt-and-suspenders: clip horizontal overflow at the document scroller too.
+     `clip` (not `hidden`) does NOT turn body into a scroll container, so the
+     position:sticky finder headers keep sticking to the viewport. This stops
+     any stray sub-pixel/element overflow from being pannable on iOS WKWebView. */
+  body {
+    overflow-x: clip;
+  }
 }
 
 /* Native camera preview transparency. @capacitor-community/camera-preview
