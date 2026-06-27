@@ -51,3 +51,14 @@ export async function invokeLLM(params) {
   const { data } = await callWorker('invoke-llm', params);
   return data;
 }
+
+// Cultural Info section fetch — see Worker handleCulture. The Worker caches each
+// bundle in shared KV with per-section TTL + stale-while-revalidate and returns
+// { data, meta } where meta carries server-stamped last_verified_at / expires_at
+// / stale. We unwrap to { data, meta, error } for call sites.
+// params: { cacheKey, ttlDays, prompt, response_json_schema, forceRefresh }
+export async function fetchCulture(params) {
+  const { data, error } = await callWorker('culture', params);
+  if (error) return { data: null, meta: null, error };
+  return { data: data?.data ?? null, meta: data?.meta ?? null, error: null };
+}
