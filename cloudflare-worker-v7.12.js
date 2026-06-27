@@ -9780,6 +9780,132 @@ async function handleInvokeLLM(request, env) {
   }
 }
 
+// ─── Cultural Info (two-layer Country / City / Region guide) ─────────────────
+// Generic cached-LLM endpoint for the Cultural Info page. The FRONTEND owns the
+// section catalog (prompts, JSON schemas, per-section TTLs) and posts one bundle
+// at a time: { cacheKey, ttlDays, prompt, response_json_schema, forceRefresh }.
+// We cache each bundle in shared KV keyed by (section + geo) so one traveler's
+// fetch serves every user, apply stale-while-revalidate, and stamp REAL
+// last_verified_at / expires_at (server time of the fetch — never a model claim).
+// Volatile bundles (city leadership 24h, travel advisory 1d, safety 30d) get
+// short TTLs from the client; when stale, the UI shows "May have changed — tap
+// to refresh" instead of presenting stale data as current. source_url is always
+// null here — Haiku has no web grounding (see handleInvokeLLM); the only real
+// links live in the client-side curated travel-advisory list.
+const CULTURE_KEY_PREFIX = 'culture:v2:';
+const CULTURE_FRESH_FLOOR_S = 60 * 60;            // 1h minimum fresh window
+const CULTURE_FRESH_MAX_S = 400 * 24 * 60 * 60;   // ~400d ceiling (clamp client TTL)
+const CULTURE_MAX_TOKENS = 8000;
+
+function sanitizeCultureKey(raw) {
+  return String(raw || '').toLowerCase().trim().replace(/[^a-z0-9:_|\-]+/g, '-').slice(0, 256);
+}
+
+// Calls Haiku with a JSON schema and returns the parsed object (or throws).
+// Mirrors handleInvokeLLM's proven prompt + extraction so existing behavior is
+// untouched.
+async function cultureLLM(env, prompt, schema) {
+  const system = schema
+    ? 'You return ONLY a single valid JSON object that conforms to this JSON schema. No markdown, no code fences, no commentary. Schema: ' + JSON.stringify(schema)
+    : 'You are a helpful assistant.';
+  const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: CULTURE_MAX_TOKENS,
+      system,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!apiRes.ok) {
+    const details = await apiRes.text().catch(() => '');
+    throw new Error(`Anthropic ${apiRes.status}: ${details.slice(0, 200)}`);
+  }
+  const json = await apiRes.json();
+  const text = (json.content && json.content[0] && json.content[0].text) || '';
+  let jsonStr = text.trim();
+  const fence = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) jsonStr = fence[1].trim();
+  const first = jsonStr.indexOf('{');
+  const last = jsonStr.lastIndexOf('}');
+  if (first !== -1 && last !== -1) jsonStr = jsonStr.slice(first, last + 1);
+  return JSON.parse(jsonStr);
+}
+
+function cultureMeta(timestamp, freshTtlS, stale, extra) {
+  return {
+    source_type: 'ai_estimate',
+    source_url: null,
+    last_verified_at: new Date(timestamp).toISOString(),
+    expires_at: new Date(timestamp + freshTtlS * 1000).toISOString(),
+    stale: !!stale,
+    cache_age_seconds: Math.max(0, Math.round((Date.now() - timestamp) / 1000)),
+    ...(extra || {}),
+  };
+}
+
+async function handleCulture(request, env, ctx) {
+  try {
+    if (!env.ANTHROPIC_API_KEY) return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
+    const body = await request.json().catch(() => ({}));
+    const prompt = body.prompt;
+    const schema = body.response_json_schema || null;
+    const rawKey = body.cacheKey;
+    const ttlDays = Number(body.ttlDays);
+    const forceRefresh = body.forceRefresh === true;
+    if (!prompt || typeof prompt !== 'string') return jsonResponse({ error: 'prompt is required' }, 400);
+    if (!rawKey || typeof rawKey !== 'string') return jsonResponse({ error: 'cacheKey is required' }, 400);
+    if (!ttlDays || ttlDays <= 0) return jsonResponse({ error: 'ttlDays must be > 0' }, 400);
+
+    const key = CULTURE_KEY_PREFIX + sanitizeCultureKey(rawKey);
+    const freshTtlS = Math.min(CULTURE_FRESH_MAX_S, Math.max(CULTURE_FRESH_FLOOR_S, Math.round(ttlDays * 86400)));
+    const swrTtlS = freshTtlS;                 // serve stale for up to one more fresh window
+    const totalTtlS = freshTtlS + swrTtlS;      // KV entry lifetime
+
+    const refresher = async () => {
+      const fresh = await cultureLLM(env, prompt, schema);
+      await setInCache(env, key, fresh, totalTtlS);
+    };
+
+    if (!forceRefresh) {
+      const cached = await getFromCache(env, key);
+      if (cached) {
+        const ageS = cached.age / 1000;
+        if (ageS < freshTtlS) {
+          return jsonResponse({ data: cached.data, meta: cultureMeta(cached.timestamp, freshTtlS, false) });
+        }
+        if (ageS < totalTtlS) {
+          // Stale-but-servable: return immediately, refresh in the background.
+          if (ctx && typeof ctx.waitUntil === 'function') {
+            ctx.waitUntil(refresher().catch(e => console.error(`culture SWR refresh failed for ${key}:`, e)));
+          }
+          return jsonResponse({ data: cached.data, meta: cultureMeta(cached.timestamp, freshTtlS, true) });
+        }
+        // Beyond SWR window: fetch fresh, but fall back to stale data on failure.
+        try {
+          const fresh = await cultureLLM(env, prompt, schema);
+          await setInCache(env, key, fresh, totalTtlS);
+          return jsonResponse({ data: fresh, meta: cultureMeta(Date.now(), freshTtlS, false) });
+        } catch (e) {
+          return jsonResponse({ data: cached.data, meta: cultureMeta(cached.timestamp, freshTtlS, true, { refresh_failed: true }) });
+        }
+      }
+    }
+
+    // Miss (or forceRefresh): fetch fresh from Haiku.
+    const fresh = await cultureLLM(env, prompt, schema);
+    await setInCache(env, key, fresh, totalTtlS);
+    return jsonResponse({ data: fresh, meta: cultureMeta(Date.now(), freshTtlS, false) });
+  } catch (e) {
+    return jsonResponse({ error: 'culture fetch failed', details: e.message }, 502);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -9822,6 +9948,7 @@ export default {
       if (pathname === '/exchange-rate' && request.method === 'POST') return await handleExchangeRate(request, env);
       if (pathname === '/weather-forecast' && request.method === 'POST') return await handleWeatherForecast(request, env);
       if (pathname === '/invoke-llm' && request.method === 'POST') return await handleInvokeLLM(request, env);
+      if (pathname === '/culture' && request.method === 'POST') return await handleCulture(request, env, ctx);
       if (pathname === '/money-exchange' && request.method === 'POST') return await handleMoneyExchange(request, env, ctx);
       if (pathname === '/activities' && request.method === 'POST') return await handleActivities(request, env, ctx);
       if (pathname === '/restaurants-full' && request.method === 'POST') return await handleRestaurantsFull(request, env, ctx);
