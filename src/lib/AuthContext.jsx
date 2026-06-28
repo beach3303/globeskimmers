@@ -32,6 +32,12 @@ import {
   OAUTH_REDIRECT_TO,
 } from '@/lib/nativeAuth';
 
+// sessionStorage flag set the moment the USER initiates a sign-in/sign-up, so we
+// can tell a fresh sign-in from a plain app-launch session restore. sessionStorage
+// (not a module var) survives a web OAuth redirect and the native deep-link return.
+const PENDING_SIGNIN_KEY = 'gs_pending_fresh_signin';
+const markPendingSignIn = () => { try { sessionStorage.setItem(PENDING_SIGNIN_KEY, '1'); } catch { /* ignore */ } };
+
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -42,6 +48,9 @@ export const AuthProvider = ({ children }) => {
   const [authError, setAuthError] = useState(null);
   // Whether this user sees the global "refresh app cache" button in the nav.
   const [canRefresh, setCanRefresh] = useState(false);
+  // Bumps once per FRESH (user-initiated) sign-in / sign-up — never on a plain
+  // app-launch session restore. Home watches this to show the welcome splash.
+  const [signInTick, setSignInTick] = useState(0);
 
   const loadProfile = useCallback(async (userId) => {
     if (!userId) { setProfile(null); return null; }
@@ -79,6 +88,19 @@ export const AuthProvider = ({ children }) => {
     return null;
   }, [loadProfile]);
 
+  // Persist +1 to the per-account welcome-splash counter (capped check lives in
+  // Home). No-op / best-effort: if the column isn't migrated yet the update just
+  // errors and is swallowed, so nothing breaks pre-migration.
+  const bumpWelcomeSplashCount = useCallback(async () => {
+    try {
+      const uid = user?.id || session?.user?.id;
+      if (!uid) return;
+      const next = (profile?.welcome_splash_count ?? 0) + 1;
+      await supabase.from('profiles').update({ welcome_splash_count: next }).eq('id', uid);
+      await refreshProfile();
+    } catch { /* ignore (e.g. column not migrated yet) */ }
+  }, [user, session, profile, refreshProfile]);
+
   useEffect(() => {
     let mounted = true;
     let appListener;
@@ -106,6 +128,16 @@ export const AuthProvider = ({ children }) => {
           loadProfile(s.user.id);
           if (event === 'SIGNED_IN') {
             logLoginEvent(s.user.id, s.user.app_metadata?.provider || 'email');
+            // Only a USER-INITIATED sign-in/sign-up flagged PENDING_SIGNIN_KEY
+            // bumps the signal — an app-launch session restore does not (it
+            // fires INITIAL_SESSION or a flagless SIGNED_IN). This is what makes
+            // the welcome splash appear on sign-in but NOT on routine re-opens.
+            try {
+              if (sessionStorage.getItem(PENDING_SIGNIN_KEY)) {
+                sessionStorage.removeItem(PENDING_SIGNIN_KEY);
+                setSignInTick((t) => t + 1);
+              }
+            } catch { /* ignore */ }
           }
         }, 0);
       }
@@ -135,30 +167,35 @@ export const AuthProvider = ({ children }) => {
   // --- Auth actions (wrap nativeAuth; set/clear error for the gate UI) -------
   const signInWithProvider = useCallback(async (provider) => {
     setAuthError(null);
+    markPendingSignIn();
     try { await startProviderSignIn(provider); }
     catch (e) { setAuthError({ type: 'oauth', message: e?.message || 'Sign-in failed' }); throw e; }
   }, []);
 
   const signInApple = useCallback(async () => {
     setAuthError(null);
+    markPendingSignIn();
     try { await signInWithApple(); }
     catch (e) { setAuthError({ type: 'oauth', message: e?.message || 'Apple sign-in failed' }); throw e; }
   }, []);
 
   const signInWithEmail = useCallback(async (email, password) => {
     setAuthError(null);
+    markPendingSignIn();
     try { return await emailSignIn(email, password); }
     catch (e) { setAuthError({ type: 'email', message: e?.message || 'Sign-in failed' }); throw e; }
   }, []);
 
   const signUpWithEmail = useCallback(async (args) => {
     setAuthError(null);
+    markPendingSignIn();
     try { return await emailSignUp(args); }
     catch (e) { setAuthError({ type: 'email', message: e?.message || 'Sign-up failed' }); throw e; }
   }, []);
 
   const verifyEmailOtp = useCallback(async (email, token) => {
     setAuthError(null);
+    markPendingSignIn();
     try { return await authVerifyOtp(email, token); }
     catch (e) { setAuthError({ type: 'email', message: e?.message || 'Verification failed' }); throw e; }
   }, []);
@@ -196,6 +233,7 @@ export const AuthProvider = ({ children }) => {
     isLoadingAuth,
     authError,
     canRefresh,
+    signInTick,
     // actions
     signInWithProvider,
     signInWithApple: signInApple,
@@ -204,6 +242,7 @@ export const AuthProvider = ({ children }) => {
     resendConfirmation,
     verifyEmailOtp,
     refreshProfile,
+    bumpWelcomeSplashCount,
     logout,
     // ---- backward-compat shims for old Base44 consumers ----
     isLoadingPublicSettings: false,
@@ -211,9 +250,9 @@ export const AuthProvider = ({ children }) => {
     checkUserAuth: refreshProfile,
     navigateToLogin: () => {}, // gate is rendered by App.jsx now; no redirect
   }), [
-    session, user, profile, isLoadingAuth, authError, canRefresh,
+    session, user, profile, isLoadingAuth, authError, canRefresh, signInTick,
     signInWithProvider, signInApple, signInWithEmail, signUpWithEmail,
-    verifyEmailOtp, refreshProfile, logout,
+    verifyEmailOtp, refreshProfile, bumpWelcomeSplashCount, logout,
   ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

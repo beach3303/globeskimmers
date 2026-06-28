@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { MapPin, Cloud, ChevronRight } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { trackEvent } from "../Layout";
@@ -17,6 +17,7 @@ import { useFontScale } from "@/components/a11y/FontScaleContext";
 import { countryCode } from "@/lib/countries";
 import { useIsTablet } from "@/lib/useIsTablet";
 import HomeTablet from "@/components/home/HomeTablet";
+import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
 
 // Translation mapping for greetings — shown next to "Hello 👋"
 // when the active location's country has a non-English primary language.
@@ -57,17 +58,51 @@ const HOME_CAPITAL_COORDS = {
 // (countryCode), so EVERY country a user picks in Settings resolves to a flag —
 // not just the ~20 that used to be hardcoded here.
 
+// Phone finder tiles — the six core finders (mirrors HomeTablet's FEATURES list).
+// `action` is the label fed to handleQuickAction, which owns ALL navigation; no
+// routes are invented here.
+const PHONE_FEATURES = [
+  { cat: CAT.transit,     emoji: '🚌', title: 'Transit Info',       sub: 'Routes & times',   action: 'Transportation' },
+  { cat: CAT.food,        emoji: '🍽️', title: 'Nearby Restaurants', sub: 'Where locals eat', action: 'Places to Eat' },
+  { cat: CAT.coffee,      emoji: '☕', title: 'Coffee Finder',      sub: 'Cafés near you',   action: 'Coffee' },
+  { cat: CAT.atm,         emoji: '🏧', title: 'ATM Finder',         sub: 'Skip the fees',    action: 'ATM' },
+  { cat: CAT.restroom,    emoji: '🚻', title: 'Restroom Finder',    sub: 'Clean & rated',    action: 'Restroom' },
+  { cat: CAT.convenience, emoji: '🏪', title: 'Convenience',        sub: '24/7 essentials',  action: 'Convenience Store' },
+];
+
+// Phone Explore-more cards — smaller gradient tiles (same gradients/glyphs as
+// the tablet GradCards). Weather lives here on phone (it is a finder tile on
+// tablet); Price + Text scanners are separate cards so BOTH stay reachable.
+const PHONE_EXPLORE = [
+  { grad: `linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 100%)`,     emoji: '🎟️', title: 'Things to do',  action: 'Things to Do' },
+  { grad: `linear-gradient(135deg, ${CAT.shopping.ink} 0%, #A855F7 100%)`, emoji: '🛍️', title: 'Shopping',      action: 'Shopping' },
+  { grad: `linear-gradient(135deg, ${CAT.culture.ink} 0%, #D97706 100%)`,  emoji: '🏛️', title: 'Cultural Info', action: 'Culture Information' },
+  { grad: `linear-gradient(135deg, ${CAT.weather.ink} 0%, #F4B740 100%)`,  emoji: '☀️', title: 'Weather',       action: 'Weather' },
+  { grad: `linear-gradient(135deg, ${CAT.phrases.ink} 0%, #EAB308 100%)`,  emoji: '💬', title: 'Phrases',       action: 'Basic Phrases' },
+  { grad: 'linear-gradient(135deg, #0F766E 0%, #14B8A6 100%)',             emoji: '💲', title: 'Price scanner', action: 'Smart Price Scanner' },
+  { grad: 'linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%)',             emoji: '🔤', title: 'Text scanner',  action: 'Smart Text Scanner' },
+];
+
+// Module-scoped so it survives Home re-mounts within one app session: the
+// signInTick of the last sign-in we already showed the welcome splash for. Keeps
+// the splash to ONCE per sign-in (not on every Home re-mount/navigation).
+let lastWelcomeHandledTick = 0;
+// Per-account cap: the welcome splash shows on at most this many sign-ins, then
+// it's gone for good. The counter lives on the Supabase profile
+// (profile.welcome_splash_count) — see AuthContext.bumpWelcomeSplashCount.
+const WELCOME_MAX = 10;
+
 export default function HomePage() {
   const navigate = useNavigate();
   const { locationMode, selectedLocation, currentGpsLocation, getActiveLocation, loading: locationLoading } = useLocation();
-  const { profile, user: authUser } = useAuth();
-  // Feature tiles: default is the compact 3+4 grid. The moment the user enlarges
-  // text (any glasses bump) the rows reflow to 2-across, where the WIDER boxes
-  // keep the full labels whole at a bigger font (chosen design: widen-when-large).
-  const { step: fontStep } = useFontScale();
-  const twoUp = fontStep >= 1;
-  // iPad gets a dedicated tablet layout (HomeTablet); phone is untouched.
+  const { profile, user: authUser, signInTick, bumpWelcomeSplashCount } = useAuth();
+  // iPad gets a dedicated tablet layout (HomeTablet); phone gets the fuller
+  // editorial layout below.
   const isTablet = useIsTablet();
+  // Text-size step (0-3) from the glasses control. Phone Explore tiles grow with
+  // it and the Explore grid drops to 2-col at the larger steps so the enlarged
+  // tiles + titles fit (presentation only — see PHONE_EXPLORE render below).
+  const { step: fontStep } = useFontScale();
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -76,6 +111,7 @@ export default function HomePage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [timezone, setTimezone] = useState(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false); // welcome splash (first launches, before the location selector)
   const [tempUnit, setTempUnit] = useState('F');
   const [homeCountryInfo, setHomeCountryInfo] = useState(null);
   const [homeCountryTime, setHomeCountryTime] = useState(new Date());
@@ -83,25 +119,41 @@ export default function HomePage() {
   const [shouldShowHomeCountryTime, setShouldShowHomeCountryTime] = useState(false);
   const [showHomeFlag, setShowHomeFlag] = useState(false);
   const [homeFlagUrl, setHomeFlagUrl] = useState(null);
-  const locationPrompted = useRef(false); // gate the one-time auto-open of the location picker
+  const pickerPrompted = useRef(false); // gate the one-time location-picker auto-open (per mount)
 
   useEffect(() => {
     if (!locationLoading) loadUserAndWeather();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationLoading, locationMode, selectedLocation, currentGpsLocation, profile]);
 
-  // If location init finishes with no location set, proactively open the picker
-  // so the user can choose "Use My Current Location" or navigate to another —
-  // the app is location-centric and does nothing useful without one. Fires once
-  // per mount; the user can still dismiss it and tap "Set location" later.
+  // ENTRY FLOW — one ATOMIC decision (so the splash and the location picker can
+  // never both open at once):
+  //   • A FRESH sign-in/sign-up (signInTick bumped in AuthContext — never on a
+  //     plain app-launch session restore) shows the Welcome splash, capped at
+  //     WELCOME_MAX per account via profile.welcome_splash_count. When shown we
+  //     RETURN, so the picker is not opened underneath it (the splash leads; its
+  //     Start exploring / Skip / ✕ opens the picker next).
+  //   • Otherwise (no fresh sign-in, or cap reached) open the location picker
+  //     once if no location is set yet. Keyed to lastWelcomeHandledTick so the
+  //     splash shows once per sign-in, not on every Home re-mount in a session.
   useEffect(() => {
-    if (locationLoading || locationPrompted.current) return;
-    if (!getActiveLocation()?.coordinates) {
-      locationPrompted.current = true;
+    if (locationLoading) return;
+    if (signInTick && signInTick !== lastWelcomeHandledTick) {
+      if (!profile) return; // wait for the account's count before deciding
+      lastWelcomeHandledTick = signInTick;
+      if ((profile.welcome_splash_count ?? 0) < WELCOME_MAX) {
+        setShowWelcome(true);
+        bumpWelcomeSplashCount(); // persist +1 to the per-account counter
+        return; // splash leads — do NOT also open the picker underneath
+      }
+      // cap reached → fall through to the picker
+    }
+    if (!pickerPrompted.current && !showWelcome && !getActiveLocation()?.coordinates) {
+      pickerPrompted.current = true;
       setShowLocationPicker(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locationLoading, locationMode, selectedLocation, currentGpsLocation]);
+  }, [locationLoading, signInTick, profile, showWelcome, locationMode, selectedLocation, currentGpsLocation]);
 
   // Drive the local greeting word (e.g. "Hola", "Bonjour") from the active
   // location's country. Theme-system country-code sync was removed when the
@@ -329,6 +381,20 @@ export default function HomePage() {
     if (routes[actionLabel]) navigate(createPageUrl(routes[actionLabel]));
   };
 
+  // Welcome-splash actions:
+  //   • Proceed (Start exploring / Skip / ✕) → open the location selector.
+  //   • Timeout (30s with no interaction)    → go straight to the home screen.
+  // The starter rows are display-only. Both stable (useCallback) so the splash's
+  // 30s auto-dismiss timer isn't reset on re-render.
+  const welcomeExplore = useCallback(() => {
+    setShowWelcome(false);
+    pickerPrompted.current = true; // we're opening it; don't let the effect re-open on close
+    setShowLocationPicker(true);
+  }, []);
+  const welcomeClose = useCallback(() => {
+    setShowWelcome(false);
+  }, []);
+
   const toggleTempUnit = () => setTempUnit((prev) => (prev === 'C' ? 'F' : 'C'));
 
   if (loading) {
@@ -385,6 +451,11 @@ export default function HomePage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen font-sans" style={{ background: IVORY }}>
+      {/* First-launches Welcome splash — overlays Home (phone + tablet) BEFORE
+          the location selector; any dismissal opens the selector → home. */}
+      <AnimatePresence>
+        {showWelcome && <WelcomeSplash onProceed={welcomeExplore} onTimeout={welcomeClose} />}
+      </AnimatePresence>
       {isTablet ? (
         <HomeTablet
           firstName={getFirstName()}
@@ -403,93 +474,163 @@ export default function HomePage() {
         />
       ) : (
       <>
+      {/* PHONE — fuller editorial Home. Mirrors HomeTablet's structure at phone
+          scale (greeting card → Money Exchange hero → 2-col finder tiles →
+          Explore-more gradient row) and matches the approved phone preview.
+          Single max-w-md column. Presentation only — every handler / data field
+          below is reused exactly as the tablet layout consumes it. */}
       {/* HERO GREETING CARD ----------------------------------------------- */}
-      <div className="px-4 pt-2 pb-4">
+      <div className="px-4 pt-2 pb-3">
         <div
-          className="max-w-md mx-auto rounded-[22px] relative overflow-hidden"
+          className="max-w-md mx-auto rounded-[20px] relative overflow-hidden flex flex-col justify-end"
           style={{
             background: '#FFFFFF',
             border: '1px solid #F0E9DC',
             boxShadow: '0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)',
+            // CONSTANT fixed height — the box stays exactly this size and never
+            // grows/shrinks with the glasses text-size control; only the text
+            // inside scales (per user request). A definite height also lets the
+            // inner `min-h-full` distribute content top→base and the flag fill
+            // the whole card. Mirrors how HomeTablet pins its flag card.
+            height: 330,
           }}
         >
-          {/* Home-country flag as the greeting-card background. Stretched to fill
-              the whole card so the ENTIRE flag shows, with a light scrim for text
-              legibility. Active when the Show Home Country Flag toggle is on. */}
+          {/* Home-country flag as the greeting-card background. The ENTIRE flag
+              is shown undistorted — `contain` = no crop, no stretch — centered
+              over a blurred copy of itself so the card is fully filled (no empty
+              bars) without cutting off any part of the flag. A scrim keeps text
+              legible. Active when the Show Home Country Flag toggle is on. */}
           {flagActive && (
             <>
+              {/* Blurred fill: covers the card so there are no empty bars behind
+                  the contained flag. A slightly oversized backgroundSize hides any
+                  blur edge-seam — WITHOUT a transform (a scaled child escapes the
+                  page's overflow clip on iOS WKWebView and makes the whole app
+                  pannable sideways). */}
               <div
                 className="absolute inset-0 z-0"
                 style={{
                   backgroundImage: `url(${homeFlagUrl})`,
-                  backgroundSize: '100% 100%',
+                  backgroundSize: '170%',
+                  backgroundPosition: 'center',
+                  filter: 'blur(22px) saturate(1.2)',
+                }}
+              />
+              {/* The whole flag — uncropped and undistorted. */}
+              <div
+                className="absolute inset-0 z-0"
+                style={{
+                  backgroundImage: `url(${homeFlagUrl})`,
+                  backgroundSize: 'contain',
                   backgroundRepeat: 'no-repeat',
-                  filter: 'saturate(1.1)',
+                  backgroundPosition: 'center',
+                  filter: 'saturate(1.05)',
                 }}
               />
               <div
                 className="absolute inset-0 z-[1]"
-                style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.16) 0%, rgba(0,0,0,0.40) 100%)' }}
+                // Scrim shaped so the flag stays vibrant/filled through the
+                // middle: light wash at top (behind the Hello kicker), nearly
+                // clear in the center (the flag shows; the serif headline keeps
+                // its own text-shadow), darkening only toward the base where the
+                // white date·weather·location row needs contrast.
+                style={{ background: 'linear-gradient(180deg, rgba(8,10,14,0.42) 0%, rgba(8,10,14,0.12) 28%, rgba(8,10,14,0.08) 52%, rgba(8,10,14,0.55) 82%, rgba(8,10,14,0.82) 100%)' }}
               />
             </>
           )}
 
-          {/* ONE unified layout for flag-on AND flag-off: same compact placement
-              (greeting top-left, eyeglasses top-right, location + date/time/temp as
-              right-aligned ovals at the bottom), same height. No full-width bars.
-              Only the colors differ (white-over-flag vs dark-on-white). The flag
-              fills the whole box (backgroundSize 100% 100% above). */}
-          <div className="relative z-10 p-4 flex flex-col" style={{ minHeight: 'calc(205px * min(var(--fs), 1.25))' }}>
-            <div>
-              {/* Hello (left) · eyeglasses (right) */}
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-[calc(13.5px*var(--fs))] flex items-center gap-1.5 leading-none" style={{ color: flagActive ? '#fff' : '#475569', textShadow: flagActive ? '0 1px 8px rgba(0,0,0,0.6)' : 'none' }}>
-                  <span>Hello 👋</span>
-                  {localGreeting && (
-                    <span className="font-serif italic" style={{ color: flagActive ? '#FFE7A3' : '#3A3128' }}>
-                      {localGreeting.charAt(0).toUpperCase() + localGreeting.slice(1)}
-                    </span>
-                  )}
-                </p>
-                <div className="flex-none"><FontScaleButton /></div>
-              </div>
-
-              {/* Name, in <City> */}
-              <h1 className="mt-1.5 text-[calc(27px*var(--fs))] font-extrabold tracking-tight leading-tight" style={{ color: flagActive ? '#fff' : '#0F1419', textShadow: flagActive ? '0 2px 14px rgba(0,0,0,0.6)' : 'none' }}>
-                {getFirstName()}
-                {cityName && (
-                  <>
-                    <span>, in </span>
-                    <span className="font-serif italic font-normal" style={{ color: flagActive ? '#FFE7A3' : TEAL_DEEP }}>{cityName}</span>
-                  </>
+          {/* FIXED-big card: content laid out top→base (flex column +
+              justify-between) so the greeting/name pin to the top and the
+              date·weather·location row sits at the base, letting the flag fill
+              the whole card at every font size (mirrors HomeTablet). */}
+          <div className="relative z-10 p-4 flex flex-col justify-between h-full">
+          {/* TOP LINE — "Hello 👋" (left) · first name (right, just before the
+              glasses) · glasses (far right). The city headline sits below,
+              right-aligned over the plain fly side of the flag. */}
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] flex items-center gap-1.5 leading-none flex-shrink-0" style={{ color: flagActive ? 'rgba(255,255,255,.92)' : '#736657' }}>
+                <span>Hello 👋</span>
+                {localGreeting && (
+                  <span className="font-serif italic normal-case tracking-normal" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP }}>
+                    {localGreeting.charAt(0).toUpperCase() + localGreeting.slice(1)}
+                  </span>
                 )}
-              </h1>
+              </p>
+              {/* First name CENTERED in the gap between "Hello 👋" and the glasses
+                  (flex-1 + text-center); whitespace-nowrap so it never splits its
+                  letters. */}
+              {getFirstName() && (
+                <span className="flex-1 min-w-0 text-center font-serif italic text-[calc(22px*var(--fs))] whitespace-nowrap" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP, textShadow: flagActive ? '0 1px 10px rgba(0,0,0,0.55)' : 'none', overflowWrap: 'normal', wordBreak: 'keep-all' }}>
+                  {getFirstName()}
+                </span>
+              )}
+              <div className="flex-none"><FontScaleButton /></div>
             </div>
 
-            {/* Compact ovals pushed to the bottom — each background hugs its text.
-                Home time/temp live in the subtle row BELOW the card. */}
-            <div className="mt-auto pt-3 flex flex-col items-end gap-2">
-              <button
-                onClick={() => setShowLocationPicker(true)}
-                className="inline-flex items-center gap-2 rounded-full px-3 py-2 max-w-[88%]"
-                style={{ background: flagActive ? 'rgba(0,0,0,0.45)' : '#F7F4EC', backdropFilter: flagActive ? 'blur(10px)' : 'none', WebkitBackdropFilter: flagActive ? 'blur(10px)' : 'none' }}
-              >
-                <MapPin size={15} color={flagActive ? '#FFE7A3' : TEAL_DEEP} strokeWidth={2} className="flex-none" />
-                <span className="text-[calc(13.5px*var(--fs))] font-semibold truncate" style={{ color: flagActive ? '#fff' : '#0F1419' }}>{placeText}</span>
-                <span className="text-[calc(10.5px*var(--fs))] underline underline-offset-2 flex-none" style={{ color: flagActive ? 'rgba(255,255,255,0.8)' : TEAL_DEEP }}>Change</span>
-              </button>
+            {/* City headline — right-aligned, 2-line clamp. */}
+            {cityName && (
+              <h1 className="text-right mt-2 font-serif leading-[1.06] text-[calc(28px*var(--fs))]" style={{ color: flagActive ? '#fff' : '#16110D', textShadow: flagActive ? '0 2px 18px rgba(0,0,0,0.55)' : 'none', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                <span style={{ color: flagActive ? 'rgba(255,255,255,.85)' : '#3A3128' }}>in </span>
+                <span className="italic" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP }}>{cityName}</span>
+              </h1>
+            )}
+          </div>
 
-              <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                <span className="rounded-full px-2.5 py-1 text-[calc(11.5px*var(--fs))] font-semibold whitespace-nowrap" style={{ background: flagActive ? 'rgba(0,0,0,0.45)' : '#F7F4EC', color: flagActive ? '#fff' : '#0F1419', backdropFilter: flagActive ? 'blur(10px)' : 'none', WebkitBackdropFilter: flagActive ? 'blur(10px)' : 'none' }}>{formatLocalDate(currentTime, timezone)}</span>
-                <span className="rounded-full px-2.5 py-1 text-[calc(11.5px*var(--fs))] font-semibold whitespace-nowrap" style={{ background: flagActive ? 'rgba(0,0,0,0.45)' : '#F7F4EC', color: flagActive ? '#fff' : '#0F1419', backdropFilter: flagActive ? 'blur(10px)' : 'none', WebkitBackdropFilter: flagActive ? 'blur(10px)' : 'none' }}>{formatLocalTime(currentTime, timezone)}</span>
-                {weatherInfo && Number.isFinite(weatherInfo.celsius) && Number.isFinite(weatherInfo.fahrenheit) && (
-                  <button onClick={toggleTempUnit} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[calc(11.5px*var(--fs))] font-semibold whitespace-nowrap" style={{ background: flagActive ? 'rgba(0,0,0,0.45)' : '#F7F4EC', color: flagActive ? '#fff' : '#0F1419', backdropFilter: flagActive ? 'blur(10px)' : 'none', WebkitBackdropFilter: flagActive ? 'blur(10px)' : 'none' }}>
-                    <Cloud size={13} color={flagActive ? '#FFE7A3' : TEAL_DEEP} strokeWidth={2} />
+          {/* BOTTOM — normally "date · temp" (left) with the location pill
+              bottom-right. At the larger text sizes (step ≥ 2) it reflows: the
+              temperature + pill move to an upper row and the day·date drops to its
+              OWN last line at the bottom-left, so nothing crowds. */}
+          {fontStep >= 2 ? (
+            <div className="pt-2.5 flex flex-col gap-2" style={{ borderTop: `1px solid ${flagActive ? 'rgba(255,255,255,.25)' : '#F0E9DC'}` }}>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                {weatherInfo && Number.isFinite(weatherInfo.celsius) && Number.isFinite(weatherInfo.fahrenheit) ? (
+                  <button onClick={toggleTempUnit} className="inline-flex items-center gap-1 whitespace-nowrap text-[calc(12px*var(--fs))] font-medium" style={{ color: flagActive ? '#fff' : '#3A3128', textShadow: flagActive ? '0 1px 8px rgba(0,0,0,0.5)' : 'none' }}>
+                    <Cloud size={13} color={flagActive ? '#FFD9A0' : TEAL_DEEP} strokeWidth={2} />
                     {tempUnit === 'C' ? `${weatherInfo.celsius}°C` : `${weatherInfo.fahrenheit}°F`}
                   </button>
+                ) : <span />}
+                <button
+                  onClick={() => setShowLocationPicker(true)}
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 max-w-full min-w-0"
+                  style={{ background: flagActive ? 'rgba(0,0,0,0.4)' : '#F7F4EC', backdropFilter: flagActive ? 'blur(10px)' : 'none', WebkitBackdropFilter: flagActive ? 'blur(10px)' : 'none' }}
+                >
+                  <MapPin size={14} color={flagActive ? '#FFD9A0' : TEAL_DEEP} strokeWidth={2} className="flex-none" />
+                  <span className="text-[calc(11.5px*var(--fs))] font-semibold truncate" style={{ color: flagActive ? '#fff' : '#16110D' }}>{placeText}</span>
+                  <span className="text-[calc(10.5px*var(--fs))] underline underline-offset-2 flex-none" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP }}>Change</span>
+                </button>
+              </div>
+              {/* day · date — its own last line, bottom-left */}
+              <span className="text-[calc(12px*var(--fs))] font-medium" style={{ color: flagActive ? '#fff' : '#3A3128', textShadow: flagActive ? '0 1px 8px rgba(0,0,0,0.5)' : 'none' }}>{formatLocalDate(currentTime, timezone)}</span>
+            </div>
+          ) : (
+            <div
+              className="flex items-end justify-between gap-x-2 gap-y-2 flex-wrap pt-2.5"
+              style={{ borderTop: `1px solid ${flagActive ? 'rgba(255,255,255,.25)' : '#F0E9DC'}` }}
+            >
+              <div className="flex items-center gap-1.5 text-[calc(12px*var(--fs))] font-medium" style={{ color: flagActive ? '#fff' : '#3A3128', textShadow: flagActive ? '0 1px 8px rgba(0,0,0,0.5)' : 'none' }}>
+                <span className="whitespace-nowrap">{formatLocalDate(currentTime, timezone)}</span>
+                {weatherInfo && Number.isFinite(weatherInfo.celsius) && Number.isFinite(weatherInfo.fahrenheit) && (
+                  <>
+                    <span style={{ opacity: 0.4 }}>·</span>
+                    <button onClick={toggleTempUnit} className="inline-flex items-center gap-1 whitespace-nowrap">
+                      <Cloud size={13} color={flagActive ? '#FFD9A0' : TEAL_DEEP} strokeWidth={2} />
+                      {tempUnit === 'C' ? `${weatherInfo.celsius}°C` : `${weatherInfo.fahrenheit}°F`}
+                    </button>
+                  </>
                 )}
               </div>
+              <button
+                onClick={() => setShowLocationPicker(true)}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 max-w-full min-w-0"
+                style={{ background: flagActive ? 'rgba(0,0,0,0.4)' : '#F7F4EC', backdropFilter: flagActive ? 'blur(10px)' : 'none', WebkitBackdropFilter: flagActive ? 'blur(10px)' : 'none' }}
+              >
+                <MapPin size={14} color={flagActive ? '#FFD9A0' : TEAL_DEEP} strokeWidth={2} className="flex-none" />
+                <span className="text-[calc(11.5px*var(--fs))] font-semibold truncate" style={{ color: flagActive ? '#fff' : '#16110D' }}>{placeText}</span>
+                <span className="text-[calc(10.5px*var(--fs))] underline underline-offset-2 flex-none" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP }}>Change</span>
+              </button>
             </div>
+          )}
           </div>
         </div>
       </div>
@@ -511,123 +652,60 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* FEATURED MONEY EXCHANGE ----------------------------------------- */}
+      {/* FEATURED MONEY EXCHANGE — compact green hero ----------------------- */}
       <div className="px-4 pb-3">
         <div className="max-w-md mx-auto">
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={() => handleQuickAction('Money Exchange')}
-            className="w-full rounded-[22px] p-5 relative overflow-hidden flex items-center gap-4 text-left"
+            className="w-full rounded-[18px] p-4 relative overflow-hidden flex items-center gap-3 text-left"
             style={{
-              background: 'linear-gradient(135deg, #0F9A6B 0%, #0BB572 60%, #16E27A 100%)',
-              boxShadow: '0 14px 30px -14px rgba(15,154,107,.5)',
+              background: 'linear-gradient(110deg, #15A06A, #0C7B50)',
+              boxShadow: '0 12px 28px -16px rgba(12,123,80,.55)',
             }}
           >
             <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center flex-none font-serif italic text-[calc(22px*var(--fs))] text-white"
-              style={{ background: 'rgba(255,255,255,0.2)' }}
+              className="w-10 h-10 rounded-xl flex items-center justify-center flex-none font-serif italic text-[calc(16px*var(--fs))] text-white"
+              style={{ background: 'rgba(255,255,255,0.18)' }}
             >
               $€¥
             </div>
-            <div className="flex-1 text-white">
-              <div className="text-[calc(21px*var(--fs))] font-bold tracking-tight leading-tight">Money Exchange</div>
-              <div className="text-[calc(13px*var(--fs))] opacity-90 mt-1">Compare rates near you</div>
+            <div className="flex-1 text-white min-w-0">
+              <div className="font-serif text-[calc(21px*var(--fs))] leading-[1.05]">Money Exchange</div>
+              <div className="text-[calc(12px*var(--fs))] opacity-90 mt-0.5">Compare rates near you</div>
             </div>
-            <ChevronRight size={22} color="#fff" strokeWidth={2.2} />
+            <ChevronRight size={20} color="#fff" strokeWidth={2.2} className="flex-none" />
           </motion.button>
         </div>
       </div>
 
-      {/* FEATURE TILES — default 3+4 compact grid; reflows to 2-across the moment
-          text is enlarged (twoUp) so the wider boxes keep the full labels whole.
-          Words wrap only at spaces (never mid-word); icon + label are packed
-          together with a small gap (no large icon↔text space). */}
-      {twoUp ? (
-        /* ENLARGED: one 2-across grid so there are NO empty holes. The odd 7th
-           tile (Weather) spans the full width as a long tile. */
-        <div className="px-4 pb-4">
-          <div className="max-w-md mx-auto grid grid-cols-2 gap-3">
-            <SatTile twoUp cat={CAT.transit} emoji="🚌" label="Transit Info" onClick={() => handleQuickAction('Transportation')} />
-            <SatTile twoUp cat={CAT.food} emoji="🍽️" label="Nearby Restaurants" onClick={() => handleQuickAction('Places to Eat')} />
-            <SatTile twoUp cat={CAT.coffee} emoji="☕" label="Coffee Shop Finder" onClick={() => handleQuickAction('Coffee')} />
-            <SatTile twoUp cat={CAT.atm} emoji="🏧" label="ATM Finder" onClick={() => handleQuickAction('ATM')} />
-            <SatTile twoUp cat={CAT.restroom} emoji="🚻" label="Restroom Finder" onClick={() => handleQuickAction('Restroom')} />
-            <SatTile twoUp cat={CAT.convenience} emoji="🏪" label="Convenience Store" onClick={() => handleQuickAction('Convenience Store')} />
-            <SatTile twoUp wide cat={CAT.weather} emoji="☀️" label="Weather" onClick={() => handleQuickAction('Weather')} />
-          </div>
+      {/* FEATURE TILES — 2-col grid of all six finders. Editorial: emoji chip,
+          serif title (2-line clamp), tiny subtitle; min-height so enlarging text
+          grows the tile instead of clipping. */}
+      <div className="px-4 pb-3">
+        <div className="max-w-md mx-auto grid grid-cols-2 gap-2.5">
+          {PHONE_FEATURES.map((f) => (
+            <PhoneTile key={f.title} cat={f.cat} emoji={f.emoji} title={f.title} sub={f.sub} onClick={() => handleQuickAction(f.action)} />
+          ))}
         </div>
-      ) : (
-        /* DEFAULT: compact 3-on-top + 4-below grid. */
-        <>
-          <div className="px-4 pb-3">
-            <div className="max-w-md mx-auto grid grid-cols-3 gap-3">
-              <SatTile cat={CAT.transit} emoji="🚌" label="Transit Info" onClick={() => handleQuickAction('Transportation')} />
-              <SatTile cat={CAT.food} emoji="🍽️" label="Nearby Restaurants" onClick={() => handleQuickAction('Places to Eat')} />
-              <SatTile cat={CAT.coffee} emoji="☕" label="Coffee Shop Finder" onClick={() => handleQuickAction('Coffee')} />
-            </div>
-          </div>
-          <div className="px-4 pb-4">
-            <div className="max-w-md mx-auto grid grid-cols-4 gap-3">
-              <SatTile small cat={CAT.atm} emoji="🏧" label="ATM Finder" onClick={() => handleQuickAction('ATM')} />
-              <SatTile small cat={CAT.restroom} emoji="🚻" label="Restroom Finder" onClick={() => handleQuickAction('Restroom')} />
-              <SatTile small cat={CAT.convenience} emoji="🏪" label="Convenience Store" onClick={() => handleQuickAction('Convenience Store')} />
-              <SatTile small cat={CAT.weather} emoji="☀️" label="Weather" onClick={() => handleQuickAction('Weather')} />
-            </div>
-          </div>
-        </>
-      )}
+      </div>
 
-      {/* EXPLORE MORE — vibrant gradient cards --------------------------- */}
+      {/* EXPLORE MORE — mono kicker + gradient cards. At small text steps this
+          is a 3-col row of compact cards; once text is enlarged (step >= 2) it
+          drops to a 2-col grid so the larger tiles + 2-line serif titles fit and
+          read as large as the six finder tiles above. */}
       <div className="px-4 pb-28">
         <div className="max-w-md mx-auto">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="font-mono text-[calc(10.5px*var(--fs))] tracking-[0.16em] uppercase text-[#475569] font-semibold">
-              Explore more
-            </span>
+          <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] font-semibold mt-1 mb-2" style={{ color: '#736657' }}>
+            Explore more
           </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            <GradCard
-              gradient={`linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 60%, #FF7DB1 100%)`}
-              emoji="🎟️"
-              label="Things to do"
-              sub="Sights · tours"
-              onClick={() => handleQuickAction('Things to Do')}
-            />
-            <GradCard
-              gradient={`linear-gradient(135deg, ${CAT.shopping.ink} 0%, #A855F7 60%, #C084FC 100%)`}
-              emoji="🛍️"
-              label="Shopping"
-              sub="Markets · malls"
-              onClick={() => handleQuickAction('Shopping')}
-            />
-            <GradCard
-              gradient={`linear-gradient(135deg, ${CAT.culture.ink} 0%, #D97706 60%, #FBBF24 100%)`}
-              emoji="🏛️"
-              label="Cultural Info"
-              sub="Museums · sights"
-              onClick={() => handleQuickAction('Culture Information')}
-            />
-            <GradCard
-              gradient={`linear-gradient(135deg, ${CAT.phrases.ink} 0%, #CA8A04 60%, #EAB308 100%)`}
-              emoji="💬"
-              label="Basic Language Phrases"
-              sub="50 essentials"
-              onClick={() => handleQuickAction('Basic Phrases')}
-            />
-            <GradCard
-              gradient="linear-gradient(135deg, #0F766E 0%, #14B8A6 60%, #2DD4BF 100%)"
-              emoji="💲"
-              label="Price scanner"
-              sub="Convert any price"
-              onClick={() => handleQuickAction('Smart Price Scanner')}
-            />
-            <GradCard
-              gradient="linear-gradient(135deg, #6D28D9 0%, #8B5CF6 60%, #A78BFA 100%)"
-              emoji="🔤"
-              label="Text scanner"
-              sub="Menus · signs · labels"
-              onClick={() => handleQuickAction('Smart Text Scanner')}
-            />
+          <div
+            className="grid gap-2.5"
+            style={{ gridTemplateColumns: fontStep >= 2 ? '1fr 1fr' : '1fr 1fr 1fr' }}
+          >
+            {PHONE_EXPLORE.map((e) => (
+              <PhoneGrad key={e.title} grad={e.grad} emoji={e.emoji} title={e.title} step={fontStep} onClick={() => handleQuickAction(e.action)} />
+            ))}
           </div>
         </div>
       </div>
@@ -650,118 +728,73 @@ export default function HomePage() {
           appears in the chrome. Gated on onboarding_completed so the
           native banner overlay never shows during the brief Home mount
           that precedes the onboarding redirect (it would otherwise
-          linger over the onboarding screens). */}
-      {profile?.onboarding_completed && <HomeBanner />}
+          linger over the onboarding screens). ALSO suppressed while the
+          Welcome splash or the location picker is open — the native ad
+          overlay would otherwise sit at the bottom over those screens;
+          unmounting HomeBanner calls AdMob.hideBanner/removeBanner, and it
+          re-shows once the user is on the actual home content. */}
+      {profile?.onboarding_completed && !showWelcome && !showLocationPicker && <HomeBanner />}
 
       <LocationModePicker isOpen={showLocationPicker} onClose={() => setShowLocationPicker(false)} />
     </div>
   );
 }
 
-// ── SatTile — saturated category-color tile ────────────────────────────────
-// ink bg, white icon chip, ONE-LINE label, decorative circle off the top-right.
-// aspect-square keeps the chunky look; the box grows proportionally as the
-// auto-fit grid reflows to fewer/wider columns at larger font sizes — so the
-// label never wraps and never clips (the box always widens to fit it).
-function SatTile({ cat, icon: Icon, emoji, label, onClick, small = false, twoUp = false, wide = false }) {
-  // `compact` = the narrow 4-across tile shown at the default text size. When the
-  // user enlarges text the grid reflows to 2-across (twoUp): the boxes get WIDER,
-  // so the same labels stay whole at a bigger, --fs-scaled font. Icon + label are
-  // packed at the top with a small gap (no big icon↔text space). Font sizes are
-  // chosen so the longest word fits the box width on ONE line — never mid-word.
-  // `wide` makes the tile span both columns (the long Weather tile in the 2-up
-  // layout) so there are no empty holes.
-  const compact = small && !twoUp;
-  const iconBox = compact ? 30 : 38;
-  const fontSize = twoUp ? 'calc(13px * var(--fs))' : (compact ? '11px' : '12.5px');
-  return (
-    <motion.button
-      whileTap={{ scale: 0.96 }}
-      onClick={onClick}
-      className="relative overflow-hidden rounded-[18px] text-white text-left min-w-0"
-      style={{
-        background: cat.ink,
-        gridColumn: wide ? 'span 2' : undefined,
-        minHeight: twoUp ? 92 : (compact ? 88 : 100),
-        padding: compact ? 11 : 14,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'flex-start',
-        gap: compact ? 6 : 8,
-        boxShadow: `0 10px 22px -12px ${cat.ink}80`,
-      }}
-    >
-      <div
-        className="absolute -top-3 -right-3 rounded-full pointer-events-none"
-        style={{ width: 70, height: 70, background: 'rgba(255,255,255,0.12)' }}
-      />
-      <div
-        className="flex items-center justify-center relative flex-none"
-        style={{ width: iconBox, height: iconBox, borderRadius: compact ? 10 : 12, background: 'rgba(255,255,255,0.2)' }}
-      >
-        {emoji ? (
-          <span style={{ fontSize: compact ? 17 : 21, lineHeight: 1 }}>{emoji}</span>
-        ) : (
-          <Icon size={compact ? 16 : 20} color="#fff" strokeWidth={2} />
-        )}
-      </div>
-      {/* break-normal = words wrap ONLY at spaces, never split mid-word. The font
-          is sized to fit the longest word, so nothing overflows or clips. */}
-      <div
-        className="font-bold tracking-tight relative leading-tight break-normal"
-        style={{ fontSize }}
-      >
-        {label}
-      </div>
-    </motion.button>
-  );
-}
-
-// ── GradCard — vibrant gradient feature card (Explore More section) ────────
-// Per spec: gradient bg, 1.3:1 aspect, decorative shape + optional glyph,
-// icon chip top-left, two-line label bottom-left. Optional `badge` pill
-// (top-right) for status callouts like "Soon".
-function GradCard({ gradient, emoji, label, sub, badge, onClick }) {
+// ── PhoneTile — compact editorial finder tile (2-col grid) ─────────────────
+// Saturated category-ink bg, white emoji chip, serif title (2-line clamp), tiny
+// subtitle. min-height (never fixed) so enlarging text grows the tile instead of
+// clipping. Mirrors HomeTablet's TabletTile at phone scale.
+function PhoneTile({ cat, emoji, title, sub, onClick }) {
   return (
     <motion.button
       whileTap={{ scale: 0.97 }}
       onClick={onClick}
-      className="relative overflow-hidden rounded-[18px] text-white text-left p-3.5"
-      style={{
-        background: gradient,
-        // Cap height growth (~1 step) so the Explore cards don't balloon as text
-        // enlarges. The emoji chip sits in the UPPER-LEFT (the only glyph on the
-        // card); the label grows downward from the bottom-left.
-        minHeight: 'calc(132px * min(var(--fs), 1.15))',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        boxShadow: '0 12px 26px -12px rgba(15,20,25,0.4)',
-      }}
+      className="relative overflow-hidden rounded-[18px] text-white text-left min-w-0 p-[13px]"
+      style={{ background: cat.ink, minHeight: 100, boxShadow: `0 10px 22px -12px ${cat.ink}80` }}
     >
       <div
-        className="absolute -top-2.5 -right-2.5 rounded-full pointer-events-none"
-        style={{ width: 70, height: 70, background: 'rgba(255,255,255,0.14)' }}
+        className="absolute -top-3.5 -right-3.5 rounded-full pointer-events-none"
+        style={{ width: 84, height: 84, background: 'rgba(255,255,255,0.12)' }}
       />
-      {badge && (
-        <span
-          className="absolute top-2.5 right-2.5 font-mono font-bold uppercase tracking-[0.12em] text-[calc(9px*var(--fs))] px-1.5 py-0.5 rounded-full"
-          style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', backdropFilter: 'blur(6px)' }}
-        >
-          {badge}
-        </span>
-      )}
-      {/* EMOJI chip — upper-left. The ONLY icon on the card (no glyph by the label). */}
       <div
         className="relative flex items-center justify-center flex-none"
-        style={{ width: 36, height: 36, borderRadius: 11, background: 'rgba(255,255,255,0.22)' }}
+        style={{ width: 36, height: 36, borderRadius: 11, background: 'rgba(255,255,255,0.2)' }}
       >
         <span style={{ fontSize: 20, lineHeight: 1 }}>{emoji}</span>
       </div>
-      {/* TEXT — lower-left. */}
-      <div className="relative" style={{ paddingRight: 26 }}>
-        <div className="font-extrabold text-[calc(16px*var(--fs))] tracking-tight leading-tight">{label}</div>
-        {sub && <div className="text-[calc(11.5px*var(--fs))] opacity-90 mt-0.5">{sub}</div>}
+      <div
+        className="font-serif leading-[1.05] tracking-tight relative text-[calc(18px*var(--fs))] mt-2"
+        style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+      >
+        {title}
+      </div>
+      {sub && <div className="text-[calc(11px*var(--fs))] opacity-85 relative mt-0.5">{sub}</div>}
+    </motion.button>
+  );
+}
+
+// ── PhoneGrad — gradient Explore-more card ─────────────────────────────────
+// Gradient bg, emoji glyph, serif title (2-line clamp). min-height so the card
+// grows with enlarged text. `step` is the glasses text-size step (0-3): once
+// enlarged (>= 2) the card matches the six finder tiles — serif title fs(18) and
+// min-height ~100px — to read AS LARGE as them in the 2-col Explore grid; at the
+// smaller steps it stays compact (fs(14), min-height 82) for the 3-col row.
+// Mirrors HomeTablet's TabletGrad at phone scale.
+function PhoneGrad({ grad, emoji, title, step = 0, onClick }) {
+  const big = step >= 2;
+  return (
+    <motion.button
+      whileTap={{ scale: 0.97 }}
+      onClick={onClick}
+      className="relative overflow-hidden rounded-[15px] text-white text-left p-[11px]"
+      style={{ background: grad, minHeight: big ? 100 : 82, boxShadow: '0 12px 26px -14px rgba(15,20,25,0.4)' }}
+    >
+      <div style={{ fontSize: 20, lineHeight: 1 }}>{emoji}</div>
+      <div
+        className={`font-serif leading-[1.05] tracking-tight mt-[7px] ${big ? 'text-[calc(18px*var(--fs))]' : 'text-[calc(14px*var(--fs))]'}`}
+        style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+      >
+        {title}
       </div>
     </motion.button>
   );

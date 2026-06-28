@@ -56,17 +56,29 @@ export default function HomeTablet({
       >
         {flagActive && (
           <>
-            <div className="absolute inset-0 z-0" style={{ backgroundImage: `url(${homeFlagUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'saturate(1.1)' }} />
-            <div className="absolute inset-0 z-[1]" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.46) 100%)' }} />
+            {/* Blurred fill covers the card behind the contained flag (no empty
+                bars). Oversized backgroundSize hides the blur seam WITHOUT a
+                transform — a scaled child escapes the page overflow-clip on iOS
+                WKWebView and makes the whole app pannable sideways. */}
+            <div className="absolute inset-0 z-0" style={{ backgroundImage: `url(${homeFlagUrl})`, backgroundSize: '170%', backgroundPosition: 'center', filter: 'blur(26px) saturate(1.2)' }} />
+            {/* The whole flag — uncropped and undistorted (contain). */}
+            <div className="absolute inset-0 z-0" style={{ backgroundImage: `url(${homeFlagUrl})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', filter: 'saturate(1.05)' }} />
+            {/* Scrim keeps the flag vibrant through the middle, darkening only at
+                the very top (Hello kicker) and toward the base (date·location). */}
+            <div className="absolute inset-0 z-[1]" style={{ background: 'linear-gradient(180deg, rgba(8,10,14,0.42) 0%, rgba(8,10,14,0.12) 28%, rgba(8,10,14,0.08) 52%, rgba(8,10,14,0.5) 82%, rgba(8,10,14,0.8) 100%)' }} />
           </>
         )}
         {/* Flag cards are pinned to TABLET_HERO_MIN so the flag never shrinks
             with text scale; flex justify-between keeps the greeting at the top
             and the date/location row at the base (matching the spec). */}
         <div className="relative z-10 p-8 flex flex-col justify-between" style={{ minHeight: flagActive ? TABLET_HERO_MIN : undefined }}>
+          {/* TOP LINE — "Hello 👋" (left) · first name CENTERED in the gap
+              (flex-1 + text-center) · glasses (right). The city headline sits
+              below, right-aligned over the plain fly side of the flag. Mirrors
+              the phone Home layout. */}
           <div>
-            <div className="flex items-start justify-between gap-3">
-              <p className="font-mono uppercase tracking-[0.16em] text-[calc(15px*var(--fs))] flex items-center gap-2" style={{ color: flagActive ? 'rgba(255,255,255,.92)' : '#736657' }}>
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-mono uppercase tracking-[0.16em] text-[calc(15px*var(--fs))] flex items-center gap-2 leading-none flex-shrink-0" style={{ color: flagActive ? 'rgba(255,255,255,.92)' : '#736657' }}>
                 <span>Hello 👋</span>
                 {localGreeting && (
                   <span className="font-serif italic normal-case tracking-normal" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP }}>
@@ -74,25 +86,31 @@ export default function HomeTablet({
                   </span>
                 )}
               </p>
+              {firstName && (
+                // First name centered between "Hello 👋" and the glasses;
+                // whitespace-nowrap so it never splits its letters.
+                <span className="flex-1 min-w-0 text-center font-serif italic text-[calc(38px*var(--fs))] whitespace-nowrap" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP, textShadow: flagActive ? '0 1px 10px rgba(0,0,0,0.55)' : 'none', overflowWrap: 'normal', wordBreak: 'keep-all' }}>
+                  {firstName}
+                </span>
+              )}
               <div className="flex-none"><FontScaleButton /></div>
             </div>
 
-            <h1 className="mt-3 font-serif leading-[1.04] text-[calc(72px*var(--fs))]" style={{ color: flagActive ? '#fff' : '#16110D', textShadow: flagActive ? '0 2px 18px rgba(0,0,0,0.5)' : 'none' }}>
-              {firstName}
-              {cityName && (
-                <>
-                  <span>, in </span>
-                  <span className="italic" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP }}>{cityName}</span>
-                </>
-              )}
-            </h1>
+            {cityName && (
+              <h1 className="text-right mt-3 font-serif leading-[1.04] text-[calc(72px*var(--fs))]" style={{ color: flagActive ? '#fff' : '#16110D', textShadow: flagActive ? '0 2px 18px rgba(0,0,0,0.55)' : 'none' }}>
+                <span style={{ color: flagActive ? 'rgba(255,255,255,.85)' : '#3A3128' }}>in </span>
+                <span className="italic" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP }}>{cityName}</span>
+              </h1>
+            )}
           </div>
 
           <div>
             <div className="my-6 border-t" style={{ borderColor: flagActive ? 'rgba(255,255,255,.25)' : RULE }} />
 
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div className="flex items-center gap-2.5 text-[calc(16px*var(--fs))] font-medium" style={{ color: flagActive ? '#fff' : '#3A3128' }}>
+            {/* date·time·weather, plus location pill pinned bottom-RIGHT (ml-auto)
+                so it stays right even when enlarged text wraps it to a new line. */}
+            <div className="flex items-end justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-2.5 text-[calc(16px*var(--fs))] font-medium" style={{ color: flagActive ? '#fff' : '#3A3128', textShadow: flagActive ? '0 1px 8px rgba(0,0,0,0.5)' : 'none' }}>
                 <span>{dateText}</span>
                 <span style={{ opacity: 0.4 }}>·</span>
                 <span>{timeText}</span>
@@ -108,7 +126,7 @@ export default function HomeTablet({
               </div>
               <button
                 onClick={onLocation}
-                className="inline-flex items-center gap-2.5 rounded-full px-5 py-3"
+                className="ml-auto inline-flex items-center gap-2.5 rounded-full px-5 py-3"
                 style={{ background: flagActive ? 'rgba(0,0,0,0.42)' : '#F6F1E7', backdropFilter: flagActive ? 'blur(10px)' : 'none', WebkitBackdropFilter: flagActive ? 'blur(10px)' : 'none' }}
               >
                 <MapPin size={17} color={flagActive ? '#FFD9A0' : TEAL_DEEP} strokeWidth={2} />
