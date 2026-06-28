@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { fetchCulture } from "@/lib/callWorker";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Loader2, Navigation, RefreshCw, ChevronLeft, Compass, AlertTriangle, ExternalLink } from "lucide-react";
+import { Loader2, Navigation, RefreshCw, ChevronLeft, ChevronDown, ChevronRight, Compass, AlertTriangle, ExternalLink } from "lucide-react";
 import { CAT, IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesign/constants";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import { useIsTablet } from "@/lib/useIsTablet";
@@ -181,6 +182,12 @@ const ANIMAL_ITEM = {
 // ============================================================================
 const COUNTRY_BUNDLES = [
   {
+    id: "country_leadership", layer: "country", ttlDays: 30, volatile: true,
+    prompt: (p) => `List the current top national leaders of ${p} (3-5): for each give position (e.g. President, Prime Minister, Monarch), full name, and a short title. Use full names and proper titles.${HONESTY(p)}`,
+    schema: objOf({ leaders: arrOf({ position: STR, name: STR, title: STR }) }),
+    cards: [{ id: "leaders", title: "National Leadership", icon: "🏛️", blocks: [{ kind: "leaders", field: "leaders" }] }],
+  },
+  {
     id: "country_basics", layer: "country", ttlDays: 365,
     prompt: (p) => `Provide national cultural basics for ${p}: a short national_food_culture summary, a short national_pride summary, the national motto (original + english), religion breakdown (name + % share, highest first), the official language, common second languages, an english_level expectation for travelers, the writing system, and 4-6 basic greetings (phrase + meaning), plus the country's most famous products/exports.${HONESTY(p)}`,
     schema: objOf({
@@ -250,12 +257,6 @@ const COUNTRY_BUNDLES = [
       { id: "wildlife", title: "Wildlife", icon: "🦜", blocks: [{ kind: "cards", field: "wildlife" }] },
       { id: "etiquette", title: "Etiquette", icon: "🤝", blocks: [{ kind: "dodont", field: "etiquette" }] },
     ],
-  },
-  {
-    id: "country_leadership", layer: "country", ttlDays: 30, volatile: true,
-    prompt: (p) => `List the current top national leaders of ${p} (3-5): for each give position (e.g. President, Prime Minister, Monarch), full name, and a short title. Use full names and proper titles.${HONESTY(p)}`,
-    schema: objOf({ leaders: arrOf({ position: STR, name: STR, title: STR }) }),
-    cards: [{ id: "leaders", title: "National Leadership", icon: "🏛️", blocks: [{ kind: "leaders", field: "leaders" }] }],
   },
   {
     id: "country_safety", layer: "country", ttlDays: 30, volatile: true,
@@ -505,6 +506,50 @@ function ChipRow({ items, tone }) {
   );
 }
 
+// Chip variant for plain-text items (products / exports / where-to-buy) that
+// can carry a leading 60px tappable Wikipedia thumb. Each item renders as a
+// wider rounded pill; when it has no Wikipedia image it degrades gracefully to
+// a plain text pill (no empty box). Layout-safe on phone + tablet.
+function ThumbChip({ label }) {
+  const cached = _wikiThumbCache.get(label);
+  const [entry, setEntry] = useState(cached && typeof cached === "object" ? cached : null);
+  const openLightbox = React.useContext(LightboxContext);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(getWikiThumb(label)).then((e) => { if (alive) setEntry(e || null); });
+    return () => { alive = false; };
+  }, [label]);
+  const url = thumbUrlOf(entry);
+  if (!url) {
+    return (
+      <span style={{ background: IVORY_2, color: INK2, fontSize: fs(12.5), fontFamily: SANS }}
+        className="px-3 py-2 rounded-full font-medium">{label}</span>
+    );
+  }
+  const enlarge = () => openLightbox && openLightbox(biggerWikiSrc(entry), label);
+  return (
+    <span style={{ background: IVORY_2, color: INK2, fontSize: fs(12.5), fontFamily: SANS }}
+      className="inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full font-medium">
+      <img src={url} alt={label || ""} loading="lazy"
+        role="button" tabIndex={0}
+        onClick={enlarge}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); enlarge(); } }}
+        title="Tap to enlarge"
+        className="cursor-pointer transition-transform active:scale-95"
+        style={{ width: 36, height: 36, objectFit: "cover", borderRadius: 999, border: `1px solid ${RULE}`, flexShrink: 0 }} />
+      {label}
+    </span>
+  );
+}
+
+function ThumbChips({ items }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {items.filter(hasData).map((it, i) => <ThumbChip key={i} label={it} />)}
+    </div>
+  );
+}
+
 // Small inline meta line used throughout ItemCard (📍 where, 💡 tip, ⚠️ safety…).
 function Meta({ show, color, icon, italic, children }) {
   if (!show) return null;
@@ -532,8 +577,268 @@ function itemBadges(it) {
   return out;
 }
 
+// ---- Wikipedia thumbnail (food + wildlife items) --------------------------
+// Session-scoped cache keyed by English name → entry | null | Promise.
+// An `entry` is { thumb, original } (both URL strings, either may be null).
+// Each name is fetched at most once per session; failures resolve to null.
+// NOTE: presentation-only. Storing both the thumb AND originalimage URLs lets
+// the tap-to-enlarge lightbox load a crisper source without re-fetching.
+const _wikiThumbCache = new Map();
+
+// Pull the small-thumb URL out of whatever the cache holds (entry | string | null).
+const thumbUrlOf = (entry) =>
+  entry && typeof entry === "object" ? entry.thumb || null : (typeof entry === "string" ? entry : null);
+
+// Derive a crisper source for the lightbox from a cached Wikimedia thumb URL.
+// Wikimedia thumbs look like .../thumb/.../<digits>px-Name.jpg — rewriting the
+// "<digits>px-" segment to "640px-" yields a larger render of the SAME image.
+// If the URL doesn't match that pattern, fall back to the originalimage / thumb.
+function biggerWikiSrc(entry) {
+  const original = entry && typeof entry === "object" ? entry.original || null : null;
+  const thumb = thumbUrlOf(entry);
+  // Prefer the full-res originalimage — it is always valid AND clear. (Rewriting
+  // the thumb URL to a larger "640px-" width is unreliable: Wikimedia returns
+  // HTTP 400 for widths it won't generate, which left the enlarged popup blank.)
+  // Fall back to the small thumb only when there is no originalimage.
+  return original || thumb || null;
+}
+
+function getWikiThumb(name) {
+  const key = String(name || "").trim();
+  if (!key) return Promise.resolve(null);
+  if (_wikiThumbCache.has(key)) return Promise.resolve(_wikiThumbCache.get(key));
+  const p = fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(key)}`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((json) => {
+      const thumb = json?.thumbnail?.source || null;
+      const entry = thumb ? { thumb, original: json?.originalimage?.source || null } : null;
+      _wikiThumbCache.set(key, entry);
+      return entry;
+    })
+    .catch(() => {
+      _wikiThumbCache.set(key, null);
+      return null;
+    });
+  _wikiThumbCache.set(key, p); // de-dupe in-flight fetches
+  return p;
+}
+
+// ---- tap-to-enlarge lightbox ----------------------------------------------
+// One lightbox open at a time, page-wide. The currently-open photo lives in a
+// React context provided at the page root; WikiThumb/ThumbChip open it, the
+// portal-rendered <Lightbox> shows it. Backdrop = blurred page + light ivory
+// tint (NOT a solid black overlay); tapping anywhere (backdrop or photo) or
+// pressing Escape closes it. The popup photo is a MODEST centered square.
+const LightboxContext = React.createContext(null);
+
+function LightboxProvider({ children }) {
+  const [photo, setPhoto] = useState(null); // { src, caption } | null
+  const open = useCallback((src, caption) => { if (src) setPhoto({ src, caption }); }, []);
+  const close = useCallback(() => setPhoto(null), []);
+
+  useEffect(() => {
+    if (!photo) return;
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [photo, close]);
+
+  return (
+    <LightboxContext.Provider value={open}>
+      {children}
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {photo && (
+            <motion.div
+              key="culture-lightbox"
+              role="dialog" aria-modal="true" aria-label={photo.caption || "Photo"}
+              onClick={close}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-6"
+              style={{
+                background: "rgba(247,244,236,0.5)",
+                backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
+              }}>
+              <motion.img
+                src={photo.src} alt={photo.caption || ""}
+                initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}
+                style={{
+                  width: "min(360px, 84vw)", height: "min(360px, 84vw)", objectFit: "cover",
+                  borderRadius: 18, boxShadow: "0 18px 50px rgba(22,17,13,.28)",
+                  border: "3px solid #FFFFFF",
+                }} />
+              {photo.caption && (
+                <motion.p
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="mt-3 text-center font-semibold"
+                  style={{ color: INK, fontFamily: SERIF, fontSize: fs(18), maxWidth: "min(360px, 84vw)" }}>
+                  {photo.caption}
+                </motion.p>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
+    </LightboxContext.Provider>
+  );
+}
+
+// Small rounded thumbnail. Renders NOTHING while loading or when no image
+// exists (no empty box / placeholder). Lazy by nature — only mounts when its
+// collapsible section is expanded. Tapping it opens the page lightbox (a modest
+// centered photo); keyboard-focusable (Enter / Space).
+function WikiThumb({ name, size = 60 }) {
+  const cached = _wikiThumbCache.get(name);
+  const [entry, setEntry] = useState(cached && typeof cached === "object" ? cached : null);
+  const openLightbox = React.useContext(LightboxContext);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(getWikiThumb(name)).then((e) => { if (alive) setEntry(e || null); });
+    return () => { alive = false; };
+  }, [name]);
+  const url = thumbUrlOf(entry);
+  if (!url) return null;
+  const enlarge = () => openLightbox && openLightbox(biggerWikiSrc(entry), name);
+  return (
+    <img src={url} alt={name || ""} loading="lazy"
+      role="button" tabIndex={0}
+      onClick={enlarge}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); enlarge(); } }}
+      title="Tap to enlarge"
+      className="cursor-pointer transition-transform active:scale-95"
+      style={{ width: size, height: size, objectFit: "cover", borderRadius: 12, border: `1px solid ${RULE}`, flexShrink: 0 }} />
+  );
+}
+
+// ---- live national leaders (Wikidata) -------------------------------------
+// The National Leadership card's AI `leaders` data goes stale fast (the Haiku
+// snapshot once showed Biden/Harris in 2026). Wikidata is free, CORS-enabled
+// and frontend-only, so we fetch the CURRENT head of state + head of government
+// live and only fall back to the AI data if Wikidata returns nothing / errors.
+// Session-scoped cache keyed by country name → array | null | in-flight Promise.
+// `wdt:` = the current/best-rank value (so we get today's office holders);
+// Q3624078 = "sovereign state", to disambiguate the plain country label.
+const _wikidataLeaderCache = new Map();
+
+// Curated deputy / vice-head offices (Wikidata office-entity Q-ids) for the few
+// countries where the role matters AND Wikidata keeps the current holder at
+// "preferred" rank. The country entity itself has no generic VP/deputy property,
+// so this curated map is the only reliable route; a country absent here simply
+// shows its head of state + head of government (always available, every country).
+const DEPUTY_OFFICES = {
+  "United States": { qid: "Q11699", title: "Vice President" },
+};
+
+function getWikidataLeaders(country) {
+  const key = String(country || "").trim();
+  if (!key) return Promise.resolve(null);
+  if (_wikidataLeaderCache.has(key)) return Promise.resolve(_wikidataLeaderCache.get(key));
+
+  const esc = key.replace(/"/g, '\\"');
+  // Current head of state (P35) + head of government (P6), each with its OFFICE
+  // TITLE (P1906 / P1313) so the card reads "President" / "Monarch" / "Emperor" /
+  // "Prime Minister" / "Federal Chancellor" rather than a generic label. `wdt:` =
+  // current best-rank value; "en,mul" resolves modern names stored under the `mul`
+  // (multilingual) label code — without it the service returns a raw Q-id.
+  const mainQ = `SELECT ?role ?officeLabel ?personLabel WHERE {
+  ?country rdfs:label "${esc}"@en ; wdt:P31 wd:Q3624078 .
+  { ?country wdt:P35 ?person . OPTIONAL { ?country wdt:P1906 ?office . } BIND("hos" AS ?role) }
+  UNION { ?country wdt:P6 ?person . OPTIONAL { ?country wdt:P1313 ?office . } BIND("hog" AS ?role) }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul" . }
+}`;
+  const dep = DEPUTY_OFFICES[key];
+  const depQ = dep ? `SELECT ?personLabel WHERE { wd:${dep.qid} p:P1308 ?st . ?st ps:P1308 ?person . ?st wikibase:rank wikibase:PreferredRank . SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul" . } }` : null;
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
+  const sparql = (qq) => fetch(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(qq)}`, {
+    headers: { Accept: "application/sparql-results+json" }, signal: ctrl.signal,
+  }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  // "President of the United States" -> "President" (the page is already scoped to
+  // the country); also capitalise Wikidata's lowercase labels ("monarch" -> "Monarch").
+  const cleanOffice = (s) => {
+    if (!s) return null;
+    const short = s.replace(/\s+of\s+.*$/i, "").trim();
+    return short ? short.charAt(0).toUpperCase() + short.slice(1) : null;
+  };
+
+  const p = Promise.all([sparql(mainQ), depQ ? sparql(depQ) : Promise.resolve(null)])
+    .then(([main, depRes]) => {
+      clearTimeout(timer);
+      const byRole = {};
+      for (const b of (main?.results?.bindings || [])) {
+        const role = b?.role?.value;
+        const name = b?.personLabel?.value;
+        if (!role || !name || /^Q\d+$/.test(name)) continue; // skip unresolved raw ids
+        if (!byRole[role]) byRole[role] = { name, office: b?.officeLabel?.value };
+      }
+      const out = [];
+      const seen = new Set();
+      for (const role of ["hos", "hog"]) {
+        const e = byRole[role];
+        if (!e || seen.has(e.name)) continue; // dedupe when one person holds both
+        seen.add(e.name);
+        out.push({ position: cleanOffice(e.office) || (role === "hos" ? "Head of State" : "Head of Government"), name: e.name });
+      }
+      const depName = depRes?.results?.bindings?.[0]?.personLabel?.value;
+      if (dep && depName && !/^Q\d+$/.test(depName) && !seen.has(depName)) {
+        seen.add(depName);
+        out.push({ position: dep.title, name: depName });
+      }
+      const result = out.length ? out : null;
+      _wikidataLeaderCache.set(key, result);
+      return result;
+    })
+    .catch(() => {
+      clearTimeout(timer);
+      _wikidataLeaderCache.set(key, null);
+      return null;
+    });
+  _wikidataLeaderCache.set(key, p); // de-dupe in-flight fetches
+  return p;
+}
+
+// Renders national leaders for the country_leadership card. While Wikidata is
+// loading (or if it never resolves with data) it shows the AI `fallback`
+// leaders — so there is no flicker/blank — using the same mono-kicker + serif/
+// ink treatment as the standard `leaders` Block. When Wikidata resolves with
+// data, those CURRENT names render instead, stamped "Source: Wikidata · current".
+function WikidataLeaders({ country, fallback }) {
+  const cached = _wikidataLeaderCache.get(country);
+  const [live, setLive] = useState(Array.isArray(cached) ? cached : null);
+  useEffect(() => {
+    let alive = true;
+    setLive(Array.isArray(_wikidataLeaderCache.get(country)) ? _wikidataLeaderCache.get(country) : null);
+    Promise.resolve(getWikidataLeaders(country)).then((res) => { if (alive) setLive(res || null); });
+    return () => { alive = false; };
+  }, [country]);
+
+  const fromWikidata = Array.isArray(live) && live.length > 0;
+  const list = fromWikidata ? live : (fallback || []).filter((l) => hasData(l?.name));
+  if (!list.length) return null;
+
+  return (
+    <div>
+      <div className="space-y-2.5">
+        {list.map((l, i) => (
+          <div key={i}>
+            <p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>{l.position || l.title}</p>
+            <p className="font-semibold" style={{ color: INK, fontFamily: SERIF, fontSize: fs(18) }}>{l.name}{!fromWikidata && hasData(l.title) && l.position ? ` · ${l.title}` : ""}</p>
+          </div>
+        ))}
+      </div>
+      {fromWikidata && (
+        <p className="mt-2 uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>Source: Wikidata · current</p>
+      )}
+    </div>
+  );
+}
+
 // Generic rich item card — renders whichever optional fields are present.
-function ItemCard({ it }) {
+function ItemCard({ it, showThumb = false }) {
   const title = it.name || it.term || "";
   const desc = it.short_description || it.description || it.why_visit || it.why_it_matters || it.why_worth_buying_here || it.why_this_city_is_known_for_it;
   const chips = [it.flavor_tags, it.texture_tags, it.main_ingredients, it.activities].filter(Array.isArray).flat().filter(hasData);
@@ -541,6 +846,7 @@ function ItemCard({ it }) {
     it.spice_level && `🌶 ${it.spice_level}`, it.sweetness_level && `🍬 ${it.sweetness_level}`,
     it.price_level && `💰 ${it.price_level}`, it.difficulty_level && `⛰ ${it.difficulty_level}`,
     it.crowd_level && `👥 ${it.crowd_level}`, it.common_meal_time, it.best_time_to_visit || it.best_time_or_season,
+    (it.month || it.date) && `📅 ${it.month || it.date}`,
     it.recommended_duration, it.distance_from_city && `📍 ${it.distance_from_city}`, it.type, it.category, it.animal_type,
     it.likelihood && it.likelihood !== "common" && `${it.likelihood} to see`,
   ].filter(hasData);
@@ -549,8 +855,8 @@ function ItemCard({ it }) {
   const safety = it.safety_note || it.food_safety_tip || it.how_to_avoid;
   const photo = it.photo_tip || it.creator_photo_tip;
   const badges = itemBadges(it);
-  return (
-    <div className="pb-3.5 last:pb-0" style={{ borderBottom: `1px solid ${RULE}` }}>
+  const content = (
+    <div className="min-w-0 flex-1">
       <div className="flex items-baseline gap-2 flex-wrap">
         {hasData(it.rank) && <span className="font-bold" style={{ color: INK3, fontFamily: MONO, fontSize: fs(11) }}>#{it.rank}</span>}
         <p className="font-semibold" style={{ color: INK, fontFamily: SANS, fontSize: fs(15) }}>{title}</p>
@@ -576,6 +882,21 @@ function ItemCard({ it }) {
       <Meta show={hasData(tip)} color={INK2} icon="💡" italic>{tip}</Meta>
     </div>
   );
+  return (
+    <div className="pb-3.5 last:pb-0" style={{ borderBottom: `1px solid ${RULE}` }}>
+      {showThumb ? (
+        // Food / wildlife items: optional Wikipedia thumb on the LEFT. WikiThumb
+        // renders null while loading / when no image exists, so the row simply
+        // falls back to text-only — identical to the no-thumb layout.
+        <div className="flex items-start gap-3">
+          <WikiThumb name={it.name} />
+          {content}
+        </div>
+      ) : (
+        content
+      )}
+    </div>
+  );
 }
 
 // A mono uppercase eyebrow used to label blocks (handoff kicker treatment).
@@ -583,8 +904,42 @@ const Kicker = ({ children }) => (
   <p className="mb-2 uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em" }}>{children}</p>
 );
 
+// Fields whose 'cards' items show a tappable Wikipedia thumbnail. Covers food /
+// desserts / street food / snacks / wildlife PLUS national heroes, nature icons
+// (national + nearby), and the "Made Here" product items (city brags / crafts /
+// souvenirs). Everything else (attractions, day trips, hidden gems, festivals,
+// history, late-night food, food districts/markets, scams, etc.) renders
+// text-only as before. Items with no Wikipedia image show no icon (graceful).
+const THUMB_FIELDS = new Set([
+  // food / desserts / street food / snacks
+  "national_dishes", "national_desserts", "national_street_foods",
+  "top_10_city_foods", "local_specialty_dishes", "top_city_desserts",
+  "local_pastries", "traditional_sweets", "top_10_city_street_foods",
+  "top_10_local_snacks",
+  // wildlife
+  "wildlife", "common_city_animals", "nearby_wildlife", "dangerous_animals",
+  // national heroes
+  "national_heroes",
+  // nature icons (national + nearby)
+  "nature_icons", "nearby_nature_icons",
+  // "Made Here": brags / crafts / souvenirs
+  "city_brags", "local_crafts", "best_souvenirs",
+]);
+
+// Plain-text chip fields that get a leading 60px tappable thumb where one fits
+// cleanly — national products/exports + the "where to buy" / brags chips. These
+// render via ThumbChips (a wider pill that degrades to a normal chip with no
+// image). Other chip blocks stay as compact pills (ChipRow).
+const THUMB_CHIP_FIELDS = new Set([
+  "major_products_exports", "local_brands", "products_cheaper_locally", "where_to_buy",
+]);
+
 // Renders one block within a card. Returns null when the block has no data.
-function Block({ block, data }) {
+// `wikidataCountry` is set ONLY for the national-leadership card — when present,
+// a `leaders` block fetches the CURRENT office holders live from Wikidata and
+// falls back to the AI `leaders` data. No other card passes it, so every other
+// card (including city leadership) renders exactly as before.
+function Block({ block, data, wikidataCountry }) {
   const { kind, field, label } = block;
   if (kind === "kv") {
     const rows = (block.fields || []).filter((f) => hasData(data[f.field]));
@@ -623,7 +978,7 @@ function Block({ block, data }) {
         </div>
       );
     case "chips":
-      return <div>{Label}<ChipRow items={val} /></div>;
+      return <div>{Label}{THUMB_CHIP_FIELDS.has(field) ? <ThumbChips items={val} /> : <ChipRow items={val} />}</div>;
     case "bullets":
       return <div>{Label}<ul className="space-y-1.5">{val.filter(hasData).map((b, i) => (
         <li key={i} className="flex items-start gap-2" style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.45 }}><span className="font-bold mt-0.5" style={{ color: TEAL_DEEP }}>•</span><span>{b}</span></li>
@@ -652,11 +1007,19 @@ function Block({ block, data }) {
         </div>
       );
     case "leaders":
+      // National-leadership card only: fetch CURRENT leaders live from Wikidata,
+      // falling back to the AI list. Every other leaders block (city gov) keeps
+      // the original AI-only rendering below.
+      if (wikidataCountry) {
+        return <div>{Label}<WikidataLeaders country={wikidataCountry} fallback={val} /></div>;
+      }
       return <div>{Label}<div className="space-y-2.5">{val.filter((l) => hasData(l.name)).map((l, i) => (
         <div key={i}><p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>{l.position || l.title}</p><p className="font-semibold" style={{ color: INK, fontSize: fs(14.5) }}>{l.name}{hasData(l.title) && l.position ? ` · ${l.title}` : ""}</p></div>
       ))}</div></div>;
-    case "cards":
-      return <div>{Label}<div className="space-y-3.5">{val.filter((x) => hasData(x?.name)).map((it, i) => <ItemCard key={i} it={it} />)}</div></div>;
+    case "cards": {
+      const showThumb = THUMB_FIELDS.has(field);
+      return <div>{Label}<div className="space-y-3.5">{val.filter((x) => hasData(x?.name)).map((it, i) => <ItemCard key={i} it={it} showThumb={showThumb} />)}</div></div>;
+    }
     default:
       return null;
   }
@@ -672,7 +1035,8 @@ function FreshnessLine({ meta, volatile }) {
   return null;
 }
 
-function SectionCard({ card, bundle, state, onRefresh, layer }) {
+function SectionCard({ card, bundle, state, layer, onRefresh, wikidataCountry }) {
+  const [open, setOpen] = useState(true); // default = expanded
   const data = state?.data || {};
   // Card renders only if at least one block has data (advisory always renders).
   const blocksWithData = (card.blocks || []).filter((b) =>
@@ -681,35 +1045,71 @@ function SectionCard({ card, bundle, state, onRefresh, layer }) {
   if (card.kind !== "advisory" && blocksWithData.length === 0 && state?.status !== "loading") return null;
 
   const world = LAYER[layer] || LAYER.country;
+  const bodyId = `culture-card-${layer}-${bundle.id}-${card.id}`;
+  const Chevron = open ? ChevronDown : ChevronRight;
+  // Only volatile / time-sensitive bundles get a per-card refresh button
+  // (advisory, national + city leadership, country + city safety). Evergreen
+  // cards rely on the global "Refresh all" header button instead.
+  const showRefresh = bundle.volatile === true && typeof onRefresh === "function";
   return (
     <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
       className="bg-white rounded-[22px] overflow-hidden"
       style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
       <div className="p-5">
-        <div className="flex items-start gap-3 mb-3.5">
-          <div className="shrink-0 rounded-2xl flex items-center justify-center"
-            style={{ width: 44, height: 44, background: world.bg, fontSize: 22, lineHeight: 1 }}>{card.icon}</div>
-          <div className="min-w-0 flex-1">
-            <h3 className="leading-tight" style={{ color: INK, fontFamily: SERIF, fontSize: fs(23) }}>{card.title}</h3>
-            {card.summaryField && hasData(bundle.summary) && <p className="mt-0.5" style={{ color: INK3, fontSize: fs(13) }}>{bundle.summary}</p>}
-            {card.noteField && hasData(bundle.note) && <p className="mt-0.5 italic" style={{ color: INK3, fontSize: fs(12) }}>{bundle.note}</p>}
-            {hasData(bundle.cadenceNote) && <p className="mt-1" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10) }}>🔄 {bundle.cadenceNote}</p>}
-            <FreshnessLine meta={state?.meta} volatile={bundle.volatile} />
-          </div>
-          <button onClick={onRefresh} disabled={state?.status === "loading"} title="Refresh this section"
-            className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-black/5"
-            style={{ border: `1px solid ${RULE}` }}>
-            <RefreshCw className={`w-3.5 h-3.5 ${state?.status === "loading" ? "animate-spin" : ""}`} style={{ color: INK3 }} />
+        {/* Header row toggles the body open/closed. Freshness / cadence stay
+            visible here even when collapsed. The refresh button (volatile
+            bundles only) sits just LEFT of the collapse chevron. */}
+        <div className="w-full flex items-start gap-3 text-left">
+          <button type="button" onClick={() => setOpen((o) => !o)}
+            aria-expanded={open} aria-controls={bodyId}
+            className="flex-1 min-w-0 flex items-start gap-3 text-left">
+            <div className="shrink-0 rounded-2xl flex items-center justify-center"
+              style={{ width: 44, height: 44, background: world.bg, fontSize: 22, lineHeight: 1 }}>{card.icon}</div>
+            <div className="min-w-0 flex-1">
+              <h3 className="leading-tight" style={{ color: INK, fontFamily: SERIF, fontSize: fs(23) }}>{card.title}</h3>
+              {card.summaryField && hasData(bundle.summary) && <p className="mt-0.5" style={{ color: INK3, fontSize: fs(13) }}>{bundle.summary}</p>}
+              {card.noteField && hasData(bundle.note) && <p className="mt-0.5 italic" style={{ color: INK3, fontSize: fs(12) }}>{bundle.note}</p>}
+              {hasData(bundle.cadenceNote) && <p className="mt-1" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10) }}>🔄 {bundle.cadenceNote}</p>}
+              <FreshnessLine meta={state?.meta} volatile={bundle.volatile} />
+            </div>
           </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {showRefresh && (
+              <button type="button" onClick={(e) => { e.stopPropagation(); onRefresh(); }}
+                disabled={state?.status === "loading"} title="Refresh this section" aria-label="Refresh this section"
+                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-black/5"
+                style={{ border: `1px solid ${RULE}` }}>
+                <RefreshCw className={`w-3.5 h-3.5 ${state?.status === "loading" ? "animate-spin" : ""}`} style={{ color: INK3 }} strokeWidth={2} />
+              </button>
+            )}
+            <button type="button" onClick={() => setOpen((o) => !o)}
+              aria-expanded={open} aria-controls={bodyId} aria-label={open ? "Collapse section" : "Expand section"}
+              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-black/5"
+              style={{ border: `1px solid ${RULE}` }}>
+              <Chevron className="w-4 h-4" style={{ color: INK3 }} strokeWidth={2.2} />
+            </button>
+          </div>
         </div>
 
-        {card.kind === "advisory" ? (
-          <AdvisoryBody data={data} state={state} />
-        ) : state?.status === "loading" && blocksWithData.length === 0 ? (
-          <div className="flex items-center gap-2 py-2" style={{ color: INK3, fontSize: fs(13) }}><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
-        ) : (
-          <div className="space-y-4">{blocksWithData.map((b, i) => <Block key={i} block={b} data={data} />)}</div>
-        )}
+        <AnimatePresence initial={false}>
+          {open && (
+            <motion.div id={bodyId}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden">
+              <div className="pt-3.5">
+                {card.kind === "advisory" ? (
+                  <AdvisoryBody data={data} state={state} />
+                ) : state?.status === "loading" && blocksWithData.length === 0 ? (
+                  <div className="flex items-center gap-2 py-2" style={{ color: INK3, fontSize: fs(13) }}><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+                ) : (
+                  <div className="space-y-4">{blocksWithData.map((b, i) => <Block key={i} block={b} data={data} wikidataCountry={wikidataCountry} />)}</div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );
@@ -857,6 +1257,9 @@ export default function CultureInformationPage() {
     if (initialized && geo.country) loadAll(false);
   }, [initialized, countrySlug, citySlug, loadAll]);
 
+  // Per-card refresh for volatile/time-sensitive bundles only. Re-fetches just
+  // this bundle with force and stores it the same way loadAll does (results, or
+  // regionResults when scope === "region").
   const refreshSection = useCallback(async (bundle, scope) => {
     const setter = scope === "region" ? setRegionResults : setResults;
     setter((prev) => ({ ...prev, [bundle.id]: { ...(prev[bundle.id] || {}), status: "loading" } }));
@@ -879,6 +1282,7 @@ export default function CultureInformationPage() {
   const regionFallbacksToShow = CITY_BUNDLES.filter((b) => b.fallback && regionResults[b.id]?.status === "ok");
 
   return (
+    <LightboxProvider>
     <div className="min-h-screen" style={{ background: IVORY, fontFamily: SANS }}>
       {/* HEADER */}
       <div className="px-4 pt-2 pb-3">
@@ -932,7 +1336,8 @@ export default function CultureInformationPage() {
             {COUNTRY_BUNDLES.flatMap((bundle) =>
               bundle.cards.map((card) => (
                 <SectionCard key={`${bundle.id}_${card.id}`} card={card} bundle={bundle} layer="country"
-                  state={results[bundle.id]} onRefresh={() => refreshSection(bundle, "country")} />
+                  state={results[bundle.id]} onRefresh={() => refreshSection(bundle, "country")}
+                  wikidataCountry={bundle.id === "country_leadership" ? geo.country : undefined} />
               ))
             )}
           </CardGrid>
@@ -967,5 +1372,6 @@ export default function CultureInformationPage() {
 
       <LocationModePicker isOpen={showLocationPicker} onClose={() => setShowLocationPicker(false)} />
     </div>
+    </LightboxProvider>
   );
 }
