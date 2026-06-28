@@ -15,7 +15,7 @@ import { invokeLLM } from "@/lib/callWorker";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { ChevronDown, ChevronUp, Globe, Loader2, Volume2, Languages, Search, X, ChevronLeft, MapPin } from "lucide-react";
-import { CAT, TEAL_DEEP, IVORY, SHADOW_CARD_SOFT } from "@/components/redesign/constants";
+import { CAT, IVORY, SHADOW_CARD_SOFT } from "@/components/redesign/constants";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
@@ -631,6 +631,34 @@ export default function BasicPhrasesPage() {
   const navigate = useNavigate();
   const isTablet = useIsTablet();
   const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
+  // Editorial sizing tokens — same look at both widths, phone-tuned when !isTablet.
+  // Tablet keeps its larger handoff sizes; phone gets compact equivalents. Every
+  // value still flows through fs() so text-scaling grows (never clips) elements.
+  const ED = {
+    // big display headings / serif
+    display: isTablet ? 34 : 28,
+    displaySm: isTablet ? 30 : 26,
+    // section / card titles
+    title: isTablet ? 26 : 21,
+    titleMd: isTablet ? 23 : 20,
+    titleSm: isTablet ? 22 : 20,
+    titleXs: isTablet ? 20 : 18,
+    titleXxs: isTablet ? 19 : 17,
+    // body
+    body: isTablet ? 14.5 : 13.5,
+    body2: isTablet ? 14 : 13.5,
+    sub: isTablet ? 13 : 12.5,
+    note: isTablet ? 12.5 : 12,
+    // mono kickers
+    kicker: isTablet ? 11 : 10.5,
+    kickerSm: isTablet ? 10 : 10,
+    kickerXs: isTablet ? 9.5 : 9.5,
+    // card / surface radii
+    rCard: isTablet ? 18 : 18,
+    rCardLg: isTablet ? 22 : 20,
+    rChip: isTablet ? 14 : 14,
+    rInput: isTablet ? 12 : 12,
+  };
   const { activeLocation, locationMode, initialized } = useLocation();
   const [loading, setLoading] = useState(true);
   const [languageInfo, setLanguageInfo] = useState(null);
@@ -697,7 +725,6 @@ export default function BasicPhrasesPage() {
 
   const detectLanguageAndDialect = async () => {
     if (!activeLocation?.address) {
-      console.log('⚠️ No address in activeLocation');
       return;
     }
     
@@ -722,9 +749,7 @@ export default function BasicPhrasesPage() {
     };
     
     const city = normalizeForMatch(rawCity);
-    
-    console.log(`🗺️ Detecting language for: "${rawCity}" (normalized: "${city}"), ${country}`);
-    
+
     const inEnglishCountry = ENGLISH_SPEAKING_COUNTRIES.some(
       ec => country.toLowerCase().includes(ec.toLowerCase())
     );
@@ -792,7 +817,6 @@ export default function BasicPhrasesPage() {
         if (matches) {
           dialectInfo = info;
           matchedCity = locationKey;
-          console.log(`✅ Matched "${rawCity}" to region "${locationKey}"`);
           break;
         }
       }
@@ -822,10 +846,6 @@ export default function BasicPhrasesPage() {
           setTtsWarning(null);
         }
         
-        console.log(`📍 Detected: ${matchedCity} → ${dialectInfo.dialect} (${dialectInfo.code})`);
-        console.log(`🌍 Country default: ${countryMapping.default_language} (${countryMapping.default_code})`);
-        console.log(`🔀 Has different dialect: ${hasDifferentDialect} → Show toggle: ${hasDifferentDialect}`);
-        
         setLanguageInfo({
           country,
           country_flag: countryMapping.flag,
@@ -854,7 +874,6 @@ export default function BasicPhrasesPage() {
       }
       
       // No specific city match - use country default
-      console.log(`🌍 No city match for "${rawCity}" - Using country default: ${countryMapping.default_language}`);
       setTtsWarning(null);
       setUseDialect(false);
       setPhrases({});
@@ -873,7 +892,6 @@ export default function BasicPhrasesPage() {
     }
     
     // Unknown country - try to detect language by country name
-    console.log(`⚠️ No mapping for country: ${country}`);
     setLanguageInfo({
       country,
       country_language: "Local language",
@@ -934,7 +952,6 @@ export default function BasicPhrasesPage() {
       if (localCached) {
         const data = JSON.parse(localCached);
         if (data.phrases && data.phrases.length > 0) {
-          console.log(`✅ localStorage HIT: ${cacheKey}`);
           return data.phrases;
         }
       }
@@ -944,12 +961,10 @@ export default function BasicPhrasesPage() {
     
     // 2. Check Cloudflare KV (shared across all users)
     try {
-      console.log(`🔍 Checking Cloudflare KV: ${cacheKey}`);
       const response = await fetch(`${CLOUDFLARE_TTS_URL}?action=getTranslation&key=${encodeURIComponent(cacheKey)}`);
       if (response.ok) {
         const data = await response.json();
         if (data.phrases && data.phrases.length > 0) {
-          console.log(`✅ Cloudflare KV HIT: ${cacheKey}`);
           // Save to localStorage for faster access next time
           try {
             localStorage.setItem(cacheKey, JSON.stringify({ phrases: data.phrases, timestamp: Date.now() }));
@@ -957,10 +972,10 @@ export default function BasicPhrasesPage() {
           return data.phrases;
         }
       }
-    } catch (e) {
-      console.log('Cloudflare KV check failed:', e);
+    } catch {
+      // Cloudflare KV check failed - fall through to return null
     }
-    
+
     return null;
   };
 
@@ -971,7 +986,6 @@ export default function BasicPhrasesPage() {
     // 1. Save to localStorage (instant access for this user)
     try {
       localStorage.setItem(cacheKey, JSON.stringify({ phrases: phrasesData, timestamp: Date.now() }));
-      console.log(`💾 Saved to localStorage: ${cacheKey}`);
     } catch (e) {
       console.error('localStorage write error:', e);
     }
@@ -986,13 +1000,11 @@ export default function BasicPhrasesPage() {
           key: cacheKey,
           phrases: phrasesData
         })
-      }).then(() => {
-        console.log(`☁️ Saved to Cloudflare KV: ${cacheKey}`);
-      }).catch(e => {
-        console.log('Cloudflare KV save failed:', e);
+      }).catch(() => {
+        // Cloudflare KV save failed - non-fatal, localStorage already has it
       });
-    } catch (e) {
-      console.log('Cloudflare KV save error:', e);
+    } catch {
+      // Cloudflare KV save error - non-fatal, localStorage already has it
     }
   };
 
@@ -1001,11 +1013,9 @@ export default function BasicPhrasesPage() {
   // ============================================================================
   const loadCategoryPhrases = async (categoryId) => {
     if (phrases[categoryId]) {
-      console.log(`✅ Already loaded in state: ${categoryId}`);
       return;
     }
     if (!languageInfo) {
-      console.log(`⚠️ No language info yet`);
       return;
     }
 
@@ -1013,11 +1023,8 @@ export default function BasicPhrasesPage() {
     const languageCode = getActiveLanguageCode();
     const languageName = getActiveLanguageName();
 
-    console.log(`📂 Loading ${categoryId} in ${languageName} (${languageCode})`);
-
     // English = instant load (no translation needed)
     if (isEnglishOnly || languageCode === 'en') {
-      console.log(`⚡ Instant load (English) - from Word document`);
       const englishPhrases = PRESET_PHRASES[categoryId].map(phrase => ({
         english: phrase, 
         translation: phrase, 
@@ -1049,7 +1056,6 @@ export default function BasicPhrasesPage() {
     // unused fields are filled blank to keep the existing phrase shape intact.
     const isReverseMode = isInEnglishCountry && wantsTranslation && selectedTranslationLanguage;
     if (isReverseMode) {
-      console.log(`⚡ Reverse mode: lean translation for ${categoryId} → ${languageName}`);
       const presetPhrases = PRESET_PHRASES[categoryId];
       try {
         const result = await invokeLLM({
@@ -1102,8 +1108,6 @@ ${presetPhrases.map((p, i) => `${i + 1}. ${p}`).join('\n')}`,
       setLoadingPhrases(prev => ({ ...prev, [categoryId]: false }));
       return;
     }
-
-    console.log(`❌ No cache found - Translating with AI (one-time)...`);
 
     // Translate with AI (only happens once per language, then cached globally)
     try {
@@ -1213,8 +1217,6 @@ Return a JSON object with "phrases" array. Each phrase object needs:
         romanization: ""
       }));
 
-      console.log(`✅ AI translated ${translatedPhrases.length} phrases`);
-      
       setPhrases(prev => ({ ...prev, [categoryId]: translatedPhrases }));
       
       // Save to cache (localStorage + Cloudflare KV for all users)
@@ -1271,7 +1273,6 @@ Return a JSON object with "phrases" array. Each phrase object needs:
       const cleanedText = cleanTextForTTS(text);
       
       if (!cleanedText || cleanedText.length < 2) {
-        console.log('⚠️ No speakable text after cleaning');
         setPlayingAudio(prev => ({ ...prev, [phraseKey]: false }));
         return;
       }
@@ -1286,16 +1287,12 @@ Return a JSON object with "phrases" array. Each phrase object needs:
       
       // Use browser cached audio if available
       if (cachedAudio) {
-        console.log('✅ Audio cache HIT');
         const audio = new Audio(cachedAudio);
         audio.play();
         audio.onended = () => setPlayingAudio(prev => ({ ...prev, [phraseKey]: false }));
         audio.onerror = () => setPlayingAudio(prev => ({ ...prev, [phraseKey]: false }));
         return;
       }
-      
-      console.log(`🔊 Calling Cloudflare TTS: "${cleanedText.substring(0, 50)}..." in ${ttsCode}`);
-      console.log(`🔍 Has pause markers (...): ${cleanedText.includes('...')}`);
       
       // Call Cloudflare Worker (send cleaned text)
       const response = await fetch(CLOUDFLARE_TTS_URL, {
@@ -1307,7 +1304,6 @@ Return a JSON object with "phrases" array. Each phrase object needs:
       const data = await response.json();
       
       if (data.error || data.useFallback) {
-        console.log('⚠️ Cloudflare TTS failed, using browser fallback:', data.error);
         throw new Error('Using browser fallback');
       }
       
@@ -1326,15 +1322,8 @@ Return a JSON object with "phrases" array. Each phrase object needs:
       audio.play();
       audio.onended = () => setPlayingAudio(prev => ({ ...prev, [phraseKey]: false }));
       audio.onerror = () => setPlayingAudio(prev => ({ ...prev, [phraseKey]: false }));
-      
-      if (data.cached) {
-        console.log('✅ Cloudflare KV cache HIT');
-      } else {
-        console.log(`✅ Generated new audio: ${data.voiceUsed}, ${data.charCount} chars`);
-      }
-      
-    } catch (error) {
-      console.log('🔊 Using browser TTS fallback:', error.message);
+
+    } catch {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = languageCode || 'en';
       utterance.rate = 0.85;
@@ -1480,328 +1469,122 @@ Return a JSON object with "phrases" array. Each phrase object needs:
       return formal !== casual && casual !== '';
     };
 
-    // ── iPad editorial phrase rows ──────────────────────────────────────────
+    // ── Editorial phrase rows ───────────────────────────────────────────────
     // Same data, same speakPhrase actions, same formal/casual logic — restyled
     // to the handoff: serif phrase (gold/ink), meaning in muted ink, tinted
-    // "Say it" / formality chips, gold round speaker. Phone path is untouched.
-    if (isTablet) {
-      const GOLD = CAT.phrases.ink, GOLD_BG = CAT.phrases.bg;
-      const Speaker = ({ phraseKey, text, code, label }) => (
-        <button
-          onClick={() => speakPhrase(text, code, phraseKey)}
-          disabled={playingAudio[phraseKey]}
-          title={label}
-          aria-label={label}
-          className="flex-shrink-0 rounded-full flex items-center justify-center transition-all"
-          style={{
-            width: 44, height: 44,
-            background: playingAudio[phraseKey] ? GOLD : "#FFFFFF",
-            color: playingAudio[phraseKey] ? "#FFFFFF" : GOLD,
-            border: `1px solid ${playingAudio[phraseKey] ? GOLD : ED_RULE}`,
-          }}
-        >
-          <Volume2 className={`w-5 h-5 ${playingAudio[phraseKey] ? "animate-pulse" : ""}`} />
-        </button>
-      );
-      return (
-        <div className="px-5 pb-5 pt-1 space-y-3">
-          {categoryPhrases.map((phrase, index) => {
-            const showBothVersions = hasDifferentFormality(phrase);
-            const rowKey = `${expandedCategory}_${index}`;
-            return (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.02 }}
-                className="bg-white rounded-[18px] p-4"
-                style={{ border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}
-              >
-                {isReverseMode ? (
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p style={{ color: ED_INK3, fontSize: fs(14), lineHeight: 1.4 }}>{phrase.formal_translation || phrase.translation}</p>
-                      <p className="font-semibold mt-1" style={{ color: GOLD, fontFamily: ED_SERIF, fontSize: fs(22), lineHeight: 1.15 }}>{phrase.english}</p>
-                    </div>
-                    <Speaker phraseKey={rowKey} text={phrase.english} code="en" label="Listen to pronunciation" />
-                  </div>
-                ) : (
-                  <>
-                    <p style={{ color: ED_INK2, fontSize: fs(14.5), lineHeight: 1.4 }}>{phrase.english}</p>
-
-                    {!isEnglishOnly && (phrase.formal_translation || phrase.translation) && (
-                      <div className="mt-2.5 space-y-2.5">
-                        {!showBothVersions && (
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold" style={{ color: GOLD, fontFamily: ED_SERIF, fontSize: fs(23), lineHeight: 1.12 }}>
-                                {phrase.formal_translation || phrase.translation}
-                              </p>
-                              {(phrase.formal_phonetic || phrase.phonetic) && (
-                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                  <span className="uppercase rounded-full px-2 py-0.5 font-semibold" style={{ background: GOLD_BG, color: GOLD, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em" }}>Say it</span>
-                                  <span style={{ color: ED_INK2, fontSize: fs(14) }}>{cleanPhonetic(phrase.formal_phonetic || phrase.phonetic)}</span>
-                                </div>
-                              )}
-                              {phrase.romanization && (
-                                <p className="italic mt-1" style={{ color: ED_INK3, fontSize: fs(12) }}>Romanized: {phrase.romanization}</p>
-                              )}
-                            </div>
-                            <Speaker phraseKey={rowKey} text={phrase.formal_translation || phrase.translation} code={ttsCode} label="Listen to pronunciation" />
-                          </div>
-                        )}
-
-                        {showBothVersions && (
-                          <>
-                            <div className="rounded-[14px] p-3" style={{ background: ED_IVORY2 }}>
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <span className="uppercase rounded-full px-2 py-0.5 font-semibold inline-block mb-1.5" style={{ background: "#FFFFFF", color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em", border: `1px solid ${ED_RULE}` }}>Formal · Polite</span>
-                                  <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(22), lineHeight: 1.12 }}>{phrase.formal_translation || phrase.translation}</p>
-                                  {(phrase.formal_phonetic || phrase.phonetic) && (
-                                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                      <span className="uppercase font-semibold" style={{ color: GOLD, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em" }}>Say it</span>
-                                      <span style={{ color: ED_INK2, fontSize: fs(14) }}>{cleanPhonetic(phrase.formal_phonetic || phrase.phonetic)}</span>
-                                    </div>
-                                  )}
-                                  {phrase.romanization && (
-                                    <p className="italic mt-1" style={{ color: ED_INK3, fontSize: fs(12) }}>Romanized: {phrase.romanization}</p>
-                                  )}
-                                </div>
-                                <Speaker phraseKey={`${rowKey}_formal`} text={phrase.formal_translation || phrase.translation} code={ttsCode} label="Listen to formal pronunciation" />
-                              </div>
-                            </div>
-                            <div className="rounded-[14px] p-3" style={{ background: ED_IVORY2 }}>
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <span className="uppercase rounded-full px-2 py-0.5 font-semibold inline-block mb-1.5" style={{ background: "#FFFFFF", color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em", border: `1px solid ${ED_RULE}` }}>Casual</span>
-                                  <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(22), lineHeight: 1.12 }}>{phrase.casual_translation || phrase.formal_translation || phrase.translation}</p>
-                                  {(phrase.casual_phonetic || phrase.formal_phonetic || phrase.phonetic) && (
-                                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                      <span className="uppercase font-semibold" style={{ color: GOLD, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em" }}>Say it</span>
-                                      <span style={{ color: ED_INK2, fontSize: fs(14) }}>{cleanPhonetic(phrase.casual_phonetic || phrase.formal_phonetic || phrase.phonetic)}</span>
-                                    </div>
-                                  )}
-                                </div>
-                                <Speaker phraseKey={`${rowKey}_casual`} text={phrase.casual_translation || phrase.formal_translation || phrase.translation} code={ttsCode} label="Listen to casual pronunciation" />
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    {isEnglishOnly && (
-                      <div className="flex items-center gap-2.5 mt-2.5">
-                        <Speaker phraseKey={rowKey} text={phrase.english} code="en" label="Tap to hear" />
-                        <span className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em" }}>Tap to hear</span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </motion.div>
-            );
-          })}
-        </div>
-      );
-    }
-
+    // "Say it" / formality chips, gold round speaker. Renders at both widths;
+    // ED.* tokens supply phone-tuned sizing when !isTablet.
+    const GOLD = CAT.phrases.ink, GOLD_BG = CAT.phrases.bg;
+    const spk = isTablet ? 44 : 40;
+    const Speaker = ({ phraseKey, text, code, label }) => (
+      <button
+        onClick={() => speakPhrase(text, code, phraseKey)}
+        disabled={playingAudio[phraseKey]}
+        title={label}
+        aria-label={label}
+        className="flex-shrink-0 rounded-full flex items-center justify-center transition-all"
+        style={{
+          width: spk, height: spk,
+          background: playingAudio[phraseKey] ? GOLD : "#FFFFFF",
+          color: playingAudio[phraseKey] ? "#FFFFFF" : GOLD,
+          border: `1px solid ${playingAudio[phraseKey] ? GOLD : ED_RULE}`,
+        }}
+      >
+        <Volume2 className={`w-5 h-5 ${playingAudio[phraseKey] ? "animate-pulse" : ""}`} />
+      </button>
+    );
     return (
-      <div className="space-y-3 p-3">
+      <div className={isTablet ? "px-5 pb-5 pt-1 space-y-3" : "px-3 pb-3 pt-1 space-y-2.5"}>
         {categoryPhrases.map((phrase, index) => {
           const showBothVersions = hasDifferentFormality(phrase);
-          
+          const rowKey = `${expandedCategory}_${index}`;
           return (
             <motion.div
               key={index}
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.02 }}
-              className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm"
+              className="bg-white p-4"
+              style={{ borderRadius: ED.rCard, border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}
             >
               {isReverseMode ? (
-                // Reverse mode: User in English country, wants to see their native language
-                <>
-                  <p className="text-[calc(14px*var(--fs))] text-gray-600 mb-1">{phrase.formal_translation || phrase.translation}</p>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <p className="text-[calc(16px*var(--fs))] font-bold text-[#088395]">{phrase.english}</p>
-                    </div>
-                    <button
-                      onClick={() => speakPhrase(phrase.english, 'en', `${expandedCategory}_${index}`)}
-                      className={`flex-shrink-0 p-2 rounded-full ${
-                        playingAudio[`${expandedCategory}_${index}`]
-                          ? 'bg-[#088395] text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                      disabled={playingAudio[`${expandedCategory}_${index}`]}
-                    >
-                      <Volume2 className="w-4 h-4" />
-                    </button>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p style={{ color: ED_INK3, fontSize: fs(ED.body2), lineHeight: 1.4 }}>{phrase.formal_translation || phrase.translation}</p>
+                    <p className="font-semibold mt-1" style={{ color: GOLD, fontFamily: ED_SERIF, fontSize: fs(ED.titleSm), lineHeight: 1.15 }}>{phrase.english}</p>
                   </div>
-                </>
+                  <Speaker phraseKey={rowKey} text={phrase.english} code="en" label="Listen to pronunciation" />
+                </div>
               ) : (
-                // Normal mode: User traveling, needs local language
                 <>
-                  {/* English phrase */}
-                  <p className="text-[calc(14px*var(--fs))] text-gray-600 mb-3">{phrase.english}</p>
-                  
+                  <p style={{ color: ED_INK2, fontSize: fs(ED.body), lineHeight: 1.4 }}>{phrase.english}</p>
+
                   {!isEnglishOnly && (phrase.formal_translation || phrase.translation) && (
-                    <div className="space-y-3">
-                      
-                      {/* SINGLE VERSION - When formal and casual are the same */}
+                    <div className="mt-2.5 space-y-2.5">
                       {!showBothVersions && (
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1">
-                            <p className="text-[calc(16px*var(--fs))] font-bold text-[#088395]">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold" style={{ color: GOLD, fontFamily: ED_SERIF, fontSize: fs(ED.titleMd), lineHeight: 1.12 }}>
                               {phrase.formal_translation || phrase.translation}
                             </p>
-                            
-                            {/* Phonetic */}
                             {(phrase.formal_phonetic || phrase.phonetic) && (
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <span className="text-[calc(12px*var(--fs))] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
-                                  Say it:
-                                </span>
-                                <p className="text-[calc(14px*var(--fs))] text-amber-700">
-                                  {cleanPhonetic(phrase.formal_phonetic || phrase.phonetic)}
-                                </p>
+                              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                <span className="uppercase rounded-full px-2 py-0.5 font-semibold" style={{ background: GOLD_BG, color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Say it</span>
+                                <span style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>{cleanPhonetic(phrase.formal_phonetic || phrase.phonetic)}</span>
                               </div>
                             )}
-                            
-                            {/* Romanization */}
                             {phrase.romanization && (
-                              <p className="text-[calc(12px*var(--fs))] text-gray-500 italic mt-1">
-                                Romanized: {phrase.romanization}
-                              </p>
+                              <p className="italic mt-1" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>Romanized: {phrase.romanization}</p>
                             )}
                           </div>
-                          
-                          {/* Speaker button */}
-                          <button
-                            onClick={() => speakPhrase(phrase.formal_translation || phrase.translation, ttsCode, `${expandedCategory}_${index}`)}
-                            className={`flex-shrink-0 p-2.5 rounded-full transition-all ${
-                              playingAudio[`${expandedCategory}_${index}`]
-                                ? 'bg-[#088395] text-white animate-pulse'
-                                : 'bg-gray-100 text-gray-600 hover:bg-[#E0F7FA] hover:text-[#088395]'
-                            }`}
-                            disabled={playingAudio[`${expandedCategory}_${index}`]}
-                            title="Listen to pronunciation"
-                          >
-                            <Volume2 className="w-5 h-5" />
-                          </button>
+                          <Speaker phraseKey={rowKey} text={phrase.formal_translation || phrase.translation} code={ttsCode} label="Listen to pronunciation" />
                         </div>
                       )}
-                      
-                      {/* TWO VERSIONS - When formal and casual are different */}
+
                       {showBothVersions && (
                         <>
-                          {/* FORMAL / POLITE VERSION */}
-                          <div className="bg-gradient-to-r from-[#E8F5E9] to-[#F1F8E9] rounded-lg p-3 border border-green-200">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-[calc(12px*var(--fs))] bg-green-600 text-white px-2 py-0.5 rounded-full font-medium">
-                                    Formal / Polite
-                                  </span>
-                                </div>
-                                <p className="text-[calc(16px*var(--fs))] font-bold text-green-800">
-                                  {phrase.formal_translation || phrase.translation}
-                                </p>
-                                
-                                {/* Formal phonetic */}
+                          <div className="p-3" style={{ borderRadius: ED.rChip, background: ED_IVORY2 }}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <span className="uppercase rounded-full px-2 py-0.5 font-semibold inline-block mb-1.5" style={{ background: "#FFFFFF", color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em", border: `1px solid ${ED_RULE}` }}>Formal · Polite</span>
+                                <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleSm), lineHeight: 1.12 }}>{phrase.formal_translation || phrase.translation}</p>
                                 {(phrase.formal_phonetic || phrase.phonetic) && (
-                                  <div className="flex items-center gap-1.5 mt-1">
-                                    <span className="text-[calc(12px*var(--fs))] text-green-600 font-medium">Say it:</span>
-                                    <p className="text-[calc(14px*var(--fs))] text-green-700">
-                                      {cleanPhonetic(phrase.formal_phonetic || phrase.phonetic)}
-                                    </p>
+                                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                    <span className="uppercase font-semibold" style={{ color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Say it</span>
+                                    <span style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>{cleanPhonetic(phrase.formal_phonetic || phrase.phonetic)}</span>
                                   </div>
                                 )}
-                                
-                                {/* Romanization */}
                                 {phrase.romanization && (
-                                  <p className="text-[calc(12px*var(--fs))] text-green-600/70 italic mt-1">
-                                    Romanized: {phrase.romanization}
-                                  </p>
+                                  <p className="italic mt-1" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>Romanized: {phrase.romanization}</p>
                                 )}
                               </div>
-                              
-                              {/* Speaker button for formal */}
-                              <button
-                                onClick={() => speakPhrase(phrase.formal_translation || phrase.translation, ttsCode, `${expandedCategory}_${index}_formal`)}
-                                className={`flex-shrink-0 p-2.5 rounded-full transition-all ${
-                                  playingAudio[`${expandedCategory}_${index}_formal`]
-                                    ? 'bg-green-600 text-white animate-pulse'
-                                    : 'bg-white text-green-600 hover:bg-green-50 border border-green-300'
-                                }`}
-                                disabled={playingAudio[`${expandedCategory}_${index}_formal`]}
-                                title="Listen to formal pronunciation"
-                              >
-                                <Volume2 className="w-5 h-5" />
-                              </button>
+                              <Speaker phraseKey={`${rowKey}_formal`} text={phrase.formal_translation || phrase.translation} code={ttsCode} label="Listen to formal pronunciation" />
                             </div>
                           </div>
-                          
-                          {/* CASUAL VERSION */}
-                          <div className="bg-gradient-to-r from-[#FFF3E0] to-[#FFF8E1] rounded-lg p-3 border border-orange-200">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-[calc(12px*var(--fs))] bg-orange-500 text-white px-2 py-0.5 rounded-full font-medium">
-                                    Casual
-                                  </span>
-                                </div>
-                                <p className="text-[calc(16px*var(--fs))] font-bold text-orange-800">
-                                  {phrase.casual_translation || phrase.formal_translation || phrase.translation}
-                                </p>
-                                
-                                {/* Casual phonetic */}
+                          <div className="p-3" style={{ borderRadius: ED.rChip, background: ED_IVORY2 }}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <span className="uppercase rounded-full px-2 py-0.5 font-semibold inline-block mb-1.5" style={{ background: "#FFFFFF", color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em", border: `1px solid ${ED_RULE}` }}>Casual</span>
+                                <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleSm), lineHeight: 1.12 }}>{phrase.casual_translation || phrase.formal_translation || phrase.translation}</p>
                                 {(phrase.casual_phonetic || phrase.formal_phonetic || phrase.phonetic) && (
-                                  <div className="flex items-center gap-1.5 mt-1">
-                                    <span className="text-[calc(12px*var(--fs))] text-orange-600 font-medium">Say it:</span>
-                                    <p className="text-[calc(14px*var(--fs))] text-orange-700">
-                                      {cleanPhonetic(phrase.casual_phonetic || phrase.formal_phonetic || phrase.phonetic)}
-                                    </p>
+                                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                    <span className="uppercase font-semibold" style={{ color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Say it</span>
+                                    <span style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>{cleanPhonetic(phrase.casual_phonetic || phrase.formal_phonetic || phrase.phonetic)}</span>
                                   </div>
                                 )}
                               </div>
-                              
-                              {/* Speaker button for casual */}
-                              <button
-                                onClick={() => speakPhrase(phrase.casual_translation || phrase.formal_translation || phrase.translation, ttsCode, `${expandedCategory}_${index}_casual`)}
-                                className={`flex-shrink-0 p-2.5 rounded-full transition-all ${
-                                  playingAudio[`${expandedCategory}_${index}_casual`]
-                                    ? 'bg-orange-500 text-white animate-pulse'
-                                    : 'bg-white text-orange-500 hover:bg-orange-50 border border-orange-300'
-                                }`}
-                                disabled={playingAudio[`${expandedCategory}_${index}_casual`]}
-                                title="Listen to casual pronunciation"
-                              >
-                                <Volume2 className="w-5 h-5" />
-                              </button>
+                              <Speaker phraseKey={`${rowKey}_casual`} text={phrase.casual_translation || phrase.formal_translation || phrase.translation} code={ttsCode} label="Listen to casual pronunciation" />
                             </div>
                           </div>
                         </>
                       )}
                     </div>
                   )}
-                  
-                  {/* English only mode */}
+
                   {isEnglishOnly && (
-                    <div className="flex items-center gap-2 mt-1">
-                      <button
-                        onClick={() => speakPhrase(phrase.english, 'en', `${expandedCategory}_${index}`)}
-                        className={`p-2 rounded-full ${
-                          playingAudio[`${expandedCategory}_${index}`]
-                            ? 'bg-[#088395] text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                        disabled={playingAudio[`${expandedCategory}_${index}`]}
-                      >
-                        <Volume2 className="w-4 h-4" />
-                      </button>
-                      <span className="text-[calc(12px*var(--fs))] text-gray-400">Tap to hear</span>
+                    <div className="flex items-center gap-2.5 mt-2.5">
+                      <Speaker phraseKey={rowKey} text={phrase.english} code="en" label="Tap to hear" />
+                      <span className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Tap to hear</span>
                     </div>
                   )}
                 </>
@@ -1838,91 +1621,53 @@ Return a JSON object with "phrases" array. Each phrase object needs:
       </div>
 
       <div
-        className={isTablet ? "" : "max-w-2xl mx-auto px-4 py-2"}
-        style={isTablet ? { maxWidth: 1024, margin: "0 auto", padding: "8px 24px 170px" } : undefined}
+        className={`${colWrap} mx-auto`}
+        style={{ padding: isTablet ? "8px 24px 170px" : "8px 16px 170px" }}
       >
         {/* LOCATION CARD */}
-        {isTablet ? (
-          <button onClick={() => setShowLocationPicker(true)} className="w-full flex items-center gap-3.5 px-5 py-4 rounded-[18px] text-left mb-4 transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:`1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}>
-            <MapPin size={20} color={CAT.phrases.ink} strokeWidth={2} className="flex-none" />
+        <button onClick={() => setShowLocationPicker(true)} className={`w-full flex items-center text-left mb-4 transition-transform active:scale-[0.99] ${isTablet ? "gap-3.5 px-5 py-4" : "gap-3 px-4 py-3.5"}`} style={{ borderRadius: ED.rCard, background:'#FFFFFF', border:`1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}>
+            <MapPin size={isTablet ? 20 : 18} color={CAT.phrases.ink} strokeWidth={2} className="flex-none" />
             <div className="flex-1 min-w-0">
-              <div className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".14em" }}>Location</div>
-              <div className="font-semibold mt-0.5 truncate" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(22), lineHeight: 1.1 }}>
+              <div className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".14em" }}>Location</div>
+              <div className="font-semibold mt-0.5 truncate" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleSm), lineHeight: 1.1 }}>
                 {activeLocation?.placeName || activeLocation?.address?.city}
               </div>
-              <div className="mt-0.5 truncate" style={{ color: ED_INK3, fontSize: fs(13) }}>
+              <div className="mt-0.5 truncate" style={{ color: ED_INK3, fontSize: fs(ED.sub) }}>
                 {activeLocation?.address?.city}, {activeLocation?.address?.country}
               </div>
             </div>
-            <span className="uppercase rounded-full px-3.5 py-2 font-semibold flex-none" style={{ background: CAT.phrases.bg, color: CAT.phrases.ink, fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: ".08em" }}>
+            <span className="uppercase rounded-full px-3.5 py-2 font-semibold flex-none" style={{ background: CAT.phrases.bg, color: CAT.phrases.ink, fontFamily: ED_MONO, fontSize: fs(ED.kicker), letterSpacing: ".08em" }}>
               Change
             </span>
-          </button>
-        ) : (
-        <button onClick={() => setShowLocationPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left mb-4 transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
-          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
-          <div className="flex-1 min-w-0">
-            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>📍 Location</div>
-            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">
-              {activeLocation?.placeName || activeLocation?.address?.city}
-            </div>
-            <div className="text-[calc(11px*var(--fs))] text-[#6B7280] mt-0.5 truncate">
-              {activeLocation?.address?.city}, {activeLocation?.address?.country}
-            </div>
-          </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{ background: CAT.phrases.bg, color: CAT.phrases.ink }}>
-            Change
-          </span>
         </button>
-        )}
 
         {languageInfo && (
           <div
-            className={isTablet ? "rounded-[18px] p-5 mb-4" : "bg-white rounded-xl p-4 mb-4 shadow-sm border border-gray-100"}
-            style={isTablet ? { background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT } : undefined}
+            className={isTablet ? "p-5 mb-4" : "p-4 mb-4"}
+            style={{ borderRadius: ED.rCard, background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}
           >
-            {isTablet ? (
-              <div className="mb-4">
-                <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".14em" }}>
-                  {isInEnglishCountry ? (wantsTranslation && selectedTranslationLanguage ? "Translating from" : "Language") : "Translating to"}
-                </p>
-                <div className="flex items-center gap-2.5 mt-1">
-                  <Globe className="w-5 h-5 flex-none" style={{ color: CAT.phrases.ink }} />
-                  <p style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(26), lineHeight: 1.05 }}>
-                    {isInEnglishCountry
-                      ? (wantsTranslation && selectedTranslationLanguage
-                          ? `${selectedTranslationLanguage.name} → English`
-                          : "Phrases in English")
-                      : (useDialect ? languageInfo.city_language : languageInfo.country_language)}
-                  </p>
-                </div>
-              </div>
-            ) : (
-            <div className="flex items-center gap-2 mb-3">
-              <Globe className="w-5 h-5 text-[#088395]" />
-              <p className="font-bold text-gray-900 text-[calc(16px*var(--fs))]">
-                {isInEnglishCountry
-                  ? (wantsTranslation && selectedTranslationLanguage
-                      ? `${selectedTranslationLanguage.name} → English`
-                      : "Phrases in English")
-                  : `Translating to: ${useDialect ? languageInfo.city_language : languageInfo.country_language}`}
+            <div className="mb-4">
+              <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerSm), letterSpacing: ".14em" }}>
+                {isInEnglishCountry ? (wantsTranslation && selectedTranslationLanguage ? "Translating from" : "Language") : "Translating to"}
               </p>
+              <div className="flex items-center gap-2.5 mt-1">
+                <Globe className="w-5 h-5 flex-none" style={{ color: CAT.phrases.ink }} />
+                <p style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.displaySm), lineHeight: 1.05 }}>
+                  {isInEnglishCountry
+                    ? (wantsTranslation && selectedTranslationLanguage
+                        ? `${selectedTranslationLanguage.name} → English`
+                        : "Phrases in English")
+                    : (useDialect ? languageInfo.city_language : languageInfo.country_language)}
+                </p>
+              </div>
             </div>
-            )}
 
             {/* TTS Warning for dialects using fallback voice */}
             {ttsWarning && useDialect && (
-              isTablet ? (
-                <div className="rounded-[14px] p-3 mb-3 flex items-start gap-2.5" style={{ background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}>
-                  <Languages className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: CAT.phrases.ink }} />
-                  <p style={{ color: ED_INK2, fontSize: fs(13), lineHeight: 1.45 }}>{ttsWarning.message}</p>
-                </div>
-              ) : (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-start gap-2">
-                <Languages className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className="text-[calc(12px*var(--fs))] text-amber-800">{ttsWarning.message}</p>
+              <div className="p-3 mb-3 flex items-start gap-2.5" style={{ borderRadius: ED.rChip, background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}>
+                <Languages className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: CAT.phrases.ink }} />
+                <p style={{ color: ED_INK2, fontSize: fs(ED.sub), lineHeight: 1.45 }}>{ttsWarning.message}</p>
               </div>
-              )
             )}
 
             {/* English region — offer "Translate from another language": pick a
@@ -1934,75 +1679,40 @@ Return a JSON object with "phrases" array. Each phrase object needs:
             {isInEnglishCountry && (
               <div className="space-y-3">
                 {wantsTranslation && selectedTranslationLanguage ? (
-                  isTablet ? (
-                    <div className="rounded-[14px] p-3.5" style={{ background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}>
-                      <div className="flex items-center justify-between gap-3">
-                        <p style={{ color: ED_INK2, fontSize: fs(14) }}>
-                          Translating <strong style={{ color: ED_INK }}>{selectedTranslationLanguage.flag} {selectedTranslationLanguage.name}</strong> → English
-                        </p>
-                        <button onClick={handleDisableTranslation} className="uppercase flex-none" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".06em" }}>
-                          English only
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                  <div className="bg-[#E0F7FA] border border-[#00BCD4]/30 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[calc(14px*var(--fs))] text-[#088395]">
-                        ✓ Translating <strong>{selectedTranslationLanguage.flag} {selectedTranslationLanguage.name}</strong> → English
+                  <div className="p-3.5" style={{ borderRadius: ED.rChip, background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}>
+                    <div className="flex items-center justify-between gap-3">
+                      <p style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>
+                        Translating <strong style={{ color: ED_INK }}>{selectedTranslationLanguage.flag} {selectedTranslationLanguage.name}</strong> → English
                       </p>
-                      <button onClick={handleDisableTranslation} className="text-[calc(12px*var(--fs))] text-gray-500 hover:text-gray-700 underline">
-                        Show English only
+                      <button onClick={handleDisableTranslation} className="uppercase flex-none" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerSm), letterSpacing: ".06em" }}>
+                        English only
                       </button>
                     </div>
                   </div>
-                  )
                 ) : (
-                  isTablet ? (
-                    <button
-                      onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
-                      className="w-full px-4 py-3 rounded-[14px] font-semibold flex items-center justify-center gap-2 transition-colors hover:bg-black/[.02]"
-                      style={{ background: "#FFFFFF", border: `1px solid ${CAT.phrases.ink}`, color: CAT.phrases.ink, fontSize: fs(15) }}
-                    >
-                      <Languages className="w-4 h-4" />
-                      Translate from another language
-                    </button>
-                  ) : (
                   <button
                     onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
-                    className="w-full px-4 py-2.5 bg-white border border-[#088395] text-[#088395] hover:bg-[#E0F7FA] rounded-lg font-medium text-[calc(16px*var(--fs))] flex items-center justify-center gap-2"
+                    className="w-full px-4 py-3 font-semibold flex items-center justify-center gap-2 transition-colors hover:bg-black/[.02]"
+                    style={{ borderRadius: ED.rChip, background: "#FFFFFF", border: `1px solid ${CAT.phrases.ink}`, color: CAT.phrases.ink, fontSize: fs(ED.titleXxs) }}
                   >
                     <Languages className="w-4 h-4" />
                     Translate from another language
                   </button>
-                  )
                 )}
 
                 <AnimatePresence>
                   {showLanguageDropdown && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
-                      {isTablet ? (
-                        <div className="rounded-[14px] p-2 max-h-56 overflow-y-auto space-y-0.5" style={{ background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}>
-                          {AVAILABLE_LANGUAGES.map(language => (
-                            <button key={language.code} onClick={() => handleLanguageSelect(language)}
-                              className="w-full px-3 py-2.5 text-left rounded-[10px] flex items-center gap-2.5 transition-colors hover:bg-white"
-                              style={{ color: ED_INK, fontSize: fs(14.5) }}>
-                              <span>{language.flag}</span>
-                              <span>{language.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto space-y-1">
+                      <div className="p-2 max-h-56 overflow-y-auto space-y-0.5" style={{ borderRadius: ED.rChip, background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}>
                         {AVAILABLE_LANGUAGES.map(language => (
                           <button key={language.code} onClick={() => handleLanguageSelect(language)}
-                            className="w-full px-3 py-2 text-left hover:bg-white rounded-lg flex items-center gap-2 text-[calc(14px*var(--fs))]">
+                            className="w-full px-3 py-2.5 text-left rounded-[10px] flex items-center gap-2.5 transition-colors hover:bg-white"
+                            style={{ color: ED_INK, fontSize: fs(ED.body) }}>
                             <span>{language.flag}</span>
                             <span>{language.name}</span>
                           </button>
                         ))}
                       </div>
-                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -2011,31 +1721,29 @@ Return a JSON object with "phrases" array. Each phrase object needs:
 
             {/* Non-English country WITH dialect options - show toggle */}
             {!isInEnglishCountry && languageInfo.show_toggle && (
-              isTablet ? (
               <div className="space-y-3">
-                <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".12em" }}>Choose language</p>
+                <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerSm), letterSpacing: ".12em" }}>Choose language</p>
 
                 {/* Two-option toggle */}
                 <div className="grid grid-cols-1 gap-2">
                   {/* Country's main language option */}
                   <button
                     onClick={() => {
-                      console.log('🔀 Switching to country language:', languageInfo.country_language);
                       setUseDialect(false);
                       setPhrases({});
                       setExpandedCategory(null);
                     }}
-                    className="w-full py-3.5 px-4 rounded-[14px] text-left transition-all flex items-center gap-3"
+                    className="w-full py-3.5 px-4 text-left transition-all flex items-center gap-3"
                     style={!useDialect
-                      ? { background: CAT.phrases.bg, border: `1.5px solid ${CAT.phrases.ink}` }
-                      : { background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}
+                      ? { borderRadius: ED.rChip, background: CAT.phrases.bg, border: `1.5px solid ${CAT.phrases.ink}` }
+                      : { borderRadius: ED.rChip, background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}
                   >
                     <span className="text-2xl">{languageInfo.country_flag || '🌍'}</span>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(20), lineHeight: 1.1 }}>
+                      <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleXs), lineHeight: 1.1 }}>
                         {languageInfo.country_language}
                       </p>
-                      <p className="mt-0.5" style={{ color: ED_INK3, fontSize: fs(12.5) }}>
+                      <p className="mt-0.5" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>
                         Official language of {languageInfo.country}
                       </p>
                     </div>
@@ -2045,22 +1753,21 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                   {/* City/Regional dialect option */}
                   <button
                     onClick={() => {
-                      console.log('🔀 Switching to city dialect:', languageInfo.city_language);
                       setUseDialect(true);
                       setPhrases({});
                       setExpandedCategory(null);
                     }}
-                    className="w-full py-3.5 px-4 rounded-[14px] text-left transition-all flex items-center gap-3"
+                    className="w-full py-3.5 px-4 text-left transition-all flex items-center gap-3"
                     style={useDialect
-                      ? { background: CAT.phrases.bg, border: `1.5px solid ${CAT.phrases.ink}` }
-                      : { background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}
+                      ? { borderRadius: ED.rChip, background: CAT.phrases.bg, border: `1.5px solid ${CAT.phrases.ink}` }
+                      : { borderRadius: ED.rChip, background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}
                   >
                     <span className="text-2xl">📍</span>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(20), lineHeight: 1.1 }}>
+                      <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleXs), lineHeight: 1.1 }}>
                         {languageInfo.city_language}
                       </p>
-                      <p className="mt-0.5" style={{ color: ED_INK3, fontSize: fs(12.5) }}>
+                      <p className="mt-0.5" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>
                         Local dialect in {languageInfo.city || 'this area'}
                       </p>
                     </div>
@@ -2070,176 +1777,64 @@ Return a JSON object with "phrases" array. Each phrase object needs:
 
                 {/* Dialect note if available */}
                 {languageInfo.dialect_note && useDialect && (
-                  <p className="italic px-1" style={{ color: ED_INK3, fontSize: fs(12.5) }}>
+                  <p className="italic px-1" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>
                     ℹ️ {languageInfo.dialect_note}
                   </p>
                 )}
               </div>
-              ) : (
-              <div className="space-y-3">
-                <p className="text-[calc(12px*var(--fs))] text-gray-600 font-medium uppercase tracking-wide">Choose language:</p>
-
-                {/* Two-option toggle */}
-                <div className="grid grid-cols-1 gap-2">
-                  {/* Country's main language option */}
-                  <button
-                    onClick={() => {
-                      console.log('🔀 Switching to country language:', languageInfo.country_language);
-                      setUseDialect(false);
-                      setPhrases({});
-                      setExpandedCategory(null);
-                    }}
-                    className={`w-full py-3 px-4 rounded-xl text-left transition-all flex items-center gap-3 ${
-                      !useDialect
-                        ? 'bg-[#088395] text-white shadow-md ring-2 ring-[#088395] ring-offset-2'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-                    }`}
-                  >
-                    <span className="text-2xl">{languageInfo.country_flag || '🌍'}</span>
-                    <div className="flex-1">
-                      <p className={`text-[calc(16px*var(--fs))] font-semibold ${!useDialect ? 'text-white' : 'text-gray-900'}`}>
-                        {languageInfo.country_language}
-                      </p>
-                      <p className={`text-[calc(12px*var(--fs))] ${!useDialect ? 'text-white/80' : 'text-gray-500'}`}>
-                        Official language of {languageInfo.country}
-                      </p>
-                    </div>
-                    {!useDialect && <span className="text-white text-lg">✓</span>}
-                  </button>
-
-                  {/* City/Regional dialect option */}
-                  <button
-                    onClick={() => {
-                      console.log('🔀 Switching to city dialect:', languageInfo.city_language);
-                      setUseDialect(true);
-                      setPhrases({});
-                      setExpandedCategory(null);
-                    }}
-                    className={`w-full py-3 px-4 rounded-xl text-left transition-all flex items-center gap-3 ${
-                      useDialect
-                        ? 'bg-[#088395] text-white shadow-md ring-2 ring-[#088395] ring-offset-2'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-                    }`}
-                  >
-                    <span className="text-2xl">📍</span>
-                    <div className="flex-1">
-                      <p className={`text-[calc(16px*var(--fs))] font-semibold ${useDialect ? 'text-white' : 'text-gray-900'}`}>
-                        {languageInfo.city_language}
-                      </p>
-                      <p className={`text-[calc(12px*var(--fs))] ${useDialect ? 'text-white/80' : 'text-gray-500'}`}>
-                        Local dialect in {languageInfo.city || 'this area'}
-                      </p>
-                    </div>
-                    {useDialect && <span className="text-white text-lg">✓</span>}
-                  </button>
-                </div>
-
-                {/* Dialect note if available */}
-                {languageInfo.dialect_note && useDialect && (
-                  <p className="text-[calc(12px*var(--fs))] text-gray-500 italic px-1">
-                    ℹ️ {languageInfo.dialect_note}
-                  </p>
-                )}
-              </div>
-              )
             )}
 
             {/* Non-English country WITHOUT dialect options - just show the language */}
             {!isInEnglishCountry && !languageInfo.show_toggle && (
-              isTablet ? (
-                <div className="rounded-[14px] p-3.5 flex items-center gap-3" style={{ background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}>
-                  <span className="text-2xl">{languageInfo.country_flag || '🌍'}</span>
-                  <div className="min-w-0">
-                    <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(19), lineHeight: 1.1 }}>
-                      {languageInfo.city_language || languageInfo.country_language}
-                    </p>
-                    <p className="mt-0.5" style={{ color: ED_INK3, fontSize: fs(12.5) }}>
-                      Phrases will be translated to this language
-                    </p>
-                  </div>
-                </div>
-              ) : (
-              <div className="bg-[#E0F7FA] border border-[#00BCD4]/30 rounded-lg p-3 flex items-center gap-3">
+              <div className="p-3.5 flex items-center gap-3" style={{ borderRadius: ED.rChip, background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}>
                 <span className="text-2xl">{languageInfo.country_flag || '🌍'}</span>
-                <div>
-                  <p className="text-[calc(14px*var(--fs))] font-medium text-[#088395]">
+                <div className="min-w-0">
+                  <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleXxs), lineHeight: 1.1 }}>
                     {languageInfo.city_language || languageInfo.country_language}
                   </p>
-                  <p className="text-[calc(12px*var(--fs))] text-[#088395]/70">
+                  <p className="mt-0.5" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>
                     Phrases will be translated to this language
                   </p>
                 </div>
               </div>
-              )
             )}
             </div>
             )}
 
             {/* Search Bar */}
-            {isTablet ? (
-              <div className="rounded-[18px] p-4 mb-4" style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}>
-                <div className="relative">
-                  <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4" style={{ color: ED_INK3 }} />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search for words or phrases..."
-                    className="w-full pl-11 pr-24 py-3 rounded-[12px] focus:outline-none"
-                    style={{ background: ED_IVORY2, border: `1px solid ${ED_RULE}`, color: ED_INK, fontSize: fs(15), fontFamily: ED_SERIF }}
-                  />
-                  <div className="absolute right-2.5 top-1/2 transform -translate-y-1/2 flex items-center gap-1.5">
-                    {searchQuery && (
-                      <button
-                        onClick={clearSearch}
-                        className="p-1.5 rounded-full transition-colors hover:bg-black/[.05]"
-                      >
-                        <X className="w-3.5 h-3.5" style={{ color: ED_INK3 }} />
-                      </button>
-                    )}
-                    <button
-                      onClick={performSearch}
-                      className="p-2 rounded-[10px] transition-opacity hover:opacity-90"
-                      style={{ background: CAT.phrases.ink }}
-                    >
-                      <Search className="w-3.5 h-3.5 text-white" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-            <div className="bg-white rounded-xl p-4 mb-4 shadow-sm border border-gray-100">
+            <div className="p-4 mb-4" style={{ borderRadius: ED.rCard, background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4" style={{ color: ED_INK3 }} />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search for words or phrases..."
-                  className="w-full pl-10 pr-20 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#088395] focus:border-transparent text-[calc(14px*var(--fs))]"
+                  className="w-full pl-11 pr-24 py-3 focus:outline-none"
+                  style={{ borderRadius: ED.rInput, background: ED_IVORY2, border: `1px solid ${ED_RULE}`, color: ED_INK, fontSize: fs(ED.titleXxs), fontFamily: ED_SERIF }}
                 />
-                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+                <div className="absolute right-2.5 top-1/2 transform -translate-y-1/2 flex items-center gap-1.5">
                   {searchQuery && (
                     <button
                       onClick={clearSearch}
-                      className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                      className="p-1.5 rounded-full transition-colors hover:bg-black/[.05]"
                     >
-                      <X className="w-3.5 h-3.5 text-gray-400" />
+                      <X className="w-3.5 h-3.5" style={{ color: ED_INK3 }} />
                     </button>
                   )}
                   <button
                     onClick={performSearch}
-                    className="p-1.5 bg-[#088395] hover:bg-[#06BCC1] rounded-lg transition-colors"
+                    className="p-2 rounded-[10px] transition-opacity hover:opacity-90"
+                    style={{ background: CAT.phrases.ink }}
                   >
                     <Search className="w-3.5 h-3.5 text-white" />
                   </button>
                 </div>
               </div>
             </div>
-            )}
 
-            {/* Search Results — iPad editorial treatment (same data/actions). */}
-            {isSearching && searchResults.length > 0 && isTablet && (() => {
+            {/* Search Results — editorial treatment (same data/actions), both widths. */}
+            {isSearching && searchResults.length > 0 && (() => {
               const GOLD = CAT.phrases.ink, GOLD_BG = CAT.phrases.bg;
               const cleanPhonetic = (text) => {
                 if (!text) return '';
@@ -2248,6 +1843,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
               const ttsCode = getActiveTTSCode();
               const isReverseMode = isInEnglishCountry && wantsTranslation && selectedTranslationLanguage;
               const isEnglishOnly = isInEnglishCountry && !wantsTranslation;
+              const spk = isTablet ? 44 : 40;
               const Speaker = ({ phraseKey, text, code, label }) => (
                 <button
                   onClick={() => speakPhrase(text, code, phraseKey)}
@@ -2256,7 +1852,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                   aria-label={label}
                   className="flex-shrink-0 rounded-full flex items-center justify-center transition-all"
                   style={{
-                    width: 44, height: 44,
+                    width: spk, height: spk,
                     background: playingAudio[phraseKey] ? GOLD : "#FFFFFF",
                     color: playingAudio[phraseKey] ? "#FFFFFF" : GOLD,
                     border: `1px solid ${playingAudio[phraseKey] ? GOLD : ED_RULE}`,
@@ -2269,15 +1865,15 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-4" style={{ borderTop: `1px solid ${ED_RULE}`, paddingTop: 18 }}>
                     <div>
-                      <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".16em" }}>Search</p>
-                      <h2 className="mt-1" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(30), lineHeight: 1 }}>
+                      <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kicker), letterSpacing: ".16em" }}>Search</p>
+                      <h2 className="mt-1" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.displaySm), lineHeight: 1 }}>
                         {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
                       </h2>
                     </div>
                     <button
                       onClick={clearSearch}
                       className="flex items-center gap-1.5 rounded-full px-3.5 py-2 font-semibold transition-colors hover:bg-black/[.03]"
-                      style={{ color: GOLD, border: `1px solid ${ED_RULE}`, fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".08em" }}
+                      style={{ color: GOLD, border: `1px solid ${ED_RULE}`, fontFamily: ED_MONO, fontSize: fs(ED.kicker), letterSpacing: ".08em" }}
                     >
                       <X className="w-3.5 h-3.5" />
                       CLEAR
@@ -2293,14 +1889,14 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                           key={idx}
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="bg-white rounded-[18px] p-4"
-                          style={{ border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}
+                          className="bg-white p-4"
+                          style={{ borderRadius: ED.rCard, border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}
                         >
                           <div className="flex items-start justify-between gap-3 mb-2">
-                            <p className="flex-1 min-w-0" style={{ color: isReverseMode ? ED_INK3 : ED_INK2, fontSize: fs(14.5), lineHeight: 1.4 }}>
+                            <p className="flex-1 min-w-0" style={{ color: isReverseMode ? ED_INK3 : ED_INK2, fontSize: fs(ED.body), lineHeight: 1.4 }}>
                               {isReverseMode ? meaning : result.english}
                             </p>
-                            <span className="uppercase rounded-full px-2 py-0.5 font-semibold flex-none" style={{ background: GOLD_BG, color: GOLD, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em" }}>
+                            <span className="uppercase rounded-full px-2 py-0.5 font-semibold flex-none" style={{ background: GOLD_BG, color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>
                               {result.categoryName}
                             </span>
                           </div>
@@ -2308,25 +1904,25 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                           {isReverseMode ? (
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex-1 min-w-0">
-                                <p className="font-semibold" style={{ color: GOLD, fontFamily: ED_SERIF, fontSize: fs(23), lineHeight: 1.12 }}>{result.english}</p>
+                                <p className="font-semibold" style={{ color: GOLD, fontFamily: ED_SERIF, fontSize: fs(ED.titleMd), lineHeight: 1.12 }}>{result.english}</p>
                               </div>
                               <Speaker phraseKey={`search_${idx}`} text={result.english} code="en" label="Listen to pronunciation" />
                             </div>
                           ) : isEnglishOnly ? (
                             <div className="flex items-center gap-2.5">
                               <Speaker phraseKey={`search_${idx}`} text={result.english} code="en" label="Tap to hear" />
-                              <span className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em" }}>Tap to hear</span>
+                              <span className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Tap to hear</span>
                             </div>
                           ) : !showBothVersions ? (
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex-1 min-w-0">
-                                <p className="font-semibold" style={{ color: GOLD, fontFamily: ED_SERIF, fontSize: fs(23), lineHeight: 1.12 }}>
+                                <p className="font-semibold" style={{ color: GOLD, fontFamily: ED_SERIF, fontSize: fs(ED.titleMd), lineHeight: 1.12 }}>
                                   {meaning}
                                 </p>
                                 {(result.formal_phonetic || result.phonetic) && (
                                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                    <span className="uppercase rounded-full px-2 py-0.5 font-semibold" style={{ background: GOLD_BG, color: GOLD, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em" }}>Say it</span>
-                                    <span style={{ color: ED_INK2, fontSize: fs(14) }}>{cleanPhonetic(result.formal_phonetic || result.phonetic)}</span>
+                                    <span className="uppercase rounded-full px-2 py-0.5 font-semibold" style={{ background: GOLD_BG, color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Say it</span>
+                                    <span style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>{cleanPhonetic(result.formal_phonetic || result.phonetic)}</span>
                                   </div>
                                 )}
                               </div>
@@ -2334,30 +1930,30 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                             </div>
                           ) : (
                             <div className="space-y-2.5">
-                              <div className="rounded-[14px] p-3" style={{ background: ED_IVORY2 }}>
+                              <div className="p-3" style={{ borderRadius: ED.rChip, background: ED_IVORY2 }}>
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="flex-1 min-w-0">
-                                    <span className="uppercase rounded-full px-2 py-0.5 font-semibold inline-block mb-1.5" style={{ background: "#FFFFFF", color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em", border: `1px solid ${ED_RULE}` }}>Formal · Polite</span>
-                                    <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(22), lineHeight: 1.12 }}>{result.formal_translation}</p>
+                                    <span className="uppercase rounded-full px-2 py-0.5 font-semibold inline-block mb-1.5" style={{ background: "#FFFFFF", color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em", border: `1px solid ${ED_RULE}` }}>Formal · Polite</span>
+                                    <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleSm), lineHeight: 1.12 }}>{result.formal_translation}</p>
                                     {result.formal_phonetic && (
                                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                        <span className="uppercase font-semibold" style={{ color: GOLD, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em" }}>Say it</span>
-                                        <span style={{ color: ED_INK2, fontSize: fs(14) }}>{cleanPhonetic(result.formal_phonetic)}</span>
+                                        <span className="uppercase font-semibold" style={{ color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Say it</span>
+                                        <span style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>{cleanPhonetic(result.formal_phonetic)}</span>
                                       </div>
                                     )}
                                   </div>
                                   <Speaker phraseKey={`search_${idx}_formal`} text={result.formal_translation} code={ttsCode} label="Listen to formal pronunciation" />
                                 </div>
                               </div>
-                              <div className="rounded-[14px] p-3" style={{ background: ED_IVORY2 }}>
+                              <div className="p-3" style={{ borderRadius: ED.rChip, background: ED_IVORY2 }}>
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="flex-1 min-w-0">
-                                    <span className="uppercase rounded-full px-2 py-0.5 font-semibold inline-block mb-1.5" style={{ background: "#FFFFFF", color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em", border: `1px solid ${ED_RULE}` }}>Casual</span>
-                                    <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(22), lineHeight: 1.12 }}>{result.casual_translation}</p>
+                                    <span className="uppercase rounded-full px-2 py-0.5 font-semibold inline-block mb-1.5" style={{ background: "#FFFFFF", color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em", border: `1px solid ${ED_RULE}` }}>Casual</span>
+                                    <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleSm), lineHeight: 1.12 }}>{result.casual_translation}</p>
                                     {result.casual_phonetic && (
                                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                        <span className="uppercase font-semibold" style={{ color: GOLD, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em" }}>Say it</span>
-                                        <span style={{ color: ED_INK2, fontSize: fs(14) }}>{cleanPhonetic(result.casual_phonetic)}</span>
+                                        <span className="uppercase font-semibold" style={{ color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Say it</span>
+                                        <span style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>{cleanPhonetic(result.casual_phonetic)}</span>
                                       </div>
                                     )}
                                   </div>
@@ -2374,193 +1970,44 @@ Return a JSON object with "phrases" array. Each phrase object needs:
               );
             })()}
 
-            {/* Search Results */}
-            {isSearching && searchResults.length > 0 && !isTablet && (
-            <div className="mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[calc(14px*var(--fs))] font-semibold text-gray-700">
-                {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found
-              </p>
-              <button
-                onClick={clearSearch}
-                className="flex items-center gap-1 text-[calc(14px*var(--fs))] text-[#088395] hover:text-[#06BCC1] font-semibold"
-              >
-                <X className="w-4 h-4" />
-                Clear
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {searchResults.map((result, idx) => {
-                const showBothVersions = result.formal_translation !== result.casual_translation && result.casual_translation && !result.same_formality;
-                const cleanPhonetic = (text) => {
-                  if (!text) return '';
-                  return text.replace(/\[.*?\]/g, '').replace(/_+/g, '').replace(/\s+/g, ' ').trim();
-                };
-                const ttsCode = getActiveTTSCode();
-
-                return (
-                  <motion.div
-                    key={idx}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <p className="text-[calc(14px*var(--fs))] text-gray-600 flex-1">{result.english}</p>
-                      <span className="text-[calc(12px*var(--fs))] bg-gray-100 text-gray-600 px-2 py-1 rounded-full ml-2">
-                        {result.categoryName}
-                      </span>
-                    </div>
-
-                    {!showBothVersions ? (
-                      // Single version
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <p className="text-[calc(16px*var(--fs))] font-bold text-[#088395]">
-                            {result.formal_translation || result.translation}
-                          </p>
-                          {(result.formal_phonetic || result.phonetic) && (
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <span className="text-[calc(12px*var(--fs))] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
-                                Say it:
-                              </span>
-                              <p className="text-[calc(14px*var(--fs))] text-amber-700">
-                                {cleanPhonetic(result.formal_phonetic || result.phonetic)}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => speakPhrase(result.formal_translation || result.translation, ttsCode, `search_${idx}`)}
-                          className={`flex-shrink-0 p-2.5 rounded-full transition-all ${
-                            playingAudio[`search_${idx}`]
-                              ? 'bg-[#088395] text-white animate-pulse'
-                              : 'bg-gray-100 text-gray-600 hover:bg-[#E0F7FA] hover:text-[#088395]'
-                          }`}
-                          disabled={playingAudio[`search_${idx}`]}
-                        >
-                          <Volume2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    ) : (
-                      // Both formal and casual
-                      <div className="space-y-2">
-                        <div className="bg-gradient-to-r from-[#E8F5E9] to-[#F1F8E9] rounded-lg p-2 border border-green-200">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <span className="text-[calc(12px*var(--fs))] bg-green-600 text-white px-2 py-0.5 rounded-full font-medium">
-                                Formal
-                              </span>
-                              <p className="text-[calc(14px*var(--fs))] font-bold text-green-800 mt-1">
-                                {result.formal_translation}
-                              </p>
-                              {result.formal_phonetic && (
-                                <p className="text-[calc(12px*var(--fs))] text-green-700 mt-0.5">
-                                  {cleanPhonetic(result.formal_phonetic)}
-                                </p>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => speakPhrase(result.formal_translation, ttsCode, `search_${idx}_formal`)}
-                              className={`flex-shrink-0 p-2 rounded-full ${
-                                playingAudio[`search_${idx}_formal`]
-                                  ? 'bg-green-600 text-white'
-                                  : 'bg-white text-green-600 hover:bg-green-50'
-                              }`}
-                              disabled={playingAudio[`search_${idx}_formal`]}
-                            >
-                              <Volume2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="bg-gradient-to-r from-[#FFF3E0] to-[#FFF8E1] rounded-lg p-2 border border-orange-200">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <span className="text-[calc(12px*var(--fs))] bg-orange-500 text-white px-2 py-0.5 rounded-full font-medium">
-                                Casual
-                              </span>
-                              <p className="text-[calc(14px*var(--fs))] font-bold text-orange-800 mt-1">
-                                {result.casual_translation}
-                              </p>
-                              {result.casual_phonetic && (
-                                <p className="text-[calc(12px*var(--fs))] text-orange-700 mt-0.5">
-                                  {cleanPhonetic(result.casual_phonetic)}
-                                </p>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => speakPhrase(result.casual_translation, ttsCode, `search_${idx}_casual`)}
-                              className={`flex-shrink-0 p-2 rounded-full ${
-                                playingAudio[`search_${idx}_casual`]
-                                  ? 'bg-orange-500 text-white'
-                                  : 'bg-white text-orange-500 hover:bg-orange-50'
-                              }`}
-                              disabled={playingAudio[`search_${idx}_casual`]}
-                            >
-                              <Volume2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </motion.div>
-                );
-              })}
-            </div>
-            </div>
-            )}
-
-            {isSearching && searchResults.length === 0 && searchQuery.trim() && isTablet && (
-            <div className="rounded-[18px] p-7 mb-4 text-center" style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}>
-              <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: ".12em" }}>No matches</p>
-              <p className="mt-1.5" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(24), lineHeight: 1.1 }}>Nothing for "{searchQuery}"</p>
+            {isSearching && searchResults.length === 0 && searchQuery.trim() && (
+            <div className="p-7 mb-4 text-center" style={{ borderRadius: ED.rCard, background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}>
+              <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kicker), letterSpacing: ".12em" }}>No matches</p>
+              <p className="mt-1.5" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.displaySm), lineHeight: 1.1 }}>Nothing for "{searchQuery}"</p>
               <button
                 onClick={clearSearch}
                 className="mt-3 uppercase font-semibold"
-                style={{ color: CAT.phrases.ink, fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".08em" }}
+                style={{ color: CAT.phrases.ink, fontFamily: ED_MONO, fontSize: fs(ED.kicker), letterSpacing: ".08em" }}
               >
                 Clear search
               </button>
             </div>
             )}
 
-            {isSearching && searchResults.length === 0 && searchQuery.trim() && !isTablet && (
-            <div className="bg-gray-50 rounded-xl p-6 mb-4 text-center">
-            <p className="text-[calc(16px*var(--fs))] text-gray-600">No results found for "{searchQuery}"</p>
-            <button
-              onClick={clearSearch}
-              className="mt-2 text-[calc(14px*var(--fs))] text-[#088395] hover:text-[#06BCC1] font-semibold"
-            >
-              Clear search
-            </button>
-            </div>
-            )}
-
-            {!isSearching && isTablet && (
+            {!isSearching && (
             <div>
               {/* Editorial section header — mono kicker + serif display title */}
               <div className="mt-1 mb-5" style={{ borderTop: `1px solid ${ED_RULE}`, paddingTop: 18 }}>
-                <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".16em" }}>Phrasebook</p>
-                <h2 className="mt-1" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(34), lineHeight: 1 }}>Pick a situation</h2>
+                <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kicker), letterSpacing: ".16em" }}>Phrasebook</p>
+                <h2 className="mt-1" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.display), lineHeight: 1 }}>Pick a situation</h2>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isTablet ? "1fr 1fr" : "1fr", gap: isTablet ? 16 : 12, alignItems: "start" }}>
                 {PHRASE_CATEGORIES.map((category) => {
                   const isOpen = expandedCategory === category.id;
                   const isEmergency = category.priority === 'emergency';
                   return (
                     <div
                       key={category.id}
-                      className="bg-white rounded-[22px] overflow-hidden"
-                      style={{ border: `1px solid ${isEmergency ? "#E9C3C0" : ED_RULE}`, boxShadow: SHADOW_CARD_SOFT, gridColumn: isOpen ? "1 / -1" : "auto" }}
+                      className="bg-white overflow-hidden"
+                      style={{ borderRadius: ED.rCardLg, border: `1px solid ${isEmergency ? "#E9C3C0" : ED_RULE}`, boxShadow: SHADOW_CARD_SOFT, gridColumn: isOpen ? "1 / -1" : "auto" }}
                     >
-                      <button onClick={() => handleCategoryClick(category.id)} className="w-full px-5 py-5 flex items-center justify-between text-left transition-colors hover:bg-black/[.02]">
-                        <div className="flex items-center gap-3.5 min-w-0">
-                          <span className="shrink-0 rounded-2xl flex items-center justify-center" style={{ width: 48, height: 48, background: CAT.phrases.bg, fontSize: 24, lineHeight: 1 }}>{category.icon}</span>
+                      <button onClick={() => handleCategoryClick(category.id)} className={`w-full flex items-center justify-between text-left transition-colors hover:bg-black/[.02] ${isTablet ? "px-5 py-5" : "px-4 py-4"}`}>
+                        <div className={`flex items-center min-w-0 ${isTablet ? "gap-3.5" : "gap-3"}`}>
+                          <span className="shrink-0 rounded-2xl flex items-center justify-center" style={{ width: isTablet ? 48 : 44, height: isTablet ? 48 : 44, background: CAT.phrases.bg, fontSize: isTablet ? 24 : 22, lineHeight: 1 }}>{category.icon}</span>
                           <div className="min-w-0">
-                            <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".12em" }}>{isEmergency ? "Critical" : category.priority === 'high' ? "Essential" : "Useful"}</p>
-                            <p className="font-semibold mt-0.5 truncate" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(26), lineHeight: 1.05 }}>{category.name}</p>
-                            <p className="mt-0.5 truncate" style={{ color: ED_INK3, fontSize: fs(13) }}>{category.subtitle}</p>
+                            <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".12em" }}>{isEmergency ? "Critical" : category.priority === 'high' ? "Essential" : "Useful"}</p>
+                            <p className="font-semibold mt-0.5" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.title), lineHeight: 1.05, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{category.name}</p>
+                            <p className="mt-0.5 truncate" style={{ color: ED_INK3, fontSize: fs(ED.sub) }}>{category.subtitle}</p>
                           </div>
                         </div>
                         <span className="shrink-0 ml-3 rounded-full flex items-center justify-center" style={{ width: 34, height: 34, border: `1px solid ${ED_RULE}`, color: CAT.phrases.ink }}>
@@ -2574,7 +2021,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                             {loadingPhrases[category.id] ? (
                               <div className="p-8 flex flex-col items-center">
                                 <Loader2 className="w-6 h-6 animate-spin mb-2" style={{ color: CAT.phrases.ink }} />
-                                <p style={{ color: ED_INK3, fontSize: fs(14) }}>Translating to {getActiveLanguageName()}...</p>
+                                <p style={{ color: ED_INK3, fontSize: fs(ED.body) }}>Translating to {getActiveLanguageName()}...</p>
                               </div>
                             ) : renderPhrases(phrases[category.id])}
                           </motion.div>
@@ -2584,38 +2031,6 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                   );
                 })}
               </div>
-            </div>
-            )}
-
-            {!isSearching && !isTablet && (
-            <div className="space-y-3">
-          {PHRASE_CATEGORIES.map((category) => (
-            <div key={category.id} className={`bg-white rounded-xl shadow-sm border overflow-hidden ${category.priority === 'emergency' ? 'border-red-200' : 'border-gray-100'}`}>
-              <button onClick={() => handleCategoryClick(category.id)} className="w-full px-4 py-4 flex items-center justify-between hover:bg-gray-50">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">{category.icon}</span>
-                  <div className="text-left">
-                    <p className="font-bold text-gray-900 text-[calc(16px*var(--fs))]">{category.name}</p>
-                    <p className="text-[calc(12px*var(--fs))] text-gray-600">{category.subtitle}</p>
-                  </div>
-                </div>
-                {expandedCategory === category.id ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
-              </button>
-
-              <AnimatePresence>
-                {expandedCategory === category.id && (
-                  <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
-                    {loadingPhrases[category.id] ? (
-                      <div className="p-8 flex flex-col items-center">
-                        <Loader2 className="w-6 h-6 text-[#088395] animate-spin mb-2" />
-                        <p className="text-[calc(14px*var(--fs))] text-gray-600">Translating to {getActiveLanguageName()}...</p>
-                      </div>
-                    ) : renderPhrases(phrases[category.id])}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-            ))}
             </div>
             )}
             </div>

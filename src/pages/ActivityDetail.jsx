@@ -168,9 +168,8 @@ export default function ActivityDetailPage() {
           url: window.location.href
         });
         return;
-      } catch (error) {
+      } catch {
         // If share fails (e.g., in iframe or user cancels), fall back to modal
-        console.log('Native share failed, showing modal:', error.message);
       }
     }
     

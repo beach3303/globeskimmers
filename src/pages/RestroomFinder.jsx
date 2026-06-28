@@ -161,228 +161,21 @@ function PhotoStrip({ photos, fallbackIcon = "🚻", onPhotoClick, height = null
   );
 }
 
-// ─── RESTROOM CARD (Cleaned up per ChatGPT #2) ─────────────────────────────
-function RestroomCard({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng, formatDistance }) {
-  const [showDirs, setShowDirs] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  // Fullscreen photo gallery — tap a photo on the card to enlarge.
-  // Swipe / arrow / dot indicator nav inside the modal, X to close.
-  const [gallery, setGallery] = useState({ open: false, idx: 0 });
-
-  useEffect(() => { if (forceExpanded) setExpanded(true); }, [forceExpanded]);
-
-  const name = r.name || "Restroom";
-  const address = r.formattedAddress || "";
-  const phone = r.nationalPhoneNumber || r.internationalPhoneNumber || "";
-  const openSt = computeOpenStatus(r);
-  const chips = getFeatureChips(r);
-  const weekdayDesc = r.weekdayDescriptions || [];
-
-  return (
-    <motion.div
-      ref={cardRef}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04, type: "spring", stiffness: 280, damping: 22 }}
-      style={{
-        background: "#fff", borderRadius: "20px",
-        boxShadow: isHighlighted ? `0 0 0 3px ${TEAL}, 0 8px 32px rgba(0,188,212,0.22)` : "0 2px 16px rgba(0,0,0,0.07)",
-        overflow: "hidden",
-        border: isHighlighted ? `2px solid ${TEAL}` : "1px solid #E8EDF2",
-      }}
-    >
-      {/* Photo */}
-      <div style={{ position: "relative" }}>
-        <PhotoStrip
-          photos={r.photos}
-          fallbackIcon={r.venueIcon || "🚻"}
-          onPhotoClick={(i) => setGallery({ open: true, idx: i })}
-        />
-
-        {/* Rank */}
-        <div style={{
-          position: "absolute", top: "12px", left: "12px",
-          background: index === 0 ? "linear-gradient(135deg,#FFD700,#FFA000)" : index === 1 ? "linear-gradient(135deg,#B0BEC5,#78909C)" : index === 2 ? "linear-gradient(135deg,#FFAB40,#F57C00)" : TEAL,
-          color: "#fff", width: "28px", height: "28px", borderRadius: "50%",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontWeight: "800", fontSize: "calc(12px*var(--fs))", boxShadow: "0 2px 8px rgba(0,0,0,0.25)"
-        }}>{index + 1}</div>
-
-        {/* Venue pill */}
-        <div style={{ position: "absolute", bottom: "12px", left: "12px", background: "rgba(255,255,255,0.95)", backdropFilter: "blur(6px)", padding: "4px 10px", borderRadius: "20px", fontSize: "calc(11px*var(--fs))", fontWeight: "700", color: DARK }}>
-          {r.venueIcon} {r.venueLabel}
-        </div>
-
-        {/* Open status */}
-        <div style={{
-          position: "absolute", top: "12px", right: "12px",
-          background: openSt.isOpen === true || openSt.is24H ? "rgba(5,150,105,0.95)" : openSt.isOpen === false ? "rgba(220,38,38,0.95)" : "rgba(100,116,139,0.9)",
-          backdropFilter: "blur(6px)", color: "#fff", padding: "4px 10px", borderRadius: "20px",
-          fontSize: "calc(11px*var(--fs))", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px"
-        }}>
-          <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: openSt.isOpen === true || openSt.is24H ? "#69F0AE" : "#fff" }} />
-          {openSt.label}
-        </div>
-      </div>
-
-      {/* Body */}
-      <div style={{ padding: "16px" }}>
-
-        {/* Row 1: Name + Distance */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "2px" }}>
-          <div style={{ fontWeight: "800", fontSize: "calc(18px*var(--fs))", color: DARK, lineHeight: "1.25", flex: 1 }}>{name}</div>
-          {r.distanceMiles!=null && (
-            <div style={{ background: `${TEAL}15`, color: TEAL_DARK, padding: "4px 10px", borderRadius: "20px", fontSize: "calc(12px*var(--fs))", fontWeight: "700", flexShrink: 0 }}>
-              📍 {formatDistance(r.distanceMiles)}
-            </div>
-          )}
-        </div>
-        <NameLanguageHelp placeId={r.placeId || r.id} name={name} />
-
-        {/* Row 2: Rating */}
-        {r.rating && (
-          <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "10px", fontSize: "calc(13px*var(--fs))" }}>
-            <span style={{ color: GOLD }}>★</span>
-            <span style={{ fontWeight: "700", color: DARK }}>{r.rating}</span>
-            {r.userRatingCount > 0 && <span style={{ color: GRAY }}>({r.userRatingCount.toLocaleString()})</span>}
-          </div>
-        )}
-
-        {/* Feature chips */}
-        {chips.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "10px" }}>
-            {chips.map(chip => (
-              <span key={chip.key} style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: chip.bg, color: chip.color, padding: "4px 10px", borderRadius: "20px", fontSize: "calc(11px*var(--fs))", fontWeight: "600" }}>
-                {chip.icon} {chip.label}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Row 5: Address */}
-        {address && (
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "10px", padding: "10px 12px", background: "#F8FAFC", borderRadius: "12px", border: "1px solid #E8EDF2" }}>
-            <span style={{ fontSize: "calc(16px*var(--fs))", flexShrink: 0 }}>📍</span>
-            <span style={{ fontSize: "calc(13px*var(--fs))", color: DARK, lineHeight: "1.45" }}>{address}</span>
-          </div>
-        )}
-
-        {/* Row 6: Smart note (only if exists) */}
-        {r.smartNote && (
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", padding: "10px 12px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: "12px" }}>
-            <span style={{ fontSize: "calc(14px*var(--fs))" }}>💡</span>
-            <span style={{ fontSize: "calc(12px*var(--fs))", color: "#92400E", fontWeight: "500" }}>{r.smartNote}</span>
-          </div>
-        )}
-
-        {/* Hours row */}
-        {(openSt.todayHours || openSt.isOpen !== null) && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", padding: "10px 12px", borderRadius: "12px",
-            background: openSt.is24H ? BLUE_LIGHT : openSt.isOpen === true ? GREEN_LIGHT : openSt.isOpen === false ? "#FEE2E2" : "#F5F5F5"
-          }}>
-            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: openSt.isOpen === true || openSt.is24H ? GREEN : openSt.isOpen === false ? CORAL : GRAY }} />
-            <span style={{ fontWeight: "700", fontSize: "calc(13px*var(--fs))", color: openSt.isOpen === true || openSt.is24H ? GREEN : openSt.isOpen === false ? "#DC2626" : GRAY }}>{openSt.label}</span>
-            {openSt.todayHours && !openSt.is24H && <span style={{ color: GRAY, fontSize: "calc(12px*var(--fs))" }}>· {openSt.todayHours}</span>}
-          </div>
-        )}
-
-        {/* Phone */}
-        {phone ? (
-          <a href={`tel:${phone}`} style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px", padding: "10px 14px", background: BLUE_LIGHT, borderRadius: "12px", textDecoration: "none", border: "1px solid #BBDEFB" }}>
-            <div style={{ width: "34px", height: "34px", background: BLUE, color: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "calc(16px*var(--fs))" }}>📞</div>
-            <div>
-              <div style={{ fontWeight: "700", fontSize: "calc(14px*var(--fs))", color: BLUE }}>{phone}</div>
-              <div style={{ fontSize: "calc(11px*var(--fs))", color: GRAY }}>Tap to call</div>
-            </div>
-            <span style={{ marginLeft: "auto", color: BLUE, fontSize: "calc(18px*var(--fs))" }}>›</span>
-          </a>
-        ) : null}
-
-        {/* Buttons */}
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button onClick={() => setShowDirs(true)}
-            style={{ flex: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "12px", borderRadius: "12px", border: "none", fontSize: "calc(14px*var(--fs))", fontWeight: "700", cursor: "pointer", background: `linear-gradient(135deg,${TEAL_DARK},${TEAL})`, color: "#fff", fontFamily: "inherit" }}>
-            🧭 Directions
-          </button>
-          <button onClick={() => onShowOnMap?.(index)}
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "12px", borderRadius: "12px", border: "none", fontSize: "calc(13px*var(--fs))", fontWeight: "700", cursor: "pointer", background: "#EDE7F6", color: PURPLE, fontFamily: "inherit" }}>
-            🗺️ Map
-          </button>
-          {/* Details button always renders so AI Details is reachable
-              even on restrooms without hours or website. */}
-          <button onClick={() => { const n = !expanded; setExpanded(n); onExpandChange?.(n); }}
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", borderRadius: "12px", border: "none", fontSize: "calc(13px*var(--fs))", fontWeight: "700", cursor: "pointer", background: expanded ? DARK : GRAY_LIGHT, color: expanded ? "#fff" : DARK, fontFamily: "inherit" }}>
-            {expanded ? "▲ Less" : "▼ Details"}
-          </button>
-        </div>
-
-        {/* Expanded view: Daily Hours + AI Details + Website */}
-        <AnimatePresence>
-          {expanded && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: "hidden" }}>
-              <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                {weekdayDesc.length > 0 && (
-                  <div style={{ padding: "12px", background: "#F8FAFC", borderRadius: "12px", border: "1px solid #E8EDF2" }}>
-                    <div style={{ fontSize: "calc(11px*var(--fs))", color: GRAY, fontWeight: "700", marginBottom: "8px", textTransform: "uppercase" }}>🕐 Daily Hours</div>
-                    {weekdayDesc.map((day, i) => {
-                      const today = new Date().getDay();
-                      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-                      const dayIdx = dayNames.findIndex(d => day?.toLowerCase?.().startsWith(d.toLowerCase()));
-                      const isToday = dayIdx === today;
-                      const parts = (day || "").split(":"); const dayName = parts[0]; const hrs = parts.slice(1).join(":").trim();
-                      return (
-                        <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "calc(12px*var(--fs))", color: isToday ? TEAL_DARK : DARK, fontWeight: isToday ? "700" : "400", padding: isToday ? "6px 8px" : "4px 0", background: isToday ? `${TEAL}12` : "transparent", borderRadius: isToday ? "6px" : "0" }}>
-                          <span>{dayName}{isToday && <span style={{ fontSize: "calc(9px*var(--fs))", color: TEAL, marginLeft: "4px" }}>TODAY</span>}</span>
-                          <span style={{ color: hrs.toLowerCase() === "closed" ? CORAL : isToday ? TEAL_DARK : GRAY }}>{hrs}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {/* Restroom-specific AI Details: 7 honest sections + amenity
-                    chips with confidence labels (toilet setup / supplies /
-                    access / accessibility / family-elderly / safety). Dedicated
-                    Worker route so it never uses the restaurant voice. */}
-                <RestroomAIDetails
-                  placeId={r.placeId || r.id}
-                  placeName={name}
-                  venueLabel={r.venueLabel}
-                  venueCategory={r.venueCategory}
-                  accessType={r.accessType}
-                />
-                {(r.websiteUri || r.website) && (
-                  <a href={r.websiteUri || r.website} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 10px", background: "#fff", border: "1px solid #E2E8F0", borderRadius: "8px", textDecoration: "none", color: TEAL_DARK, fontSize: "calc(13px*var(--fs))", fontWeight: "600" }}>🌐 Visit Website</a>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <MapAppSelector
-        isOpen={showDirs}
-        onClose={() => setShowDirs(false)}
-        destination={{ name, address: r.formattedAddress || r.vicinity || r.address || "", latitude: r.lat, longitude: r.lng }}
-        userLat={userLat}
-        userLng={userLng}
-      />
-      <PhotoGalleryModal photos={r.photos || []} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
-    </motion.div>
-  );
-}
-
-// ─── RESTROOM CARD · TABLET ────────────────────────────────────────────────
-// iPad-only editorial card. Mirrors PlacesToEat's RestaurantCardTablet 1:1
-// (28px radius, soft shadow, ED_* tokens, serif name, coral kicker, tinted
-// pills, green/blue bars, More ▾ panel). Takes the SAME props as the phone
-// RestroomCard and reuses the SAME fields + handlers + shared sub-components
-// (PhotoStrip, NameLanguageHelp, getFeatureChips, computeOpenStatus,
-// RestroomAIDetails, PhotoGalleryModal, MapAppSelector). Domain content only:
-// access (free/customers/fee), clean/accessible/family/bidet chips, place type
-// kicker. No phone bar unless a phone exists; no open bar unless hours exist.
-// Rendered ONLY at tablet width so the phone card stays byte-identical.
-function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng, formatDistance }) {
+// ─── RESTROOM CARD · EDITORIAL (responsive) ────────────────────────────────
+// The editorial card, now rendered at BOTH widths. Mirrors PlacesToEat's
+// RestaurantCardTablet (soft shadow, ED_* tokens, serif name, accent kicker,
+// tinted pills, green/blue bars, More ▾ panel). Takes an `isTablet` prop and
+// gates every size: tablet keeps the original handoff sizes; phone uses a
+// compact, phone-tuned scale (≈200px photo, 20px radius, fs(26) serif name,
+// fs(13) kicker, fs(16) body padding). Reuses the SAME fields + handlers +
+// shared sub-components (PhotoStrip, NameLanguageHelp, getFeatureChips,
+// computeOpenStatus, RestroomAIDetails, PhotoGalleryModal, MapAppSelector).
+// Domain content only: access (free/customers/fee), clean/accessible/family/
+// bidet chips, place type kicker. No phone bar unless a phone exists; no open
+// bar unless hours exist. Every text size stays on fs() so the 4-step glasses
+// control scales it; the serif name clamps to 2 lines and the card uses a
+// min-height so enlarged text grows the card instead of clipping.
+function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng, formatDistance, isTablet }) {
   const [showDirs, setShowDirs] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [hoursExpanded, setHoursExpanded] = useState(false);
@@ -400,8 +193,25 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
   const accCfg = ACCESS_CONFIG[r.accessType] || ACCESS_CONFIG.unknown;
   const hasOpen = openSt.todayHours || openSt.isOpen !== null;
 
+  // Phone-tuned vs tablet sizing. Tablet values are the original handoff sizes.
+  const S = isTablet
+    ? { photoH: 360, radius: 28, bodyPad: `${fs(28)} ${fs(32)} ${fs(32)}`, name: 38, kicker: 17,
+        rankBox: 36, rankFs: 15, rankPos: 16, overlayPad: `${fs(5)} ${fs(12)}`, overlayFs: 13,
+        meta: 17, metaGap: 16, metaTop: 12, tagPad: `${fs(9)} ${fs(16)}`, tagFs: 15.5, tagGap: 10, tagTop: 16,
+        sectTop: 16, sectPad: 16, sectRadius: "16px", icon: 18, bodyText: 16, noteTop: 14,
+        barPad: `${fs(16)} ${fs(20)}`, barFs: 18, barDot: 10, barGap: 11,
+        phonePad: `${fs(18)} ${fs(20)}`, phoneIcon: 24, phoneNum: 20, phoneSub: 15, phoneGap: 14,
+        actGap: 12, actTop: 20, actPad: 15, actFs: 18, expTop: 20, expGap: 14, websitePad: 16, websiteIcon: 22, websiteText: 16 }
+    : { photoH: 200, radius: 20, bodyPad: `${fs(16)} ${fs(16)} ${fs(18)}`, name: 26, kicker: 13,
+        rankBox: 28, rankFs: 12, rankPos: 12, overlayPad: `${fs(4)} ${fs(10)}`, overlayFs: 11.5,
+        meta: 13.5, metaGap: 10, metaTop: 8, tagPad: `${fs(6)} ${fs(11)}`, tagFs: 12.5, tagGap: 7, tagTop: 12,
+        sectTop: 12, sectPad: 12, sectRadius: "14px", icon: 16, bodyText: 13.5, noteTop: 10,
+        barPad: `${fs(11)} ${fs(13)}`, barFs: 13.5, barDot: 8, barGap: 9,
+        phonePad: `${fs(12)} ${fs(14)}`, phoneIcon: 18, phoneNum: 14.5, phoneSub: 12, phoneGap: 11,
+        actGap: 8, actTop: 14, actPad: 12, actFs: 14, expTop: 14, expGap: 10, websitePad: 12, websiteIcon: 18, websiteText: 14 };
+
   const Tag = ({ bg, color, children }) => (
-    <span style={{ background: bg, color, borderRadius: "999px", padding: `${fs(9)} ${fs(16)}`, fontSize: fs(15.5), fontWeight: 600, whiteSpace: "nowrap" }}>{children}</span>
+    <span style={{ background: bg, color, borderRadius: "999px", padding: S.tagPad, fontSize: fs(S.tagFs), fontWeight: 600, whiteSpace: "nowrap" }}>{children}</span>
   );
 
   return (
@@ -411,7 +221,7 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index, 8) * 0.03, type: "spring", stiffness: 280, damping: 22 }}
       style={{
-        background: "#fff", borderRadius: "28px", overflow: "hidden",
+        background: "#fff", borderRadius: `${S.radius}px`, overflow: "hidden", height: "auto",
         boxShadow: isHighlighted ? `0 0 0 3px ${TEAL}, 0 24px 50px -30px rgba(0,188,212,0.5)` : "0 24px 50px -30px rgba(22,17,13,.4)",
         border: isHighlighted ? `2px solid ${TEAL}` : `1px solid ${ED_RULE}`,
       }}
@@ -421,31 +231,31 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
         <PhotoStrip
           photos={r.photos}
           fallbackIcon={r.venueIcon || "🚻"}
-          height={360}
+          height={S.photoH}
           onPhotoClick={(i) => setGallery({ open: true, idx: i })}
         />
 
         {/* Rank — top-3 medal gradients; rest use the restroom accent #0F8A82 for a single coherent color world */}
         <div style={{
-          position: "absolute", top: "16px", left: "16px",
+          position: "absolute", top: `${S.rankPos}px`, left: `${S.rankPos}px`,
           background: index === 0 ? "linear-gradient(135deg,#FFD700,#FFA000)" : index === 1 ? "linear-gradient(135deg,#B0BEC5,#78909C)" : index === 2 ? "linear-gradient(135deg,#FFAB40,#F57C00)" : CAT.restroom.ink,
-          color: "#fff", width: "36px", height: "36px", borderRadius: "50%",
+          color: "#fff", width: `${S.rankBox}px`, height: `${S.rankBox}px`, borderRadius: "50%",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontWeight: "800", fontSize: fs(15), boxShadow: "0 2px 8px rgba(0,0,0,0.25)", border: "2px solid #fff"
+          fontWeight: "800", fontSize: fs(S.rankFs), boxShadow: "0 2px 8px rgba(0,0,0,0.25)", border: "2px solid #fff"
         }}>{index + 1}</div>
 
         {/* Access tag (the "Dish Specialist"-style trust tag for restrooms) */}
-        <div style={{ position: "absolute", top: "16px", right: "16px", background: "rgba(255,255,255,0.95)", backdropFilter: "blur(6px)", padding: `${fs(5)} ${fs(12)}`, borderRadius: "999px", fontSize: fs(13), fontWeight: 700, color: accCfg.color, boxShadow: "0 1px 4px rgba(0,0,0,0.12)" }}>
+        <div style={{ position: "absolute", top: `${S.rankPos}px`, right: `${S.rankPos}px`, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(6px)", padding: S.overlayPad, borderRadius: "999px", fontSize: fs(S.overlayFs), fontWeight: 700, color: accCfg.color, boxShadow: "0 1px 4px rgba(0,0,0,0.12)" }}>
           {accCfg.icon} {accCfg.label}
         </div>
 
         {/* Open status pill */}
         {hasOpen && (
           <div style={{
-            position: "absolute", bottom: "16px", right: "16px",
+            position: "absolute", bottom: `${S.rankPos}px`, right: `${S.rankPos}px`,
             background: openSt.isOpen === true || openSt.is24H ? "rgba(5,150,105,0.95)" : openSt.isOpen === false ? "rgba(220,38,38,0.95)" : "rgba(100,116,139,0.9)",
-            backdropFilter: "blur(6px)", color: "#fff", padding: `${fs(5)} ${fs(12)}`, borderRadius: "999px",
-            fontSize: fs(13), fontWeight: 700, display: "flex", alignItems: "center", gap: "5px"
+            backdropFilter: "blur(6px)", color: "#fff", padding: S.overlayPad, borderRadius: "999px",
+            fontSize: fs(S.overlayFs), fontWeight: 700, display: "flex", alignItems: "center", gap: "5px"
           }}>
             <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: openSt.isOpen === true || openSt.is24H ? "#69F0AE" : "#fff" }} />
             {openSt.label}
@@ -453,13 +263,13 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
         )}
       </div>
 
-      <div style={{ padding: `${fs(28)} ${fs(32)} ${fs(32)}` }}>
+      <div style={{ padding: S.bodyPad }}>
         {/* Category kicker — place type (restroom accent #0F8A82) */}
-        {r.venueLabel && <div style={{ color: CAT.restroom.ink, fontWeight: 600, fontSize: fs(17), letterSpacing: "0.2px" }}>{r.venueIcon} {r.venueLabel}</div>}
-        <h3 style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(38), lineHeight: 1.04, color: ED_INK, margin: `${fs(4)} 0 0` }}>{name}</h3>
+        {r.venueLabel && <div style={{ color: CAT.restroom.ink, fontWeight: 600, fontSize: fs(S.kicker), letterSpacing: "0.2px" }}>{r.venueIcon} {r.venueLabel}</div>}
+        <h3 style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(S.name), lineHeight: 1.04, color: ED_INK, margin: `${fs(4)} 0 0`, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{name}</h3>
 
         {/* Say it / Translate / rating / distance */}
-        <div style={{ display: "flex", gap: fs(16), alignItems: "center", flexWrap: "wrap", marginTop: fs(12), fontSize: fs(17), color: ED_INK3 }}>
+        <div style={{ display: "flex", gap: fs(S.metaGap), alignItems: "center", flexWrap: "wrap", marginTop: fs(S.metaTop), fontSize: fs(S.meta), color: ED_INK3 }}>
           <NameLanguageHelp placeId={r.placeId || r.id} name={name} />
           {r.rating && <span><span style={{ color: "#E0922F" }}>★</span> <span style={{ fontWeight: 700, color: ED_INK2 }}>{r.rating}</span>{r.userRatingCount > 0 ? ` (${r.userRatingCount.toLocaleString()})` : ''}</span>}
           {r.distanceMiles != null && <span>· {formatDistance(r.distanceMiles)}</span>}
@@ -467,7 +277,7 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
 
         {/* Pill tags — clean / accessible / family / bidet / 24-7 / squat / stairs */}
         {chips.length > 0 && (
-          <div style={{ display: "flex", gap: fs(10), flexWrap: "wrap", marginTop: fs(16) }}>
+          <div style={{ display: "flex", gap: fs(S.tagGap), flexWrap: "wrap", marginTop: fs(S.tagTop) }}>
             {chips.map(chip => (
               <Tag key={chip.key} bg={chip.bg} color={chip.color}>{chip.icon} {chip.label}</Tag>
             ))}
@@ -476,16 +286,16 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
 
         {/* Address */}
         {address && (
-          <div style={{ marginTop: fs(16), display: "flex", alignItems: "flex-start", gap: fs(10), padding: fs(16), background: "#FAF7F0", borderRadius: "16px", border: `1px solid ${ED_RULE}` }}>
-            <span style={{ fontSize: fs(18), flexShrink: 0 }}>📍</span>
-            <span style={{ fontSize: fs(16), color: ED_INK2, lineHeight: 1.5 }}>{address}</span>
+          <div style={{ marginTop: fs(S.sectTop), display: "flex", alignItems: "flex-start", gap: fs(10), padding: fs(S.sectPad), background: "#FAF7F0", borderRadius: S.sectRadius, border: `1px solid ${ED_RULE}` }}>
+            <span style={{ fontSize: fs(S.icon), flexShrink: 0 }}>📍</span>
+            <span style={{ fontSize: fs(S.bodyText), color: ED_INK2, lineHeight: 1.5 }}>{address}</span>
           </div>
         )}
 
         {/* Smart note */}
         {r.smartNote && (
-          <div style={{ marginTop: fs(14), display: "flex", alignItems: "center", gap: fs(10), padding: fs(16), background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: "16px", fontSize: fs(16), color: "#92400E" }}>
-            <span style={{ fontSize: fs(18) }}>💡</span>
+          <div style={{ marginTop: fs(S.noteTop), display: "flex", alignItems: "center", gap: fs(10), padding: fs(S.sectPad), background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: S.sectRadius, fontSize: fs(S.bodyText), color: "#92400E" }}>
+            <span style={{ fontSize: fs(S.icon) }}>💡</span>
             <span>{r.smartNote}</span>
           </div>
         )}
@@ -493,12 +303,12 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
         {/* Open bar */}
         {hasOpen && (
           <div style={{
-            marginTop: fs(14), borderRadius: "16px", padding: `${fs(16)} ${fs(20)}`, fontSize: fs(18), fontWeight: 600,
+            marginTop: fs(S.noteTop), borderRadius: S.sectRadius, padding: S.barPad, fontSize: fs(S.barFs), fontWeight: 600,
             background: openSt.is24H ? "#EAF0FB" : openSt.isOpen === true ? "#E7F3EA" : openSt.isOpen === false ? "#FBE0DC" : ED_IVORY2,
             color: openSt.is24H ? "#2E6FE0" : openSt.isOpen === true ? "#2E7D46" : openSt.isOpen === false ? "#C2392F" : ED_INK3,
-            display: "flex", alignItems: "center", gap: fs(11)
+            display: "flex", alignItems: "center", gap: fs(S.barGap)
           }}>
-            <span style={{ width: fs(10), height: fs(10), borderRadius: "50%", background: openSt.isOpen === true || openSt.is24H ? "#2E7D46" : openSt.isOpen === false ? "#C2392F" : GRAY, flexShrink: 0 }} />
+            <span style={{ width: fs(S.barDot), height: fs(S.barDot), borderRadius: "50%", background: openSt.isOpen === true || openSt.is24H ? "#2E7D46" : openSt.isOpen === false ? "#C2392F" : GRAY, flexShrink: 0 }} />
             <span>{openSt.label}</span>
             {openSt.todayHours && !openSt.is24H && <span style={{ color: ED_INK3, fontWeight: 500 }}>· {openSt.todayHours}</span>}
           </div>
@@ -506,29 +316,29 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
 
         {/* Phone bar */}
         {phone && (
-          <a href={`tel:${phone}`} style={{ marginTop: fs(14), background: "#EFF4FB", borderRadius: "16px", padding: `${fs(18)} ${fs(20)}`, display: "flex", alignItems: "center", gap: fs(14), textDecoration: "none" }}>
-            <span style={{ fontSize: fs(24) }}>📞</span>
-            <span><span style={{ display: "block", fontSize: fs(20), fontWeight: 600, color: "#2E6FE0" }}>{phone}</span><span style={{ fontSize: fs(15), color: ED_INK3 }}>Tap to call</span></span>
+          <a href={`tel:${phone}`} style={{ marginTop: fs(S.noteTop), background: "#EFF4FB", borderRadius: S.sectRadius, padding: S.phonePad, display: "flex", alignItems: "center", gap: fs(S.phoneGap), textDecoration: "none" }}>
+            <span style={{ fontSize: fs(S.phoneIcon) }}>📞</span>
+            <span><span style={{ display: "block", fontSize: fs(S.phoneNum), fontWeight: 600, color: "#2E6FE0" }}>{phone}</span><span style={{ fontSize: fs(S.phoneSub), color: ED_INK3 }}>Tap to call</span></span>
           </a>
         )}
 
         {/* Actions */}
-        <div style={{ display: "flex", gap: fs(12), marginTop: fs(20) }}>
-          <button onClick={() => setShowDirs(true)} style={{ flex: 1, borderRadius: "16px", padding: fs(15), fontSize: fs(18), fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: CAT.restroom.ink, color: "#fff" }}>Directions</button>
-          <button onClick={() => onShowOnMap?.(index)} style={{ flex: 1, borderRadius: "16px", padding: fs(15), fontSize: fs(18), fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: ED_IVORY2, color: ED_INK2 }}>📍 Map</button>
-          <button onClick={() => { const n = !expanded; setExpanded(n); onExpandChange?.(n); }} style={{ flex: 1, borderRadius: "16px", padding: fs(15), fontSize: fs(18), fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: expanded ? ED_INK : ED_IVORY2, color: expanded ? "#fff" : ED_INK2 }}>{expanded ? "Less ▴" : "More ▾"}</button>
+        <div style={{ display: "flex", gap: fs(S.actGap), marginTop: fs(S.actTop) }}>
+          <button onClick={() => setShowDirs(true)} style={{ flex: 1, borderRadius: S.sectRadius, padding: fs(S.actPad), fontSize: fs(S.actFs), fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: CAT.restroom.ink, color: "#fff" }}>Directions</button>
+          <button onClick={() => onShowOnMap?.(index)} style={{ flex: 1, borderRadius: S.sectRadius, padding: fs(S.actPad), fontSize: fs(S.actFs), fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: ED_IVORY2, color: ED_INK2 }}>📍 Map</button>
+          <button onClick={() => { const n = !expanded; setExpanded(n); onExpandChange?.(n); }} style={{ flex: 1, borderRadius: S.sectRadius, padding: fs(S.actPad), fontSize: fs(S.actFs), fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: expanded ? ED_INK : ED_IVORY2, color: expanded ? "#fff" : ED_INK2 }}>{expanded ? "Less ▴" : "More ▾"}</button>
         </div>
 
         {/* Expanded details: daily hours + AI Details + website */}
         <AnimatePresence>
           {expanded && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: "hidden" }}>
-              <div style={{ marginTop: fs(20), display: "flex", flexDirection: "column", gap: fs(14) }}>
+              <div style={{ marginTop: fs(S.expTop), display: "flex", flexDirection: "column", gap: fs(S.expGap) }}>
                 {weekdayDesc.length > 0 && (
-                  <div style={{ padding: fs(16), background: "#FAF7F0", borderRadius: "16px" }}>
+                  <div style={{ padding: fs(S.sectPad), background: "#FAF7F0", borderRadius: S.sectRadius }}>
                     <button onClick={() => setHoursExpanded(h => !h)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "transparent", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
-                      <span style={{ fontSize: fs(13), fontWeight: 700, color: ED_INK3, letterSpacing: "0.5px" }}>🕐 DAILY HOURS</span>
-                      <span style={{ fontSize: fs(13), color: ED_INK3 }}>{hoursExpanded ? '▲' : '▼'}</span>
+                      <span style={{ fontSize: fs(S.kicker), fontWeight: 700, color: ED_INK3, letterSpacing: "0.5px" }}>🕐 DAILY HOURS</span>
+                      <span style={{ fontSize: fs(S.kicker), color: ED_INK3 }}>{hoursExpanded ? '▲' : '▼'}</span>
                     </button>
                     {hoursExpanded && (
                       <div style={{ marginTop: fs(8) }}>
@@ -538,7 +348,7 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
                           const isToday = dayNames.findIndex(d => day?.toLowerCase?.().startsWith(d.toLowerCase())) === today;
                           const parts = (day || "").split(":"); const dayName = parts[0]; const hrs = parts.slice(1).join(":").trim();
                           return (
-                            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: `${fs(4)} 0`, fontSize: fs(15), fontWeight: isToday ? 700 : 400, color: isToday ? TEAL_DEEP : ED_INK2, borderBottom: i < weekdayDesc.length - 1 ? `1px solid ${ED_RULE}` : "none" }}>
+                            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: `${fs(4)} 0`, fontSize: fs(S.bodyText), fontWeight: isToday ? 700 : 400, color: isToday ? TEAL_DEEP : ED_INK2, borderBottom: i < weekdayDesc.length - 1 ? `1px solid ${ED_RULE}` : "none" }}>
                               <span>{dayName}</span><span style={{ color: hrs.toLowerCase() === "closed" ? "#C2392F" : isToday ? TEAL_DEEP : ED_INK3 }}>{hrs}</span>
                             </div>
                           );
@@ -556,9 +366,9 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
                   accessType={r.accessType}
                 />
                 {(r.websiteUri || r.website) && (
-                  <a href={r.websiteUri || r.website} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: fs(12), padding: fs(16), background: "#F3E8FF", borderRadius: "16px", textDecoration: "none", color: "#7C3AED" }}>
-                    <span style={{ fontSize: fs(22) }}>🌐</span>
-                    <span style={{ display: "block", fontWeight: 600, fontSize: fs(16) }}>Visit Website</span>
+                  <a href={r.websiteUri || r.website} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: fs(12), padding: fs(S.websitePad), background: "#F3E8FF", borderRadius: S.sectRadius, textDecoration: "none", color: "#7C3AED" }}>
+                    <span style={{ fontSize: fs(S.websiteIcon) }}>🌐</span>
+                    <span style={{ display: "block", fontWeight: 600, fontSize: fs(S.websiteText) }}>Visit Website</span>
                   </a>
                 )}
               </div>
@@ -1068,7 +878,7 @@ export default function RestroomFinderPage() {
       ) : viewMode === "list" ? (
         <div style={isTablet
           ? { maxWidth: 1024, margin: "0 auto", padding: "0 24px 170px", display: "flex", flexDirection: "column", gap: "30px" }
-          : { padding: "14px 12px 100px", display: "flex", flexDirection: "column", gap: "14px" }}>
+          : { padding: "14px 12px 100px", display: "flex", flexDirection: "column", gap: "16px" }}>
           {loadingMore && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "6px", color: GRAY, fontSize: "calc(13px*var(--fs))", fontWeight: 600 }}>
               <Loader2 className="w-4 h-4 animate-spin" /> Finding more restrooms nearby…
@@ -1081,7 +891,7 @@ export default function RestroomFinderPage() {
               <div style={{ color: GRAY, fontSize: "calc(13px*var(--fs))" }}>Try removing filters or switching category</div>
             </div>
           ) : filtered.map((r, i) => {
-            const Card = isTablet ? RestroomCardTablet : RestroomCard;
+            const Card = RestroomCardTablet;
             return (
             <Card key={r.id || i} r={r} index={i}
               onShowOnMap={handleShowOnMap}
@@ -1092,6 +902,7 @@ export default function RestroomFinderPage() {
               userLat={lat}
               userLng={lng}
               formatDistance={formatDistance}
+              isTablet={isTablet}
             />
           );})}
         </div>

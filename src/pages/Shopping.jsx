@@ -103,90 +103,14 @@ function PhotoStrip({photos,fallback="🛍️",bg,height}){
   return(<div style={{display:"grid",gridTemplateColumns:"60% 40%",height:"150px",overflow:"hidden"}}>{valid.slice(0,2).map((url,i)=>(<div key={i} style={{position:"relative",overflow:"hidden",borderRight:i===0?"2px solid #fff":"none"}}>{ld[i]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(30px*var(--fs))"}}>{fallback}</div>}<img src={url} alt="" onError={()=>setErr((p)=>({...p,[i]:true}))} onLoad={()=>setLd((p)=>({...p,[i]:false}))} style={{width:"100%",height:"150px",objectFit:"cover",opacity:ld[i]?0:1,transition:"opacity 0.4s"}}/></div>))}</div>);
 }
 
-function ShopCard({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance}){
-  const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false);
-  useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
-  const name=p.displayName?.text||p.name||"Shop"; const st=openStatus(p);
-  const hBg=st.isOpen===true?"#E8F5E9":st.isOpen===false?"#FFEBEE":"#F5F5F5";
-  const hColor=st.isOpen===true?"#2E7D32":st.isOpen===false?"#D32F2F":T.gray;
-  const hDot=st.isOpen===true?T.green:st.isOpen===false?T.coral:T.gray;
-  const activeTags=PROP_TAGS.filter(t=>p.props?.[t.key]);
-  const vColor=p.venueColor||T.accent;
-
-  return(
-    <motion.div ref={cardRef} initial={{opacity:0,y:24}} animate={{opacity:1,y:0}} transition={{delay:index*0.05,type:"spring",stiffness:260,damping:20}}
-      style={{background:"#fff",borderRadius:"20px",boxShadow:isHighlighted?`0 0 0 3px ${T.accent},0 8px 32px rgba(124,58,237,0.22)`:"0 2px 16px rgba(0,0,0,0.07)",overflow:"hidden",border:isHighlighted?`2px solid ${T.accent}`:"1px solid #E8EDF2",transition:"box-shadow 0.3s,border 0.3s"}}>
-      <div style={{position:"relative"}}>
-        <PhotoStrip photos={p.photos} fallback={p.venueIcon||"🛍️"} bg={`linear-gradient(135deg,${vColor}dd,${vColor}99)`}/>
-        <div style={{position:"absolute",top:"12px",left:"12px",background:index===0?"linear-gradient(135deg,#FFD700,#FFA000)":index===1?"linear-gradient(135deg,#B0BEC5,#78909C)":index===2?"linear-gradient(135deg,#FFAB40,#F57C00)":T.accent,color:"#fff",width:"30px",height:"30px",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",fontSize:"calc(13px*var(--fs))",boxShadow:"0 2px 8px rgba(0,0,0,0.25)"}}>{index+1}</div>
-        <div style={{position:"absolute",top:"12px",right:"12px",background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:"4px 10px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"800",color:vColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{p.venueIcon} {p.venueLabel}</div>
-        <div style={{position:"absolute",bottom:"12px",left:"12px",background:st.isOpen===true?"rgba(46,125,50,0.92)":st.isOpen===false?"rgba(211,47,47,0.92)":"rgba(100,116,139,0.85)",backdropFilter:"blur(6px)",color:"#fff",padding:"4px 10px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}>
-          <span style={{width:"7px",height:"7px",borderRadius:"50%",background:st.isOpen===true?"#69F0AE":st.isOpen===false?"#FF5252":"#fff",display:"inline-block"}}/>
-          {st.label}
-        </div>
-        {p.distanceMiles!=null&&<div style={{position:"absolute",bottom:"12px",right:"12px",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",color:"#fff",padding:"4px 9px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"700"}}>📍 {formatDistance(p.distanceMiles)}</div>}
-      </div>
-
-      <div style={{padding:"16px"}}>
-        <div style={{fontWeight:"800",fontSize:"calc(17px*var(--fs))",color:T.dark,marginBottom:"4px"}}>{name}</div>
-        <NameLanguageHelp placeId={p.placeId||p.id} name={name}/>
-        {p.rating&&(<div style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:"10px"}}>{[1,2,3,4,5].map(n=><span key={n} style={{color:n<=Math.round(p.rating)?T.gold:"#E2E8F0",fontSize:"calc(14px*var(--fs))"}}>★</span>)}<span style={{fontWeight:"700",color:T.dark,fontSize:"calc(13px*var(--fs))"}}>{p.rating}</span>{p.userRatingCount>0&&<span style={{color:T.gray,fontSize:"calc(12px*var(--fs))"}}>({p.userRatingCount.toLocaleString()})</span>}</div>)}
-
-        {/* Highlight badges */}
-        {p.highlights?.length>0&&(
-          <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"12px"}}>
-            {p.highlights.map((h,i)=>(
-              <span key={i} style={{background:T.accentL,color:T.accentD,padding:"4px 10px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"700"}}>{h}</span>
-            ))}
-          </div>
-        )}
-
-        {activeTags.length>0&&(
-          <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"12px"}}>
-            {activeTags.map((t,i)=><span key={i} style={{display:"inline-flex",alignItems:"center",gap:"4px",background:t.bg,color:t.color,padding:"4px 10px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"700"}}>{t.icon} {t.label}</span>)}
-          </div>
-        )}
-
-        {p.formattedAddress&&(<div style={{display:"flex",alignItems:"flex-start",gap:"9px",marginBottom:"10px",padding:"10px 12px",background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2"}}><span style={{fontSize:"calc(18px*var(--fs))",marginTop:"1px",flexShrink:0}}>📍</span><span style={{fontSize:"calc(13px*var(--fs))",color:T.dark,lineHeight:"1.5",fontWeight:"500"}}>{p.formattedAddress}</span></div>)}
-
-        {(st.today||st.isOpen!==null)&&(<div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px",padding:"10px 12px",background:hBg,borderRadius:"12px"}}><span style={{width:"10px",height:"10px",borderRadius:"50%",background:hDot,flexShrink:0,boxShadow:st.isOpen===true?"0 0 8px rgba(76,175,80,0.6)":"none"}}/><div style={{flex:1,fontSize:"calc(13px*var(--fs))"}}><span style={{fontWeight:"700",color:hColor}}>{st.label}</span>{st.today&&<span style={{color:T.gray,marginLeft:"8px"}}>· {st.today}</span>}</div></div>)}
-
-        {p.nationalPhoneNumber?(
-          <a href={`tel:${p.nationalPhoneNumber}`} style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"14px",padding:"11px 14px",background:T.blueL,borderRadius:"12px",textDecoration:"none",border:"1px solid #BBDEFB"}}>
-            <div style={{width:"36px",height:"36px",background:T.blue,color:"#fff",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(18px*var(--fs))",flexShrink:0}}>📞</div>
-            <div><div style={{fontWeight:"700",fontSize:"calc(14px*var(--fs))",color:T.blue}}>{p.nationalPhoneNumber}</div><div style={{fontSize:"calc(11px*var(--fs))",color:T.gray}}>Tap to call</div></div>
-            <span style={{marginLeft:"auto",color:T.blue,fontSize:"calc(20px*var(--fs))"}}>›</span>
-          </a>
-        ):(<div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px",padding:"10px 12px",background:"#F5F5F5",borderRadius:"12px",color:T.gray,fontSize:"calc(13px*var(--fs))"}}><span>📞</span><span>Phone not available</span></div>)}
-
-        {p.websiteUri&&(
-          <a href={p.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px",padding:"11px 14px",background:T.accentL,borderRadius:"12px",textDecoration:"none",border:`1px solid ${T.accent}40`}}>
-            <span style={{fontSize:"calc(20px*var(--fs))"}}>🌐</span><span style={{fontWeight:"700",fontSize:"calc(13px*var(--fs))",color:T.accentD,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Visit Website</span><span style={{color:T.accentD,fontSize:"calc(20px*var(--fs))"}}>›</span>
-          </a>
-        )}
-
-        <div style={{display:"flex",gap:"8px"}}>
-          <motion.button whileTap={{scale:0.96}} onClick={()=>setDirs(true)} style={{flex:2,display:"flex",alignItems:"center",justifyContent:"center",gap:"7px",padding:"12px",borderRadius:"12px",border:"none",fontSize:"calc(14px*var(--fs))",fontWeight:"700",cursor:"pointer",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontFamily:"inherit",boxShadow:`0 4px 14px ${T.accent}40`}}>🧭 Directions</motion.button>
-          <motion.button whileTap={{scale:0.96}} onClick={()=>onMap?.(index)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",padding:"12px",borderRadius:"12px",border:"none",fontSize:"calc(13px*var(--fs))",fontWeight:"700",cursor:"pointer",background:T.accentL,color:T.accentD,fontFamily:"inherit"}}>🗺️ Map</motion.button>
-          {p.hours?.length>0&&(<motion.button whileTap={{scale:0.96}} onClick={()=>setExp(e=>!e)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"12px",borderRadius:"12px",border:"none",fontSize:"calc(13px*var(--fs))",fontWeight:"700",cursor:"pointer",background:exp?T.dark:T.grayL,color:exp?"#fff":T.dark,fontFamily:"inherit"}}>{exp?"▲":"▼ Hrs"}</motion.button>)}
-        </div>
-
-        <AnimatePresence>{exp&&p.hours?.length>0&&(<motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}><div style={{marginTop:"12px",padding:"14px",background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2"}}>
-          <div style={{fontSize:"calc(11px*var(--fs))",color:T.gray,fontWeight:"700",marginBottom:"10px",textTransform:"uppercase",letterSpacing:"0.5px"}}>🕐 Weekly Hours</div>
-          {p.hours.map((d,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(n=>d.toLowerCase().startsWith(n.toLowerCase()));const isT=di===today;const pts=d.split(":");const dn2=pts[0];const hrs=pts.slice(1).join(":").trim();return(<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:"calc(13px*var(--fs))",color:isT?T.accentD:T.dark,fontWeight:isT?"700":"400",padding:isT?"7px 10px":"5px 2px",background:isT?`${T.accent}12`:"transparent",margin:isT?"2px -2px":"0",borderRadius:isT?"8px":"0",borderLeft:isT?`3px solid ${T.accent}`:"3px solid transparent"}}><span>{dn2}{isT&&<span style={{fontSize:"calc(10px*var(--fs))",color:T.accent,marginLeft:"5px",fontWeight:"800"}}>TODAY</span>}</span><span style={{color:hrs.toLowerCase()==="closed"?T.coral:isT?T.accentD:T.gray}}>{hrs}</span></div>);})}
-        </div></motion.div>)}</AnimatePresence>
-      </div>
-      <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:p.formattedAddress||p.shortFormattedAddress||p.vicinity||p.address||"",latitude:p.lat,longitude:p.lng}} userLat={userLat} userLng={userLng}/>
-    </motion.div>
-  );
-}
-
-// ─── SHOP CARD — iPad EDITORIAL ──────────────────────────────────────────────
-// Same props + fields + handlers as ShopCard. Editorial structure cloned from
+// ─── SHOP CARD — EDITORIAL (responsive: phone + iPad) ────────────────────────
+// One editorial card for BOTH platforms — gated by the isTablet prop via the
+// local v(tablet,phone) helper. Tablet keeps the original handoff sizes; phone
+// gets compact, glasses-scalable equivalents. Editorial structure cloned from
 // RestaurantCardTablet (PlacesToEat); only the domain content differs. Domain:
 // shop category kicker (venueLabel), mall-vs-market hours, rating. No best-time /
 // seating / parking / customer-favorites panels — this finder doesn't have them.
-function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance}){
+function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet}){
   const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false);
   const [hoursExpanded,setHoursExpanded]=useState(false);
   useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
@@ -197,36 +121,45 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
   const vColor=p.venueColor||T.accent;
   const phone=p.nationalPhoneNumber||p.internationalPhoneNumber||"";
 
+  // Responsive token picker: tablet value | phone value. Every text size stays
+  // wrapped in fs() so the 4-step glasses control scales card text gracefully.
+  const v=(t,ph)=>isTablet?t:ph;
+
   const Tag=({bg,color,children})=>(
-    <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(9)} ${fs(16)}`,fontSize:fs(15.5),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
+    <span style={{background:bg,color,borderRadius:"999px",padding:v(`${fs(9)} ${fs(16)}`,`${fs(6)} ${fs(12)}`),fontSize:v(fs(15.5),fs(12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
   );
 
   return(
     <motion.div ref={cardRef} initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(index,8)*0.03}}
-      style={{background:"#fff",borderRadius:"28px",overflow:"hidden",boxShadow:isHighlighted?`0 0 0 3px ${T.accent},0 24px 50px -30px rgba(22,17,13,.4)`:"0 24px 50px -30px rgba(22,17,13,.4)",border:isHighlighted?`2px solid ${T.accent}`:`1px solid ${ED_RULE}`,transition:"box-shadow 0.3s,border 0.3s"}}>
+      style={{background:"#fff",borderRadius:v("28px","20px"),overflow:"hidden",minHeight:v(fs(560),fs(360)),boxShadow:isHighlighted?`0 0 0 3px ${T.accent},0 24px 50px -30px rgba(22,17,13,.4)`:v("0 24px 50px -30px rgba(22,17,13,.4)","0 12px 30px -20px rgba(22,17,13,.35)"),border:isHighlighted?`2px solid ${T.accent}`:`1px solid ${ED_RULE}`,transition:"box-shadow 0.3s,border 0.3s"}}>
 
       {/* Photo — editorial hero with rank badge + venue category tag */}
       <div style={{position:"relative"}}>
-        <PhotoStrip photos={p.photos} fallback={p.venueIcon||"🛍️"} bg={`linear-gradient(135deg,${vColor}dd,${vColor}99)`} height={360}/>
-        <div style={{position:"absolute",top:fs(14),left:fs(14),width:fs(38),height:fs(38),borderRadius:"50%",background:index===0?"linear-gradient(135deg,#FFD700,#FFA000)":index===1?"linear-gradient(135deg,#B0BEC5,#78909C)":index===2?"linear-gradient(135deg,#FFAB40,#F57C00)":T.accent,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",fontSize:fs(16),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
-        {p.venueLabel&&<div style={{position:"absolute",top:fs(14),right:fs(14),background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:`${fs(5)} ${fs(12)}`,borderRadius:"999px",fontSize:fs(14),fontWeight:"800",color:vColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{p.venueIcon} {p.venueLabel}</div>}
+        <PhotoStrip photos={p.photos} fallback={p.venueIcon||"🛍️"} bg={`linear-gradient(135deg,${vColor}dd,${vColor}99)`} height={v(360,200)}/>
+        <div style={{position:"absolute",top:fs(14),left:fs(14),width:v(fs(38),fs(32)),height:v(fs(38),fs(32)),borderRadius:"50%",background:index===0?"linear-gradient(135deg,#FFD700,#FFA000)":index===1?"linear-gradient(135deg,#B0BEC5,#78909C)":index===2?"linear-gradient(135deg,#FFAB40,#F57C00)":T.accent,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",fontSize:v(fs(16),fs(13)),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
+        {p.venueLabel&&<div style={{position:"absolute",top:fs(14),right:fs(14),background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:v(`${fs(5)} ${fs(12)}`,`${fs(4)} ${fs(10)}`),borderRadius:"999px",fontSize:v(fs(14),fs(11)),fontWeight:"800",color:vColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{p.venueIcon} {p.venueLabel}</div>}
       </div>
 
-      <div style={{padding:`${fs(28)} ${fs(32)} ${fs(32)}`}}>
+      <div style={{padding:v(`${fs(28)} ${fs(32)} ${fs(32)}`,`${fs(16)} ${fs(16)} ${fs(18)}`)}}>
         {/* Coral kicker — shop category */}
-        {p.venueLabel&&<div style={{color:CAT.shopping.ink,fontWeight:600,fontSize:fs(17),letterSpacing:"0.2px"}}>{p.venueLabel}</div>}
-        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(38),lineHeight:1.04,color:ED_INK,margin:`${fs(4)} 0 0`}}>{name}</h3>
+        {p.venueLabel&&<div style={{color:CAT.shopping.ink,fontWeight:600,fontSize:v(fs(17),fs(13)),letterSpacing:"0.2px"}}>{p.venueLabel}</div>}
+        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:v(fs(38),fs(26)),lineHeight:1.04,color:ED_INK,margin:`${fs(4)} 0 0`,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</h3>
 
         {/* Say it / Translate / rating / distance */}
-        <div style={{display:"flex",gap:fs(16),alignItems:"center",flexWrap:"wrap",marginTop:fs(12),fontSize:fs(17),color:ED_INK3}}>
+        <div style={{display:"flex",gap:v(fs(16),fs(10)),alignItems:"center",flexWrap:"wrap",marginTop:fs(12),fontSize:v(fs(17),fs(13.5)),color:ED_INK3}}>
           <NameLanguageHelp placeId={p.placeId||p.id} name={name}/>
           {p.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{p.rating.toFixed?p.rating.toFixed(1):p.rating}</span>{p.userRatingCount>0&&<> ({p.userRatingCount.toLocaleString()})</>}</span>}
           {p.distanceMiles!=null&&<span>· {formatDistance(p.distanceMiles)}</span>}
         </div>
 
+        {/* Street address — subtle on-card line (phone + tablet) */}
+        {(p.formattedAddress||p.shortFormattedAddress||p.vicinity)&&(
+          <div style={{marginTop:fs(8),fontSize:v(fs(13.5),fs(12)),color:ED_INK3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {p.formattedAddress||p.shortFormattedAddress||p.vicinity}</div>
+        )}
+
         {/* Pill tags — editorial highlights + property tags */}
         {(p.highlights?.length>0||activeTags.length>0)&&(
-          <div style={{display:"flex",gap:fs(10),flexWrap:"wrap",marginTop:fs(16)}}>
+          <div style={{display:"flex",gap:v(fs(10),fs(6)),flexWrap:"wrap",marginTop:fs(16)}}>
             {p.highlights?.map((h,i)=><Tag key={`h${i}`} bg={T.accentL} color={T.accentD}>{h}</Tag>)}
             {activeTags.map((t,i)=><Tag key={`t${i}`} bg={t.bg} color={t.color}>{t.icon} {t.label}</Tag>)}
           </div>
@@ -234,7 +167,7 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
 
         {/* Open bar */}
         {(st.today||st.isOpen!==null)&&(
-          <div style={{marginTop:fs(18),background:st.isOpen===true?"#E7F3EA":st.isOpen===false?"#FBE0DC":"#FAF7F0",borderRadius:"16px",padding:`${fs(16)} ${fs(20)}`,fontSize:fs(18),fontWeight:600,color:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK2,display:"flex",alignItems:"center",gap:fs(11)}}>
+          <div style={{marginTop:v(fs(18),fs(14)),background:st.isOpen===true?"#E7F3EA":st.isOpen===false?"#FBE0DC":"#FAF7F0",borderRadius:"16px",padding:v(`${fs(16)} ${fs(20)}`,`${fs(12)} ${fs(14)}`),fontSize:v(fs(18),fs(13.5)),fontWeight:600,color:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK2,display:"flex",alignItems:"center",gap:fs(11)}}>
             <span style={{width:fs(10),height:fs(10),borderRadius:"50%",background:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK3,flexShrink:0}}/>
             <span>{openText}</span>
             {st.today&&<span style={{color:ED_INK3,fontWeight:500}}>· {st.today}</span>}
@@ -243,34 +176,34 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
 
         {/* Phone bar */}
         {phone&&(
-          <a href={`tel:${phone}`} style={{marginTop:fs(14),background:"#EFF4FB",borderRadius:"16px",padding:`${fs(18)} ${fs(20)}`,display:"flex",alignItems:"center",gap:fs(14),textDecoration:"none"}}>
-            <span style={{fontSize:fs(24)}}>📞</span>
-            <span><span style={{display:"block",fontSize:fs(20),fontWeight:600,color:"#2E6FE0"}}>{phone}</span><span style={{fontSize:fs(15),color:ED_INK3}}>Tap to call</span></span>
+          <a href={`tel:${phone}`} style={{marginTop:fs(14),background:"#EFF4FB",borderRadius:"16px",padding:v(`${fs(18)} ${fs(20)}`,`${fs(13)} ${fs(14)}`),display:"flex",alignItems:"center",gap:fs(14),textDecoration:"none"}}>
+            <span style={{fontSize:v(fs(24),fs(18))}}>📞</span>
+            <span><span style={{display:"block",fontSize:v(fs(20),fs(13.5)),fontWeight:600,color:"#2E6FE0"}}>{phone}</span><span style={{fontSize:v(fs(15),fs(11.5)),color:ED_INK3}}>Tap to call</span></span>
           </a>
         )}
 
         {/* Actions */}
-        <div style={{display:"flex",gap:fs(12),marginTop:fs(20)}}>
-          <button onClick={()=>setDirs(true)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:CAT.shopping.ink,color:"#fff"}}>Directions</button>
-          <button onClick={()=>onMap?.(index)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
-          <button onClick={()=>setExp(e=>!e)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:exp?ED_INK:ED_IVORY2,color:exp?"#fff":ED_INK2}}>{exp?"Less ▴":"More ▾"}</button>
+        <div style={{display:"flex",gap:v(fs(12),fs(8)),marginTop:v(fs(20),fs(16))}}>
+          <button onClick={()=>setDirs(true)} style={{flex:1,borderRadius:"16px",padding:v(fs(15),fs(12)),fontSize:v(fs(18),fs(14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:CAT.shopping.ink,color:"#fff"}}>Directions</button>
+          <button onClick={()=>onMap?.(index)} style={{flex:1,borderRadius:"16px",padding:v(fs(15),fs(12)),fontSize:v(fs(18),fs(14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
+          <button onClick={()=>setExp(e=>!e)} style={{flex:1,borderRadius:"16px",padding:v(fs(15),fs(12)),fontSize:v(fs(18),fs(14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:exp?ED_INK:ED_IVORY2,color:exp?"#fff":ED_INK2}}>{exp?"Less ▴":"More ▾"}</button>
         </div>
 
         {/* Expanded details */}
         <AnimatePresence>
           {exp&&(
             <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{marginTop:fs(20),display:"flex",flexDirection:"column",gap:fs(14)}}>
+              <div style={{marginTop:v(fs(20),fs(16)),display:"flex",flexDirection:"column",gap:v(fs(14),fs(10))}}>
 
                 {p.formattedAddress&&(
-                  <div style={{display:"flex",alignItems:"flex-start",gap:fs(11),padding:fs(16),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
-                    <span style={{fontSize:fs(20),flexShrink:0}}>📍</span>
-                    <span style={{fontSize:fs(16),lineHeight:1.5,color:ED_INK2}}>{p.formattedAddress}</span>
+                  <div style={{display:"flex",alignItems:"flex-start",gap:fs(11),padding:v(fs(16),fs(13)),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
+                    <span style={{fontSize:v(fs(20),fs(16)),flexShrink:0}}>📍</span>
+                    <span style={{fontSize:v(fs(16),fs(13)),lineHeight:1.5,color:ED_INK2}}>{p.formattedAddress}</span>
                   </div>
                 )}
 
                 {p.hours?.length>0&&(
-                  <div style={{padding:fs(16),background:"#FAF7F0",borderRadius:"16px"}}>
+                  <div style={{padding:v(fs(16),fs(13)),background:"#FAF7F0",borderRadius:"16px"}}>
                     <button onClick={()=>setHoursExpanded(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
                       <span style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 WEEKLY HOURS</span>
                       <span style={{fontSize:fs(13),color:ED_INK3}}>{hoursExpanded?'▲':'▼'}</span>
@@ -281,7 +214,7 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
                           const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
                           const isToday=DAY.findIndex(d=>day.toLowerCase().startsWith(d.toLowerCase()))===new Date().getDay();
                           const hrs=day.split(':').slice(1).join(':').trim();
-                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?T.accentD:ED_INK2,borderBottom:i<p.hours.length-1?`1px solid ${ED_RULE}`:"none"}}>
+                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:v(fs(15),fs(13)),fontWeight:isToday?700:400,color:isToday?T.accentD:ED_INK2,borderBottom:i<p.hours.length-1?`1px solid ${ED_RULE}`:"none"}}>
                             <span>{day.split(':')[0]}</span><span style={{color:hrs.toLowerCase()==="closed"?"#C2392F":isToday?T.accentD:ED_INK3}}>{hrs}</span>
                           </div>;
                         })}
@@ -291,9 +224,9 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
                 )}
 
                 {p.websiteUri&&(
-                  <a href={p.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(16),background:"#F3E8FF",borderRadius:"16px",textDecoration:"none",color:"#7C3AED"}}>
-                    <span style={{fontSize:fs(22)}}>🌐</span>
-                    <span><span style={{display:"block",fontWeight:600,fontSize:fs(16)}}>Visit Website</span><span style={{fontSize:fs(14),color:ED_INK3}}>Store info &amp; hours</span></span>
+                  <a href={p.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:v(fs(16),fs(13)),background:"#F3E8FF",borderRadius:"16px",textDecoration:"none",color:"#7C3AED"}}>
+                    <span style={{fontSize:v(fs(22),fs(18))}}>🌐</span>
+                    <span><span style={{display:"block",fontWeight:600,fontSize:v(fs(16),fs(13.5))}}>Visit Website</span><span style={{fontSize:v(fs(14),fs(11.5)),color:ED_INK3}}>Store info &amp; hours</span></span>
                   </a>
                 )}
               </div>
@@ -443,7 +376,7 @@ export default function ShoppingFinder() {
       :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"calc(16px*var(--fs))"}}>{error}</div><button onClick={()=>setRadius(r=>Math.min(r+5,25))} style={{marginTop:"14px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Expand Radius</button></div>)
       :viewMode==="list"?(<div style={isTablet
         ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
-        : {padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"14px"}}>{filtered.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div></div>:filtered.map((p,i)=>{const Card=isTablet?ShopCardTablet:ShopCard;return <Card key={p.id||i} p={p} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance}/>;})}</div>)
+        : {width:"100%",padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>{filtered.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div></div>:filtered.map((p,i)=>{const Card=ShopCardTablet;return <Card key={p.id||i} p={p} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet}/>;})}</div>)
       :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:T.dark}}>✕</button></div>)}
       <style>{`::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:16px;padding:0;overflow:hidden;}.gs-popup .leaflet-popup-content{margin:0;}.gs-popup .leaflet-popup-tip-container{display:none;}`}</style>
       <MapAppSelector isOpen={!!dirsP} onClose={()=>setDirsP(null)} destination={dirsP?{name:dirsP.displayName?.text||dirsP.name,address:dirsP.formattedAddress||dirsP.shortFormattedAddress||dirsP.vicinity||dirsP.address||"",latitude:dirsP.lat,longitude:dirsP.lng}:null} userLat={lat} userLng={lng}/>

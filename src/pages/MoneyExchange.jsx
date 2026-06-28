@@ -24,11 +24,12 @@ import RefreshButton from "@/components/RefreshButton";
 // Helper function
 const createPageUrl = (pageName) => `/${pageName}`;
 
-// ─── EDITORIAL TABLET TOKENS ────────────────────────────────────────────────
-// iPad-only "editorial" treatment (matches PlacesToEat / CultureInformation):
+// ─── EDITORIAL TOKENS ───────────────────────────────────────────────────────
+// "Editorial" treatment (matches PlacesToEat / CultureInformation):
 // Instrument Serif headings + amounts, JetBrains Mono UPPERCASE kickers, ivory
 // canvas, soft white rounded cards with a hairline rule, money-green accent.
-// Phones never see any of this — every use is gated on useIsTablet().
+// Renders at BOTH widths — full iPad sizing when isTablet, compact phone-tuned
+// sizing otherwise (the in-component `t(tab, phone)` helper picks per width).
 const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const ED_MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
@@ -251,6 +252,13 @@ export default function MoneyExchangePage() {
   // Phone layout is unchanged — every tablet branch is gated on this.
   const isTablet = useIsTablet();
   const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
+  // Editorial design renders at BOTH widths now. `t(tab, phone)` picks the
+  // tablet value when on iPad and the compact phone-tuned value otherwise —
+  // matches the PlacesToEat / Culture editorial responsive pattern. Every size
+  // stays on fs() so the glasses text-scale control keeps working; multi-line
+  // titles are 2-line clamped and cards use min-height (never fixed) so larger
+  // text grows the element instead of clipping.
+  const t = (tab, phone) => (isTablet ? tab : phone);
   const { activeLocation, locationMode, initialized, switchToCurrentLocation } = useLocation();
   const [user, setUser] = useState(null);
   const [fromAmount, setFromAmount] = useState("1");
@@ -561,41 +569,29 @@ export default function MoneyExchangePage() {
           >
             <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
-          {isTablet ? (
-            <div
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full uppercase"
-              style={{background:CAT.money.bg,color:CAT.money.ink,fontFamily:ED_MONO,fontSize:fs(11),letterSpacing:".08em",fontWeight:500}}
-            >
-              <DollarSign size={13} color={CAT.money.ink} strokeWidth={2} />
-              Currency Exchange
-            </div>
-          ) : (
-            <div
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
-              style={{background:CAT.money.bg,color:CAT.money.ink}}
-            >
-              <DollarSign size={13} color={CAT.money.ink} strokeWidth={2} />
-              Currency Exchange
-            </div>
-          )}
+          <div
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full uppercase"
+            style={{background:CAT.money.bg,color:CAT.money.ink,fontFamily:ED_MONO,fontSize:t(fs(11),fs(10.5)),letterSpacing:".08em",fontWeight:500}}
+          >
+            <DollarSign size={13} color={CAT.money.ink} strokeWidth={2} />
+            Currency Exchange
+          </div>
           <RefreshButton onClick={handleRefresh} isRefreshing={converting || loadingStores} tone="light" title="Refresh rates & stores" />
         </div>
       </div>
 
-      {/* TABLET — editorial page title + mono kicker (handoff "Money Exchange" frame) */}
-      {isTablet && (
-        <div className={`px-4 ${colWrap} mx-auto pb-1 text-center`}>
-          <h1 className="leading-none" style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(46),color:ED_INK}}>Money Exchange</h1>
-          <p className="uppercase mt-2 font-semibold" style={{fontFamily:ED_MONO,fontSize:fs(10.5),letterSpacing:"0.16em",color:ED_INK3}}>Compare live rates near you</p>
-        </div>
-      )}
+      {/* Editorial page title + mono kicker (handoff "Money Exchange" frame) */}
+      <div className={`px-4 ${colWrap} mx-auto pb-1 text-center`}>
+        <h1 className="leading-none" style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:t(fs(46),fs(30)),color:ED_INK}}>Money Exchange</h1>
+        <p className="uppercase mt-2 font-semibold" style={{fontFamily:ED_MONO,fontSize:t(fs(10.5),fs(10)),letterSpacing:"0.16em",color:ED_INK3}}>Compare live rates near you</p>
+      </div>
 
       <div className={`${colWrap} mx-auto px-4`}>
         {/* Location Display */}
         <div className="mb-3">
           <div
-            className={isTablet ? "rounded-[20px] p-5" : "bg-white rounded-2xl p-4 shadow-sm border border-gray-100"}
-            style={isTablet ? {background:"#FFFFFF",border:`1px solid ${ED_RULE}`,boxShadow:"0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)"} : undefined}
+            className={t("rounded-[20px] p-5", "rounded-[18px] p-4")}
+            style={{background:"#FFFFFF",border:`1px solid ${ED_RULE}`,boxShadow:"0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)"}}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -604,33 +600,18 @@ export default function MoneyExchangePage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   {(() => {
-                    if (!activeLocation) return <p className="text-sm text-gray-600">Loading location...</p>;
-
-                    if (isTablet) {
-                      return (
-                        <>
-                          <p className="uppercase" style={{fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".12em",color:ED_INK3,marginBottom:fs(3)}}>
-                            {activeLocation?.granularity === 'city' ? 'City' : (locationMode === 'navigate' ? 'Selected location' : 'Current location')}
-                          </p>
-                          <p className="truncate" style={{fontFamily:ED_SERIF,fontSize:fs(24),lineHeight:1.05,color:ED_INK}}>
-                            {locationMode === 'navigate' ? activeLocation.placeName : activeLocation.address?.city}
-                          </p>
-                          {activeLocation.address?.city && locationMode === 'navigate' && (
-                            <p className="truncate" style={{fontSize:fs(14),color:ED_INK3,marginTop:fs(2)}}>
-                              {activeLocation.address.city}, {activeLocation.address.state || activeLocation.address.country}
-                            </p>
-                          )}
-                        </>
-                      );
-                    }
+                    if (!activeLocation) return <p style={{fontSize:fs(13.5),color:ED_INK3}}>Loading location...</p>;
 
                     return (
                       <>
-                        <p className="text-base font-bold text-gray-900 truncate">
+                        <p className="uppercase" style={{fontFamily:ED_MONO,fontSize:t(fs(10),fs(10)),letterSpacing:".12em",color:ED_INK3,marginBottom:fs(3)}}>
+                          {activeLocation?.granularity === 'city' ? 'City' : (locationMode === 'navigate' ? 'Selected location' : 'Current location')}
+                        </p>
+                        <p className="truncate" style={{fontFamily:ED_SERIF,fontSize:t(fs(24),fs(21)),lineHeight:1.05,color:ED_INK}}>
                           {locationMode === 'navigate' ? activeLocation.placeName : activeLocation.address?.city}
                         </p>
                         {activeLocation.address?.city && locationMode === 'navigate' && (
-                          <p className="text-sm text-gray-600 truncate">
+                          <p className="truncate" style={{fontSize:t(fs(14),fs(13)),color:ED_INK3,marginTop:fs(2)}}>
                             {activeLocation.address.city}, {activeLocation.address.state || activeLocation.address.country}
                           </p>
                         )}
@@ -643,60 +624,41 @@ export default function MoneyExchangePage() {
                 {locationMode === 'navigate' && (
                   <button
                     onClick={() => switchToCurrentLocation()}
-                    className={isTablet ? "p-2 rounded-lg transition-colors" : "p-2 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors"}
-                    style={isTablet ? {background:CAT.money.bg} : undefined}
+                    className="p-2 rounded-lg transition-colors"
+                    style={{background:CAT.money.bg}}
                     title="Use Current Location"
                   >
-                    <Navigation className={isTablet ? "w-4 h-4" : "w-4 h-4 text-blue-600"} style={isTablet ? {color:ED_MONEY} : undefined} />
+                    <Navigation className="w-4 h-4" style={{color:ED_MONEY}} />
                   </button>
                 )}
-                {isTablet ? (
-                  <button
-                    onClick={() => setShowLocationPicker(true)}
-                    className="flex-none rounded-[10px]"
-                    style={{background:CAT.money.bg,color:ED_MONEY,fontFamily:ED_MONO,fontSize:fs(11),letterSpacing:".06em",fontWeight:600,padding:`${fs(7)} ${fs(12)}`,textTransform:"uppercase"}}
-                  >
-                    Change
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setShowLocationPicker(true)}
-                    className="text-sm font-bold text-blue-600 hover:text-blue-700 underline underline-offset-2 flex-shrink-0"
-                  >
-                    Change
-                  </button>
-                )}
+                <button
+                  onClick={() => setShowLocationPicker(true)}
+                  className="flex-none rounded-[10px]"
+                  style={{background:CAT.money.bg,color:ED_MONEY,fontFamily:ED_MONO,fontSize:t(fs(11),fs(10.5)),letterSpacing:".06em",fontWeight:600,padding:`${fs(7)} ${fs(12)}`,textTransform:"uppercase"}}
+                >
+                  Change
+                </button>
               </div>
             </div>
           </div>
           {activeLocation?.granularity === 'city' && (
-            isTablet ? (
-              <div className="mt-2 px-3.5 py-2.5 rounded-[12px] leading-snug flex items-start gap-2" style={{background:CAT.weather.bg,color:CAT.weather.ink,fontSize:fs(12)}}>
-                <span>💡</span>
-                <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
-              </div>
-            ) : (
-              <div className="mt-2 p-2 bg-amber-50 border border-amber-300 rounded-lg text-[calc(11px*var(--fs))] text-amber-900 leading-snug">
-                💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
-              </div>
-            )
+            <div className="mt-2 px-3.5 py-2.5 rounded-[12px] leading-snug flex items-start gap-2" style={{background:CAT.weather.bg,color:CAT.weather.ink,fontSize:t(fs(12),fs(11.5))}}>
+              <span>💡</span>
+              <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
+            </div>
           )}
         </div>
 
         {/* Currency Converter */}
         <div
-          className={isTablet ? "rounded-[24px] mb-3" : "bg-white rounded-[16px] shadow-md mb-3"}
-          style={isTablet ? {background:"#FFFFFF",border:`1px solid ${ED_RULE}`,boxShadow:"0 1px 0 rgba(15,20,25,.04), 0 12px 32px -16px rgba(15,20,25,.12)"} : undefined}
+          className={t("rounded-[24px] mb-3", "rounded-[20px] mb-3")}
+          style={{background:"#FFFFFF",border:`1px solid ${ED_RULE}`,boxShadow:"0 1px 0 rgba(15,20,25,.04), 0 12px 32px -16px rgba(15,20,25,.12)"}}
         >
-          <div className={isTablet ? "flex items-center justify-between p-5 pb-3" : "flex items-center justify-between p-4 pb-3"}>
-            {isTablet ? (
-              <div>
-                <p className="uppercase" style={{fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".12em",color:ED_INK3,marginBottom:fs(4)}}>Converter</p>
-                <h2 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(28),lineHeight:1,color:ED_INK}}>Conversion Calculator</h2>
-              </div>
-            ) : (
-              <h2 className="text-[calc(15px*var(--fs))] font-semibold">Currency Conversion Calculator</h2>
-            )}
+          <div className={t("flex items-center justify-between p-5 pb-3", "flex items-center justify-between p-4 pb-3")}>
+            <div>
+              <p className="uppercase" style={{fontFamily:ED_MONO,fontSize:t(fs(10),fs(10)),letterSpacing:".12em",color:ED_INK3,marginBottom:fs(4)}}>Converter</p>
+              <h2 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:t(fs(28),fs(22)),lineHeight:1,color:ED_INK}}>Conversion Calculator</h2>
+            </div>
             <button
               onClick={() => setConverterCollapsed(!converterCollapsed)}
               className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
@@ -711,25 +673,25 @@ export default function MoneyExchangePage() {
           </div>
           
           {!converterCollapsed && (
-            <div className={isTablet ? "px-5 pb-5" : "px-4 pb-4"}>
+            <div className={t("px-5 pb-5", "px-4 pb-4")}>
           <div className="mb-3">
             <label
-              className={isTablet ? "uppercase mb-1 block" : "text-[calc(11px*var(--fs))] uppercase text-gray-500 mb-1 block"}
-              style={isTablet ? {fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3} : undefined}
+              className="uppercase mb-1 block"
+              style={{fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3}}
             >From</label>
             <div className="flex gap-2">
               <Input
                 type="number"
                 value={fromAmount}
                 onChange={(e) => setFromAmount(e.target.value)}
-                className={isTablet ? "flex-1 h-[60px]" : "flex-1 h-[48px]"}
-                style={isTablet ? {fontFamily:ED_SERIF,fontSize:fs(30),color:ED_INK,borderColor:ED_RULE,borderRadius:"16px",background:ED_IVORY2} : undefined}
+                className={t("flex-1 h-[60px]", "flex-1 h-[52px]")}
+                style={{fontFamily:ED_SERIF,fontSize:t(fs(30),fs(26)),color:ED_INK,borderColor:ED_RULE,borderRadius:t("16px","14px"),background:ED_IVORY2}}
                 placeholder="1.00"
               />
               <Select value={fromCurrency} onValueChange={setFromCurrency}>
                 <SelectTrigger
-                  className={isTablet ? "w-[140px] h-[60px]" : "w-[120px] h-[48px]"}
-                  style={isTablet ? {borderColor:ED_RULE,borderRadius:"16px",background:ED_IVORY2} : undefined}
+                  className={t("w-[140px] h-[60px]", "w-[120px] h-[52px]")}
+                  style={{borderColor:ED_RULE,borderRadius:t("16px","14px"),background:ED_IVORY2}}
                 >
                   <div className="flex items-center gap-2">
                     <span>{getCurrencyFlag(fromCurrency)}</span>
@@ -763,29 +725,29 @@ export default function MoneyExchangePage() {
           <div className="flex justify-center -my-2 relative z-10">
             <button
               onClick={swapCurrencies}
-              className={isTablet ? "rounded-full p-2.5 transition-colors" : "bg-white border-2 border-gray-200 rounded-full p-2 hover:bg-gray-50 transition-colors shadow-sm"}
-              style={isTablet ? {background:"#FFFFFF",border:`2px solid ${CAT.money.soft}`,boxShadow:"0 4px 12px -6px rgba(15,154,107,.5)"} : undefined}
+              className="rounded-full p-2.5 transition-colors"
+              style={{background:"#FFFFFF",border:`2px solid ${CAT.money.soft}`,boxShadow:"0 4px 12px -6px rgba(15,154,107,.5)"}}
             >
-              <ArrowUpDown className={isTablet ? "w-4 h-4" : "w-4 h-4 text-gray-600"} style={isTablet ? {color:ED_MONEY} : undefined} />
+              <ArrowUpDown className="w-4 h-4" style={{color:ED_MONEY}} />
             </button>
           </div>
 
           <div className="mb-2">
             <label
-              className={isTablet ? "uppercase mb-1 block" : "text-[calc(11px*var(--fs))] uppercase text-gray-500 mb-1 block"}
-              style={isTablet ? {fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3} : undefined}
+              className="uppercase mb-1 block"
+              style={{fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3}}
             >To</label>
             <div className="flex gap-2">
               <div
-                className={isTablet ? "flex-1 h-[60px] px-4 flex items-center" : "flex-1 h-[48px] px-3 bg-gray-50 border rounded flex items-center font-bold"}
-                style={isTablet ? {fontFamily:ED_SERIF,fontSize:fs(30),color:ED_MONEY,background:CAT.money.bg,border:`1px solid ${CAT.money.soft}`,borderRadius:"16px"} : undefined}
+                className={t("flex-1 h-[60px] px-4 flex items-center", "flex-1 h-[52px] px-4 flex items-center")}
+                style={{fontFamily:ED_SERIF,fontSize:t(fs(30),fs(26)),color:ED_MONEY,background:CAT.money.bg,border:`1px solid ${CAT.money.soft}`,borderRadius:t("16px","14px")}}
               >
-                {converting ? <Loader2 className="w-4 h-4 animate-spin" style={isTablet ? {color:ED_MONEY} : undefined} /> : (convertedAmount || "0.00")}
+                {converting ? <Loader2 className="w-4 h-4 animate-spin" style={{color:ED_MONEY}} /> : (convertedAmount || "0.00")}
               </div>
               <Select value={toCurrency} onValueChange={setToCurrency}>
                 <SelectTrigger
-                  className={isTablet ? "w-[140px] h-[60px]" : "w-[120px] h-[48px]"}
-                  style={isTablet ? {borderColor:ED_RULE,borderRadius:"16px",background:ED_IVORY2} : undefined}
+                  className={t("w-[140px] h-[60px]", "w-[120px] h-[52px]")}
+                  style={{borderColor:ED_RULE,borderRadius:t("16px","14px"),background:ED_IVORY2}}
                 >
                   {toCurrency ? (
                     <div className="flex items-center gap-2">
@@ -825,68 +787,42 @@ export default function MoneyExchangePage() {
 
           {/* Rate Information */}
           {exchangeRate && (
-            isTablet ? (
-              <div className="mt-3 rounded-[16px]" style={{background:CAT.money.bg,border:`1px solid ${CAT.money.soft}`,padding:fs(16)}}>
-                <div className="flex items-start gap-2.5">
-                  <TrendingUp className="mt-1 flex-shrink-0" style={{width:fs(18),height:fs(18),color:ED_MONEY}} />
-                  <div className="flex-1">
-                    <p className="uppercase" style={{fontFamily:ED_MONO,fontSize:fs(9.5),letterSpacing:".1em",color:ED_MONEY,marginBottom:fs(3)}}>Mid-market rate</p>
-                    <p style={{fontFamily:ED_SERIF,fontSize:fs(22),lineHeight:1.05,color:ED_INK}}>
-                      1 {fromCurrency} = {exchangeRate?.toFixed(4)} {toCurrency}
-                    </p>
-                    {rateTimestamp && (
-                      <p style={{fontSize:fs(12),color:ED_INK3,marginTop:fs(2)}}>
-                        Rate updated: {rateTimestamp}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 mt-2.5 pt-2.5" style={{borderTop:`1px solid ${ED_RULE}`}}>
-                  <Info className="mt-0.5 flex-shrink-0" style={{width:fs(14),height:fs(14),color:ED_MONEY}} />
-                  <p className="leading-relaxed" style={{fontSize:fs(12),color:ED_INK3}}>
-                    Mid-market rate. Exchange stores may charge 2-5% fees.
+            <div className="mt-3 rounded-[16px]" style={{background:CAT.money.bg,border:`1px solid ${CAT.money.soft}`,padding:t(fs(16),fs(14))}}>
+              <div className="flex items-start gap-2.5">
+                <TrendingUp className="mt-1 flex-shrink-0" style={{width:t(fs(18),fs(16)),height:t(fs(18),fs(16)),color:ED_MONEY}} />
+                <div className="flex-1">
+                  <p className="uppercase" style={{fontFamily:ED_MONO,fontSize:t(fs(9.5),fs(10)),letterSpacing:".1em",color:ED_MONEY,marginBottom:fs(3)}}>Mid-market rate</p>
+                  <p style={{fontFamily:ED_SERIF,fontSize:t(fs(22),fs(20)),lineHeight:1.05,color:ED_INK}}>
+                    1 {fromCurrency} = {exchangeRate?.toFixed(4)} {toCurrency}
                   </p>
+                  {rateTimestamp && (
+                    <p style={{fontSize:t(fs(12),fs(11.5)),color:ED_INK3,marginTop:fs(2)}}>
+                      Rate updated: {rateTimestamp}
+                    </p>
+                  )}
                 </div>
               </div>
-            ) : (
-              <div className="mt-3 p-2.5 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="flex items-start gap-2">
-                  <TrendingUp className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-blue-900">
-                      1 {fromCurrency} = {exchangeRate?.toFixed(4)} {toCurrency}
-                    </p>
-                    {rateTimestamp && (
-                      <p className="text-[calc(11px*var(--fs))] text-blue-700 mt-0.5">
-                        Rate updated: {rateTimestamp}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 mt-2 pt-2 border-t border-blue-200">
-                  <Info className="w-3.5 h-3.5 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <p className="text-[calc(11px*var(--fs))] text-blue-700 leading-relaxed">
-                    Mid-market rate. Exchange stores may charge 2-5% fees.
-                  </p>
-                </div>
+              <div className="flex items-start gap-2 mt-2.5 pt-2.5" style={{borderTop:`1px solid ${ED_RULE}`}}>
+                <Info className="mt-0.5 flex-shrink-0" style={{width:fs(14),height:fs(14),color:ED_MONEY}} />
+                <p className="leading-relaxed" style={{fontSize:t(fs(12),fs(11.5)),color:ED_INK3}}>
+                  Mid-market rate. Exchange stores may charge 2-5% fees.
+                </p>
               </div>
-            )
+            </div>
           )}
 
           {/* Popular Conversions */}
           {localCurrency && localCurrency !== fromCurrency && (
             <div className="mt-3 flex flex-wrap gap-2">
-              {isTablet && (
-                <span className="w-full uppercase" style={{fontFamily:ED_MONO,fontSize:fs(9.5),letterSpacing:".12em",color:ED_INK3,marginBottom:fs(2)}}>Popular conversions</span>
-              )}
+              <span className="w-full uppercase" style={{fontFamily:ED_MONO,fontSize:t(fs(9.5),fs(10)),letterSpacing:".12em",color:ED_INK3,marginBottom:fs(2)}}>Popular conversions</span>
               <button
                 onClick={() => {
                   setFromCurrency("USD");
                   setToCurrency(localCurrency);
                   setCurrencyLookup(localCurrency);
                 }}
-                className={isTablet ? "rounded-full transition-colors" : "text-xs bg-gray-100 hover:bg-gray-200 px-2.5 py-1.5 rounded-lg text-gray-700 font-medium transition-colors"}
-                style={isTablet ? {background:CAT.money.bg,color:ED_MONEY,fontFamily:ED_MONO,fontSize:fs(11),letterSpacing:".02em",fontWeight:600,padding:`${fs(7)} ${fs(14)}`,border:`1px solid ${CAT.money.soft}`} : undefined}
+                className="rounded-full transition-colors"
+                style={{background:CAT.money.bg,color:ED_MONEY,fontFamily:ED_MONO,fontSize:t(fs(11),fs(11)),letterSpacing:".02em",fontWeight:600,padding:`${fs(7)} ${fs(14)}`,border:`1px solid ${CAT.money.soft}`}}
               >
                 USD → {localCurrency}
               </button>
@@ -896,8 +832,8 @@ export default function MoneyExchangePage() {
                   setToCurrency("USD");
                   setCurrencyLookup("USD");
                 }}
-                className={isTablet ? "rounded-full transition-colors" : "text-xs bg-gray-100 hover:bg-gray-200 px-2.5 py-1.5 rounded-lg text-gray-700 font-medium transition-colors"}
-                style={isTablet ? {background:CAT.money.bg,color:ED_MONEY,fontFamily:ED_MONO,fontSize:fs(11),letterSpacing:".02em",fontWeight:600,padding:`${fs(7)} ${fs(14)}`,border:`1px solid ${CAT.money.soft}`} : undefined}
+                className="rounded-full transition-colors"
+                style={{background:CAT.money.bg,color:ED_MONEY,fontFamily:ED_MONO,fontSize:t(fs(11),fs(11)),letterSpacing:".02em",fontWeight:600,padding:`${fs(7)} ${fs(14)}`,border:`1px solid ${CAT.money.soft}`}}
               >
                 {localCurrency} → USD
               </button>
@@ -907,8 +843,8 @@ export default function MoneyExchangePage() {
                   setToCurrency(localCurrency);
                   setCurrencyLookup(localCurrency);
                 }}
-                className={isTablet ? "rounded-full transition-colors" : "text-xs bg-gray-100 hover:bg-gray-200 px-2.5 py-1.5 rounded-lg text-gray-700 font-medium transition-colors"}
-                style={isTablet ? {background:CAT.money.bg,color:ED_MONEY,fontFamily:ED_MONO,fontSize:fs(11),letterSpacing:".02em",fontWeight:600,padding:`${fs(7)} ${fs(14)}`,border:`1px solid ${CAT.money.soft}`} : undefined}
+                className="rounded-full transition-colors"
+                style={{background:CAT.money.bg,color:ED_MONEY,fontFamily:ED_MONO,fontSize:t(fs(11),fs(11)),letterSpacing:".02em",fontWeight:600,padding:`${fs(7)} ${fs(14)}`,border:`1px solid ${CAT.money.soft}`}}
               >
                 EUR → {localCurrency}
               </button>
@@ -919,78 +855,39 @@ export default function MoneyExchangePage() {
         </div>
 
         {/* OR DIVIDER - Only show when converter is expanded */}
-        {!converterCollapsed && isTablet && (
-          <div className="relative flex items-center justify-center py-7">
+        {!converterCollapsed && (
+          <div className={t("relative flex items-center justify-center py-7", "relative flex items-center justify-center py-5")}>
             <div className="flex-1" style={{height:1,background:ED_RULE}}></div>
-            <span className="mx-4 uppercase" style={{fontFamily:ED_MONO,fontSize:fs(11),letterSpacing:".18em",color:ED_INK3}}>or</span>
+            <span className="mx-4 uppercase" style={{fontFamily:ED_MONO,fontSize:t(fs(11),fs(10.5)),letterSpacing:".18em",color:ED_INK3}}>or</span>
             <div className="flex-1" style={{height:1,background:ED_RULE}}></div>
-          </div>
-        )}
-        {!converterCollapsed && !isTablet && (
-          <div className="relative flex items-center justify-center py-6">
-            {/* Left line */}
-            <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent via-gray-300 to-gray-300"></div>
-            
-            {/* OR circle */}
-            <div className="relative mx-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
-                <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
-                  <span className="text-[calc(16px*var(--fs))] font-bold text-transparent bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text">
-                    OR
-                  </span>
-                </div>
-              </div>
-              
-              {/* Optional: Small decorative dots */}
-              <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-yellow-400 animate-pulse"></div>
-              <div className="absolute -bottom-1 -left-1 w-2 h-2 rounded-full bg-pink-400 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-            </div>
-            
-            {/* Right line */}
-            <div className="flex-1 h-[1px] bg-gradient-to-l from-transparent via-gray-300 to-gray-300"></div>
           </div>
         )}
 
-        {/* Currency Availability Section - WITH GRADIENT BANNER */}
+        {/* Currency Availability Section */}
         <div
-          className={isTablet ? "rounded-[24px] p-5 mb-3" : "bg-white rounded-[16px] shadow-md p-4 mb-3"}
-          style={isTablet ? {background:"#FFFFFF",border:`1px solid ${ED_RULE}`,boxShadow:"0 1px 0 rgba(15,20,25,.04), 0 12px 32px -16px rgba(15,20,25,.12)"} : undefined}
+          className={t("rounded-[24px] p-5 mb-3", "rounded-[20px] p-4 mb-3")}
+          style={{background:"#FFFFFF",border:`1px solid ${ED_RULE}`,boxShadow:"0 1px 0 rgba(15,20,25,.04), 0 12px 32px -16px rgba(15,20,25,.12)"}}
         >
-          {isTablet ? (
-            <h3 className="mb-3" style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(28),lineHeight:1,color:ED_INK}}>Money Exchange Near You</h3>
-          ) : (
-            <h3 className="text-[calc(15px*var(--fs))] font-semibold mb-3">Money Exchange Near You</h3>
-          )}
+          <h3 className="mb-3" style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:t(fs(28),fs(22)),lineHeight:1,color:ED_INK}}>Money Exchange Near You</h3>
 
-          {/* Gradient Banner + Currency Lookup Dropdown */}
+          {/* Editorial prompt banner + Currency Lookup Dropdown */}
           <div className="mb-4">
-            {isTablet ? (
-              <div className="rounded-[16px] p-4 mb-3" style={{background:CAT.money.bg,border:`1px solid ${CAT.money.soft}`}}>
-                <div className="flex items-center gap-2.5" style={{color:ED_MONEY}}>
-                  <Search className="flex-shrink-0" style={{width:fs(20),height:fs(20)}} />
-                  <p style={{fontFamily:ED_SERIF,fontSize:fs(22),lineHeight:1.05,color:ED_INK}}>
-                    What currency are you looking for?
-                  </p>
-                </div>
+            <div className="rounded-[16px] p-4 mb-3" style={{background:CAT.money.bg,border:`1px solid ${CAT.money.soft}`}}>
+              <div className="flex items-center gap-2.5" style={{color:ED_MONEY}}>
+                <Search className="flex-shrink-0" style={{width:t(fs(20),fs(18)),height:t(fs(20),fs(18))}} />
+                <p style={{fontFamily:ED_SERIF,fontSize:t(fs(22),fs(20)),lineHeight:1.05,color:ED_INK}}>
+                  What currency are you looking for?
+                </p>
               </div>
-            ) : (
-              <div className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl p-4 mb-3 shadow-md">
-                <div className="flex items-center gap-2 text-white">
-                  <Search className="w-5 h-5 flex-shrink-0" />
-                  <p className="text-[calc(16px*var(--fs))] font-bold">
-                    What currency are you looking for?
-                  </p>
-                </div>
-              </div>
-            )}
+            </div>
 
             <Select value={currencyLookup} onValueChange={(value) => {
               setCurrencyLookup(value);
               setToCurrency(value);
             }}>
               <SelectTrigger
-                className={isTablet ? "w-full h-[52px]" : "w-full h-[44px]"}
-                style={isTablet ? {borderColor:ED_RULE,borderRadius:"14px",background:ED_IVORY2} : undefined}
+                className={t("w-full h-[52px]", "w-full h-[48px]")}
+                style={{borderColor:ED_RULE,borderRadius:"14px",background:ED_IVORY2}}
               >
                 {currencyLookup ? (
                   <div className="flex items-center gap-2">
@@ -1052,47 +949,25 @@ export default function MoneyExchangePage() {
 
           {/* Local Currency Display */}
           {localCurrencyData && (
-            isTablet ? (
-              <div className="mt-6 pt-4" style={{borderTop:`1px solid ${ED_RULE}`}}>
-                <div className="flex items-center gap-2 mb-2">
-                  <MapPin style={{width:fs(14),height:fs(14),color:ED_INK3}} />
-                  <h4 className="uppercase" style={{fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3}}>Your Local Currency</h4>
-                </div>
-                <div className="rounded-[14px] p-3.5" style={{background:ED_IVORY2,border:`1px solid ${ED_RULE}`}}>
-                  <div className="flex items-center gap-2.5">
-                    <span style={{fontSize:fs(26)}}>{localCurrencyData.flag}</span>
-                    <div className="flex-1">
-                      <p style={{fontFamily:ED_SERIF,fontSize:fs(18),lineHeight:1.1,color:ED_INK}}>
-                        {localCurrencyData.code} - {localCurrencyData.name}
-                      </p>
-                      <p style={{fontSize:fs(12),color:ED_MONEY,marginTop:fs(2),fontWeight:600}}>
-                        ✓ Usually available in stock
-                      </p>
-                    </div>
+            <div className="mt-6 pt-4" style={{borderTop:`1px solid ${ED_RULE}`}}>
+              <div className="flex items-center gap-2 mb-2">
+                <MapPin style={{width:fs(14),height:fs(14),color:ED_INK3}} />
+                <h4 className="uppercase" style={{fontFamily:ED_MONO,fontSize:t(fs(10),fs(10)),letterSpacing:".1em",color:ED_INK3}}>Your Local Currency</h4>
+              </div>
+              <div className="rounded-[14px] p-3.5" style={{background:ED_IVORY2,border:`1px solid ${ED_RULE}`}}>
+                <div className="flex items-center gap-2.5">
+                  <span style={{fontSize:t(fs(26),fs(24))}}>{localCurrencyData.flag}</span>
+                  <div className="flex-1">
+                    <p style={{fontFamily:ED_SERIF,fontSize:t(fs(18),fs(17)),lineHeight:1.1,color:ED_INK}}>
+                      {localCurrencyData.code} - {localCurrencyData.name}
+                    </p>
+                    <p style={{fontSize:t(fs(12),fs(11.5)),color:ED_MONEY,marginTop:fs(2),fontWeight:600}}>
+                      ✓ Usually available in stock
+                    </p>
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="mt-6 pt-4 border-t border-gray-100">
-                <div className="flex items-center gap-2 mb-2 opacity-60">
-                  <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                  <h4 className="text-[calc(11px*var(--fs))] font-semibold text-gray-500 uppercase tracking-wide">Your Local Currency</h4>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl opacity-70">{localCurrencyData.flag}</span>
-                    <div className="flex-1">
-                      <p className="font-semibold text-[calc(13px*var(--fs))] text-gray-700">
-                        {localCurrencyData.code} - {localCurrencyData.name}
-                      </p>
-                      <p className="text-[calc(11px*var(--fs))] text-gray-500 mt-0.5">
-                        ✓ Usually available in stock
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )
+            </div>
           )}
         </div>
 
@@ -1100,31 +975,20 @@ export default function MoneyExchangePage() {
         {activeLocation?.coordinates && toCurrency && fromCurrency && (
           <div
             id="exchange-stores-map"
-            className={isTablet ? "rounded-[24px] p-5 mb-6" : "bg-white rounded-[16px] shadow-md p-4 mb-6"}
-            style={isTablet ? {background:"#FFFFFF",border:`1px solid ${ED_RULE}`,boxShadow:"0 1px 0 rgba(15,20,25,.04), 0 12px 32px -16px rgba(15,20,25,.12)"} : undefined}
+            className={t("rounded-[24px] p-5 mb-6", "rounded-[20px] p-4 mb-6")}
+            style={{background:"#FFFFFF",border:`1px solid ${ED_RULE}`,boxShadow:"0 1px 0 rgba(15,20,25,.04), 0 12px 32px -16px rgba(15,20,25,.12)"}}
           >
-            {isTablet ? (
-              <>
-                <h3 className="mb-1" style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(28),lineHeight:1.02,color:ED_INK}}>Exchange Stores for {toCurrency}</h3>
-                <p className="mb-4" style={{fontSize:fs(13),color:ED_INK3}}>
-                  Showing stores that exchange {fromCurrency} to {toCurrency}
-                </p>
-              </>
-            ) : (
-              <>
-                <h3 className="text-[calc(16px*var(--fs))] font-bold mb-1">Exchange Stores for {toCurrency}</h3>
-                <p className="text-[calc(12px*var(--fs))] text-gray-600 mb-4">
-                  Showing stores that exchange {fromCurrency} to {toCurrency}
-                </p>
-              </>
-            )}
+            <h3 className="mb-1" style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:t(fs(28),fs(22)),lineHeight:1.02,color:ED_INK}}>Exchange Stores for {toCurrency}</h3>
+            <p className="mb-4" style={{fontSize:t(fs(13),fs(13.5)),color:ED_INK3}}>
+              Showing stores that exchange {fromCurrency} to {toCurrency}
+            </p>
 
             {/* View Mode Tabs + Refresh Button */}
             <div className="mb-3">
               <div className="flex items-center justify-between mb-2">
                 <p
-                  className={isTablet ? "uppercase" : "text-[calc(11px*var(--fs))] font-semibold text-gray-600"}
-                  style={isTablet ? {fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3} : undefined}
+                  className="uppercase"
+                  style={{fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3}}
                 >VIEW MODE</p>
                 <Button
                   size="sm"
@@ -1136,25 +1000,21 @@ export default function MoneyExchangePage() {
                   🔄 Refresh
                 </Button>
               </div>
-              <div className="flex gap-2" style={{borderBottom:`1px solid ${isTablet ? ED_RULE : "#E5E7EB"}`}}>
+              <div className="flex gap-2" style={{borderBottom:`1px solid ${ED_RULE}`}}>
                 <button
                   onClick={() => {
                     setViewMode("list");
                     setSelectedStoreIndex(null);
                   }}
-                  className={isTablet
-                    ? "pb-2 px-3 font-semibold transition-colors"
-                    : `pb-2 px-3 text-[calc(13px*var(--fs))] font-semibold transition-colors ${viewMode === "list" ? "text-[#667eea] border-b-2 border-[#667eea]" : "text-gray-500"}`}
-                  style={isTablet ? {fontSize:fs(13),color:viewMode === "list" ? ED_MONEY : ED_INK3,borderBottom:viewMode === "list" ? `2px solid ${ED_MONEY}` : "2px solid transparent"} : undefined}
+                  className="pb-2 px-3 font-semibold transition-colors"
+                  style={{fontSize:t(fs(13),fs(13.5)),color:viewMode === "list" ? ED_MONEY : ED_INK3,borderBottom:viewMode === "list" ? `2px solid ${ED_MONEY}` : "2px solid transparent"}}
                 >
                   List View
                 </button>
                 <button
                   onClick={() => setViewMode("map")}
-                  className={isTablet
-                    ? "pb-2 px-3 font-semibold transition-colors"
-                    : `pb-2 px-3 text-[calc(13px*var(--fs))] font-semibold transition-colors ${viewMode === "map" ? "text-[#667eea] border-b-2 border-[#667eea]" : "text-gray-500"}`}
-                  style={isTablet ? {fontSize:fs(13),color:viewMode === "map" ? ED_MONEY : ED_INK3,borderBottom:viewMode === "map" ? `2px solid ${ED_MONEY}` : "2px solid transparent"} : undefined}
+                  className="pb-2 px-3 font-semibold transition-colors"
+                  style={{fontSize:t(fs(13),fs(13.5)),color:viewMode === "map" ? ED_MONEY : ED_INK3,borderBottom:viewMode === "map" ? `2px solid ${ED_MONEY}` : "2px solid transparent"}}
                 >
                   Map View
                 </button>
@@ -1165,25 +1025,21 @@ export default function MoneyExchangePage() {
             {viewMode === "list" && (
               <div className="mb-4">
                 <p
-                  className={isTablet ? "mb-2 uppercase" : "text-[calc(11px*var(--fs))] font-semibold text-gray-600 mb-2"}
-                  style={isTablet ? {fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3} : undefined}
+                  className="mb-2 uppercase"
+                  style={{fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3}}
                 >SORT BY</p>
-                <div className="flex gap-2" style={{borderBottom:`1px solid ${isTablet ? ED_RULE : "#E5E7EB"}`}}>
+                <div className="flex gap-2" style={{borderBottom:`1px solid ${ED_RULE}`}}>
                   <button
                     onClick={() => setSortBy("distance")}
-                    className={isTablet
-                      ? "pb-2 px-3 font-semibold transition-colors"
-                      : `pb-2 px-3 text-[calc(13px*var(--fs))] font-semibold transition-colors ${sortBy === "distance" ? "text-[#667eea] border-b-2 border-[#667eea]" : "text-gray-500"}`}
-                    style={isTablet ? {fontSize:fs(13),color:sortBy === "distance" ? ED_MONEY : ED_INK3,borderBottom:sortBy === "distance" ? `2px solid ${ED_MONEY}` : "2px solid transparent"} : undefined}
+                    className="pb-2 px-3 font-semibold transition-colors"
+                    style={{fontSize:t(fs(13),fs(13.5)),color:sortBy === "distance" ? ED_MONEY : ED_INK3,borderBottom:sortBy === "distance" ? `2px solid ${ED_MONEY}` : "2px solid transparent"}}
                   >
                     📍 Nearest
                   </button>
                   <button
                     onClick={() => setSortBy("rate")}
-                    className={isTablet
-                      ? "pb-2 px-3 font-semibold transition-colors"
-                      : `pb-2 px-3 text-[calc(13px*var(--fs))] font-semibold transition-colors ${sortBy === "rate" ? "text-[#667eea] border-b-2 border-[#667eea]" : "text-gray-500"}`}
-                    style={isTablet ? {fontSize:fs(13),color:sortBy === "rate" ? ED_MONEY : ED_INK3,borderBottom:sortBy === "rate" ? `2px solid ${ED_MONEY}` : "2px solid transparent"} : undefined}
+                    className="pb-2 px-3 font-semibold transition-colors"
+                    style={{fontSize:t(fs(13),fs(13.5)),color:sortBy === "rate" ? ED_MONEY : ED_INK3,borderBottom:sortBy === "rate" ? `2px solid ${ED_MONEY}` : "2px solid transparent"}}
                   >
                     💰 Best Rate
                   </button>
@@ -1198,12 +1054,12 @@ export default function MoneyExchangePage() {
                   type="checkbox"
                   checked={openOnly}
                   onChange={(e) => setOpenOnly(e.target.checked)}
-                  className={isTablet ? "w-4 h-4 bg-gray-100 border-gray-300 rounded cursor-pointer" : "w-4 h-4 text-[#667eea] bg-gray-100 border-gray-300 rounded focus:ring-[#667eea] cursor-pointer"}
-                  style={isTablet ? {accentColor:ED_MONEY} : undefined}
+                  className="w-4 h-4 bg-gray-100 border-gray-300 rounded cursor-pointer"
+                  style={{accentColor:ED_MONEY}}
                 />
                 <span
-                  className={isTablet ? "font-semibold" : "text-[calc(13px*var(--fs))] font-semibold text-gray-700"}
-                  style={isTablet ? {fontSize:fs(13.5),color:ED_INK2} : undefined}
+                  className="font-semibold"
+                  style={{fontSize:t(fs(13.5),fs(13.5)),color:ED_INK2}}
                 >Show only open stores</span>
               </label>
             </div>
@@ -1212,8 +1068,8 @@ export default function MoneyExchangePage() {
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
                 <p
-                  className={isTablet ? "uppercase" : "text-[calc(12px*var(--fs))] font-semibold text-gray-700"}
-                  style={isTablet ? {fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3} : undefined}
+                  className="uppercase"
+                  style={{fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3}}
                 >Search Radius</p>
                 <div className="flex items-center gap-2">
                   <DistanceUnitToggle
@@ -1230,8 +1086,7 @@ export default function MoneyExchangePage() {
                     variant="light"
                   />
                   <span
-                    className={isTablet ? "" : "text-[calc(12px*var(--fs))] font-bold text-[#667eea]"}
-                    style={isTablet ? {fontFamily:ED_SERIF,fontSize:fs(18),color:ED_MONEY} : undefined}
+                    style={{fontFamily:ED_SERIF,fontSize:t(fs(18),fs(17)),color:ED_MONEY}}
                   >{searchRadius} {distanceUnit}</span>
                 </div>
               </div>
@@ -1241,12 +1096,12 @@ export default function MoneyExchangePage() {
                 max={radiusArray.length - 1}
                 value={radiusIndex}
                 onChange={(e) => handleRadiusChange(parseInt(e.target.value))}
-                className={isTablet ? "w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" : "w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#667eea]"}
-                style={isTablet ? {accentColor:ED_MONEY} : undefined}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                style={{accentColor:ED_MONEY}}
               />
               <div
-                className={isTablet ? "flex justify-between mt-1" : "flex justify-between text-[calc(10px*var(--fs))] text-gray-500 mt-1"}
-                style={isTablet ? {fontFamily:ED_MONO,fontSize:fs(10),color:ED_INK3} : undefined}
+                className="flex justify-between mt-1"
+                style={{fontFamily:ED_MONO,fontSize:fs(10),color:ED_INK3}}
               >
                 <span>{radiusArray[0]}{distanceUnit}</span>
                 <span>{radiusArray[Math.floor(radiusArray.length / 2)]}{distanceUnit}</span>
@@ -1257,8 +1112,8 @@ export default function MoneyExchangePage() {
             {/* Store Listings */}
             {loadingStores ? (
               <div className="flex flex-col items-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin mb-3" style={isTablet ? {color:ED_MONEY} : {color:"#667eea"}} />
-                <p className={isTablet ? "" : "text-sm text-gray-600"} style={isTablet ? {fontSize:fs(13),color:ED_INK3} : undefined}>Finding exchange stores...</p>
+                <Loader2 className="w-8 h-8 animate-spin mb-3" style={{color:ED_MONEY}} />
+                <p style={{fontSize:t(fs(13),fs(13.5)),color:ED_INK3}}>Finding exchange stores...</p>
               </div>
             ) : viewMode === "list" ? (
               exchangeStores.length > 0 ? (
@@ -1266,71 +1121,60 @@ export default function MoneyExchangePage() {
                   {exchangeStores.slice(0, 10).map((store, index) => ( // Slice for list view
                     <div
                       key={index}
-                      className={isTablet ? "rounded-[18px] p-4" : "bg-gradient-to-r from-gray-50 to-white rounded-lg p-3 border border-gray-200 shadow-sm"}
-                      style={isTablet ? {background:ED_IVORY2,border:`1px solid ${ED_RULE}`} : undefined}
+                      className={t("rounded-[18px] p-4", "rounded-[18px] p-4")}
+                      style={{background:ED_IVORY2,border:`1px solid ${ED_RULE}`}}
                     >
                       <div className="flex items-start gap-3">
                         <div
-                          className={isTablet ? "flex items-center justify-center flex-shrink-0" : "w-10 h-10 rounded-full bg-gradient-to-br from-[#667eea] to-[#764ba2] flex items-center justify-center flex-shrink-0"}
-                          style={isTablet ? {width:fs(36),height:fs(36),borderRadius:"50%",background:ED_MONEY} : undefined}
+                          className="flex items-center justify-center flex-shrink-0"
+                          style={{width:t(fs(36),fs(32)),height:t(fs(36),fs(32)),borderRadius:"50%",background:ED_MONEY}}
                         >
-                          <span className={isTablet ? "text-white" : "text-white font-bold text-sm"} style={isTablet ? {fontFamily:ED_SERIF,fontSize:fs(18)} : undefined}>{index + 1}</span>
+                          <span className="text-white" style={{fontFamily:ED_SERIF,fontSize:t(fs(18),fs(16))}}>{index + 1}</span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          {isTablet ? (
-                            <h4 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(22),lineHeight:1.05,color:ED_INK,marginBottom:fs(2)}}>{store.name}</h4>
-                          ) : (
-                            <h4 className="font-bold text-[calc(14px*var(--fs))] text-gray-900 mb-1">{store.name}</h4>
-                          )}
+                          <h4 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:t(fs(22),fs(20)),lineHeight:1.05,color:ED_INK,marginBottom:fs(2),display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{store.name}</h4>
                           <NameLanguageHelp placeId={store.place_id || store.placeId || store.id} name={store.name} />
 
                           {store.exchange_rate && (
-                            isTablet ? (
-                              <div className="inline-block mb-2" style={{background:CAT.money.bg,color:ED_MONEY,fontFamily:ED_MONO,fontSize:fs(12),fontWeight:600,padding:`${fs(4)} ${fs(10)}`,borderRadius:"10px",border:`1px solid ${CAT.money.soft}`}}>
-                                1 {fromCurrency} = {store.exchange_rate.toFixed(4)} {toCurrency}
-                              </div>
-                            ) : (
-                              <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-[calc(13px*var(--fs))] font-bold px-2 py-1 rounded inline-block mb-2">
-                                1 {fromCurrency} = {store.exchange_rate.toFixed(4)} {toCurrency}
-                              </div>
-                            )
+                            <div className="inline-block mb-2" style={{background:CAT.money.bg,color:ED_MONEY,fontFamily:ED_MONO,fontSize:t(fs(12),fs(11.5)),fontWeight:600,padding:`${fs(4)} ${fs(10)}`,borderRadius:"10px",border:`1px solid ${CAT.money.soft}`}}>
+                              1 {fromCurrency} = {store.exchange_rate.toFixed(4)} {toCurrency}
+                            </div>
                           )}
 
                           <div className="flex items-center gap-2 mb-1">
-                            <MapPin className={isTablet ? "w-3 h-3" : "w-3 h-3 text-gray-500"} style={isTablet ? {color:ED_MONEY} : undefined} />
+                            <MapPin className="w-3 h-3" style={{color:ED_MONEY}} />
                             <span
-                              className={isTablet ? "font-semibold" : "text-[calc(12px*var(--fs))] font-semibold text-[#667eea]"}
-                              style={isTablet ? {fontSize:fs(12.5),color:ED_MONEY} : undefined}
+                              className="font-semibold"
+                              style={{fontSize:t(fs(12.5),fs(12.5)),color:ED_MONEY}}
                             >
                               📍 {formatDistance(store.distance_miles)} away
                             </span>
                           </div>
 
                           <p
-                            className={isTablet ? "mb-2" : "text-[calc(11px*var(--fs))] text-gray-600 mb-2"}
-                            style={isTablet ? {fontSize:fs(12.5),color:ED_INK3} : undefined}
+                            className="mb-2"
+                            style={{fontSize:t(fs(12.5),fs(12.5)),color:ED_INK3}}
                           >{store.address}</p>
 
                           <div className="flex items-center gap-3 mb-2 flex-wrap">
                             {store.is_open !== undefined && (
                               <span
-                                className={isTablet ? "font-semibold" : `text-[calc(11px*var(--fs))] font-semibold ${store.is_open ? 'text-green-600' : 'text-red-600'}`}
-                                style={isTablet ? {fontSize:fs(12),color:store.is_open ? ED_MONEY : "#DC2626"} : undefined}
+                                className="font-semibold"
+                                style={{fontSize:t(fs(12),fs(12)),color:store.is_open ? ED_MONEY : "#DC2626"}}
                               >
                                 {store.is_open ? '● Open Now' : '● Closed'}
                               </span>
                             )}
                             {store.hours_today && (
                               <span
-                                className={isTablet ? "" : "text-[calc(11px*var(--fs))] text-gray-700"}
-                                style={isTablet ? {fontSize:fs(12),color:ED_INK2} : undefined}
+                                style={{fontSize:t(fs(12),fs(12)),color:ED_INK2}}
                               >🕐 {store.hours_today.split(':').slice(1).join(':').trim()}</span>
                             )}
                             {store.phone && (
                               <a
                                 href={`tel:${store.phone}`}
-                                className={isTablet ? "flex items-center gap-1" : "text-[calc(11px*var(--fs))] text-gray-600 flex items-center gap-1 hover:text-[#667eea]"}
-                                style={isTablet ? {fontSize:fs(12),color:ED_INK3} : undefined}
+                                className="flex items-center gap-1"
+                                style={{fontSize:t(fs(12),fs(12)),color:ED_INK3}}
                               >
                                 <Phone className="w-3 h-3" />
                                 {store.phone}
@@ -1342,8 +1186,8 @@ export default function MoneyExchangePage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className={isTablet ? "flex-1 h-9" : "flex-1 h-8 text-[calc(11px*var(--fs))] border-[#667eea] text-[#667eea] hover:bg-gray-100"}
-                              style={isTablet ? {fontSize:fs(12.5),borderColor:CAT.money.soft,color:ED_MONEY,borderRadius:"12px",background:"#FFFFFF"} : undefined}
+                              className={t("flex-1 h-9", "flex-1 h-9")}
+                              style={{fontSize:t(fs(12.5),fs(12.5)),borderColor:CAT.money.soft,color:ED_MONEY,borderRadius:"12px",background:"#FFFFFF"}}
                               onClick={() => handleGetDirections(store)}
                             >
                               <Navigation className="w-3 h-3 mr-1" />
@@ -1351,8 +1195,8 @@ export default function MoneyExchangePage() {
                             </Button>
                             <Button
                               size="sm"
-                              className={isTablet ? "flex-1 h-9" : "flex-1 h-8 text-[calc(11px*var(--fs))] bg-[#667eea] hover:bg-[#5568d3]"}
-                              style={isTablet ? {fontSize:fs(12.5),background:ED_MONEY,borderRadius:"12px"} : undefined}
+                              className={t("flex-1 h-9", "flex-1 h-9")}
+                              style={{fontSize:t(fs(12.5),fs(12.5)),background:ED_MONEY,borderRadius:"12px"}}
                               onClick={() => handleShowOnMap(index)}
                             >
                               <Map className="w-3 h-3 mr-1" />
@@ -1362,8 +1206,8 @@ export default function MoneyExchangePage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className={isTablet ? "flex-1 h-9" : "flex-1 h-8 text-[calc(11px*var(--fs))] border-gray-300 text-gray-700 hover:bg-gray-100"}
-                                style={isTablet ? {fontSize:fs(12.5),borderColor:ED_RULE,color:ED_INK2,borderRadius:"12px",background:"#FFFFFF"} : undefined}
+                                className={t("flex-1 h-9", "flex-1 h-9")}
+                                style={{fontSize:t(fs(12.5),fs(12.5)),borderColor:ED_RULE,color:ED_INK2,borderRadius:"12px",background:"#FFFFFF"}}
                                 onClick={() => setExpandedStoreIndex(expandedStoreIndex === index ? null : index)}
                               >
                                 {expandedStoreIndex === index ? '▲ Less' : '▼ Details'}
@@ -1373,14 +1217,14 @@ export default function MoneyExchangePage() {
 
                           {expandedStoreIndex === index && ((store.hours && store.hours.length > 0) || store.website) && (
                             <div
-                              className={isTablet ? "mt-2 p-3 rounded-[12px]" : "mt-2 p-2 bg-gray-50 rounded border border-gray-200"}
-                              style={isTablet ? {background:"#FFFFFF",border:`1px solid ${ED_RULE}`} : undefined}
+                              className="mt-2 p-3 rounded-[12px]"
+                              style={{background:"#FFFFFF",border:`1px solid ${ED_RULE}`}}
                             >
                               {store.hours && store.hours.length > 0 && (
                                 <>
                                   <div
-                                    className={isTablet ? "uppercase mb-1" : "text-[calc(10px*var(--fs))] font-bold text-gray-500 uppercase tracking-wide mb-1"}
-                                    style={isTablet ? {fontFamily:ED_MONO,fontSize:fs(9.5),letterSpacing:".1em",color:ED_INK3} : undefined}
+                                    className="uppercase mb-1"
+                                    style={{fontFamily:ED_MONO,fontSize:t(fs(9.5),fs(10)),letterSpacing:".1em",color:ED_INK3}}
                                   >🕐 Weekly Hours</div>
                                   {store.hours.map((h, di) => {
                                     const today = new Date().getDay();
@@ -1393,11 +1237,11 @@ export default function MoneyExchangePage() {
                                     return (
                                       <div
                                         key={di}
-                                        className={isTablet ? "flex justify-between py-0.5" : `flex justify-between text-[calc(11px*var(--fs))] py-0.5 ${isToday ? 'font-bold text-[#667eea]' : 'text-gray-700'}`}
-                                        style={isTablet ? {fontSize:fs(12),fontWeight:isToday ? 700 : 400,color:isToday ? ED_MONEY : ED_INK2} : undefined}
+                                        className="flex justify-between py-0.5"
+                                        style={{fontSize:t(fs(12),fs(12)),fontWeight:isToday ? 700 : 400,color:isToday ? ED_MONEY : ED_INK2}}
                                       >
                                         <span>{dayName}{isToday && ' (Today)'}</span>
-                                        <span className={hrs.toLowerCase() === 'closed' ? 'text-red-600' : ''} style={isTablet && hrs.toLowerCase() !== 'closed' ? {color:ED_INK2} : undefined}>{hrs}</span>
+                                        <span className={hrs.toLowerCase() === 'closed' ? 'text-red-600' : ''} style={hrs.toLowerCase() !== 'closed' ? {color:ED_INK2} : undefined}>{hrs}</span>
                                       </div>
                                     );
                                   })}
@@ -1408,10 +1252,8 @@ export default function MoneyExchangePage() {
                                   href={store.website}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className={isTablet
-                                    ? `block font-semibold ${store.hours && store.hours.length > 0 ? 'mt-2 pt-2' : ''}`
-                                    : `block text-[calc(11px*var(--fs))] text-[#667eea] font-semibold ${store.hours && store.hours.length > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}`}
-                                  style={isTablet ? {fontSize:fs(12),color:ED_MONEY,borderTop:(store.hours && store.hours.length > 0) ? `1px solid ${ED_RULE}` : undefined} : undefined}
+                                  className={`block font-semibold ${store.hours && store.hours.length > 0 ? 'mt-2 pt-2' : ''}`}
+                                  style={{fontSize:t(fs(12),fs(12)),color:ED_MONEY,borderTop:(store.hours && store.hours.length > 0) ? `1px solid ${ED_RULE}` : undefined}}
                                 >
                                   🌐 Visit Website
                                 </a>
@@ -1424,17 +1266,10 @@ export default function MoneyExchangePage() {
                   ))}
                 </div>
               ) : (
-                isTablet ? (
-                  <div className="text-center py-12">
-                    <p className="mb-2" style={{fontFamily:ED_SERIF,fontSize:fs(20),color:ED_INK}}>No exchange stores found nearby</p>
-                    <p style={{fontSize:fs(13),color:ED_INK3}}>Try increasing the search radius</p>
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <p className="text-gray-600 mb-2">No exchange stores found nearby</p>
-                    <p className="text-sm text-gray-500">Try increasing the search radius</p>
-                  </div>
-                )
+                <div className="text-center py-12">
+                  <p className="mb-2" style={{fontFamily:ED_SERIF,fontSize:t(fs(20),fs(20)),color:ED_INK}}>No exchange stores found nearby</p>
+                  <p style={{fontSize:t(fs(13),fs(13.5)),color:ED_INK3}}>Try increasing the search radius</p>
+                </div>
               )
             ) : ( // Map View
               <div className="relative h-[500px] rounded-lg overflow-hidden border border-gray-200">

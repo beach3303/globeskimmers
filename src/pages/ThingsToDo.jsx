@@ -423,181 +423,27 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
   );
 }
 
-// "About This Place" panel with expand/collapse. Picks the best text in
-// this precedence: Google editorialSummary > generativeSummary (Gemini AI
-// overview, has historical context for famous places) > synthetic aboutText.
-// Truncates at 200 chars with a "Read more" link; expands fully on tap.
-function PhotoStrip({photos,fallback="⭐",bg,onPhotoClick}){
-  const [err,setErr]=useState({}); const [ld,setLd]=useState({0:true,1:true,2:true});
-  const valid=(photos||[]).filter((_,i)=>_&&!err[i]);
-  const fbBg=bg||`linear-gradient(135deg,${T.accentL},#FDE68A)`;
-  if(!valid.length) return <div style={{height:"130px",background:fbBg,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:"calc(52px*var(--fs))",filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.15))"}}>{fallback}</span></div>;
-  if(valid.length===1) return(<div style={{position:"relative",height:"170px",overflow:"hidden",cursor:"pointer"}} onClick={()=>onPhotoClick?.(0)}>{ld[0]&&<div style={{position:"absolute",inset:0,background:fbBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(40px*var(--fs))"}}>{fallback}</div>}<img src={valid[0]} alt="" onError={()=>setErr((p)=>({...p,0:true}))} onLoad={()=>setLd((p)=>({...p,0:false}))} style={{width:"100%",height:"170px",objectFit:"cover",opacity:ld[0]?0:1,transition:"opacity 0.4s"}}/></div>);
-  if(valid.length===2) return(<div style={{display:"grid",gridTemplateColumns:"60% 40%",height:"150px",overflow:"hidden"}}>{valid.slice(0,2).map((url,i)=>(<div key={i} style={{position:"relative",overflow:"hidden",borderRight:i===0?"2px solid #fff":"none",cursor:"pointer"}} onClick={()=>onPhotoClick?.(i)}>{ld[i]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(30px*var(--fs))"}}>{fallback}</div>}<img src={url} alt="" onError={()=>setErr((p)=>({...p,[i]:true}))} onLoad={()=>setLd((p)=>({...p,[i]:false}))} style={{width:"100%",height:"150px",objectFit:"cover",opacity:ld[i]?0:1,transition:"opacity 0.4s"}}/></div>))}</div>);
-  // 3+ photos: 50/25/25 grid (large left photo, two smaller stacked right).
-  // Slices to exactly 3 (rest go through the PhotoGalleryModal on tap).
-  return(<div style={{display:"grid",gridTemplateColumns:"50% 50%",gridTemplateRows:"75px 75px",height:"150px",overflow:"hidden",gap:"2px",background:"#fff"}}>
-    <div onClick={()=>onPhotoClick?.(0)} style={{position:"relative",overflow:"hidden",gridRow:"span 2",cursor:"pointer"}}>{ld[0]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(30px*var(--fs))"}}>{fallback}</div>}<img src={valid[0]} alt="" onError={()=>setErr((p)=>({...p,0:true}))} onLoad={()=>setLd((p)=>({...p,0:false}))} style={{width:"100%",height:"100%",objectFit:"cover",opacity:ld[0]?0:1,transition:"opacity 0.4s"}}/></div>
-    <div onClick={()=>onPhotoClick?.(1)} style={{position:"relative",overflow:"hidden",cursor:"pointer"}}>{ld[1]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(24px*var(--fs))"}}>{fallback}</div>}<img src={valid[1]} alt="" onError={()=>setErr((p)=>({...p,1:true}))} onLoad={()=>setLd((p)=>({...p,1:false}))} style={{width:"100%",height:"100%",objectFit:"cover",opacity:ld[1]?0:1,transition:"opacity 0.4s"}}/></div>
-    <div onClick={()=>onPhotoClick?.(2)} style={{position:"relative",overflow:"hidden",cursor:"pointer"}}>{ld[2]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(24px*var(--fs))"}}>{fallback}</div>}<img src={valid[2]} alt="" onError={()=>setErr((p)=>({...p,2:true}))} onLoad={()=>setLd((p)=>({...p,2:false}))} style={{width:"100%",height:"100%",objectFit:"cover",opacity:ld[2]?0:1,transition:"opacity 0.4s"}}/>{valid.length>3&&<div style={{position:"absolute",bottom:"4px",right:"4px",background:"rgba(0,0,0,0.7)",color:"#fff",padding:"2px 8px",borderRadius:"12px",fontSize:"calc(11px*var(--fs))",fontWeight:"700"}}>+{valid.length-3}</div>}</div>
-  </div>);
-}
-
-function ActivityCard({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance}){
-  const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false); const [hoursExp,setHoursExp]=useState(false); const [gallery,setGallery]=useState({open:false,idx:0});
-  useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
-  const name=a.displayName?.text||a.name||"Activity"; const st=openStatus(a);
-  const hBg=st.isOpen===true?"#E8F5E9":st.isOpen===false?"#FFEBEE":"#F5F5F5";
-  const hColor=st.isOpen===true?"#2E7D32":st.isOpen===false?"#D32F2F":T.gray;
-  const hDot=st.isOpen===true?T.green:st.isOpen===false?T.coral:T.gray;
-  const activeTags=PROP_TAGS.filter(t=>a.props?.[t.key]);
-  const aColor=a.activityColor||T.accent;
-  const gradBg=`linear-gradient(135deg,${aColor}ee,${aColor}99)`;
-
-  return(
-    <motion.div ref={cardRef} initial={{opacity:0,y:24}} animate={{opacity:1,y:0}} transition={{delay:index*0.05,type:"spring",stiffness:260,damping:20}}
-      style={{background:"#fff",borderRadius:"20px",boxShadow:isHighlighted?`0 0 0 3px ${T.accent},0 8px 32px rgba(245,158,11,0.22)`:"0 2px 16px rgba(0,0,0,0.07)",overflow:"hidden",border:isHighlighted?`2px solid ${T.accent}`:"1px solid #E8EDF2",transition:"box-shadow 0.3s,border 0.3s"}}>
-      <div style={{position:"relative"}}>
-        <PhotoStrip photos={a.photos} fallback={a.activityIcon||"⭐"} bg={gradBg} onPhotoClick={(i)=>setGallery({open:true,idx:i})}/>
-        {/* Rank badge */}
-        <div style={{position:"absolute",top:"12px",left:"12px",background:index===0?"linear-gradient(135deg,#FFD700,#FFA000)":index===1?"linear-gradient(135deg,#B0BEC5,#78909C)":index===2?"linear-gradient(135deg,#FFAB40,#F57C00)":aColor,color:"#fff",width:"30px",height:"30px",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",fontSize:"calc(13px*var(--fs))",boxShadow:"0 2px 8px rgba(0,0,0,0.25)"}}>{index+1}</div>
-        {/* Category label */}
-        <div style={{position:"absolute",top:"12px",right:"12px",background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:"4px 10px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"800",color:aColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{a.activityIcon} {a.activityLabel}</div>
-        {/* Open status */}
-        <div style={{position:"absolute",bottom:"12px",left:"12px",background:st.isOpen===true?"rgba(46,125,50,0.92)":st.isOpen===false?"rgba(211,47,47,0.92)":"rgba(100,116,139,0.85)",backdropFilter:"blur(6px)",color:"#fff",padding:"4px 10px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}><span style={{width:"7px",height:"7px",borderRadius:"50%",background:st.isOpen===true?"#69F0AE":st.isOpen===false?"#FF5252":"#fff",display:"inline-block"}}/>{st.label}</div>
-        {a.distanceMiles!=null&&<div style={{position:"absolute",bottom:"12px",right:"12px",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",color:"#fff",padding:"4px 9px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"700"}}>📍 {formatDistance(a.distanceMiles)}</div>}
-      </div>
-
-      <div style={{padding:"16px"}}>
-        <div style={{fontWeight:"800",fontSize:"calc(17px*var(--fs))",color:T.dark,marginBottom:"4px"}}>{name}</div>
-        {/* Tour mode chip — only renders when the backend stamped a
-            mode (i.e. the venue came from a "walking tour" / "bike
-            tour" / "boat tour" query). Tells the user how the tour
-            gets around at a glance, without having to read the
-            description. Stays compact to avoid stealing focus from
-            the rating row that follows. */}
-        {a.tourMode && TOUR_MODE_LABELS[a.tourMode] && (
-          <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",marginBottom:"6px",background:"#F1F5F9",color:"#334155",borderRadius:"999px",fontSize:"calc(11px*var(--fs))",fontWeight:"600"}}>
-            <span>{TOUR_MODE_LABELS[a.tourMode].icon}</span>
-            {TOUR_MODE_LABELS[a.tourMode].label}
-          </div>
-        )}
-        <NameLanguageHelp placeId={a.placeId||a.id} name={name}/>
-
-        {/* Rating */}
-        {a.rating&&(<div style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:"10px"}}>{[1,2,3,4,5].map(n=><span key={n} style={{color:n<=Math.round(a.rating)?T.gold:"#E2E8F0",fontSize:"calc(14px*var(--fs))"}}>★</span>)}<span style={{fontWeight:"700",color:T.dark,fontSize:"calc(13px*var(--fs))"}}>{a.rating}</span>{a.userRatingCount>0&&<span style={{color:T.gray,fontSize:"calc(12px*var(--fs))"}}>({a.userRatingCount.toLocaleString()})</span>}</div>)}
-
-        {/* Traveler badges */}
-        {a.badges?.length>0&&(
-          <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"12px"}}>
-            {a.badges.map((b,i)=><span key={i} style={{background:T.accentL,color:T.accentD,padding:"4px 10px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"700"}}>{b}</span>)}
-          </div>
-        )}
-
-        {/* Property tags */}
-        {(activeTags.length>0||a.outdoorContext)&&(
-          <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"12px"}}>
-            {a.outdoorContext&&<span style={{display:"inline-flex",alignItems:"center",gap:"4px",background:"#FEF3C7",color:"#92400E",padding:"4px 10px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"700"}}>🏛️ {a.outdoorContext}</span>}
-            {activeTags.map((t,i)=><span key={i} style={{display:"inline-flex",alignItems:"center",gap:"4px",background:t.bg,color:t.color,padding:"4px 10px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"700"}}>{t.icon} {t.label}</span>)}
-          </div>
-        )}
-
-        {/* What People Love */}
-        {a.highlights?.length>0&&(
-          <div style={{marginBottom:"10px",padding:"10px 12px",background:"#F0FDF4",borderRadius:"12px",border:"1px solid #BBF7D0"}}>
-            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"800",color:"#059669",marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.5px"}}>💚 What People Love</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
-              {a.highlights.map((h,i)=><span key={i} style={{background:"#D1FAE5",color:"#065F46",padding:"3px 9px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"600",textTransform:"capitalize"}}>{h}</span>)}
-            </div>
-          </div>
-        )}
-        {/* Heads Up */}
-        {a.warnings?.length>0&&(
-          <div style={{marginBottom:"10px",padding:"10px 12px",background:"#FFF7ED",borderRadius:"12px",border:"1px solid #FED7AA"}}>
-            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"800",color:"#D97706",marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.5px"}}>⚠️ Heads Up</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
-              {a.warnings.map((w,i)=><span key={i} style={{background:"#FEF3C7",color:"#92400E",padding:"3px 9px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"600",textTransform:"capitalize"}}>{w}</span>)}
-            </div>
-          </div>
-        )}
-        {/* Best Time to Visit */}
-        {a.bestTime&&(
-          <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px",padding:"9px 12px",background:"#EFF6FF",borderRadius:"12px",border:"1px solid #BFDBFE"}}>
-            <span style={{fontSize:"calc(16px*var(--fs))"}}>🕐</span>
-            <div style={{fontSize:"calc(13px*var(--fs))",color:"#1E40AF"}}><span style={{fontWeight:"700"}}>Best time: </span>{a.bestTime}</div>
-          </div>
-        )}
-        {a.formattedAddress&&(<div style={{display:"flex",alignItems:"flex-start",gap:"9px",marginBottom:"10px",padding:"10px 12px",background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2"}}><span style={{fontSize:"calc(18px*var(--fs))",marginTop:"1px",flexShrink:0}}>📍</span><span style={{fontSize:"calc(13px*var(--fs))",color:T.dark,lineHeight:"1.5",fontWeight:"500"}}>{a.formattedAddress}</span></div>)}
-
-        {(st.today||st.isOpen!==null)&&(<div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px",padding:"10px 12px",background:hBg,borderRadius:"12px"}}><span style={{width:"10px",height:"10px",borderRadius:"50%",background:hDot,flexShrink:0,boxShadow:st.isOpen===true?"0 0 8px rgba(76,175,80,0.6)":"none"}}/><div style={{flex:1,fontSize:"calc(13px*var(--fs))"}}><span style={{fontWeight:"700",color:hColor}}>{st.label}</span>{st.today&&<span style={{color:T.gray,marginLeft:"8px"}}>· {st.today}</span>}</div></div>)}
-
-        {a.nationalPhoneNumber?(
-          <a href={`tel:${a.nationalPhoneNumber}`} style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"14px",padding:"11px 14px",background:T.blueL,borderRadius:"12px",textDecoration:"none",border:"1px solid #BBDEFB"}}>
-            <div style={{width:"36px",height:"36px",background:T.blue,color:"#fff",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(18px*var(--fs))",flexShrink:0}}>📞</div>
-            <div><div style={{fontWeight:"700",fontSize:"calc(14px*var(--fs))",color:T.blue}}>{a.nationalPhoneNumber}</div><div style={{fontSize:"calc(11px*var(--fs))",color:T.gray}}>Tap to call / book</div></div>
-            <span style={{marginLeft:"auto",color:T.blue,fontSize:"calc(20px*var(--fs))"}}>›</span>
-          </a>
-        ):(<div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px",padding:"10px 12px",background:"#F5F5F5",borderRadius:"12px",color:T.gray,fontSize:"calc(13px*var(--fs))"}}><span>📞</span><span>Phone not available</span></div>)}
-
-        {a.websiteUri&&(<a href={a.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px",padding:"11px 14px",background:T.accentL,borderRadius:"12px",textDecoration:"none",border:`1px solid ${T.accent}40`}}><span style={{fontSize:"calc(20px*var(--fs))"}}>🌐</span><span style={{fontWeight:"700",fontSize:"calc(13px*var(--fs))",color:T.accentD,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Visit Website / Book</span><span style={{color:T.accentD,fontSize:"calc(20px*var(--fs))"}}>›</span></a>)}
-
-        <div style={{display:"flex",gap:"8px"}}>
-          <motion.button whileTap={{scale:0.96}} onClick={()=>setDirs(true)} style={{flex:2,display:"flex",alignItems:"center",justifyContent:"center",gap:"7px",padding:"12px",borderRadius:"12px",border:"none",fontSize:"calc(14px*var(--fs))",fontWeight:"700",cursor:"pointer",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontFamily:"inherit",boxShadow:`0 4px 14px ${T.accent}40`}}>🧭 Directions</motion.button>
-          <motion.button whileTap={{scale:0.96}} onClick={()=>onMap?.(index)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",padding:"12px",borderRadius:"12px",border:"none",fontSize:"calc(13px*var(--fs))",fontWeight:"700",cursor:"pointer",background:"#EDE9FE",color:"#7C3AED",fontFamily:"inherit"}}>🗺️ Map</motion.button>
-          {/* Details button always renders so AI Details is reachable
-              even on activities without published hours. */}
-          <motion.button whileTap={{scale:0.96}} onClick={()=>setExp(e=>!e)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"12px",borderRadius:"12px",border:"none",fontSize:"calc(13px*var(--fs))",fontWeight:"700",cursor:"pointer",background:exp?T.dark:T.grayL,color:exp?"#fff":T.dark,fontFamily:"inherit"}}>{exp?"▲":"▼ Details"}</motion.button>
-        </div>
-
-        <AnimatePresence>{exp&&(<motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-          <div style={{marginTop:"12px",display:"flex",flexDirection:"column",gap:"10px"}}>
-            {/* Daily hours — collapsed by default, tap header to expand
-                (matches PlacesToEat pattern). */}
-            {a.hours?.length>0&&(
-              <div style={{padding:"14px",background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2"}}>
-                <button onClick={()=>setHoursExp(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
-                  <span style={{fontSize:"calc(11px*var(--fs))",color:T.gray,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>🕐 Daily Hours</span>
-                  <span style={{fontSize:"calc(11px*var(--fs))",color:T.gray}}>{hoursExp?"▲":"▼"}</span>
-                </button>
-                {hoursExp&&(
-                  <div style={{marginTop:"10px"}}>
-                    {a.hours.map((d,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(n=>d.toLowerCase().startsWith(n.toLowerCase()));const isT=di===today;const pts=d.split(":");const dn2=pts[0];const hrs=pts.slice(1).join(":").trim();return(<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:"calc(13px*var(--fs))",color:isT?T.accentD:T.dark,fontWeight:isT?"700":"400",padding:isT?"7px 10px":"5px 2px",background:isT?`${T.accent}12`:"transparent",margin:isT?"2px -2px":"0",borderRadius:isT?"8px":"0",borderLeft:isT?`3px solid ${T.accent}`:"3px solid transparent"}}><span>{dn2}{isT&&<span style={{fontSize:"calc(10px*var(--fs))",color:T.accent,marginLeft:"5px",fontWeight:"800"}}>TODAY</span>}</span><span style={{color:hrs.toLowerCase()==="closed"?T.coral:isT?T.accentD:T.gray}}>{hrs}</span></div>);})}
-                  </div>
-                )}
-              </div>
-            )}
-            {/* AI Details — attraction-only renderer (Things-To-Do redesign,
-                Phase 1). Forked from AIDetailsSection so the 4-zone layout
-                can evolve without risk to PlacesToEat restaurant rendering.
-                Calls the same getAIDetails endpoint under the hood for now;
-                Phase 2 will fork the Worker prompt too. */}
-            <AttractionAIDetails
-              placeId={a.placeId || a.id}
-              placeName={name}
-              page="ThingsToDo"
-            />
-          </div>
-        </motion.div>)}</AnimatePresence>
-      </div>
-      <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",latitude:a.lat,longitude:a.lng}} userLat={userLat} userLng={userLng}/>
-      <PhotoGalleryModal photos={a.photos||[]} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
-    </motion.div>
-  );
-}
-
-// ─── ACTIVITY CARD — iPad editorial layout (design handoff) ──────────────────
-// Full-width editorial card: big ~360px photo + rank badge + category tag,
-// coral attraction-category kicker, serif name, Say-it/Translate/rating/distance
-// row, tinted pill tags, green Open bar, blue phone bar, three action buttons,
-// and a "More ▾" expand panel (badges / property tags / what-people-love / heads-up
-// / best-time / address / daily hours / AttractionAIDetails / website).
-// Same props/handlers as ActivityCard; reuses PhotoGalleryModal / NameLanguageHelp /
-// AttractionAIDetails / MapAppSelector / openStatus / PROP_TAGS / TOUR_MODE_LABELS.
-// Rendered ONLY at tablet width (the page branches on useIsTablet) so the phone
-// card is untouched.
-function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance}){
+// ─── ACTIVITY CARD — editorial layout (responsive: phone + iPad) ─────────────
+// Full-width editorial card: big photo (tablet ~360 / phone ~200) + rank badge +
+// category tag, magenta attraction-category kicker, serif name, Say-it/Translate/
+// rating/distance row, tinted pill tags, green Open bar, blue phone bar, three
+// action buttons, and a "More ▾" expand panel (badges / property tags /
+// what-people-love / heads-up / best-time / address / daily hours /
+// AttractionAIDetails / website).
+// Reuses PhotoGalleryModal / NameLanguageHelp / AttractionAIDetails /
+// MapAppSelector / openStatus / PROP_TAGS / TOUR_MODE_LABELS.
+// RESPONSIVE: renders the editorial layout at BOTH widths. `isTablet` gates every
+// size — tablet keeps the original generous sizes; phone uses compact phone-tuned
+// sizes (smaller photo, tighter radius/type/padding) while keeping the exact same
+// fields, handlers, and sub-components. fs() stays on every text size so the
+// 4-step glasses control scales card text gracefully (serif name has a 2-line
+// clamp + the card uses min-height so it GROWS instead of clipping).
+function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet}){
   const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false); const [hoursExp,setHoursExp]=useState(false); const [gallery,setGallery]=useState({open:false,idx:0});
   const fs=(n)=>`calc(${n}px*var(--fs))`;
+  // t(tabletValue, phoneValue) — pick the size for the active platform. Used for
+  // BOTH fs()-wrapped type sizes and raw px (photo height, radius, paddings).
+  const t=(tab,ph)=>isTablet?tab:ph;
   useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
   const name=a.displayName?.text||a.name||"Activity"; const st=openStatus(a);
   const activeTags=PROP_TAGS.filter(t=>a.props?.[t.key]);
@@ -605,51 +451,60 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
   const photos=(a.photos||[]).filter(Boolean);
   const medalGrad=index===0?"linear-gradient(135deg,#FFD700,#FFA000)":index===1?"linear-gradient(135deg,#B0BEC5,#78909C)":index===2?"linear-gradient(135deg,#FFAB40,#F57C00)":aColor;
   const openText=st.label;
+  const photoH=t(360,200);   // tablet 360px, phone ~200px
+  const radius=t("28px","20px");
 
   const Tag=({bg,color,children})=>(
-    <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(9)} ${fs(16)}`,fontSize:fs(15.5),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
+    <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(t(9,6))} ${fs(t(16,12))}`,fontSize:fs(t(15.5,12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
   );
 
   return(
     <motion.div ref={cardRef} initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(index,8)*0.03}}
-      style={{background:"#fff",borderRadius:"28px",overflow:"hidden",boxShadow:isHighlighted?`0 0 0 3px ${T.accent},0 24px 50px -30px rgba(22,17,13,.4)`:"0 24px 50px -30px rgba(22,17,13,.4)",border:isHighlighted?`2px solid ${T.accent}`:`1px solid ${ED_RULE}`,transition:"box-shadow 0.3s,border 0.3s"}}>
+      style={{background:"#fff",borderRadius:radius,overflow:"hidden",boxShadow:isHighlighted?`0 0 0 3px ${T.accent},0 24px 50px -30px rgba(22,17,13,.4)`:"0 24px 50px -30px rgba(22,17,13,.4)",border:isHighlighted?`2px solid ${T.accent}`:`1px solid ${ED_RULE}`,transition:"box-shadow 0.3s,border 0.3s",
+      /* min-height (not fixed height) — the card grows with enlarged text
+         instead of clipping; the photo height stays fixed, the body flows. */
+      minHeight:fs(t(520,360))}}>
 
-      {/* Photo — editorial 360px block; reuse photos + gallery, rank + category tag overlays */}
-      <div style={{position:"relative",height:fs(360),background:`linear-gradient(135deg,${aColor}ee,${aColor}99)`}}>
+      {/* Photo — editorial block (tablet 360 / phone ~200); reuse photos + gallery, rank + category tag overlays */}
+      <div style={{position:"relative",height:fs(photoH),background:`linear-gradient(135deg,${aColor}ee,${aColor}99)`}}>
         {photos.length>0?(
           <img src={photos[0]} alt="" onClick={()=>setGallery({open:true,idx:0})} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"zoom-in"}}/>
         ):(
-          <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:fs(96)}}>{a.activityIcon||"⭐"}</div>
+          <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:fs(t(96,56))}}>{a.activityIcon||"⭐"}</div>
         )}
         {/* Rank badge */}
-        <div style={{position:"absolute",top:fs(14),left:fs(14),background:medalGrad,color:"#fff",width:fs(40),height:fs(40),borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:fs(16),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
+        <div style={{position:"absolute",top:fs(t(14,12)),left:fs(t(14,12)),background:medalGrad,color:"#fff",width:fs(t(40,30)),height:fs(t(40,30)),borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:fs(t(16,13)),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
         {/* Category tag */}
-        {a.activityLabel&&<div style={{position:"absolute",top:fs(14),right:fs(14),background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:`${fs(5)} ${fs(13)}`,borderRadius:"999px",fontSize:fs(14),fontWeight:700,color:aColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{a.activityIcon} {a.activityLabel}</div>}
-        {photos.length>1&&<div style={{position:"absolute",bottom:fs(12),right:fs(12),background:"rgba(0,0,0,0.6)",color:"#fff",padding:`${fs(4)} ${fs(11)}`,borderRadius:"999px",fontSize:fs(13),fontWeight:600,cursor:"pointer"}} onClick={()=>setGallery({open:true,idx:0})}>📷 {photos.length} photos</div>}
+        {a.activityLabel&&<div style={{position:"absolute",top:fs(t(14,12)),right:fs(t(14,12)),background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:`${fs(t(5,4))} ${fs(t(13,10))}`,borderRadius:"999px",fontSize:fs(t(14,11)),fontWeight:700,color:aColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{a.activityIcon} {a.activityLabel}</div>}
+        {photos.length>1&&<div style={{position:"absolute",bottom:fs(t(12,10)),right:fs(t(12,10)),background:"rgba(0,0,0,0.6)",color:"#fff",padding:`${fs(t(4,3))} ${fs(t(11,9))}`,borderRadius:"999px",fontSize:fs(t(13,11)),fontWeight:600,cursor:"pointer"}} onClick={()=>setGallery({open:true,idx:0})}>📷 {photos.length} photos</div>}
       </div>
 
-      <div style={{padding:`${fs(28)} ${fs(32)} ${fs(32)}`}}>
+      <div style={{padding:t(`${fs(28)} ${fs(32)} ${fs(32)}`,`${fs(16)} ${fs(16)} ${fs(18)}`)}}>
         {/* Attraction-category kicker — Things-To-Do magenta accent (not Eat coral) */}
-        {a.activityLabel&&<div style={{color:ED_TODO,fontWeight:600,fontSize:fs(17),letterSpacing:"0.2px"}}>{a.activityIcon} {a.activityLabel}</div>}
-        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(38),lineHeight:1.04,color:ED_INK,margin:`${fs(4)} 0 0`}}>{name}</h3>
+        {a.activityLabel&&<div style={{color:ED_TODO,fontWeight:600,fontSize:fs(t(17,13)),letterSpacing:"0.2px"}}>{a.activityIcon} {a.activityLabel}</div>}
+        {/* Serif name — 2-line clamp + min-height so enlarged text grows the card */}
+        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(t(38,26)),lineHeight:1.04,color:ED_INK,margin:`${fs(4)} 0 0`,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</h3>
 
         {/* Tour mode chip */}
         {a.tourMode && TOUR_MODE_LABELS[a.tourMode] && (
-          <div style={{display:"inline-flex",alignItems:"center",gap:fs(5),padding:`${fs(4)} ${fs(12)}`,marginTop:fs(10),background:"#F1F5F9",color:"#334155",borderRadius:"999px",fontSize:fs(15),fontWeight:600}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:fs(5),padding:`${fs(4)} ${fs(t(12,10))}`,marginTop:fs(10),background:"#F1F5F9",color:"#334155",borderRadius:"999px",fontSize:fs(t(15,12.5)),fontWeight:600}}>
             <span>{TOUR_MODE_LABELS[a.tourMode].icon}</span>{TOUR_MODE_LABELS[a.tourMode].label}
           </div>
         )}
 
         {/* Say it / Translate / rating / distance */}
-        <div style={{display:"flex",gap:fs(16),alignItems:"center",flexWrap:"wrap",marginTop:fs(12),fontSize:fs(17),color:ED_INK3}}>
+        <div style={{display:"flex",gap:fs(t(16,12)),alignItems:"center",flexWrap:"wrap",marginTop:fs(t(12,10)),fontSize:fs(t(17,13.5)),color:ED_INK3}}>
           <NameLanguageHelp placeId={a.placeId||a.id} name={name}/>
           {a.rating&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{a.rating}</span>{a.userRatingCount>0&&<span> ({a.userRatingCount.toLocaleString()})</span>}</span>}
           {a.distanceMiles!=null&&<span>· {formatDistance(a.distanceMiles)}</span>}
         </div>
 
+        {/* Street address — muted single-line, on-card at both widths */}
+        {a.formattedAddress&&<div style={{marginTop:fs(t(8,6)),fontSize:fs(t(13.5,12)),color:ED_INK3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress}</div>}
+
         {/* Pill tags — traveler badges + property tags */}
         {(a.badges?.length>0||activeTags.length>0||a.outdoorContext)&&(
-          <div style={{display:"flex",gap:fs(10),flexWrap:"wrap",marginTop:fs(16)}}>
+          <div style={{display:"flex",gap:fs(t(10,8)),flexWrap:"wrap",marginTop:fs(t(16,12))}}>
             {a.badges?.map((b,i)=><Tag key={`b${i}`} bg={T.accentL} color={T.accentD}>{b}</Tag>)}
             {a.outdoorContext&&<Tag bg="#FEF3C7" color="#92400E">🏛️ {a.outdoorContext}</Tag>}
             {activeTags.map((t,i)=><Tag key={`t${i}`} bg={t.bg} color={t.color}>{t.icon} {t.label}</Tag>)}
@@ -658,8 +513,8 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
 
         {/* Open bar */}
         {(st.today||st.isOpen!==null)&&(
-          <div style={{marginTop:fs(18),background:st.isOpen===true?"#E7F3EA":st.isOpen===false?"#FBE0DC":ED_IVORY2,borderRadius:"16px",padding:`${fs(16)} ${fs(20)}`,fontSize:fs(18),fontWeight:600,color:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK2,display:"flex",alignItems:"center",gap:fs(11)}}>
-            <span style={{width:fs(10),height:fs(10),borderRadius:"50%",background:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK3,flexShrink:0}}/>
+          <div style={{marginTop:fs(t(18,12)),background:st.isOpen===true?"#E7F3EA":st.isOpen===false?"#FBE0DC":ED_IVORY2,borderRadius:t("16px","14px"),padding:t(`${fs(16)} ${fs(20)}`,`${fs(11)} ${fs(14)}`),fontSize:fs(t(18,13.5)),fontWeight:600,color:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK2,display:"flex",alignItems:"center",gap:fs(t(11,9))}}>
+            <span style={{width:fs(t(10,8)),height:fs(t(10,8)),borderRadius:"50%",background:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK3,flexShrink:0}}/>
             <span>{openText}</span>
             {st.today&&<span style={{color:ED_INK3,fontWeight:500}}>· {st.today}</span>}
           </div>
@@ -667,65 +522,65 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
 
         {/* Phone bar */}
         {a.nationalPhoneNumber&&(
-          <a href={`tel:${a.nationalPhoneNumber}`} style={{marginTop:fs(14),background:"#EFF4FB",borderRadius:"16px",padding:`${fs(18)} ${fs(20)}`,display:"flex",alignItems:"center",gap:fs(14),textDecoration:"none"}}>
-            <span style={{fontSize:fs(24)}}>📞</span>
-            <span><span style={{display:"block",fontSize:fs(20),fontWeight:600,color:"#2E6FE0"}}>{a.nationalPhoneNumber}</span><span style={{fontSize:fs(15),color:ED_INK3}}>Tap to call / book</span></span>
+          <a href={`tel:${a.nationalPhoneNumber}`} style={{marginTop:fs(t(14,12)),background:"#EFF4FB",borderRadius:t("16px","14px"),padding:t(`${fs(18)} ${fs(20)}`,`${fs(12)} ${fs(14)}`),display:"flex",alignItems:"center",gap:fs(t(14,12)),textDecoration:"none"}}>
+            <span style={{fontSize:fs(t(24,20))}}>📞</span>
+            <span><span style={{display:"block",fontSize:fs(t(20,13.5)),fontWeight:600,color:"#2E6FE0"}}>{a.nationalPhoneNumber}</span><span style={{fontSize:fs(t(15,12)),color:ED_INK3}}>Tap to call / book</span></span>
           </a>
         )}
 
         {/* Actions */}
-        <div style={{display:"flex",gap:fs(12),marginTop:fs(20)}}>
-          <button onClick={()=>setDirs(true)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_TODO,color:"#fff"}}>Directions</button>
-          <button onClick={()=>onMap?.(index)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
-          <button onClick={()=>setExp(e=>!e)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:exp?ED_INK:ED_IVORY2,color:exp?"#fff":ED_INK2}}>{exp?"Less ▴":"More ▾"}</button>
+        <div style={{display:"flex",gap:fs(t(12,8)),marginTop:fs(t(20,14))}}>
+          <button onClick={()=>setDirs(true)} style={{flex:1,borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_TODO,color:"#fff"}}>Directions</button>
+          <button onClick={()=>onMap?.(index)} style={{flex:1,borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
+          <button onClick={()=>setExp(e=>!e)} style={{flex:1,borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:exp?ED_INK:ED_IVORY2,color:exp?"#fff":ED_INK2}}>{exp?"Less ▴":"More ▾"}</button>
         </div>
 
         {/* Expanded details */}
         <AnimatePresence>
           {exp&&(
             <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{marginTop:fs(20),display:"flex",flexDirection:"column",gap:fs(14)}}>
+              <div style={{marginTop:fs(t(20,14)),display:"flex",flexDirection:"column",gap:fs(t(14,12))}}>
 
                 {a.highlights?.length>0&&(
-                  <div style={{padding:fs(16),background:"#F0FDF4",borderRadius:"16px",border:"1px solid #BBF7D0"}}>
-                    <div style={{fontSize:fs(13),fontWeight:700,color:"#059669",letterSpacing:"0.5px",marginBottom:fs(9),textTransform:"uppercase"}}>💚 What People Love</div>
+                  <div style={{padding:fs(t(16,14)),background:"#F0FDF4",borderRadius:t("16px","14px"),border:"1px solid #BBF7D0"}}>
+                    <div style={{fontSize:fs(t(13,11.5)),fontWeight:700,color:"#059669",letterSpacing:"0.5px",marginBottom:fs(9),textTransform:"uppercase"}}>💚 What People Love</div>
                     <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
-                      {a.highlights.map((h,i)=><span key={i} style={{background:"#D1FAE5",color:"#065F46",padding:`${fs(5)} ${fs(13)}`,borderRadius:"999px",fontSize:fs(15),fontWeight:600,textTransform:"capitalize"}}>{h}</span>)}
+                      {a.highlights.map((h,i)=><span key={i} style={{background:"#D1FAE5",color:"#065F46",padding:`${fs(5)} ${fs(t(13,11))}`,borderRadius:"999px",fontSize:fs(t(15,12.5)),fontWeight:600,textTransform:"capitalize"}}>{h}</span>)}
                     </div>
                   </div>
                 )}
 
                 {a.warnings?.length>0&&(
-                  <div style={{padding:fs(16),background:"#FFF7ED",borderRadius:"16px",border:"1px solid #FED7AA"}}>
-                    <div style={{fontSize:fs(13),fontWeight:700,color:"#D97706",letterSpacing:"0.5px",marginBottom:fs(9),textTransform:"uppercase"}}>⚠️ Heads Up</div>
+                  <div style={{padding:fs(t(16,14)),background:"#FFF7ED",borderRadius:t("16px","14px"),border:"1px solid #FED7AA"}}>
+                    <div style={{fontSize:fs(t(13,11.5)),fontWeight:700,color:"#D97706",letterSpacing:"0.5px",marginBottom:fs(9),textTransform:"uppercase"}}>⚠️ Heads Up</div>
                     <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
-                      {a.warnings.map((w,i)=><span key={i} style={{background:"#FEF3C7",color:"#92400E",padding:`${fs(5)} ${fs(13)}`,borderRadius:"999px",fontSize:fs(15),fontWeight:600,textTransform:"capitalize"}}>{w}</span>)}
+                      {a.warnings.map((w,i)=><span key={i} style={{background:"#FEF3C7",color:"#92400E",padding:`${fs(5)} ${fs(t(13,11))}`,borderRadius:"999px",fontSize:fs(t(15,12.5)),fontWeight:600,textTransform:"capitalize"}}>{w}</span>)}
                     </div>
                   </div>
                 )}
 
                 {a.bestTime&&(
-                  <div style={{padding:fs(16),background:"#EFF6FF",borderRadius:"16px",border:"1px solid #BFDBFE",fontSize:fs(16),color:"#1E40AF"}}>
+                  <div style={{padding:fs(t(16,14)),background:"#EFF6FF",borderRadius:t("16px","14px"),border:"1px solid #BFDBFE",fontSize:fs(t(16,13)),color:"#1E40AF"}}>
                     <span style={{fontWeight:700}}>🕐 Best time · </span>{a.bestTime}
                   </div>
                 )}
 
                 {a.formattedAddress&&(
-                  <div style={{display:"flex",alignItems:"flex-start",gap:fs(10),padding:fs(16),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
-                    <span style={{fontSize:fs(20),flexShrink:0}}>📍</span>
-                    <span style={{fontSize:fs(16),color:ED_INK2,lineHeight:1.5,fontWeight:500}}>{a.formattedAddress}</span>
+                  <div style={{display:"flex",alignItems:"flex-start",gap:fs(10),padding:fs(t(16,14)),background:"#FAF7F0",borderRadius:t("16px","14px"),border:`1px solid ${ED_RULE}`}}>
+                    <span style={{fontSize:fs(t(20,16)),flexShrink:0}}>📍</span>
+                    <span style={{fontSize:fs(t(16,13)),color:ED_INK2,lineHeight:1.5,fontWeight:500}}>{a.formattedAddress}</span>
                   </div>
                 )}
 
                 {a.hours?.length>0&&(
-                  <div style={{padding:fs(16),background:"#FAF7F0",borderRadius:"16px"}}>
+                  <div style={{padding:fs(t(16,14)),background:"#FAF7F0",borderRadius:t("16px","14px")}}>
                     <button onClick={()=>setHoursExp(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
-                      <span style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
-                      <span style={{fontSize:fs(13),color:ED_INK3}}>{hoursExp?"▲":"▼"}</span>
+                      <span style={{fontSize:fs(t(13,11.5)),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
+                      <span style={{fontSize:fs(t(13,11.5)),color:ED_INK3}}>{hoursExp?"▲":"▼"}</span>
                     </button>
                     {hoursExp&&(
                       <div style={{marginTop:fs(8)}}>
-                        {a.hours.map((d,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(n=>d.toLowerCase().startsWith(n.toLowerCase()));const isT=di===today;const pts=d.split(":");const dn2=pts[0];const hrs=pts.slice(1).join(":").trim();return(<div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isT?700:400,color:isT?T.accentD:ED_INK2,borderBottom:i<a.hours.length-1?`1px solid ${ED_RULE}`:"none"}}><span>{dn2}</span><span style={{color:hrs.toLowerCase()==="closed"?"#C2392F":isT?T.accentD:ED_INK3}}>{hrs}</span></div>);})}
+                        {a.hours.map((d,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(n=>d.toLowerCase().startsWith(n.toLowerCase()));const isT=di===today;const pts=d.split(":");const dn2=pts[0];const hrs=pts.slice(1).join(":").trim();return(<div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(t(15,12.5)),fontWeight:isT?700:400,color:isT?T.accentD:ED_INK2,borderBottom:i<a.hours.length-1?`1px solid ${ED_RULE}`:"none"}}><span>{dn2}</span><span style={{color:hrs.toLowerCase()==="closed"?"#C2392F":isT?T.accentD:ED_INK3}}>{hrs}</span></div>);})}
                       </div>
                     )}
                   </div>
@@ -734,9 +589,9 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
                 <AttractionAIDetails placeId={a.placeId||a.id} placeName={name} page="ThingsToDo"/>
 
                 {a.websiteUri&&(
-                  <a href={a.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(16),background:T.accentL,borderRadius:"16px",textDecoration:"none",color:T.accentD,border:`1px solid ${T.accent}40`}}>
-                    <span style={{fontSize:fs(22)}}>🌐</span>
-                    <span><span style={{display:"block",fontWeight:600,fontSize:fs(16)}}>Visit Website / Book</span><span style={{fontSize:fs(14),color:ED_INK3}}>Tickets &amp; details</span></span>
+                  <a href={a.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(t(16,14)),background:T.accentL,borderRadius:t("16px","14px"),textDecoration:"none",color:T.accentD,border:`1px solid ${T.accent}40`}}>
+                    <span style={{fontSize:fs(t(22,18))}}>🌐</span>
+                    <span><span style={{display:"block",fontWeight:600,fontSize:fs(t(16,13.5))}}>Visit Website / Book</span><span style={{fontSize:fs(t(14,12)),color:ED_INK3}}>Tickets &amp; details</span></span>
                   </a>
                 )}
               </div>
@@ -755,12 +610,17 @@ const TRAVEL_COLORS={'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC26
 function TierCard({a,userLat,userLng,isTablet}){
   const [dirs,setDirs]=useState(false);
   const [gallery,setGallery]=useState({open:false,idx:0});
-  // fs()-style scaler for the iPad editorial variant. Phone path ignores this.
+  // fs()-style scaler for the editorial body (used at both widths now).
   const fs=(n)=>`calc(${n}px*var(--fs))`;
+  // t(tabletValue, phoneValue) — pick the platform size, same pattern as the
+  // editorial activity card. The tier card now uses the editorial body at BOTH
+  // widths; tablet keeps its 340px width / generous sizes, phone is a compact
+  // ~240px card so the horizontal strips match the main editorial cards.
+  const t=(tab,ph)=>isTablet?tab:ph;
   // Tapping the compact card body opens a fullscreen modal rendering the
-  // full ActivityCard (the same component used under "Near You"). Inner
-  // buttons (Directions / Website / photo) stopPropagation so they don't
-  // also open the modal.
+  // full ActivityCardTablet (the same editorial component used under "Near
+  // You", responsive to isTablet). Inner buttons (Directions / Website /
+  // photo) stopPropagation so they don't also open the modal.
   const [expanded,setExpanded]=useState(false);
   // The Map button inside the expanded modal opens a fullscreen TierMapOverlay
   // ON TOP of the modal — the modal stays mounted so when the overlay's X is
@@ -777,82 +637,50 @@ function TierCard({a,userLat,userLng,isTablet}){
   // wired to the parent's useDistanceUnit hook, so use a simple miles
   // formatter (matches the compact card's "X.X mi" rendering).
   const fmtDist=(d)=>`${d.toFixed(1)} mi`;
-  // ── iPad editorial tier card ────────────────────────────────────────────
-  // Same DATA + handlers as the phone card (open-modal onClick, photo-gallery
-  // taps, Directions, Website) — only enlarged + restyled with the editorial
-  // tokens (serif name, ED_* inks, fs()-scaled type, magenta ED_TODO accent)
-  // so it reads as part of the same system as the ActivityCardTablet cards.
-  // No width:220px flex-strip child — the grid in TierSection sizes it 2-up.
+  // ── Editorial tier card (responsive) ────────────────────────────────────
+  // Same DATA + handlers as before (open-modal onClick, photo-gallery taps,
+  // Directions, Website) — restyled with the editorial tokens (serif name,
+  // ED_* inks, fs()-scaled type, magenta ED_TODO accent) so the tier strips
+  // match the main editorial cards. Renders at BOTH widths: tablet keeps the
+  // 340px width / generous sizes; phone is a compact ~240px card. Fixed-width
+  // flex child so the tier row scrolls horizontally.
+  const photoH=t(220,150);   // tablet 220px, phone ~150px photo block
   const editorialBody=(
-    <div onClick={()=>setExpanded(true)} style={{background:"#fff",borderRadius:"24px",boxShadow:"0 18px 40px -26px rgba(22,17,13,.4)",overflow:"hidden",border:`1px solid ${ED_RULE}`,cursor:"pointer"}}>
-      <div style={{position:"relative",height:fs(220),background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
+    <div onClick={()=>setExpanded(true)} style={{flexShrink:0,width:t("340px","240px"),background:"#fff",borderRadius:t("24px","20px"),boxShadow:t("0 18px 40px -26px rgba(22,17,13,.4)","0 10px 26px -18px rgba(22,17,13,.4)"),overflow:"hidden",border:`1px solid ${ED_RULE}`,cursor:"pointer"}}>
+      <div style={{position:"relative",height:fs(photoH),background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
         {photo1&&photo2&&photo3?(
-          <div style={{display:"grid",gridTemplateColumns:"50% 50%",gridTemplateRows:`${fs(110)} ${fs(110)}`,height:fs(220),gap:"2px",background:"#fff"}}>
+          <div style={{display:"grid",gridTemplateColumns:"50% 50%",gridTemplateRows:`${fs(photoH/2)} ${fs(photoH/2)}`,height:fs(photoH),gap:"2px",background:"#fff"}}>
             <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",gridRow:"span 2",minWidth:0}}/>
             <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
             <img src={photo3} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:2});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
           </div>
         ):photo1&&photo2?(
-          <div style={{display:"flex",height:fs(220)}}>
-            <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{flex:1,height:fs(220),objectFit:"cover",cursor:"pointer",minWidth:0}}/>
-            <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{flex:1,height:fs(220),objectFit:"cover",cursor:"pointer",borderLeft:"2px solid #fff",minWidth:0}}/>
+          <div style={{display:"flex",height:fs(photoH)}}>
+            <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{flex:1,height:fs(photoH),objectFit:"cover",cursor:"pointer",minWidth:0}}/>
+            <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{flex:1,height:fs(photoH),objectFit:"cover",cursor:"pointer",borderLeft:"2px solid #fff",minWidth:0}}/>
           </div>
         ):photo1?(
-          <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:fs(220),objectFit:"cover",cursor:"pointer"}}/>
+          <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:fs(photoH),objectFit:"cover",cursor:"pointer"}}/>
         ):(
-          <div style={{height:fs(220),display:"flex",alignItems:"center",justifyContent:"center",fontSize:fs(72)}}>{a.activityIcon||"⭐"}</div>
+          <div style={{height:fs(photoH),display:"flex",alignItems:"center",justifyContent:"center",fontSize:fs(t(72,48))}}>{a.activityIcon||"⭐"}</div>
         )}
       </div>
-      <div style={{padding:`${fs(20)} ${fs(22)} ${fs(22)}`}}>
-        {a.activityLabel&&<div style={{fontSize:fs(14),fontWeight:600,color:ED_TODO,letterSpacing:"0.2px",marginBottom:fs(4)}}>{a.activityIcon} {a.activityLabel}</div>}
-        <div style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(26),lineHeight:1.08,color:ED_INK,marginBottom:fs(10),display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
-        {a.travelType&&<div style={{marginBottom:fs(8)}}><span style={{background:tc.bg,color:tc.color,padding:`${fs(5)} ${fs(12)}`,borderRadius:"999px",fontSize:fs(13),fontWeight:700,display:"inline-block"}}>{a.travelType} · {a.distance}</span></div>}
-        {a.rating&&<div style={{display:"flex",alignItems:"center",gap:fs(6),marginBottom:fs(8)}}><span style={{color:"#E0922F",fontSize:fs(16)}}>★</span><span style={{fontWeight:700,color:ED_INK2,fontSize:fs(16)}}>{a.rating}</span><span style={{color:ED_INK3,fontSize:fs(14)}}>({(a.userRatingCount||0).toLocaleString()})</span></div>}
-        {a.formattedAddress&&<div style={{fontSize:fs(14),color:ED_INK3,marginBottom:fs(12),whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress.split(',').slice(-3,-1).join(',').trim()}</div>}
-        <div style={{display:"flex",gap:fs(10)}}>
-          <button onClick={(e)=>{e.stopPropagation();setDirs(true);}} style={{flex:1,padding:fs(13),borderRadius:"14px",border:"none",background:ED_TODO,color:"#fff",fontWeight:600,fontSize:fs(16),cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
-          {a.websiteUri&&<button onClick={(e)=>{e.stopPropagation();window.open(a.websiteUri,'_blank');}} style={{flex:1,padding:fs(13),borderRadius:"14px",border:"none",background:ED_IVORY2,color:ED_INK2,fontWeight:600,fontSize:fs(16),cursor:"pointer",fontFamily:"inherit"}}>🌐 Website</button>}
-        </div>
-      </div>
-    </div>
-  );
-  const phoneBody=(
-    <div onClick={()=>setExpanded(true)} style={{flexShrink:0,width:"220px",background:"#fff",borderRadius:"16px",boxShadow:"0 2px 12px rgba(0,0,0,0.08)",overflow:"hidden",border:"1px solid #E8EDF2",cursor:"pointer"}}>
-      <div style={{position:"relative",height:"130px",background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
-        {/* 3 photos: 50/25/25 grid (large left, two stacked right). 2: 50/50. 1: full. */}
-        {photo1&&photo2&&photo3?(
-          <div style={{display:"grid",gridTemplateColumns:"50% 50%",gridTemplateRows:"65px 65px",height:"130px",gap:"2px",background:"#fff"}}>
-            <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",gridRow:"span 2",minWidth:0}}/>
-            <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
-            <img src={photo3} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:2});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
-          </div>
-        ):photo1&&photo2?(
-          <div style={{display:"flex",height:"130px"}}>
-            <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{flex:1,height:"130px",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
-            <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{flex:1,height:"130px",objectFit:"cover",cursor:"pointer",borderLeft:"2px solid #fff",minWidth:0}}/>
-          </div>
-        ):photo1?(
-          <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"130px",objectFit:"cover",cursor:"pointer"}}/>
-        ):(
-          <div style={{height:"130px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(40px*var(--fs))"}}>{a.activityIcon||"⭐"}</div>
-        )}
-      </div>
-      <div style={{padding:"10px 12px"}}>
-        <div style={{fontWeight:"700",fontSize:"calc(13px*var(--fs))",color:T.dark,lineHeight:"1.3",marginBottom:"6px",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
-        {a.travelType&&<div style={{marginBottom:"6px"}}><span style={{background:tc.bg,color:tc.color,padding:"3px 8px",borderRadius:"12px",fontSize:"calc(10px*var(--fs))",fontWeight:"700",display:"inline-block"}}>{a.travelType} · {a.distance}</span></div>}
-        {a.rating&&<div style={{display:"flex",alignItems:"center",gap:"4px",marginBottom:"6px"}}><span style={{color:T.gold,fontSize:"calc(12px*var(--fs))"}}>★</span><span style={{fontWeight:"700",color:T.dark,fontSize:"calc(12px*var(--fs))"}}>{a.rating}</span><span style={{color:T.gray,fontSize:"calc(11px*var(--fs))"}}>({(a.userRatingCount||0).toLocaleString()})</span></div>}
-        {a.activityLabel&&<div style={{fontSize:"calc(10px*var(--fs))",fontWeight:"600",color:a.activityColor||T.accent,marginBottom:"4px"}}>{a.activityIcon} {a.activityLabel}</div>}
-        {a.formattedAddress&&<div style={{fontSize:"calc(10px*var(--fs))",color:T.gray,marginBottom:"6px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress.split(',').slice(-3,-1).join(',').trim()}</div>}
-        <div style={{display:"flex",gap:"6px"}}>
-          <button onClick={(e)=>{e.stopPropagation();setDirs(true);}} style={{flex:1,padding:"8px",borderRadius:"8px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(11px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
-          {a.websiteUri&&<button onClick={(e)=>{e.stopPropagation();window.open(a.websiteUri,'_blank');}} style={{flex:1,padding:"8px",borderRadius:"8px",border:"1px solid #E8EDF2",background:"#F8FAFC",color:T.dark,fontWeight:"700",fontSize:"calc(11px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>🌐 Website</button>}
+      <div style={{padding:t(`${fs(20)} ${fs(22)} ${fs(22)}`,`${fs(14)} ${fs(14)} ${fs(14)}`)}}>
+        {a.activityLabel&&<div style={{fontSize:fs(t(14,11.5)),fontWeight:600,color:ED_TODO,letterSpacing:"0.2px",marginBottom:fs(4)}}>{a.activityIcon} {a.activityLabel}</div>}
+        <div style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(t(26,21)),lineHeight:1.08,color:ED_INK,marginBottom:fs(10),display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
+        {a.travelType&&<div style={{marginBottom:fs(8)}}><span style={{background:tc.bg,color:tc.color,padding:`${fs(5)} ${fs(t(12,10))}`,borderRadius:"999px",fontSize:fs(t(13,11)),fontWeight:700,display:"inline-block"}}>{a.travelType} · {a.distance}</span></div>}
+        {a.rating&&<div style={{display:"flex",alignItems:"center",gap:fs(6),marginBottom:fs(8)}}><span style={{color:"#E0922F",fontSize:fs(t(16,13))}}>★</span><span style={{fontWeight:700,color:ED_INK2,fontSize:fs(t(16,13))}}>{a.rating}</span><span style={{color:ED_INK3,fontSize:fs(t(14,11.5))}}>({(a.userRatingCount||0).toLocaleString()})</span></div>}
+        {a.formattedAddress&&<div style={{fontSize:fs(t(14,11.5)),color:ED_INK3,marginBottom:fs(12),whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress.split(',').slice(-3,-1).join(',').trim()}</div>}
+        <div style={{display:"flex",gap:fs(t(10,8))}}>
+          <button onClick={(e)=>{e.stopPropagation();setDirs(true);}} style={{flex:1,padding:fs(t(13,10)),borderRadius:t("14px","12px"),border:"none",background:ED_TODO,color:"#fff",fontWeight:600,fontSize:fs(t(16,12.5)),cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
+          {a.websiteUri&&<button onClick={(e)=>{e.stopPropagation();window.open(a.websiteUri,'_blank');}} style={{flex:1,padding:fs(t(13,10)),borderRadius:t("14px","12px"),border:"none",background:ED_IVORY2,color:ED_INK2,fontWeight:600,fontSize:fs(t(16,12.5)),cursor:"pointer",fontFamily:"inherit"}}>🌐 Website</button>}
         </div>
       </div>
     </div>
   );
   return(
     <>
-      {isTablet?editorialBody:phoneBody}
+      {editorialBody}
       <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",latitude:a.lat,longitude:a.lng}} userLat={userLat} userLng={userLng}/>
       <PhotoGalleryModal photos={a.photos||[]} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
       <AnimatePresence>
@@ -862,13 +690,13 @@ function TierCard({a,userLat,userLng,isTablet}){
             onClick={()=>setExpanded(false)}
             style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",backdropFilter:"blur(4px)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px",overflowY:"auto"}}
           >
-            <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxWidth:"480px",position:"relative",marginTop:"20px",marginBottom:"40px"}}>
+            <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxWidth:isTablet?"min(840px, 94vw)":"480px",position:"relative",marginTop:"20px",marginBottom:"40px"}}>
               <button
                 onClick={()=>setExpanded(false)}
                 aria-label="Close"
                 style={{position:"absolute",top:"12px",right:"12px",zIndex:10000,width:"36px",height:"36px",borderRadius:"50%",border:"none",background:"rgba(255,255,255,0.95)",color:T.dark,fontSize:"calc(18px*var(--fs))",fontWeight:"800",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}
               >✕</button>
-              <ActivityCard a={a} index={0} onMap={()=>setMapOpen(true)} isHighlighted={false} cardRef={null} forceExpanded={false} userLat={userLat} userLng={userLng} formatDistance={fmtDist}/>
+              <ActivityCardTablet a={a} index={0} onMap={()=>setMapOpen(true)} isHighlighted={false} cardRef={null} forceExpanded={true} userLat={userLat} userLng={userLng} formatDistance={fmtDist} isTablet={isTablet}/>
             </div>
           </motion.div>
         )}
@@ -883,13 +711,13 @@ function TierCard({a,userLat,userLng,isTablet}){
 function TierSection({title,icon,items,userLat,userLng,isTablet}){
   const [collapsed,setCollapsed]=useState(false);
   if(!items?.length) return null;
-  // On iPad the tier strip becomes part of the editorial system: serif header
-  // in the Things-To-Do magenta accent, bigger header type, and a 2-up grid of
-  // enlarged editorial TierCards (instead of the small phone scroll strip that
-  // clashed above the large ActivityCardTablet cards below). Phone path is the
-  // original horizontal scroll strip — untouched.
+  // The tier strip is part of the editorial system at BOTH widths: serif header
+  // in the Things-To-Do magenta accent and a horizontally SCROLLABLE row of
+  // editorial TierCards (swipe left/right). Tablet gets the bigger header type +
+  // 340px cards; phone gets a compact header + ~240px editorial cards in the same
+  // scroll strip. Tier data + the full-screen detail-on-tap are unchanged.
   const itemsLayout = isTablet
-    ? {display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:"20px",paddingBottom:"6px"}
+    ? {display:"flex",gap:"20px",overflowX:"auto",paddingBottom:"10px",scrollbarWidth:"none"}
     : {display:"flex",gap:"12px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none"};
   return(
     <div style={{marginBottom:isTablet?"30px":"16px"}}>
@@ -1156,9 +984,9 @@ export default function ThingsToDoFinder() {
         <TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet}/>
         {(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Near You</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
         {filtered.length===0&&nationalIcons.length===0&&regionalGems.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Try a different category or expand your radius</div></div>:null}
-        <div style={{display:"flex",flexDirection:"column",gap:isTablet?"30px":"14px"}}>{filtered.map((a,i)=>{
-          const Card = isTablet ? ActivityCardTablet : ActivityCard;
-          return <Card key={a.id||i} a={a} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance}/>;
+        <div style={{display:"flex",flexDirection:"column",gap:isTablet?"30px":"16px"}}>{filtered.map((a,i)=>{
+          // Editorial card at BOTH widths now — responsive via isTablet.
+          return <ActivityCardTablet key={a.id||i} a={a} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet}/>;
         })}</div>
       </div>)
       :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:T.dark}}>✕</button></div>)}

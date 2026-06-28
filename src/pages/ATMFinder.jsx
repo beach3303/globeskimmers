@@ -259,215 +259,6 @@ function ATMPhotoStrip({ photos, fallbackIcon = "🏧", onPhotoClick, height }) 
   );
 }
 
-// ─── ATM CARD ──────────────────────────────────────────────────────────────
-function ATMCard({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng, formatDistance }) {
-  const [showDirs, setShowDirs] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  const [hoursExpanded, setHoursExpanded] = useState(false);
-  // Fullscreen photo gallery — tap a photo on the card to enlarge.
-  const [gallery, setGallery] = useState({ open: false, idx: 0 });
-
-  useEffect(() => { if (forceExpanded) setExpanded(true); }, [forceExpanded]);
-
-  const name    = atm.displayName?.text || atm.name || "ATM";
-  const address = atm.formattedAddress || atm.shortFormattedAddress || "";
-  const phone   = atm.nationalPhoneNumber || atm.internationalPhoneNumber || "";
-
-  const hoursStatusBg = atm.is24Hours ? "#E3F2FD"
-    : atm.isOpen === true ? "#E8F5E9"
-    : atm.isOpen === false ? "#FFEBEE"
-    : "#F5F5F5";
-  const hoursStatusDot = atm.is24Hours ? BLUE
-    : atm.isOpen === true ? GREEN
-    : atm.isOpen === false ? CORAL
-    : GRAY;
-  const hoursStatusLabel = atm.is24Hours ? "🔄 Open 24/7"
-    : atm.isOpen === true ? "Open Now"
-    : atm.isOpen === false ? "Closed"
-    : "Hours Unknown";
-  const hoursStatusColor = atm.is24Hours ? "#1565C0"
-    : atm.isOpen === true ? "#2E7D32"
-    : atm.isOpen === false ? "#D32F2F"
-    : GRAY;
-
-  return (
-    <motion.div
-      ref={cardRef}
-      initial={{ opacity:0, y:20 }}
-      animate={{ opacity:1, y:0 }}
-      transition={{ delay: index * 0.04 }}
-      style={{
-        background:"#fff", borderRadius:"16px",
-        boxShadow: isHighlighted
-          ? `0 0 0 3px ${TEAL}, 0 4px 20px rgba(0,188,212,0.25)`
-          : "0 2px 12px rgba(0,0,0,0.06)",
-        overflow:"hidden",
-        border: isHighlighted ? `2px solid ${TEAL}` : "1px solid #E8EDF2",
-        transition:"box-shadow 0.3s, border 0.3s",
-      }}
-    >
-      {/* Photo strip — up to 2 (tappable to enlarge in fullscreen modal) */}
-      <div style={{ position:"relative" }}>
-        <ATMPhotoStrip
-          photos={atm.photos}
-          fallbackIcon={atm.venueIcon || "🏧"}
-          onPhotoClick={(i) => setGallery({ open: true, idx: i })}
-        />
-        {/* Index badge */}
-        <div style={{ position:"absolute", top:"10px", left:"10px", background:TEAL, color:"#fff", width:"28px", height:"28px", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:"800", fontSize:"calc(13px*var(--fs))" }}>{index+1}</div>
-        {/* Network badge */}
-        {atm.network && atm.network !== "Independent" && (
-          <div style={{ position:"absolute", top:"10px", right:"10px", background:"rgba(255,255,255,0.95)", padding:"3px 9px", borderRadius:"6px", fontSize:"calc(11px*var(--fs))", fontWeight:"700", color:"#1565C0" }}>🏦 {atm.network}</div>
-        )}
-        {/* Venue badge */}
-        {atm.venueType && atm.venueType !== "standalone" && atm.venueType !== "bank" && (
-          <div style={{ position:"absolute", bottom:"10px", left:"10px", background:"rgba(0,0,0,0.65)", padding:"3px 9px", borderRadius:"6px", fontSize:"calc(11px*var(--fs))", fontWeight:"700", color:"#fff" }}>{atm.venueIcon} {atm.venueType === "airport" ? "Airport" : atm.venueType === "transit" ? "Transit/Metro" : atm.venueType === "gas" ? "Gas Station" : atm.venueType === "hospital" ? "Hospital" : atm.venueType === "hotel" ? "Hotel" : atm.venueType === "convenience" ? "Convenience" : atm.venueType === "mall" ? "Mall" : atm.venueType === "grocery" ? "Grocery" : atm.venueType === "entertainment" ? "Entertainment" : ""}</div>
-        )}
-      </div>
-
-      {/* Card body */}
-      <div style={{ padding:"14px 16px" }}>
-        <div style={{ fontWeight:"700", fontSize:"calc(16px*var(--fs))", color:DARK, marginBottom:"6px" }}>{name}</div>
-
-        {/* Address */}
-        {address && (
-          <div style={{ display:"flex", alignItems:"flex-start", gap:"8px", marginBottom:"10px", padding:"8px 10px", background:"#F8FAFC", borderRadius:"8px" }}>
-            <span style={{ fontSize:"calc(16px*var(--fs))", marginTop:"1px" }}>🗺️</span>
-            <span style={{ fontSize:"calc(13px*var(--fs))", color:DARK, lineHeight:"1.4" }}>{address}</span>
-          </div>
-        )}
-
-        {/* Rating + Distance */}
-        <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap", gap:"10px", fontSize:"calc(13px*var(--fs))", color:GRAY, marginBottom:"10px" }}>
-          {atm.rating && (
-            <span>
-              <span style={{ color:GOLD }}>★</span>
-              <span style={{ fontWeight:"700", color:DARK, marginLeft:"2px" }}>{atm.rating}</span>
-              {atm.userRatingCount > 0 && <span style={{ opacity:0.7 }}> ({atm.userRatingCount})</span>}
-            </span>
-          )}
-          {atm.distanceMiles!=null && <span style={{ fontWeight:"600", color:TEAL_DARK }}>📍 {formatDistance(atm.distanceMiles)}</span>}
-        </div>
-
-        {/* Badges */}
-        {atm.badges?.length > 0 && (
-          <div style={{ display:"flex", flexWrap:"wrap", gap:"5px", marginBottom:"10px" }}>
-            {atm.badges.map((b, i) => (
-              <span key={i} style={{ background:b.bg, color:b.color, padding:"3px 9px", borderRadius:"6px", fontSize:"calc(11px*var(--fs))", fontWeight:"600" }}>{b.icon} {b.label}</span>
-            ))}
-          </div>
-        )}
-
-        {/* Hours */}
-        <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"10px", padding:"10px 12px", background:hoursStatusBg, borderRadius:"10px" }}>
-          <span style={{ width:"10px", height:"10px", borderRadius:"50%", background:hoursStatusDot, boxShadow: atm.isOpen===true ? "0 0 6px rgba(76,175,80,0.5)" : "none", flexShrink:0 }} />
-          <div style={{ flex:1, fontSize:"calc(13px*var(--fs))" }}>
-            <span style={{ fontWeight:"700", color:hoursStatusColor }}>{hoursStatusLabel}</span>
-            {atm.todayHours && !atm.is24Hours && (
-              <span style={{ color:GRAY, marginLeft:"8px" }}>· {atm.todayHours}</span>
-            )}
-          </div>
-        </div>
-
-        {/* Phone */}
-        {phone ? (
-          <a href={`tel:${phone}`} style={{ display:"flex", alignItems:"center", gap:"10px", marginBottom:"12px", padding:"10px 12px", background:"#E3F2FD", borderRadius:"10px", textDecoration:"none", color:"#1565C0" }}>
-            <span style={{ width:"32px", height:"32px", background:"#1565C0", color:"#fff", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"calc(16px*var(--fs))", flexShrink:0 }}>📞</span>
-            <div>
-              <div style={{ fontWeight:"600", fontSize:"calc(14px*var(--fs))" }}>{phone}</div>
-              <div style={{ fontSize:"calc(11px*var(--fs))", color:GRAY }}>Tap to call</div>
-            </div>
-          </a>
-        ) : (
-          <div style={{ display:"flex", alignItems:"center", gap:"10px", marginBottom:"12px", padding:"10px 12px", background:"#F5F5F5", borderRadius:"10px", color:GRAY, fontSize:"calc(13px*var(--fs))" }}>
-            <span>📞</span><span>Phone not available</span>
-          </div>
-        )}
-
-        {/* Action buttons — Details always renders so AI Details is reachable
-            even on ATMs without hours/website. */}
-        <div style={{ display:"flex", gap:"8px", flexWrap:"wrap" }}>
-          <button onClick={() => setShowDirs(true)} style={btn(TEAL, "#fff")}>🧭 Directions</button>
-          <button onClick={() => onShowOnMap?.(index)} style={btn("#EDE7F6", PURPLE)}>📍 Map</button>
-          <button onClick={() => { const n=!expanded; setExpanded(n); onExpandChange?.(n); }} style={btn(expanded ? DARK : "#F1F5F9", expanded ? "#fff" : DARK)}>
-            {expanded ? "▲ Less" : "▼ Details"}
-          </button>
-        </div>
-
-        {/* Expanded view — Daily Hours (collapsible) + AI Details + Website.
-            Matches the pattern in PlacesToEat / CoffeeFinder / RestroomFinder. */}
-        <AnimatePresence>
-          {expanded && (
-            <motion.div initial={{ height:0, opacity:0 }} animate={{ height:"auto", opacity:1 }} exit={{ height:0, opacity:0 }} style={{ overflow:"hidden" }}>
-              <div style={{ marginTop:"12px", display:"flex", flexDirection:"column", gap:"10px" }}>
-                {atm.weekdayDescriptions?.length > 0 && (
-                  <div style={{ padding:"12px", background:"#F8FAFC", borderRadius:"10px" }}>
-                    <button onClick={() => setHoursExpanded(h => !h)} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"transparent", border:"none", padding:0, cursor:"pointer", fontFamily:"inherit" }}>
-                      <span style={{ fontSize:"calc(11px*var(--fs))", color:GRAY, fontWeight:"700", letterSpacing:"0.5px" }}>🕐 DAILY HOURS</span>
-                      <span style={{ fontSize:"calc(11px*var(--fs))", color:GRAY }}>{hoursExpanded ? "▲" : "▼"}</span>
-                    </button>
-                    {hoursExpanded && (
-                      <div style={{ marginTop:"8px" }}>
-                        {atm.weekdayDescriptions.map((day, i) => {
-                          const today = new Date().getDay();
-                          const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-                          const dayIdx = dayNames.findIndex(d => day.toLowerCase().startsWith(d.toLowerCase()));
-                          const isToday = dayIdx === today;
-                          const parts = day.split(":");
-                          const dayName = parts[0];
-                          const hrs = parts.slice(1).join(":").trim();
-                          return (
-                            <div key={i} style={{
-                              display:"flex", justifyContent:"space-between",
-                              fontSize:"calc(13px*var(--fs))", color: isToday ? TEAL_DARK : DARK,
-                              fontWeight: isToday ? "700" : "400",
-                              padding: isToday ? "6px 8px" : "5px 0",
-                              background: isToday ? `${TEAL}15` : "transparent",
-                              margin: isToday ? "0 -4px" : "0",
-                              borderRadius: isToday ? "6px" : "0"
-                            }}>
-                              <span>{dayName}{isToday && " (Today)"}</span>
-                              <span>{hrs}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* AI Details — ATM-only renderer (ATM redesign Phase A2).
-                    Forked from AIDetailsSection so the 8-section ATM layout
-                    (Verdict / Calculator / Fees / Card Compatibility /
-                    Limits / Location / Safety / More) can evolve without
-                    risk to PlacesToEat or other finders. Calls the same
-                    getAIDetails endpoint under the hood for now; Phase A3
-                    forks the Worker prompt + endpoint. */}
-                <AtmAIDetails
-                  placeId={atm.placeId || atm.id}
-                  placeName={name}
-                  page="ATMFinder"
-                />
-                {(atm.websiteUri || atm.website) && (
-                  <a href={atm.websiteUri || atm.website} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 12px", background:"#fff", border:"1px solid #E2E8F0", borderRadius:"10px", textDecoration:"none", color:TEAL_DARK, fontSize:"calc(13px*var(--fs))", fontWeight:"600" }}>🌐 Visit Website</a>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <MapAppSelector
-        isOpen={showDirs}
-        onClose={() => setShowDirs(false)}
-        destination={{ name, address: address || atm.vicinity || "", latitude: atm.lat, longitude: atm.lng }}
-        userLat={userLat}
-        userLng={userLng}
-      />
-      <PhotoGalleryModal photos={atm.photos || []} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
-    </motion.div>
-  );
-}
-
 const btn = (bg, color) => ({
   display:"flex", alignItems:"center", gap:"5px",
   padding:"8px 14px", borderRadius:"10px",
@@ -475,22 +266,55 @@ const btn = (bg, color) => ({
   cursor:"pointer", background:bg, color, fontFamily:"inherit",
 });
 
-// ─── ATM CARD — iPad editorial layout (design handoff) ───────────────────────
+// ─── ATM CARD — editorial layout (design handoff) ───────────────────────────
 // Full-width editorial card mirroring RestaurantCardTablet: big photo (or a
 // tasteful placeholder) + index badge + network tag, bank/network kicker,
 // serif name, rating/distance sub-row, tinted pill tags (24/7, fee-free,
 // venue), green Open bar, blue phone bar (only when a phone exists), and three
 // action buttons with a "More ▾" expand panel (badges / daily hours /
-// AtmAIDetails / website). Same props/handlers as ATMCard; reuses
-// ATMPhotoStrip / AtmAIDetails / MapAppSelector / PhotoGalleryModal. Rendered
-// ONLY at tablet width (ATMFinder branches on useIsTablet) so the phone card is
-// untouched. ATMs may have NO phone and NO photo — both are handled gracefully.
-function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng, formatDistance }) {
+// AtmAIDetails / website). Same props/handlers as the old ATMCard; reuses
+// ATMPhotoStrip / AtmAIDetails / MapAppSelector / PhotoGalleryModal.
+//
+// RESPONSIVE: this single editorial card now serves BOTH platforms. The parent
+// passes `isTablet`; every size is gated through the `D` token map below so the
+// iPad keeps its full editorial scale while the phone gets a compact,
+// phone-tuned version (the primary platform). ATMs may have NO phone and NO
+// photo — both are handled gracefully at either width.
+function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceExpanded, onExpandChange, userLat, userLng, formatDistance, isTablet }) {
   const [showDirs, setShowDirs] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [hoursExpanded, setHoursExpanded] = useState(false);
   const [gallery, setGallery] = useState({ open: false, idx: 0 });
   const fs = (n) => `calc(${n}px*var(--fs))`;
+
+  // Width-gated design tokens. Tablet values are VERBATIM from the original
+  // tablet-only card; phone values are the phone-tuned spec (compact, beautiful,
+  // consistent across finders). Text sizes stay wrapped in fs() so the 4-step
+  // glasses control still scales them, and the card grows (min-height) rather
+  // than clipping when text enlarges.
+  const D = isTablet ? {
+    photoH: 360, radius: 28, bodyPad: `${fs(28)} ${fs(32)} ${fs(32)}`,
+    kicker: 17, name: 38, address: 16, sub: 17,
+    tagsGap: 10, tagPadV: 9, tagPadH: 16, tagFs: 15.5,
+    barRadius: 16, openMt: 18, openPadV: 16, openPadH: 20, openFs: 18, openGap: 11, openDot: 10,
+    phoneMt: 14, phonePadV: 18, phonePadH: 20, phoneGap: 14, phoneIcon: 24, phoneNum: 20, phoneSub: 15,
+    actMt: 20, actGap: 12, actPad: 15, actFs: 18,
+    chromeOff: 14, idxSize: 36, idxFs: 16, netFs: 14, netPadV: 4, netPadH: 11, venueFs: 14,
+    nameMb: 4, addressMt: 8, subMt: 12, subGap: 16, tagsMt: 16,
+    expMt: 20, expGap: 14, panelPad: 16, panelRadius: 16, hoursHeadFs: 13, hoursRowFs: 15,
+    siteGap: 12, sitePad: 16, siteIcon: 22, siteFs: 16,
+  } : {
+    photoH: 200, radius: 20, bodyPad: `${fs(16)} ${fs(16)} ${fs(18)}`,
+    kicker: 13, name: 26, address: 14, sub: 14,
+    tagsGap: 7, tagPadV: 6, tagPadH: 12, tagFs: 12.5,
+    barRadius: 13, openMt: 12, openPadV: 11, openPadH: 14, openFs: 13.5, openGap: 9, openDot: 9,
+    phoneMt: 10, phonePadV: 12, phonePadH: 14, phoneGap: 11, phoneIcon: 18, phoneNum: 14.5, phoneSub: 12,
+    actMt: 14, actGap: 8, actPad: 11, actFs: 14,
+    chromeOff: 10, idxSize: 28, idxFs: 13, netFs: 11.5, netPadV: 3, netPadH: 9, venueFs: 11.5,
+    nameMb: 3, addressMt: 6, subMt: 9, subGap: 12, tagsMt: 11,
+    expMt: 14, expGap: 10, panelPad: 12, panelRadius: 12, hoursHeadFs: 11, hoursRowFs: 13,
+    siteGap: 10, sitePad: 12, siteIcon: 18, siteFs: 14,
+  };
 
   useEffect(() => { if (forceExpanded) setExpanded(true); }, [forceExpanded]);
 
@@ -504,7 +328,7 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
   const openText = atm.is24Hours ? "Open 24/7" : (atm.isOpen === true ? "Open" : atm.isOpen === false ? "Closed" : "Hours Unknown");
 
   const Tag = ({ bg, color, children }) => (
-    <span style={{ background:bg, color, borderRadius:"999px", padding:`${fs(9)} ${fs(16)}`, fontSize:fs(15.5), fontWeight:600, whiteSpace:"nowrap" }}>{children}</span>
+    <span style={{ background:bg, color, borderRadius:"999px", padding:`${fs(D.tagPadV)} ${fs(D.tagPadH)}`, fontSize:fs(D.tagFs), fontWeight:600, whiteSpace:"nowrap" }}>{children}</span>
   );
 
   return (
@@ -514,7 +338,7 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
       animate={{ opacity:1, y:0 }}
       transition={{ delay: Math.min(index, 8) * 0.03 }}
       style={{
-        background:"#fff", borderRadius:"28px", overflow:"hidden",
+        background:"#fff", borderRadius:`${D.radius}px`, overflow:"hidden",
         boxShadow: isHighlighted
           ? `0 0 0 3px ${TEAL}, 0 24px 50px -30px rgba(22,17,13,.4)`
           : "0 24px 50px -30px rgba(22,17,13,.4)",
@@ -529,35 +353,35 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
           photos={atm.photos}
           fallbackIcon={atm.venueIcon || "🏧"}
           onPhotoClick={(i) => setGallery({ open: true, idx: i })}
-          height={360}
+          height={D.photoH}
         />
-        <div style={{ position:"absolute", top:fs(14), left:fs(14), width:fs(36), height:fs(36), borderRadius:"50%", background:TEAL, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:fs(16), boxShadow:"0 2px 8px rgba(0,0,0,0.25)", border:"2px solid #fff" }}>{index+1}</div>
+        <div style={{ position:"absolute", top:fs(D.chromeOff), left:fs(D.chromeOff), width:fs(D.idxSize), height:fs(D.idxSize), borderRadius:"50%", background:TEAL, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:fs(D.idxFs), boxShadow:"0 2px 8px rgba(0,0,0,0.25)", border:"2px solid #fff" }}>{index+1}</div>
         {network && (
-          <div style={{ position:"absolute", top:fs(14), right:fs(14), background:"rgba(255,255,255,0.95)", padding:`${fs(4)} ${fs(11)}`, borderRadius:"10px", fontSize:fs(14), fontWeight:700, color:"#1565C0", boxShadow:"0 1px 4px rgba(0,0,0,0.12)" }}>🏦 {network}</div>
+          <div style={{ position:"absolute", top:fs(D.chromeOff), right:fs(D.chromeOff), background:"rgba(255,255,255,0.95)", padding:`${fs(D.netPadV)} ${fs(D.netPadH)}`, borderRadius:"10px", fontSize:fs(D.netFs), fontWeight:700, color:"#1565C0", boxShadow:"0 1px 4px rgba(0,0,0,0.12)" }}>🏦 {network}</div>
         )}
         {atm.venueType && atm.venueType !== "standalone" && atm.venueType !== "bank" && venueLabels[atm.venueType] && (
-          <div style={{ position:"absolute", bottom:fs(14), left:fs(14), background:"rgba(0,0,0,0.65)", padding:`${fs(4)} ${fs(11)}`, borderRadius:"10px", fontSize:fs(14), fontWeight:700, color:"#fff" }}>{atm.venueIcon} {venueLabels[atm.venueType]}</div>
+          <div style={{ position:"absolute", bottom:fs(D.chromeOff), left:fs(D.chromeOff), background:"rgba(0,0,0,0.65)", padding:`${fs(D.netPadV)} ${fs(D.netPadH)}`, borderRadius:"10px", fontSize:fs(D.venueFs), fontWeight:700, color:"#fff" }}>{atm.venueIcon} {venueLabels[atm.venueType]}</div>
         )}
       </div>
 
-      <div style={{ padding:`${fs(28)} ${fs(32)} ${fs(32)}` }}>
+      <div style={{ padding:D.bodyPad }}>
         {/* Kicker (bank / network) — finder's own category accent (ATM = CAT.atm.ink #1F5BD6). */}
-        <div style={{ color:CAT.atm.ink, fontWeight:600, fontSize:fs(17), letterSpacing:"0.2px" }}>{kicker}</div>
-        {/* Serif name */}
-        <h3 style={{ fontFamily:ED_SERIF, fontWeight:400, fontSize:fs(38), lineHeight:1.04, color:ED_INK, margin:`${fs(4)} 0 0` }}>{name}</h3>
+        <div style={{ color:CAT.atm.ink, fontWeight:600, fontSize:fs(D.kicker), letterSpacing:"0.2px" }}>{kicker}</div>
+        {/* Serif name — 2-line clamp so it grows the card (not overlap) as glasses-scale text enlarges. */}
+        <h3 style={{ fontFamily:ED_SERIF, fontWeight:400, fontSize:fs(D.name), lineHeight:1.04, color:ED_INK, margin:`${fs(D.nameMb)} 0 0`, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{name}</h3>
 
         {/* Address */}
-        {address && <div style={{ marginTop:fs(8), fontSize:fs(16), color:ED_INK3, lineHeight:1.4 }}>🗺️ {address}</div>}
+        {address && <div style={{ marginTop:fs(D.addressMt), fontSize:fs(D.address), color:ED_INK3, lineHeight:1.4 }}>🗺️ {address}</div>}
 
         {/* Rating / distance sub-row */}
-        <div style={{ display:"flex", gap:fs(16), alignItems:"center", flexWrap:"wrap", marginTop:fs(12), fontSize:fs(17), color:ED_INK3 }}>
+        <div style={{ display:"flex", gap:fs(D.subGap), alignItems:"center", flexWrap:"wrap", marginTop:fs(D.subMt), fontSize:fs(D.sub), color:ED_INK3 }}>
           {atm.rating && <span><span style={{ color:"#E0922F" }}>★</span> <span style={{ fontWeight:700, color:ED_INK2 }}>{atm.rating}</span>{atm.userRatingCount > 0 && <span> ({atm.userRatingCount})</span>}</span>}
           {atm.distanceMiles!=null && <span>{atm.rating ? "· " : ""}📍 {formatDistance(atm.distanceMiles)}</span>}
         </div>
 
         {/* Pill tags */}
         {atm.badges?.length > 0 && (
-          <div style={{ display:"flex", gap:fs(10), flexWrap:"wrap", marginTop:fs(16) }}>
+          <div style={{ display:"flex", gap:fs(D.tagsGap), flexWrap:"wrap", marginTop:fs(D.tagsMt) }}>
             {atm.badges.map((b, i) => <Tag key={i} bg={b.bg} color={b.color}>{b.icon} {b.label}</Tag>)}
           </div>
         )}
@@ -565,37 +389,37 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
         {/* Open bar — always shown (matches phone ATMCard). When isOpen === null
             (no hours data, very common for ATMs) it falls through to the gray-dot
             "Hours Unknown" state; openText already supplies that label. */}
-        <div style={{ marginTop:fs(18), background:atm.is24Hours ? "#EAF0FB" : atm.isOpen === true ? "#E7F3EA" : atm.isOpen === false ? "#FBE0DC" : "#F1F2F4", borderRadius:"16px", padding:`${fs(16)} ${fs(20)}`, fontSize:fs(18), fontWeight:600, color:atm.is24Hours ? "#1565C0" : atm.isOpen === true ? "#2E7D46" : atm.isOpen === false ? "#C2392F" : GRAY, display:"flex", alignItems:"center", gap:fs(11) }}>
-          <span style={{ width:fs(10), height:fs(10), borderRadius:"50%", background:atm.is24Hours ? BLUE : atm.isOpen === true ? "#2E7D46" : atm.isOpen === false ? "#C2392F" : GRAY, flexShrink:0 }} />
+        <div style={{ marginTop:fs(D.openMt), background:atm.is24Hours ? "#EAF0FB" : atm.isOpen === true ? "#E7F3EA" : atm.isOpen === false ? "#FBE0DC" : "#F1F2F4", borderRadius:`${D.barRadius}px`, padding:`${fs(D.openPadV)} ${fs(D.openPadH)}`, fontSize:fs(D.openFs), fontWeight:600, color:atm.is24Hours ? "#1565C0" : atm.isOpen === true ? "#2E7D46" : atm.isOpen === false ? "#C2392F" : GRAY, display:"flex", alignItems:"center", gap:fs(D.openGap) }}>
+          <span style={{ width:fs(D.openDot), height:fs(D.openDot), borderRadius:"50%", background:atm.is24Hours ? BLUE : atm.isOpen === true ? "#2E7D46" : atm.isOpen === false ? "#C2392F" : GRAY, flexShrink:0 }} />
           <span>{openText}</span>
           {atm.todayHours && !atm.is24Hours && <span style={{ color:ED_INK3, fontWeight:500 }}>· {atm.todayHours}</span>}
         </div>
 
         {/* Phone bar — skip entirely when no phone (ATMs often have none) */}
         {phone && (
-          <a href={`tel:${phone}`} style={{ marginTop:fs(14), background:"#EFF4FB", borderRadius:"16px", padding:`${fs(18)} ${fs(20)}`, display:"flex", alignItems:"center", gap:fs(14), textDecoration:"none" }}>
-            <span style={{ fontSize:fs(24) }}>📞</span>
-            <span><span style={{ display:"block", fontSize:fs(20), fontWeight:600, color:"#2E6FE0" }}>{phone}</span><span style={{ fontSize:fs(15), color:ED_INK3 }}>Tap to call</span></span>
+          <a href={`tel:${phone}`} style={{ marginTop:fs(D.phoneMt), background:"#EFF4FB", borderRadius:`${D.barRadius}px`, padding:`${fs(D.phonePadV)} ${fs(D.phonePadH)}`, display:"flex", alignItems:"center", gap:fs(D.phoneGap), textDecoration:"none" }}>
+            <span style={{ fontSize:fs(D.phoneIcon) }}>📞</span>
+            <span><span style={{ display:"block", fontSize:fs(D.phoneNum), fontWeight:600, color:"#2E6FE0" }}>{phone}</span><span style={{ fontSize:fs(D.phoneSub), color:ED_INK3 }}>Tap to call</span></span>
           </a>
         )}
 
         {/* Actions */}
-        <div style={{ display:"flex", gap:fs(12), marginTop:fs(20) }}>
-          <button onClick={() => setShowDirs(true)} style={{ flex:1, borderRadius:"16px", padding:fs(15), fontSize:fs(18), fontWeight:600, border:"none", cursor:"pointer", fontFamily:"inherit", background:CAT.atm.ink, color:"#fff" }}>Directions</button>
-          <button onClick={() => onShowOnMap?.(index)} style={{ flex:1, borderRadius:"16px", padding:fs(15), fontSize:fs(18), fontWeight:600, border:"none", cursor:"pointer", fontFamily:"inherit", background:ED_IVORY2, color:ED_INK2 }}>📍 Map</button>
-          <button onClick={() => { const n=!expanded; setExpanded(n); onExpandChange?.(n); }} style={{ flex:1, borderRadius:"16px", padding:fs(15), fontSize:fs(18), fontWeight:600, border:"none", cursor:"pointer", fontFamily:"inherit", background:expanded ? ED_INK : ED_IVORY2, color:expanded ? "#fff" : ED_INK2 }}>{expanded ? "Less ▴" : "More ▾"}</button>
+        <div style={{ display:"flex", gap:fs(D.actGap), marginTop:fs(D.actMt) }}>
+          <button onClick={() => setShowDirs(true)} style={{ flex:1, borderRadius:`${D.barRadius}px`, padding:fs(D.actPad), fontSize:fs(D.actFs), fontWeight:600, border:"none", cursor:"pointer", fontFamily:"inherit", background:CAT.atm.ink, color:"#fff" }}>Directions</button>
+          <button onClick={() => onShowOnMap?.(index)} style={{ flex:1, borderRadius:`${D.barRadius}px`, padding:fs(D.actPad), fontSize:fs(D.actFs), fontWeight:600, border:"none", cursor:"pointer", fontFamily:"inherit", background:ED_IVORY2, color:ED_INK2 }}>📍 Map</button>
+          <button onClick={() => { const n=!expanded; setExpanded(n); onExpandChange?.(n); }} style={{ flex:1, borderRadius:`${D.barRadius}px`, padding:fs(D.actPad), fontSize:fs(D.actFs), fontWeight:600, border:"none", cursor:"pointer", fontFamily:"inherit", background:expanded ? ED_INK : ED_IVORY2, color:expanded ? "#fff" : ED_INK2 }}>{expanded ? "Less ▴" : "More ▾"}</button>
         </div>
 
         {/* Expanded details */}
         <AnimatePresence>
           {expanded && (
             <motion.div initial={{ height:0, opacity:0 }} animate={{ height:"auto", opacity:1 }} exit={{ height:0, opacity:0 }} style={{ overflow:"hidden" }}>
-              <div style={{ marginTop:fs(20), display:"flex", flexDirection:"column", gap:fs(14) }}>
+              <div style={{ marginTop:fs(D.expMt), display:"flex", flexDirection:"column", gap:fs(D.expGap) }}>
                 {atm.weekdayDescriptions?.length > 0 && (
-                  <div style={{ padding:fs(16), background:"#FAF7F0", borderRadius:"16px" }}>
+                  <div style={{ padding:fs(D.panelPad), background:"#FAF7F0", borderRadius:`${D.panelRadius}px` }}>
                     <button onClick={() => setHoursExpanded(h => !h)} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"transparent", border:"none", padding:0, cursor:"pointer", fontFamily:"inherit" }}>
-                      <span style={{ fontSize:fs(13), fontWeight:700, color:ED_INK3, letterSpacing:"0.5px" }}>🕐 DAILY HOURS</span>
-                      <span style={{ fontSize:fs(13), color:ED_INK3 }}>{hoursExpanded ? "▲" : "▼"}</span>
+                      <span style={{ fontSize:fs(D.hoursHeadFs), fontWeight:700, color:ED_INK3, letterSpacing:"0.5px" }}>🕐 DAILY HOURS</span>
+                      <span style={{ fontSize:fs(D.hoursHeadFs), color:ED_INK3 }}>{hoursExpanded ? "▲" : "▼"}</span>
                     </button>
                     {hoursExpanded && (
                       <div style={{ marginTop:fs(8) }}>
@@ -608,7 +432,7 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
                           const dayName = parts[0];
                           const hrs = parts.slice(1).join(":").trim();
                           return (
-                            <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:`${fs(4)} 0`, fontSize:fs(15), fontWeight:isToday ? 700 : 400, color:isToday ? TEAL_DEEP : ED_INK2, borderBottom:i<6 ? `1px solid ${ED_RULE}` : "none" }}>
+                            <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:`${fs(4)} 0`, fontSize:fs(D.hoursRowFs), fontWeight:isToday ? 700 : 400, color:isToday ? TEAL_DEEP : ED_INK2, borderBottom:i<6 ? `1px solid ${ED_RULE}` : "none" }}>
                               <span>{dayName}{isToday && " (Today)"}</span>
                               <span>{hrs}</span>
                             </div>
@@ -624,9 +448,9 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
                   page="ATMFinder"
                 />
                 {(atm.websiteUri || atm.website) && (
-                  <a href={atm.websiteUri || atm.website} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", gap:fs(12), padding:fs(16), background:"#F3E8FF", borderRadius:"16px", textDecoration:"none", color:"#7C3AED" }}>
-                    <span style={{ fontSize:fs(22) }}>🌐</span>
-                    <span style={{ fontWeight:600, fontSize:fs(16) }}>Visit Website</span>
+                  <a href={atm.websiteUri || atm.website} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", gap:fs(D.siteGap), padding:fs(D.sitePad), background:"#F3E8FF", borderRadius:`${D.panelRadius}px`, textDecoration:"none", color:"#7C3AED" }}>
+                    <span style={{ fontSize:fs(D.siteIcon) }}>🌐</span>
+                    <span style={{ fontWeight:600, fontSize:fs(D.siteFs) }}>Visit Website</span>
                   </a>
                 )}
               </div>
@@ -759,7 +583,6 @@ export default function ATMFinderPage() {
 
     (async () => {
       try {
-        console.log("🏧 ATMFinder v6.0: fetching", { lat, lng, radius });
         const { data, error: workerError } = await callWorker(ROUTE.getATMLocations, {
           latitude:  lat,
           longitude: lng,
@@ -1019,7 +842,7 @@ export default function ATMFinderPage() {
       ) : viewMode === "list" ? (
         <div style={isTablet
           ? { maxWidth:1024, margin:"0 auto", padding:"0 24px 170px", display:"flex", flexDirection:"column", gap:"30px" }
-          : { padding:"0 12px 100px", display:"flex", flexDirection:"column", gap:"12px" }}>
+          : { width:"100%", padding:"0 12px 100px", display:"flex", flexDirection:"column", gap:"16px" }}>
           {filtered.length === 0 ? (
             <div style={{ textAlign:"center", padding:"40px 20px", background:"#fff", borderRadius:"12px" }}>
               <div style={{ fontSize:"calc(32px*var(--fs))", marginBottom:"10px" }}>🔍</div>
@@ -1028,7 +851,8 @@ export default function ATMFinderPage() {
             </div>
           ) : (
             filtered.map((atm, i) => {
-              const Card = isTablet ? ATMCardTablet : ATMCard;
+              // Single editorial card serves both platforms — phone-tuned via isTablet.
+              const Card = ATMCardTablet;
               return (
               <Card
                 key={atm.id || i}
@@ -1042,6 +866,7 @@ export default function ATMFinderPage() {
                 userLat={lat}
                 userLng={lng}
                 formatDistance={formatDistance}
+                isTablet={isTablet}
               />
             );})
           )}

@@ -34,7 +34,6 @@ const GOLD       = "#D4A574";
 const CORAL      = "#FF6B6B";
 const GRAY       = "#64748B";
 const DARK       = "#1A2332";
-const TEAL       = "#00BCD4";
 const GREEN      = "#4CAF50";
 
 // ─── DRINK PATTERNS ────────────────────────────────────────────────────────
@@ -171,214 +170,23 @@ function PhotoCarousel({ photos=[], height="180px" }) {
   );
 }
 
-// ─── COFFEE CARD ───────────────────────────────────────────────────────────
-function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance }) {
-  const [expanded,setExpanded]=useState(false);
-  const [hoursExpanded,setHoursExpanded]=useState(false);
-  const [showDir,setShowDir]=useState(false);
-  const name    = shop.displayName?.text || shop.name || "Coffee Shop";
-  const address = shop.shortFormattedAddress || shop.formattedAddress || "";
-  const photos  = shop.photos||(shop.photoUrl?[shop.photoUrl]:[]);
-  const parking = shop.parking;
-  const parkingConfirmed = parking?.source==='api';
-  const hasAnySeating = shop.hasIndoorSeating||shop.hasOutdoorSeating||shop.seating?.hasLoungeSeating||shop.seating?.hasBarSeating;
-  const seatingConfirmed = shop.seatingSource==='api';
-
-  return (
-    <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{delay:index*0.04}} style={{background:"#fff",borderRadius:"16px",boxShadow:"0 2px 12px rgba(0,0,0,0.06)",overflow:"hidden",border:"1px solid #E8EDF2"}}>
-      <div style={{position:"relative"}}>
-        <PhotoCarousel photos={photos} height="180px"/>
-        <div style={{position:"absolute",top:"10px",left:"10px",background:BROWN,color:"#fff",width:"28px",height:"28px",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",fontSize:"calc(13px*var(--fs))"}}>{index+1}</div>
-        {shop.tier===1&&<div style={{position:"absolute",top:"10px",right:"10px",background:"rgba(255,255,255,0.95)",padding:"3px 8px",borderRadius:"6px",fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:"#E65100"}}>✨ Specialty</div>}
-      </div>
-
-      <div style={{padding:"14px 16px"}}>
-        <div style={{fontWeight:"700",fontSize:"calc(16px*var(--fs))",color:DARK,marginBottom:"2px"}}>{name}</div>
-        <NameLanguageHelp placeId={shop.placeId||shop.id} name={name}/>
-        <div style={{fontSize:"calc(13px*var(--fs))",color:GRAY,marginBottom:"6px",marginTop:"4px"}}>{address}</div>
-
-        {/* Meta */}
-        <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:"8px",fontSize:"calc(13px*var(--fs))",color:GRAY,marginBottom:"8px"}}>
-          {shop.rating>0&&<span><span style={{color:GOLD}}>★</span> <span style={{fontWeight:"700",color:DARK}}>{shop.rating}</span>{shop.userRatingCount>0&&<span> ({shop.userRatingCount.toLocaleString()})</span>}</span>}
-          {shop.distanceMiles!=null&&<><span style={{color:"#CBD5E1"}}>·</span><span style={{fontWeight:"600"}}>📍 {formatDistance(shop.distanceMiles)}</span></>}
-          {shop.priceLevel&&<><span style={{color:"#CBD5E1"}}>·</span><span>{'$'.repeat(shop.priceLevel)}</span></>}
-        </div>
-
-        {/* Drink tags */}
-        {Object.keys(shop.detectedDrinks||{}).length>0&&(
-          <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"8px"}}>
-            {Object.entries(shop.detectedDrinks).slice(0,4).map(([type])=>{const p=DRINK_PATTERNS[type];return p?<span key={type} style={{background:p.bg,color:p.color,padding:"2px 8px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"600",border:`1px solid ${p.color}30`}}>{p.icon} {p.label}</span>:null;})}
-          </div>
-        )}
-
-        {/* Badges */}
-        {shop.badges?.length>0&&(
-          <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"8px"}}>
-            {shop.badges.filter(b=>b.label!=='Specialty').map((b,i)=><span key={i} style={{background:b.bg,color:b.color,padding:"3px 8px",borderRadius:"6px",fontSize:"calc(11px*var(--fs))",fontWeight:"600"}}>{b.icon} {b.label}</span>)}
-          </div>
-        )}
-
-        {/* Open status */}
-        {shop.isOpen!==null&&(
-          <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px",padding:"8px 10px",background:shop.isOpen?"#E8F5E9":"#FFEBEE",borderRadius:"8px",fontSize:"calc(13px*var(--fs))"}}>
-            <span style={{width:"8px",height:"8px",borderRadius:"50%",background:shop.is24Hours?TEAL:(shop.isOpen?GREEN:CORAL),flexShrink:0}}/>
-            <span style={{fontWeight:"700",color:shop.is24Hours?"#00838F":(shop.isOpen?"#2E7D32":"#D32F2F")}}>{shop.is24Hours?'🔄 Open 24/7':(shop.isOpen?'Open':'Closed')}</span>
-            {shop.todayHours&&!shop.is24Hours&&<span style={{color:GRAY}}>· {shop.todayHours}</span>}
-          </div>
-        )}
-
-        {/* ── SEATING (API-confirmed = ✅, review = ⚠️) ── */}
-        {hasAnySeating&&(
-          <div style={{display:"flex",alignItems:"flex-start",gap:"8px",marginBottom:"10px",padding:"10px 12px",background:"#F8FAFC",borderRadius:"10px",border:"1px solid #E8EDF2"}}>
-            <span style={{fontSize:"calc(16px*var(--fs))",marginTop:"1px"}}>🪑</span>
-            <div style={{flex:1}}>
-              <div style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:"4px"}}>
-                <span style={{fontSize:"calc(13px*var(--fs))",fontWeight:"700",color:DARK}}>Seating</span>
-                <span style={{fontSize:"calc(10px*var(--fs))",fontWeight:"700",color:seatingConfirmed?"#2E7D32":"#E65100",background:seatingConfirmed?"#E8F5E9":"#FFF3E0",padding:"1px 6px",borderRadius:"4px"}}>
-                  {seatingConfirmed?"✅ Google confirmed":"⚠️ Not confirmed"}
-                </span>
-              </div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
-                {shop.hasIndoorSeating&&<span style={{fontSize:"calc(12px*var(--fs))",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🏠 Indoor</span>}
-                {shop.hasOutdoorSeating&&<span style={{fontSize:"calc(12px*var(--fs))",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🌿 Outdoor</span>}
-                {shop.seating?.hasLoungeSeating&&<span style={{fontSize:"calc(12px*var(--fs))",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🛋️ Lounge</span>}
-                {shop.seating?.hasBarSeating&&<span style={{fontSize:"calc(12px*var(--fs))",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🪑 Bar seats</span>}
-                {shop.seating?.capacityNote&&<span style={{fontSize:"calc(12px*var(--fs))",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>📐 {shop.seating.capacityNote}</span>}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── PARKING (API-confirmed = ✅, review = ⚠️) ── */}
-        {parking&&(
-          <div style={{display:"flex",alignItems:"flex-start",gap:"8px",marginBottom:"10px",padding:"10px 12px",background:"#F8FAFC",borderRadius:"10px",border:"1px solid #E8EDF2"}}>
-            <span style={{fontSize:"calc(16px*var(--fs))",marginTop:"1px"}}>🅿️</span>
-            <div style={{flex:1}}>
-              <div style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:"4px"}}>
-                <span style={{fontSize:"calc(13px*var(--fs))",fontWeight:"700",color:DARK}}>Parking</span>
-                <span style={{fontSize:"calc(10px*var(--fs))",fontWeight:"700",color:parkingConfirmed?"#2E7D32":"#E65100",background:parkingConfirmed?"#E8F5E9":"#FFF3E0",padding:"1px 6px",borderRadius:"4px"}}>
-                  {parkingConfirmed?"✅ Google confirmed":"⚠️ Mentioned in reviews"}
-                </span>
-              </div>
-              {parking.noParking?(
-                <div style={{fontSize:"calc(12px*var(--fs))",color:CORAL}}>{parking.noParkingNote}</div>
-              ):(
-                <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
-                  {parking.details?.length>0?parking.details.map((d,i)=>(
-                    <span key={i} style={{fontSize:"calc(12px*var(--fs))",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>
-                      {d.icon} {d.label}{d.free===true?' · Free':d.free===false&&!d.cost?' · Paid':''}
-                    </span>
-                  )):<span style={{fontSize:"calc(12px*var(--fs))",color:GRAY}}>Parking available nearby</span>}
-                  {parking.valetCost&&<span style={{fontSize:"calc(12px*var(--fs))",color:GRAY,background:"#fff",border:"1px solid #E2E8F0",padding:"2px 8px",borderRadius:"6px"}}>🎩 Valet {parking.valetCost}</span>}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Review-detected amenities (always ⚠️ reported). WiFi is intentionally
-            excluded here — it now lives ONLY inside the "Good for working" panel
-            (CafeWorkProfileSection, under Details) so WiFi isn't shown in three
-            places. The "Has WiFi" quick filter still uses shop.hasWifi. */}
-        {Object.entries(shop.amenities||{}).some(([k,a])=>a.available&&k!=='wifi')&&(
-          <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"10px"}}>
-            {Object.entries(shop.amenities).filter(([k,a])=>a.available&&k!=='wifi').map(([k,a])=>(
-              <span key={k} title="Mentioned in customer reviews — call ahead to confirm" style={{display:"flex",alignItems:"center",gap:"4px",background:"#FFFBF0",border:"1px solid #FED7AA",padding:"3px 9px",borderRadius:"6px",fontSize:"calc(11px*var(--fs))",fontWeight:"600",color:"#92400E",cursor:"default"}}>
-                {a.icon} {a.label} <span style={{color:"#D97706",fontSize:"calc(10px*var(--fs))"}}>·reported</span>
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Phone */}
-        {(shop.nationalPhoneNumber||shop.internationalPhoneNumber)&&(
-          <a href={`tel:${shop.nationalPhoneNumber||shop.internationalPhoneNumber}`} style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"12px",padding:"10px 12px",background:"#E3F2FD",borderRadius:"10px",textDecoration:"none",color:"#1565C0"}}>
-            <span style={{width:"32px",height:"32px",background:"#1565C0",color:"#fff",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(14px*var(--fs))",flexShrink:0}}>📞</span>
-            <div><div style={{fontWeight:"600",fontSize:"calc(14px*var(--fs))"}}>{shop.nationalPhoneNumber||shop.internationalPhoneNumber}</div><div style={{fontSize:"calc(11px*var(--fs))",color:"#64748B"}}>Tap to call</div></div>
-          </a>
-        )}
-
-        {/* Actions */}
-        <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
-          <button onClick={()=>setShowDir(true)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"8px 14px",borderRadius:"10px",border:"none",fontSize:"calc(13px*var(--fs))",fontWeight:"600",cursor:"pointer",background:BROWN,color:"#fff",fontFamily:"inherit"}}>🧭 Directions</button>
-          <button onClick={()=>onShowOnMap?.(index)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"8px 14px",borderRadius:"10px",border:"none",fontSize:"calc(13px*var(--fs))",fontWeight:"600",cursor:"pointer",background:"#EDE7F6",color:"#5E35B1",fontFamily:"inherit"}}>📍 Map</button>
-          <button onClick={()=>setExpanded(!expanded)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"8px 14px",borderRadius:"10px",border:"none",fontSize:"calc(13px*var(--fs))",fontWeight:"600",cursor:"pointer",background:expanded?DARK:"#F1F5F9",color:expanded?"#fff":DARK,fontFamily:"inherit"}}>{expanded?"▲ Less":"▼ Details"}</button>
-        </div>
-
-        {/* Expanded view — matches PlacesToEat pattern:
-            1. Daily Hours (collapsible, collapsed by default)
-            2. AI Details (collapsible, collapsed by default, lazy fetch on open)
-            3. Visit Website button */}
-        <AnimatePresence>
-          {expanded&&(
-            <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{marginTop:"12px",display:"flex",flexDirection:"column",gap:"10px"}}>
-                {/* Daily hours — collapsed by default, tap header to expand */}
-                {shop.currentOpeningHours?.weekdayDescriptions?.length>0&&(
-                  <div style={{padding:"12px",background:"#F8FAFC",borderRadius:"10px"}}>
-                    <button
-                      onClick={()=>setHoursExpanded(h=>!h)}
-                      style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}
-                    >
-                      <span style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
-                      <span style={{fontSize:"calc(11px*var(--fs))",color:GRAY}}>{hoursExpanded?'▲':'▼'}</span>
-                    </button>
-                    {hoursExpanded&&(
-                      <div style={{marginTop:"8px"}}>
-                        {shop.currentOpeningHours.weekdayDescriptions.map((day,i)=>{
-                          const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                          const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
-                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:"calc(13px*var(--fs))",color:isToday?BROWN_DARK:DARK,fontWeight:isToday?"700":"400",borderBottom:i<6?"1px solid #F1F5F9":"none"}}>
-                            <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
-                          </div>;
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* Work-friendliness — laptop/remote-work signals (wifi, outlets,
-                    tables, AC, seating, noise) from reviews; cached in D1. */}
-                <CafeWorkProfileSection
-                  placeId={shop.placeId || shop.id}
-                  placeName={name}
-                />
-                {/* AI Details — shared component with PlacesToEat. Collapsed
-                    by default. Lazy fetch on first open of the panel. */}
-                <AIDetailsSection
-                  placeId={shop.placeId || shop.id}
-                  placeName={name}
-                  page="CoffeeFinder"
-                  kind="coffee"
-                />
-                {/* Website — full-width button matching PlacesToEat style */}
-                {(shop.websiteUri||shop.website)&&(
-                  <a href={shop.websiteUri||shop.website} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:"10px",padding:"12px",background:"#F3E8FF",borderRadius:"10px",textDecoration:"none",color:"#6D28D9"}}>
-                    <div style={{width:"36px",height:"36px",background:"#6D28D9",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(16px*var(--fs))",flexShrink:0,color:"#fff"}}>🌐</div>
-                    <div><div style={{fontWeight:"600",fontSize:"calc(13px*var(--fs))"}}>Visit Website</div><div style={{fontSize:"calc(11px*var(--fs))",color:GRAY}}>Menu & info</div></div>
-                  </a>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-      <MapAppSelector isOpen={showDir} onClose={()=>setShowDir(false)} destination={{name, address, latitude:shop.lat, longitude:shop.lng}} userLat={userLat} userLng={userLng}/>
-    </motion.div>
-  );
-}
-
-// ─── COFFEE CARD · iPad EDITORIAL ────────────────────────────────────────────
-// iPad-only editorial variant of CoffeeCard. Same props, same fields, same
-// handlers (drinks / amenities / seating / parking / phone / directions via the
-// internal MapAppSelector / CafeWorkProfileSection / AIDetailsSection / website).
-// Rendered ONLY at tablet width (CoffeeFinder branches on useIsTablet) so the
-// phone card is untouched. Tokens/structure mirror RestaurantCardTablet exactly;
-// only the café domain content differs.
-function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDistance }) {
+// ─── COFFEE CARD · EDITORIAL (responsive: phone + iPad) ──────────────────────
+// Editorial card used at BOTH widths. Same props, same fields, same handlers
+// (drinks / amenities / seating / parking / phone / directions via the internal
+// MapAppSelector / CafeWorkProfileSection / AIDetailsSection / website). The
+// `isTablet` prop gates sizing only: tablet keeps the large editorial scale,
+// phone gets a compact, phone-tuned variant. Tokens/structure mirror
+// RestaurantCardTablet; only the café domain content + phone tuning differ.
+function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDistance, isTablet }) {
   const [expanded,setExpanded]=useState(false);
   const [hoursExpanded,setHoursExpanded]=useState(false);
   const [showDir,setShowDir]=useState(false);
   const fs=(n)=>`calc(${n}px*var(--fs))`;
+  // Responsive size picker — `t` (tablet) keeps the current editorial sizes,
+  // `p` (phone) is the compact phone-tuned value. Every size below routes
+  // through z() so the card renders correctly at both widths while keeping fs()
+  // on all text (graceful growth via the 4-step glasses control).
+  const z=(t,p)=>isTablet?t:p;
   // Category accent — this finder's OWN color world (canonical CAT.coffee.ink),
   // NOT the Places-to-Eat coral. Used for the editorial kicker, the primary
   // Directions button, the rank badge, and the Specialty tag, so the card reads
@@ -403,27 +211,27 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
   const openText = shop.is24Hours ? 'Open 24/7' : (shop.isOpen ? 'Open' : 'Closed');
 
   const Tag=({bg,color,children})=>(
-    <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(9)} ${fs(16)}`,fontSize:fs(15.5),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
+    <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(z(9,6))} ${fs(z(16,11))}`,fontSize:fs(z(15.5,12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
   );
 
   return (
     <motion.div initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(index,8)*0.03}}
-      style={{background:"#fff",borderRadius:"28px",overflow:"hidden",boxShadow:"0 24px 50px -30px rgba(22,17,13,.4)",border:`1px solid ${ED_RULE}`}}>
+      style={{background:"#fff",borderRadius:z("28px","20px"),overflow:"hidden",boxShadow:z("0 24px 50px -30px rgba(22,17,13,.4)","0 14px 30px -22px rgba(22,17,13,.34)"),border:`1px solid ${ED_RULE}`,minHeight:z("auto","320px")}}>
 
       {/* Photo — editorial height, with rank badge + Specialty tag */}
       <div style={{position:"relative"}}>
-        <PhotoCarousel photos={photos} height="360px"/>
-        <div style={{position:"absolute",top:fs(14),left:fs(14),background:ACCENT,color:"#fff",width:fs(38),height:fs(38),borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:fs(16),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
-        {shop.tier===1&&<div style={{position:"absolute",top:fs(14),right:fs(14),background:"rgba(255,255,255,0.95)",padding:`${fs(4)} ${fs(11)}`,borderRadius:"8px",fontSize:fs(14),fontWeight:700,color:ACCENT,boxShadow:"0 1px 4px rgba(0,0,0,0.12)"}}>✨ Specialty</div>}
+        <PhotoCarousel photos={photos} height={z("360px","200px")}/>
+        <div style={{position:"absolute",top:fs(z(14,11)),left:fs(z(14,11)),background:ACCENT,color:"#fff",width:fs(z(38,30)),height:fs(z(38,30)),borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:fs(z(16,13)),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
+        {shop.tier===1&&<div style={{position:"absolute",top:fs(z(14,11)),right:fs(z(14,11)),background:"rgba(255,255,255,0.95)",padding:`${fs(z(4,3))} ${fs(z(11,9))}`,borderRadius:"8px",fontSize:fs(z(14,11.5)),fontWeight:700,color:ACCENT,boxShadow:"0 1px 4px rgba(0,0,0,0.12)"}}>✨ Specialty</div>}
       </div>
 
-      <div style={{padding:`${fs(28)} ${fs(32)} ${fs(32)}`}}>
-        <div style={{color:ACCENT,fontWeight:600,fontSize:fs(17),letterSpacing:"0.2px"}}>{kicker}</div>
-        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(38),lineHeight:1.04,color:ED_INK,margin:`${fs(4)} 0 0`}}>{name}</h3>
-        {address&&<div style={{fontSize:fs(15.5),color:ED_INK3,marginTop:fs(6)}}>{address}</div>}
+      <div style={{padding:z(`${fs(28)} ${fs(32)} ${fs(32)}`,`${fs(16)} ${fs(16)} ${fs(18)}`)}}>
+        <div style={{color:ACCENT,fontWeight:600,fontSize:fs(z(17,13)),letterSpacing:"0.2px"}}>{kicker}</div>
+        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(z(38,26)),lineHeight:1.04,color:ED_INK,margin:`${fs(z(4,3))} 0 0`,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</h3>
+        {address&&<div style={{fontSize:fs(z(15.5,12.5)),color:ED_INK3,marginTop:fs(z(6,5))}}>{address}</div>}
 
         {/* Say it / Translate / rating / distance / price */}
-        <div style={{display:"flex",gap:fs(16),alignItems:"center",flexWrap:"wrap",marginTop:fs(12),fontSize:fs(17),color:ED_INK3}}>
+        <div style={{display:"flex",gap:fs(z(16,10)),alignItems:"center",flexWrap:"wrap",marginTop:fs(z(12,9)),fontSize:fs(z(17,13)),color:ED_INK3}}>
           <NameLanguageHelp placeId={shop.placeId||shop.id} name={name}/>
           {shop.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{shop.rating}</span>{shop.userRatingCount>0&&<span> ({shop.userRatingCount.toLocaleString()})</span>}</span>}
           {shop.distanceMiles!=null&&<span>· {formatDistance(shop.distanceMiles)}</span>}
@@ -432,7 +240,7 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
 
         {/* Drink + status pill tags */}
         {(Object.keys(shop.detectedDrinks||{}).length>0||shop.badges?.some(b=>b.label!=='Specialty'))&&(
-          <div style={{display:"flex",gap:fs(10),flexWrap:"wrap",marginTop:fs(16)}}>
+          <div style={{display:"flex",gap:fs(z(10,7)),flexWrap:"wrap",marginTop:fs(z(16,12))}}>
             {Object.entries(shop.detectedDrinks||{}).slice(0,4).map(([type])=>{const p=DRINK_PATTERNS[type];return p?<Tag key={type} bg={p.bg} color={p.color}>{p.icon} {p.label}</Tag>:null;})}
             {shop.badges?.filter(b=>b.label!=='Specialty').map((b,i)=><Tag key={i} bg={b.bg} color={b.color}>{b.icon} {b.label}</Tag>)}
           </div>
@@ -440,8 +248,8 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
 
         {/* Open bar */}
         {shop.isOpen!==null&&(
-          <div style={{marginTop:fs(18),background:shop.isOpen?"#E7F3EA":"#FBE0DC",borderRadius:"16px",padding:`${fs(16)} ${fs(20)}`,fontSize:fs(18),fontWeight:600,color:shop.isOpen?"#2E7D46":"#C2392F",display:"flex",alignItems:"center",gap:fs(11)}}>
-            <span style={{width:fs(10),height:fs(10),borderRadius:"50%",background:shop.is24Hours?"#00BCD4":(shop.isOpen?"#2E7D46":"#C2392F"),flexShrink:0}}/>
+          <div style={{marginTop:fs(z(18,12)),background:shop.isOpen?"#E7F3EA":"#FBE0DC",borderRadius:z("16px","13px"),padding:`${fs(z(16,11))} ${fs(z(20,14))}`,fontSize:fs(z(18,13.5)),fontWeight:600,color:shop.isOpen?"#2E7D46":"#C2392F",display:"flex",alignItems:"center",gap:fs(z(11,9))}}>
+            <span style={{width:fs(z(10,9)),height:fs(z(10,9)),borderRadius:"50%",background:shop.is24Hours?"#00BCD4":(shop.isOpen?"#2E7D46":"#C2392F"),flexShrink:0}}/>
             <span>{openText}</span>
             {shop.todayHours&&!shop.is24Hours&&<span style={{color:ED_INK3,fontWeight:500}}>· {shop.todayHours}</span>}
           </div>
@@ -449,29 +257,29 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
 
         {/* Phone bar */}
         {phone&&(
-          <a href={`tel:${phone}`} style={{marginTop:fs(14),background:"#EFF4FB",borderRadius:"16px",padding:`${fs(18)} ${fs(20)}`,display:"flex",alignItems:"center",gap:fs(14),textDecoration:"none"}}>
-            <span style={{fontSize:fs(24)}}>📞</span>
-            <span><span style={{display:"block",fontSize:fs(20),fontWeight:600,color:"#2E6FE0"}}>{phone}</span><span style={{fontSize:fs(15),color:ED_INK3}}>Tap to call</span></span>
+          <a href={`tel:${phone}`} style={{marginTop:fs(z(14,10)),background:"#EFF4FB",borderRadius:z("16px","13px"),padding:`${fs(z(18,12))} ${fs(z(20,14))}`,display:"flex",alignItems:"center",gap:fs(z(14,11)),textDecoration:"none"}}>
+            <span style={{fontSize:fs(z(24,19))}}>📞</span>
+            <span><span style={{display:"block",fontSize:fs(z(20,13.5)),fontWeight:600,color:"#2E6FE0"}}>{phone}</span><span style={{fontSize:fs(z(15,12)),color:ED_INK3}}>Tap to call</span></span>
           </a>
         )}
 
         {/* Actions */}
-        <div style={{display:"flex",gap:fs(12),marginTop:fs(20)}}>
-          <button onClick={()=>setShowDir(true)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ACCENT,color:"#fff"}}>Directions</button>
-          <button onClick={()=>onShowOnMap?.(index)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
-          <button onClick={()=>setExpanded(e=>!e)} style={{flex:1,borderRadius:"16px",padding:fs(15),fontSize:fs(18),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:expanded?ED_INK:ED_IVORY2,color:expanded?"#fff":ED_INK2}}>{expanded?"Less ▴":"More ▾"}</button>
+        <div style={{display:"flex",gap:fs(z(12,8)),marginTop:fs(z(20,14))}}>
+          <button onClick={()=>setShowDir(true)} style={{flex:1,borderRadius:z("16px","13px"),padding:fs(z(15,11)),fontSize:fs(z(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ACCENT,color:"#fff"}}>Directions</button>
+          <button onClick={()=>onShowOnMap?.(index)} style={{flex:1,borderRadius:z("16px","13px"),padding:fs(z(15,11)),fontSize:fs(z(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
+          <button onClick={()=>setExpanded(e=>!e)} style={{flex:1,borderRadius:z("16px","13px"),padding:fs(z(15,11)),fontSize:fs(z(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:expanded?ED_INK:ED_IVORY2,color:expanded?"#fff":ED_INK2}}>{expanded?"Less ▴":"More ▾"}</button>
         </div>
 
         {/* Expanded details */}
         <AnimatePresence>
           {expanded&&(
             <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{marginTop:fs(20),display:"flex",flexDirection:"column",gap:fs(14)}}>
+              <div style={{marginTop:fs(z(20,14)),display:"flex",flexDirection:"column",gap:fs(z(14,10))}}>
 
                 {(hasAnySeating||parking)&&(
-                  <div style={{display:"flex",gap:fs(14),flexWrap:"wrap"}}>
+                  <div style={{display:"flex",gap:fs(z(14,10)),flexWrap:"wrap"}}>
                     {hasAnySeating&&(
-                      <div style={{flex:"1 1 240px",padding:fs(16),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
+                      <div style={{flex:"1 1 240px",padding:fs(z(16,13)),background:"#FAF7F0",borderRadius:z("16px","13px"),border:`1px solid ${ED_RULE}`}}>
                         <div style={{display:"flex",alignItems:"center",gap:fs(8),marginBottom:fs(8)}}>
                           <span style={{fontSize:fs(17),fontWeight:700,color:ED_INK}}>🪑 Seating</span>
                           <span style={{fontSize:fs(12),fontWeight:700,color:seatingConfirmed?"#2E7D32":"#E65100",background:seatingConfirmed?"#E8F5E9":"#FFF3E0",padding:`${fs(1)} ${fs(7)}`,borderRadius:"6px"}}>{seatingConfirmed?"✅ Google confirmed":"⚠️ Not confirmed"}</span>
@@ -486,7 +294,7 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
                       </div>
                     )}
                     {parking&&(
-                      <div style={{flex:"1 1 240px",padding:fs(16),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
+                      <div style={{flex:"1 1 240px",padding:fs(z(16,13)),background:"#FAF7F0",borderRadius:z("16px","13px"),border:`1px solid ${ED_RULE}`}}>
                         <div style={{display:"flex",alignItems:"center",gap:fs(8),marginBottom:fs(8)}}>
                           <span style={{fontSize:fs(17),fontWeight:700,color:ED_INK}}>🅿️ Parking</span>
                           <span style={{fontSize:fs(12),fontWeight:700,color:parkingConfirmed?"#2E7D32":"#E65100",background:parkingConfirmed?"#E8F5E9":"#FFF3E0",padding:`${fs(1)} ${fs(7)}`,borderRadius:"6px"}}>{parkingConfirmed?"✅ Google confirmed":"⚠️ Mentioned in reviews"}</span>
@@ -519,7 +327,7 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
 
                 {/* Daily hours — collapsed by default */}
                 {shop.currentOpeningHours?.weekdayDescriptions?.length>0&&(
-                  <div style={{padding:fs(16),background:"#FAF7F0",borderRadius:"16px"}}>
+                  <div style={{padding:fs(z(16,13)),background:"#FAF7F0",borderRadius:z("16px","13px")}}>
                     <button onClick={()=>setHoursExpanded(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
                       <span style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
                       <span style={{fontSize:fs(13),color:ED_INK3}}>{hoursExpanded?'▲':'▼'}</span>
@@ -546,7 +354,7 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
 
                 {/* Website */}
                 {(shop.websiteUri||shop.website)&&(
-                  <a href={shop.websiteUri||shop.website} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(16),background:"#F3E8FF",borderRadius:"16px",textDecoration:"none",color:"#7C3AED"}}>
+                  <a href={shop.websiteUri||shop.website} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(z(16,13)),background:"#F3E8FF",borderRadius:z("16px","13px"),textDecoration:"none",color:"#7C3AED"}}>
                     <span style={{fontSize:fs(22)}}>🌐</span>
                     <span><span style={{display:"block",fontWeight:600,fontSize:fs(16)}}>Visit Website</span><span style={{fontSize:fs(14),color:ED_INK3}}>Menu &amp; info</span></span>
                   </a>
@@ -861,7 +669,7 @@ export default function CoffeeFinderPage() {
       ):viewMode==="list"?(
         <div style={isTablet
           ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
-          : {padding:"0 12px 100px",display:"flex",flexDirection:"column",gap:"12px"}}>
+          : {width:"100%",padding:"0 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>
           {filtered.length===0?(
             <div style={{textAlign:"center",padding:"40px 20px",background:"#fff",borderRadius:"12px"}}>
               <div style={{fontSize:"calc(32px*var(--fs))",marginBottom:"10px"}}>🔍</div>
@@ -870,9 +678,9 @@ export default function CoffeeFinderPage() {
               {activeFilterCount>0&&<button onClick={clearFilters} style={{padding:"9px 18px",borderRadius:"8px",border:"none",background:BROWN,color:"#fff",fontWeight:"600",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Clear Filters</button>}
             </div>
           ):filtered.map((shop,i)=>{
-            const Card = isTablet ? CoffeeCardTablet : CoffeeCard;
+            const Card = CoffeeCardTablet;
             return (
-            <div key={shop.id||i} ref={el=>cardRefs.current[i]=el}><Card shop={shop} index={i} onShowOnMap={handleShowOnMap} userLat={lat} userLng={lng} formatDistance={formatDistance}/></div>
+            <div key={shop.id||i} ref={el=>cardRefs.current[i]=el}><Card shop={shop} index={i} onShowOnMap={handleShowOnMap} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet}/></div>
           );})}
         </div>
       ):(

@@ -15,8 +15,8 @@ import { isCityLocation } from "../components/location/locationLabel";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 
-// iPad editorial design tokens (design handoff: ivory canvas + 1024 column).
-// Phone layout is untouched; these only feed the `useIsTablet()` branch below.
+// Editorial design tokens (design handoff: ivory canvas + 1024 column).
+// These now feed BOTH widths — phone is phone-tuned, tablet keeps the 1024 column.
 const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const ED_INK = "#16110D";
 const fs = (n) => `calc(${n}px*var(--fs))`;
@@ -44,7 +44,6 @@ const getCachedRouteInfo = (originLat, originLng, destLat, destLng, city) => {
     if (cached) {
       const { data, timestamp } = JSON.parse(cached);
       if (Date.now() - timestamp < ROUTE_INFO_CACHE_TTL) {
-        console.log(`📦 Route info cache hit for ${city}`);
         return data;
       }
     }
@@ -62,7 +61,6 @@ const setCachedRouteInfo = (originLat, originLng, destLat, destLng, city, data) 
       data,
       timestamp: Date.now()
     }));
-    console.log(`💾 Cached route info for ${city}`);
   } catch (error) {
     console.error('Route cache write error:', error);
   }
@@ -83,7 +81,6 @@ const getCachedLocationSearch = (query, lat, lng) => {
     if (cached) {
       const { data, timestamp } = JSON.parse(cached);
       if (Date.now() - timestamp < LOCATION_SEARCH_CACHE_TTL) {
-        console.log(`📦 Location search cache hit for "${query}"`);
         return data;
       }
     }
@@ -101,7 +98,6 @@ const setCachedLocationSearch = (query, lat, lng, data) => {
       data,
       timestamp: Date.now()
     }));
-    console.log(`💾 Cached location search for "${query}"`);
   } catch (error) {
     console.error('Location search cache write error:', error);
   }
@@ -674,23 +670,19 @@ const getCachedExchangeRate = async (toCurrency) => {
 export default function Transportation() {
   const navigate = useNavigate();
   const { activeLocation, locationMode, initialized } = useLocation();
-  // iPad editorial branch — widen the centered column, swap kickers for serif
-  // section headings. Phone layout (below 768px) stays byte-identical.
+  // Editorial design renders at BOTH widths now. Tablet widens the centered
+  // column; phone keeps the existing max-w-md. Both promote section kickers to
+  // Instrument Serif headings with a hairline rule — phone-tuned smaller.
   const isTablet = useIsTablet();
   const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
-  // Section label: phone keeps the mono UPPERCASE kicker byte-for-byte; tablet
-  // promotes it to an Instrument Serif editorial heading (with a thin rule).
-  const SectionLabel = ({ children, mt = "mt-3" }) =>
-    isTablet ? (
-      <div className={`${mt} mb-2`}>
-        <h2 className="leading-none" style={{ fontFamily: ED_SERIF, fontSize: fs(25), color: ED_INK }}>{children}</h2>
-        <div className="mt-2" style={{ height: 1, background: "rgba(22,17,13,.10)" }} />
-      </div>
-    ) : (
-      <div className={`font-mono text-[calc(10.5px*var(--fs))] tracking-[0.16em] uppercase font-semibold ${mt} mb-1`} style={{ color: '#6B7280' }}>
-        {children}
-      </div>
-    );
+  // Section label: Instrument Serif editorial heading + thin rule at every
+  // width. Phone-tuned to ~fs(20); tablet keeps the larger fs(25).
+  const SectionLabel = ({ children, mt = "mt-3" }) => (
+    <div className={`${mt} mb-2`}>
+      <h2 className="leading-tight line-clamp-2" style={{ fontFamily: ED_SERIF, fontSize: isTablet ? fs(25) : fs(20), color: ED_INK }}>{children}</h2>
+      <div className="mt-2" style={{ height: 1, background: "rgba(22,17,13,.10)" }} />
+    </div>
+  );
 
   // State
   const [loading, setLoading] = useState(true);
@@ -1567,7 +1559,6 @@ export default function Transportation() {
     try {
       // SPECIAL CASE: If in Luzon, Philippines - show NAIA terminals
       if (isInLuzon(activeLocation)) {
-        console.log("User is in Luzon, Philippines - showing NAIA terminals");
         const naiaTerminals = getNAIATerminals(origin.latitude, origin.longitude);
         setNearbyAirports(naiaTerminals);
         setLoadingAirports(false);
@@ -1579,9 +1570,7 @@ export default function Transportation() {
       const country = activeLocation.address?.country || "";
       const countryCode = getCountryCode(activeLocation);
       const userCity = city.toLowerCase();
-      
-      console.log("Searching airports for:", { city, country, countryCode });
-      
+
       let airports = [];
       let usedCache = false;
       
@@ -1607,8 +1596,6 @@ export default function Transportation() {
           const cacheData = await cacheResponse.json();
           
           if (cacheData.airports && cacheData.airports.length > 0) {
-            console.log("Airport cache HIT:", cacheData.cached ? "from cache" : "fresh fetch");
-            
             // Process cached airports: calculate distances from user's exact location
             airports = cacheData.airports
               .map(airport => {
@@ -1643,16 +1630,14 @@ export default function Transportation() {
             usedCache = true;
           }
         }
-      } catch (cacheError) {
-        console.log("Cache unavailable, using direct API:", cacheError.message);
+      } catch {
+        // Cache unavailable — fall through to direct API call below.
       }
       
       // =====================================================================
       // STEP 2: If cache miss or failed, use direct API call
       // =====================================================================
       if (!usedCache || airports.length === 0) {
-        console.log("Using direct API call for airport search");
-        
         const searchQuery = `airport ${city} ${country}`.trim();
         
         const { data } = await callWorker(ROUTE.searchLocation, {
@@ -1737,9 +1722,7 @@ export default function Transportation() {
         if (!a.isInSameCity && b.isInSameCity) return 1;
         return a.distance - b.distance;
       });
-      
-      console.log(`Found ${airports.length} airports after merge`);
-      
+
       // Build smart airport list: local airports + nearest major hub (minimum 6)
       const finalAirports = buildSmartAirportList(airports, countryCode, origin.latitude, origin.longitude, activeLocation);
       
@@ -1776,9 +1759,7 @@ export default function Transportation() {
   
   const buildSmartAirportList = (airports, countryCode, userLat, userLng, location) => {
     const MIN_AIRPORTS = 6;
-    
-    console.log(`buildSmartAirportList: Starting with ${airports.length} airports`);
-    
+
     if (!airports || airports.length === 0) {
       // No airports found, return major hubs from database
       const majorHub = findClosestMajorHub(countryCode, userLat, userLng);
@@ -1797,9 +1778,7 @@ export default function Transportation() {
     // Separate into same-city and nearby
     const sameCityAirports = airports.filter(a => a.isInSameCity);
     const nearbyAirports = airports.filter(a => !a.isInSameCity);
-    
-    console.log(`Same city: ${sameCityAirports.length}, Nearby: ${nearbyAirports.length}`);
-    
+
     // Start building final list
     let finalList = [];
     
@@ -1866,9 +1845,7 @@ export default function Transportation() {
       // Otherwise by distance
       return a.distance - b.distance;
     });
-    
-    console.log(`buildSmartAirportList: Returning ${finalList.length} airports`);
-    
+
     return finalList;
   };
 
@@ -2101,7 +2078,6 @@ export default function Transportation() {
     );
     
     if (cached) {
-      console.log('📦 Using locally cached route info');
       setRouteInfo(cached);
       return;
     }
@@ -2120,7 +2096,6 @@ export default function Transportation() {
         if (workerResponse.ok) {
           const workerData = await workerResponse.json();
           if (workerData.success && workerData.data) {
-            console.log('📦 Using Worker cached route info');
             setRouteInfo(workerData.data);
             // Also cache locally
             setCachedRouteInfo(
@@ -2369,21 +2344,21 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                 <button onClick={() => setShowLocationPicker(true)} className="text-[calc(11.5px*var(--fs))] font-semibold mt-1 underline underline-offset-2" style={{ color: TEAL_DEEP }}>
                   Change
                 </button>
-                {/* Subtle secondary action — set the starting point to live GPS.
-                    Compact pill, right-aligned inside the FROM card; updates the
-                    origin only (never the destination). */}
-                <div className="flex justify-end mt-1.5">
-                  <button
-                    onClick={handleUseCurrentAsStart}
-                    disabled={fromGpsLoading}
-                    className="flex items-center gap-1.5 px-3 rounded-full text-[calc(11px*var(--fs))] font-semibold disabled:opacity-60 active:scale-[0.98] transition"
-                    style={{ height: '30px', background: '#E6F4F1', color: TEAL_DEEP, border: '1px solid #B6E3DC' }}
-                  >
-                    {fromGpsLoading ? <Loader2 size={12} className="animate-spin" /> : <Navigation size={12} />}
-                    <span>{fromGpsLoading ? 'Updating starting point…' : 'Use my current location as the starting point'}</span>
-                  </button>
-                </div>
-                {fromGpsError && <div className="text-[calc(11px*var(--fs))] text-red-600 mt-1 text-right">{fromGpsError}</div>}
+                {/* Secondary action — set the starting point to live GPS. A
+                    FULL-WIDTH button (not a fixed-height pill) so the long label
+                    wraps cleanly and the control grows with the text-size control
+                    instead of spilling out. Stacked below "Change" so the two
+                    never collide. Updates the origin only (never the destination). */}
+                <button
+                  onClick={handleUseCurrentAsStart}
+                  disabled={fromGpsLoading}
+                  className="w-full flex items-center justify-center gap-2 mt-2 rounded-xl font-semibold text-[calc(11.5px*var(--fs))] disabled:opacity-60 active:scale-[0.99] transition"
+                  style={{ padding: '9px 14px', background: '#E6F4F1', color: TEAL_DEEP, border: '1px solid #B6E3DC', lineHeight: 1.3 }}
+                >
+                  {fromGpsLoading ? <Loader2 size={13} className="animate-spin flex-none" /> : <Navigation size={13} className="flex-none" />}
+                  <span className="text-center">{fromGpsLoading ? 'Updating starting point…' : 'Use my current location as the starting point'}</span>
+                </button>
+                {fromGpsError && <div className="text-[calc(11px*var(--fs))] text-red-600 mt-1.5">{fromGpsError}</div>}
               </div>
               {/* TO */}
               <div className="pt-3">

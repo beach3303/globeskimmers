@@ -15,9 +15,12 @@ import { logEvent } from "@/lib/analytics";
 import { useCameraPreview } from "@/lib/useCameraPreview";
 import { useIsTablet } from "@/lib/useIsTablet";
 
-// ── iPad editorial design tokens (matches PlacesToEat / CultureInformation) ──
-// Tablet-only chrome. Phone layout never references these. fs() scales every
-// added text size off the global --fs variable, exactly like the shipped pages.
+// ── Editorial design tokens (matches PlacesToEat / CultureInformation) ──
+// Shared by the result + analysis chrome on BOTH phone and tablet. The LIVE
+// CAMERA viewport never references these (its root stays transparent and the
+// freeze/capture/instruction overlays keep their original dark-glass styling).
+// fs() scales every added text size off the global --fs variable, exactly like
+// the shipped pages.
 const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const ED_MONO  = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
@@ -30,6 +33,41 @@ const ED_IVORY = "#FFFCF7", ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)
 const ED_TEAL = "#0F766E";
 const fs = (n) => `calc(${n}px*var(--fs))`;
 void CAT; // imported per redesign-constants contract; teal is this page's world
+
+// Editorial size scale for the result + analysis chrome. Tablet keeps the
+// shipped (larger) values; phone is tuned down per the redesign brief — serif
+// headings ~24-28, card titles ~20, body ~13.5, mono kickers ~10-11, card
+// radius ~18. Returned as a plain map so the JSX below stays declarative and
+// presentation-only (no logic/state changes). GRACEFUL GROWTH: every size is
+// wrapped in fs() so the global text-size control still scales the panels, and
+// the cards use min-height (not fixed heights) via natural flow.
+const edScale = (isTablet) => isTablet
+  ? {
+      cardMaxW: 560, analysisMaxW: 620, cardRadius: 28, innerRadius: 18,
+      cardPad: 32, innerPad: 20,
+      kicker: 11, kickerLs: ".16em",
+      hero: 52, heroLabel: 10, origAmt: 28, origCur: 13,
+      ctxKicker: 10.5, noPriceTitle: 30, bodyLg: 15,
+      h3: 34, gsQuote: 22, sectionTitle: 11,
+      itemImg: 180, verdictChip: 11.5,
+      altName: 14, altMeta: 11, altPrice: 14, altNote: 11.5,
+      home: 13, footer: 11, estTag: 9,
+      btnPrimary: 16.5, btnPrimarySub: 12, btnSecondary: 15.5, btnGhost: 13,
+      ctaPadV: 14, ctaPadH: 16, secPadV: 13, ghostPadV: 8,
+    }
+  : {
+      cardMaxW: 448, analysisMaxW: 448, cardRadius: 22, innerRadius: 18,
+      cardPad: 22, innerPad: 16,
+      kicker: 10.5, kickerLs: ".14em",
+      hero: 40, heroLabel: 10, origAmt: 22, origCur: 12,
+      ctxKicker: 10, noPriceTitle: 24, bodyLg: 13.5,
+      h3: 26, gsQuote: 18, sectionTitle: 11,
+      itemImg: 150, verdictChip: 11,
+      altName: 13.5, altMeta: 10.5, altPrice: 13.5, altNote: 11,
+      home: 12.5, footer: 10.5, estTag: 9,
+      btnPrimary: 15.5, btnPrimarySub: 11, btnSecondary: 14.5, btnGhost: 12.5,
+      ctaPadV: 13, ctaPadH: 16, secPadV: 12, ghostPadV: 8,
+    };
 
 // ============================================================================
 // CONFIGURATION
@@ -167,7 +205,6 @@ async function getCachedExchangeRate(fromCurrency, toCurrency) {
       const age = Date.now() - timestamp;
       
       if (age < EXCHANGE_RATE_CACHE_TTL) {
-        console.log(`📦 Exchange rate cache hit: ${fromCurrency} -> ${toCurrency}`);
         return rate;
       }
     }
@@ -186,7 +223,6 @@ async function getCachedExchangeRate(fromCurrency, toCurrency) {
             rate: data.rate,
             timestamp: Date.now()
           }));
-          console.log(`💾 Cached exchange rate: ${fromCurrency} -> ${toCurrency} = ${data.rate}`);
           return data.rate;
         }
       }
@@ -350,7 +386,6 @@ export default function SmartPriceScannerPage() {
     // Increment on tap (count-on-intent).
     const nextScans = incrementDailyCount(STORAGE_KEY_SCAN_COUNT);
     setScanCount(nextScans);
-    console.log("📸 Freeze & convert tapped...");
     setIsScanning(true);
 
     try {
@@ -358,7 +393,6 @@ export default function SmartPriceScannerPage() {
       if (!base64) { setIsScanning(false); return; }
 
       const prices = await extractPricesFromImage(base64);
-      console.log("💰 Extracted prices:", prices);
 
       if (prices && prices.length > 0) {
         const conversions = await Promise.all(
@@ -366,7 +400,6 @@ export default function SmartPriceScannerPage() {
         );
 
         const filtered = conversions.filter(c => c !== null);
-        console.log("💱 Converted prices:", filtered);
 
         if (filtered.length > 0) {
           // The native capture already framed the shot (native pinch-zoom),
@@ -919,6 +952,10 @@ export default function SmartPriceScannerPage() {
   const isItemPhoto = step === 'itemPhoto';
   const isAnalysis  = step === 'analysis';
 
+  // Phone/tablet editorial size scale for the result + analysis chrome. Pure
+  // presentation — picks tuned values per viewport; no data/handler changes.
+  const ed = edScale(isTablet);
+
   // X-button behavior: live → home, item-photo → back to the result card,
   // frozen → unfreeze to live, analysis → back to the result card.
   const handleClose = () => {
@@ -1135,107 +1172,72 @@ export default function SmartPriceScannerPage() {
       )}
 
       {/* FROZEN STATE — show detected prices + 3 buttons.
-          Tablet (iPad) gets an editorial ivory result card with an Instrument
-          Serif converted price + teal accent; phone keeps the dark glass panel
-          byte-for-byte. The action-button stack below is shared (identical
-          gating logic) and themed inline per isTablet. */}
+          Editorial ivory result card on BOTH phone and tablet: Instrument
+          Serif converted price + teal accent, soft white inner cards, hairline
+          rule. Sizes/widths come from `ed` (phone-tuned vs tablet). The action
+          buttons keep identical gating logic and are themed inline. The frozen
+          still beneath is untouched — this is the non-camera chrome only. */}
       {isFrozen && (
         <div className="absolute inset-0 z-10 flex items-center justify-center px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className={isTablet
-              ? "rounded-[28px] p-8 w-full pointer-events-auto"
-              : "bg-black/85 backdrop-blur-md rounded-2xl p-6 max-w-sm w-full pointer-events-auto"}
-            style={isTablet ? {
-              maxWidth: 560,
+            className="w-full max-w-md pointer-events-auto"
+            style={{
+              maxWidth: ed.cardMaxW,
+              minHeight: fs(120),
+              padding: fs(ed.cardPad),
+              borderRadius: ed.cardRadius,
               background: ED_IVORY,
               border: `1px solid ${ED_RULE}`,
               boxShadow: "0 30px 60px -28px rgba(22,17,13,.55)",
-            } : undefined}
+            }}
           >
-            {isTablet ? (
-              detectedPrices.length > 0 ? (
-                <>
-                  <p className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".16em", color: ED_TEAL, fontWeight: 600 }}>
-                    Converted price
-                  </p>
-                  <div className="mt-4 space-y-4">
-                    {detectedPrices.map((conversion, index) => (
-                      <div key={index} className="rounded-[18px]" style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}`, padding: fs(20) }}>
-                        {conversion.original.context && (
-                          <p className="uppercase mb-3" style={{ fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: ".06em", color: ED_INK3 }}>
-                            {conversion.original.context}
+            {detectedPrices.length > 0 ? (
+              <>
+                <p className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(ed.kicker), letterSpacing: ed.kickerLs, color: ED_TEAL, fontWeight: 600 }}>
+                  Converted price
+                </p>
+                <div className="mt-4 space-y-4 overflow-y-auto" style={{ maxHeight: isTablet ? undefined : "52vh" }}>
+                  {detectedPrices.map((conversion, index) => (
+                    <div key={index} style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}`, borderRadius: ed.innerRadius, padding: fs(ed.innerPad) }}>
+                      {conversion.original.context && (
+                        <p className="uppercase mb-3 line-clamp-2" style={{ fontFamily: ED_MONO, fontSize: fs(ed.ctxKicker), letterSpacing: ".06em", color: ED_INK3 }}>
+                          {conversion.original.context}
+                        </p>
+                      )}
+                      <div className="flex items-end justify-between gap-4 flex-wrap">
+                        <div>
+                          <p className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".08em", color: ED_INK3 }}>Original</p>
+                          <p style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(ed.origAmt), color: ED_INK2, lineHeight: 1.05, marginTop: fs(4) }}>
+                            {conversion.original.symbol}{conversion.original.amount.toLocaleString()}
+                            <span style={{ fontFamily: ED_MONO, fontSize: fs(ed.origCur), color: ED_INK3, marginLeft: fs(8) }}>{conversion.original.currency}</span>
                           </p>
-                        )}
-                        <div className="flex items-end justify-between gap-4 flex-wrap">
-                          <div>
-                            <p className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".08em", color: ED_INK3 }}>Original</p>
-                            <p style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(28), color: ED_INK2, lineHeight: 1.05, marginTop: fs(4) }}>
-                              {conversion.original.symbol}{conversion.original.amount.toLocaleString()}
-                              <span style={{ fontFamily: ED_MONO, fontSize: fs(13), color: ED_INK3, marginLeft: fs(8) }}>{conversion.original.currency}</span>
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".08em", color: ED_TEAL }}>Your currency</p>
-                            <p style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(52), color: ED_TEAL, lineHeight: 1.0, marginTop: fs(2) }}>
-                              {conversion.converted.symbol}{parseFloat(conversion.converted.amount).toLocaleString()}
-                            </p>
-                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(ed.heroLabel), letterSpacing: ".08em", color: ED_TEAL }}>Your currency</p>
+                          <p style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(ed.hero), color: ED_TEAL, lineHeight: 1.0, marginTop: fs(2) }}>
+                            {conversion.converted.symbol}{parseFloat(conversion.converted.amount).toLocaleString()}
+                          </p>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div style={{ marginBottom: fs(8) }}>
-                  <p className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".16em", color: ED_INK3, fontWeight: 600 }}>No prices found</p>
-                  <p style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(30), color: ED_INK, lineHeight: 1.08, marginTop: fs(8) }}>
-                    Couldn&apos;t read a price tag
-                  </p>
-                  <p style={{ fontSize: fs(15), color: ED_INK3, marginTop: fs(8), lineHeight: 1.5 }}>
-                    Try framing the price tag more clearly, then tap Scan another.
-                  </p>
+                    </div>
+                  ))}
                 </div>
-              )
+              </>
             ) : (
-              detectedPrices.length > 0 ? (
-                <>
-                  <h3 className="text-white font-bold text-lg mb-4">✓ Prices Detected</h3>
-                  <div className="space-y-3 max-h-60 overflow-y-auto mb-4">
-                    {detectedPrices.map((conversion, index) => (
-                      <div key={index} className="bg-white/10 rounded-xl p-4">
-                        {conversion.original.context && (
-                          <p className="text-white/70 text-sm mb-2">{conversion.original.context}</p>
-                        )}
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-white/80 text-sm">Original</p>
-                            <p className="text-white font-semibold">
-                              {conversion.original.symbol}{conversion.original.amount.toLocaleString()} {conversion.original.currency}
-                            </p>
-                          </div>
-                          <div className="text-green-400 text-xl mx-3">→</div>
-                          <div className="text-right">
-                            <p className="text-white/80 text-sm">Your Currency</p>
-                            <p className="text-green-400 font-bold text-xl">
-                              {conversion.converted.symbol}{parseFloat(conversion.converted.amount).toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="mb-4">
-                  <h3 className="text-white font-bold text-lg mb-2">No prices found</h3>
-                  <p className="text-white/70 text-sm">Try framing the price tag more clearly and tap Scan another.</p>
-                </div>
-              )
+              <div style={{ marginBottom: fs(8) }}>
+                <p className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(ed.kicker), letterSpacing: ed.kickerLs, color: ED_INK3, fontWeight: 600 }}>No prices found</p>
+                <p className="line-clamp-2" style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(ed.noPriceTitle), color: ED_INK, lineHeight: 1.08, marginTop: fs(8) }}>
+                  Couldn&apos;t read a price tag
+                </p>
+                <p style={{ fontSize: fs(ed.bodyLg), color: ED_INK3, marginTop: fs(8), lineHeight: 1.5 }}>
+                  Try framing the price tag more clearly, then tap Scan another.
+                </p>
+              </div>
             )}
 
-            <div className={isTablet ? "space-y-2.5 mt-6" : "space-y-2"}>
+            <div className="space-y-2.5" style={{ marginTop: fs(20) }}>
               {/* View price analysis — only meaningful when we have a price.
                   The button stays tappable when capped; gating happens
                   inside handleViewAnalysis so a tap shows the cap-hit
@@ -1250,22 +1252,17 @@ export default function SmartPriceScannerPage() {
                         early. Grey by default, amber at ≤1 left, coral at 0. */}
                     {Number.isFinite(caps.analyses) && (
                       <div
-                        className={isTablet ? "text-center uppercase mb-1" : "text-center text-[calc(11px*var(--fs))] font-medium mb-1"}
-                        style={isTablet ? {
+                        className="text-center uppercase mb-1"
+                        style={{
                           fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: ".06em",
                           color: analysesLeft === 0 ? '#B91C1C' : analysesLeft <= 1 ? '#B45309' : ED_INK3,
-                        } : {
-                          color: analysesLeft === 0 ? '#FCA5A5' : analysesLeft <= 1 ? '#FCD34D' : 'rgba(255,255,255,0.5)',
                         }}>
                         {analysesLeft} of {caps.analyses} analyses left today
                       </div>
                     )}
                     {/* Prompt so the analyze option is obvious after a scan. */}
                     {!analysis && !analysisCapHit && (
-                      <div
-                        className={isTablet ? "text-center mb-1" : "text-center text-white/70 text-[calc(12px*var(--fs))] mb-1"}
-                        style={isTablet ? { fontSize: fs(13), color: ED_INK3 } : undefined}
-                      >
+                      <div className="text-center mb-1" style={{ fontSize: fs(ed.bodyLg), color: ED_INK3 }}>
                         Is this a fair price? Find out 👇
                       </div>
                     )}
@@ -1277,22 +1274,20 @@ export default function SmartPriceScannerPage() {
                             ? () => setCapHitModal('analysis')
                             : handleAnalyzeThisPrice
                       }
-                      className={isTablet
-                        ? "w-full text-white flex flex-col items-center justify-center transition-opacity hover:opacity-90"
-                        : "w-full text-white font-bold py-3 rounded-xl flex flex-col items-center justify-center transition-colors"}
-                      style={isTablet ? {
+                      className="w-full text-white flex flex-col items-center justify-center transition-opacity hover:opacity-90"
+                      style={{
                         background: (analysisCapHit && !analysis) ? ED_INK3 : ED_TEAL,
-                        borderRadius: 16, padding: `${fs(14)} ${fs(16)}`, fontWeight: 600,
-                      } : { background: (analysisCapHit && !analysis) ? '#475569' : '#7C3AED' }}
+                        borderRadius: 16, padding: `${fs(ed.ctaPadV)} ${fs(ed.ctaPadH)}`, fontWeight: 600,
+                      }}
                     >
                       {analysis ? (
-                        <span className="flex items-center gap-2" style={isTablet ? { fontSize: fs(16) } : undefined}>💡 View price analysis</span>
+                        <span className="flex items-center gap-2" style={{ fontSize: fs(ed.btnPrimary) }}>💡 View price analysis</span>
                       ) : analysisCapHit ? (
-                        <span className="flex items-center gap-2" style={isTablet ? { fontSize: fs(16) } : undefined}>🔒 Daily analysis limit reached</span>
+                        <span className="flex items-center gap-2" style={{ fontSize: fs(ed.btnPrimary) }}>🔒 Daily analysis limit reached</span>
                       ) : (
                         <>
-                          <span className="flex items-center gap-2" style={isTablet ? { fontSize: fs(16.5) } : undefined}><span className={isTablet ? "" : "text-[calc(15.5px*var(--fs))]"}>💡 Analyze this price</span></span>
-                          <span className="font-normal opacity-85" style={isTablet ? { fontSize: fs(12) } : undefined}><span className={isTablet ? "" : "text-[calc(11px*var(--fs))]"}>snap the item to compare prices</span></span>
+                          <span className="flex items-center gap-2" style={{ fontSize: fs(ed.btnPrimary) }}>💡 Analyze this price</span>
+                          <span className="font-normal opacity-85" style={{ fontSize: fs(ed.btnPrimarySub) }}>snap the item to compare prices</span>
                         </>
                       )}
                     </button>
@@ -1301,23 +1296,19 @@ export default function SmartPriceScannerPage() {
               })()}
               <button
                 onClick={handleScanAnother}
-                className={isTablet
-                  ? "w-full flex items-center justify-center gap-2 transition-colors"
-                  : "w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"}
-                style={isTablet ? {
+                className="w-full flex items-center justify-center gap-2 transition-colors"
+                style={{
                   background: ED_IVORY2, color: ED_INK2, borderRadius: 16,
-                  padding: `${fs(13)} ${fs(16)}`, fontWeight: 600, fontSize: fs(15.5),
-                } : undefined}
+                  padding: `${fs(ed.secPadV)} ${fs(ed.ctaPadH)}`, fontWeight: 600, fontSize: fs(ed.btnSecondary),
+                }}
               >
                 <Camera className="w-4 h-4" />
                 Scan another
               </button>
               <button
                 onClick={handleDone}
-                className={isTablet
-                  ? "w-full transition-colors hover:opacity-80"
-                  : "w-full text-white/70 hover:text-white text-sm font-medium py-2 transition-colors"}
-                style={isTablet ? { color: ED_INK3, fontSize: fs(13), fontWeight: 500, padding: `${fs(8)} 0` } : undefined}
+                className="w-full transition-colors hover:opacity-80"
+                style={{ color: ED_INK3, fontSize: fs(ed.btnGhost), fontWeight: 500, padding: `${fs(ed.ghostPadV)} 0` }}
               >
                 🏠 Done
               </button>
@@ -1327,80 +1318,61 @@ export default function SmartPriceScannerPage() {
       )}
 
       {/* ANALYSIS CARD — fetched lazily on first View Analysis tap.
-          Tablet gets an editorial ivory card (serif heading, mono kickers,
-          tinted chips); phone keeps the dark glass card byte-for-byte. */}
+          Editorial ivory card on BOTH phone and tablet (serif heading, mono
+          kickers, tinted chips, soft white inner cards). Sizes from `ed`. */}
       {isAnalysis && (
         <div className="absolute inset-0 z-10 flex items-start justify-center px-4 pt-16 pb-8 overflow-y-auto pointer-events-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className={isTablet
-              ? "rounded-[28px] p-8 w-full pointer-events-auto"
-              : "bg-black/90 backdrop-blur-md rounded-2xl p-6 max-w-sm w-full pointer-events-auto"}
-            style={isTablet ? {
-              maxWidth: 620,
+            className="w-full max-w-md pointer-events-auto"
+            style={{
+              maxWidth: ed.analysisMaxW,
+              padding: fs(ed.cardPad),
+              borderRadius: ed.cardRadius,
               background: ED_IVORY,
               border: `1px solid ${ED_RULE}`,
               boxShadow: "0 30px 60px -28px rgba(22,17,13,.55)",
-            } : undefined}
+            }}
           >
-            {isTablet ? (
-              <>
-                <p className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".16em", color: ED_TEAL, fontWeight: 600 }}>Price analysis</p>
-                <h3 style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(34), color: ED_INK, lineHeight: 1.06, margin: `${fs(4)} 0 ${fs(12)}` }}>Is this a fair deal?</h3>
-              </>
-            ) : (
-              <h3 className="text-white font-bold text-lg mb-2">💡 Price Analysis</h3>
-            )}
+            <p className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(ed.kicker), letterSpacing: ed.kickerLs, color: ED_TEAL, fontWeight: 600 }}>Price analysis</p>
+            <h3 className="line-clamp-2" style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(ed.h3), color: ED_INK, lineHeight: 1.06, margin: `${fs(4)} 0 ${fs(12)}` }}>Is this a fair deal?</h3>
             {itemFrame && (
               <img
                 src={itemFrame}
                 alt="Item"
-                className={isTablet ? "w-full object-cover" : "w-full h-32 object-cover rounded-xl mb-3"}
-                style={isTablet ? { height: fs(180), borderRadius: 18, marginBottom: fs(16), border: `1px solid ${ED_RULE}` } : undefined}
+                className="w-full object-cover"
+                style={{ height: fs(ed.itemImg), borderRadius: ed.innerRadius, marginBottom: fs(16), border: `1px solid ${ED_RULE}` }}
               />
             )}
             {detectedPrices[0]?.original?.context && (
               <p
-                className={isTablet ? "uppercase mb-3" : "text-white/70 text-[calc(13px*var(--fs))] mb-3"}
-                style={isTablet ? { fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: ".06em", color: ED_INK3 } : undefined}
+                className="uppercase mb-3 line-clamp-2"
+                style={{ fontFamily: ED_MONO, fontSize: fs(ed.ctxKicker), letterSpacing: ".06em", color: ED_INK3 }}
               >{detectedPrices[0].original.context}</p>
             )}
 
             {analysisLoading && (
-              isTablet ? (
-                <div className="text-center" style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}`, borderRadius: 18, padding: fs(24), marginBottom: fs(16) }}>
-                  <div className="mx-auto rounded-full animate-spin" style={{ width: fs(40), height: fs(40), marginBottom: fs(12), border: `3px solid ${ED_IVORY2}`, borderTopColor: ED_TEAL }} />
-                  <p style={{ fontSize: fs(15), color: ED_INK3 }}>Analyzing similar items at nearby stores…</p>
-                </div>
-              ) : (
-                <div className="bg-white/10 rounded-xl p-5 mb-4 text-center">
-                  <div className="w-10 h-10 mx-auto mb-3 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-                  <p className="text-white/80 text-sm">Analyzing similar items at nearby stores…</p>
-                </div>
-              )
+              <div className="text-center" style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}`, borderRadius: ed.innerRadius, padding: fs(24), marginBottom: fs(16) }}>
+                <div className="mx-auto rounded-full animate-spin" style={{ width: fs(40), height: fs(40), marginBottom: fs(12), border: `3px solid ${ED_IVORY2}`, borderTopColor: ED_TEAL }} />
+                <p style={{ fontSize: fs(ed.bodyLg), color: ED_INK3 }}>Analyzing similar items at nearby stores…</p>
+              </div>
             )}
 
             {analysisError && !analysisLoading && (
-              isTablet ? (
-                <div style={{ background: "#FBEAEA", border: "1px solid rgba(185,28,28,.25)", borderRadius: 16, padding: fs(16), marginBottom: fs(16) }}>
-                  <p style={{ fontSize: fs(14), color: "#991B1B", lineHeight: 1.5 }}>Couldn&apos;t load analysis: {analysisError}</p>
-                </div>
-              ) : (
-                <div className="bg-red-500/20 border border-red-500/40 rounded-xl p-4 mb-4">
-                  <p className="text-red-200 text-sm">Couldn&apos;t load analysis: {analysisError}</p>
-                </div>
-              )
+              <div style={{ background: "#FBEAEA", border: "1px solid rgba(185,28,28,.25)", borderRadius: 16, padding: fs(16), marginBottom: fs(16) }}>
+                <p style={{ fontSize: fs(ed.bodyLg), color: "#991B1B", lineHeight: 1.5 }}>Couldn&apos;t load analysis: {analysisError}</p>
+              </div>
             )}
 
-            {analysis && !analysisLoading && (isTablet ? (
+            {analysis && !analysisLoading && (
               <div style={{ marginBottom: fs(20) }}>
                 {/* Verdict chip */}
                 <div style={{ marginBottom: fs(12) }}>
                   <span className="inline-block uppercase" style={{
                     background: verdictBg(analysis.verdict),
                     color: verdictFg(analysis.verdict),
-                    fontFamily: ED_MONO, fontSize: fs(11.5), letterSpacing: ".06em", fontWeight: 600,
+                    fontFamily: ED_MONO, fontSize: fs(ed.verdictChip), letterSpacing: ".06em", fontWeight: 600,
                     padding: `${fs(6)} ${fs(14)}`, borderRadius: 999,
                   }}>
                     {analysis.verdictBadge}
@@ -1409,34 +1381,34 @@ export default function SmartPriceScannerPage() {
 
                 {/* GS Verdict sentence — serif pull-quote */}
                 {analysis.gsVerdict && (
-                  <p style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(22), color: ED_INK, lineHeight: 1.3, marginBottom: fs(18) }}>{analysis.gsVerdict}</p>
+                  <p style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(ed.gsQuote), color: ED_INK, lineHeight: 1.3, marginBottom: fs(18) }}>{analysis.gsVerdict}</p>
                 )}
 
-                {/* Alternatives — ivory inner card with hairline rule. */}
+                {/* Alternatives — soft white inner card with hairline rule. */}
                 {analysis.alternatives && analysis.alternatives.length > 0 && (
-                  <div style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}`, borderRadius: 18, padding: fs(18), marginBottom: fs(12) }}>
-                    <div className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".06em", color: ED_INK3, fontWeight: 600, marginBottom: fs(8) }}>
+                  <div style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}`, borderRadius: ed.innerRadius, padding: fs(ed.innerPad), marginBottom: fs(12) }}>
+                    <div className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(ed.sectionTitle), letterSpacing: ".06em", color: ED_INK3, fontWeight: 600, marginBottom: fs(8) }}>
                       {analysis.comparisonType === 'similar_style'
                         ? <>🎨 Comparable handcrafted / look-alike pieces</>
                         : <>Similar items nearby</>}
-                      <span className="ml-2 inline-block" style={{ background: '#FEF3C7', color: '#92400E', fontFamily: ED_MONO, fontSize: fs(9), fontWeight: 600, padding: `${fs(2)} ${fs(6)}`, borderRadius: 6 }}>estimated</span>
+                      <span className="ml-2 inline-block" style={{ background: '#FEF3C7', color: '#92400E', fontFamily: ED_MONO, fontSize: fs(ed.estTag), fontWeight: 600, padding: `${fs(2)} ${fs(6)}`, borderRadius: 6 }}>estimated</span>
                     </div>
                     {analysis.comparisonType === 'similar_style' && (
-                      <div style={{ fontSize: fs(12.5), color: ED_INK3, marginBottom: fs(8), lineHeight: 1.5 }}>
+                      <div style={{ fontSize: fs(ed.altNote), color: ED_INK3, marginBottom: fs(8), lineHeight: 1.5 }}>
                         Exact item isn&apos;t typically sold at chain stores. These are similar in style / category at places that sell comparable handcrafted pieces.
                       </div>
                     )}
                     <ul className="space-y-2">
                       {analysis.alternatives.map((a, i) => (
-                        <li key={i} style={{ fontSize: fs(14), color: ED_INK2 }}>
+                        <li key={i} style={{ fontSize: fs(ed.altName), color: ED_INK2 }}>
                           <div className="flex items-start justify-between gap-2">
                             <div>
                               <span style={{ fontWeight: 600, color: ED_INK }}>{a.store}</span>
-                              <span className="ml-2" style={{ fontFamily: ED_MONO, fontSize: fs(11), color: ED_INK3 }}>{a.scope === 'online' ? '🌐 online' : '📍 local'}</span>
+                              <span className="ml-2" style={{ fontFamily: ED_MONO, fontSize: fs(ed.altMeta), color: ED_INK3 }}>{a.scope === 'online' ? '🌐 online' : '📍 local'}</span>
                             </div>
-                            <div className="whitespace-nowrap" style={{ color: ED_TEAL, fontWeight: 700, fontSize: fs(14) }}>{a.priceRange}</div>
+                            <div className="whitespace-nowrap" style={{ color: ED_TEAL, fontWeight: 700, fontSize: fs(ed.altPrice) }}>{a.priceRange}</div>
                           </div>
-                          {a.note && <div style={{ fontSize: fs(11.5), color: ED_INK3, marginTop: fs(2) }}>{a.note}</div>}
+                          {a.note && <div style={{ fontSize: fs(ed.altNote), color: ED_INK3, marginTop: fs(2) }}>{a.note}</div>}
                         </li>
                       ))}
                     </ul>
@@ -1445,101 +1417,32 @@ export default function SmartPriceScannerPage() {
 
                 {/* Home country reference */}
                 {analysis.homeReference && (
-                  <div style={{ background: ED_IVORY2, borderRadius: 16, padding: fs(14), marginBottom: fs(12), color: ED_INK2, fontSize: fs(13), lineHeight: 1.5 }}>
+                  <div style={{ background: ED_IVORY2, borderRadius: 16, padding: fs(14), marginBottom: fs(12), color: ED_INK2, fontSize: fs(ed.home), lineHeight: 1.5 }}>
                     🏠 {analysis.homeReference}
-                    <span className="ml-2 inline-block align-middle" style={{ background: '#FEF3C7', color: '#92400E', fontFamily: ED_MONO, fontSize: fs(9), fontWeight: 600, padding: `${fs(2)} ${fs(6)}`, borderRadius: 6 }}>estimated</span>
+                    <span className="ml-2 inline-block align-middle" style={{ background: '#FEF3C7', color: '#92400E', fontFamily: ED_MONO, fontSize: fs(ed.estTag), fontWeight: 600, padding: `${fs(2)} ${fs(6)}`, borderRadius: 6 }}>estimated</span>
                   </div>
                 )}
 
                 {/* Honesty footer */}
-                <p style={{ fontSize: fs(11), color: ED_INK3, lineHeight: 1.5 }}>
+                <p style={{ fontSize: fs(ed.footer), color: ED_INK3, lineHeight: 1.5 }}>
                   Price ranges are estimates based on typical store pricing — not live data. Verify before purchase.
                 </p>
               </div>
-            ) : (
-              <div className="mb-4">
-                {/* Verdict chip */}
-                <div className="mb-3">
-                  <span className="inline-block px-3 py-1.5 rounded-full text-[calc(13px*var(--fs))] font-bold" style={{
-                    background: verdictBg(analysis.verdict),
-                    color: verdictFg(analysis.verdict),
-                  }}>
-                    {analysis.verdictBadge}
-                  </span>
-                </div>
+            )}
 
-                {/* GS Verdict sentence */}
-                {analysis.gsVerdict && (
-                  <p className="text-white text-[calc(14px*var(--fs))] leading-relaxed mb-4">{analysis.gsVerdict}</p>
-                )}
-
-                {/* Alternatives. Header copy varies by comparisonType so the
-                    user knows whether these are exact-match alternatives
-                    (chain-store items) or look-alike comparable pieces
-                    (handcrafted / artisan items where the exact item won't
-                    be at chain stores). */}
-                {analysis.alternatives && analysis.alternatives.length > 0 && (
-                  <div className="bg-white/10 rounded-xl p-4 mb-3">
-                    <div className="text-white/70 text-[calc(11px*var(--fs))] font-bold uppercase tracking-wide mb-2">
-                      {analysis.comparisonType === 'similar_style'
-                        ? <>🎨 Comparable handcrafted / look-alike pieces</>
-                        : <>Similar items nearby</>}
-                      <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[calc(9px*var(--fs))] font-semibold" style={{ background: '#FEF3C7', color: '#92400E' }}>estimated</span>
-                    </div>
-                    {analysis.comparisonType === 'similar_style' && (
-                      <div className="text-white/60 text-[calc(11px*var(--fs))] mb-2 leading-relaxed">
-                        Exact item isn&apos;t typically sold at chain stores. These are similar in style / category at places that sell comparable handcrafted pieces.
-                      </div>
-                    )}
-                    <ul className="space-y-2">
-                      {analysis.alternatives.map((a, i) => (
-                        <li key={i} className="text-white text-[calc(13px*var(--fs))]">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <span className="font-semibold">{a.store}</span>
-                              <span className="text-white/50 text-[calc(11px*var(--fs))] ml-2">{a.scope === 'online' ? '🌐 online' : '📍 local'}</span>
-                            </div>
-                            <div className="text-emerald-300 font-semibold whitespace-nowrap">{a.priceRange}</div>
-                          </div>
-                          {a.note && <div className="text-white/60 text-[calc(11px*var(--fs))] mt-0.5">{a.note}</div>}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Home country reference */}
-                {analysis.homeReference && (
-                  <div className="bg-white/5 rounded-xl p-3 mb-3 text-white/80 text-[calc(12px*var(--fs))] leading-relaxed">
-                    🏠 {analysis.homeReference}
-                    <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[calc(9px*var(--fs))] font-semibold align-middle" style={{ background: '#FEF3C7', color: '#92400E' }}>estimated</span>
-                  </div>
-                )}
-
-                {/* Honesty footer */}
-                <p className="text-white/40 text-[calc(10px*var(--fs))] leading-relaxed">
-                  Price ranges are estimates based on typical store pricing — not live data. Verify before purchase.
-                </p>
-              </div>
-            ))}
-
-            <div className={isTablet ? "space-y-2.5" : "space-y-2"}>
+            <div className="space-y-2.5">
               <button
                 onClick={handleScanAnother}
-                className={isTablet
-                  ? "w-full flex items-center justify-center gap-2 transition-opacity hover:opacity-90"
-                  : "w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"}
-                style={isTablet ? { background: ED_TEAL, color: "#FFFFFF", borderRadius: 16, padding: `${fs(13)} ${fs(16)}`, fontWeight: 600, fontSize: fs(15.5) } : undefined}
+                className="w-full flex items-center justify-center gap-2 transition-opacity hover:opacity-90"
+                style={{ background: ED_TEAL, color: "#FFFFFF", borderRadius: 16, padding: `${fs(ed.secPadV)} ${fs(ed.ctaPadH)}`, fontWeight: 600, fontSize: fs(ed.btnSecondary) }}
               >
                 <Camera className="w-4 h-4" />
                 Scan another item
               </button>
               <button
                 onClick={handleDone}
-                className={isTablet
-                  ? "w-full transition-colors hover:opacity-80"
-                  : "w-full text-white/70 hover:text-white text-sm font-medium py-2 transition-colors"}
-                style={isTablet ? { color: ED_INK3, fontSize: fs(13), fontWeight: 500, padding: `${fs(8)} 0` } : undefined}
+                className="w-full transition-colors hover:opacity-80"
+                style={{ color: ED_INK3, fontSize: fs(ed.btnGhost), fontWeight: 500, padding: `${fs(ed.ghostPadV)} 0` }}
               >
                 🏠 Done
               </button>
