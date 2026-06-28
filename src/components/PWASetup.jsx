@@ -194,11 +194,8 @@ export default function PWASetup() {
       const swURL = URL.createObjectURL(swBlob);
 
       navigator.serviceWorker.register(swURL)
-        .then(registration => {
-          console.log('✅ Service Worker registered');
-        })
         .catch(error => {
-          console.log('❌ Service Worker registration failed:', error);
+          console.error('Service Worker registration failed:', error);
         });
     }
 

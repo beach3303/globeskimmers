@@ -55,7 +55,6 @@ import BasicPhrases from './pages/BasicPhrases';
 import CoffeeFinder from './pages/CoffeeFinder';
 import ConvenienceStore from './pages/ConvenienceStore';
 import CultureInformation from './pages/CultureInformation';
-import GenerateIcon from './pages/GenerateIcon';
 import Home from './pages/Home';
 import Map from './pages/Map';
 import MoneyExchange from './pages/MoneyExchange';
@@ -67,7 +66,6 @@ import Settings from './pages/Settings';
 import Shopping from './pages/Shopping';
 import SmartPriceScanner from './pages/SmartPriceScanner';
 import SmartTextScanner from './pages/SmartTextScanner';
-import TestAPI from './pages/TestAPI';
 import ThingsToDo from './pages/ThingsToDo';
 import Transportation from './pages/Transportation';
 import Weather from './pages/Weather';
@@ -83,7 +81,6 @@ export const PAGES = {
     "CoffeeFinder": CoffeeFinder,
     "ConvenienceStore": ConvenienceStore,
     "CultureInformation": CultureInformation,
-    "GenerateIcon": GenerateIcon,
     "Home": Home,
     "Map": Map,
     "MoneyExchange": MoneyExchange,
@@ -95,7 +92,6 @@ export const PAGES = {
     "Shopping": Shopping,
     "SmartPriceScanner": SmartPriceScanner,
     "SmartTextScanner": SmartTextScanner,
-    "TestAPI": TestAPI,
     "ThingsToDo": ThingsToDo,
     "Transportation": Transportation,
     "Weather": Weather,

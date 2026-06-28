@@ -47,10 +47,6 @@ export async function getCurrentPositionSmart(options = {}) {
   if (_posInFlight) return _posInFlight;
   if (_posCache && (Date.now() - _posCacheAt) < POS_TTL_MS) return _posCache;
 
-  // TEMP DIAGNOSTIC: fires at most once per POS_TTL_MS (throttled), so the
-  // stack names the REAL caller without flooding. Remove once the loop is gone.
-  console.trace('🛰️ getCurrentPositionSmart firing real GPS');
-
   _posInFlight = _resolvePosition(options);
   try {
     const result = await _posInFlight;
@@ -91,7 +87,6 @@ async function _resolvePosition(options) {
       if (!granted(requested)) {
         const err = new Error('Location permission denied');
         err.code = 1; // PERMISSION_DENIED
-        console.log('📍 Location permission not granted');
         throw err;
       }
     }
@@ -105,7 +100,6 @@ async function _resolvePosition(options) {
       );
       return normalize(pos);
     } catch (e1) {
-      console.log('📍 High-accuracy GPS failed, trying network location:', e1?.message || e1);
       const pos = await withTimeout(
         Geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }),
         17000,

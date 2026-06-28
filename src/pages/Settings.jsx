@@ -8,11 +8,11 @@ import { X, User, Mail, Edit3, Check, Globe, DollarSign, Languages, Thermometer,
 import ContactUsModal from "../components/ContactUsModal";
 import RefreshAccessModal from "../components/RefreshAccessModal";
 import { ADMIN_EMAILS } from "@/lib/admins";
-import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
+import { useFontScale } from "@/components/a11y/FontScaleContext";
 
 // ADMIN_EMAILS now imported from @/lib/admins (single source of truth, 4 admins).
 
@@ -26,22 +26,27 @@ const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
 // Respect the app-wide text-scale variable, with a safe 1 fallback.
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 
-// ── iPad editorial settings primitives (tablet-only presentation) ───────────
+// 2-line clamp for multi-line titles — combined with min-height (never a fixed
+// height) so enlarging the text scale grows the element instead of clipping it.
+const CLAMP_2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };
+
+// ── Editorial settings primitives (phone + tablet, phone-tuned via `isTablet`)
 // A settings group: JetBrains-Mono UPPERCASE kicker over a soft-white rounded
-// card whose rows are separated by the editorial hairline rule.
-function EdGroup({ kicker, children }) {
+// card whose rows are separated by the editorial hairline rule. Phone gets a
+// tighter radius / kicker; tablet keeps its larger sizing.
+function EdGroup({ kicker, children, isTablet }) {
   return (
-    <div style={{ marginTop: 28 }}>
+    <div style={{ marginTop: isTablet ? 28 : 22 }}>
       <p
         className="uppercase"
-        style={{ fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".14em", color: ED_INK3, margin: "0 6px 12px" }}
+        style={{ fontFamily: ED_MONO, fontSize: fs(isTablet ? 11 : 10), letterSpacing: ".14em", color: ED_INK3, margin: "0 6px 10px" }}
       >
         {kicker}
       </p>
       <div
         style={{
           background: "#FFFFFF",
-          borderRadius: 22,
+          borderRadius: isTablet ? 24 : 20,
           overflow: "hidden",
           border: `1px solid ${ED_RULE}`,
           boxShadow: "0 16px 40px -28px rgba(22,17,13,.4)",
@@ -55,27 +60,60 @@ function EdGroup({ kicker, children }) {
 
 // A single settings row: icon chip + serif/strong label + description, with an
 // optional control on the right. Last-of-type drops the hairline via `last`.
-function EdRow({ icon: Icon, iconBg, title, desc, control, last }) {
+//
+// Robust at every text-scale step: the right-hand VALUE (a non-`below` control —
+// e.g. "Fahrenheit (°F)", "US Dollar") used to sit in a fixed left/right flex,
+// so enlarging the glasses size made the long serif value collide with the
+// title/description. We now adapt by `step` (from useFontScale): at the larger
+// steps the row becomes a COLUMN and the value drops to its own full-width line
+// under the title+desc; at small steps it stays side-by-side but is allowed to
+// WRAP (items-start + flex-wrap) so the value can never overlap or get clipped.
+// `below` controls (editable fields) always stack, unchanged.
+function EdRow({ icon: Icon, iconBg, title, desc, control, last, isTablet, step = 0 }) {
+  const chip = isTablet ? 44 : 38;
+  // A side-value present at a large text size needs the stacked column layout so
+  // the long value never crowds the title. Tablet has more room, so it only
+  // stacks at the top step; phone stacks one step earlier. Fixed-width toggles
+  // never overlap (the title wraps beside them), so they stay inline always.
+  const sideValue = control && !control.below;
+  const isToggle = sideValue && React.isValidElement(control.node) && control.node.type === EdToggle;
+  const stack = sideValue && !isToggle && step >= (isTablet ? 3 : 2);
   return (
     <div
-      className="flex items-center gap-4"
-      style={{ padding: "20px 24px", borderBottom: last ? "none" : `1px solid ${ED_RULE}` }}
+      className={stack ? "flex flex-col" : "flex flex-wrap items-start gap-x-4 gap-y-2"}
+      style={{ padding: isTablet ? "20px 24px" : "16px 16px", minHeight: isTablet ? 84 : 70, borderBottom: last ? "none" : `1px solid ${ED_RULE}` }}
     >
-      {Icon && (
+      <div className={stack ? "flex items-start gap-4 w-full" : "flex items-start gap-4 flex-1 min-w-0"}>
+        {Icon && (
+          <div
+            className="flex items-center justify-center flex-none"
+            style={{ width: chip, height: chip, borderRadius: isTablet ? 13 : 11, background: iconBg, color: "#fff" }}
+          >
+            <Icon className={isTablet ? "w-5 h-5" : "w-[18px] h-[18px]"} />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold" style={{ fontFamily: ED_SERIF, fontSize: fs(isTablet ? 20 : 20), color: ED_INK, lineHeight: 1.1, ...CLAMP_2 }}>{title}</p>
+          {desc && <p style={{ fontSize: fs(isTablet ? 13 : 13.5), color: ED_INK3, marginTop: 3, lineHeight: 1.35, ...CLAMP_2 }}>{desc}</p>}
+          {/* Stacked controls (editable fields) live under the label. */}
+          {control && control.below && <div style={{ marginTop: 12 }}>{control.node}</div>}
+        </div>
+      </div>
+      {sideValue && (
+        // When stacked, the value sits on its own full-width line under the label
+        // (offset to align under the title, past the icon chip) and reads left.
+        // When inline, it keeps its place at the right edge and is allowed to wrap.
         <div
-          className="flex items-center justify-center flex-none"
-          style={{ width: 44, height: 44, borderRadius: 13, background: iconBg, color: "#fff" }}
+          className={stack ? "min-w-0" : "flex-none min-w-0 max-w-[55%]"}
+          style={stack ? { marginTop: 6, marginLeft: Icon ? chip + 16 : 0 } : undefined}
         >
-          <Icon className="w-5 h-5" />
+          {/* When stacked, left-align the value (it now leads its own line). The
+              value node is an <EdValue> that honours an `align` prop. */}
+          {stack && React.isValidElement(control.node) && control.node.type === EdValue
+            ? React.cloneElement(control.node, { align: "left" })
+            : control.node}
         </div>
       )}
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold" style={{ fontFamily: ED_SERIF, fontSize: fs(20), color: ED_INK, lineHeight: 1.1 }}>{title}</p>
-        {desc && <p style={{ fontSize: fs(13), color: ED_INK3, marginTop: 3, lineHeight: 1.35 }}>{desc}</p>}
-        {/* Stacked controls (editable fields) live under the label. */}
-        {control && control.below && <div style={{ marginTop: 12 }}>{control.node}</div>}
-      </div>
-      {control && !control.below && <div className="flex-none">{control.node}</div>}
     </div>
   );
 }
@@ -99,8 +137,19 @@ function EdToggle({ on, onClick, label }) {
 }
 
 // The read-only "value" pill used in non-editing rows (serif strong text).
-function EdValue({ children }) {
-  return <span className="font-semibold" style={{ fontFamily: ED_SERIF, fontSize: fs(17), color: ED_INK2 }}>{children}</span>;
+// `align` follows the row layout: right-aligned when the value sits inline at the
+// row's right edge, left-aligned when the row has stacked it onto its own line.
+// `block` + word-break let a long value (e.g. "South African Rand") wrap to a
+// second line instead of overflowing — it grows the row height, never clips.
+function EdValue({ children, align = "right" }) {
+  return (
+    <span
+      className={`font-semibold block ${align === "left" ? "text-left" : "text-right"}`}
+      style={{ fontFamily: ED_SERIF, fontSize: fs(16), color: ED_INK2, overflowWrap: "anywhere", ...CLAMP_2 }}
+    >
+      {children}
+    </span>
+  );
 }
 
 
@@ -342,12 +391,15 @@ const LANGUAGES = [
 ].sort((a, b) => a.name.localeCompare(b.name));
 
 const showToast = (message, type) => {
-  console.log(`Toast (${type}): ${message}`);
+  // Toast surface intentionally no-op pending a real toast system.
+  void message; void type;
 };
 
 export default function SettingsPage() {
   const navigate = useNavigate();
   const isTablet = useIsTablet(); // gates the iPad editorial layout; phone untouched
+  const { step: fontStep } = useFontScale(); // larger steps → rows stack value below
+
   const { logout, profile, user: authUser, refreshProfile } = useAuth(); // Supabase
   const countryBoxRef = useRef(null);
   const [countryOpen, setCountryOpen] = useState(false);
@@ -475,14 +527,14 @@ export default function SettingsPage() {
   };
 
   // ════════════════════════════════════════════════════════════════════════
-  // iPad EDITORIAL LAYOUT — ivory canvas, ~1024 centered column, settings
-  // grouped into soft-white rounded cards with mono UPPERCASE kickers, serif
-  // row labels, hairline rules, and a brand-teal accent. Tablet-only; the phone
-  // layout below is byte-identical. All state / handlers are shared.
+  // EDITORIAL LAYOUT — ivory canvas, settings grouped into soft-white rounded
+  // cards with mono UPPERCASE kickers, serif row labels, hairline rules, and a
+  // brand-teal accent. Renders at BOTH widths: tablet keeps the larger sizing
+  // and ~1024 centered column; phone gets a phone-tuned, compact variant in the
+  // existing single max-w-md column. All state / handlers are shared.
   // ════════════════════════════════════════════════════════════════════════
-  if (isTablet) {
-    const countryDropdown = (
-      <div className="relative" ref={countryBoxRef} style={{ minWidth: 280 }}>
+  const countryDropdown = (
+      <div className="relative w-full" ref={countryBoxRef} style={{ minWidth: isTablet ? 280 : 0 }}>
         <button type="button" onClick={() => setCountryOpen((o) => !o)} className="w-full flex items-center justify-between text-left" style={{ height: 48, padding: "0 16px", borderRadius: 14, border: `1px solid ${ED_RULE}`, background: "#fff" }}>
           <span style={{ fontSize: fs(15), color: homeCountry ? ED_INK : ED_INK3 }}>{homeCountry || "Select your home country"}</span>
           <ChevronDown className="w-5 h-5" style={{ color: ED_INK3 }} />
@@ -517,7 +569,7 @@ export default function SettingsPage() {
 
     return (
       <div className="font-sans" style={{ background: IVORY, minHeight: "100vh" }}>
-        <div style={{ maxWidth: 1024, margin: "0 auto", padding: "20px 24px 64px" }}>
+        <div className={isTablet ? "max-w-[1024px] mx-auto" : "max-w-md mx-auto"} style={{ padding: isTablet ? "20px 24px 64px" : "16px 16px 56px" }}>
           {/* Header: back + sign-out, serif title + kicker subtitle */}
           <div className="flex items-center justify-between">
             <button onClick={() => navigate(createPageUrl("Home"))} className="flex items-center justify-center transition-colors" style={{ width: 44, height: 44, borderRadius: 999, background: "#FFFFFF", border: `1px solid ${ED_RULE}` }} aria-label="Close settings">
@@ -528,48 +580,52 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          <h1 style={{ fontFamily: ED_SERIF, fontSize: fs(52), lineHeight: 1, color: ED_INK, margin: "20px 0 6px" }}>Settings</h1>
-          <p className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".14em", color: ED_INK3 }}>Tailor Globeskimmers to how you travel</p>
+          <h1 style={{ fontFamily: ED_SERIF, fontSize: fs(isTablet ? 52 : 30), lineHeight: 1, color: ED_INK, margin: isTablet ? "20px 0 6px" : "18px 0 5px" }}>Settings</h1>
+          <p className="uppercase" style={{ fontFamily: ED_MONO, fontSize: fs(isTablet ? 11 : 10), letterSpacing: ".14em", color: ED_INK3 }}>Tailor Globeskimmers to how you travel</p>
 
-          {/* Profile card — brand-teal feature surface with Edit / Save-Cancel */}
-          <div className="flex items-center gap-5" style={{ marginTop: 26, background: `linear-gradient(110deg, ${TEAL_DEEP}, #0A554E)`, color: "#fff", borderRadius: 24, padding: "26px 28px", boxShadow: "0 22px 48px -26px rgba(14,110,102,.6)" }}>
-            <div className="flex items-center justify-center flex-none" style={{ width: 72, height: 72, borderRadius: 22, background: "rgba(255,255,255,.18)" }}>
-              <User className="w-8 h-8 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p style={{ fontFamily: ED_SERIF, fontSize: fs(32), lineHeight: 1 }}>{user?.first_name || user?.full_name || "Traveler"}</p>
-              <p className="truncate" style={{ fontSize: fs(15), opacity: 0.9, marginTop: 5 }}>{user?.email}</p>
+          {/* Profile card — brand-teal feature surface with Edit / Save-Cancel.
+              On phone the avatar + name stack above the action button so the
+              compact column never crowds; tablet keeps the single roomy row. */}
+          <div className={isTablet ? "flex items-center gap-5" : "flex flex-col gap-4"} style={{ marginTop: isTablet ? 26 : 20, background: `linear-gradient(110deg, ${TEAL_DEEP}, #0A554E)`, color: "#fff", borderRadius: isTablet ? 24 : 20, padding: isTablet ? "26px 28px" : "20px 20px", boxShadow: "0 22px 48px -26px rgba(14,110,102,.6)" }}>
+            <div className="flex items-center gap-4 min-w-0 flex-1">
+              <div className="flex items-center justify-center flex-none" style={{ width: isTablet ? 72 : 56, height: isTablet ? 72 : 56, borderRadius: isTablet ? 22 : 18, background: "rgba(255,255,255,.18)" }}>
+                <User className={isTablet ? "w-8 h-8 text-white" : "w-7 h-7 text-white"} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p style={{ fontFamily: ED_SERIF, fontSize: fs(isTablet ? 32 : 26), lineHeight: 1.05, ...CLAMP_2 }}>{user?.first_name || user?.full_name || "Traveler"}</p>
+                <p className="truncate" style={{ fontSize: fs(isTablet ? 15 : 13.5), opacity: 0.9, marginTop: 5 }}>{user?.email}</p>
+              </div>
             </div>
             {!editing ? (
-              <button onClick={() => setEditing(true)} className="flex items-center gap-2 flex-none" style={{ background: "rgba(255,255,255,.18)", border: "1px solid rgba(255,255,255,.3)", borderRadius: 999, padding: "12px 22px", fontSize: fs(15), fontWeight: 600 }}><Edit3 className="w-4 h-4" />Edit</button>
+              <button onClick={() => setEditing(true)} className={`flex items-center justify-center gap-2 flex-none ${isTablet ? "" : "w-full"}`} style={{ background: "rgba(255,255,255,.18)", border: "1px solid rgba(255,255,255,.3)", borderRadius: 999, padding: isTablet ? "12px 22px" : "11px 22px", fontSize: fs(isTablet ? 15 : 14), fontWeight: 600 }}><Edit3 className="w-4 h-4" />Edit</button>
             ) : (
-              <div className="flex items-center gap-2 flex-none">
-                <button onClick={cancelEdit} style={{ background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.28)", borderRadius: 999, padding: "12px 18px", fontSize: fs(14), fontWeight: 600 }}>Cancel</button>
-                <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 disabled:opacity-50" style={{ background: "#fff", color: TEAL_DEEP, borderRadius: 999, padding: "12px 20px", fontSize: fs(14), fontWeight: 700 }}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Save</button>
+              <div className={`flex items-center gap-2 flex-none ${isTablet ? "" : "w-full"}`}>
+                <button onClick={cancelEdit} className={isTablet ? "" : "flex-1"} style={{ background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.28)", borderRadius: 999, padding: "12px 18px", fontSize: fs(14), fontWeight: 600 }}>Cancel</button>
+                <button onClick={handleSave} disabled={saving} className={`flex items-center justify-center gap-1.5 disabled:opacity-50 ${isTablet ? "" : "flex-1"}`} style={{ background: "#fff", color: TEAL_DEEP, borderRadius: 999, padding: "12px 20px", fontSize: fs(14), fontWeight: 700 }}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Save</button>
               </div>
             )}
           </div>
 
           {/* Travel preferences group */}
-          <EdGroup kicker="Travel preferences">
-            <EdRow icon={Mail} iconBg={CAT.atm.ink} title="Email" desc="Your sign-in address" control={{ node: <EdValue>{user?.email}</EdValue> }} />
-            <EdRow icon={User} iconBg={CAT.culture.ink} title="First Name" desc="Used to greet you across the app"
+          <EdGroup kicker="Travel preferences" isTablet={isTablet}>
+            <EdRow isTablet={isTablet} step={fontStep} icon={Mail} iconBg={CAT.atm.ink} title="Email" desc="Your sign-in address" control={{ node: <EdValue>{user?.email}</EdValue> }} />
+            <EdRow isTablet={isTablet} step={fontStep} icon={User} iconBg={CAT.culture.ink} title="First Name" desc="Used to greet you across the app"
               control={editing
                 ? { below: true, node: <Input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Enter your first name" className="h-12 rounded-xl" style={{ borderColor: ED_RULE }} /> }
                 : { node: <EdValue>{user?.first_name || user?.full_name || "Not set"}</EdValue> }}
             />
-            <EdRow icon={Globe} iconBg={CAT.restroom.ink} title="Home Country" desc="Sets your home flag & currency"
+            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.restroom.ink} title="Home Country" desc="Sets your home flag & currency"
               control={editing
                 ? { below: true, node: countryDropdown }
                 : { node: <EdValue>{user?.home_country || "Not set"}</EdValue> }}
             />
             {editing && (
-              <EdRow icon={Globe} iconBg={CAT.transit.ink} title="Show Home Country Time" desc="Display home country time on home page"
+              <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.transit.ink} title="Show Home Country Time" desc="Display home country time on home page"
                 control={{ node: <EdToggle on={showHomeCountryInfo} onClick={() => setShowHomeCountryInfo(!showHomeCountryInfo)} label="Toggle home country time" /> }}
               />
             )}
             {editing && (
-              <EdRow icon={Globe} iconBg={CAT.weather.ink} title="Show Home Country Flag" desc="Display your flag on the home page card"
+              <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.weather.ink} title="Show Home Country Flag" desc="Display your flag on the home page card"
                 control={{ node: <EdToggle on={showHomeFlag} onClick={() => setShowHomeFlag(!showHomeFlag)} label="Toggle home country flag" /> }}
                 last
               />
@@ -577,18 +633,18 @@ export default function SettingsPage() {
           </EdGroup>
 
           {/* Currency & language group */}
-          <EdGroup kicker="Currency & language">
-            <EdRow icon={DollarSign} iconBg={CAT.money.ink} title="Preferred Currency" desc="How prices are displayed across the app"
+          <EdGroup kicker="Currency & language" isTablet={isTablet}>
+            <EdRow isTablet={isTablet} step={fontStep} icon={DollarSign} iconBg={CAT.money.ink} title="Preferred Currency" desc="How prices are displayed across the app"
               control={editing
                 ? { below: true, node: (<Select value={preferredCurrency} onValueChange={setPreferredCurrency}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue placeholder="Select preferred currency" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{CURRENCIES.map((currency) => (<SelectItem key={currency.code} value={currency.code}>{currency.flag} {currency.name} ({currency.code})</SelectItem>))}</SelectContent></Select>) }
                 : { node: <EdValue>{user?.preferred_currencies?.[0] ? CURRENCIES.find(c => c.code === user.preferred_currencies[0])?.name : "Not set"}</EdValue> }}
             />
-            <EdRow icon={CreditCard} iconBg={CAT.atm.ink} title="Primary Banking Currency" desc="The currency of the bank account or card you'll use at ATMs"
+            <EdRow isTablet={isTablet} step={fontStep} icon={CreditCard} iconBg={CAT.atm.ink} title="Primary Banking Currency" desc="The currency of the bank account or card you'll use at ATMs"
               control={editing
                 ? { below: true, node: (<Select value={primaryBankingCurrency} onValueChange={setPrimaryBankingCurrency}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue placeholder="Select banking currency" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{CURRENCIES.map((currency) => (<SelectItem key={currency.code} value={currency.code}>{currency.flag} {currency.name} ({currency.code})</SelectItem>))}</SelectContent></Select>) }
                 : { node: <EdValue>{user?.primary_banking_currency ? (CURRENCIES.find(c => c.code === user.primary_banking_currency)?.name || user.primary_banking_currency) : "Not set"}</EdValue> }}
             />
-            <EdRow icon={Languages} iconBg={CAT.transit.ink} title="Preferred Language" desc="Translates menus, signs & phrases"
+            <EdRow isTablet={isTablet} step={fontStep} icon={Languages} iconBg={CAT.transit.ink} title="Preferred Language" desc="Translates menus, signs & phrases"
               control={editing
                 ? { below: true, node: (<Select value={preferredLanguage} onValueChange={setPreferredLanguage}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue placeholder="Select preferred language" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{LANGUAGES.map((language) => (<SelectItem key={language.code} value={language.code}>{language.flag} {language.name}</SelectItem>))}</SelectContent></Select>) }
                 : { node: <EdValue>{LANGUAGES.find(l => l.code === user?.preferred_language)?.name || "Not set"}</EdValue> }}
@@ -597,13 +653,13 @@ export default function SettingsPage() {
           </EdGroup>
 
           {/* Units group */}
-          <EdGroup kicker="Units">
-            <EdRow icon={Thermometer} iconBg={CAT.weather.ink} title="Temperature Scale" desc="Used across Weather & finders"
+          <EdGroup kicker="Units" isTablet={isTablet}>
+            <EdRow isTablet={isTablet} step={fontStep} icon={Thermometer} iconBg={CAT.weather.ink} title="Temperature Scale" desc="Used across Weather & finders"
               control={editing
                 ? { below: true, node: (<Select value={preferredTempScale} onValueChange={setPreferredTempScale}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue /></SelectTrigger><SelectContent className="rounded-xl"><SelectItem value="celsius">Celsius (°C)</SelectItem><SelectItem value="fahrenheit">Fahrenheit (°F)</SelectItem></SelectContent></Select>) }
                 : { node: <EdValue>{user?.preferred_temperature_scale === 'celsius' ? 'Celsius (°C)' : 'Fahrenheit (°F)'}</EdValue> }}
             />
-            <EdRow icon={MapPin} iconBg={CAT.money.ink} title="Distance Unit" desc="Used across all finders"
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.money.ink} title="Distance Unit" desc="Used across all finders"
               control={editing
                 ? { below: true, node: (<Select value={preferredDistanceUnit} onValueChange={setPreferredDistanceUnit}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue /></SelectTrigger><SelectContent className="rounded-xl"><SelectItem value="km">Kilometers (km)</SelectItem><SelectItem value="miles">Miles (mi)</SelectItem></SelectContent></Select>) }
                 : { node: <EdValue>{user?.preferred_distance_unit === 'miles' ? 'Miles (mi)' : 'Kilometers (km)'}</EdValue> }}
@@ -612,149 +668,28 @@ export default function SettingsPage() {
           </EdGroup>
 
           {/* Account & navigation group */}
-          <EdGroup kicker="Account">
+          <EdGroup kicker="Account" isTablet={isTablet}>
             {navItems.map((n) => (
-              <button key={n.title} onClick={n.onClick} className="w-full flex items-center gap-4 text-left transition-colors" style={{ padding: "20px 24px", borderBottom: `1px solid ${ED_RULE}` }}>
-                <div className="flex items-center justify-center flex-none" style={{ width: 44, height: 44, borderRadius: 13, background: n.bg, color: "#fff" }}><n.icon className="w-5 h-5" /></div>
+              <button key={n.title} onClick={n.onClick} className="w-full flex items-center gap-4 text-left transition-colors" style={{ padding: isTablet ? "20px 24px" : "16px 16px", minHeight: isTablet ? 84 : 70, borderBottom: `1px solid ${ED_RULE}` }}>
+                <div className="flex items-center justify-center flex-none" style={{ width: isTablet ? 44 : 38, height: isTablet ? 44 : 38, borderRadius: isTablet ? 13 : 11, background: n.bg, color: "#fff" }}><n.icon className={isTablet ? "w-5 h-5" : "w-[18px] h-[18px]"} /></div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold" style={{ fontFamily: ED_SERIF, fontSize: fs(20), color: ED_INK, lineHeight: 1.1 }}>{n.title}</p>
-                  <p style={{ fontSize: fs(13), color: ED_INK3, marginTop: 3, lineHeight: 1.35 }}>{n.desc}</p>
+                  <p className="font-semibold" style={{ fontFamily: ED_SERIF, fontSize: fs(20), color: ED_INK, lineHeight: 1.1, ...CLAMP_2 }}>{n.title}</p>
+                  <p style={{ fontSize: fs(isTablet ? 13 : 13.5), color: ED_INK3, marginTop: 3, lineHeight: 1.35, ...CLAMP_2 }}>{n.desc}</p>
                 </div>
                 <ChevronRight className="w-5 h-5 flex-none" style={{ color: ED_INK3, opacity: 0.6 }} />
               </button>
             ))}
-            <button onClick={logout} className="w-full flex items-center justify-center gap-3 transition-colors" style={{ padding: "20px 24px" }}>
+            <button onClick={logout} className="w-full flex items-center justify-center gap-3 transition-colors" style={{ padding: isTablet ? "20px 24px" : "16px 16px" }}>
               <LogOut className="w-5 h-5" style={{ color: TEAL_DEEP }} />
-              <span className="font-semibold" style={{ fontFamily: ED_SERIF, fontSize: fs(19), color: TEAL_DEEP }}>Sign Out</span>
+              <span className="font-semibold" style={{ fontFamily: ED_SERIF, fontSize: fs(isTablet ? 19 : 18), color: TEAL_DEEP }}>Sign Out</span>
             </button>
           </EdGroup>
 
-          <p className="text-center" style={{ marginTop: 32, fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".08em", color: ED_INK3, textTransform: "uppercase" }}>Made for travelers worldwide · © 2025 Globeskimmers</p>
+          <p className="text-center" style={{ marginTop: isTablet ? 32 : 26, fontFamily: ED_MONO, fontSize: fs(isTablet ? 11 : 10), letterSpacing: ".08em", color: ED_INK3, textTransform: "uppercase" }}>Made for travelers worldwide · © 2025 Globeskimmers</p>
         </div>
 
         <ContactUsModal isOpen={showContactUs} onClose={() => setShowContactUs(false)} />
         <RefreshAccessModal isOpen={showRefreshAccess} onClose={() => setShowRefreshAccess(false)} />
       </div>
     );
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f7fafc] via-[#eef2ff] to-[#f3e8ff]">
-      <div className="relative bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white px-6 py-8 overflow-hidden">
-        <div className="absolute inset-0 opacity-10"><div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div></div>
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full blur-2xl"></div>
-        <div className="relative z-10 flex items-center justify-between mb-4">
-          <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 flex items-center justify-center transition-all shadow-lg active:scale-95"><X className="w-6 h-6" /></button>
-          <button onClick={logout} className="flex items-center gap-2 px-4 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white font-semibold text-[calc(13px*var(--fs))] transition-all shadow-lg active:scale-95"><LogOut className="w-4 h-4" />Sign Out</button>
-        </div>
-        <div className="relative z-10"><h1 className="text-[calc(32px*var(--fs))] font-extrabold mb-2 tracking-tight">Settings</h1><p className="text-[calc(15px*var(--fs))] text-white/90">Manage your account and preferences</p></div>
-      </div>
-
-      <div className="max-w-2xl mx-auto px-5 py-6 pb-8">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white/80 backdrop-blur-md rounded-3xl shadow-xl p-6 mb-6 border border-white/50">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#667eea] to-[#764ba2] flex items-center justify-center shadow-lg"><User className="w-6 h-6 text-white" /></div>
-              <h2 className="text-[calc(22px*var(--fs))] font-bold text-gray-900">Profile</h2>
-            </div>
-            {!editing ? (
-              <button onClick={() => setEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white font-semibold rounded-xl hover:opacity-90 transition-all shadow-md"><Edit3 className="w-4 h-4" />Edit</button>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                <button onClick={() => { setEditing(false); setFirstName(user?.first_name || ""); setHomeCountry(user?.home_country || ""); setShowHomeCountryInfo(user?.show_home_country_info || false); setShowHomeFlag(user?.show_home_flag || false); setPreferredCurrency(user?.preferred_currencies?.[0] || "USD"); setPrimaryBankingCurrency(user?.primary_banking_currency || user?.preferred_currencies?.[0] || "USD"); setPreferredLanguage(user?.preferred_language || "en"); setPreferredTempScale(user?.preferred_temperature_scale || "fahrenheit"); setPreferredDistanceUnit(user?.preferred_distance_unit || "km"); }} className="px-2.5 py-1.5 text-xs text-gray-700 font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition-all">Cancel</button>
-                <button onClick={handleSave} disabled={saving} className="px-2.5 py-1.5 text-xs bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium rounded-lg hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-1">{saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}Save</button>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <div><label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2"><Mail className="w-4 h-4" />Email</label><div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl text-gray-700 font-medium border border-gray-200">{user?.email}</div></div>
-
-            <div><label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2"><User className="w-4 h-4" />First Name</label>
-              {editing ? (<Input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Enter your first name" className="h-12 rounded-xl border-gray-300 focus:border-[#667eea] focus:ring-[#667eea]" />) : (<div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl text-gray-900 font-medium border border-gray-200">{user?.first_name || user?.full_name || "Not set"}</div>)}
-            </div>
-
-            <div><label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2"><Globe className="w-4 h-4" />Home Country</label>
-              {editing ? (
-                <div className="relative" ref={countryBoxRef}>
-                  <button type="button" onClick={() => setCountryOpen((o) => !o)} className="w-full h-12 px-4 rounded-xl border border-gray-300 bg-white flex items-center justify-between text-left">
-                    <span className={homeCountry ? "text-gray-900 font-medium" : "text-gray-400"}>{homeCountry || "Select your home country"}</span>
-                    <ChevronDown className="w-5 h-5 text-gray-400" />
-                  </button>
-                  {countryOpen && (
-                    <div className="absolute z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden">
-                      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
-                        <Search className="w-4 h-4 text-gray-400" />
-                        <input autoFocus value={countryQuery} onChange={(e) => setCountryQuery(e.target.value)} placeholder="Type a country (e.g. US, USA)…" className="flex-1 outline-none bg-transparent text-gray-900 text-[calc(14px*var(--fs))]" />
-                      </div>
-                      <div className="max-h-[260px] overflow-y-auto">
-                        {searchCountries(countryQuery).map((c) => (
-                          <button key={c.code} type="button" onClick={() => { setHomeCountry(c.name); setCountryOpen(false); setCountryQuery(""); }} className={`w-full text-left px-4 py-2.5 hover:bg-indigo-50 flex items-center justify-between ${c.name === homeCountry ? "bg-indigo-50" : ""}`}>
-                            <span className="text-gray-900 text-[calc(14px*var(--fs))]">{c.name}</span>
-                            {c.name === homeCountry && <Check className="w-4 h-4 text-indigo-600" />}
-                          </button>
-                        ))}
-                        {searchCountries(countryQuery).length === 0 && (<div className="px-4 py-3 text-gray-400 text-[calc(13px*var(--fs))]">No match</div>)}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (<div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl text-gray-900 font-medium border border-gray-200">{user?.home_country || "Not set"}</div>)}
-            </div>
-
-            {editing && (<div className="flex items-center justify-between p-5 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl border border-indigo-200 shadow-sm"><div><p className="font-bold text-gray-900 text-[calc(15px*var(--fs))]">Show Home Country Time</p><p className="text-sm text-gray-600 mt-0.5">Display home country time on home page</p></div><button onClick={() => setShowHomeCountryInfo(!showHomeCountryInfo)} className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all duration-300 shadow-lg ${showHomeCountryInfo ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2]' : 'bg-gray-300'}`}><span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-300 ${showHomeCountryInfo ? 'translate-x-7' : 'translate-x-1'}`} /></button></div>)}
-
-            {editing && (<div className="flex items-center justify-between p-5 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl border border-indigo-200 shadow-sm"><div><p className="font-bold text-gray-900 text-[calc(15px*var(--fs))]">Show Home Country Flag</p><p className="text-sm text-gray-600 mt-0.5">Display your flag on the home page card</p></div><button onClick={() => setShowHomeFlag(!showHomeFlag)} className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all duration-300 shadow-lg ${showHomeFlag ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2]' : 'bg-gray-300'}`}><span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-300 ${showHomeFlag ? 'translate-x-7' : 'translate-x-1'}`} /></button></div>)}
-
-            <div><label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2"><DollarSign className="w-4 h-4" />Preferred Currency</label>
-              <p className="text-xs text-gray-500 -mt-1 mb-2">How prices are displayed across the app.</p>
-              {editing ? (<Select value={preferredCurrency} onValueChange={setPreferredCurrency}><SelectTrigger className="h-12 rounded-xl border-gray-300"><SelectValue placeholder="Select preferred currency" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{CURRENCIES.map((currency) => (<SelectItem key={currency.code} value={currency.code}>{currency.flag} {currency.name} ({currency.code})</SelectItem>))}</SelectContent></Select>) : (<div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl text-gray-900 font-medium border border-gray-200">{user?.preferred_currencies?.[0] ? CURRENCIES.find(c => c.code === user.preferred_currencies[0])?.name : "Not set"}</div>)}
-            </div>
-
-            {/* Primary banking currency — the currency of the bank account or
-                card the user actually withdraws FROM at ATMs. Used by the ATM
-                Finder Withdrawal Calculator to set the default "Withdraw From"
-                currency. Distinct from Preferred Currency above per the ATM
-                redesign spec. */}
-            <div><label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2"><CreditCard className="w-4 h-4" />Primary Banking Currency</label>
-              <p className="text-xs text-gray-500 -mt-1 mb-2">The currency of the bank account or card you'll use at ATMs.</p>
-              {editing ? (<Select value={primaryBankingCurrency} onValueChange={setPrimaryBankingCurrency}><SelectTrigger className="h-12 rounded-xl border-gray-300"><SelectValue placeholder="Select banking currency" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{CURRENCIES.map((currency) => (<SelectItem key={currency.code} value={currency.code}>{currency.flag} {currency.name} ({currency.code})</SelectItem>))}</SelectContent></Select>) : (<div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl text-gray-900 font-medium border border-gray-200">{user?.primary_banking_currency ? (CURRENCIES.find(c => c.code === user.primary_banking_currency)?.name || user.primary_banking_currency) : "Not set"}</div>)}
-            </div>
-
-            <div><label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2"><Languages className="w-4 h-4" />Preferred Language</label>
-              {editing ? (<Select value={preferredLanguage} onValueChange={setPreferredLanguage}><SelectTrigger className="h-12 rounded-xl border-gray-300"><SelectValue placeholder="Select preferred language" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{LANGUAGES.map((language) => (<SelectItem key={language.code} value={language.code}>{language.flag} {language.name}</SelectItem>))}</SelectContent></Select>) : (<div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl text-gray-900 font-medium border border-gray-200">{LANGUAGES.find(l => l.code === user?.preferred_language)?.name || "Not set"}</div>)}
-            </div>
-
-            <div><label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2"><Thermometer className="w-4 h-4" />Temperature Scale</label>
-              {editing ? (<Select value={preferredTempScale} onValueChange={setPreferredTempScale}><SelectTrigger className="h-12 rounded-xl border-gray-300"><SelectValue /></SelectTrigger><SelectContent className="rounded-xl"><SelectItem value="celsius">Celsius (°C)</SelectItem><SelectItem value="fahrenheit">Fahrenheit (°F)</SelectItem></SelectContent></Select>) : (<div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl text-gray-900 font-medium border border-gray-200">{user?.preferred_temperature_scale === 'celsius' ? 'Celsius (°C)' : 'Fahrenheit (°F)'}</div>)}
-            </div>
-
-            <div><label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2"><MapPin className="w-4 h-4" />Distance Unit</label>
-              {editing ? (<Select value={preferredDistanceUnit} onValueChange={setPreferredDistanceUnit}><SelectTrigger className="h-12 rounded-xl border-gray-300"><SelectValue /></SelectTrigger><SelectContent className="rounded-xl"><SelectItem value="km">Kilometers (km)</SelectItem><SelectItem value="miles">Miles (mi)</SelectItem></SelectContent></Select>) : (<div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl text-gray-900 font-medium border border-gray-200">{user?.preferred_distance_unit === 'miles' ? 'Miles (mi)' : 'Kilometers (km)'}</div>)}
-            </div>
-
-            {editing && (<div className="flex gap-2 pt-2">
-              <button onClick={() => { setEditing(false); setFirstName(user?.first_name || ""); setHomeCountry(user?.home_country || ""); setShowHomeCountryInfo(user?.show_home_country_info || false); setShowHomeFlag(user?.show_home_flag || false); setPreferredCurrency(user?.preferred_currencies?.[0] || "USD"); setPrimaryBankingCurrency(user?.primary_banking_currency || user?.preferred_currencies?.[0] || "USD"); setPreferredLanguage(user?.preferred_language || "en"); setPreferredTempScale(user?.preferred_temperature_scale || "fahrenheit"); setPreferredDistanceUnit(user?.preferred_distance_unit || "km"); }} className="flex-1 px-4 py-3 text-gray-700 font-semibold bg-gray-100 hover:bg-gray-200 rounded-xl transition-all">Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="flex-1 px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-md">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Save</button>
-            </div>)}
-          </div>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="space-y-3 mb-6">
-          <button onClick={() => navigate(createPageUrl("SavedLocations"))} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><MapPin className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[calc(15px*var(--fs))] font-bold text-white">Saved Locations</p><p className="text-[calc(13px*var(--fs))] text-white/90">Manage your favorite places</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>
-          {isAdmin && (<button onClick={() => navigate(createPageUrl("AdminDashboard"))} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><Shield className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[calc(15px*var(--fs))] font-bold text-white">Admin Portal</p><p className="text-[calc(13px*var(--fs))] text-white/90">Manage app and users</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>)}
-          {isAdmin && (<button onClick={() => navigate(createPageUrl("AdminAnalytics"))} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-indigo-600 to-slate-800 hover:from-indigo-700 hover:to-slate-900 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><BarChart3 className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[calc(15px*var(--fs))] font-bold text-white">Analytics</p><p className="text-[calc(13px*var(--fs))] text-white/90">Page views, searches, zero-results</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>)}
-          {isAdmin && (<button onClick={() => setShowRefreshAccess(true)} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><RefreshCw className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[calc(15px*var(--fs))] font-bold text-white">Refresh Access</p><p className="text-[calc(13px*var(--fs))] text-white/90">Grant the refresh button to users</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>)}
-          <button onClick={() => setShowContactUs(true)} className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 rounded-2xl transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98]"><div className="w-12 h-12 rounded-2xl bg-white/30 backdrop-blur-sm flex items-center justify-center shadow-lg"><MessageCircle className="w-6 h-6 text-white" /></div><div className="text-left flex-1"><p className="text-[calc(15px*var(--fs))] font-bold text-white">Contact Us</p><p className="text-[calc(13px*var(--fs))] text-white/90">Get in touch with our team</p></div><ChevronRight className="w-5 h-5 text-white/80" /></button>
-          <button onClick={logout} className="w-full flex items-center justify-center gap-3 p-4 bg-gray-100 hover:bg-gray-200 rounded-2xl transition-all text-gray-700 font-medium"><LogOut className="w-5 h-5" /><span>Sign Out</span></button>
-        </motion.div>
-
-        <div className="mt-8 text-center text-sm text-gray-500 pb-8"><p className="font-medium">Made with ❤️ for travelers worldwide</p><p className="mt-2 text-xs">© 2025 Globeskimmers. All rights reserved.</p></div>
-      </div>
-
-      <ContactUsModal isOpen={showContactUs} onClose={() => setShowContactUs(false)} />
-      <RefreshAccessModal isOpen={showRefreshAccess} onClose={() => setShowRefreshAccess(false)} />
-    </div>
-  );
 }
