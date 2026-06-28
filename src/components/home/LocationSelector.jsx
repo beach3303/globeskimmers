@@ -28,13 +28,9 @@ export default function LocationSelector({ isOpen, onClose, onLocationSelected }
     setErrorMessage("");
     
     try {
-      console.log("Searching for location:", searchQuery);
-      
       const response = await callWorker(ROUTE.searchLocation, {
         query: searchQuery
       });
-
-      console.log("Search response:", response);
 
       // Check if response has data property
       if (!response || !response.data) {
@@ -86,8 +82,6 @@ export default function LocationSelector({ isOpen, onClose, onLocationSelected }
     setErrorMessage("");
     
     try {
-      console.log("Getting current location...");
-      
       const position = await getCurrentPositionSmart({
         enableHighAccuracy: true,
         timeout: 10000,
@@ -95,16 +89,11 @@ export default function LocationSelector({ isOpen, onClose, onLocationSelected }
       });
 
       const { latitude, longitude } = position.coords;
-      
-      console.log("Got coordinates:", latitude, longitude);
-      console.log("Reverse geocoding...");
 
       const response = await callWorker(ROUTE.reverseGeocode, {
         latitude,
         longitude
       });
-
-      console.log("Reverse geocode response:", response);
 
       if (!response || !response.data) {
         setErrorMessage("Invalid response from server. Please try again.");

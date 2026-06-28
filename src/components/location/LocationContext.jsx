@@ -1,8 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { base44 } from '@/api/base44Client';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { getCurrentPositionSmart } from '@/lib/geolocation';
+import {
+  getSavedLocations as readSavedLocations,
+  saveSavedLocation,
+  updateSavedLocation,
+  deleteSavedLocation,
+} from '@/lib/savedLocations';
 
 const LocationContext = createContext();
 
@@ -19,6 +24,14 @@ const _store = {
   currentGpsLocation: null,
   initDone: false,
 };
+
+// Last active location, persisted ON-DEVICE so it survives app launches with no
+// Base44/Supabase round-trip (the old base44.auth.me() restore is dead on native).
+// First-time users with nothing saved fall through to the welcome / location-
+// picker flow on Home.
+const LAST_LOC_KEY = 'gs_last_location_v1';
+const readLastLocation = () => { try { const r = localStorage.getItem(LAST_LOC_KEY); return r ? JSON.parse(r) : null; } catch { return null; } };
+const writeLastLocation = (loc) => { try { if (loc?.coordinates) localStorage.setItem(LAST_LOC_KEY, JSON.stringify(loc)); } catch { /* ignore */ } };
 
 export function useLocation() {
   const context = useContext(LocationContext);
@@ -56,8 +69,8 @@ export function LocationProvider({ children }) {
     try {
       const res = await callWorker(ROUTE.reverseGeocode, { latitude, longitude });
       data = (res && res.data) || {};
-    } catch (geoErr) {
-      console.log('reverseGeocode failed; using coordinates only:', geoErr?.message || geoErr);
+    } catch {
+      // reverseGeocode failed — non-fatal; fall back to bare coordinates.
     }
 
     const formatted = [data.city, data.state_or_country].filter(Boolean).join(', ');
@@ -86,98 +99,26 @@ export function LocationProvider({ children }) {
       setInitialized(true);
       return;
     }
+    _store.initDone = true; // claim init (prevents concurrent/remount re-runs)
     try {
-      const isAuth = await base44.auth.isAuthenticated();
-      if (!isAuth) {
-        // Don't mark initDone — let a later mount retry once auth is ready.
-        setLoading(false);
-        setInitialized(true);
-        return;
-      }
-
-      _store.initDone = true; // claim init (prevents concurrent/remount re-runs)
-
-      const user = await base44.auth.me();
-
-      if (user.location_mode === 'navigate' && user.selected_location) {
+      // Restore the last location from on-device storage — auth-independent, so
+      // it works on native where there's no Base44 session. A returning user
+      // gets their last location immediately (finders work, no picker); a
+      // first-time user has nothing saved and falls through to Home's welcome /
+      // location-picker flow to choose one.
+      const last = readLastLocation();
+      if (last?.coordinates) {
         setLocationMode('navigate');
-        setSelectedLocation(user.selected_location);
-      } else if (user.location_mode === 'current') {
-        try {
-          await getCurrentLocation();
-          setLocationMode('current');
-          await base44.auth.updateMe({ location_permission_granted: true });
-        } catch (error) {
-          console.log('GPS not available during init, using fallback');
-          if (user.last_used_location) {
-            setLocationMode('navigate');
-            setSelectedLocation(user.last_used_location);
-          } else if (user.selected_location) {
-            setLocationMode('navigate');
-            setSelectedLocation(user.selected_location);
-          } else {
-            setLocationMode('navigate');
-          }
-        }
-      } else if (user.custom_location && !user.location_mode) {
-        const oldLocation = user.custom_location;
-        if (oldLocation.latitude && oldLocation.longitude) {
-          const migratedLocation = {
-            placeName: oldLocation.city || 'Selected Location',
-            address: {
-              formatted: `${oldLocation.city}, ${oldLocation.state_or_country}`,
-              city: oldLocation.city || '',
-              state: '',
-              postalCode: '',
-              country: oldLocation.country || oldLocation.state_or_country || '',
-            },
-            coordinates: {
-              latitude: oldLocation.latitude,
-              longitude: oldLocation.longitude,
-            },
-            placeType: 'location',
-            migrated: true,
-          };
-          setLocationMode('navigate');
-          setSelectedLocation(migratedLocation);
-          await base44.auth.updateMe({
-            location_mode: 'navigate',
-            selected_location: migratedLocation,
-          });
-        }
-      } else {
-        // New user — default to current location.
-        try {
-          await getCurrentLocation();
-          setLocationMode('current');
-          await base44.auth.updateMe({
-            location_mode: 'current',
-            location_permission_granted: true,
-          });
-        } catch (error) {
-          setLocationMode('navigate');
-        }
+        setSelectedLocation(last);
       }
-
-      setInitialized(true);
-      setLoading(false);
-    } catch (error) {
-      setLocationMode('current');
-      setLoading(false);
-      setInitialized(true);
-    }
-  }, [getCurrentLocation, setLocationMode, setSelectedLocation]);
+    } catch (e) { /* ignore — picker flow handles a fresh start */ }
+    setInitialized(true);
+    setLoading(false);
+  }, [setLocationMode, setSelectedLocation]);
 
   const getActiveLocation = useCallback(() => {
     return locationMode === 'current' ? currentGpsLocation : selectedLocation;
   }, [locationMode, selectedLocation, currentGpsLocation]);
-
-  // TEMP DIAGNOSTIC: mount/unmount. If these spam, the provider is re-mounting
-  // in a loop (the real bug). If it logs once, re-mount is NOT the issue.
-  useEffect(() => {
-    console.log('🟢 LocationProvider MOUNTED');
-    return () => console.log('🔴 LocationProvider UNMOUNTED');
-  }, []);
 
   // Run init once (initializeLocation is stable). Safe across remounts because
   // of the initDone guard.
@@ -187,9 +128,7 @@ export function LocationProvider({ children }) {
 
   // Keep activeLocation in sync with mode + the two location slots.
   useEffect(() => {
-    const al = getActiveLocation();
-    console.log('🔵 activeLocation →', al?.placeName ?? '(none)', '| mode:', locationMode);
-    setActiveLocation(al);
+    setActiveLocation(getActiveLocation());
   }, [getActiveLocation, locationMode]);
 
   const switchToCurrentLocation = useCallback(async () => {
@@ -201,16 +140,7 @@ export function LocationProvider({ children }) {
         setLocationMode('current');
         setSelectedLocation(null);
         setCurrentGpsLocation(gpsLoc);
-
-        const isAuth = await base44.auth.isAuthenticated();
-        if (isAuth) {
-          await base44.auth.updateMe({
-            location_mode: 'current',
-            selected_location: null,
-            last_used_location: gpsLoc,
-            location_permission_granted: true,
-          });
-        }
+        writeLastLocation(gpsLoc); // remember across launches (on-device)
 
         window.dispatchEvent(new CustomEvent('location:changed', {
           detail: { mode: 'current', location: gpsLoc },
@@ -221,16 +151,6 @@ export function LocationProvider({ children }) {
       return false;
     } catch (error) {
       console.error('Error getting current location:', error);
-      if (error.code === 1) {
-        try {
-          const isAuth = await base44.auth.isAuthenticated();
-          if (isAuth) {
-            await base44.auth.updateMe({ location_permission_granted: false });
-          }
-        } catch (e) {
-          console.error('Error updating permission status:', e);
-        }
-      }
       throw error;
     } finally {
       setLoading(false);
@@ -239,18 +159,9 @@ export function LocationProvider({ children }) {
 
   const switchToNavigateMode = useCallback(async (location) => {
     try {
-      console.log('🟣 switchToNavigateMode →', location?.placeName);
       setLocationMode('navigate');
       setSelectedLocation(location);
-
-      const isAuth = await base44.auth.isAuthenticated();
-      if (isAuth) {
-        await base44.auth.updateMe({
-          location_mode: 'navigate',
-          selected_location: location,
-          last_used_location: location,
-        });
-      }
+      writeLastLocation(location); // remember across launches (on-device)
 
       window.dispatchEvent(new CustomEvent('location:changed', {
         detail: { mode: 'navigate', location },
@@ -260,55 +171,23 @@ export function LocationProvider({ children }) {
     }
   }, [setLocationMode, setSelectedLocation]);
 
-  const saveLocation = useCallback(async (location, nickname = null) => {
-    try {
-      const isAuth = await base44.auth.isAuthenticated();
-      if (!isAuth) return false;
-
-      const user = await base44.auth.me();
-      const savedLocations = user.saved_locations || [];
-
-      const locationToSave = {
-        ...location,
-        nickname: nickname || location.placeName,
-        savedAt: new Date().toISOString(),
-      };
-
-      const exists = savedLocations.some(loc =>
-        loc.coordinates.latitude === location.coordinates.latitude &&
-        loc.coordinates.longitude === location.coordinates.longitude
-      );
-
-      if (!exists) {
-        savedLocations.push(locationToSave);
-        await base44.auth.updateMe({ saved_locations: savedLocations });
-      }
-
-      return true;
-    } catch (error) {
-      return false;
-    }
+  // Saved / favorite locations now live ON-DEVICE (localStorage) — see
+  // src/lib/savedLocations.js. (The old base44.auth.updateMe({saved_locations})
+  // path silently failed once auth moved to Supabase, so saves never stuck.)
+  // These wrappers keep the existing async-ish call sites working.
+  const saveLocation = useCallback((location, nickname = null) => {
+    try { saveSavedLocation(location, nickname); return true; } catch (e) { return false; }
   }, []);
 
-  const deleteLocation = useCallback(async (location) => {
-    try {
-      const isAuth = await base44.auth.isAuthenticated();
-      if (!isAuth) return false;
-
-      const user = await base44.auth.me();
-      const savedLocations = user.saved_locations || [];
-
-      const updated = savedLocations.filter(loc =>
-        !(loc.coordinates.latitude === location.coordinates.latitude &&
-          loc.coordinates.longitude === location.coordinates.longitude)
-      );
-
-      await base44.auth.updateMe({ saved_locations: updated });
-      return true;
-    } catch (error) {
-      return false;
-    }
+  const updateLocation = useCallback((match, changes) => {
+    try { return updateSavedLocation(match, changes); } catch (e) { return false; }
   }, []);
+
+  const deleteLocation = useCallback((location) => {
+    try { deleteSavedLocation(location); return true; } catch (e) { return false; }
+  }, []);
+
+  const getSavedLocations = useCallback(() => readSavedLocations(), []);
 
   const value = useMemo(() => ({
     locationMode,
@@ -320,7 +199,9 @@ export function LocationProvider({ children }) {
     switchToCurrentLocation,
     switchToNavigateMode,
     saveLocation,
+    updateLocation,
     deleteLocation,
+    getSavedLocations,
     getActiveLocation,
     getCurrentLocation,
   }), [
@@ -333,7 +214,9 @@ export function LocationProvider({ children }) {
     switchToCurrentLocation,
     switchToNavigateMode,
     saveLocation,
+    updateLocation,
     deleteLocation,
+    getSavedLocations,
     getActiveLocation,
     getCurrentLocation,
   ]);

@@ -29,12 +29,10 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
     // Auto-check permission when page regains focus (user returns from Settings)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('Page visible - checking permission...');
         checkPermissionState();
         // If permission is now granted, automatically try to get location
         setTimeout(() => {
           if (permissionState === 'granted' || permissionState === 'prompt') {
-            console.log('Permission available - auto-requesting location');
             requestLocation();
           }
         }, 500);
@@ -42,7 +40,6 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
     };
 
     const handleFocus = () => {
-      console.log('Window focused - checking permission...');
       checkPermissionState();
       setTimeout(() => {
         if (permissionState === 'granted' || permissionState === 'prompt') {
@@ -81,12 +78,10 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
   const checkPermissionState = async () => {
     try {
       if (!navigator.permissions) {
-        console.log('Permissions API not supported');
         return;
       }
-      
+
       const result = await navigator.permissions.query({ name: 'geolocation' });
-      console.log('Permission state:', result.state);
       setPermissionState(result.state);
       
       // Clear error if permission is now granted
@@ -97,7 +92,6 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
       }
       
       result.addEventListener('change', () => {
-        console.log('Permission state changed:', result.state);
         setPermissionState(result.state);
         
         // Auto-request if permission granted
@@ -105,8 +99,8 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
           requestLocation();
         }
       });
-    } catch (error) {
-      console.log('Permission API not supported:', error);
+    } catch {
+      // Permissions API unavailable — non-fatal; the request flow still works.
     }
   };
 

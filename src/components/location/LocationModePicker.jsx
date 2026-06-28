@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Navigation, Search, Loader2, AlertCircle, Crosshair } from 'lucide-react';
+import { X, MapPin, Navigation, Search, Loader2, AlertCircle, Crosshair, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { base44 } from '@/api/base44Client';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { useLocation } from './LocationContext';
@@ -36,12 +35,13 @@ const PLACE_TYPE_ICONS = {
 };
 
 export default function LocationModePicker({ isOpen, onClose }) {
-  const { 
-    locationMode, 
+  const {
+    locationMode,
     selectedLocation,
     switchToCurrentLocation,
     switchToNavigateMode,
-    getCurrentLocation
+    getCurrentLocation,
+    getSavedLocations,
   } = useLocation();
   // iPad: scale the whole picker up so its (phone-sized) text + controls read
   // comfortably on the large canvas. zoom scales uniformly; the max-height is
@@ -83,16 +83,10 @@ export default function LocationModePicker({ isOpen, onClose }) {
     }
   }, [searchQuery]);
 
-  const loadSavedLocations = async () => {
-    try {
-      const isAuth = await base44.auth.isAuthenticated();
-      if (!isAuth) return;
-
-      const user = await base44.auth.me();
-      setSavedLocations(user.saved_locations || []);
-    } catch (error) {
-      console.error('Error loading saved locations:', error);
-    }
+  // Saved locations come from on-device storage now (src/lib/savedLocations.js),
+  // so this is a synchronous read — no auth/network round-trip that could fail.
+  const loadSavedLocations = () => {
+    setSavedLocations(getSavedLocations());
   };
 
   const performSearch = async (query) => {
@@ -243,12 +237,15 @@ export default function LocationModePicker({ isOpen, onClose }) {
   // focused field stays visible and the box never gets pushed above the top
   // margin when the keyboard opens. The picker/info screens have no input, so
   // center them vertically (the "middle of screen" placement requested).
+  // Phone keyboards crowd a centered box, so search/coords top-anchor on phone.
+  // iPad's big screen leaves room — center those there too (wrapper below), so
+  // the address box sits mid-screen like the Select-Location-Mode card.
   const needsKeyboard = mode === 'search' || mode === 'coords';
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className={`fixed inset-0 z-[9998] overflow-y-auto flex justify-center px-3 ${needsKeyboard ? 'items-start pt-[8vh] pb-6' : 'items-center py-[7vh]'}`}>
+        <div className={`fixed inset-0 z-[9998] overflow-y-auto flex justify-center px-3 ${(needsKeyboard && !isTablet) ? 'items-start pt-[8vh] pb-6' : 'items-center py-[7vh]'}`}>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -307,31 +304,26 @@ export default function LocationModePicker({ isOpen, onClose }) {
                   </div>
 
                   {savedLocations.length > 0 && (
-                    <div className="mb-6">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-xl">📌</span>
-                        <p className="text-sm font-bold text-gray-700">Your Saved Locations</p>
-                      </div>
-                      <div className="space-y-2 mb-4">
-                        {savedLocations.map((location, index) => (
-                          <button
-                            key={index}
-                            onClick={() => handleSelectSavedLocation(location)}
-                            className="w-full text-left p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-3 border-2 border-blue-200"
-                          >
-                            <span className="text-2xl">{PLACE_TYPE_ICONS[location.placeType] || '📍'}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-gray-900 truncate">
-                                {location.nickname || location.placeName}
-                              </p>
-                              <p className="text-xs text-gray-500 truncate">
-                                {location.address.formatted}
-                              </p>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                      
+                    <>
+                      {/* One tidy button instead of an inline list — opens a
+                          dedicated, scrollable saved-locations view (handles 10+
+                          cleanly). */}
+                      <button
+                        onClick={() => setMode('saved')}
+                        className="w-full bg-blue-50 border-2 border-blue-200 hover:bg-blue-100 rounded-xl px-4 py-3 flex items-center justify-between gap-3 transition-colors"
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <span className="text-2xl flex-shrink-0">📌</span>
+                          <span className="flex flex-col items-start leading-tight min-w-0">
+                            <span className="text-[15px] font-bold text-gray-900">Saved Locations</span>
+                            <span className="text-[12px] text-gray-500 font-medium truncate">
+                              {savedLocations.length} saved · tap to pick one
+                            </span>
+                          </span>
+                        </span>
+                        <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                      </button>
+
                       <div className="relative my-4">
                         <div className="absolute inset-0 flex items-center">
                           <span className="w-full border-t border-gray-300" />
@@ -340,7 +332,7 @@ export default function LocationModePicker({ isOpen, onClose }) {
                           <span className="bg-white px-3 text-gray-500 font-semibold">or search new location</span>
                         </div>
                       </div>
-                    </div>
+                    </>
                   )}
 
                   <Button
@@ -366,6 +358,52 @@ export default function LocationModePicker({ isOpen, onClose }) {
                     <Crosshair className="w-4 h-4" />
                     Or enter coordinates manually
                   </button>
+                </div>
+              </>
+            )}
+
+            {/* Saved Locations Mode — a focused, scrollable list to pick one to
+                navigate from (handles 10+). The ✕ returns to the select screen
+                (Use current location / search another). */}
+            {mode === 'saved' && (
+              <>
+                <div className="bg-gradient-to-r from-[#3A6EA5] to-[#1E3150] text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
+                  <h2 className="text-[20px] font-bold">Saved Locations</h2>
+                  <button
+                    onClick={() => setMode('select')}
+                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+                    aria-label="Back to location options"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-5">
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Tap a place to navigate from it</p>
+                  {savedLocations.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-10">No saved locations yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {savedLocations.map((location, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleSelectSavedLocation(location)}
+                          className="w-full text-left p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-3 border-2 border-blue-200"
+                        >
+                          <span className="text-2xl flex-shrink-0">{PLACE_TYPE_ICONS[location.placeType] || '📍'}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">
+                              {location.nickname || location.placeName}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {location.address.formatted}
+                            </p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </>
             )}
