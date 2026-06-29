@@ -48,9 +48,9 @@ export default function AccommodationStyleStep({ onNext, onSkip, onBack, value }
           </Button>
           <button
             onClick={() => onSkip()}
-            className="w-full mt-3 text-gray-500 hover:text-gray-700 text-sm"
+            className="w-full mt-5 text-gray-500 hover:text-gray-700 text-sm"
           >
-            Maybe later
+            Skip
           </button>
         </>
       }

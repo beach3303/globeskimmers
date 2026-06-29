@@ -37,22 +37,29 @@ export default function OnboardingStepLayout({ icon, title, subtitle, onBack, ch
           )}
         </div>
 
-        {/* Header */}
-        <div className="text-center shrink-0">
-          {icon && (
-            <div className="w-14 h-14 mx-auto mb-2.5 bg-gradient-to-br from-[#088395] to-[#05BFDB] rounded-full flex items-center justify-center">
-              {icon}
-            </div>
-          )}
-          <h2 className="text-2xl font-bold text-[#0A4D68] mb-1 text-center leading-tight">{title}</h2>
-          {subtitle && <p className="text-gray-600 text-[14px] text-center">{subtitle}</p>}
+        {/* Header + content + footer, vertically CENTERED in the space below the
+            Back row — so Continue/Skip land near the middle instead of stranded
+            at the very bottom on tall tablet screens. Long steps still behave:
+            the content is flex:0 1 auto + min-h-0 + overflow, so it shrinks and
+            scrolls internally rather than pushing the cluster off-screen. */}
+        <div className="flex-1 min-h-0 flex flex-col justify-center">
+          {/* Header */}
+          <div className="text-center shrink-0">
+            {icon && (
+              <div className="w-14 h-14 mx-auto mb-2.5 bg-gradient-to-br from-[#088395] to-[#05BFDB] rounded-full flex items-center justify-center">
+                {icon}
+              </div>
+            )}
+            <h2 className="text-2xl font-bold text-[#0A4D68] mb-1 text-center leading-tight">{title}</h2>
+            {subtitle && <p className="text-gray-600 text-[14px] text-center">{subtitle}</p>}
+          </div>
+
+          {/* Content — natural height; shrinks + scrolls internally if too tall */}
+          <div className="min-h-0 overflow-y-auto py-3" style={{ flex: "0 1 auto" }}>{children}</div>
+
+          {/* Footer — Continue + Skip, riding just under the content */}
+          <div className="shrink-0 pt-1">{footer}</div>
         </div>
-
-        {/* Content — scrolls internally if it can't fit */}
-        <div className="flex-1 min-h-0 overflow-y-auto py-3">{children}</div>
-
-        {/* Footer — pinned to the bottom of the viewport */}
-        <div className="shrink-0 pt-1">{footer}</div>
       </div>
     </motion.div>
   );
