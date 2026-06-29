@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDismissable } from '@/lib/dismissStack';
 
 export default function ContactUsModal({ isOpen, onClose }) {
   const [subject, setSubject] = useState("");
@@ -17,6 +18,8 @@ export default function ContactUsModal({ isOpen, onClose }) {
   // the user inside the modal so they can edit + retry without
   // re-typing.
   const [errorMessage, setErrorMessage] = useState("");
+
+  useDismissable(isOpen, onClose);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

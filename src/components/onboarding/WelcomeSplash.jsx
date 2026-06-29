@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
+import { useDismissable } from "@/lib/dismissStack";
 
 // Editorial fonts (already loaded in index.html).
 const SERIF = '"Instrument Serif", Georgia, serif';
@@ -35,6 +36,9 @@ export default function WelcomeSplash({ onProceed, onTimeout }) {
   const isTablet = useIsTablet();
   const t = (tab, phone) => (isTablet ? tab : phone);
   const fs = (n) => `calc(${n}px * var(--fs, 1))`;
+
+  // Swipe-down dismiss → same as the ✕ / Skip buttons (opens location selector).
+  useDismissable(true, onProceed);
 
   useEffect(() => {
     const timer = setTimeout(onTimeout, AUTO_MS); // no interaction → home

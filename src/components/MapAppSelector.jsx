@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Navigation, LocateFixed, Pencil } from 'lucide-react';
+import { useDismissable } from '@/lib/dismissStack';
 
 // Shared "Get Directions" sheet used by every finder. Two key behaviors:
 //   1. Destination is sent as the place's NAME + ADDRESS (human-readable) so the
@@ -21,6 +22,8 @@ export default function MapAppSelector({ isOpen, onClose, destination, userLat, 
   useEffect(() => {
     if (isOpen) { setOriginMode(haveCurrent ? 'current' : 'custom'); setCustomOrigin(''); }
   }, [isOpen, haveCurrent]);
+
+  useDismissable(isOpen, onClose);
 
   if (!isOpen || !destination) return null;
 

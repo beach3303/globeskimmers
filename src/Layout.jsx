@@ -1,8 +1,9 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { createPageUrl } from "@/utils";
+import useSwipeDownDismiss from "@/lib/swipeDismiss";
 import PWASetup from "@/components/PWASetup";
 import { ToastContainer } from "@/components/Toast";
 import { LocationProvider } from "@/components/location/LocationContext";
@@ -19,6 +20,14 @@ import { IVORY } from "@/components/redesign/constants";
 const AD_FINDER_PAGES = new Set([
   "PlacesToEat", "CoffeeFinder", "ATMFinder", "RestroomFinder",
   "ConvenienceStore", "ThingsToDo", "Shopping",
+]);
+
+// Swipe-down-to-dismiss: which pages DON'T exit on a downward swipe. Root pages
+// (Home/Onboarding) have nowhere to go; Map pans on vertical drag (would
+// conflict); the camera scanners are immersive. Overlays (photos, forms,
+// pickers) still close via the dismiss stack on EVERY page, including these.
+const SWIPE_EXIT_EXCLUDE = new Set([
+  "Home", "Onboarding", "Map", "SmartPriceScanner", "SmartTextScanner",
 ]);
 
 // Generate or retrieve session ID
@@ -62,6 +71,19 @@ export default function Layout({ children, currentPageName }) {
   // Drives the banner mount, the FloatingNav lift, and extra bottom padding so
   // the last card / radius row clears the overlay.
   const showFinderAd = AD_FINDER_PAGES.has(currentPageName);
+
+  // Swipe-down gesture: close the frontmost overlay (handled globally by the
+  // dismiss stack), or — when nothing is open — exit the page back one screen.
+  // We use react-router's history index to tell real in-app history from a cold
+  // launch, falling back to Home so a swipe can never strand the user / exit the
+  // app.
+  const handlePageDismiss = useCallback(() => {
+    if (SWIPE_EXIT_EXCLUDE.has(currentPageName)) return;
+    const idx = window.history.state?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else navigate(createPageUrl("Home"));
+  }, [currentPageName, navigate]);
+  useSwipeDownDismiss(handlePageDismiss);
   // Onboarding fills the screen itself (each step sizes to viewport − banner and
   // pins its own footer), so it must NOT get the FloatingNav bottom padding —
   // that extra 96px pushes the step taller than the viewport and scrolls the

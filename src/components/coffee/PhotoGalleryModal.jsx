@@ -1,9 +1,12 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { useDismissable } from '@/lib/dismissStack';
 
 export default function PhotoGalleryModal({ photos, initialIndex = 0, isOpen, onClose }) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+
+  useDismissable(isOpen, onClose);
 
   if (!isOpen || !photos || photos.length === 0) return null;
 

@@ -7,6 +7,7 @@ import { base44 } from "@/api/base44Client";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { getCurrentPositionSmart } from "@/lib/geolocation";
+import { useDismissable } from "@/lib/dismissStack";
 import { showToast } from "./Toast";
 
 export default function LocationSelectorModal({ isOpen, onClose, globalLocationManager }) {
@@ -16,6 +17,8 @@ export default function LocationSelectorModal({ isOpen, onClose, globalLocationM
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [recentLocations, setRecentLocations] = useState([]);
+
+  useDismissable(isOpen, onClose);
 
   useEffect(() => {
     if (isOpen && globalLocationManager) {

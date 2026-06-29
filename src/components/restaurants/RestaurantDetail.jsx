@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { X, Star, MapPin, Phone, Globe, Clock, Navigation, Share2, Heart, Info, ChevronLeft, ChevronRight, Utensils } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDismissable } from '@/lib/dismissStack';
 
 const PRICE_DISPLAY = {
   0: '$',
@@ -16,6 +17,8 @@ export default function RestaurantDetail({ restaurant, isOpen, onClose, onGetDir
   const [activeTab, setActiveTab] = useState("overview");
   const [isSaved, setIsSaved] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+
+  useDismissable(!!(isOpen && restaurant), onClose);
 
   if (!isOpen || !restaurant) return null;
 

@@ -12,6 +12,7 @@ import { createPageUrl } from "@/utils";
 import MapAppSelector from '../components/MapAppSelector';
 import { invokeLLM } from "@/lib/callWorker";
 import { showToast } from "../components/Toast";
+import { useDismissable } from '@/lib/dismissStack';
 
 export default function ActivityDetailPage() {
   const navigate = useNavigate();
@@ -35,6 +36,8 @@ export default function ActivityDetailPage() {
     loadActivityDetails();
     loadDistancePreference();
   }, []);
+
+  useDismissable(showShareModal, () => setShowShareModal(false));
 
   const loadDistancePreference = () => {
     try {

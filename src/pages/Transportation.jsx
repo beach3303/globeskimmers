@@ -14,6 +14,7 @@ import { getCurrentPositionSmart } from "@/lib/geolocation";
 import { isCityLocation } from "../components/location/locationLabel";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
+import { useDismissable } from '@/lib/dismissStack';
 
 // Editorial design tokens (design handoff: ivory canvas + 1024 column).
 // These now feed BOTH widths — phone is phone-tuned, tablet keeps the 1024 column.
@@ -700,6 +701,11 @@ export default function Transportation() {
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [fromGpsLoading, setFromGpsLoading] = useState(false);
   const [fromGpsError, setFromGpsError] = useState(null);
+
+  // Swipe-down-to-dismiss wiring for the three inline modals
+  useDismissable(showAirportPicker, () => setShowAirportPicker(false));
+  useDismissable(showSavedLocations, () => setShowSavedLocations(false));
+  useDismissable(showDestinationSearch, () => setShowDestinationSearch(false));
 
   // "Use my current location as the starting point" — updates ONLY the FROM /
   // origin (never the destination). GPS → reverse geocode → street address +

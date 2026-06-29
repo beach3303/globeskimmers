@@ -132,6 +132,12 @@ export default function MapPage() {
           zoom={14}
           style={{ height: '100%', width: '100%' }}
           scrollWheelZoom={true}
+          /* Map zoom is Leaflet's own gesture handling — unaffected by the app's
+             page-zoom lock. Explicit here so pinch, double-tap, and the +/− zoom
+             control are always available on the map. */
+          touchZoom={true}
+          doubleClickZoom={true}
+          zoomControl={true}
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

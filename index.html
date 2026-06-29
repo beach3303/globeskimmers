@@ -5,8 +5,14 @@
     <link rel="icon" type="image/svg+xml" href="https://base44.com/logo_v2.svg" />
     <!-- viewport-fit=cover is required on iOS for env(safe-area-inset-*) to
          resolve to real values (notch / Dynamic Island / home indicator).
-         Without it the brand banner renders under the status bar. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+         Without it the brand banner renders under the status bar.
+         maximum-scale=1 + user-scalable=no LOCK page zoom: the WKWebView (unlike
+         mobile Safari) honors this, so pinch / double-tap can never zoom the app
+         and the user is never left panning a zoomed-in page sideways. The app
+         stays fit-to-width + centered on iPad and iPhone. (Leaflet maps zoom via
+         their own gesture handling, so the map is unaffected; in-app photo
+         lightbox + the text-size button cover the real "see it bigger" needs.) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <link rel="manifest" href="/manifest.json" />
     <!-- Redesign typography stack: Inter Tight (UI), Instrument Serif (italic accents), JetBrains Mono (labels) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
