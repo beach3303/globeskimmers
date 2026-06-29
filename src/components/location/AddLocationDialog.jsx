@@ -4,6 +4,7 @@ import { X, Search, Loader2, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
+import { useDismissable } from '@/lib/dismissStack';
 
 const PLACE_TYPE_ICONS = {
   airport: '✈️',
@@ -21,6 +22,8 @@ export default function AddLocationDialog({ isOpen, onAdd, onClose }) {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  useDismissable(isOpen, onClose);
 
   useEffect(() => {
     if (!isOpen) {
@@ -76,7 +79,7 @@ export default function AddLocationDialog({ isOpen, onAdd, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] overflow-hidden flex items-center justify-center px-3">
+    <div className="fixed inset-0 z-[9999] overflow-hidden flex items-start justify-center px-3 pt-[max(6vh,env(safe-area-inset-top))]">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -102,30 +105,33 @@ export default function AddLocationDialog({ isOpen, onAdd, onClose }) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        {/* Search input — PINNED above the scroll area so the on-screen keyboard
+            and populating results can never push it off the top of the screen. */}
+        <div className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100">
+          <label className="text-sm font-semibold text-gray-700 mb-2 block">
+            Search for a location
+          </label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="Empire State Building, hotel name, restaurant..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 h-12 text-base"
+            />
+            {searching && (
+              <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+            )}
+          </div>
+        </div>
+
+        {/* Results / messages — the only part that scrolls. */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm text-blue-800">
               💡 Search for a place to save it for quick access later
             </p>
-          </div>
-
-          <div className="mb-4">
-            <label className="text-sm font-semibold text-gray-700 mb-2 block">
-              Search for a location
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                type="text"
-                placeholder="Empire State Building, hotel name, restaurant..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-12 text-base"
-              />
-              {searching && (
-                <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
-              )}
-            </div>
           </div>
 
           {errorMessage && (

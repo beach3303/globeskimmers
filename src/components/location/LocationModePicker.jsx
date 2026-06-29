@@ -7,6 +7,7 @@ import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { useLocation } from './LocationContext';
 import { useIsTablet } from '@/lib/useIsTablet';
+import { useDismissable } from '@/lib/dismissStack';
 
 // Preset cities for one-tap testing in the coordinate-entry mode.
 // Order is roughly by global familiarity / common test scenarios so
@@ -58,6 +59,8 @@ export default function LocationModePicker({ isOpen, onClose }) {
   const [coordsInput, setCoordsInput] = useState('');
   const [coordsApplying, setCoordsApplying] = useState(false);
   const [coordsError, setCoordsError] = useState('');
+
+  useDismissable(isOpen, onClose);
 
   useEffect(() => {
     if (isOpen) {
@@ -498,25 +501,29 @@ export default function LocationModePicker({ isOpen, onClose }) {
                   </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-5">
-                  <div className="mb-4">
-                    <label className="text-sm font-semibold text-gray-700 mb-2 block">
-                      Enter a specific location
-                    </label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <Input
-                        type="text"
-                        placeholder="Empire State Building, JFK Airport, hotel address..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10 h-12 text-base"
-                      />
-                      {searching && (
-                        <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
-                      )}
-                    </div>
+                {/* Search input — PINNED above the scroll area so results + the
+                    on-screen keyboard can't push it off the top of the screen. */}
+                <div className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100">
+                  <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                    Enter a specific location
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      type="text"
+                      placeholder="Empire State Building, JFK Airport, hotel address..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10 h-12 text-base"
+                    />
+                    {searching && (
+                      <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+                    )}
                   </div>
+                </div>
+
+                {/* Results / messages — the only part that scrolls. */}
+                <div className="flex-1 overflow-y-auto px-5 py-4">
 
                   {errorMessage && (
                     <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-2">
