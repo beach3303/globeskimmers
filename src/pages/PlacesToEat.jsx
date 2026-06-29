@@ -57,6 +57,19 @@ const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)", ED_EAT = "#D8443C";
 
 const WORKER_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
 
+// Build a Google Places photo URL at a chosen width — mirrors ConvenienceStore's
+// getPhotoUrl so result-card photos render from the SAME crisp landscape 800px
+// source. We PREFER building from the photo `name` (overriding any pre-built
+// .url/.thumbnail, which can be a smaller/square crop that reads as "zoomed in"
+// inside the wide cover box). Strings pass through; falls back to any pre-built
+// URL only when there's no `name`.
+function photoSrc(photo, maxWidth = 800) {
+  if (!photo) return null;
+  if (typeof photo === 'string') return photo;
+  if (photo.name) return `${WORKER_URL}/places/photo?name=${encodeURIComponent(photo.name)}&maxWidth=${maxWidth}`;
+  return photo.full || photo.url || photo.thumbnail || null;
+}
+
 // ─── THEME ──────────────────────────────────────────────────────────────────
 const BLUE      = "#3B82F6";
 const BLUE_DARK = "#1E40AF";
@@ -356,7 +369,7 @@ function processRest(place, userLat, userLng) {
   // Normalize to URL strings so the carousel renders instead of falling back
   // to the emoji placeholder.
   const photos  = ((place.photos && place.photos.length)
-    ? place.photos.map(p => (typeof p === 'string' ? p : (p?.url || p?.full || p?.thumbnail)))
+    ? place.photos.map(p => photoSrc(p, 800))
     : (place.photoUrl ? [place.photoUrl] : [])
   ).filter(Boolean);
 
@@ -469,7 +482,7 @@ function processRest(place, userLat, userLng) {
 // ─── PHOTO CAROUSEL ──────────────────────────────────────────────────────────
 function PhotoCarousel({ photos=[], rank, badges=[], height=180 }) {
   const [cur,setCur]=useState(0); const [errs,setErrs]=useState({}); const ref=useRef(null);
-  const H = typeof height==='number'?`${height}px`:height;
+  const H = typeof height==='number'?`calc(${height}px*var(--fs))`:height;
   const [lightbox,setLightbox]=useState(false);   // tap-to-enlarge full-screen viewer
   const [lbCur,setLbCur]=useState(0);
   const lbRef=useRef(null);
@@ -1255,7 +1268,7 @@ export default function PlacesToEat() {
         // Update the underlying restaurants array so derived `filtered` re-renders
         setRestaurants(prev => prev.map(p =>
           (p.id === place.id || p.placeId === place.placeId)
-            ? { ...p, photos: [...matched, ...rest], photosLabeled: true }
+            ? { ...p, photos: [...matched, ...rest].map(ph => photoSrc(ph, 800)), photosLabeled: true }
             : p
         ));
       } catch (_e) {
