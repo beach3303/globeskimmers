@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import { useIsTablet } from "@/lib/useIsTablet";
+import { useDismissable } from "@/lib/dismissStack";
 
 // ============================================================================
 // Cultural Info — two-layer (Country / City / Nearby Region) traveler guide.
@@ -636,6 +637,11 @@ function LightboxProvider({ children }) {
   const open = useCallback((src, caption) => { if (src) setPhoto({ src, caption }); }, []);
   const close = useCallback(() => setPhoto(null), []);
 
+  // Swipe-down dismiss: while a photo is open, register its close on the global
+  // dismiss stack so the frontmost overlay closes on swipe-down (same path as
+  // backdrop tap / Escape).
+  useDismissable(!!photo, close);
+
   useEffect(() => {
     if (!photo) return;
     const onKey = (e) => { if (e.key === "Escape") close(); };
@@ -713,6 +719,29 @@ function WikiThumb({ name, size = 60 }) {
   );
 }
 
+// National-leadership headshot — uses the leader's Wikidata image (P18) of the
+// EXACT person entity, so it is never the wrong same-named person (name-based
+// Wikipedia lookup hits disambiguation pages for "Mike Johnson" etc.). Tap to
+// enlarge via the shared lightbox (tap again / swipe-down closes). Renders
+// nothing if the entity has no free image, so the row degrades to text-only.
+function LeaderPhoto({ src, name, size = 56 }) {
+  const openLightbox = React.useContext(LightboxContext);
+  if (!src) return null;
+  const sep = src.includes("?") ? "&" : "?";
+  const thumb = `${src}${sep}width=${size * 3}`; // crisp on retina
+  const full = `${src}${sep}width=1000`;
+  const enlarge = () => openLightbox && openLightbox(full, name);
+  return (
+    <img src={thumb} alt={name || ""} loading="lazy"
+      role="button" tabIndex={0}
+      onClick={enlarge}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); enlarge(); } }}
+      title="Tap to enlarge"
+      className="cursor-pointer transition-transform active:scale-95"
+      style={{ width: size, height: size, objectFit: "cover", borderRadius: 12, border: `1px solid ${RULE}`, flexShrink: 0 }} />
+  );
+}
+
 // ---- live national leaders (Wikidata) -------------------------------------
 // The National Leadership card's AI `leaders` data goes stale fast (the Haiku
 // snapshot once showed Biden/Harris in 2026). Wikidata is free, CORS-enabled
@@ -723,13 +752,118 @@ function WikiThumb({ name, size = 60 }) {
 // Q3624078 = "sovereign state", to disambiguate the plain country label.
 const _wikidataLeaderCache = new Map();
 
-// Curated deputy / vice-head offices (Wikidata office-entity Q-ids) for the few
-// countries where the role matters AND Wikidata keeps the current holder at
-// "preferred" rank. The country entity itself has no generic VP/deputy property,
-// so this curated map is the only reliable route; a country absent here simply
-// shows its head of state + head of government (always available, every country).
-const DEPUTY_OFFICES = {
-  "United States": { qid: "Q11699", title: "Vice President" },
+// Curated cabinet / parliament office Q-ids per country → their CURRENT holder.
+// Wikidata has NO generic country→minister link, and P1308 ("officeholder") is
+// maintained only for a few offices (president/VP) — so accurate extra roles
+// require VERIFIED office Q-ids, queried via the robust P39 pattern in
+// getWikidataLeaders (real human + most-recent start + no end date). Head of
+// state (P35 → president/monarch) and head of government (P6 → PM) come from the
+// generic query and cover EVERY country; these add the deputy + key cabinet /
+// parliament seats. Rendered in listed order, right after head of state/gov.
+// A country absent here still shows its head of state + head of government.
+const CABINET_OFFICES = {
+  // US — power-ranked (presidential line of succession). With the President from
+  // the generic head-of-state/gov query, this yields the top 6 most powerful.
+  "United States": [
+    { qid: "Q11699",   title: "Vice President" },
+    { qid: "Q912994",  title: "Speaker of the House" },
+    { qid: "Q14213",   title: "Secretary of State" },
+    { qid: "Q4215834", title: "Secretary of the Treasury" },
+    { qid: "Q735015",  title: "Secretary of Defense" },
+  ],
+};
+
+// Verified top-of-line royals for sovereign monarchies (heir + next in line),
+// keyed by the Wikidata English country label. The reigning monarch comes LIVE
+// from the head-of-state query (P35); these complete the top 3 in succession.
+// `img` = the person's P18 image URL. Populated from a live-Wikidata pass.
+const ROYAL_LINE = {
+  "United Kingdom": [
+    { title: "Prince of Wales", name: "William, Prince of Wales", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Prince%20of%20Wales%20in%20Normandy%202024.jpg" },
+    { title: "Second in Line", name: "Prince George of Wales", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Trooping%20the%20Colour%202023%20%28GovPM%2041%29%20crop%202.jpg" },
+  ],
+  "Spain": [
+    { title: "Princess of Asturias", name: "Leonor, Princess of Asturias", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Leonor%20de%20Borb%C3%B3n%20en%202023%20%28cropped%29.jpg" },
+    { title: "Second in Line", name: "Infanta Sofía of Spain", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Infanta%20Sof%C3%ADa%202025%20%28cropped%29.jpg" },
+  ],
+  "Netherlands": [
+    { title: "Princess of Orange", name: "Catharina-Amalia, Princess of Orange", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Luxembourg%2C%20trounwiessel%202025%20chd.lu%20%28111%29%20-%20Catharina-Amalia.jpg" },
+    { title: "Second in Line", name: "Princess Alexia of the Netherlands", img: "https://commons.wikimedia.org/wiki/Special:FilePath/2019%20Annual%20winter%20photocall%20with%20the%20Dutch%20Royal%20Family%20in%20Lech%2C%20Austria%20-%2004.jpg" },
+  ],
+  "Belgium": [
+    { title: "Duchess of Brabant", name: "Princess Elisabeth, Duchess of Brabant", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Princess%20Elisabeth%202025%20%28crop%29.jpg" },
+    { title: "Second in Line", name: "Prince Gabriel of Belgium", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Prince%20Gabriel%20of%20Belgium%20in%202018.jpg" },
+  ],
+  "Sweden": [
+    { title: "Crown Princess", name: "Victoria, Crown Princess of Sweden", img: "https://commons.wikimedia.org/wiki/Special:FilePath/2025-11-18%20Event%2C%20Besuch%20der%20Kronprinzessin%20Victoria%20von%20Schweden%20beim%20deutschen%20Bundespr%C3%A4sidenten%20Frank-Walter%20Steinmeier%20im%20November%202025%20STP%209817.jpg" },
+    { title: "Second in Line", name: "Princess Estelle, Duchess of Östergötland", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Princess%20Estelle%2C%20Duchess%20of%20%C3%96sterg%C3%B6tland%202023.jpg" },
+  ],
+  "Norway": [
+    { title: "Crown Prince", name: "Haakon, Crown Prince of Norway", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Pr%C3%ADncipe%20Heredero%20Haakon%20Magnus%202025.jpg" },
+    { title: "Second in Line", name: "Princess Ingrid Alexandra of Norway", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Prinsesse%20Ingrid%20Alexandra%20Kadettangen%2003.jpg" },
+  ],
+  "Denmark": [
+    { title: "Crown Prince", name: "Christian, Crown Prince of Denmark", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Prins%20Christian%20til%20Danmark%202021.JPG" },
+    { title: "Second in Line", name: "Princess Isabella of Denmark", img: "https://commons.wikimedia.org/wiki/Special:FilePath/The%20Danish%20Royal%20Family%20at%20Amalienborg%20-%20Princess%20Isabella.jpg" },
+  ],
+  "Japan": [
+    { title: "Crown Prince", name: "Fumihito, Crown Prince of Japan", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Fumihito%2C%20Crown%20Prince%20Akishino%20%2854751644693%2C%20cropped%29.jpg" },
+    { title: "Second in Line", name: "Prince Hisahito of Akishino", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Prince%20Hisahito%2C%202021%20%28cropped%2C%202%29.jpg" },
+  ],
+  "Thailand": [
+    { title: "Heir Apparent", name: "Prince Dipangkorn Rasmijoti", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Dipangkorn%20Rasmijoti%202019.jpg" },
+  ],
+  "Saudi Arabia": [
+    { title: "Crown Prince", name: "Mohammed bin Salman Al Saud", img: "https://commons.wikimedia.org/wiki/Special:FilePath/%D8%A7%D9%84%D8%B5%D9%88%D8%B1%D8%A9%20%D8%A7%D9%84%D8%B1%D8%B3%D9%85%D9%8A%D8%A9%20%D9%84%D9%84%D8%A3%D9%85%D9%8A%D8%B1%20%D9%85%D8%AD%D9%85%D8%AF%20%D8%A8%D9%86%20%D8%B3%D9%84%D9%85%D8%A7%D9%86%20%D8%A8%D9%86%20%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2%20%D8%A2%D9%84%20%D8%B3%D8%B9%D9%88%D8%AF%20%28%D9%85%D9%82%D8%B5%D9%88%D8%B5%D8%A9%29.jpg" },
+  ],
+  "Jordan": [
+    { title: "Crown Prince", name: "Hussein bin Abdullah", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Crown%20Prince%20Hussein%20of%20Jordan%20cropped.jpeg" },
+    { title: "Second in Line", name: "Prince Hashem bin Abdullah", img: "" },
+  ],
+  "Morocco": [
+    { title: "Crown Prince", name: "Moulay Hassan, Crown Prince of Morocco", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Moulay%20Hassan%20in%202018.jpg" },
+    { title: "Second in Line", name: "Prince Moulay Rachid of Morocco", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Prince%20Moulay%20Rachid%20of%20Morocco%20%28cropped%29.jpg" },
+  ],
+  "Monaco": [
+    { title: "Hereditary Prince of Monaco", name: "Jacques, Hereditary Prince of Monaco", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Jacques%2C%20Hereditary%20Prince%20of%20Monaco.jpg" },
+    { title: "Second in Line", name: "Princess Gabriella, Countess of Carladès", img: "" },
+  ],
+  "Luxembourg": [
+    { title: "Hereditary Grand Duke", name: "Prince Charles of Luxembourg", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Prince%20Charles%20of%20Luxembourg%202025.jpg" },
+    { title: "Second in Line", name: "Prince François of Luxembourg", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Prince%20Fran%C3%A7ois%20of%20Luxembourg%202025.jpg" },
+  ],
+  "Oman": [
+    { title: "Crown Prince", name: "Theyazin bin Haitham Al Said", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Theyazin%20bin%20Haitham%202%20%28cropped%29%20%28cropped%29.jpg" },
+    { title: "Second in Line", name: "Bilarab bin Haitham Al Said", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Bilarab%20bin%20Haitham%20Al%20Said%202023.jpg" },
+  ],
+  "Bhutan": [
+    { title: "Crown Prince", name: "Jigme Namgyel Wangchuck", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Jigme%20Namgyel%20Wangchuck%20%2853612269394%29%20%28cropped%29.jpg" },
+    { title: "Second in Line", name: "Jigme Ugyen Wangchuck", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Jigme%20Ugyen%20Wangchuck%20%2853612269394%29%20%28cropped%29.jpg" },
+  ],
+  "Qatar": [
+    { title: "Heir Apparent", name: "Abdullah bin Hamad bin Khalifa Al Thani", img: "https://upload.wikimedia.org/wikipedia/commons/0/05/Sheikh_abdualla_althani.jpg" },
+  ],
+  "United Arab Emirates": [
+    { title: "Crown Prince", name: "Khaled bin Mohamed bin Zayed Al Nahyan", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Khaled%20bin%20Mohamed%20Al%20Nahyan.jpg" },
+  ],
+  "Malaysia": [
+    { title: "Deputy King", name: "Sultan Nazrin Muizzuddin Shah of Perak", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Sultan%20Nazrin%20Muizzuddin%20Shah%20%28cropped%29.jpg" },
+  ],
+  "Kuwait": [
+    { title: "Crown Prince", name: "Sabah Al-Khalid Al-Sabah", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Sabah%20Al-Khalid%20Al-Sabah%202014%20%28portrait%20crop%29.jpg" },
+  ],
+  "Bahrain": [
+    { title: "Crown Prince", name: "Salman bin Hamad Al Khalifa", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Kingdom%20of%20Bahrain%20Crown%20Prince%20and%20Prime%20Minister%2C%20His%20Royal%20Highness%20Salman%20bin%20Hamad%20Al%20Khalifa%20%28Salman%20bin%20Hamad%20bin%20Isa%20Al%20Khalifa%29%20participates%20in%20a%20bilateral%20exchange%20at%20the%20Pentagon%20on%20September%2014%2C%202023%20%28cropped%29.jpg" },
+    { title: "Second in Line", name: "Isa bin Salman Al Khalifa", img: "" },
+  ],
+  "Brunei": [
+    { title: "Crown Prince", name: "Al-Muhtadee Billah", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Al-Muhtadee%20Billah%20%282023%29.jpg" },
+    { title: "Second in Line", name: "Prince Abdul Muntaqim", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Prince%20Abdul%20Muntaqim%20-%2053588524144.jpg" },
+  ],
+  "Liechtenstein": [
+    { title: "Hereditary Prince", name: "Alois, Hereditary Prince of Liechtenstein", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Alois%20of%20Liechtenstein%20and%20Karin%20Kneissl%20November%202018%20%2845170115774%29%20%28cropped%29.jpg" },
+    { title: "Second in Line", name: "Prince Joseph Wenzel of Liechtenstein", img: "https://commons.wikimedia.org/wiki/Special:FilePath/Prince%20Joseph%20Wenzel%20of%20Liechtenstein%20%28cropped%29.jpg" },
+  ],
 };
 
 function getWikidataLeaders(country) {
@@ -740,17 +874,33 @@ function getWikidataLeaders(country) {
   const esc = key.replace(/"/g, '\\"');
   // Current head of state (P35) + head of government (P6), each with its OFFICE
   // TITLE (P1906 / P1313) so the card reads "President" / "Monarch" / "Emperor" /
-  // "Prime Minister" / "Federal Chancellor" rather than a generic label. `wdt:` =
-  // current best-rank value; "en,mul" resolves modern names stored under the `mul`
-  // (multilingual) label code — without it the service returns a raw Q-id.
-  const mainQ = `SELECT ?role ?officeLabel ?personLabel WHERE {
+  // "Prime Minister" / "Federal Chancellor" rather than a generic label. P18 =
+  // the person's image (tied to the entity, so it's never the wrong same-named
+  // person). `wdt:` = current best-rank value; "en,mul" resolves modern names
+  // stored under the `mul` (multilingual) label code (else a raw Q-id leaks).
+  const mainQ = `SELECT ?role ?officeLabel ?personLabel ?img WHERE {
   ?country rdfs:label "${esc}"@en ; wdt:P31 wd:Q3624078 .
   { ?country wdt:P35 ?person . OPTIONAL { ?country wdt:P1906 ?office . } BIND("hos" AS ?role) }
   UNION { ?country wdt:P6 ?person . OPTIONAL { ?country wdt:P1313 ?office . } BIND("hog" AS ?role) }
+  OPTIONAL { ?person wdt:P18 ?img . }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul" . }
 }`;
-  const dep = DEPUTY_OFFICES[key];
-  const depQ = dep ? `SELECT ?personLabel WHERE { wd:${dep.qid} p:P1308 ?st . ?st ps:P1308 ?person . ?st wikibase:rank wikibase:PreferredRank . SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul" . } }` : null;
+  // Cabinet / parliament: current holder of each curated office. Robust "current
+  // holder" pattern — position held (P39) by a REAL human (P31=Q5) with a start
+  // date (P580) and NO end date (P582), taking the most-recent such start. The
+  // human + most-recent filters reject fictional TV characters (e.g. West Wing's
+  // "Arnold Vinick") and historical holders with missing end-dates that a naive
+  // "no end date" query otherwise surfaces.
+  const cab = CABINET_OFFICES[key];
+  const cabQ = cab && cab.length ? `SELECT ?office ?personLabel ?img WHERE {
+  VALUES ?office { ${cab.map((o) => "wd:" + o.qid).join(" ")} }
+  ?person p:P39 ?st . ?st ps:P39 ?office ; pq:P580 ?start .
+  ?person wdt:P31 wd:Q5 .
+  FILTER NOT EXISTS { ?st pq:P582 ?e }
+  FILTER NOT EXISTS { ?p2 p:P39 ?st2 . ?st2 ps:P39 ?office ; pq:P580 ?s2 . ?p2 wdt:P31 wd:Q5 . FILTER NOT EXISTS { ?st2 pq:P582 ?e2 } FILTER(?s2 > ?start) }
+  OPTIONAL { ?person wdt:P18 ?img . }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul" . }
+}` : null;
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 6000);
@@ -764,16 +914,18 @@ function getWikidataLeaders(country) {
     const short = s.replace(/\s+of\s+.*$/i, "").trim();
     return short ? short.charAt(0).toUpperCase() + short.slice(1) : null;
   };
+  // P18 image URLs come back as http://commons… — force https for the WKWebView.
+  const httpsImg = (u) => (u ? String(u).replace(/^http:/, "https:") : null);
 
-  const p = Promise.all([sparql(mainQ), depQ ? sparql(depQ) : Promise.resolve(null)])
-    .then(([main, depRes]) => {
+  const p = Promise.all([sparql(mainQ), cabQ ? sparql(cabQ) : Promise.resolve(null)])
+    .then(([main, cabRes]) => {
       clearTimeout(timer);
       const byRole = {};
       for (const b of (main?.results?.bindings || [])) {
         const role = b?.role?.value;
         const name = b?.personLabel?.value;
         if (!role || !name || /^Q\d+$/.test(name)) continue; // skip unresolved raw ids
-        if (!byRole[role]) byRole[role] = { name, office: b?.officeLabel?.value };
+        if (!byRole[role]) byRole[role] = { name, office: b?.officeLabel?.value, img: httpsImg(b?.img?.value) };
       }
       const out = [];
       const seen = new Set();
@@ -781,12 +933,23 @@ function getWikidataLeaders(country) {
         const e = byRole[role];
         if (!e || seen.has(e.name)) continue; // dedupe when one person holds both
         seen.add(e.name);
-        out.push({ position: cleanOffice(e.office) || (role === "hos" ? "Head of State" : "Head of Government"), name: e.name });
+        out.push({ position: cleanOffice(e.office) || (role === "hos" ? "Head of State" : "Head of Government"), name: e.name, img: e.img || null });
       }
-      const depName = depRes?.results?.bindings?.[0]?.personLabel?.value;
-      if (dep && depName && !/^Q\d+$/.test(depName) && !seen.has(depName)) {
-        seen.add(depName);
-        out.push({ position: dep.title, name: depName });
+      // Cabinet / parliament holders, in the curated order, deduped vs head of state/gov.
+      if (cab && cabRes) {
+        const byQid = {};
+        for (const b of (cabRes?.results?.bindings || [])) {
+          const qid = (b?.office?.value || "").split("/").pop();
+          const name = b?.personLabel?.value;
+          if (!qid || !name || /^Q\d+$/.test(name)) continue;
+          if (!byQid[qid]) byQid[qid] = { name, img: httpsImg(b?.img?.value) };
+        }
+        for (const o of cab) {
+          const e = byQid[o.qid];
+          if (!e || seen.has(e.name)) continue;
+          seen.add(e.name);
+          out.push({ position: o.title, name: e.name, img: e.img || null });
+        }
       }
       const result = out.length ? out : null;
       _wikidataLeaderCache.set(key, result);
@@ -817,21 +980,45 @@ function WikidataLeaders({ country, fallback }) {
   }, [country]);
 
   const fromWikidata = Array.isArray(live) && live.length > 0;
-  const list = fromWikidata ? live : (fallback || []).filter((l) => hasData(l?.name));
-  if (!list.length) return null;
+  const all = fromWikidata ? live : (fallback || []).filter((l) => hasData(l?.name));
+  if (!all.length) return null;
+
+  // Monarchy split: when the head of state is a monarch AND we have verified
+  // royals for this country, lift the monarch into its OWN "Monarchy" group of
+  // up to 3 (reigning monarch + line of succession), and keep the government's
+  // top 6 (PM + cabinet + speaker) separate. Otherwise it's one top-6 list.
+  const isMonarchy = /\b(king|queen|monarch|emperor|empress|sultan|emir|grand duke|grand duchess)\b/i.test(all[0]?.position || "");
+  const heirs = ROYAL_LINE[country] || [];
+  const royals = isMonarchy && heirs.length ? [all[0], ...heirs].slice(0, 3) : null;
+  const gov = (royals ? all.slice(1) : all).slice(0, 6);
+
+  const label = (text) => (
+    <p className="mb-2 uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em" }}>{text}</p>
+  );
+  const row = (l, key) => (
+    <div key={key} className="flex items-center gap-3">
+      <LeaderPhoto src={l.img} name={l.name} />
+      <div className="min-w-0">
+        <p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>{l.position || l.title}</p>
+        <p className="font-semibold" style={{ color: INK, fontFamily: SERIF, fontSize: fs(18) }}>{l.name}{!fromWikidata && hasData(l.title) && l.position ? ` · ${l.title}` : ""}</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div>
-      <div className="space-y-2.5">
-        {list.map((l, i) => (
-          <div key={i}>
-            <p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>{l.position || l.title}</p>
-            <p className="font-semibold" style={{ color: INK, fontFamily: SERIF, fontSize: fs(18) }}>{l.name}{!fromWikidata && hasData(l.title) && l.position ? ` · ${l.title}` : ""}</p>
-          </div>
-        ))}
+    <div className="space-y-4">
+      {royals && (
+        <div>
+          {label("👑 Monarchy · line of succession")}
+          <div className="space-y-3">{royals.map((l, i) => row(l, `r${i}`))}</div>
+        </div>
+      )}
+      <div>
+        {royals && label("Government")}
+        <div className="space-y-3">{gov.map((l, i) => row(l, `g${i}`))}</div>
       </div>
       {fromWikidata && (
-        <p className="mt-2 uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>Source: Wikidata · current</p>
+        <p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>Source: Wikidata · current</p>
       )}
     </div>
   );
@@ -1161,13 +1348,24 @@ function Divider({ icon, label, sublabel, layer = "country" }) {
   );
 }
 
-// On tablet, group a layer's SectionCards into a 2-column CSS grid so the wide
-// editorial column reads well; on phone, render them bare so they stay direct
-// children of the parent `space-y-4` stack (phone layout byte-identical).
-// `items-start` keeps unequal-height cards top-aligned instead of stretching.
+// On tablet, lay a layer's SectionCards into TWO independent column stacks
+// (masonry) so a short card beside a tall one never leaves a blank hole in the
+// middle — each column packs to its own content. Cards keep their left/right
+// reading order (even index → left, odd → right), and the assignment is fixed,
+// so collapsing/expanding one card never makes the others jump columns. On
+// phone, render bare so they stay direct children of the parent `space-y-4`
+// stack (phone layout byte-identical).
 function CardGrid({ isTablet, children }) {
   if (!isTablet) return <>{children}</>;
-  return <div className="grid grid-cols-2 gap-5 items-start">{children}</div>;
+  const items = React.Children.toArray(children);
+  const left = items.filter((_, i) => i % 2 === 0);
+  const right = items.filter((_, i) => i % 2 === 1);
+  return (
+    <div className="grid grid-cols-2 gap-5 items-start">
+      <div className="flex flex-col gap-5">{left}</div>
+      <div className="flex flex-col gap-5">{right}</div>
+    </div>
+  );
 }
 
 // ============================================================================
@@ -1291,7 +1489,7 @@ export default function CultureInformationPage() {
             <ChevronLeft size={18} color={INK} strokeWidth={2.2} />
           </button>
           <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full uppercase" style={{ background: CAT.culture.bg, color: CAT.culture.ink, fontFamily: MONO, fontSize: fs(11), letterSpacing: ".08em", fontWeight: 500 }}>
-            <Compass size={13} color={CAT.culture.ink} strokeWidth={2} /> Culture
+            <Compass size={13} color={CAT.culture.ink} strokeWidth={2} /> Cultural Info
           </div>
           <button onClick={() => loadAll(true)} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-black/5" style={{ background: "#FFFFFF", border: `1px solid ${RULE}` }} title="Refresh all">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} color={INK} strokeWidth={2} />
