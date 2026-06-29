@@ -153,12 +153,16 @@ export default function HomeTablet({
         <ChevronRight size={30} color="#fff" strokeWidth={2.2} className="flex-none" />
       </motion.button>
 
-      {/* ── FEATURE TILES — 2-col grid; Weather spans full width ──────── */}
-      <div className="grid grid-cols-2 gap-6 mt-6">
+      {/* ── FEATURE TILES — 3-up COMPACT grid (same footprint as Explore More).
+          Real-iPad feedback: the old 2-up tiles read far too large. These now
+          match the Explore-More tile size — the default (and largest) size on
+          iPad — and only grow a little in height as the text scale increases.
+          Weather rides along as a 7th small tile (no longer full-width). ──── */}
+      <div className="grid grid-cols-3 gap-5 mt-6">
         {FEATURES.map((f) => (
           <TabletTile key={f.title} cat={f.cat} emoji={f.emoji} title={f.title} sub={f.sub} onClick={() => onAction(f.action)} />
         ))}
-        <TabletTile cat={CAT.weather} emoji="☀️" title="Weather" sub="Today's forecast" wide onClick={() => onAction('Weather')} />
+        <TabletTile cat={CAT.weather} emoji="☀️" title="Weather" sub="Today's forecast" onClick={() => onAction('Weather')} />
       </div>
 
       {/* ── EXPLORE MORE — 3-col gradient cards ───────────────────────── */}
@@ -179,20 +183,25 @@ export default function HomeTablet({
   );
 }
 
-function TabletTile({ cat, emoji, title, sub, wide = false, onClick }) {
+// Compact feature tile — same footprint as TabletGrad (the Explore-More size),
+// solid category color + matching colored glow. Chip on top, title/sub pinned to
+// the base; height grows only modestly as the text scale increases.
+function TabletTile({ cat, emoji, title, sub, onClick }) {
   return (
     <motion.button
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="relative overflow-hidden rounded-[26px] text-left text-white p-7"
-      style={{ background: cat.ink, gridColumn: wide ? 'span 2' : undefined, minHeight: 156, boxShadow: `0 16px 36px -18px ${cat.ink}90` }}
+      className="relative overflow-hidden rounded-[24px] text-left text-white p-6"
+      style={{ background: cat.ink, minHeight: 178, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: `0 14px 32px -16px ${cat.ink}80` }}
     >
-      <div className="absolute -top-5 -right-5 rounded-full pointer-events-none" style={{ width: 120, height: 120, background: 'rgba(255,255,255,0.12)' }} />
-      <div className="relative flex items-center justify-center rounded-2xl flex-none" style={{ width: 74, height: 74, background: 'rgba(255,255,255,0.2)' }}>
-        <span style={{ fontSize: 38, lineHeight: 1 }}>{emoji}</span>
+      <div className="absolute -top-3 -right-3 rounded-full pointer-events-none" style={{ width: 90, height: 90, background: 'rgba(255,255,255,0.12)' }} />
+      <div className="relative flex items-center justify-center rounded-2xl flex-none" style={{ width: 56, height: 56, background: 'rgba(255,255,255,0.2)' }}>
+        <span style={{ fontSize: 28, lineHeight: 1 }}>{emoji}</span>
       </div>
-      <h3 className="font-serif mt-4 leading-tight tracking-tight text-[calc(34px*var(--fs))]">{title}</h3>
-      <p className="text-[calc(18px*var(--fs))] opacity-85 mt-1">{sub}</p>
+      <div className="relative">
+        <h3 className="font-serif leading-tight tracking-tight text-[calc(27px*var(--fs))]">{title}</h3>
+        <p className="text-[calc(14px*var(--fs))] opacity-85 mt-0.5">{sub}</p>
+      </div>
     </motion.button>
   );
 }
