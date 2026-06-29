@@ -12,6 +12,7 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { invokeLLM } from "@/lib/callWorker";
+import { supabase } from "@/lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { ChevronDown, ChevronUp, Globe, Loader2, Volume2, Languages, Search, X, ChevronLeft, MapPin } from "lucide-react";
@@ -939,7 +940,34 @@ export default function BasicPhrasesPage() {
     // for the same language code. Both read and write go through here, so the
     // tag stays consistent.
     const rev = (isInEnglishCountry && wantsTranslation) ? '_rev' : '';
-    return `phrases_v14_${categoryId}_${languageCode}${rev}`; // v14: o like oracle
+    return `phrases_v15_${categoryId}_${languageCode}${rev}`; // v15: Supabase-sourced (old AI caches ignored)
+  };
+
+  // Curated, pre-seeded translations from Supabase (`phrase_translations`) — the
+  // SOURCE OF TRUTH. Public read (anon key). Returns the app's phrase shape, or
+  // null for a language/dialect not yet seeded (caller then falls back to AI).
+  const fetchSupabasePhrases = async (languageCode, categoryId) => {
+    try {
+      const { data, error } = await supabase
+        .from('phrase_translations')
+        .select('phrase_index,english,formal,casual,formal_phonetic,casual_phonetic,romanization,same_formality,audio_formal_url')
+        .eq('language_code', languageCode)
+        .eq('category', categoryId)
+        .order('phrase_index');
+      if (error || !data || data.length === 0) return null;
+      return data.map((r) => ({
+        english: r.english,
+        formal_translation: r.formal || '',
+        formal_phonetic: r.formal_phonetic || '',
+        casual_translation: r.casual || r.formal || '',
+        casual_phonetic: r.casual_phonetic || '',
+        same_formality: r.same_formality ?? true,
+        romanization: r.romanization || '',
+        audio_url: r.audio_formal_url || null,
+      }));
+    } catch {
+      return null;
+    }
   };
 
   // Try localStorage first (instant), then Cloudflare KV
@@ -1042,6 +1070,18 @@ export default function BasicPhrasesPage() {
     const cached = await getCachedPhrases(categoryId, languageCode);
     if (cached) {
       setPhrases(prev => ({ ...prev, [categoryId]: cached }));
+      setLoadingPhrases(prev => ({ ...prev, [categoryId]: false }));
+      return;
+    }
+
+    // Supabase curated translations — the SOURCE OF TRUTH, ahead of live AI.
+    // (The v15 cache key above means old AI-era caches never short-circuit this.)
+    // Cached locally after the first hit; falls through to AI generation only
+    // for languages/dialects not yet seeded into the DB.
+    const seeded = await fetchSupabasePhrases(languageCode, categoryId);
+    if (seeded) {
+      setPhrases(prev => ({ ...prev, [categoryId]: seeded }));
+      saveCachedPhrases(categoryId, languageCode, seeded);
       setLoadingPhrases(prev => ({ ...prev, [categoryId]: false }));
       return;
     }
@@ -1265,10 +1305,23 @@ Return a JSON object with "phrases" array. Each phrase object needs:
       .trim();
   };
 
-  const speakPhrase = async (text, languageCode, phraseKey) => {
+  const speakPhrase = async (text, languageCode, phraseKey, audioUrl = null) => {
+    setPlayingAudio(prev => ({ ...prev, [phraseKey]: true }));
+
+    // Pre-seeded Gemini audio (Supabase phrase_translations.audio_formal_url) is
+    // the most authentic clip — play it directly. On ANY failure (missing file /
+    // network), fall through to the live TTS worker below.
+    if (audioUrl) {
+      try {
+        const a = new Audio(audioUrl);
+        a.onended = () => setPlayingAudio(prev => ({ ...prev, [phraseKey]: false }));
+        a.onerror = () => setPlayingAudio(prev => ({ ...prev, [phraseKey]: false }));
+        await a.play();
+        return;
+      } catch { /* fall through to TTS worker */ }
+    }
+
     try {
-      setPlayingAudio(prev => ({ ...prev, [phraseKey]: true }));
-      
       // Clean the text - remove [brackets], ___underscores___, etc.
       const cleanedText = cleanTextForTTS(text);
       
@@ -1476,9 +1529,9 @@ Return a JSON object with "phrases" array. Each phrase object needs:
     // ED.* tokens supply phone-tuned sizing when !isTablet.
     const GOLD = CAT.phrases.ink, GOLD_BG = CAT.phrases.bg;
     const spk = isTablet ? 44 : 40;
-    const Speaker = ({ phraseKey, text, code, label }) => (
+    const Speaker = ({ phraseKey, text, code, label, audioUrl }) => (
       <button
-        onClick={() => speakPhrase(text, code, phraseKey)}
+        onClick={() => speakPhrase(text, code, phraseKey, audioUrl)}
         disabled={playingAudio[phraseKey]}
         title={label}
         aria-label={label}
@@ -1537,7 +1590,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                               <p className="italic mt-1" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>Romanized: {phrase.romanization}</p>
                             )}
                           </div>
-                          <Speaker phraseKey={rowKey} text={phrase.formal_translation || phrase.translation} code={ttsCode} label="Listen to pronunciation" />
+                          <Speaker phraseKey={rowKey} text={phrase.formal_translation || phrase.translation} code={ttsCode} label="Listen to pronunciation" audioUrl={phrase.audio_url} />
                         </div>
                       )}
 
@@ -1558,7 +1611,7 @@ Return a JSON object with "phrases" array. Each phrase object needs:
                                   <p className="italic mt-1" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>Romanized: {phrase.romanization}</p>
                                 )}
                               </div>
-                              <Speaker phraseKey={`${rowKey}_formal`} text={phrase.formal_translation || phrase.translation} code={ttsCode} label="Listen to formal pronunciation" />
+                              <Speaker phraseKey={`${rowKey}_formal`} text={phrase.formal_translation || phrase.translation} code={ttsCode} label="Listen to formal pronunciation" audioUrl={phrase.audio_url} />
                             </div>
                           </div>
                           <div className="p-3" style={{ borderRadius: ED.rChip, background: ED_IVORY2 }}>
