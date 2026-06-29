@@ -67,6 +67,7 @@ const OPT = {
   langConcurrency: parseInt(arg('lang-concurrency', '4'), 10),
   limit: parseInt(arg('limit', '0'), 10) || 0,
   onlyMissing: flag('only-missing'),
+  audioOnly: flag('audio-only'),
   dryRun: flag('dry-run'),
 };
 
@@ -226,6 +227,34 @@ async function seedTarget(target) {
   let textRows = 0, audioClips = 0;
   for (const [category, allPhrases] of categories) {
     const phrases = OPT.limit ? allPhrases.slice(0, OPT.limit) : allPhrases;
+
+    // AUDIO-ONLY: never touch the (verified) text. Read the existing rows, voice
+    // them with Gemini TTS, and patch ONLY audio_formal_url. Rows that already
+    // have audio are skipped, so this is safe to re-run / resume.
+    if (OPT.audioOnly) {
+      let { data: existing } = await supabase.from('phrase_translations')
+        .select('phrase_index,formal,casual,audio_formal_url')
+        .eq('language_code', target.language_code).eq('category', category)
+        .order('phrase_index');
+      if (OPT.limit && existing) existing = existing.slice(0, OPT.limit);
+      if (!existing || !existing.length) { console.log(`  • ${category}: no rows to voice — skip`); continue; }
+      let voiced = 0;
+      await pool(existing, OPT.concurrency, async (row) => {
+        if (row.audio_formal_url) return; // already voiced
+        const speak = row.formal || row.casual; if (!speak) return;
+        try {
+          const wav = await geminiTTS(speak, target);
+          const url = await uploadAudio(`${target.language_code}/${category}/${row.phrase_index}.wav`, wav);
+          if (!OPT.dryRun) await supabase.from('phrase_translations')
+            .update({ audio_formal_url: url })
+            .eq('language_code', target.language_code).eq('category', category).eq('phrase_index', row.phrase_index);
+          audioClips++; voiced++;
+        } catch (e) { console.error(`    ✗ audio ${category}#${row.phrase_index}:`, e.message); }
+      });
+      console.log(`  ✓ ${category}: +${voiced} clips voiced (audio-only)`);
+      continue;
+    }
+
     if (OPT.onlyMissing) {
       const { count } = await supabase.from('phrase_translations').select('id', { count: 'exact', head: true })
         .eq('language_code', target.language_code).eq('category', category);
@@ -279,7 +308,7 @@ async function main() {
   let totalText = 0, totalAudio = 0;
   // Languages run in parallel (each language still does its categories in order);
   // audio runs are kept gentler on the API, so force serial languages with --audio.
-  const langN = OPT.audio ? 1 : OPT.langConcurrency;
+  const langN = (OPT.audio || OPT.audioOnly) ? 1 : OPT.langConcurrency;
   await pool(targets, langN, async (t) => {
     console.log(`▶ ${t.dialect_name} [${t.language_code}] — ${t.country}`);
     const { textRows, audioClips } = await seedTarget(t);
