@@ -4,12 +4,13 @@ import { useAuth } from "@/lib/AuthContext";
 import { searchCountries } from "@/lib/countries";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { X, User, Mail, Edit3, Check, Globe, DollarSign, Languages, Thermometer, Shield, Loader2, MessageCircle, MapPin, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut } from "lucide-react";
+import { X, User, Mail, Edit3, Check, Globe, DollarSign, Languages, Thermometer, Shield, Loader2, MessageCircle, MapPin, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2 } from "lucide-react";
 import ContactUsModal from "../components/ContactUsModal";
 import RefreshAccessModal from "../components/RefreshAccessModal";
 import { ADMIN_EMAILS } from "@/lib/admins";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
@@ -400,7 +401,7 @@ export default function SettingsPage() {
   const isTablet = useIsTablet(); // gates the iPad editorial layout; phone untouched
   const { step: fontStep } = useFontScale(); // larger steps → rows stack value below
 
-  const { logout, profile, user: authUser, refreshProfile } = useAuth(); // Supabase
+  const { logout, deleteAccount, profile, user: authUser, refreshProfile } = useAuth(); // Supabase
   const countryBoxRef = useRef(null);
   const [countryOpen, setCountryOpen] = useState(false);
   const [countryQuery, setCountryQuery] = useState("");
@@ -423,6 +424,10 @@ export default function SettingsPage() {
   const [preferredDistanceUnit, setPreferredDistanceUnit] = useState("km");
   const [showContactUs, setShowContactUs] = useState(false);
   const [showRefreshAccess, setShowRefreshAccess] = useState(false);
+  // Account deletion (Apple 5.1.1(v) / Google Play in-app delete requirement)
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   // Profile lives in the Supabase `profiles` row (loaded by AuthContext). Reshape
   // it into the Base44-style `user` object the display JSX already reads, and seed
@@ -495,6 +500,21 @@ export default function SettingsPage() {
       showToast("Failed to update profile. Please try again.", "error");
     }
     setSaving(false);
+  };
+
+  // Permanently delete this account + all its data. On success AuthContext
+  // clears the session, so App.jsx re-renders the signed-out gate and this
+  // page unmounts (no need to reset `deleting`). On failure we surface the
+  // error and keep the confirm dialog open so the user can retry or cancel.
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteAccount();
+    } catch (e) {
+      setDeleteError(e?.message || "Couldn't delete your account. Please try again.");
+      setDeleting(false);
+    }
   };
 
   // Guard against `user.email` being undefined. Reported as a white
@@ -685,11 +705,48 @@ export default function SettingsPage() {
             </button>
           </EdGroup>
 
+          {/* Danger zone — in-app account deletion (Apple Guideline 5.1.1(v) /
+              Google Play requirement: account-creation apps must let users
+              delete their account + data from inside the app). */}
+          <EdGroup kicker="Danger zone" isTablet={isTablet}>
+            <button onClick={() => { setDeleteError(""); setConfirmDelete(true); }} className="w-full flex items-center justify-center gap-3 transition-colors" style={{ padding: isTablet ? "20px 24px" : "16px 16px" }}>
+              <Trash2 className="w-5 h-5" style={{ color: "#C0362C" }} />
+              <span className="font-semibold" style={{ fontFamily: ED_SERIF, fontSize: fs(isTablet ? 19 : 18), color: "#C0362C" }}>Delete Account</span>
+            </button>
+          </EdGroup>
+
           <p className="text-center" style={{ marginTop: isTablet ? 32 : 26, fontFamily: ED_MONO, fontSize: fs(isTablet ? 11 : 10), letterSpacing: ".08em", color: ED_INK3, textTransform: "uppercase" }}>Made for travelers worldwide · © 2025 Globeskimmers</p>
         </div>
 
         <ContactUsModal isOpen={showContactUs} onClose={() => setShowContactUs(false)} />
         <RefreshAccessModal isOpen={showRefreshAccess} onClose={() => setShowRefreshAccess(false)} />
+
+        {/* Delete-account confirmation. Stays open during the async delete
+            (e.preventDefault on the action stops Radix auto-closing) so we can
+            show progress + errors; on success the page unmounts to the gate. */}
+        <AlertDialog open={confirmDelete} onOpenChange={(open) => { if (!open && !deleting) { setConfirmDelete(false); setDeleteError(""); } }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently deletes your Globeskimmers account and all associated data — your profile, preferences, and saved locations. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {deleteError && (
+              <p style={{ color: "#C0362C", fontSize: 13.5, lineHeight: 1.4, margin: "2px 0 0" }}>{deleteError}</p>
+            )}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); handleDeleteAccount(); }}
+                disabled={deleting}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                {deleting ? "Deleting…" : "Delete Account"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
 }

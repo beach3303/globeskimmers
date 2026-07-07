@@ -31,6 +31,7 @@ import {
   logLoginEvent,
   OAUTH_REDIRECT_TO,
 } from '@/lib/nativeAuth';
+import { callWorker } from '@/lib/callWorker';
 
 // sessionStorage flag set the moment the USER initiates a sign-in/sign-up, so we
 // can tell a fresh sign-in from a plain app-launch session restore. sessionStorage
@@ -206,6 +207,23 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  // Permanently delete the signed-in user's account + data (Apple Guideline
+  // 5.1.1(v) / Google Play requirement for account-creation apps). The anon-key
+  // client CANNOT delete an auth user, so this calls the Worker's /delete-account
+  // route (callWorker attaches the user's JWT as Bearer); the Worker verifies the
+  // token, then hard-deletes the auth user with the service role — which cascades
+  // the profiles + login_events rows. On success we purge the local session +
+  // state exactly like logout (a failing signOut here is fine — the account is
+  // already gone server-side), so App.jsx re-renders the signed-out auth gate.
+  const deleteAccount = useCallback(async () => {
+    const uid = user?.id || session?.user?.id;
+    if (!uid) throw new Error('Not signed in');
+    const { error } = await callWorker('delete-account', {});
+    if (error) throw new Error(error);
+    try { await authSignOut(); } catch { /* token already invalid — account deleted */ }
+    setSession(null); setUser(null); setProfile(null); setCanRefresh(false);
+  }, [user, session]);
+
   // canRefresh = admin email (always) OR an email an admin granted in the
   // Supabase `refresh_access` table. Re-evaluated whenever the user changes, so
   // revoking access takes effect on the user's next sign-in.
@@ -244,6 +262,7 @@ export const AuthProvider = ({ children }) => {
     refreshProfile,
     bumpWelcomeSplashCount,
     logout,
+    deleteAccount,
     // ---- backward-compat shims for old Base44 consumers ----
     isLoadingPublicSettings: false,
     authChecked: !isLoadingAuth,
@@ -252,7 +271,7 @@ export const AuthProvider = ({ children }) => {
   }), [
     session, user, profile, isLoadingAuth, authError, canRefresh, signInTick,
     signInWithProvider, signInApple, signInWithEmail, signUpWithEmail,
-    verifyEmailOtp, refreshProfile, bumpWelcomeSplashCount, logout,
+    verifyEmailOtp, refreshProfile, bumpWelcomeSplashCount, logout, deleteAccount,
   ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -857,6 +857,51 @@ async function handleLogEvent(request, env) {
   }
 }
 
+// ── Account deletion (Apple Guideline 5.1.1(v) / Google Play) ─────────────
+// Lets a signed-in user permanently delete their OWN account + data from
+// inside the app. The frontend calls POST /delete-account via callWorker,
+// which attaches the user's Supabase JWT as `Authorization: Bearer <jwt>`.
+// Flow: (1) resolve that JWT to a user via GoTrue and delete ONLY the id the
+// token resolves to (never a client-supplied id); (2) hard-delete that auth
+// user with the SERVICE ROLE key. Removing the auth.users row cascades
+// public.profiles + public.login_events (FK ON DELETE CASCADE).
+// Requires the Worker secret SUPABASE_SERVICE_ROLE_KEY (`wrangler secret put`).
+async function handleDeleteAccount(request, env) {
+  try {
+    const authHeader = request.headers.get('Authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!token) return jsonResponse({ error: 'Not signed in' }, 401);
+
+    const SUPABASE_URL = env.SUPABASE_URL || 'https://bkaxadiyehddzkiuheea.supabase.co';
+    const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!SERVICE_KEY) return jsonResponse({ error: 'Server not configured for deletion' }, 500);
+
+    // 1) Verify + resolve the caller from their JWT — the id comes from the
+    //    token, so a user can only ever delete themselves.
+    const whoRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${token}` },
+    });
+    if (whoRes.status !== 200) return jsonResponse({ error: 'Invalid or expired session' }, 401);
+    const who = await whoRes.json();
+    const userId = who?.id;
+    if (!userId) return jsonResponse({ error: 'Could not identify account' }, 401);
+
+    // 2) Hard-delete the auth user (cascades profiles + login_events).
+    const delRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+      method: 'DELETE',
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    });
+    if (delRes.status !== 200 && delRes.status !== 204) {
+      const detail = await delRes.text().catch(() => '');
+      return jsonResponse({ error: `Deletion failed (${delRes.status})`, detail: detail.slice(0, 300) }, 502);
+    }
+
+    return jsonResponse({ ok: true });
+  } catch (e) {
+    return jsonResponse({ error: e.message || 'Deletion failed' }, 500);
+  }
+}
+
 // ── Analytics query endpoint — read-only allowlisted SELECTs against D1 ───
 // Browser sends { type: 'page_views_7d' | 'top_zero_results' | ... }, NOT
 // raw SQL. Each type maps to a hardcoded prepared statement. This is the
@@ -9933,6 +9978,7 @@ export default {
       if (pathname === '/places/text-search') return await handleTextSearch(request, env, ctx);
       if (pathname === '/places/nearby' || pathname === '/places/search') return await handleNearbySearch(request, env, ctx);
       if (pathname === '/log-event' && request.method === 'POST') return await handleLogEvent(request, env);
+      if (pathname === '/delete-account' && request.method === 'POST') return await handleDeleteAccount(request, env);
       if (pathname === '/analytics-query') return await handleAnalyticsQuery(request, env);
       if (pathname.startsWith('/places/details/')) return await handlePlaceDetails(request, env);
       if (pathname === '/places/photo') return await handlePhotoProxy(request, env);
