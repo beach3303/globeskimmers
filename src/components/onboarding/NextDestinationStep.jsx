@@ -48,12 +48,13 @@ export default function NextDestinationStep({ onNext, onSkip, onBack, value }) {
         placeholder="e.g. Tokyo, Japan"
         className="w-full h-12 px-4 mb-2 rounded-xl border-2 border-gray-300 focus:border-[#088395] focus:outline-none text-[15px]"
       />
-      {/* Subtle skip right under the field — no upcoming trip, just browsing.
+      {/* Skip right under the field — no upcoming trip, just browsing. Styled
+          as an obvious teal link (not faint gray) so users know it's tappable.
           Tapping skips the step (same as the footer button below). */}
       <button
         type="button"
         onClick={() => onSkip()}
-        className="w-full mb-6 text-left text-[13px] leading-snug text-gray-400 hover:text-gray-600"
+        className="w-full mb-6 text-left text-[14px] leading-snug font-medium text-[#088395] underline underline-offset-2 hover:text-[#05BFDB]"
       >
         None at this time — I’d like to search and browse features anyway.
       </button>

@@ -302,6 +302,9 @@ export default function SmartPriceScannerPage() {
   // Photo 2 (the whole item) — captured after the price tag is converted, used
   // to identify the item for price comparison and shown in the analysis header.
   const [itemFrame, setItemFrame] = useState(null);
+  // True when the item photo (or price-tag scan) didn't clearly show a product,
+  // so we honestly say "couldn't identify" instead of fabricating a comparison.
+  const [itemNotIdentified, setItemNotIdentified] = useState(false);
   // Analysis-only mode: the user skipped currency conversion and just wants the
   // fair-deal analysis. One scan goes straight to the analysis card (no convert
   // step). Still gated by the daily ANALYSIS cap.
@@ -607,8 +610,12 @@ export default function SmartPriceScannerPage() {
       });
       if (!res.ok) return null;
       const data = await res.json();
-      const desc = (data?.itemDescription || '').trim();
-      return desc || null;
+      const itemDescription = (data?.itemDescription || '').trim();
+      // Use the Worker's explicit `identified` flag when present (new deploys);
+      // fall back to "did we get a description" for older Worker versions so the
+      // feature degrades gracefully until the Worker is redeployed.
+      const identified = typeof data?.identified === 'boolean' ? data.identified : itemDescription.length > 0;
+      return { itemDescription, identified, confidence: data?.confidence || null };
     } catch {
       return null;
     }
@@ -679,6 +686,7 @@ export default function SmartPriceScannerPage() {
       setStep('analysis');
       setAnalysisLoading(true);
       setAnalysisError(null);
+      setItemNotIdentified(false);
       runAnalysis(ctx, first);
     } else {
       // Couldn't read the item from the tag → ask for an item photo.
@@ -710,11 +718,21 @@ export default function SmartPriceScannerPage() {
     setStep('analysis');
     setAnalysisLoading(true);
     setAnalysisError(null);
+    setItemNotIdentified(false);
 
     let itemDescription = first.original?.context || 'Item';
     if (base64) {
-      const visionDesc = await describeItemFromImage(base64);
-      if (visionDesc) itemDescription = visionDesc;
+      const vision = await describeItemFromImage(base64);
+      if (vision && vision.identified === false) {
+        // Honest: the photo doesn't clearly show a product, so we can't compare
+        // prices. Don't fabricate a comparison — and don't charge a credit
+        // (the credit is only charged inside runAnalysis on success).
+        setAnalysis(null);
+        setItemNotIdentified(true);
+        setAnalysisLoading(false);
+        return;
+      }
+      if (vision && vision.itemDescription) itemDescription = vision.itemDescription;
     }
     await runAnalysis(itemDescription, first);
   };
@@ -761,7 +779,20 @@ export default function SmartPriceScannerPage() {
       setStep('analysis');
       setAnalysisLoading(true);
       setAnalysisError(null);
-      await runAnalysis(p.context || 'Item', first);
+      setItemNotIdentified(false);
+
+      // This path has only the price tag (no item photo). If the tag scan didn't
+      // capture an item name, we can't honestly compare prices — say so instead
+      // of fabricating a comparison.
+      const ctx = (p.context || '').trim();
+      const hasItemInfo = ctx && ctx.toLowerCase() !== 'item' && ctx.length >= 4;
+      if (!hasItemInfo) {
+        setAnalysis(null);
+        setItemNotIdentified(true);
+        setAnalysisLoading(false);
+        return;
+      }
+      await runAnalysis(ctx, first);
     } catch (e) {
       setAnalysisError(e?.message || 'Failed to analyze price');
       setStep('analysis');
@@ -1362,6 +1393,29 @@ export default function SmartPriceScannerPage() {
             {analysisError && !analysisLoading && (
               <div style={{ background: "#FBEAEA", border: "1px solid rgba(185,28,28,.25)", borderRadius: 16, padding: fs(16), marginBottom: fs(16) }}>
                 <p style={{ fontSize: fs(ed.bodyLg), color: "#991B1B", lineHeight: 1.5 }}>Couldn&apos;t load analysis: {analysisError}</p>
+              </div>
+            )}
+
+            {/* Honest "couldn't identify the item" state — shown instead of a
+                fabricated comparison when the photo/scan didn't clearly show a
+                product. No analysis credit is charged in this case. */}
+            {itemNotIdentified && !analysisLoading && (
+              <div style={{ marginBottom: fs(20) }}>
+                <div style={{ marginBottom: fs(12) }}>
+                  <span className="inline-block uppercase" style={{
+                    background: '#FEF3C7', color: '#92400E',
+                    fontFamily: ED_MONO, fontSize: fs(ed.verdictChip), letterSpacing: ".06em", fontWeight: 600,
+                    padding: `${fs(6)} ${fs(14)}`, borderRadius: 999,
+                  }}>
+                    ❓ Couldn&apos;t identify the item
+                  </span>
+                </div>
+                <p style={{ fontFamily: ED_SERIF, fontWeight: 400, fontSize: fs(ed.gsQuote), color: ED_INK, lineHeight: 1.3, marginBottom: fs(12) }}>
+                  We couldn&apos;t clearly see the item, so we can&apos;t compare prices without guessing.
+                </p>
+                <p style={{ fontSize: fs(ed.footer), color: ED_INK3, lineHeight: 1.5 }}>
+                  Point the camera at the whole item — not just the price tag — and tap “Scan another item” to try again.
+                </p>
               </div>
             )}
 

@@ -4387,7 +4387,7 @@ async function handleDescribeItem(request, env) {
               },
               {
                 type: 'text',
-                text: 'Identify the main retail/product item in this photo for a price comparison. Return ONLY a JSON object: {"itemDescription": "<short generic description, 3-8 words, no brand names unless visibly printed, include material/type/category>"}. Examples: "women\'s sleeveless A-line cotton dress", "stainless steel water bottle 750ml". Respond with JSON only, no prose, no markdown fences.'
+                text: 'Identify the main retail/product item in this photo for a price comparison. Look at the WHOLE image. If it does NOT clearly show an actual product to price-compare — e.g. it is only a price tag/label, a barcode, a receipt, a store sign or logo, an empty shelf, a hand/finger, or is too blurry/ambiguous to tell — then DO NOT guess a product. Return ONLY a JSON object: {"itemDescription": "<short generic description, 3-8 words, no brand names unless visibly printed, include material/type/category; empty string if not identifiable>", "identified": <true only if you can clearly see a specific product, false otherwise>, "confidence": "high"|"medium"|"low"}. Examples of identified items: "women\'s sleeveless A-line cotton dress", "stainless steel water bottle 750ml". If you cannot clearly see a product, set identified=false, itemDescription="", confidence="low". Respond with JSON only, no prose, no markdown fences.'
               }
             ]
           }
@@ -4420,7 +4420,11 @@ async function handleDescribeItem(request, env) {
     }
 
     const itemDescription = typeof parsed.itemDescription === 'string' ? parsed.itemDescription.trim() : '';
-    return jsonResponse({ itemDescription, usage: data.usage || null });
+    // Explicit "could I actually see a product?" signal so the app can be honest
+    // instead of price-comparing a fabricated item (e.g. a bare price tag).
+    const identified = parsed.identified === true && itemDescription.length > 0;
+    const confidence = ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : (identified ? 'medium' : 'low');
+    return jsonResponse({ itemDescription, identified, confidence, usage: data.usage || null });
   } catch (error) {
     return jsonResponse({ error: error.message, itemDescription: '' }, 200);
   }

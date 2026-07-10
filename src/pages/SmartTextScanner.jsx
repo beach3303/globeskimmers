@@ -17,7 +17,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { ChevronLeft, X, Volume2, ScanLine, ArrowRight, ChevronDown, RefreshCw } from "lucide-react";
+import { ChevronLeft, X, Volume2, ScanLine, ArrowRight, ChevronDown, RefreshCw, Scissors } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CAT, IVORY, TEAL_DEEP } from "@/components/redesign/constants";
 import { useCameraPreview } from "@/lib/useCameraPreview";
@@ -824,9 +824,16 @@ export default function SmartTextScannerPage() {
             </button>
             <button
               onClick={handleFreezeForSelect}
-              className="w-full mt-2 text-white/90 hover:text-white text-[calc(13px*var(--fs))] font-semibold py-2 flex items-center justify-center gap-1.5"
+              className="w-full h-[58px] rounded-[18px] mt-3 flex items-center justify-center gap-2 font-bold text-[calc(16px*var(--fs))] text-white"
+              style={{
+                background: 'rgba(255,255,255,0.16)',
+                border: '1px solid rgba(255,255,255,0.4)',
+                backdropFilter: 'blur(6px)',
+                WebkitBackdropFilter: 'blur(6px)',
+              }}
             >
-              ✂️ Select part of the image
+              <Scissors size={20} color="#fff" strokeWidth={2.2} />
+              Select part of the image
             </button>
           </div>
         </div>
