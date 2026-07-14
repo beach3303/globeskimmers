@@ -7,6 +7,7 @@ import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { useLocation } from './LocationContext';
 import { useIsTablet } from '@/lib/useIsTablet';
+import { useKeyboardOffset } from '@/lib/useKeyboardOffset';
 import { useDismissable } from '@/lib/dismissStack';
 
 // Preset cities for one-tap testing in the coordinate-entry mode.
@@ -50,6 +51,12 @@ export default function LocationModePicker({ isOpen, onClose }) {
   const isTablet = useIsTablet();
 
   const [mode, setMode] = useState('select'); // 'select', 'search', 'coords', 'info'
+  // Keyboard-aware placement: only the text-input modes raise the keyboard.
+  // Track its height so the card floats centered in the visible area ABOVE the
+  // keyboard (input + results stay in view). See useKeyboardOffset.
+  const needsKeyboard = mode === 'search' || mode === 'coords';
+  const keyboardOffset = useKeyboardOffset(isOpen && needsKeyboard);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -236,19 +243,28 @@ export default function LocationModePicker({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
-  // Modes with a text input bring up the keyboard. Top-anchor those so the
-  // focused field stays visible and the box never gets pushed above the top
-  // margin when the keyboard opens. The picker/info screens have no input, so
-  // center them vertically (the "middle of screen" placement requested).
-  // Phone keyboards crowd a centered box, so search/coords top-anchor on phone.
-  // iPad's big screen leaves room — center those there too (wrapper below), so
-  // the address box sits mid-screen like the Select-Location-Mode card.
-  const needsKeyboard = mode === 'search' || mode === 'coords';
+  // Placement: always vertically CENTER the card, but center it inside the
+  // space left ABOVE the keyboard (paddingBottom = keyboardOffset). This keeps
+  // the address bar near the middle of the screen while guaranteeing the input
+  // AND its result list stay visible above the keyboard on iPhone/iPad/Android.
+  // The card height is capped to that same visible area so results never hide
+  // behind the keyboard (divided by the iPad zoom factor so the cap holds when
+  // the card is scaled up).
+  const zoomFactor = isTablet ? 1.3 : 1;
+  const modalStyle = {
+    maxHeight: keyboardOffset
+      ? `calc((100vh - ${keyboardOffset + 32}px) / ${zoomFactor})`
+      : (isTablet ? '64vh' : '85vh'),
+    ...(isTablet ? { zoom: 1.3 } : {}),
+  };
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className={`fixed inset-0 z-[9998] overflow-y-auto flex justify-center px-3 ${(needsKeyboard && !isTablet) ? 'items-start pt-[8vh] pb-6' : 'items-center py-[7vh]'}`}>
+        <div
+          className="fixed inset-0 z-[9998] overflow-y-auto flex items-center justify-center px-3 py-[6vh]"
+          style={keyboardOffset ? { paddingTop: 16, paddingBottom: keyboardOffset + 16 } : undefined}
+        >
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -262,8 +278,8 @@ export default function LocationModePicker({ isOpen, onClose }) {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 40, opacity: 0, scale: 0.96 }}
             transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-            className="relative w-full max-w-md bg-white rounded-[24px] shadow-2xl max-h-[85vh] overflow-hidden flex flex-col"
-            style={isTablet ? { zoom: 1.3, maxHeight: '64vh' } : undefined}
+            className="relative w-full max-w-md bg-white rounded-[24px] shadow-2xl overflow-hidden flex flex-col"
+            style={modalStyle}
           >
             {/* Mode Selection */}
             {mode === 'select' && (

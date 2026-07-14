@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { useDismissable } from '@/lib/dismissStack';
+import { useKeyboardOffset } from '@/lib/useKeyboardOffset';
 
 const PLACE_TYPE_ICONS = {
   airport: '✈️',
@@ -22,6 +23,10 @@ export default function AddLocationDialog({ isOpen, onAdd, onClose }) {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Float the card centered ABOVE the on-screen keyboard (input is pinned at
+  // the top, results scroll below) — see useKeyboardOffset.
+  const keyboardOffset = useKeyboardOffset(isOpen);
 
   useDismissable(isOpen, onClose);
 
@@ -79,7 +84,10 @@ export default function AddLocationDialog({ isOpen, onAdd, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] overflow-hidden flex items-start justify-center px-3 pt-[max(6vh,env(safe-area-inset-top))]">
+    <div
+      className="fixed inset-0 z-[9999] overflow-y-auto flex items-center justify-center px-3 py-[6vh]"
+      style={keyboardOffset ? { paddingTop: 16, paddingBottom: keyboardOffset + 16 } : undefined}
+    >
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -93,7 +101,8 @@ export default function AddLocationDialog({ isOpen, onAdd, onClose }) {
         animate={{ y: 0, opacity: 1, scale: 1 }}
         exit={{ y: 40, opacity: 0, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-        className="relative w-full max-w-md bg-white rounded-[24px] shadow-2xl max-h-[85vh] overflow-hidden flex flex-col"
+        className="relative w-full max-w-md bg-white rounded-[24px] shadow-2xl overflow-hidden flex flex-col"
+        style={{ maxHeight: keyboardOffset ? `calc(100vh - ${keyboardOffset + 32}px)` : '85vh' }}
       >
         <div className="bg-gradient-to-r from-[#3A6EA5] to-[#1E3150] text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
           <h2 className="text-[20px] font-bold">Add New Location</h2>

@@ -5,7 +5,7 @@ import { ROUTE } from "@/lib/workerRoutes";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
-  ArrowLeft, Hotel, Plane, Loader2, ExternalLink, Search, X, Star, Navigation, Phone, ChevronRight, Bus
+  ArrowLeft, Hotel, Plane, Loader2, ExternalLink, Search, X, Star, Navigation, Phone, ChevronRight, Bus, MapPin, Check
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
@@ -14,6 +14,7 @@ import { getCurrentPositionSmart } from "@/lib/geolocation";
 import { isCityLocation } from "../components/location/locationLabel";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
+import { useKeyboardOffset } from "@/lib/useKeyboardOffset";
 import { useDismissable } from '@/lib/dismissStack';
 
 // Editorial design tokens (design handoff: ivory canvas + 1024 column).
@@ -705,7 +706,13 @@ export default function Transportation() {
   // Swipe-down-to-dismiss wiring for the three inline modals
   useDismissable(showAirportPicker, () => setShowAirportPicker(false));
   useDismissable(showSavedLocations, () => setShowSavedLocations(false));
-  useDismissable(showDestinationSearch, () => setShowDestinationSearch(false));
+  useDismissable(showDestinationSearch, () => closeDestinationSearch());
+
+  // Keyboard-aware search modal: when the on-screen keyboard opens it would
+  // otherwise cover the destination search bar (it's a bottom sheet). Track the
+  // keyboard height so we can float the whole sheet — input AND results — in the
+  // visible area ABOVE the keyboard. Shared hook (see also the location pickers).
+  const keyboardOffset = useKeyboardOffset(showDestinationSearch);
 
   // "Use my current location as the starting point" — updates ONLY the FROM /
   // origin (never the destination). GPS → reverse geocode → street address +
@@ -747,6 +754,10 @@ export default function Transportation() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  // Destination search: a tapped suggestion is held here as a PENDING pick (not
+  // yet applied). The user reviews it, can clear it with ✕ if they mis-tapped,
+  // then explicitly confirms — so a stray tap never jumps straight to a route.
+  const [pendingPlace, setPendingPlace] = useState(null);
   const [nearbyAirports, setNearbyAirports] = useState([]);
   const [loadingAirports, setLoadingAirports] = useState(false);
   
@@ -843,6 +854,21 @@ export default function Transportation() {
   }, [destination]);
 
   // Search for places - WITH CACHING
+  // Close the destination search and reset all of its transient state.
+  const closeDestinationSearch = () => {
+    setShowDestinationSearch(false);
+    setSearchQuery("");
+    setSearchResults([]);
+    setPendingPlace(null);
+  };
+
+  // Apply the pending (reviewed + confirmed) destination pick.
+  const confirmPendingPlace = () => {
+    if (!pendingPlace) return;
+    setDestination({ ...pendingPlace, type: "custom" });
+    closeDestinationSearch();
+  };
+
   const searchPlaces = async (query) => {
     if (!query || query.length < 3 || !activeLocation) return;
     
@@ -2915,20 +2941,22 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center"
-            onClick={() => setShowDestinationSearch(false)}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4 pt-4"
+            style={{ paddingBottom: keyboardOffset + 16 }}
+            onClick={closeDestinationSearch}
           >
             <motion.div
               initial={{ y: 100 }}
               animate={{ y: 0 }}
               exit={{ y: 100 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg max-h-[80vh] overflow-hidden"
+              className="bg-white rounded-3xl w-full sm:max-w-lg overflow-hidden flex flex-col"
+              style={{ maxHeight: `calc(100vh - ${keyboardOffset + 32}px)` }}
             >
-              <div className="p-4 border-b">
+              <div className="p-4 border-b shrink-0">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold">Search Destination</h3>
-                  <button onClick={() => setShowDestinationSearch(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                  <button onClick={closeDestinationSearch} className="p-2 hover:bg-gray-100 rounded-lg">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -2947,30 +2975,65 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
                     autoFocus
                   />
                 </div>
+
+                {/* Pending pick — the tapped suggestion, staged for review. ✕
+                    removes it (in case of a mis-tap); Confirm applies it. Nothing
+                    commits to a route until the user taps Confirm. */}
+                {pendingPlace && (
+                  <div className="mt-3">
+                    <div className="flex items-center gap-2 p-3 rounded-xl border-2 border-blue-200 bg-blue-50">
+                      <MapPin className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-900 truncate">{pendingPlace.name}</p>
+                        <p className="text-xs text-gray-500 truncate">{pendingPlace.address}</p>
+                      </div>
+                      <button
+                        onClick={() => setPendingPlace(null)}
+                        aria-label="Remove selected address"
+                        className="p-1.5 rounded-full hover:bg-blue-100 flex-shrink-0"
+                      >
+                        <X className="w-4 h-4 text-gray-500" />
+                      </button>
+                    </div>
+                    <button
+                      onClick={confirmPendingPlace}
+                      className="w-full mt-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-center gap-2 transition-colors"
+                    >
+                      <Check className="w-5 h-5" /> Confirm destination
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <div className="max-h-96 overflow-y-auto p-4">
+              {/* Suggestions — only ~3 show at a time; swipe/scroll the list for
+                  more. Tapping a row STAGES it as the pending pick (above) rather
+                  than jumping straight to a route, so a mis-tap is easy to undo. */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-3" style={{ maxHeight: 224 }}>
                 {searching ? (
                   <div className="text-center py-8">
                     <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto" />
                   </div>
                 ) : searchResults.length > 0 ? (
                   <div className="space-y-2">
-                    {searchResults.map((place, index) => (
-                      <button
-                        key={index}
-                        onClick={() => {
-                          setDestination({ ...place, type: "custom" });
-                          setShowDestinationSearch(false);
-                          setSearchQuery("");
-                          setSearchResults([]);
-                        }}
-                        className="w-full p-3 text-left hover:bg-gray-50 rounded-xl transition-colors"
-                      >
-                        <p className="font-semibold text-gray-900">{place.name}</p>
-                        <p className="text-sm text-gray-500 truncate">{place.address}</p>
-                      </button>
-                    ))}
+                    {searchResults.map((place, index) => {
+                      const isPicked = pendingPlace
+                        && pendingPlace.name === place.name
+                        && pendingPlace.address === place.address;
+                      return (
+                        <button
+                          key={index}
+                          onClick={() => setPendingPlace(place)}
+                          className={`w-full p-3 text-left rounded-xl transition-colors flex items-center gap-2 border-2 ${isPicked ? 'border-blue-300 bg-blue-50' : 'border-transparent hover:bg-gray-50'}`}
+                        >
+                          <MapPin className={`w-4 h-4 flex-shrink-0 ${isPicked ? 'text-blue-600' : 'text-gray-400'}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-900 truncate">{place.name}</p>
+                            <p className="text-sm text-gray-500 truncate">{place.address}</p>
+                          </div>
+                          {isPicked && <Check className="w-4 h-4 text-blue-600 flex-shrink-0" />}
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : searchQuery.length >= 3 ? (
                   <p className="text-center text-gray-500 py-8">No results found</p>
