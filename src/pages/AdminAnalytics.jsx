@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { callWorker } from '@/lib/callWorker';
 import { createPageUrl } from '@/utils';
-import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap, Users, UserCheck } from 'lucide-react';
 import { isAdminEmail } from '@/lib/admins';
 
 const COLORS = {
@@ -80,6 +80,7 @@ export default function AdminAnalytics() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
+  const [userStats, setUserStats] = useState(null); // real Supabase-profiles aggregates
   const [generatedAt, setGeneratedAt] = useState(null);
 
   const load = async () => {
@@ -101,6 +102,12 @@ export default function AdminAnalytics() {
         return [type, { results: qd?.results || [], error: qe || qd?.error || null }];
       }));
       setData(Object.fromEntries(pairs));
+      // Real user metrics from Supabase profiles (service-role, admin-gated in
+      // the Worker). Non-fatal: if it fails, the event analytics still render.
+      try {
+        const { data: us, error: ue } = await callWorker('admin-user-stats', {});
+        setUserStats(ue ? null : us);
+      } catch { setUserStats(null); }
       setGeneratedAt(new Date().toISOString());
     } catch (e) {
       setError(e?.message || 'Failed to load analytics');
@@ -190,6 +197,51 @@ export default function AdminAnalytics() {
 
         {data && (
           <>
+            {/* Real user metrics from Supabase profiles (replaces the dead
+                Base44 AdminDashboard user data). */}
+            {userStats && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                  <KpiCard icon={Users} label="Total users" value={userStats.totalUsers ?? 0} color={COLORS.green} />
+                  <KpiCard
+                    icon={UserCheck}
+                    label="Onboarded"
+                    value={userStats.onboardingCompleted ?? 0}
+                    sublabel={userStats.totalUsers ? `${Math.round((userStats.onboardingCompleted / userStats.totalUsers) * 100)}% of users` : null}
+                    color={COLORS.accent}
+                  />
+                </div>
+
+                {userStats.signupsByDay?.length > 0 && (
+                  <Section title="Sign-ups per day (30d)" icon={Users}>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 100 }}>
+                      {userStats.signupsByDay.map(d => {
+                        const mx = Math.max(...userStats.signupsByDay.map(x => x.count || 0), 1);
+                        return (
+                          <div key={d.day} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                            <div title={`${d.day}: ${d.count}`} style={{ width: '100%', height: `${Math.max((d.count / mx) * 100, 4)}%`, background: COLORS.green, borderRadius: '3px 3px 0 0' }} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Section>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <Section title="Top home countries" icon={Users} empty={(userStats.byCountry?.length ?? 0) === 0 ? 'No data' : null}>
+                    {(userStats.byCountry || []).map(c => (
+                      <BarRow key={c.label} label={c.label} count={c.count} max={userStats.byCountry[0]?.count || 1} color={COLORS.green} />
+                    ))}
+                  </Section>
+                  <Section title="Preferred languages" icon={Users} empty={(userStats.byLanguage?.length ?? 0) === 0 ? 'No data' : null}>
+                    {(userStats.byLanguage || []).map(l => (
+                      <BarRow key={l.label} label={l.label} count={l.count} max={userStats.byLanguage[0]?.count || 1} color={COLORS.accent} />
+                    ))}
+                  </Section>
+                </div>
+              </>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               <KpiCard
                 icon={Activity}

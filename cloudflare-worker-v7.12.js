@@ -902,6 +902,86 @@ async function handleDeleteAccount(request, env) {
   }
 }
 
+// ── Admin user stats — aggregate metrics from Supabase profiles ───────────
+// User data lives in Supabase now (not Base44), so the admin dashboard reads it
+// here with the SERVICE ROLE key (bypasses RLS). Gated to admin emails, verified
+// from the caller's JWT. Returns ONLY aggregates (counts / distributions) — no
+// per-user rows, emails, or PII ever leave the Worker.
+// Keep ADMIN_EMAILS_WORKER in sync with src/lib/admins.js.
+const ADMIN_EMAILS_WORKER = [
+  'maizasimeon@gmail.com', 'yreolsleow@gmail.com',
+  'founder@globeskimmers.io', 'simeonmaiza@gmail.com',
+];
+
+async function handleAdminUserStats(request, env) {
+  try {
+    const authHeader = request.headers.get('Authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!token) return jsonResponse({ error: 'Not signed in' }, 401);
+
+    const SUPABASE_URL = env.SUPABASE_URL || 'https://bkaxadiyehddzkiuheea.supabase.co';
+    const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!SERVICE_KEY) return jsonResponse({ error: 'Server not configured' }, 500);
+
+    // Verify the caller from their JWT, then gate to admins.
+    const whoRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${token}` },
+    });
+    if (whoRes.status !== 200) return jsonResponse({ error: 'Invalid or expired session' }, 401);
+    const who = await whoRes.json();
+    const email = String(who?.email || '').trim().toLowerCase();
+    if (!ADMIN_EMAILS_WORKER.includes(email)) return jsonResponse({ error: 'Forbidden' }, 403);
+
+    // Read all profiles with the service key (bypasses RLS). select=* is safe —
+    // PostgREST won't error on columns that don't exist.
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=*`, {
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    });
+    if (res.status !== 200) {
+      const detail = await res.text().catch(() => '');
+      return jsonResponse({ error: `profiles read failed (${res.status})`, detail: detail.slice(0, 200) }, 502);
+    }
+    const list = await res.json().then((r) => (Array.isArray(r) ? r : [])).catch(() => []);
+
+    const tally = (key) => {
+      const m = {};
+      for (const r of list) {
+        const v = r?.[key];
+        if (v == null || v === '') continue;
+        m[v] = (m[v] || 0) + 1;
+      }
+      return Object.entries(m).map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+    };
+
+    // Sign-ups per day (last 30d) if a timestamp column exists.
+    const dateKey = list.some((r) => r?.created_at) ? 'created_at' : (list.some((r) => r?.inserted_at) ? 'inserted_at' : null);
+    let signupsByDay = [];
+    if (dateKey) {
+      const m = {};
+      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      for (const r of list) {
+        const t = Date.parse(r[dateKey]);
+        if (!Number.isFinite(t) || t < cutoff) continue;
+        const day = new Date(t).toISOString().slice(0, 10);
+        m[day] = (m[day] || 0) + 1;
+      }
+      signupsByDay = Object.entries(m).map(([day, count]) => ({ day, count })).sort((a, b) => a.day.localeCompare(b.day));
+    }
+
+    return jsonResponse({
+      totalUsers: list.length,
+      onboardingCompleted: list.filter((r) => r?.onboarding_completed === true).length,
+      byCountry: tally('home_country').slice(0, 15),
+      byLanguage: tally('preferred_language').slice(0, 15),
+      byCurrency: tally('preferred_currency').slice(0, 15),
+      signupsByDay,
+      generatedAt: Date.now(),
+    });
+  } catch (e) {
+    return jsonResponse({ error: e.message || 'admin stats failed' }, 500);
+  }
+}
+
 // ── Analytics query endpoint — read-only allowlisted SELECTs against D1 ───
 // Browser sends { type: 'page_views_7d' | 'top_zero_results' | ... }, NOT
 // raw SQL. Each type maps to a hardcoded prepared statement. This is the
@@ -9983,6 +10063,7 @@ export default {
       if (pathname === '/places/nearby' || pathname === '/places/search') return await handleNearbySearch(request, env, ctx);
       if (pathname === '/log-event' && request.method === 'POST') return await handleLogEvent(request, env);
       if (pathname === '/delete-account' && request.method === 'POST') return await handleDeleteAccount(request, env);
+      if (pathname === '/admin-user-stats') return await handleAdminUserStats(request, env);
       if (pathname === '/analytics-query') return await handleAnalyticsQuery(request, env);
       if (pathname.startsWith('/places/details/')) return await handlePlaceDetails(request, env);
       if (pathname === '/places/photo') return await handlePhotoProxy(request, env);
