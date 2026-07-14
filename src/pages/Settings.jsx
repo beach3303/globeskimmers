@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
-import { searchCountries } from "@/lib/countries";
+import { searchHomeCities, resolveHomePlace } from "@/lib/homePlace";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { X, User, Mail, Edit3, Check, Globe, DollarSign, Languages, Thermometer, Shield, Loader2, MessageCircle, MapPin, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2 } from "lucide-react";
+import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2 } from "lucide-react";
 import ContactUsModal from "../components/ContactUsModal";
 import RefreshAccessModal from "../components/RefreshAccessModal";
 import { ADMIN_EMAILS } from "@/lib/admins";
@@ -23,7 +23,7 @@ import { useFontScale } from "@/components/a11y/FontScaleContext";
 const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const ED_MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
-const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
+const ED_RULE = "rgba(22,17,13,.10)";
 // Respect the app-wide text-scale variable, with a safe 1 fallback.
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 
@@ -405,12 +405,21 @@ export default function SettingsPage() {
   const countryBoxRef = useRef(null);
   const [countryOpen, setCountryOpen] = useState(false);
   const [countryQuery, setCountryQuery] = useState("");
+  // Home CITY search (drives home_country + exact home_timezone). countryQuery is
+  // reused as the search text; these hold the city results + async states.
+  const [cityResults, setCityResults] = useState([]);
+  const [citySearching, setCitySearching] = useState(false);
+  const [cityResolving, setCityResolving] = useState(false);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [firstName, setFirstName] = useState("");
+  // Guards the name input from being reseeded (clobbered) by an async profile
+  // refresh while the user is mid-edit — everything auto-saves now, so refreshes
+  // can land at any time.
+  const firstNameFocused = useRef(false);
   const [homeCountry, setHomeCountry] = useState("");
+  const [homeCity, setHomeCity] = useState("");
   const [showHomeCountryInfo, setShowHomeCountryInfo] = useState(false);
   const [showHomeFlag, setShowHomeFlag] = useState(false);
   const [preferredCurrency, setPreferredCurrency] = useState("USD");
@@ -441,6 +450,7 @@ export default function SettingsPage() {
       first_name: profile?.first_name || "",
       full_name: profile?.first_name || "",
       home_country: profile?.home_country || "",
+      home_city: profile?.home_city || "",
       show_home_flag: !!profile?.show_home_flag,
       show_home_country_info: !!profile?.show_home_country_info,
       preferred_currencies: [profile?.preferred_currency || "USD"],
@@ -449,19 +459,21 @@ export default function SettingsPage() {
       preferred_temperature_scale: profile?.temp_unit === "C" ? "celsius" : "fahrenheit",
       preferred_distance_unit: profile?.distance_unit === "mi" ? "miles" : "km",
     });
-    if (!editing) {
-      setFirstName(profile?.first_name || "");
-      setHomeCountry(profile?.home_country || "");
-      setPreferredCurrency(profile?.preferred_currency || "USD");
-      setPrimaryBankingCurrency(profile?.primary_banking_currency || profile?.preferred_currency || "USD");
-      setPreferredLanguage(profile?.preferred_language || "en");
-      setPreferredTempScale(profile?.temp_unit === "C" ? "celsius" : "fahrenheit");
-      setPreferredDistanceUnit(profile?.distance_unit === "mi" ? "miles" : "km");
-      setShowHomeCountryInfo(!!profile?.show_home_country_info);
-      setShowHomeFlag(!!profile?.show_home_flag);
-    }
+    // Seed editable fields from the profile. Everything auto-saves, so this also
+    // runs after each save's refresh — values simply re-seed to what we saved.
+    // Skip the name field while it's focused so a refresh can't clobber typing.
+    if (!firstNameFocused.current) setFirstName(profile?.first_name || "");
+    setHomeCountry(profile?.home_country || "");
+    setHomeCity(profile?.home_city || "");
+    setPreferredCurrency(profile?.preferred_currency || "USD");
+    setPrimaryBankingCurrency(profile?.primary_banking_currency || profile?.preferred_currency || "USD");
+    setPreferredLanguage(profile?.preferred_language || "en");
+    setPreferredTempScale(profile?.temp_unit === "C" ? "celsius" : "fahrenheit");
+    setPreferredDistanceUnit(profile?.distance_unit === "mi" ? "miles" : "km");
+    setShowHomeCountryInfo(!!profile?.show_home_country_info);
+    setShowHomeFlag(!!profile?.show_home_flag);
     setLoading(false);
-  }, [profile, authUser]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profile, authUser]);
 
   // Close the home-country dropdown when tapping outside it.
   useEffect(() => {
@@ -472,34 +484,57 @@ export default function SettingsPage() {
     return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("touchstart", onDoc); };
   }, [countryOpen]);
 
-  const handleSave = async () => {
-    if (!authUser?.id) { showToast("Not signed in.", "error"); return; }
+  // Debounced home-city search while the picker is open.
+  useEffect(() => {
+    if (!countryOpen) return;
+    const q = countryQuery.trim();
+    if (q.length < 3) { setCityResults([]); setCitySearching(false); return; }
+    setCitySearching(true);
+    const t = setTimeout(async () => {
+      const r = await searchHomeCities(q);
+      setCityResults(r);
+      setCitySearching(false);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [countryQuery, countryOpen]);
+
+  // Pick a city → resolve its exact timezone, then set home fields (country from
+  // the city drives the flag). Nothing persists until the user taps Save.
+  const pickHomeCity = async (result) => {
+    if (cityResolving) return;
+    setCityResolving(true);
+    const place = await resolveHomePlace(result);
+    setCityResolving(false);
+    setHomeCity(place.city);
+    setHomeCountry(place.country);
+    setCountryOpen(false);
+    setCountryQuery("");
+    setCityResults([]);
+    persist({ home_city: place.city, home_country: place.country, home_lat: place.latitude, home_lng: place.longitude, home_timezone: place.timezone });
+  };
+
+  // Auto-save a PARTIAL profile update. Every editable control calls this on
+  // change (selects/toggles) or blur (text) — there's no manual Save anymore, so
+  // a toggle takes effect instantly without hunting for a Save button. Keeps the
+  // pre-migration fallback that strips the home_* columns if they don't exist yet.
+  const persist = async (patch) => {
+    if (!authUser?.id) return;
     setSaving(true);
     try {
-      // Write to the Supabase profiles row using the SCHEMA's column names/values
-      // (singular preferred_currency; temp_unit 'C'/'F'; distance_unit 'mi'/'km')
-      // — exactly what Home + the ATM calculator read, so the home page updates.
-      const update = {
-        first_name: firstName.trim(),
-        home_country: homeCountry,
-        show_home_flag: showHomeFlag,
-        show_home_country_info: showHomeCountryInfo,
-        preferred_currency: preferredCurrency,
-        primary_banking_currency: primaryBankingCurrency,
-        preferred_language: preferredLanguage,
-        temp_unit: preferredTempScale === "celsius" ? "C" : "F",
-        distance_unit: preferredDistanceUnit === "miles" ? "mi" : "km",
-      };
-      const { error } = await supabase.from("profiles").update(update).eq("id", authUser.id);
+      let { error } = await supabase.from("profiles").update(patch).eq("id", authUser.id);
+      if (error && /home_(city|lat|lng|timezone)/.test(error.message || "")) {
+        const safe = { ...patch };
+        delete safe.home_city; delete safe.home_lat; delete safe.home_lng; delete safe.home_timezone;
+        ({ error } = await supabase.from("profiles").update(safe).eq("id", authUser.id));
+      }
       if (error) throw error;
-      setEditing(false);
-      await refreshProfile(); // re-pull profile → Home + Settings reflect the change
-      showToast("✅ Profile updated successfully!", "success");
-    } catch (error) {
-      console.error("Error saving profile:", error);
-      showToast("Failed to update profile. Please try again.", "error");
+      await refreshProfile(); // re-pull so Home + Settings reflect the change
+    } catch (e) {
+      console.error("Auto-save failed:", e);
+      showToast("Couldn't save — check your connection.", "error");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   // Permanently delete this account + all its data. On success AuthContext
@@ -530,22 +565,6 @@ export default function SettingsPage() {
     return (<div className="min-h-screen bg-gradient-to-b from-[#f7fafc] to-[#e2e8f0] flex items-center justify-center"><div className="w-16 h-16 border-4 border-[#6366f1] border-t-transparent rounded-full animate-spin"></div></div>);
   }
 
-  // Cancel handler shared by the editorial layout's Edit toolbar (reverts the
-  // in-progress edits to the last-saved `user` snapshot — identical logic to
-  // the phone Cancel buttons, just referenced from one place).
-  const cancelEdit = () => {
-    setEditing(false);
-    setFirstName(user?.first_name || "");
-    setHomeCountry(user?.home_country || "");
-    setShowHomeCountryInfo(user?.show_home_country_info || false);
-    setShowHomeFlag(user?.show_home_flag || false);
-    setPreferredCurrency(user?.preferred_currencies?.[0] || "USD");
-    setPrimaryBankingCurrency(user?.primary_banking_currency || user?.preferred_currencies?.[0] || "USD");
-    setPreferredLanguage(user?.preferred_language || "en");
-    setPreferredTempScale(user?.preferred_temperature_scale || "fahrenheit");
-    setPreferredDistanceUnit(user?.preferred_distance_unit || "km");
-  };
-
   // ════════════════════════════════════════════════════════════════════════
   // EDITORIAL LAYOUT — ivory canvas, settings grouped into soft-white rounded
   // cards with mono UPPERCASE kickers, serif row labels, hairline rules, and a
@@ -553,26 +572,32 @@ export default function SettingsPage() {
   // and ~1024 centered column; phone gets a phone-tuned, compact variant in the
   // existing single max-w-md column. All state / handlers are shared.
   // ════════════════════════════════════════════════════════════════════════
+  const homeCityLabel = homeCity ? (homeCountry ? `${homeCity}, ${homeCountry}` : homeCity) : (homeCountry || "");
   const countryDropdown = (
       <div className="relative w-full" ref={countryBoxRef} style={{ minWidth: isTablet ? 280 : 0 }}>
         <button type="button" onClick={() => setCountryOpen((o) => !o)} className="w-full flex items-center justify-between text-left" style={{ height: 48, padding: "0 16px", borderRadius: 14, border: `1px solid ${ED_RULE}`, background: "#fff" }}>
-          <span style={{ fontSize: fs(15), color: homeCountry ? ED_INK : ED_INK3 }}>{homeCountry || "Select your home country"}</span>
-          <ChevronDown className="w-5 h-5" style={{ color: ED_INK3 }} />
+          <span className="truncate" style={{ fontSize: fs(15), color: homeCityLabel ? ED_INK : ED_INK3 }}>{homeCityLabel || "Search your home city"}</span>
+          <ChevronDown className="w-5 h-5 flex-shrink-0" style={{ color: ED_INK3 }} />
         </button>
         {countryOpen && (
           <div className="absolute z-30 mt-1 w-full overflow-hidden" style={{ borderRadius: 14, border: `1px solid ${ED_RULE}`, background: "#fff", boxShadow: "0 16px 40px -20px rgba(22,17,13,.45)" }}>
             <div className="flex items-center gap-2" style={{ padding: "10px 14px", borderBottom: `1px solid ${ED_RULE}` }}>
-              <Search className="w-4 h-4" style={{ color: ED_INK3 }} />
-              <input autoFocus value={countryQuery} onChange={(e) => setCountryQuery(e.target.value)} placeholder="Type a country (e.g. US, USA)…" className="flex-1 outline-none bg-transparent" style={{ fontSize: fs(14), color: ED_INK }} />
+              <Search className="w-4 h-4 flex-shrink-0" style={{ color: ED_INK3 }} />
+              <input autoFocus value={countryQuery} onChange={(e) => setCountryQuery(e.target.value)} placeholder="Type your home city (e.g. Los Angeles)…" className="flex-1 outline-none bg-transparent" style={{ fontSize: fs(14), color: ED_INK }} />
+              {(citySearching || cityResolving) && <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" style={{ color: ED_INK3 }} />}
             </div>
             <div className="max-h-[260px] overflow-y-auto">
-              {searchCountries(countryQuery).map((c) => (
-                <button key={c.code} type="button" onClick={() => { setHomeCountry(c.name); setCountryOpen(false); setCountryQuery(""); }} className="w-full text-left flex items-center justify-between" style={{ padding: "10px 16px", background: c.name === homeCountry ? ED_IVORY2 : "transparent" }}>
-                  <span style={{ fontSize: fs(14), color: ED_INK }}>{c.name}</span>
-                  {c.name === homeCountry && <Check className="w-4 h-4" style={{ color: TEAL_DEEP }} />}
+              {cityResults.map((r, i) => (
+                <button key={r.placeId || i} type="button" onClick={() => pickHomeCity(r)} disabled={cityResolving} className="w-full text-left flex items-center gap-2" style={{ padding: "10px 16px" }}>
+                  <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: ED_INK3 }} />
+                  <span className="flex-1 min-w-0">
+                    <span className="block truncate" style={{ fontSize: fs(14), color: ED_INK }}>{r.placeName || r.address?.city || r.city}</span>
+                    <span className="block truncate" style={{ fontSize: fs(12), color: ED_INK3 }}>{r.address?.formatted || r.full_name}</span>
+                  </span>
                 </button>
               ))}
-              {searchCountries(countryQuery).length === 0 && (<div style={{ padding: "12px 16px", fontSize: fs(13), color: ED_INK3 }}>No match</div>)}
+              {!citySearching && countryQuery.trim().length >= 3 && cityResults.length === 0 && (<div style={{ padding: "12px 16px", fontSize: fs(13), color: ED_INK3 }}>No cities match — try &ldquo;City, Country&rdquo;.</div>)}
+              {countryQuery.trim().length < 3 && (<div style={{ padding: "12px 16px", fontSize: fs(13), color: ED_INK3 }}>Type your home city (at least 3 letters).</div>)}
             </div>
           </div>
         )}
@@ -581,8 +606,7 @@ export default function SettingsPage() {
 
     const navItems = [
       { show: true, onClick: () => navigate(createPageUrl("SavedLocations")), icon: MapPin, bg: CAT.money.ink, title: "Saved Locations", desc: "Manage your favorite places" },
-      { show: isAdmin, onClick: () => navigate(createPageUrl("AdminDashboard")), icon: Shield, bg: CAT.shopping.ink, title: "Admin Portal", desc: "Manage app and users" },
-      { show: isAdmin, onClick: () => navigate(createPageUrl("AdminAnalytics")), icon: BarChart3, bg: CAT.transit.ink, title: "Analytics", desc: "Page views, searches, zero-results" },
+      { show: isAdmin, onClick: () => navigate(createPageUrl("AdminAnalytics")), icon: BarChart3, bg: CAT.transit.ink, title: "Admin Portal", desc: "Users, sign-ups & usage analytics" },
       { show: isAdmin, onClick: () => setShowRefreshAccess(true), icon: RefreshCw, bg: CAT.atm.ink, title: "Refresh Access", desc: "Grant the refresh button to users" },
       { show: true, onClick: () => setShowContactUs(true), icon: MessageCircle, bg: CAT.restroom.ink, title: "Contact Us", desc: "Get in touch with our team" },
     ].filter((n) => n.show);
@@ -616,58 +640,44 @@ export default function SettingsPage() {
                 <p className="truncate" style={{ fontSize: fs(isTablet ? 15 : 13.5), opacity: 0.9, marginTop: 5 }}>{user?.email}</p>
               </div>
             </div>
-            {!editing ? (
-              <button onClick={() => setEditing(true)} className={`flex items-center justify-center gap-2 flex-none ${isTablet ? "" : "w-full"}`} style={{ background: "rgba(255,255,255,.18)", border: "1px solid rgba(255,255,255,.3)", borderRadius: 999, padding: isTablet ? "12px 22px" : "11px 22px", fontSize: fs(isTablet ? 15 : 14), fontWeight: 600 }}><Edit3 className="w-4 h-4" />Edit</button>
-            ) : (
-              <div className={`flex items-center gap-2 flex-none ${isTablet ? "" : "w-full"}`}>
-                <button onClick={cancelEdit} className={isTablet ? "" : "flex-1"} style={{ background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.28)", borderRadius: 999, padding: "12px 18px", fontSize: fs(14), fontWeight: 600 }}>Cancel</button>
-                <button onClick={handleSave} disabled={saving} className={`flex items-center justify-center gap-1.5 disabled:opacity-50 ${isTablet ? "" : "flex-1"}`} style={{ background: "#fff", color: TEAL_DEEP, borderRadius: 999, padding: "12px 20px", fontSize: fs(14), fontWeight: 700 }}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Save</button>
-              </div>
-            )}
+            {/* Auto-save indicator (replaces the old Edit / Save-Cancel). Grayed
+                + non-interactive: every change saves on its own, so there's no
+                button to hunt for. Shows a live "Saving…" while a write is in
+                flight. */}
+            <div aria-live="polite" className={`flex items-center justify-center gap-1.5 flex-none ${isTablet ? "" : "w-full"}`} style={{ background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.72)", borderRadius: 999, padding: isTablet ? "12px 22px" : "11px 22px", fontSize: fs(isTablet ? 15 : 14), fontWeight: 600 }}>
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              {saving ? "Saving…" : "Auto-save changes"}
+            </div>
           </div>
 
           {/* Travel preferences group */}
           <EdGroup kicker="Travel preferences" isTablet={isTablet}>
             <EdRow isTablet={isTablet} step={fontStep} icon={Mail} iconBg={CAT.atm.ink} title="Email" desc="Your sign-in address" control={{ node: <EdValue>{user?.email}</EdValue> }} />
             <EdRow isTablet={isTablet} step={fontStep} icon={User} iconBg={CAT.culture.ink} title="First Name" desc="Used to greet you across the app"
-              control={editing
-                ? { below: true, node: <Input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Enter your first name" className="h-12 rounded-xl" style={{ borderColor: ED_RULE }} /> }
-                : { node: <EdValue>{user?.first_name || user?.full_name || "Not set"}</EdValue> }}
+              control={{ below: true, node: <Input type="text" value={firstName} onFocus={() => { firstNameFocused.current = true; }} onBlur={() => { firstNameFocused.current = false; const v = firstName.trim(); if (v !== (profile?.first_name || "")) persist({ first_name: v }); }} onChange={(e) => setFirstName(e.target.value)} placeholder="Enter your first name" className="h-12 rounded-xl" style={{ borderColor: ED_RULE }} /> }}
             />
-            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.restroom.ink} title="Home Country" desc="Sets your home flag & currency"
-              control={editing
-                ? { below: true, node: countryDropdown }
-                : { node: <EdValue>{user?.home_country || "Not set"}</EdValue> }}
+            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.restroom.ink} title="Home City" desc="Sets your home flag & accurate local time"
+              control={{ below: true, node: countryDropdown }}
             />
-            {editing && (
-              <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.transit.ink} title="Show Home Country Time" desc="Display home country time on home page"
-                control={{ node: <EdToggle on={showHomeCountryInfo} onClick={() => setShowHomeCountryInfo(!showHomeCountryInfo)} label="Toggle home country time" /> }}
-              />
-            )}
-            {editing && (
-              <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.weather.ink} title="Show Home Country Flag" desc="Display your flag on the home page card"
-                control={{ node: <EdToggle on={showHomeFlag} onClick={() => setShowHomeFlag(!showHomeFlag)} label="Toggle home country flag" /> }}
-                last
-              />
-            )}
+            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.transit.ink} title="Show Home Country Time" desc="Display home country time on home page"
+              control={{ node: <EdToggle on={showHomeCountryInfo} onClick={() => { const next = !showHomeCountryInfo; setShowHomeCountryInfo(next); persist({ show_home_country_info: next }); }} label="Toggle home country time" /> }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.weather.ink} title="Show Home Country Flag" desc="Display your flag on the home page card"
+              control={{ node: <EdToggle on={showHomeFlag} onClick={() => { const next = !showHomeFlag; setShowHomeFlag(next); persist({ show_home_flag: next }); }} label="Toggle home country flag" /> }}
+              last
+            />
           </EdGroup>
 
           {/* Currency & language group */}
           <EdGroup kicker="Currency & language" isTablet={isTablet}>
             <EdRow isTablet={isTablet} step={fontStep} icon={DollarSign} iconBg={CAT.money.ink} title="Preferred Currency" desc="How prices are displayed across the app"
-              control={editing
-                ? { below: true, node: (<Select value={preferredCurrency} onValueChange={setPreferredCurrency}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue placeholder="Select preferred currency" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{CURRENCIES.map((currency) => (<SelectItem key={currency.code} value={currency.code}>{currency.flag} {currency.name} ({currency.code})</SelectItem>))}</SelectContent></Select>) }
-                : { node: <EdValue>{user?.preferred_currencies?.[0] ? CURRENCIES.find(c => c.code === user.preferred_currencies[0])?.name : "Not set"}</EdValue> }}
+              control={{ below: true, node: (<Select value={preferredCurrency} onValueChange={(v) => { setPreferredCurrency(v); persist({ preferred_currency: v }); }}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue placeholder="Select preferred currency" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{CURRENCIES.map((currency) => (<SelectItem key={currency.code} value={currency.code}>{currency.flag} {currency.name} ({currency.code})</SelectItem>))}</SelectContent></Select>) }}
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={CreditCard} iconBg={CAT.atm.ink} title="Primary Banking Currency" desc="The currency of the bank account or card you'll use at ATMs"
-              control={editing
-                ? { below: true, node: (<Select value={primaryBankingCurrency} onValueChange={setPrimaryBankingCurrency}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue placeholder="Select banking currency" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{CURRENCIES.map((currency) => (<SelectItem key={currency.code} value={currency.code}>{currency.flag} {currency.name} ({currency.code})</SelectItem>))}</SelectContent></Select>) }
-                : { node: <EdValue>{user?.primary_banking_currency ? (CURRENCIES.find(c => c.code === user.primary_banking_currency)?.name || user.primary_banking_currency) : "Not set"}</EdValue> }}
+              control={{ below: true, node: (<Select value={primaryBankingCurrency} onValueChange={(v) => { setPrimaryBankingCurrency(v); persist({ primary_banking_currency: v }); }}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue placeholder="Select banking currency" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{CURRENCIES.map((currency) => (<SelectItem key={currency.code} value={currency.code}>{currency.flag} {currency.name} ({currency.code})</SelectItem>))}</SelectContent></Select>) }}
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={Languages} iconBg={CAT.transit.ink} title="Preferred Language" desc="Translates menus, signs & phrases"
-              control={editing
-                ? { below: true, node: (<Select value={preferredLanguage} onValueChange={setPreferredLanguage}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue placeholder="Select preferred language" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{LANGUAGES.map((language) => (<SelectItem key={language.code} value={language.code}>{language.flag} {language.name}</SelectItem>))}</SelectContent></Select>) }
-                : { node: <EdValue>{LANGUAGES.find(l => l.code === user?.preferred_language)?.name || "Not set"}</EdValue> }}
+              control={{ below: true, node: (<Select value={preferredLanguage} onValueChange={(v) => { setPreferredLanguage(v); persist({ preferred_language: v }); }}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue placeholder="Select preferred language" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{LANGUAGES.map((language) => (<SelectItem key={language.code} value={language.code}>{language.flag} {language.name}</SelectItem>))}</SelectContent></Select>) }}
               last
             />
           </EdGroup>
@@ -675,14 +685,10 @@ export default function SettingsPage() {
           {/* Units group */}
           <EdGroup kicker="Units" isTablet={isTablet}>
             <EdRow isTablet={isTablet} step={fontStep} icon={Thermometer} iconBg={CAT.weather.ink} title="Temperature Scale" desc="Used across Weather & finders"
-              control={editing
-                ? { below: true, node: (<Select value={preferredTempScale} onValueChange={setPreferredTempScale}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue /></SelectTrigger><SelectContent className="rounded-xl"><SelectItem value="celsius">Celsius (°C)</SelectItem><SelectItem value="fahrenheit">Fahrenheit (°F)</SelectItem></SelectContent></Select>) }
-                : { node: <EdValue>{user?.preferred_temperature_scale === 'celsius' ? 'Celsius (°C)' : 'Fahrenheit (°F)'}</EdValue> }}
+              control={{ below: true, node: (<Select value={preferredTempScale} onValueChange={(v) => { setPreferredTempScale(v); persist({ temp_unit: v === "celsius" ? "C" : "F" }); }}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue /></SelectTrigger><SelectContent className="rounded-xl"><SelectItem value="celsius">Celsius (°C)</SelectItem><SelectItem value="fahrenheit">Fahrenheit (°F)</SelectItem></SelectContent></Select>) }}
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.money.ink} title="Distance Unit" desc="Used across all finders"
-              control={editing
-                ? { below: true, node: (<Select value={preferredDistanceUnit} onValueChange={setPreferredDistanceUnit}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue /></SelectTrigger><SelectContent className="rounded-xl"><SelectItem value="km">Kilometers (km)</SelectItem><SelectItem value="miles">Miles (mi)</SelectItem></SelectContent></Select>) }
-                : { node: <EdValue>{user?.preferred_distance_unit === 'miles' ? 'Miles (mi)' : 'Kilometers (km)'}</EdValue> }}
+              control={{ below: true, node: (<Select value={preferredDistanceUnit} onValueChange={(v) => { setPreferredDistanceUnit(v); persist({ distance_unit: v === "miles" ? "mi" : "km" }); }}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue /></SelectTrigger><SelectContent className="rounded-xl"><SelectItem value="km">Kilometers (km)</SelectItem><SelectItem value="miles">Miles (mi)</SelectItem></SelectContent></Select>) }}
               last
             />
           </EdGroup>
