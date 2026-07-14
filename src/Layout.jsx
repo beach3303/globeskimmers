@@ -1,6 +1,5 @@
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { createPageUrl } from "@/utils";
 import useSwipeDownDismiss from "@/lib/swipeDismiss";
@@ -11,6 +10,8 @@ import BrandBanner from "@/components/redesign/BrandBanner";
 import FloatingNav from "@/components/redesign/FloatingNav";
 import AdBanner from "@/components/ads/AdBanner";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
+import BackToTop from "@/components/BackToTop";
+import { logEvent } from "@/lib/analytics";
 import { IVORY } from "@/components/redesign/constants";
 
 // Finder list pages that show a bottom AdMob banner ("per-feature ads").
@@ -22,44 +23,27 @@ const AD_FINDER_PAGES = new Set([
   "ConvenienceStore", "ThingsToDo", "Shopping",
 ]);
 
-// Swipe-down-to-dismiss: which pages DON'T exit on a downward swipe. Root pages
-// (Home/Onboarding) have nowhere to go; Map pans on vertical drag (would
-// conflict); the camera scanners are immersive. Overlays (photos, forms,
-// pickers) still close via the dismiss stack on EVERY page, including these.
-const SWIPE_EXIT_EXCLUDE = new Set([
-  "Home", "Onboarding", "Map", "SmartPriceScanner", "SmartTextScanner",
+// Long, scrollable content/list pages that get the floating "back to top" button.
+const BACK_TO_TOP_PAGES = new Set([
+  "PlacesToEat", "CoffeeFinder", "ATMFinder", "RestroomFinder",
+  "ConvenienceStore", "ThingsToDo", "Shopping",
+  "CultureInformation", "BasicPhrases", "Transportation", "Weather",
 ]);
 
-// Generate or retrieve session ID
-const getSessionId = () => {
-  let sessionId = sessionStorage.getItem('globeskimmers_session_id');
-  if (!sessionId) {
-    sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    sessionStorage.setItem('globeskimmers_session_id', sessionId);
-    sessionStorage.setItem('globeskimmers_session_start', new Date().toISOString());
-  }
-  return sessionId;
-};
 
-// Track event helper. Legacy Base44 analytics — safely no-ops when there's no
-// Base44 session (e.g. native), so it does not interfere with the Supabase
-// auth path. (Analytics move to the Workers data path in a later phase.)
-const trackEvent = async (eventType, data = {}) => {
+// Track event helper. Now writes to the LIVE Cloudflare D1 events table via
+// logEvent (the same path the AI-details analytics already use). It used to
+// write to Base44 UserEvent, which silently no-ops since auth moved to Supabase
+// (no Base44 session) — that's why the admin analytics stopped collecting page
+// views, sessions and feature usage. Signature is unchanged, so every existing
+// call site keeps working; `page_name` in the data maps to the events `page`
+// column (what page_views_7d groups by), the rest becomes the JSON payload.
+const trackEvent = (eventType, data = {}) => {
   try {
-    const isAuthenticated = await base44.auth.isAuthenticated();
-    if (!isAuthenticated) return;
-
-    const user = await base44.auth.me();
-    const sessionId = getSessionId();
-
-    await base44.entities.UserEvent.create({
-      user_email: user.email,
-      event_type: eventType,
-      session_id: sessionId,
-      ...data
-    });
-  } catch (error) {
-    // Silently fail - event tracking is non-critical
+    const { page_name, ...rest } = data || {};
+    logEvent(eventType, rest, page_name || null);
+  } catch {
+    // Silently fail - event tracking is non-critical.
   }
 };
 
@@ -72,18 +56,11 @@ export default function Layout({ children, currentPageName }) {
   // the last card / radius row clears the overlay.
   const showFinderAd = AD_FINDER_PAGES.has(currentPageName);
 
-  // Swipe-down gesture: close the frontmost overlay (handled globally by the
-  // dismiss stack), or — when nothing is open — exit the page back one screen.
-  // We use react-router's history index to tell real in-app history from a cold
-  // launch, falling back to Home so a swipe can never strand the user / exit the
-  // app.
-  const handlePageDismiss = useCallback(() => {
-    if (SWIPE_EXIT_EXCLUDE.has(currentPageName)) return;
-    const idx = window.history.state?.idx ?? 0;
-    if (idx > 0) navigate(-1);
-    else navigate(createPageUrl("Home"));
-  }, [currentPageName, navigate]);
-  useSwipeDownDismiss(handlePageDismiss);
+  // Swipe-down gesture: close the frontmost overlay (photo, form, location
+  // picker) via the dismiss stack. Page-level swipe-to-exit was REMOVED per user
+  // request — a downward swipe no longer navigates back or to Home; it only
+  // closes an open overlay. Passing no callback disables the page-exit path.
+  useSwipeDownDismiss();
   // Onboarding fills the screen itself (each step sizes to viewport − banner and
   // pins its own footer), so it must NOT get the FloatingNav bottom padding —
   // that extra 96px pushes the step taller than the viewport and scrolls the
@@ -121,13 +98,13 @@ export default function Layout({ children, currentPageName }) {
     }
   }, [currentPageName, isAuthenticated]);
 
-  // Track session start
+  // Track session start — stamp the session's start time once (used by the
+  // session_end duration calc below) and fire session_start a single time.
   useEffect(() => {
-    if (isAuthenticated) {
-      const sessionStart = sessionStorage.getItem('globeskimmers_session_start');
-      if (sessionStart) {
-        trackEvent('session_start');
-      }
+    if (!isAuthenticated) return;
+    if (!sessionStorage.getItem('globeskimmers_session_start')) {
+      sessionStorage.setItem('globeskimmers_session_start', new Date().toISOString());
+      trackEvent('session_start');
     }
   }, [isAuthenticated]);
 
@@ -193,6 +170,10 @@ export default function Layout({ children, currentPageName }) {
               Home.jsx). Single mount point so only one overlay banner is ever
               active. */}
           {showFinderAd && <AdBanner />}
+
+          {/* Floating "back to top" on long content/list pages. Lifted higher on
+              finder pages so it clears the ad banner + lifted nav. */}
+          {BACK_TO_TOP_PAGES.has(currentPageName) && <BackToTop bottom={showFinderAd ? 150 : 96} />}
 
           {/* Floating pill nav — 3 anchors (Home / Saved / Settings). Lifted
               above the AdMob banner on Home AND the finder pages so the ad can

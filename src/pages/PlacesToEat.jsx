@@ -1587,8 +1587,7 @@ export default function PlacesToEat() {
       {showAdvanced&&(
         <button onClick={()=>setShowAdvanced(false)} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9999,width:"40px",height:"40px",borderRadius:"50%",border:"none",background:BLUE,color:"#fff",fontWeight:"700",fontSize:"calc(18px*var(--fs))",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       )}
-      {/* Scroll-to-top — appears after scrolling down */}
-      {displayCount>20&&<button onClick={()=>window.scrollTo({top:0,behavior:'smooth'})} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9998,display:"flex",alignItems:"center",gap:"4px",padding:"8px 14px",borderRadius:"24px",border:"none",background:DARK,color:"#fff",fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.3)",fontFamily:"inherit",opacity:0.9}}>↑ Top</button>}
+      {/* Scroll-to-top now provided globally by Layout's <BackToTop /> on finder pages. */}
       <LocationModePicker isOpen={showLocPicker} onClose={()=>setShowLocPicker(false)}/>
       <MapAppSelector
         isOpen={dirModal.open}
