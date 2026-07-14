@@ -41,7 +41,7 @@ const EXPLORE = [
 export default function HomeTablet({
   firstName, cityName, placeText, localGreeting,
   weatherInfo, tempUnit, toggleTempUnit, dateText, timeText,
-  flagActive, homeFlagUrl, onLocation, onAction,
+  flagActive, homeFlagUrl, onLocation, onAction, clockRows = [],
 }) {
   return (
     <div className="mx-auto px-8 pt-6" style={{ maxWidth: 1024 }}>
@@ -137,6 +137,26 @@ export default function HomeTablet({
           </div>
         </div>
       </div>
+
+      {/* ── CLOCK STACK ───────────────────────────────────────────────────
+          Subtle labeled rows under the hero, mirroring the phone layout: 📍 your
+          physical location (when you've navigated elsewhere) and 🏠 home (when
+          toggled). Each: place · day,date · time · temp. Only timezones that
+          differ from the hero (and each other) are passed in. */}
+      {clockRows.length > 0 && (
+        <div className="mt-4 flex flex-col items-center gap-1.5">
+          {clockRows.map((r) => (
+            <div key={r.key} className="flex items-center justify-center gap-2.5 flex-wrap text-[calc(14px*var(--fs))] font-medium" style={{ color: '#8A93A6' }}>
+              <span className="flex items-center gap-1.5"><span>{r.icon}</span><span className="uppercase tracking-wide">{r.label}</span></span>
+              <span style={{ opacity: 0.4 }}>·</span>
+              <span>{r.dateText}</span>
+              <span style={{ opacity: 0.4 }}>·</span>
+              <span>{r.timeText}</span>
+              {r.tempText && (<><span style={{ opacity: 0.4 }}>·</span><span>{r.tempText}</span></>)}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── MONEY EXCHANGE HERO ───────────────────────────────────────── */}
       <motion.button

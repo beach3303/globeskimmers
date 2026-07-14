@@ -81,6 +81,12 @@ export default function OnboardingPage() {
     const update = { onboarding_completed: true };
     if (fn) update.first_name = fn;
     if (collected.home_country) update.home_country = collected.home_country;
+    // Home city + coordinates + exact timezone (from HomeCityField) so the home
+    // clock is accurate worldwide, not just the country default.
+    if (collected.home_city) update.home_city = collected.home_city;
+    if (collected.home_lat != null) update.home_lat = collected.home_lat;
+    if (collected.home_lng != null) update.home_lng = collected.home_lng;
+    if (collected.home_timezone) update.home_timezone = collected.home_timezone;
     if (collected.preferred_currency) update.preferred_currency = collected.preferred_currency;
     if (collected.preferred_language) update.preferred_language = collected.preferred_language;
     // TemperatureStep emits a scale ('fahrenheit'|'celsius'); column is ('C'|'F').

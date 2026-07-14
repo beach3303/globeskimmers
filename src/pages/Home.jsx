@@ -10,11 +10,13 @@ import HomeBanner from "../components/ads/HomeBanner";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
 import { useAuth } from "@/lib/AuthContext";
 import { extractFirstName } from "@/lib/extractFirstName";
+import { isLocationPermissionGranted } from "@/lib/geolocation";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
 import { countryCode } from "@/lib/countries";
+import { homeTimezoneForCountry } from "@/lib/homePlace";
 import { useIsTablet } from "@/lib/useIsTablet";
 import HomeTablet from "@/components/home/HomeTablet";
 import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
@@ -94,7 +96,7 @@ const WELCOME_MAX = 10;
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { locationMode, selectedLocation, currentGpsLocation, getActiveLocation, loading: locationLoading } = useLocation();
+  const { locationMode, selectedLocation, currentGpsLocation, getActiveLocation, getCurrentLocation, loading: locationLoading } = useLocation();
   const { profile, user: authUser, signInTick, bumpWelcomeSplashCount } = useAuth();
   // iPad gets a dedicated tablet layout (HomeTablet); phone gets the fuller
   // editorial layout below.
@@ -114,9 +116,12 @@ export default function HomePage() {
   const [showWelcome, setShowWelcome] = useState(false); // welcome splash (first launches, before the location selector)
   const [tempUnit, setTempUnit] = useState('F');
   const [homeCountryInfo, setHomeCountryInfo] = useState(null);
-  const [homeCountryTime, setHomeCountryTime] = useState(new Date());
   const [homeCountryWeather, setHomeCountryWeather] = useState(null);
   const [shouldShowHomeCountryTime, setShouldShowHomeCountryTime] = useState(false);
+  // Physical-location clock (the "You're here" row) — only needed when you've
+  // navigated to a place you're not actually at.
+  const [physicalTz, setPhysicalTz] = useState(null);
+  const [physicalLabel, setPhysicalLabel] = useState('');
   const [showHomeFlag, setShowHomeFlag] = useState(false);
   const [homeFlagUrl, setHomeFlagUrl] = useState(null);
   const pickerPrompted = useRef(false); // gate the one-time location-picker auto-open (per mount)
@@ -172,30 +177,55 @@ export default function HomePage() {
     }
   }, [locationMode, selectedLocation, currentGpsLocation, getActiveLocation]);
 
-  // Show home-country TIME chip when:
-  //   1. User toggled "Show Home Country Time" ON (show_home_country_info)
-  //   2. AND the user is currently in a DIFFERENT country than their home
-  //      (no point showing "Home time" when you're already at home)
+  // Show the home clock when the user toggled "Show Home Country Time" ON and we
+  // know their home. Whether it's actually redundant (you're already in the home
+  // timezone) is decided later by comparing timezones — that also correctly shows
+  // home time when you're in the SAME country but a different zone (e.g. LA home,
+  // currently in New York), which the old country-name check missed.
   useEffect(() => {
-    const checkShowHomeCountryTime = () => {
-      if (!user || !homeCountryInfo || !getActiveLocation()?.address) {
-        setShouldShowHomeCountryTime(false);
-        return;
-      }
-      if (!user.show_home_country_info) {
-        setShouldShowHomeCountryTime(false);
-        return;
-      }
-      const activeLocation = getActiveLocation();
-      setShouldShowHomeCountryTime(activeLocation.address.country !== user.home_country);
-    };
-    checkShowHomeCountryTime();
-  }, [user, homeCountryInfo, locationMode, selectedLocation, currentGpsLocation, getActiveLocation]);
+    setShouldShowHomeCountryTime(!!(user?.show_home_country_info && homeCountryInfo));
+  }, [user, homeCountryInfo]);
+
+  // Silent background GPS fetch: while navigating to a place you're NOT at, we
+  // still want to know your physical city (for the "You're here" clock row). Only
+  // runs when location permission is ALREADY granted — never prompts. Populates
+  // currentGpsLocation, which the timezone effect below then reads.
+  useEffect(() => {
+    if (locationMode !== 'navigate' || currentGpsLocation?.coordinates) return;
+    let cancelled = false;
+    (async () => {
+      const granted = await isLocationPermissionGranted();
+      if (cancelled || !granted) return;
+      try { await getCurrentLocation(); } catch { /* silent — no prompt, no error UI */ }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationMode, currentGpsLocation]);
+
+  // Resolve the physical GPS location's timezone for the "You're here" row. Only
+  // when navigating to a place you're not at, using the KNOWN GPS fix (no new
+  // permission prompt). Clears otherwise (in "current" mode the hero already IS
+  // your physical location).
+  useEffect(() => {
+    const coords = currentGpsLocation?.coordinates;
+    if (locationMode !== 'navigate' || !coords) { setPhysicalTz(null); setPhysicalLabel(''); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await callWorker(ROUTE.getWeatherForecast, { latitude: coords.latitude, longitude: coords.longitude });
+        if (!cancelled) {
+          setPhysicalTz(data?.timezone || null);
+          setPhysicalLabel(currentGpsLocation.placeName || currentGpsLocation.address?.city || 'Your location');
+        }
+      } catch { if (!cancelled) setPhysicalTz(null); }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationMode, currentGpsLocation]);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-      setHomeCountryTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -212,6 +242,10 @@ export default function HomePage() {
       const userData = {
         first_name: profile?.first_name || extractFirstName(authUser) || '',
         home_country: profile?.home_country || null,
+        home_city: profile?.home_city || null,
+        home_lat: profile?.home_lat ?? null,
+        home_lng: profile?.home_lng ?? null,
+        home_timezone: profile?.home_timezone || null,
         preferred_temperature_scale: profile?.temp_unit === 'C' ? 'celsius' : 'fahrenheit',
         show_home_flag: !!profile?.show_home_flag,
         show_home_country_info: !!profile?.show_home_country_info,
@@ -225,8 +259,8 @@ export default function HomePage() {
       // the time chip's own visibility logic (the useEffect above) gates
       // whether to actually render the chip. Loading the data eagerly means
       // there's no flicker the moment the user toggles the chip on.
-      if (userData.home_country) {
-        loadHomeCountryData(userData.home_country);
+      if (userData.home_country || userData.home_city) {
+        loadHomeCountryData(userData);
       }
 
       // Home-country FLAG overlay — gated by show_home_flag toggle in Settings.
@@ -266,19 +300,25 @@ export default function HomePage() {
     }
   };
 
-  const loadHomeCountryData = async (countryName) => {
-    const fallbackTimezones = {
-      'United States': 'America/New_York', 'Philippines': 'Asia/Manila', 'Japan': 'Asia/Tokyo',
-      'United Kingdom': 'Europe/London', 'Australia': 'Australia/Sydney', 'Canada': 'America/Toronto',
-      'Germany': 'Europe/Berlin', 'France': 'Europe/Paris', 'Italy': 'Europe/Rome',
-      'Spain': 'Europe/Madrid', 'Brazil': 'America/Sao_Paulo', 'Mexico': 'America/Mexico_City',
-      'South Korea': 'Asia/Seoul', 'Thailand': 'Asia/Bangkok', 'Vietnam': 'Asia/Ho_Chi_Minh',
-      'Singapore': 'Asia/Singapore', 'Malaysia': 'Asia/Kuala_Lumpur', 'Indonesia': 'Asia/Jakarta',
-      'India': 'Asia/Kolkata', 'China': 'Asia/Shanghai',
-    };
-    setHomeCountryInfo({ country: countryName, timezone: fallbackTimezones[countryName] || 'UTC' });
-    // Home-country temperature for the subtle home-info row (free Open-Meteo).
-    const coords = HOME_CAPITAL_COORDS[countryName];
+  // home = { home_country, home_city, home_lat, home_lng, home_timezone }.
+  // Timezone comes from the stored home_timezone (derived from the home city's
+  // coordinates → EXACT worldwide). Legacy users with only a country fall back to
+  // the per-country default. Label prefers the city so the row reads "🏠 Los
+  // Angeles" rather than just the country.
+  const loadHomeCountryData = async (home) => {
+    const country = home.home_country || '';
+    const tz = home.home_timezone || homeTimezoneForCountry(country);
+    setHomeCountryInfo({
+      country,
+      city: home.home_city || country,
+      timezone: tz,
+      label: home.home_city || country,
+    });
+    // Home temperature for the subtle row — from the stored home coordinates when
+    // we have them (accurate to the city), else the country's capital fallback.
+    const coords = (home.home_lat != null && home.home_lng != null)
+      ? { lat: home.home_lat, lng: home.home_lng }
+      : HOME_CAPITAL_COORDS[country];
     if (!coords) { setHomeCountryWeather(null); return; }
     try {
       const { data, error } = await callWorker(ROUTE.getWeatherForecast, { latitude: coords.lat, longitude: coords.lng });
@@ -448,6 +488,30 @@ export default function HomePage() {
   // card; chips are kept compact and right-aligned so the flag stays visible.
   const flagActive = !!(showHomeFlag && homeFlagUrl);
 
+  // Clock stack under the hero. The hero shows the SELECTED/active place; these
+  // subtle labeled rows add: 📍 where you physically are (only when you've
+  // navigated away) and 🏠 your home (when toggled). Only rows whose timezone
+  // differs from the hero — and from each other — are kept, so nothing repeats.
+  const activeTz = timezone;
+  const rawClockRows = [];
+  if (physicalTz && physicalTz !== activeTz) {
+    rawClockRows.push({ key: 'here', icon: '📍', label: physicalLabel || 'Your location', tz: physicalTz, temp: null });
+  }
+  if (shouldShowHomeCountryTime && homeCountryInfo?.timezone && homeCountryInfo.timezone !== activeTz) {
+    rawClockRows.push({ key: 'home', icon: '🏠', label: homeCountryInfo.label || homeCountryInfo.country, tz: homeCountryInfo.timezone, temp: homeCountryWeather });
+  }
+  const _seenTz = new Set();
+  const clockRows = rawClockRows
+    .filter((r) => (_seenTz.has(r.tz) ? false : (_seenTz.add(r.tz), true)))
+    .map((r) => ({
+      key: r.key,
+      icon: r.icon,
+      label: r.label,
+      dateText: formatLocalDate(currentTime, r.tz),
+      timeText: formatLocalTime(currentTime, r.tz),
+      tempText: r.temp ? (tempUnit === 'C' ? `${r.temp.celsius}°C` : `${r.temp.fahrenheit}°F`) : null,
+    }));
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen font-sans" style={{ background: IVORY }}>
@@ -471,6 +535,7 @@ export default function HomePage() {
           homeFlagUrl={homeFlagUrl}
           onLocation={() => setShowLocationPicker(true)}
           onAction={handleQuickAction}
+          clockRows={clockRows}
         />
       ) : (
       <>
@@ -635,19 +700,26 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Home-country info row — subtle text, NO background boxes. Shows only when
-          "Show Home Country Time" is on and the user is abroad. Spread across:
-          🏠 country · day,date · time · temperature. Sits between the greeting
-          card and Money Exchange. */}
-      {shouldShowHomeCountryTime && homeCountryInfo && (
+      {/* Clock stack — subtle labeled rows under the hero. 📍 your physical
+          location (when you've navigated elsewhere) and 🏠 home (when toggled),
+          each: place · day,date · time · temp. Only timezones that differ from
+          the hero (and each other) appear. Sits between the greeting card and
+          Money Exchange. */}
+      {clockRows.length > 0 && (
         <div className="px-5 pb-3 -mt-1">
           {/* Fixed 11.5px — intentionally NOT scaled by --fs, so the text-size
-              eyeglass does not enlarge this subtle home-country row. */}
-          <div className="max-w-md mx-auto flex items-center justify-between gap-2 text-[11.5px] font-medium" style={{ color: '#8A93A6' }}>
-            <span className="flex items-center gap-1 whitespace-nowrap"><span>🏠</span><span className="uppercase tracking-wide">{homeCountryInfo.country}</span></span>
-            <span className="whitespace-nowrap">{formatLocalDate(homeCountryTime, homeCountryInfo.timezone)}</span>
-            <span className="whitespace-nowrap">{formatLocalTime(homeCountryTime, homeCountryInfo.timezone)}</span>
-            {homeCountryWeather && <span className="whitespace-nowrap">{tempUnit === 'C' ? `${homeCountryWeather.celsius}°C` : `${homeCountryWeather.fahrenheit}°F`}</span>}
+              eyeglass does not enlarge these subtle rows. */}
+          <div className="max-w-md mx-auto flex flex-col gap-1">
+            {clockRows.map((r) => (
+              <div key={r.key} className="flex items-center justify-between gap-2 text-[11.5px] font-medium" style={{ color: '#8A93A6' }}>
+                <span className="flex items-center gap-1 whitespace-nowrap min-w-0"><span>{r.icon}</span><span className="uppercase tracking-wide truncate">{r.label}</span></span>
+                <span className="flex items-center gap-2 whitespace-nowrap flex-shrink-0">
+                  <span>{r.dateText}</span>
+                  <span>{r.timeText}</span>
+                  {r.tempText && <span>{r.tempText}</span>}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}

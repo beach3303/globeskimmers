@@ -41,6 +41,25 @@ function normalize(pos) {
   };
 }
 
+// True only if location permission is ALREADY granted — checked WITHOUT ever
+// showing a prompt. Lets callers do a silent background GPS fetch (e.g. to know
+// the user's physical city while they browse another location) without nagging
+// anyone who hasn't opted in. Returns false on any uncertainty.
+export async function isLocationPermissionGranted() {
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const { Geolocation } = await import('@capacitor/geolocation');
+      const p = await Geolocation.checkPermissions();
+      return !!(p && (p.location === 'granted' || p.coarseLocation === 'granted'));
+    }
+    if (navigator.permissions?.query) {
+      const s = await navigator.permissions.query({ name: 'geolocation' });
+      return s.state === 'granted';
+    }
+  } catch { /* unsupported / blocked → treat as not granted */ }
+  return false;
+}
+
 export async function getCurrentPositionSmart(options = {}) {
   // Share a single in-flight request, and reuse a recent fix, so repeated
   // calls (e.g. from a looping effect) can never hammer GPS.
