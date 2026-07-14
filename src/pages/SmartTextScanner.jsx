@@ -826,10 +826,8 @@ export default function SmartTextScannerPage() {
               onClick={handleFreezeForSelect}
               className="w-full h-[58px] rounded-[18px] mt-3 flex items-center justify-center gap-2 font-bold text-[calc(16px*var(--fs))] text-white"
               style={{
-                background: 'rgba(255,255,255,0.16)',
-                border: '1px solid rgba(255,255,255,0.4)',
-                backdropFilter: 'blur(6px)',
-                WebkitBackdropFilter: 'blur(6px)',
+                background: 'linear-gradient(135deg, #0E7490 0%, #06B6D4 100%)',
+                boxShadow: '0 14px 34px -10px rgba(6,182,212,.55)',
               }}
             >
               <Scissors size={20} color="#fff" strokeWidth={2.2} />

@@ -664,11 +664,11 @@ export default function SmartPriceScannerPage() {
     }
   };
 
-  // Smart entry from the "Analyze this price" button. If the price-tag scan
-  // already identified the item (meaningful OCR context), analyze right away —
-  // no second photo needed. Otherwise we don't have enough to compare, so send
-  // the user to the item-photo step to capture the item. The credit is charged
-  // later, only on a successful analysis.
+  // Entry from the "Analyze this price" button. Price analysis is based on
+  // SEEING the item (vision on the item photo), NOT the tag's printed name — a
+  // seller can label an item anything (common with informal tags), so the title
+  // alone isn't reliable. Always send the user to photograph the actual item.
+  // The analysis credit is charged later, only on a successful analysis.
   const handleAnalyzeThisPrice = () => {
     const first = detectedPrices[0];
     if (!first || analysisLoading) return;
@@ -679,19 +679,7 @@ export default function SmartPriceScannerPage() {
       setCapHitModal('analysis');
       return;
     }
-    const ctx = (first.original?.context || '').trim();
-    const hasItemInfo = ctx && ctx.toLowerCase() !== 'item' && ctx.length >= 4;
-    if (hasItemInfo) {
-      // Enough info from the tag scan → analyze directly.
-      setStep('analysis');
-      setAnalysisLoading(true);
-      setAnalysisError(null);
-      setItemNotIdentified(false);
-      runAnalysis(ctx, first);
-    } else {
-      // Couldn't read the item from the tag → ask for an item photo.
-      setStep('itemPhoto');
-    }
+    setStep('itemPhoto');
   };
 
   // Photo 2 → price comparison. Captures the whole item, identifies it (vision,
@@ -720,21 +708,19 @@ export default function SmartPriceScannerPage() {
     setAnalysisError(null);
     setItemNotIdentified(false);
 
-    let itemDescription = first.original?.context || 'Item';
-    if (base64) {
-      const vision = await describeItemFromImage(base64);
-      if (vision && vision.identified === false) {
-        // Honest: the photo doesn't clearly show a product, so we can't compare
-        // prices. Don't fabricate a comparison — and don't charge a credit
-        // (the credit is only charged inside runAnalysis on success).
-        setAnalysis(null);
-        setItemNotIdentified(true);
-        setAnalysisLoading(false);
-        return;
-      }
-      if (vision && vision.itemDescription) itemDescription = vision.itemDescription;
+    // Identify the item by SIGHT (vision), not the tag's printed name — sellers
+    // can label an item anything, so the title isn't reliable. Require a
+    // recognizable product; if we can't clearly identify one, be honest instead
+    // of guessing — and don't charge a credit (only charged inside runAnalysis
+    // on success).
+    const vision = base64 ? await describeItemFromImage(base64) : null;
+    if (!vision || vision.identified === false || !vision.itemDescription) {
+      setAnalysis(null);
+      setItemNotIdentified(true);
+      setAnalysisLoading(false);
+      return;
     }
-    await runAnalysis(itemDescription, first);
+    await runAnalysis(vision.itemDescription, first);
   };
 
   // Analysis-only path: one scan of the price tag → straight to the fair-deal
@@ -781,18 +767,17 @@ export default function SmartPriceScannerPage() {
       setAnalysisError(null);
       setItemNotIdentified(false);
 
-      // This path has only the price tag (no item photo). If the tag scan didn't
-      // capture an item name, we can't honestly compare prices — say so instead
-      // of fabricating a comparison.
-      const ctx = (p.context || '').trim();
-      const hasItemInfo = ctx && ctx.toLowerCase() !== 'item' && ctx.length >= 4;
-      if (!hasItemInfo) {
+      // Analysis is based on SEEING the item (vision on this same photo), not
+      // the tag's printed name. If we can't clearly see a product, be honest
+      // instead of guessing from text.
+      const vision = await describeItemFromImage(base64);
+      if (!vision || vision.identified === false || !vision.itemDescription) {
         setAnalysis(null);
         setItemNotIdentified(true);
         setAnalysisLoading(false);
         return;
       }
-      await runAnalysis(ctx, first);
+      await runAnalysis(vision.itemDescription, first);
     } catch (e) {
       setAnalysisError(e?.message || 'Failed to analyze price');
       setStep('analysis');
