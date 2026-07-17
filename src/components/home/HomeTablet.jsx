@@ -3,6 +3,7 @@ import { MapPin, Cloud, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { CAT, TEAL_DEEP } from '@/components/redesign/constants';
 import FontScaleButton from '@/components/a11y/FontScaleButton';
+import HomeRows from '@/components/home/HomeRows';
 
 // iPad / tablet Home layout — implements CLAUDE_CODE_IPAD_BUILD.md §3 "Home".
 // Rendered ONLY at tablet width (HomePage branches on useIsTablet); the phone
@@ -172,6 +173,10 @@ export default function HomeTablet({
         </div>
         <ChevronRight size={30} color="#fff" strokeWidth={2.2} className="flex-none" />
       </motion.button>
+
+      {/* ── LIVING ROWS — owned-data carousels (/home/rows), phone-parity.
+          Full-width on tablet; renders nothing when there's no owned coverage. */}
+      <HomeRows onAction={onAction} wide />
 
       {/* ── FEATURE TILES — 3-up COMPACT grid (same footprint as Explore More).
           Real-iPad feedback: the old 2-up tiles read far too large. These now

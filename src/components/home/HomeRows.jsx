@@ -18,7 +18,7 @@ import { ROUTE } from "@/lib/workerRoutes";
 import { getSeason } from "@/lib/homeContext";
 import { trackEvent } from "@/Layout";
 
-function HomeRowCard({ card, onOpen }) {
+function HomeRowCard({ card, onOpen, wide }) {
   const name = card.name || "Explore";
   const meta = [];
   if (card.rating) meta.push(`★ ${card.rating}`);
@@ -28,7 +28,7 @@ function HomeRowCard({ card, onOpen }) {
   return (
     <button
       onClick={onOpen}
-      className="flex-none w-[150px] rounded-2xl overflow-hidden bg-white text-left border"
+      className={`flex-none ${wide ? "w-[190px]" : "w-[150px]"} rounded-2xl overflow-hidden bg-white text-left border`}
       style={{ borderColor: "#E6DFD0", boxShadow: "0 8px 20px -16px rgba(22,17,13,.4)" }}
     >
       <div className="w-full" style={{ aspectRatio: "4 / 3", background: "linear-gradient(135deg,#E7C7A0,#C98A2E)" }}>
@@ -53,7 +53,7 @@ function HomeRowCard({ card, onOpen }) {
   );
 }
 
-export default function HomeRows({ onAction }) {
+export default function HomeRows({ onAction, wide = false }) {
   const { getActiveLocation, locationMode } = useLocation();
   const [rows, setRows] = useState([]);
 
@@ -100,8 +100,8 @@ export default function HomeRows({ onAction }) {
   if (!rows.length) return null;
 
   return (
-    <div className="px-4 pb-3">
-      <div className="max-w-md mx-auto flex flex-col gap-4">
+    <div className={wide ? "pb-3" : "px-4 pb-3"}>
+      <div className={wide ? "flex flex-col gap-5" : "max-w-md mx-auto flex flex-col gap-4"}>
         {rows.map((row) => (
           <div key={row.key}>
             <div className="flex items-baseline justify-between mb-2 px-0.5 gap-3">
@@ -129,6 +129,7 @@ export default function HomeRows({ onAction }) {
                 <HomeRowCard
                   key={card.id}
                   card={card}
+                  wide={wide}
                   onOpen={() => {
                     trackEvent("home_row_card_tap", {
                       row: row.key,
