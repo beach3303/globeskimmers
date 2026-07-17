@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { extractFirstName } from "@/lib/extractFirstName";
 import { isLocationPermissionGranted } from "@/lib/geolocation";
 import { callWorker } from "@/lib/callWorker";
+import HomeRows from "@/components/home/HomeRows";
 import { ROUTE } from "@/lib/workerRoutes";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
@@ -750,6 +751,12 @@ export default function HomePage() {
           </motion.button>
         </div>
       </div>
+
+      {/* LIVING ROWS — photo-forward carousels assembled by /home/rows from
+          OWNED attraction data (zero Places spend). Renders nothing when there's
+          no owned coverage, so the tiles below stand alone. Swipe sideways;
+          "See all" → the vertical finder page. */}
+      <HomeRows onAction={handleQuickAction} />
 
       {/* FEATURE TILES — 2-col grid of all six finders. Editorial: emoji chip,
           serif title (2-line clamp), tiny subtitle; min-height so enlarging text
