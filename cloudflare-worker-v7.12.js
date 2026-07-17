@@ -4860,6 +4860,26 @@ async function handleReverseGeocode(request, env) {
   if (latitude == null || longitude == null) {
     return jsonResponse({ error: 'Latitude and longitude are required' }, 400);
   }
+
+  // Transient performance cache (ToS-safe BRIDGE, ~30d). A coarse ~0.1° (~11km)
+  // tile's city/state/country basically never changes, so caching it slashes
+  // repeat Google Geocoding calls (and speeds every location naming in the app).
+  // NOT a permanent copy of Google data — only coarse ADMIN fields are cached
+  // (never the precise street formatted_address), for a bounded TTL. Retires
+  // entirely once we reverse-geocode from our own OSM/Overture data.
+  const rLat = Math.round(Number(latitude) * 10) / 10;
+  const rLng = Math.round(Number(longitude) * 10) / 10;
+  const revKey = `revgeo_${rLat}_${rLng}`;
+  const REVGEO_TTL_SECONDS = 30 * 24 * 60 * 60;
+  const canCache = env.GLOBESKIMMERS_KV && Number.isFinite(rLat) && Number.isFinite(rLng);
+  if (canCache) {
+    const hit = await env.GLOBESKIMMERS_KV.get(revKey, { type: 'json' }).catch(() => null);
+    if (hit && hit.country != null) {
+      const formatted_address = [hit.city, hit.state_or_country].filter(Boolean).join(', ');
+      return jsonResponse({ ...hit, latitude, longitude, formatted_address, cached: true });
+    }
+  }
+
   const apiKey = env.GOOGLE_API_KEY;
   if (!apiKey) return jsonResponse({ error: 'Google API key not configured' }, 500);
   try {
@@ -4882,6 +4902,13 @@ async function handleReverseGeocode(request, env) {
     const country = countryComponent?.long_name || '';
     const stateOrCountry = (countryComponent?.short_name === 'US' || countryComponent?.short_name === 'CA')
       ? (stateComponent?.long_name || country) : country;
+
+    // Cache only the coarse admin fields (~30d). The precise street
+    // formatted_address is returned fresh but NOT cached (not coarse-safe).
+    if (canCache) {
+      env.GLOBESKIMMERS_KV.put(revKey, JSON.stringify({ city, state_or_country: stateOrCountry, country }), { expirationTtl: REVGEO_TTL_SECONDS }).catch(() => {});
+    }
+
     return jsonResponse({ city, state_or_country: stateOrCountry, country, latitude, longitude, formatted_address: result.formatted_address });
   } catch (e) {
     return jsonResponse({ error: 'Internal server error', details: e.message }, 500);
@@ -5504,6 +5531,154 @@ async function handleAttractionsNearby(request, env, ctx) {
     tookMs: Date.now() - startedAt,
     attractions: within,
   });
+}
+
+// ============================================================================
+// LIVING HOMEPAGE ROWS — POST /home/rows
+// Assembles 2–3 photo-forward carousels ENTIRELY from owned data (ATTRACTIONS_DB
+// / D1) + light context (day-part, weather, season — passed by the client from
+// homeContext.js). ZERO new Google Places calls. The assembled bundle is cached
+// in KV so repeat opens are one KV read; rows reshuffle across the day because
+// the cache key includes dayPart + weather.
+// Body: { latitude, longitude, localHour?, weather?, season?, cityName?, countryName? }
+// Returns: { rows:[{ key, title, subtitle, seeAll, cards:[...] }], dayPart, cached }
+// FOLLOW-UPS (not yet wired): Unsplash inspiration rows (needs UNSPLASH_ACCESS_KEY,
+// makes rows global beyond the ~25 seeded cities); opportunistic finder-cache rows
+// (restaurants/coffee); Wave-2 "Because you saved" (needs saves→Supabase).
+// ============================================================================
+
+// Assembled-response freshness — NOT the place data (that lives longer in D1 /
+// Google cache). Just how long we keep the assembled bundle before rebuilding.
+// Tunable: attraction rows are stable for hours, and the key already changes per
+// day-part so the homepage reshuffles through the day regardless.
+const HOME_ROWS_TTL_SECONDS = 6 * 60 * 60;
+
+const HOME_SEASONAL_ROWS = {
+  summer:   { title: 'Made for summer',     subtitle: 'Sun-soaked spots to explore' },
+  winter:   { title: 'Cozy up this season', subtitle: 'Warm, memorable places nearby' },
+  spring:   { title: 'Fresh-air season',    subtitle: 'Get out and wander' },
+  fall:     { title: 'Golden-season picks', subtitle: 'Crisp days, great walks' },
+  tropical: { title: 'Tropical anytime',    subtitle: 'Year-round adventures' },
+};
+
+const HOME_DAYPART_ROW = {
+  earlyMorning: { title: 'Start your morning',  subtitle: 'Ease into the day nearby' },
+  morning:      { title: 'Good morning nearby', subtitle: 'Worth an early look' },
+  midday:       { title: 'Midday around you',   subtitle: 'Great for right now' },
+  afternoon:    { title: 'This afternoon',      subtitle: 'Make the most of it' },
+  evening:      { title: 'Tonight nearby',      subtitle: 'Where the evening takes you' },
+  lateNight:    { title: 'Still worth a look',  subtitle: 'Late-night nearby' },
+};
+
+const HOME_WEATHER_ACCENT = { hot: 'It’s hot out', cold: 'Bundle up', rain: 'Rainy-day picks', mild: 'Nice out' };
+
+function homeRowsDayPart(hour) {
+  const h = Number(hour);
+  if (!Number.isFinite(h)) return 'midday';
+  if (h >= 5 && h < 8) return 'earlyMorning';
+  if (h >= 8 && h < 11) return 'morning';
+  if (h >= 11 && h < 15) return 'midday';
+  if (h >= 15 && h < 17) return 'afternoon';
+  if (h >= 17 && h < 22) return 'evening';
+  return 'lateNight';
+}
+
+async function handleHomeRows(request, env, ctx) {
+  const startedAt = Date.now();
+  let body;
+  try { body = await request.json(); }
+  catch { return jsonResponse({ error: 'Invalid JSON body' }, 400); }
+
+  const { latitude, longitude, localHour, weather, season, cityName = '', countryName = '' } = body || {};
+  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+    return jsonResponse({ error: 'latitude and longitude required' }, 400);
+  }
+
+  const dayPart = homeRowsDayPart(localHour);
+  const weatherBucket = (weather || 'unknown').toString().toLowerCase();
+  const seasonKey = (season || '').toString().toLowerCase();
+
+  // Coarse (0.1°) key so nearby users share the bundle; dayPart + weather in the
+  // key make the homepage reshuffle across the day.
+  const rLat = Math.round(latitude * 10) / 10;
+  const rLng = Math.round(longitude * 10) / 10;
+  const cacheKey = `homerows_${rLat}_${rLng}_${dayPart}_${weatherBucket}`;
+
+  const cachedBundle = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+  if (cachedBundle && Array.isArray(cachedBundle.rows)) {
+    return jsonResponse({ ...cachedBundle, cached: true, tookMs: Date.now() - startedAt });
+  }
+
+  // Owned attractions via the existing D1 handler (reuses its bounding-box query
+  // + background-seed trigger). No Google Places spend.
+  let attractions = [];
+  try {
+    const origin = new URL(request.url).origin;
+    const res = await handleAttractionsNearby(new Request(`${origin}/attractions/nearby`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ latitude, longitude, radiusKm: 60, limit: 60, cityName, countryName }),
+    }), env, ctx);
+    const data = await res.json();
+    attractions = Array.isArray(data.attractions) ? data.attractions : [];
+  } catch (e) {
+    console.error('home/rows attractions fetch failed:', e?.message);
+  }
+
+  // No owned coverage here (outside seeded cities) → empty rows so the client
+  // shows its cold-start fallback, never an empty carousel. Unsplash inspiration
+  // rows will fill this globally once wired.
+  if (attractions.length === 0) {
+    return jsonResponse({ rows: [], dayPart, reason: 'no_owned_coverage', tookMs: Date.now() - startedAt });
+  }
+
+  const trim = (a) => ({
+    id: a.id, name: a.name, category: a.category, city: a.city, country: a.country,
+    photoUrl: a.photoUrl, rating: a.rating, whyVisit: a.whyVisit,
+    distanceMiles: a.distanceMiles, freeToVisit: a.freeToVisit, lat: a.lat, lng: a.lng,
+  });
+  const withPhoto = attractions.filter((a) => a.photoUrl);
+  const pool = withPhoto.length >= 6 ? withPhoto : attractions;
+
+  const seen = new Set();
+  const take = (list, n) => {
+    const out = [];
+    for (const a of list) {
+      if (out.length >= n) break;
+      if (seen.has(a.id)) continue;
+      seen.add(a.id); out.push(trim(a));
+    }
+    return out;
+  };
+
+  const rows = [];
+
+  // Row 1 — day-part row, rotated so morning vs evening opens differ visibly.
+  const order = ['earlyMorning', 'morning', 'midday', 'afternoon', 'evening', 'lateNight'];
+  const off = pool.length ? (Math.max(0, order.indexOf(dayPart)) % pool.length) : 0;
+  const rotated = pool.slice(off).concat(pool.slice(0, off));
+  const dp = HOME_DAYPART_ROW[dayPart] || HOME_DAYPART_ROW.midday;
+  const wAccent = HOME_WEATHER_ACCENT[weatherBucket];
+  const dpCards = take(rotated, 10);
+  if (dpCards.length) rows.push({ key: 'dayPart', title: dp.title, subtitle: wAccent ? `${wAccent} · ${dp.subtitle}` : dp.subtitle, seeAll: { action: 'Things to Do' }, cards: dpCards });
+
+  // Row 2 — nearest to you now.
+  const nearest = [...pool].sort((a, b) => (a.distanceMiles ?? 1e9) - (b.distanceMiles ?? 1e9));
+  const nearCards = take(nearest, 10);
+  if (nearCards.length) rows.push({ key: 'nearYou', title: 'Near you now', subtitle: 'Closest to where you are', seeAll: { action: 'Things to Do' }, cards: nearCards });
+
+  // Row 3 — seasonal (client-passed season = hemisphere-correct).
+  const seasonCfg = HOME_SEASONAL_ROWS[seasonKey];
+  if (seasonCfg) {
+    const seasonCards = take(pool, 10);
+    if (seasonCards.length) rows.push({ key: 'seasonal', title: seasonCfg.title, subtitle: seasonCfg.subtitle, seeAll: { action: 'Things to Do' }, cards: seasonCards });
+  }
+
+  const bundle = { rows, dayPart };
+  const store = env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(bundle), { expirationTtl: HOME_ROWS_TTL_SECONDS }).catch(() => {});
+  if (ctx && ctx.waitUntil) ctx.waitUntil(store); else await store;
+
+  return jsonResponse({ ...bundle, cached: false, tookMs: Date.now() - startedAt });
 }
 
 // ============================================================================
@@ -10105,6 +10280,7 @@ export default {
       // ctx is forwarded so the handler can ctx.waitUntil() a Phase B
       // background seed task when D1 returns sparse for this region.
       if (pathname === '/attractions/nearby' && request.method === 'POST') return await handleAttractionsNearby(request, env, ctx);
+      if (pathname === '/home/rows' && request.method === 'POST') return await handleHomeRows(request, env, ctx);
       // Phase B manual / debug trigger. Same seed logic as the
       // ctx.waitUntil path above, just synchronous so the response
       // tells you whether the seed worked. Useful for hand-seeding
