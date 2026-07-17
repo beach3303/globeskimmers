@@ -4906,7 +4906,7 @@ async function handleReverseGeocode(request, env) {
     // Cache only the coarse admin fields (~30d). The precise street
     // formatted_address is returned fresh but NOT cached (not coarse-safe).
     if (canCache) {
-      env.GLOBESKIMMERS_KV.put(revKey, JSON.stringify({ city, state_or_country: stateOrCountry, country }), { expirationTtl: REVGEO_TTL_SECONDS }).catch(() => {});
+      await env.GLOBESKIMMERS_KV.put(revKey, JSON.stringify({ city, state_or_country: stateOrCountry, country }), { expirationTtl: REVGEO_TTL_SECONDS }).catch(() => {});
     }
 
     return jsonResponse({ city, state_or_country: stateOrCountry, country, latitude, longitude, formatted_address: result.formatted_address });
