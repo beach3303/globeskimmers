@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { getCurrentPositionSmart } from '@/lib/geolocation';
+import { haversineKm } from '@/lib/homeContext';
 import {
   getSavedLocations as readSavedLocations,
   saveSavedLocation,
@@ -33,6 +34,13 @@ const LAST_LOC_KEY = 'gs_last_location_v1';
 const readLastLocation = () => { try { const r = localStorage.getItem(LAST_LOC_KEY); return r ? JSON.parse(r) : null; } catch { return null; } };
 const writeLastLocation = (loc) => { try { if (loc?.coordinates) localStorage.setItem(LAST_LOC_KEY, JSON.stringify(loc)); } catch { /* ignore */ } };
 
+// Silent auto-follow preference (default ON). When the user is on LIVE location
+// and physically moves to a new city, quietly refresh results to where they now
+// are. Fixes the tester complaint that results kept feeding from the LAST city.
+const AUTO_FOLLOW_KEY = 'gs_auto_follow_v1';
+const readAutoFollow = () => { try { return localStorage.getItem(AUTO_FOLLOW_KEY) !== '0'; } catch { return true; } };
+const writeAutoFollow = (on) => { try { localStorage.setItem(AUTO_FOLLOW_KEY, on ? '1' : '0'); } catch { /* ignore */ } };
+
 export function useLocation() {
   const context = useContext(LocationContext);
   if (!context) {
@@ -48,6 +56,8 @@ export function LocationProvider({ children }) {
   const [activeLocation, setActiveLocation] = useState(null);
   const [loading, setLoading] = useState(!_store.initDone);
   const [initialized, setInitialized] = useState(_store.initDone);
+  const [autoFollow, _setAutoFollow] = useState(readAutoFollow());
+  const setAutoFollow = useCallback((on) => { writeAutoFollow(on); _setAutoFollow(on); }, []);
 
   // Setters mirror into the module store so values survive a remount.
   const setLocationMode = useCallback((v) => { _store.locationMode = v; _setLocationMode(v); }, []);
@@ -171,6 +181,42 @@ export function LocationProvider({ children }) {
     }
   }, [setLocationMode, setSelectedLocation]);
 
+  // ── Silent auto-follow ────────────────────────────────────────────────────
+  // When the user is on LIVE location (current mode, OR a restored GPS location
+  // — placeType 'current_location') and has physically moved to a new city,
+  // quietly switch results to where they now are. NEVER overrides a manually-
+  // picked place (a planning choice). Cost-aware: a CHEAP raw GPS read does the
+  // movement check; we only geocode (one worker call) when they've actually
+  // moved >10km — so it costs nothing when they haven't.
+  const maybeAutoFollow = useCallback(async () => {
+    if (!_store.initDone || !readAutoFollow()) return;
+    const active = _store.locationMode === 'current' ? _store.currentGpsLocation : _store.selectedLocation;
+    const isLive = _store.locationMode === 'current' || active?.placeType === 'current_location';
+    if (!isLive) return;
+    try {
+      const pos = await getCurrentPositionSmart({ enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
+      const { latitude, longitude } = pos.coords;
+      const prev = active?.coordinates;
+      const km = prev ? haversineKm(prev.latitude, prev.longitude, latitude, longitude) : Infinity;
+      if (Number.isFinite(km) && km < 10) return; // not meaningfully moved → no geocode, no spend
+      const fresh = await getCurrentLocation(); // resolve the new city (one geocode) + set GPS
+      setLocationMode('current');
+      setSelectedLocation(null);
+      writeLastLocation(fresh);
+      window.dispatchEvent(new CustomEvent('location:changed', { detail: { mode: 'current', location: fresh, auto: true } }));
+    } catch { /* GPS denied/unavailable — silently keep the current location */ }
+  }, [getCurrentLocation, setLocationMode, setSelectedLocation]);
+
+  // Trigger on app FOREGROUND (the reopen-in-a-new-city case) + a light in-session
+  // poll. Foreground-only — NO background/always tracking (battery + App Store).
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') maybeAutoFollow(); };
+    document.addEventListener('visibilitychange', onVisible);
+    const poll = setInterval(() => { if (document.visibilityState === 'visible') maybeAutoFollow(); }, 5 * 60 * 1000);
+    const warm = setTimeout(() => maybeAutoFollow(), 1500); // shortly after cold open
+    return () => { document.removeEventListener('visibilitychange', onVisible); clearInterval(poll); clearTimeout(warm); };
+  }, [maybeAutoFollow]);
+
   // Saved / favorite locations now live ON-DEVICE (localStorage) — see
   // src/lib/savedLocations.js. (The old base44.auth.updateMe({saved_locations})
   // path silently failed once auth moved to Supabase, so saves never stuck.)
@@ -204,6 +250,8 @@ export function LocationProvider({ children }) {
     getSavedLocations,
     getActiveLocation,
     getCurrentLocation,
+    autoFollow,
+    setAutoFollow,
   }), [
     locationMode,
     selectedLocation,
@@ -219,6 +267,8 @@ export function LocationProvider({ children }) {
     getSavedLocations,
     getActiveLocation,
     getCurrentLocation,
+    autoFollow,
+    setAutoFollow,
   ]);
 
   return (

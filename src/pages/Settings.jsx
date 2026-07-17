@@ -14,6 +14,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
+import { useLocation } from "@/components/location/LocationContext";
 
 // ADMIN_EMAILS now imported from @/lib/admins (single source of truth, 4 admins).
 
@@ -400,6 +401,7 @@ export default function SettingsPage() {
   const navigate = useNavigate();
   const isTablet = useIsTablet(); // gates the iPad editorial layout; phone untouched
   const { step: fontStep } = useFontScale(); // larger steps → rows stack value below
+  const { autoFollow, setAutoFollow } = useLocation(); // silent auto-follow toggle (localStorage-backed)
 
   const { logout, deleteAccount, profile, user: authUser, refreshProfile } = useAuth(); // Supabase
   const countryBoxRef = useRef(null);
@@ -664,6 +666,9 @@ export default function SettingsPage() {
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.weather.ink} title="Show Home Country Flag" desc="Display your flag on the home page card"
               control={{ node: <EdToggle on={showHomeFlag} onClick={() => { const next = !showHomeFlag; setShowHomeFlag(next); persist({ show_home_flag: next }); }} label="Toggle home country flag" /> }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Update to my location as I travel" desc="Refresh results when you move to a new city"
+              control={{ node: <EdToggle on={autoFollow} onClick={() => setAutoFollow(!autoFollow)} label="Toggle auto-follow location" /> }}
               last
             />
           </EdGroup>
