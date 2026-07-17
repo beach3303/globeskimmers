@@ -5653,6 +5653,42 @@ async function handleHomeRows(request, env, ctx) {
 
   const rows = [];
 
+  // Trending row — most-tapped places (last 7d, from home_row_card_tap events)
+  // that are ALSO nearby (intersect ranked place_ids with the local pool → geo-
+  // scoped without fragile city-string matching). Leads when present; silently
+  // skipped until there's enough data (cold-start). At scale, add a city filter
+  // to the query for perf. Reads env.DB (events D1); result is cached with the
+  // bundle (6hr), so it's one query per tile per day-part, not per request.
+  if (env.DB) {
+    try {
+      const q = await env.DB.prepare(
+        `SELECT json_extract(payload,'$.place_id') AS pid, COUNT(*) AS c
+           FROM events
+          WHERE event_type = 'home_row_card_tap'
+            AND ts >= strftime('%s','now','-7 days')
+          GROUP BY pid
+          ORDER BY c DESC
+          LIMIT 60`
+      ).all();
+      const byId = new Map(pool.map((a) => [String(a.id), a]));
+      const trendingCards = [];
+      for (const r of (q?.results || [])) {
+        const a = byId.get(String(r.pid));
+        if (a && !seen.has(a.id)) { seen.add(a.id); trendingCards.push(trim(a)); }
+        if (trendingCards.length >= 10) break;
+      }
+      if (trendingCards.length >= 4) {
+        rows.push({
+          key: 'trending',
+          title: cityName ? `Trending in ${cityName}` : 'Trending near you',
+          subtitle: 'What travelers are loving now',
+          seeAll: { action: 'Things to Do' },
+          cards: trendingCards,
+        });
+      }
+    } catch (e) { console.error('home/rows trending query failed:', e?.message); }
+  }
+
   // Row 1 — day-part row, rotated so morning vs evening opens differ visibly.
   const order = ['earlyMorning', 'morning', 'midday', 'afternoon', 'evening', 'lateNight'];
   const off = pool.length ? (Math.max(0, order.indexOf(dayPart)) % pool.length) : 0;
