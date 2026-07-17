@@ -16,6 +16,7 @@ import { useLocation } from "@/components/location/LocationContext";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { getSeason } from "@/lib/homeContext";
+import { trackEvent } from "@/Layout";
 
 function HomeRowCard({ card, onOpen }) {
   const name = card.name || "Explore";
@@ -65,6 +66,11 @@ export default function HomeRows({ onAction }) {
       setRows([]);
       return;
     }
+    // Location objects come in two shapes (GPS = {address:{city,country}}, picked
+    // = top-level) — resolve both. Intent: present (live GPS) vs planning (picked).
+    const city = loc?.address?.city || loc?.city || "";
+    const country = loc?.address?.country || loc?.country || "";
+    const intent = locationMode === "current" ? "present" : "planning";
 
     (async () => {
       try {
@@ -73,11 +79,16 @@ export default function HomeRows({ onAction }) {
           longitude,
           localHour: new Date().getHours(),
           season: getSeason(new Date(), latitude),
-          cityName: loc?.city || "",
-          countryName: loc?.country || "",
+          cityName: city,
+          countryName: country,
         });
         if (cancelled) return;
-        setRows(!error && Array.isArray(data?.rows) ? data.rows : []);
+        const gotRows = !error && Array.isArray(data?.rows) ? data.rows : [];
+        setRows(gotRows);
+        // Demand signal: this user is active in / planning this city. Origin
+        // country is derivable later via user_id → profile.home_country, so we
+        // don't duplicate it here. Feeds trending rows + retargeting + B2B.
+        trackEvent("home_rows_view", { city, country, intent, row_count: gotRows.length });
       } catch {
         if (!cancelled) setRows([]);
       }
@@ -102,7 +113,10 @@ export default function HomeRows({ onAction }) {
               </div>
               {row.seeAll?.action && (
                 <button
-                  onClick={() => onAction?.(row.seeAll.action)}
+                  onClick={() => {
+                    trackEvent("home_row_see_all", { row: row.key, action: row.seeAll.action });
+                    onAction?.(row.seeAll.action);
+                  }}
                   className="flex-none text-[calc(12.5px*var(--fs))] font-semibold"
                   style={{ color: "#17A38F" }}
                 >
@@ -112,7 +126,21 @@ export default function HomeRows({ onAction }) {
             </div>
             <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
               {row.cards.map((card) => (
-                <HomeRowCard key={card.id} card={card} onOpen={() => onAction?.(row.seeAll?.action)} />
+                <HomeRowCard
+                  key={card.id}
+                  card={card}
+                  onOpen={() => {
+                    trackEvent("home_row_card_tap", {
+                      row: row.key,
+                      place_id: card.id,
+                      place_name: card.name,
+                      category: card.category,
+                      city: card.city,
+                      country: card.country,
+                    });
+                    onAction?.(row.seeAll?.action);
+                  }}
+                />
               ))}
             </div>
           </div>
