@@ -14,8 +14,8 @@ set s3_region = 'us-west-2';
 copy (
   select
     id,
-    names.primary                      as name,
-    categories.primary                 as category,
+    names."primary"                    as name,        -- "primary" is a DuckDB reserved word → must quote
+    categories."primary"               as category,
     categories.alternate               as category_alt,
     (bbox.ymin + bbox.ymax) / 2.0      as lat,
     (bbox.xmin + bbox.xmax) / 2.0      as lng,
