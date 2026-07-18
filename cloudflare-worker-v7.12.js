@@ -10226,6 +10226,20 @@ async function handleInvokeLLM(request, env) {
       ? 'You return ONLY a single valid JSON object that conforms to this JSON schema. No markdown, no code fences, no commentary. Schema: ' + JSON.stringify(schema)
       : 'You are a helpful assistant.';
 
+    // Cache: these prompts are deterministic (e.g. "visitor tips for {place}",
+    // phrase translations, transport info) — the same prompt always yields the
+    // same answer, so one traveler's fetch serves everyone. Key by prompt+schema
+    // hash, 30-day TTL. This was previously UNCACHED and re-paid ~$0.04-0.05 per
+    // call. Pass forceRefresh:true to bypass.
+    const forceRefresh = body.forceRefresh === true;
+    const cacheKey = 'illm:v1:' + await sha256Hex(prompt + ' ' + (schema ? JSON.stringify(schema) : ''));
+    if (env.GLOBESKIMMERS_KV && !forceRefresh) {
+      try {
+        const hit = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' });
+        if (hit) return jsonResponse(hit);
+      } catch { /* cache miss / KV error → fall through to a live call */ }
+    }
+
     const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -10246,20 +10260,32 @@ async function handleInvokeLLM(request, env) {
     }
     const data = await apiRes.json();
     const text = (data.content && data.content[0] && data.content[0].text) || '';
-    if (!schema) return jsonResponse({ text });
 
-    // Extract the JSON object from the response (strip fences / stray prose).
-    let jsonStr = text.trim();
-    const fence = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fence) jsonStr = fence[1].trim();
-    const first = jsonStr.indexOf('{');
-    const last = jsonStr.lastIndexOf('}');
-    if (first !== -1 && last !== -1) jsonStr = jsonStr.slice(first, last + 1);
-    try {
-      return jsonResponse(JSON.parse(jsonStr));
-    } catch (e) {
-      return jsonResponse({ error: 'Failed to parse LLM JSON', details: e.message }, 502);
+    let payload;
+    if (!schema) {
+      payload = { text };
+    } else {
+      // Extract the JSON object from the response (strip fences / stray prose).
+      let jsonStr = text.trim();
+      const fence = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fence) jsonStr = fence[1].trim();
+      const first = jsonStr.indexOf('{');
+      const last = jsonStr.lastIndexOf('}');
+      if (first !== -1 && last !== -1) jsonStr = jsonStr.slice(first, last + 1);
+      try {
+        payload = JSON.parse(jsonStr);
+      } catch (e) {
+        // Don't cache unparseable output — let the next call retry live.
+        return jsonResponse({ error: 'Failed to parse LLM JSON', details: e.message }, 502);
+      }
     }
+
+    if (env.GLOBESKIMMERS_KV) {
+      try {
+        await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: 30 * 24 * 60 * 60 });
+      } catch { /* KV write failure is non-fatal — we still return the fresh result */ }
+    }
+    return jsonResponse(payload);
   } catch (e) {
     return jsonResponse({ error: 'Internal server error', details: e.message }, 500);
   }
