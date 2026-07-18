@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { X, Star, MapPin, Phone, Globe, Clock, Navigation, Share2, Heart, Info, ChevronLeft, ChevronRight, Utensils } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDismissable } from '@/lib/dismissStack';
+import useHorizontalSwipe from '@/lib/useHorizontalSwipe';
 
 const PRICE_DISPLAY = {
   0: '$',
@@ -19,6 +20,9 @@ export default function RestaurantDetail({ restaurant, isOpen, onClose, onGetDir
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
 
   useDismissable(!!(isOpen && restaurant), onClose);
+
+  // Swipe left/right on the header photo to page through the gallery.
+  const swipe = useHorizontalSwipe({ onLeft: () => nextPhoto(), onRight: () => prevPhoto() });
 
   if (!isOpen || !restaurant) return null;
 
@@ -101,7 +105,7 @@ export default function RestaurantDetail({ restaurant, isOpen, onClose, onGetDir
         >
           {/* Header Image Gallery */}
           {photos.length > 0 ? (
-            <div className="relative h-64 overflow-hidden">
+            <div className="relative h-64 overflow-hidden" {...swipe}>
               <img
                 src={currentPhoto.url}
                 alt={restaurant.name}

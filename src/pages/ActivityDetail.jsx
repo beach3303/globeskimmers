@@ -13,6 +13,7 @@ import MapAppSelector from '../components/MapAppSelector';
 import { invokeLLM } from "@/lib/callWorker";
 import { showToast } from "../components/Toast";
 import { useDismissable } from '@/lib/dismissStack';
+import useHorizontalSwipe from '@/lib/useHorizontalSwipe';
 
 export default function ActivityDetailPage() {
   const navigate = useNavigate();
@@ -28,6 +29,18 @@ export default function ActivityDetailPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [enhancedDetails, setEnhancedDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
+
+  // Swipe left/right on the header photo to page through the gallery.
+  const photoSwipe = useHorizontalSwipe({
+    onLeft: () => setCurrentImageIndex((prev) => {
+      const n = activity?.photos?.length || 0;
+      return n ? (prev + 1) % n : prev;
+    }),
+    onRight: () => setCurrentImageIndex((prev) => {
+      const n = activity?.photos?.length || 0;
+      return n ? (prev - 1 + n) % n : prev;
+    }),
+  });
   const [imageLoading, setImageLoading] = useState({});
   const [distanceUnit, setDistanceUnit] = useState('km');
   const [showTimeExplanation, setShowTimeExplanation] = useState(false);
@@ -288,7 +301,7 @@ export default function ActivityDetailPage() {
 
       {/* Image Gallery */}
       <div className="relative mt-0">
-        <div className="h-[300px] bg-gray-200 relative overflow-hidden">
+        <div className="h-[300px] bg-gray-200 relative overflow-hidden" {...photoSwipe}>
           {photos.length > 0 ? (
             <>
               {!imageLoading[currentImageIndex] && (

@@ -2,13 +2,12 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useDismissable } from '@/lib/dismissStack';
+import useHorizontalSwipe from '@/lib/useHorizontalSwipe';
 
 export default function PhotoGalleryModal({ photos, initialIndex = 0, isOpen, onClose }) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
 
   useDismissable(isOpen, onClose);
-
-  if (!isOpen || !photos || photos.length === 0) return null;
 
   const goToPrevious = () => {
     setCurrentIndex((prev) => (prev === 0 ? photos.length - 1 : prev - 1));
@@ -17,6 +16,10 @@ export default function PhotoGalleryModal({ photos, initialIndex = 0, isOpen, on
   const goToNext = () => {
     setCurrentIndex((prev) => (prev === photos.length - 1 ? 0 : prev + 1));
   };
+
+  const swipe = useHorizontalSwipe({ onLeft: goToNext, onRight: goToPrevious });
+
+  if (!isOpen || !photos || photos.length === 0) return null;
 
   return (
     <AnimatePresence>
@@ -43,7 +46,7 @@ export default function PhotoGalleryModal({ photos, initialIndex = 0, isOpen, on
               <X className="w-6 h-6 text-white" />
             </button>
 
-            <div className="flex-1 flex items-center justify-center relative">
+            <div className="flex-1 flex items-center justify-center relative" {...swipe}>
               {photos.length > 1 && (
                 <>
                   <button
