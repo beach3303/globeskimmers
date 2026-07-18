@@ -5727,16 +5727,10 @@ async function handleHomeRows(request, env, ctx) {
   const withPhoto = attractions.filter((a) => a.photoUrl);
   const pool = withPhoto.length >= 6 ? withPhoto : attractions;
 
-  const seen = new Set();
-  const take = (list, n) => {
-    const out = [];
-    for (const a of list) {
-      if (out.length >= n) break;
-      if (seen.has(a.id)) continue;
-      seen.add(a.id); out.push(trim(a));
-    }
-    return out;
-  };
+  // Rows draw from the pool INDEPENDENTLY (mild overlap ok) so even a small owned
+  // pool yields several distinct rows — each row's different ordering (rotated /
+  // nearest / marquee) keeps them from looking identical.
+  const take = (list, n) => list.slice(0, n).map(trim);
 
   const rows = [];
 
@@ -5761,7 +5755,7 @@ async function handleHomeRows(request, env, ctx) {
       const trendingCards = [];
       for (const r of (q?.results || [])) {
         const a = byId.get(String(r.pid));
-        if (a && !seen.has(a.id)) { seen.add(a.id); trendingCards.push(trim(a)); }
+        if (a) trendingCards.push(trim(a));
         if (trendingCards.length >= 10) break;
       }
       if (trendingCards.length >= 4) {
@@ -5806,11 +5800,18 @@ async function handleHomeRows(request, env, ctx) {
   // gated on key). Parallel + capped so first build stays fast; the "Where to
   // next" cards already have photos and are skipped.
   if (env.UNSPLASH_ACCESS_KEY) {
-    const need = [];
-    for (const r of rows) for (const c of r.cards) if (!c.photoUrl && c.name) need.push(c);
-    await Promise.all(need.slice(0, 24).map(async (c) => {
-      const photo = await fetchUnsplashPhoto(env, c.city ? `${c.name}, ${c.city}` : c.name, ctx);
-      if (photo?.url) { c.photoUrl = photo.url; c.photographer = photo.photographer; c.credit = 'Unsplash'; }
+    // Dedup by "{name}, {city}" so cards repeated across rows don't waste the
+    // budget — fetch each unique place once, apply the photo to all its cards.
+    const byQuery = new Map();
+    for (const r of rows) for (const c of r.cards) {
+      if (c.photoUrl || !c.name) continue;
+      const q = c.city ? `${c.name}, ${c.city}` : c.name;
+      if (!byQuery.has(q)) byQuery.set(q, []);
+      byQuery.get(q).push(c);
+    }
+    await Promise.all([...byQuery.keys()].slice(0, 30).map(async (q) => {
+      const photo = await fetchUnsplashPhoto(env, q, ctx);
+      if (photo?.url) for (const c of byQuery.get(q)) { c.photoUrl = photo.url; c.photographer = photo.photographer; c.credit = 'Unsplash'; }
     }));
   }
 
