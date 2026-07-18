@@ -252,9 +252,12 @@ export default function LocationModePicker({ isOpen, onClose }) {
   // the card is scaled up).
   const zoomFactor = isTablet ? 1.3 : 1;
   const modalStyle = {
+    // Cap to the space between the top safe-area (notch) and the keyboard, using
+    // dvh so mobile browser chrome + the notch are respected — the pinned header
+    // stays visible and only the results list scrolls.
     maxHeight: keyboardOffset
-      ? `calc((100vh - ${keyboardOffset + 32}px) / ${zoomFactor})`
-      : (isTablet ? '64vh' : '85vh'),
+      ? `calc((100dvh - env(safe-area-inset-top, 0px) - ${keyboardOffset + 40}px) / ${zoomFactor})`
+      : (isTablet ? '64vh' : `calc((100dvh - env(safe-area-inset-top, 0px) - 48px) / ${zoomFactor})`),
     ...(isTablet ? { zoom: 1.3 } : {}),
   };
 
@@ -262,8 +265,11 @@ export default function LocationModePicker({ isOpen, onClose }) {
     <AnimatePresence>
       {isOpen && (
         <div
-          className="fixed inset-0 z-[9998] overflow-y-auto flex items-center justify-center px-3 py-[6vh]"
-          style={keyboardOffset ? { paddingTop: 16, paddingBottom: keyboardOffset + 16 } : undefined}
+          className="fixed inset-0 z-[9998] overflow-y-auto flex items-start justify-center px-3"
+          style={{
+            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)',
+            paddingBottom: keyboardOffset ? keyboardOffset + 16 : 24,
+          }}
         >
           <motion.div
             initial={{ opacity: 0 }}
