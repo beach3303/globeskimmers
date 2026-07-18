@@ -106,9 +106,10 @@ Frontend-only (no worker deploy) — events flow via `trackEvent → logEvent �
 
 ## 🗺️ Owned Places DB — pilot (NYC) — scaffolding built 2026-07-17
 Scripts in `scripts/places-pilot/`. Untested until you run DuckDB locally. Paste me any errors and I'll fix (Overture field paths are the main risk).
-- [ ] `brew install duckdb`; run `01_schema.sql` in Supabase (PostGIS + `places` table created)
-- [ ] `duckdb < 02_extract.sql` → `nyc_places.parquet` + a row count (expect tens of thousands) + 5 sample rows look right
-- [ ] Edit connection string in `03_load.sql`; `duckdb < 03_load.sql` → rows land in Supabase
+- [x] `brew install duckdb` ✅ (1.5.4)
+- [x] `duckdb < 02_extract.sql` ✅ **484,400 places** extracted 2026-07-17; quality good (normalized categories, ~80% phone / ~60% website in sample). Note: bbox is a rectangle so it includes NYC-metro NJ (Woodbridge etc.) — fine/more coverage. Overture carries some closed businesses (has `date_closed` to filter later). Fixed bug: quote `"primary"` (reserved word).
+- [ ] Run `01_schema.sql` in Supabase (PostGIS + `places` table created)
+- [ ] Edit session-pooler connection string in `03_load.sql`; `duckdb < 03_load.sql` → ~484,400 rows land in Supabase
 - [ ] Validate: `select count(*) from places` + the Times-Square radius query in the README returns sensible nearby places
 - [ ] Eyeball phone/website coverage (`where phone is not null`) — measures the real fill-rate we couldn't get from docs
 - [ ] (Next build) Worker read-path: query `places` first, fall back to Google where thin
