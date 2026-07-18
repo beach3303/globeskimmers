@@ -59,6 +59,14 @@ function HomeRowCard({ card, onOpen, wide }) {
 export default function HomeRows({ onAction, wide = false }) {
   const { getActiveLocation, locationMode } = useLocation();
   const [rows, setRows] = useState([]);
+  const [detail, setDetail] = useState(null); // the attraction card opened full-screen
+
+  const openDirections = (c) => {
+    const dest = Number.isFinite(c?.lat) && Number.isFinite(c?.lng)
+      ? `${c.lat},${c.lng}`
+      : encodeURIComponent(c?.name || "");
+    if (dest) window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}`, "_blank");
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +111,7 @@ export default function HomeRows({ onAction, wide = false }) {
   if (!rows.length) return null;
 
   return (
+    <>
     <div className={wide ? "pb-3" : "px-4 pb-3"}>
       <div className={wide ? "flex flex-col gap-5" : "max-w-md mx-auto flex flex-col gap-4"}>
         {rows.map((row) => (
@@ -142,7 +151,7 @@ export default function HomeRows({ onAction, wide = false }) {
                       city: card.city,
                       country: card.country,
                     });
-                    onAction?.(row.seeAll?.action);
+                    setDetail(card); // open THIS attraction, not the list
                   }}
                 />
               ))}
@@ -151,5 +160,63 @@ export default function HomeRows({ onAction, wide = false }) {
         ))}
       </div>
     </div>
+
+    {detail && (
+      <div
+        onClick={() => setDetail(null)}
+        className="fixed inset-0 z-[9999] overflow-y-auto"
+        style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="mx-auto my-8 bg-white rounded-3xl overflow-hidden"
+          style={{ width: "92%", maxWidth: 480 }}
+        >
+          <div className="relative" style={{ aspectRatio: "16 / 10", background: "linear-gradient(135deg,#E7C7A0,#C98A2E)" }}>
+            {detail.photoUrl ? (
+              <img src={detail.photoUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-[56px]">📍</div>
+            )}
+            <button
+              onClick={() => setDetail(null)}
+              aria-label="Close"
+              className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center"
+              style={{ background: "rgba(255,255,255,0.95)", color: "#16302B", fontWeight: 800 }}
+            >✕</button>
+          </div>
+          <div className="p-5">
+            {detail.category && (
+              <div className="text-[calc(12px*var(--fs))] font-semibold mb-1" style={{ color: "#C56B7A" }}>{detail.category}</div>
+            )}
+            <div className="font-serif text-[calc(24px*var(--fs))] leading-tight" style={{ color: "#16302B" }}>{detail.name}</div>
+            <div className="flex items-center gap-3 mt-2 text-[calc(13px*var(--fs))]" style={{ color: "#71827D" }}>
+              {detail.rating && <span>★ {detail.rating}</span>}
+              {Number.isFinite(detail.distanceMiles) && <span>{detail.distanceMiles.toFixed(1)} mi</span>}
+              {detail.freeToVisit && <span>Free</span>}
+            </div>
+            {detail.whyVisit && (
+              <p className="mt-3 text-[calc(14px*var(--fs))] leading-relaxed" style={{ color: "#55635F" }}>{detail.whyVisit}</p>
+            )}
+            {detail.photographer && (
+              <div className="mt-2 text-[calc(10px*var(--fs))]" style={{ color: "#97A6A0" }}>📷 {detail.photographer} / Unsplash</div>
+            )}
+            <div className="flex gap-2.5 mt-4">
+              <button
+                onClick={() => openDirections(detail)}
+                className="flex-1 py-3 rounded-xl font-semibold text-white text-[calc(14px*var(--fs))]"
+                style={{ background: "#17A38F" }}
+              >🧭 Directions</button>
+              <button
+                onClick={() => { setDetail(null); onAction?.("Things to Do"); }}
+                className="flex-1 py-3 rounded-xl font-semibold text-[calc(14px*var(--fs))]"
+                style={{ background: "#F7F3EB", color: "#16302B", border: "1px solid #E6DFD0" }}
+              >Explore more</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
