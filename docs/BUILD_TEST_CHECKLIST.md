@@ -123,6 +123,16 @@ Added `useHorizontalSwipe` hook → swipe left/right on ENLARGED photos. Device 
 - [ ] Swiping down/vertically still dismisses / scrolls (swipe hook ignores vertical drags — shouldn't fight it)
 - [ ] Convenience-store + in-card carousels (already had swipe) still work
 
+## 🏛️ Rich owned attraction page (2026-07-18)
+Turns "Explore more" into a full page powered by owned/free data. **Activate:** set 2 secrets + `wrangler deploy` (see below).
+- [x] #2 "Explore more" → full ActivityDetail page (not the list) — `a0fa65e`
+- [x] #3 Owned Wikimedia photos (Worker `/places/wiki-photos`, cached 180d) + swipeable gallery + credit — `253ee4e` — **needs deploy**
+- [x] #4 Owned address from Overture read-path — `9a4b099` — **needs #1 secrets + deploy**
+- [ ] **Activate #1:** `wrangler secret put SUPABASE_URL` (→ https://bkaxadiyehddzkiuheea.supabase.co), `wrangler secret put SUPABASE_SERVICE_KEY` (→ service_role), then `wrangler deploy`
+- [ ] Test: `curl -s -X POST .../places/wiki-photos -H 'Content-Type: application/json' -d '{"name":"Times Square","lat":40.758,"lng":-73.9855}'` → returns photos[]
+- [ ] Device: tap a "place to go" card → Explore more → full page with **multiple swipeable photos** + credit; address shows once read-path is live
+- [ ] Quality check: photos are mostly the actual place (filter drops pre-2000/maps/docs/logos) — flag any junk
+
 ## Template for a new build
 ```
 ### N · <feature name>
