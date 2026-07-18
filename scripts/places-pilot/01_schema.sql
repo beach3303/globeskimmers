@@ -29,7 +29,10 @@ create table if not exists places (
   updated_at          timestamptz default now()
 );
 
--- Spatial index = the reason we use PostGIS (fast "within radius" / "nearest N").
+-- Spatial indexes = the reason we use PostGIS (fast "within radius" / "nearest N").
 create index if not exists places_geom_gix     on places using gist (geom);
+-- Geography index: REQUIRED so st_dwithin(geom::geography, ...) (accurate metre
+-- radius) uses an index instead of scanning all rows (otherwise it times out).
+create index if not exists places_geog_gix     on places using gist ((geom::geography));
 create index if not exists places_city_idx      on places (city);
 create index if not exists places_category_idx  on places (category);
