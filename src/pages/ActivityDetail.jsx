@@ -10,7 +10,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPageUrl } from "@/utils";
 import MapAppSelector from '../components/MapAppSelector';
-import { invokeLLM } from "@/lib/callWorker";
+import { invokeLLM, callWorker } from "@/lib/callWorker";
 import { showToast } from "../components/Toast";
 import { useDismissable } from '@/lib/dismissStack';
 import useHorizontalSwipe from '@/lib/useHorizontalSwipe';
@@ -132,11 +132,33 @@ export default function ActivityDetailPage() {
         setIsSaved(JSON.parse(saved).includes(activityData.id));
 
         await loadEnhancedDetails(activityData);
+        loadOwnedPhotos(activityData);
       }
     } catch (error) {
       console.error('Error loading activity:', error);
     }
     setLoading(false);
+  };
+
+  // Owned attraction photos (Wikimedia — free, CC, storable). Replaces the single
+  // fallback photo with a real gallery when we can match the place.
+  const loadOwnedPhotos = async (activityData) => {
+    try {
+      if (!activityData?.name || !Number.isFinite(activityData?.latitude)) return;
+      if (Array.isArray(activityData.photos) && activityData.photos.length >= 3) return;
+      const { data } = await callWorker('places/wiki-photos', {
+        name: activityData.name,
+        lat: activityData.latitude,
+        lng: activityData.longitude,
+      });
+      const wp = data && Array.isArray(data.photos) ? data.photos : [];
+      if (!wp.length) return;
+      setActivity((prev) => ({
+        ...prev,
+        photos: wp.map((p) => p.url),
+        photoCredits: wp.map((p) => [p.credit, p.license].filter(Boolean).join(' · ')),
+      }));
+    } catch { /* keep the existing fallback photo */ }
   };
 
   const loadEnhancedDetails = async (activityData) => {
@@ -361,6 +383,12 @@ export default function ActivityDetailPage() {
             </div>
           )}
         </div>
+
+        {activity.photoCredits && activity.photoCredits[currentImageIndex] && (
+          <div className="px-4 pt-1.5 text-[calc(10px*var(--fs))] text-gray-400">
+            📷 {activity.photoCredits[currentImageIndex]} / Wikimedia Commons
+          </div>
+        )}
 
         {photos.length > 1 && (
           <div className="flex gap-2 p-3 overflow-x-auto scrollbar-hide bg-gray-50">

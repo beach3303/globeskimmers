@@ -10468,6 +10468,96 @@ async function handleNearbyOwned(request, env) {
   }
 }
 
+// ─── Owned attraction photos from Wikimedia (Wikidata → Commons) ─────────────
+// Free, CC-licensed, storable-forever photos. Flow: name → nearest Wikidata
+// entity (verified by coords) → P18 canonical hero + filtered Commons category
+// photos. Cached 180 days. Attribution (author + license) returned per photo.
+const WIKI_UA = 'Globeskimmers/1.0 (https://globeskimmers.io)';
+function wikiJson(u) {
+  return fetch(u, { headers: { 'User-Agent': WIKI_UA, 'Api-User-Agent': WIKI_UA } }).then((r) => r.json());
+}
+function stripHtml(s) { return (s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim(); }
+function badWikiFile(title) {
+  const t = (title || '').toLowerCase();
+  if (!/\.(jpe?g)$/.test(t)) return true; // photos only (no svg/png logos/maps)
+  // Drop archival collections, documents, maps, logos, and pre-2000 dated files.
+  return /logo|icon|\bmap\b|diagram|\bplan\b|seal|coat[_ ]of[_ ]arms|locator|lccn|nara|dpla|harper|weekly|evening[_ ]post|certification|engraving|\b1[6789]\d\d\b|\b19[0-9]\d\b/.test(t);
+}
+function commonsThumb(file, width = 900) {
+  return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=${width}`;
+}
+async function handleWikiPhotos(request, env) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const name = (body.name || '').toString().trim();
+    const lat = parseFloat(body.lat ?? body.latitude);
+    const lng = parseFloat(body.lng ?? body.longitude);
+    if (!name) return jsonResponse({ error: 'name is required' }, 400);
+
+    const cacheKey = 'wikiphotos:v1:' + await sha256Hex(
+      name.toLowerCase() + '|' + (Number.isFinite(lat) ? lat.toFixed(2) : '') + '|' + (Number.isFinite(lng) ? lng.toFixed(2) : '')
+    );
+    const cached = await getFromCache(env, cacheKey);
+    if (cached && cached.age < 180 * 24 * 60 * 60 * 1000) return jsonResponse({ cached: true, ...cached.data });
+
+    const empty = { photos: [], source: 'wikimedia' };
+
+    // 1) candidate Wikidata entities for this name
+    const s = await wikiJson(`https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=en&format=json&limit=5`);
+    const cands = (s.search || []).map((x) => x.id);
+    if (!cands.length) { await setInCache(env, cacheKey, empty, 30 * 24 * 60 * 60); return jsonResponse(empty); }
+
+    // 2) pick the entity whose coordinates are nearest the attraction (kills wrong matches)
+    const e = await wikiJson(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${cands.join('|')}&props=claims&format=json`);
+    let best = null, bestDist = Infinity;
+    for (const qid of cands) {
+      const c = e.entities?.[qid]?.claims || {};
+      const coord = c.P625?.[0]?.mainsnak?.datavalue?.value;
+      if (coord && Number.isFinite(lat)) {
+        const d = haversineMilesLoc(lat, lng, coord.latitude, coord.longitude);
+        if (d < bestDist) { bestDist = d; best = qid; }
+      } else if (!best) { best = qid; }
+    }
+    const claims = e.entities?.[best]?.claims || {};
+    const p18 = claims.P18?.[0]?.mainsnak?.datavalue?.value;
+    const p373 = claims.P373?.[0]?.mainsnak?.datavalue?.value;
+
+    // 3) collect filenames: canonical hero first, then filtered category photos
+    const files = [];
+    if (p18) files.push(p18);
+    if (p373) {
+      const cm = await wikiJson(`https://commons.wikimedia.org/w/api.php?action=query&generator=categorymembers&gcmtitle=Category:${encodeURIComponent(p373)}&gcmtype=file&gcmlimit=40&format=json`);
+      const pages = cm.query?.pages || {};
+      for (const p of Object.values(pages)) {
+        const title = (p.title || '').replace(/^File:/, '');
+        if (!badWikiFile(title) && !files.includes(title)) files.push(title);
+        if (files.length >= 6) break;
+      }
+    }
+    const pick = files.slice(0, 6);
+    if (!pick.length) { await setInCache(env, cacheKey, empty, 30 * 24 * 60 * 60); return jsonResponse(empty); }
+
+    // 4) one call for real thumbnail URLs + author/license (attribution)
+    const info = await wikiJson(`https://commons.wikimedia.org/w/api.php?action=query&titles=${pick.map((f) => 'File:' + encodeURIComponent(f)).join('|')}&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=900&format=json`);
+    const byTitle = {};
+    for (const p of Object.values(info.query?.pages || {})) {
+      const t = (p.title || '').replace(/^File:/, '');
+      const ii = p.imageinfo?.[0] || {};
+      byTitle[t] = {
+        url: ii.thumburl || commonsThumb(t),
+        credit: stripHtml(ii.extmetadata?.Artist?.value) || 'Wikimedia Commons',
+        license: stripHtml(ii.extmetadata?.LicenseShortName?.value) || 'CC',
+      };
+    }
+    const photos = pick.map((f) => byTitle[f] || { url: commonsThumb(f), credit: 'Wikimedia Commons', license: 'CC' });
+    const payload = { photos, source: 'wikimedia' };
+    await setInCache(env, cacheKey, payload, 180 * 24 * 60 * 60);
+    return jsonResponse(payload);
+  } catch (e) {
+    return jsonResponse({ error: 'wiki photos failed', details: e.message }, 500);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -10502,6 +10592,7 @@ export default {
       if (pathname === '/places/photo') return await handlePhotoProxy(request, env);
       if (pathname === '/places/dietary') return await handleDietarySearch(request, env);
       if (pathname === '/places/nearby-owned' && request.method === 'POST') return await handleNearbyOwned(request, env);
+      if (pathname === '/places/wiki-photos' && request.method === 'POST') return await handleWikiPhotos(request, env);
       if (pathname === '/cache/stats') return await handleCacheStats(request, env);
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
