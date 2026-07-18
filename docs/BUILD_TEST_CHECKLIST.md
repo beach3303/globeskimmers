@@ -115,6 +115,14 @@ Scripts in `scripts/places-pilot/`. Untested until you run DuckDB locally. Paste
 - [ ] Eyeball phone/website coverage (`where phone is not null`) — measures the real fill-rate we couldn't get from docs
 - [ ] (Next build) Worker read-path: query `places` first, fall back to Google where thin
 
+## 📸 Photo swipe (2026-07-18) — `07ab112`
+Added `useHorizontalSwipe` hook → swipe left/right on ENLARGED photos. Device build synced (`npx cap copy ios`).
+- [ ] Restaurant detail (PlacesToEat) → open a place with ≥2 photos → **swipe the header photo** left/right → it pages
+- [ ] Coffee / ATM / Restroom / Things-to-Do → tap a photo to enlarge (PhotoGalleryModal) → **swipe** pages through
+- [ ] Activity detail → **swipe** the big header image → pages; thumbnail strip below still scrolls + tap-selects
+- [ ] Swiping down/vertically still dismisses / scrolls (swipe hook ignores vertical drags — shouldn't fight it)
+- [ ] Convenience-store + in-card carousels (already had swipe) still work
+
 ## Template for a new build
 ```
 ### N · <feature name>
