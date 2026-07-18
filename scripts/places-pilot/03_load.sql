@@ -11,7 +11,7 @@
 
 install postgres; load postgres;
 
-attach 'dbname=postgres host=aws-0-YOUR-REGION.pooler.supabase.com port=5432 user=postgres.YOUR-PROJECT-REF password=YOUR-PASSWORD sslmode=require' as pg (type postgres);
+attach 'dbname=postgres host=aws-1-us-west-1.pooler.supabase.com port=5432 user=postgres.YOUR-PROJECT-REF password=YOUR-PASSWORD sslmode=require' as pg (type postgres);
 
 -- Pilot load: insert the scalar columns (geom auto-generates from lat/lng in Postgres).
 -- Re-running? Uncomment the next line to reload cleanly (first run: table is already empty).

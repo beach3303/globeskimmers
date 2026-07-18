@@ -108,9 +108,9 @@ Frontend-only (no worker deploy) — events flow via `trackEvent → logEvent �
 Scripts in `scripts/places-pilot/`. Untested until you run DuckDB locally. Paste me any errors and I'll fix (Overture field paths are the main risk).
 - [x] `brew install duckdb` ✅ (1.5.4)
 - [x] `duckdb < 02_extract.sql` ✅ **484,400 places** extracted 2026-07-17; quality good (normalized categories, ~80% phone / ~60% website in sample). Note: bbox is a rectangle so it includes NYC-metro NJ (Woodbridge etc.) — fine/more coverage. Overture carries some closed businesses (has `date_closed` to filter later). Fixed bug: quote `"primary"` (reserved word).
-- [ ] Run `01_schema.sql` in Supabase (PostGIS + `places` table created)
-- [ ] Edit session-pooler connection string in `03_load.sql`; `duckdb < 03_load.sql` → ~484,400 rows land in Supabase
-- [ ] Validate: `select count(*) from places` + the Times-Square radius query in the README returns sensible nearby places
+- [x] Run `01_schema.sql` in Supabase ✅ (PostGIS + `places` table + spatial index created)
+- [x] `duckdb < 03_load.sql` ✅ **484,400 rows loaded** into Supabase 2026-07-18. Gotcha: bulk load hit Supabase's default `statement_timeout` at ~99% and rolled back to 0 — fix = `alter role postgres set statement_timeout = '3600s';` then re-run. Use the SESSION POOLER connection (IPv4). Connect via keyword string (not URI) so `!` in the password needs no encoding.
+- [ ] Validate: the Times-Square radius query (README / spatial query) returns sensible nearby places ranked by distance
 - [ ] Eyeball phone/website coverage (`where phone is not null`) — measures the real fill-rate we couldn't get from docs
 - [ ] (Next build) Worker read-path: query `places` first, fall back to Google where thin
 
