@@ -110,7 +110,8 @@ Scripts in `scripts/places-pilot/`. Untested until you run DuckDB locally. Paste
 - [x] `duckdb < 02_extract.sql` ✅ **484,400 places** extracted 2026-07-17; quality good (normalized categories, ~80% phone / ~60% website in sample). Note: bbox is a rectangle so it includes NYC-metro NJ (Woodbridge etc.) — fine/more coverage. Overture carries some closed businesses (has `date_closed` to filter later). Fixed bug: quote `"primary"` (reserved word).
 - [x] Run `01_schema.sql` in Supabase ✅ (PostGIS + `places` table + spatial index created)
 - [x] `duckdb < 03_load.sql` ✅ **484,400 rows loaded** into Supabase 2026-07-18. Gotcha: bulk load hit Supabase's default `statement_timeout` at ~99% and rolled back to 0 — fix = `alter role postgres set statement_timeout = '3600s';` then re-run. Use the SESSION POOLER connection (IPv4). Connect via keyword string (not URI) so `!` in the password needs no encoding.
-- [ ] Validate: the Times-Square radius query (README / spatial query) returns sensible nearby places ranked by distance
+- [x] Validate: Times-Square radius query ✅ 2026-07-18 — returned 20 real places ranked by exact meters (Times Square Building @ 6m, Morosco Theatre, Sunglass Hut, McDonald's, Duane Reade…). **PILOT PROVEN end-to-end: own ingest → own PostGIS store → own spatial search, $0 ongoing.**
+- [ ] (Next build) Worker read-path: query `places` first, fall back to Google where thin / for live hours
 - [ ] Eyeball phone/website coverage (`where phone is not null`) — measures the real fill-rate we couldn't get from docs
 - [ ] (Next build) Worker read-path: query `places` first, fall back to Google where thin
 
