@@ -10417,6 +10417,57 @@ async function handleCulture(request, env, ctx) {
   }
 }
 
+// ─── Owned places read-path (the moat) ──────────────────────────────────────
+// Query OUR Supabase PostGIS `places` table (seeded from Overture — free, owned)
+// for what's near a point, instead of paying Google. City-agnostic: it answers
+// for any coordinates that have rows loaded. Falls back cleanly (empty) where we
+// have no coverage yet, so the caller can then hit Google. Calls Supabase's
+// PostgREST RPC `nearby_places()` with the SERVICE key (server-side only).
+async function handleNearbyOwned(request, env) {
+  try {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+      return jsonResponse({ error: 'Supabase not configured (set SUPABASE_URL + SUPABASE_SERVICE_KEY)' }, 500);
+    }
+    const body = await request.json().catch(() => ({}));
+    const lat = parseFloat(body.latitude ?? body.lat);
+    const lng = parseFloat(body.longitude ?? body.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return jsonResponse({ error: 'latitude and longitude are required' }, 400);
+    }
+    const radius = Math.min(Math.max(parseFloat(body.radius) || 2000, 50), 50000);
+    const limit = Math.min(Math.max(parseInt(body.limit, 10) || 20, 1), 60);
+    const category = (body.category && String(body.category)) || null;
+
+    // Cache: same tile + radius + category → same owned result. Cheap, but the
+    // query is already free (our DB), so a short TTL just trims round-trips.
+    const cacheKey = generateCacheKey('owned', { latitude: lat, longitude: lng, radius, types: category || '' });
+    const cached = await getFromCache(env, cacheKey);
+    if (cached && cached.age < 24 * 60 * 60 * 1000) {
+      return jsonResponse({ source: 'owned', cached: true, ...cached.data });
+    }
+
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/nearby_places`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': env.SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      },
+      body: JSON.stringify({ in_lat: lat, in_lng: lng, in_radius_m: radius, in_limit: limit, in_category: category }),
+    });
+    if (!res.ok) {
+      const details = await res.text().catch(() => '');
+      return jsonResponse({ error: `Supabase returned ${res.status}`, details }, 502);
+    }
+    const rows = await res.json();
+    const payload = { count: Array.isArray(rows) ? rows.length : 0, places: rows || [] };
+    await setInCache(env, cacheKey, payload, CONFIG.CACHE_TTL.NEARBY_SEARCH);
+    return jsonResponse({ source: 'owned', cached: false, ...payload });
+  } catch (e) {
+    return jsonResponse({ error: 'Internal server error', details: e.message }, 500);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -10450,6 +10501,7 @@ export default {
       if (pathname.startsWith('/places/details/')) return await handlePlaceDetails(request, env);
       if (pathname === '/places/photo') return await handlePhotoProxy(request, env);
       if (pathname === '/places/dietary') return await handleDietarySearch(request, env);
+      if (pathname === '/places/nearby-owned' && request.method === 'POST') return await handleNearbyOwned(request, env);
       if (pathname === '/cache/stats') return await handleCacheStats(request, env);
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
