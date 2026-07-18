@@ -1840,6 +1840,38 @@ const ANALYTICS_QUERIES = {
     ORDER BY ts DESC
     LIMIT 50
   `,
+
+  // ── Travel-demand data product (from engagement-row logging) ──────────────
+  // demand_by_city: which cities people are active in / planning, by intent.
+  demand_by_city: `
+    SELECT
+      json_extract(payload, '$.city') AS city,
+      json_extract(payload, '$.country') AS country,
+      json_extract(payload, '$.intent') AS intent,
+      COUNT(*) AS views
+    FROM events
+    WHERE event_type = 'home_rows_view'
+      AND json_extract(payload, '$.city') IS NOT NULL
+      AND json_extract(payload, '$.city') != ''
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY city, country, intent
+    ORDER BY views DESC
+    LIMIT 100
+  `,
+  // trending_places: most-tapped places (what's converting) by city/category.
+  trending_places: `
+    SELECT
+      json_extract(payload, '$.place_name') AS place,
+      json_extract(payload, '$.city') AS city,
+      json_extract(payload, '$.category') AS category,
+      COUNT(*) AS taps
+    FROM events
+    WHERE event_type = 'home_row_card_tap'
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY place, city, category
+    ORDER BY taps DESC
+    LIMIT 100
+  `,
 };
 
 async function handleAnalyticsQuery(request, env) {

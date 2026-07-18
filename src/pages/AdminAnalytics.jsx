@@ -96,7 +96,7 @@ export default function AdminAnalytics() {
       // Fan out over the live Worker /analytics-query route (one D1 query per
       // type), assembling the bundle the renderer expects. Native-safe via
       // callWorker — replaces the Base44 getAnalytics function (403s on device).
-      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d'];
+      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places'];
       const pairs = await Promise.all(TYPES.map(async (type) => {
         const { data: qd, error: qe } = await callWorker(`analytics-query?type=${encodeURIComponent(type)}`, {});
         return [type, { results: qd?.results || [], error: qe || qd?.error || null }];
@@ -123,6 +123,8 @@ export default function AdminAnalytics() {
   const eventBreakdown = data?.event_type_breakdown_7d?.results || [];
   const zeroResults = data?.top_zero_results?.results || [];
   const topSearches = data?.top_searches_7d?.results || [];
+  const demandByCity = data?.demand_by_city?.results || [];        // travel-demand (30d)
+  const trendingPlaces = data?.trending_places?.results || [];     // most-tapped places (30d)
   const eventsByDay = data?.events_by_day_14d?.results || [];
   const aiOpensByDay = data?.ai_details_opens_by_day_14d?.results || [];
   const aiOpensPerSession = data?.ai_details_per_session_7d?.results || [];
@@ -148,6 +150,8 @@ export default function AdminAnalytics() {
   const maxEventCount = Math.max(...eventBreakdown.map(e => e.count || 0), 1);
   const maxZero = Math.max(...zeroResults.map(z => z.hits || 0), 1);
   const maxSearches = Math.max(...topSearches.map(s => s.hits || 0), 1);
+  const maxDemand = Math.max(...demandByCity.map(d => d.views || 0), 1);
+  const maxTrending = Math.max(...trendingPlaces.map(t => t.taps || 0), 1);
   const maxDay = Math.max(...eventsByDay.map(d => d.count || 0), 1);
   const maxAIOpensDay = Math.max(...aiOpensByDay.map(d => d.opens || 0), 1);
   const maxAIPerSession = Math.max(...aiOpensPerSession.map(s => s.distinct_places_opened || 0), 1);
@@ -301,6 +305,24 @@ export default function AdminAnalytics() {
                   max={maxSearches}
                   color={COLORS.accent}
                 />
+              ))}
+            </Section>
+
+            <Section title="🌍 Travel demand by city (30d)" icon={Search} empty={demandByCity.length === 0 ? 'No demand data yet — fills as users open Home in cities.' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>
+                Which cities users are in or planning (intent: present = there now, planning = browsing). The B2B demand signal.
+              </div>
+              {demandByCity.map((d, i) => (
+                <BarRow key={i} label={`${d.city}${d.country ? ', ' + d.country : ''} · ${d.intent || '—'}`} count={d.views} max={maxDemand} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="🔥 Trending places (30d)" icon={Sparkles} empty={trendingPlaces.length === 0 ? 'No taps yet — fills as users tap engagement-row cards.' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>
+                Most-tapped places — what converts (your affiliate targets).
+              </div>
+              {trendingPlaces.map((t, i) => (
+                <BarRow key={i} label={`${t.place || '(unknown)'}${t.city ? ' · ' + t.city : ''}`} count={t.taps} max={maxTrending} color={COLORS.accent} />
               ))}
             </Section>
 
