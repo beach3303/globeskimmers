@@ -32,11 +32,19 @@ function HomeRowCard({ card, onOpen, wide }) {
       className={`flex-none ${wide ? "w-[190px]" : "w-[150px]"} rounded-2xl overflow-hidden bg-white text-left border`}
       style={{ borderColor: "#E6DFD0", boxShadow: "0 8px 20px -16px rgba(22,17,13,.4)" }}
     >
-      <div className="w-full" style={{ aspectRatio: "4 / 3", background: "linear-gradient(135deg,#E7C7A0,#C98A2E)" }}>
+      <div className="relative w-full" style={{ aspectRatio: "4 / 3", background: "linear-gradient(135deg,#E7C7A0,#C98A2E)" }}>
         {card.photoUrl ? (
           <img src={card.photoUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-[28px]">📍</div>
+        )}
+        {card.photoUrl && card.photographer && (
+          <div
+            className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[calc(8px*var(--fs))] leading-none"
+            style={{ background: "rgba(0,0,0,0.42)", color: "rgba(255,255,255,0.9)" }}
+          >
+            {card.photographer} / Unsplash
+          </div>
         )}
       </div>
       <div className="p-2.5">
@@ -48,9 +56,6 @@ function HomeRowCard({ card, onOpen, wide }) {
         </div>
         {meta.length > 0 && (
           <div className="text-[calc(11px*var(--fs))] mt-1" style={{ color: "#71827D" }}>{meta.join(" · ")}</div>
-        )}
-        {card.photographer && (
-          <div className="text-[calc(9.5px*var(--fs))] mt-1" style={{ color: "#97A6A0" }}>📷 {card.photographer} / Unsplash</div>
         )}
       </div>
     </button>
@@ -178,6 +183,14 @@ export default function HomeRows({ onAction, wide = false }) {
             ) : (
               <div className="w-full h-full flex items-center justify-center text-[56px]">📍</div>
             )}
+            {detail.photoUrl && detail.photographer && (
+              <div
+                className="absolute bottom-1.5 right-2 px-1.5 py-0.5 rounded text-[calc(9px*var(--fs))] leading-none"
+                style={{ background: "rgba(0,0,0,0.42)", color: "rgba(255,255,255,0.9)" }}
+              >
+                {detail.photographer} / Unsplash
+              </div>
+            )}
             <button
               onClick={() => setDetail(null)}
               aria-label="Close"
@@ -197,9 +210,6 @@ export default function HomeRows({ onAction, wide = false }) {
             </div>
             {detail.whyVisit && (
               <p className="mt-3 text-[calc(14px*var(--fs))] leading-relaxed" style={{ color: "#55635F" }}>{detail.whyVisit}</p>
-            )}
-            {detail.photographer && (
-              <div className="mt-2 text-[calc(10px*var(--fs))]" style={{ color: "#97A6A0" }}>📷 {detail.photographer} / Unsplash</div>
             )}
             <div className="flex gap-2.5 mt-4">
               <button
