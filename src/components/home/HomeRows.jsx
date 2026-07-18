@@ -17,6 +17,7 @@ import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { getSeason } from "@/lib/homeContext";
 import { trackEvent } from "@/Layout";
+import MapAppSelector from "@/components/MapAppSelector";
 
 function HomeRowCard({ card, onOpen, wide }) {
   const name = card.name || "Explore";
@@ -59,14 +60,8 @@ function HomeRowCard({ card, onOpen, wide }) {
 export default function HomeRows({ onAction, wide = false }) {
   const { getActiveLocation, locationMode } = useLocation();
   const [rows, setRows] = useState([]);
-  const [detail, setDetail] = useState(null); // the attraction card opened full-screen
-
-  const openDirections = (c) => {
-    const dest = Number.isFinite(c?.lat) && Number.isFinite(c?.lng)
-      ? `${c.lat},${c.lng}`
-      : encodeURIComponent(c?.name || "");
-    if (dest) window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}`, "_blank");
-  };
+  const [detail, setDetail] = useState(null);     // attraction opened full-screen
+  const [dirsCard, setDirsCard] = useState(null); // attraction to route to (Waze/Apple/Google chooser)
 
   useEffect(() => {
     let cancelled = false;
@@ -109,6 +104,11 @@ export default function HomeRows({ onAction, wide = false }) {
   }, [getActiveLocation, locationMode]);
 
   if (!rows.length) return null;
+
+  // Active location = the directions origin (user's current/selected spot).
+  const activeLoc = getActiveLocation?.();
+  const activeLat = activeLoc?.latitude ?? activeLoc?.lat;
+  const activeLng = activeLoc?.longitude ?? activeLoc?.lng;
 
   return (
     <>
@@ -203,7 +203,7 @@ export default function HomeRows({ onAction, wide = false }) {
             )}
             <div className="flex gap-2.5 mt-4">
               <button
-                onClick={() => openDirections(detail)}
+                onClick={() => setDirsCard(detail)}
                 className="flex-1 py-3 rounded-xl font-semibold text-white text-[calc(14px*var(--fs))]"
                 style={{ background: "#17A38F" }}
               >🧭 Directions</button>
@@ -216,6 +216,16 @@ export default function HomeRows({ onAction, wide = false }) {
           </div>
         </div>
       </div>
+    )}
+
+    {dirsCard && (
+      <MapAppSelector
+        isOpen
+        onClose={() => setDirsCard(null)}
+        destination={{ name: dirsCard.name, latitude: dirsCard.lat, longitude: dirsCard.lng }}
+        userLat={activeLat}
+        userLng={activeLng}
+      />
     )}
     </>
   );
