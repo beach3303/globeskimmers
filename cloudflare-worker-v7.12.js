@@ -5801,6 +5801,19 @@ async function handleHomeRows(request, env, ctx) {
   const wtn = await buildWhereToNextRow(env, seasonKey, ctx);
   if (wtn) rows.push(wtn);
 
+  // Photo fallback: owned attraction cards have no photo_url in D1 → fetch an
+  // Unsplash photo by "{name}, {city}" so the feed is photo-forward (cached 30d,
+  // gated on key). Parallel + capped so first build stays fast; the "Where to
+  // next" cards already have photos and are skipped.
+  if (env.UNSPLASH_ACCESS_KEY) {
+    const need = [];
+    for (const r of rows) for (const c of r.cards) if (!c.photoUrl && c.name) need.push(c);
+    await Promise.all(need.slice(0, 24).map(async (c) => {
+      const photo = await fetchUnsplashPhoto(env, c.city ? `${c.name}, ${c.city}` : c.name, ctx);
+      if (photo?.url) { c.photoUrl = photo.url; c.photographer = photo.photographer; c.credit = 'Unsplash'; }
+    }));
+  }
+
   const bundle = { rows, dayPart };
   const store = env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(bundle), { expirationTtl: HOME_ROWS_TTL_SECONDS }).catch(() => {});
   if (ctx && ctx.waitUntil) ctx.waitUntil(store); else await store;
