@@ -133,11 +133,36 @@ export default function ActivityDetailPage() {
 
         await loadEnhancedDetails(activityData);
         loadOwnedPhotos(activityData);
+        loadOwnedAddress(activityData);
       }
     } catch (error) {
       console.error('Error loading activity:', error);
     }
     setLoading(false);
+  };
+
+  // Owned address (#4): pull a free address from our Overture places table via the
+  // read-path. Activates once the read-path (SUPABASE_* secrets + deploy) is live;
+  // until then callWorker errors and the Location box just stays hidden.
+  const loadOwnedAddress = async (activityData) => {
+    try {
+      if (activityData?.address || !Number.isFinite(activityData?.latitude)) return;
+      const { data } = await callWorker('places/nearby-owned', {
+        latitude: activityData.latitude,
+        longitude: activityData.longitude,
+        radius: 250,
+        limit: 15,
+      });
+      const rows = data && Array.isArray(data.places) ? data.places : [];
+      if (!rows.length) return;
+      const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const target = norm(activityData.name);
+      const match = rows.find((r) => {
+        const n = norm(r.name);
+        return target && n && (n.includes(target) || target.includes(n));
+      });
+      if (match?.address) setActivity((prev) => ({ ...prev, address: match.address }));
+    } catch { /* no owned coverage yet → Location box stays hidden */ }
   };
 
   // Owned attraction photos (Wikimedia — free, CC, storable). Replaces the single
