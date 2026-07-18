@@ -48,6 +48,9 @@ function HomeRowCard({ card, onOpen, wide }) {
         {meta.length > 0 && (
           <div className="text-[calc(11px*var(--fs))] mt-1" style={{ color: "#71827D" }}>{meta.join(" · ")}</div>
         )}
+        {card.photographer && (
+          <div className="text-[calc(9.5px*var(--fs))] mt-1" style={{ color: "#97A6A0" }}>📷 {card.photographer} / Unsplash</div>
+        )}
       </div>
     </button>
   );

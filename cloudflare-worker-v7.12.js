@@ -5593,6 +5593,16 @@ const HOME_SEASONAL_ROWS = {
   tropical: { title: 'Tropical anytime',    subtitle: 'Year-round adventures' },
 };
 
+// Static, hemisphere-correct destination lists for the global "Where to next"
+// inspiration row (Unsplash-powered). Curated; free to expand later.
+const HOME_SEASONAL_DESTINATIONS = {
+  summer:   ['Santorini, Greece', 'Amalfi Coast, Italy', 'Barcelona, Spain', 'Maui, Hawaii', 'Nice, France', 'Dubrovnik, Croatia'],
+  winter:   ['Zermatt, Switzerland', 'Kyoto, Japan', 'Vienna, Austria', 'Reykjavik, Iceland', 'Quebec City, Canada', 'Lapland, Finland'],
+  spring:   ['Amsterdam, Netherlands', 'Kyoto, Japan', 'Paris, France', 'Marrakech, Morocco', 'Lisbon, Portugal', 'Charleston, USA'],
+  fall:     ['Kyoto, Japan', 'Munich, Germany', 'Tuscany, Italy', 'Seoul, South Korea', 'Vermont, USA', 'Quebec City, Canada'],
+  tropical: ['Bali, Indonesia', 'Phuket, Thailand', 'Tulum, Mexico', 'Maldives', 'Boracay, Philippines', 'Cairns, Australia'],
+};
+
 const HOME_DAYPART_ROW = {
   earlyMorning: { title: 'Start your morning',  subtitle: 'Ease into the day nearby' },
   morning:      { title: 'Good morning nearby', subtitle: 'Worth an early look' },
@@ -5613,6 +5623,48 @@ function homeRowsDayPart(hour) {
   if (h >= 15 && h < 17) return 'afternoon';
   if (h >= 17 && h < 22) return 'evening';
   return 'lateNight';
+}
+
+// Fetch a representative photo for a place from Unsplash, cached in KV (30d).
+// Gated on UNSPLASH_ACCESS_KEY (returns null when not configured). Fires the
+// Unsplash "download" trigger (required by their API ToS) and returns attribution.
+async function fetchUnsplashPhoto(env, query, ctx) {
+  if (!env.UNSPLASH_ACCESS_KEY) return null;
+  const cacheKey = `unsplash:v1:${String(query).toLowerCase()}`;
+  const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+  if (cached && cached.url) return cached;
+  try {
+    const res = await fetch(`https://api.unsplash.com/search/photos?per_page=1&orientation=landscape&content_filter=high&query=${encodeURIComponent(query)}`, {
+      headers: { Authorization: `Client-ID ${env.UNSPLASH_ACCESS_KEY}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const p = data?.results?.[0];
+    const photo = { url: p?.urls?.regular || p?.urls?.small || '', photographer: p?.user?.name || '', link: p?.links?.html || '' };
+    if (!photo.url) return null;
+    // Unsplash ToS: trigger a download event when a photo is used.
+    if (ctx && ctx.waitUntil && p?.links?.download_location) {
+      ctx.waitUntil(fetch(p.links.download_location, { headers: { Authorization: `Client-ID ${env.UNSPLASH_ACCESS_KEY}` } }).catch(() => {}));
+    }
+    await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(photo), { expirationTtl: 30 * 24 * 60 * 60 }).catch(() => {});
+    return photo;
+  } catch { return null; }
+}
+
+// Build the global "Where to next" inspiration row from Unsplash destination
+// photos. Returns null if Unsplash isn't configured or too few photos resolve.
+async function buildWhereToNextRow(env, seasonKey, ctx) {
+  if (!env.UNSPLASH_ACCESS_KEY) return null;
+  const dests = (HOME_SEASONAL_DESTINATIONS[seasonKey] || HOME_SEASONAL_DESTINATIONS.summer).slice(0, 6);
+  const cards = [];
+  for (const dest of dests) {
+    const photo = await fetchUnsplashPhoto(env, dest, ctx);
+    if (photo?.url) {
+      cards.push({ id: `esc_${dest}`, name: dest.split(',')[0].trim(), whyVisit: dest, photoUrl: photo.url, photographer: photo.photographer, credit: 'Unsplash' });
+    }
+  }
+  if (cards.length < 3) return null;
+  return { key: 'whereToNext', title: 'Where to next ✈️', subtitle: 'Dreaming of your next trip', seeAll: { action: 'Things to Do' }, cards };
 }
 
 async function handleHomeRows(request, env, ctx) {
@@ -5661,7 +5713,10 @@ async function handleHomeRows(request, env, ctx) {
   // shows its cold-start fallback, never an empty carousel. Unsplash inspiration
   // rows will fill this globally once wired.
   if (attractions.length === 0) {
-    return jsonResponse({ rows: [], dayPart, reason: 'no_owned_coverage', tookMs: Date.now() - startedAt });
+    // No owned coverage — still offer global Unsplash inspiration so the page
+    // isn't empty. If Unsplash isn't configured, fall back to the cold-start.
+    const wtn = await buildWhereToNextRow(env, seasonKey, ctx);
+    return jsonResponse({ rows: wtn ? [wtn] : [], dayPart, reason: wtn ? undefined : 'no_owned_coverage', tookMs: Date.now() - startedAt });
   }
 
   const trim = (a) => ({
@@ -5741,6 +5796,10 @@ async function handleHomeRows(request, env, ctx) {
     const seasonCards = take(pool, 10);
     if (seasonCards.length) rows.push({ key: 'seasonal', title: seasonCfg.title, subtitle: seasonCfg.subtitle, seeAll: { action: 'Things to Do' }, cards: seasonCards });
   }
+
+  // Where to next — global Unsplash inspiration (gated on key), a nice closer.
+  const wtn = await buildWhereToNextRow(env, seasonKey, ctx);
+  if (wtn) rows.push(wtn);
 
   const bundle = { rows, dayPart };
   const store = env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(bundle), { expirationTtl: HOME_ROWS_TTL_SECONDS }).catch(() => {});
