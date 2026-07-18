@@ -96,7 +96,7 @@ export default function AdminAnalytics() {
       // Fan out over the live Worker /analytics-query route (one D1 query per
       // type), assembling the bundle the renderer expects. Native-safe via
       // callWorker — replaces the Base44 getAnalytics function (403s on device).
-      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places'];
+      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'rows_per_session_7d'];
       const pairs = await Promise.all(TYPES.map(async (type) => {
         const { data: qd, error: qe } = await callWorker(`analytics-query?type=${encodeURIComponent(type)}`, {});
         return [type, { results: qd?.results || [], error: qe || qd?.error || null }];
@@ -125,6 +125,14 @@ export default function AdminAnalytics() {
   const topSearches = data?.top_searches_7d?.results || [];
   const demandByCity = data?.demand_by_city?.results || [];        // travel-demand (30d)
   const trendingPlaces = data?.trending_places?.results || [];     // most-tapped places (30d)
+  const activeUsers = data?.active_users?.results?.[0] || {};       // DAU/WAU/MAU
+  const activeByDay = data?.active_users_by_day_30d?.results || [];
+  const retention = data?.retention_7d?.results?.[0] || {};
+  const rowsPerSession = data?.rows_per_session_7d?.results?.[0] || {};
+  const returnRate = retention.active ? Math.round((retention.returning / retention.active) * 100) : 0;
+  const stickiness = activeUsers.mau ? Math.round((activeUsers.dau / activeUsers.mau) * 100) : 0;
+  const avgRowsTaps = rowsPerSession.avg_taps ? Number(rowsPerSession.avg_taps).toFixed(1) : '0';
+  const maxActive = Math.max(...activeByDay.map(d => d.active || 0), 1);
   const eventsByDay = data?.events_by_day_14d?.results || [];
   const aiOpensByDay = data?.ai_details_opens_by_day_14d?.results || [];
   const aiOpensPerSession = data?.ai_details_per_session_7d?.results || [];
@@ -260,6 +268,31 @@ export default function AdminAnalytics() {
                 color={COLORS.green}
               />
             </div>
+
+            {/* ── Growth & retention ─────────────────────────────────────── */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+              <KpiCard icon={Activity} label="DAU" value={activeUsers.dau ?? 0} color={COLORS.accent} />
+              <KpiCard icon={Activity} label="WAU" value={activeUsers.wau ?? 0} color={COLORS.accent} />
+              <KpiCard icon={Activity} label="MAU" value={activeUsers.mau ?? 0} color={COLORS.accent} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
+              <KpiCard icon={Eye} label="Return rate (7d)" value={`${returnRate}%`} color={COLORS.green} />
+              <KpiCard icon={Activity} label="Stickiness" value={`${stickiness}%`} color={COLORS.green} />
+              <KpiCard icon={Sparkles} label="Taps/session" value={avgRowsTaps} color={COLORS.accent} />
+            </div>
+
+            <Section title="Active users per day (30d)" icon={Eye} empty={activeByDay.length === 0 ? 'No active-user data yet.' : null}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 100 }}>
+                {activeByDay.map(d => (
+                  <div key={d.day} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <div title={`${d.day}: ${d.active}`} style={{ width: '100%', height: `${Math.max((d.active / maxActive) * 100, 4)}%`, background: COLORS.green, borderRadius: '3px 3px 0 0' }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: COLORS.gray, marginTop: 8 }}>
+                Return rate = of users active this week, the % who first came &gt;7 days ago (came back). Stickiness = DAU ÷ MAU.
+              </div>
+            </Section>
 
             <Section title="Events per day (14d)" icon={Activity} empty={eventsByDay.length === 0 ? 'No data yet — events will appear once users start interacting.' : null}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 100 }}>

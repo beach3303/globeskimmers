@@ -1872,6 +1872,46 @@ const ANALYTICS_QUERIES = {
     ORDER BY taps DESC
     LIMIT 100
   `,
+
+  // ── Growth & retention ────────────────────────────────────────────────────
+  // Unique active users use COALESCE(user_id, session_id) so anonymous devices
+  // count too. DAU/WAU/MAU in one row.
+  active_users: `
+    SELECT
+      COUNT(DISTINCT CASE WHEN ts >= strftime('%s','now','-1 day')  THEN COALESCE(user_id, session_id) END) AS dau,
+      COUNT(DISTINCT CASE WHEN ts >= strftime('%s','now','-7 days')  THEN COALESCE(user_id, session_id) END) AS wau,
+      COUNT(DISTINCT CASE WHEN ts >= strftime('%s','now','-30 days') THEN COALESCE(user_id, session_id) END) AS mau
+    FROM events
+  `,
+  active_users_by_day_30d: `
+    SELECT date(ts,'unixepoch') AS day, COUNT(DISTINCT COALESCE(user_id, session_id)) AS active
+    FROM events
+    WHERE ts >= strftime('%s','now','-30 days')
+    GROUP BY day
+    ORDER BY day
+  `,
+  // New vs returning among users active in the last 7d (returning = first seen >7d ago).
+  retention_7d: `
+    SELECT
+      COUNT(DISTINCT id) AS active,
+      COUNT(DISTINCT CASE WHEN first_seen < strftime('%s','now','-7 days') THEN id END) AS returning
+    FROM (
+      SELECT COALESCE(user_id, session_id) AS id, MIN(ts) AS first_seen, MAX(ts) AS last_seen
+      FROM events
+      GROUP BY id
+    )
+    WHERE last_seen >= strftime('%s','now','-7 days')
+  `,
+  // Engagement-row taps per session (the spec KPI).
+  rows_per_session_7d: `
+    SELECT AVG(taps) AS avg_taps, COUNT(*) AS sessions
+    FROM (
+      SELECT session_id, COUNT(*) AS taps
+      FROM events
+      WHERE event_type = 'home_row_card_tap' AND ts >= strftime('%s','now','-7 days')
+      GROUP BY session_id
+    )
+  `,
 };
 
 async function handleAnalyticsQuery(request, env) {
