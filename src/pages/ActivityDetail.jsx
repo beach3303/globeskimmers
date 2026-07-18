@@ -567,13 +567,15 @@ export default function ActivityDetailPage() {
               </p>
             </div>
 
-            <div className="bg-white rounded-xl shadow-md p-5">
-              <h3 className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-3 flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-purple-600" />
-                Location
-              </h3>
-              <p className="text-[calc(14px*var(--fs))] text-gray-700">{activity.address}</p>
-            </div>
+            {activity.address && (
+              <div className="bg-white rounded-xl shadow-md p-5">
+                <h3 className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-purple-600" />
+                  Location
+                </h3>
+                <p className="text-[calc(14px*var(--fs))] text-gray-700">{activity.address}</p>
+              </div>
+            )}
 
             {/* Opening Hours Section */}
             {activity.opening_hours && activity.opening_hours.weekday_text && activity.opening_hours.weekday_text.length > 0 && (

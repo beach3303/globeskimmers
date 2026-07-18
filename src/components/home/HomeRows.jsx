@@ -12,11 +12,13 @@
 // a card tap) calls onAction(seeAll.action) — the same handleQuickAction the
 // tiles use — to open the vertical finder page. Sideways → down/up.
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLocation } from "@/components/location/LocationContext";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { getSeason } from "@/lib/homeContext";
 import { trackEvent } from "@/Layout";
+import { createPageUrl } from "@/utils";
 import MapAppSelector from "@/components/MapAppSelector";
 
 function HomeRowCard({ card, onOpen, wide }) {
@@ -64,9 +66,38 @@ function HomeRowCard({ card, onOpen, wide }) {
 
 export default function HomeRows({ onAction, wide = false }) {
   const { getActiveLocation, locationMode } = useLocation();
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [detail, setDetail] = useState(null);     // attraction opened full-screen
   const [dirsCard, setDirsCard] = useState(null); // attraction to route to (Waze/Apple/Google chooser)
+
+  // Open the FULL attraction page (address, hours, gallery, directions, map, AI
+  // tips) — reuses ActivityDetail, which reads the attraction from sessionStorage.
+  const openFullPage = (card) => {
+    try {
+      const loc = getActiveLocation?.();
+      const activity = {
+        id: card.id,
+        name: card.name,
+        category: card.category,
+        photos: Array.isArray(card.photos) && card.photos.length ? card.photos : (card.photoUrl ? [card.photoUrl] : []),
+        description: card.whyVisit || "",
+        address: card.address || "",
+        latitude: card.lat,
+        longitude: card.lng,
+        rating: card.rating,
+        free_to_visit: card.freeToVisit,
+      };
+      sessionStorage.setItem("current_activity", JSON.stringify(activity));
+      if (loc) sessionStorage.setItem("activity_location", JSON.stringify(loc));
+      trackEvent("home_row_open_detail", { place_id: card.id, place_name: card.name });
+      setDetail(null);
+      navigate(createPageUrl("ActivityDetail"));
+    } catch {
+      setDetail(null);
+      onAction?.("Things to Do"); // safe fallback to the finder list
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -218,7 +249,7 @@ export default function HomeRows({ onAction, wide = false }) {
                 style={{ background: "#17A38F" }}
               >🧭 Directions</button>
               <button
-                onClick={() => { setDetail(null); onAction?.("Things to Do"); }}
+                onClick={() => openFullPage(detail)}
                 className="flex-1 py-3 rounded-xl font-semibold text-[calc(14px*var(--fs))]"
                 style={{ background: "#F7F3EB", color: "#16302B", border: "1px solid #E6DFD0" }}
               >Explore more</button>
