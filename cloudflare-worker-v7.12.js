@@ -10480,8 +10480,10 @@ function stripHtml(s) { return (s || '').replace(/<[^>]*>/g, '').replace(/\s+/g,
 function badWikiFile(title) {
   const t = (title || '').toLowerCase();
   if (!/\.(jpe?g)$/.test(t)) return true; // photos only (no svg/png logos/maps)
-  // Drop archival collections, documents, maps, logos, odd crops, and pre-2000 dated files.
-  return /logo|icon|\bmap\b|diagram|\bplan\b|seal|coat[_ ]of[_ ]arms|locator|lccn|nara|dpla|harper|weekly|evening[_ ]post|certification|engraving|window|interior|closeup|close-up|t-?shirt|poster|ticket|stamp|coin|postcard|drawing|painting|sketch|illustration|construction|restoration|scaffold|\b1[6789]\d\d\b|\b19[0-9]\d\b/.test(t);
+  // Pre-2000 dated files (works even next to underscores, e.g. "..._1862_crop").
+  if (/(?:^|[^0-9])(?:1[6789]\d\d|19\d\d)(?:[^0-9]|$)/.test(t)) return true;
+  // Drop archival collections, documents, maps, logos, artworks, and odd crops.
+  return /logo|icon|\bmap\b|diagram|\bplan\b|seal|coat[_ ]of[_ ]arms|locator|lccn|nara|dpla|harper|weekly|evening[_ ]post|certification|engraving|window|interior|closeup|close-up|t-?shirt|poster|ticket|stamp|coin|postcard|drawing|painting|artwork|portrait|sketch|illustration|mural|statue[_ ]of[_ ]liberty[_ ]replica|construction|restoration|scaffold/.test(t);
 }
 function commonsThumb(file, width = 900) {
   return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=${width}`;
@@ -10494,7 +10496,7 @@ async function handleWikiPhotos(request, env) {
     const lng = parseFloat(body.lng ?? body.longitude);
     if (!name) return jsonResponse({ error: 'name is required' }, 400);
 
-    const cacheKey = 'wikiphotos:v2:' + await sha256Hex(
+    const cacheKey = 'wikiphotos:v3:' + await sha256Hex(
       name.toLowerCase() + '|' + (Number.isFinite(lat) ? lat.toFixed(2) : '') + '|' + (Number.isFinite(lng) ? lng.toFixed(2) : '')
     );
     const cached = await getFromCache(env, cacheKey);
@@ -10508,7 +10510,7 @@ async function handleWikiPhotos(request, env) {
     if (!cands.length) { await setInCache(env, cacheKey, empty, 30 * 24 * 60 * 60); return jsonResponse(empty); }
 
     // 2) pick the entity whose coordinates are nearest the attraction (kills wrong matches)
-    const e = await wikiJson(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${cands.join('|')}&props=claims&format=json`);
+    const e = await wikiJson(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${cands.join('|')}&props=claims|sitelinks&sitefilter=enwiki&format=json`);
     let best = null, bestDist = Infinity;
     for (const qid of cands) {
       const c = e.entities?.[qid]?.claims || {};
@@ -10521,11 +10523,26 @@ async function handleWikiPhotos(request, env) {
     const claims = e.entities?.[best]?.claims || {};
     const p18 = claims.P18?.[0]?.mainsnak?.datavalue?.value;
     const p373 = claims.P373?.[0]?.mainsnak?.datavalue?.value;
+    const enTitle = e.entities?.[best]?.sitelinks?.enwiki?.title || null;
 
-    // 3) collect candidate filenames: canonical hero first, then keyword-filtered category
+    // 3) collect candidates: canonical hero, then editor-curated Wikipedia article
+    //    images (the iconic shots), then Commons category as fallback fill.
     const files = [];
     if (p18) files.push(p18);
-    if (p373) {
+    if (enTitle) {
+      try {
+        const ml = await wikiJson(`https://en.wikipedia.org/api/rest_v1/page/media-list/${encodeURIComponent(enTitle.replace(/ /g, '_'))}`);
+        for (const it of (ml.items || [])) {
+          if (it.type !== 'image') continue;
+          // media-list uses underscores; the imageinfo response keys by spaces —
+          // normalize so the later lookup matches (this was dropping every article image).
+          const title = (it.title || '').replace(/^File:/, '').replace(/_/g, ' ');
+          if (!badWikiFile(title) && !files.includes(title)) files.push(title);
+          if (files.length >= 14) break;
+        }
+      } catch { /* article images are optional */ }
+    }
+    if (p373 && files.length < 18) {
       const cm = await wikiJson(`https://commons.wikimedia.org/w/api.php?action=query&generator=categorymembers&gcmtitle=Category:${encodeURIComponent(p373)}&gcmtype=file&gcmlimit=60&format=json`);
       for (const p of Object.values(cm.query?.pages || {})) {
         const title = (p.title || '').replace(/^File:/, '');
@@ -10552,8 +10569,8 @@ async function handleWikiPhotos(request, env) {
       const ii = infoByTitle[f];
       if (!ii || !ii.thumburl) continue;
       const w = ii.width || 0, h = ii.height || 0;
-      if (w < 1000 || h < 600) continue;   // skip low-res / likely-poor scans
-      if (w < h * 0.85) continue;          // skip tall portraits / odd crops
+      if (w < 1000 || h < 600) continue;         // skip low-res / likely-poor scans
+      if (w < h * 0.85 || w > h * 3) continue;   // skip tall portraits AND ultra-wide panoramas
       photos.push(toPhoto(ii, f));
       if (photos.length >= 6) break;
     }

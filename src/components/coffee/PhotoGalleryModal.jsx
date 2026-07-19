@@ -41,7 +41,8 @@ export default function PhotoGalleryModal({ photos, initialIndex = 0, isOpen, on
           >
             <button
               onClick={onClose}
-              className="absolute top-6 right-6 z-20 w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md flex items-center justify-center transition-colors"
+              className="absolute right-4 z-20 w-11 h-11 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md flex items-center justify-center transition-colors"
+              style={{ top: 'calc(env(safe-area-inset-top, 0px) + 24px)' }}
             >
               <X className="w-6 h-6 text-white" />
             </button>
