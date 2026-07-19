@@ -2,13 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  ArrowLeft, MapPin, Star, Clock, DollarSign,
+  MapPin, Star, Clock, DollarSign,
   Navigation, Share2, Bookmark, Camera,
   MessageCircle, ChevronLeft, ChevronRight,
   Info, AlertCircle, X, TrendingUp, Sun
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { createPageUrl } from "@/utils";
 import MapAppSelector from '../components/MapAppSelector';
 import PhotoGalleryModal from '@/components/coffee/PhotoGalleryModal';
 import { invokeLLM, callWorker } from "@/lib/callWorker";
@@ -314,10 +313,11 @@ export default function ActivityDetailPage() {
 
         <div className="relative max-w-[600px] mx-auto flex items-center justify-between px-5 py-4">
           <button
-            onClick={() => navigate(createPageUrl("ThingsToDo"))}
+            onClick={() => navigate(-1)}
+            aria-label="Close"
             className="w-11 h-11 rounded-full bg-white/90 backdrop-blur-md hover:bg-white flex items-center justify-center transition-all shadow-lg"
           >
-            <ArrowLeft className="w-6 h-6 text-gray-900" />
+            <X className="w-6 h-6 text-gray-900" />
           </button>
 
           <div className="flex items-center gap-2">

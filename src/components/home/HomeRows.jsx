@@ -20,6 +20,8 @@ import { getSeason } from "@/lib/homeContext";
 import { trackEvent } from "@/Layout";
 import { createPageUrl } from "@/utils";
 import MapAppSelector from "@/components/MapAppSelector";
+import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
+import useHorizontalSwipe from "@/lib/useHorizontalSwipe";
 
 function HomeRowCard({ card, onOpen, wide }) {
   const name = card.name || "Explore";
@@ -70,6 +72,31 @@ export default function HomeRows({ onAction, wide = false }) {
   const [rows, setRows] = useState([]);
   const [detail, setDetail] = useState(null);     // attraction opened full-screen
   const [dirsCard, setDirsCard] = useState(null); // attraction to route to (Waze/Apple/Google chooser)
+  const [modalPhotos, setModalPhotos] = useState([]); // [{url, credit}] for the quick-look modal
+  const [modalIdx, setModalIdx] = useState(0);
+  const [galleryOpen, setGalleryOpen] = useState(false); // fullscreen viewer over the modal
+
+  // Swipe the modal's hero photo left/right through the loaded photos.
+  const heroSwipe = useHorizontalSwipe({
+    onLeft: () => setModalIdx((i) => (modalPhotos.length ? (i + 1) % modalPhotos.length : i)),
+    onRight: () => setModalIdx((i) => (modalPhotos.length ? (i - 1 + modalPhotos.length) % modalPhotos.length : i)),
+  });
+
+  // Open the quick-look modal + enrich it with owned Wikimedia photos (swipeable).
+  const openDetail = (card) => {
+    setDetail(card);
+    setModalIdx(0);
+    setGalleryOpen(false);
+    setModalPhotos(card.photoUrl ? [{ url: card.photoUrl, credit: card.photographer ? `${card.photographer} / Unsplash` : "" }] : []);
+    if (card.name && Number.isFinite(card.lat)) {
+      callWorker("places/wiki-photos", { name: card.name, lat: card.lat, lng: card.lng })
+        .then(({ data }) => {
+          const wp = data && Array.isArray(data.photos) ? data.photos : [];
+          if (wp.length) setModalPhotos(wp.map((p) => ({ url: p.url, credit: [[p.credit, p.license].filter(Boolean).join(" · "), "Wikimedia"].filter(Boolean).join(" / ") })));
+        })
+        .catch(() => {});
+    }
+  };
 
   // Open the FULL attraction page (address, hours, gallery, directions, map, AI
   // tips) — reuses ActivityDetail, which reads the attraction from sessionStorage.
@@ -188,7 +215,7 @@ export default function HomeRows({ onAction, wide = false }) {
                       city: card.city,
                       country: card.country,
                     });
-                    setDetail(card); // open THIS attraction, not the list
+                    openDetail(card); // open THIS attraction (quick-look modal)
                   }}
                 />
               ))}
@@ -209,22 +236,35 @@ export default function HomeRows({ onAction, wide = false }) {
           className="mx-auto my-8 bg-white rounded-3xl overflow-hidden"
           style={{ width: "92%", maxWidth: 480 }}
         >
-          <div className="relative" style={{ aspectRatio: "16 / 10", background: "linear-gradient(135deg,#E7C7A0,#C98A2E)" }}>
-            {detail.photoUrl ? (
-              <img src={detail.photoUrl} alt="" className="w-full h-full object-cover" />
+          <div
+            className="relative cursor-pointer"
+            style={{ aspectRatio: "16 / 10", background: "linear-gradient(135deg,#E7C7A0,#C98A2E)" }}
+            {...heroSwipe}
+            onClick={() => { if (modalPhotos[modalIdx]?.url || detail.photoUrl) setGalleryOpen(true); }}
+          >
+            {(modalPhotos[modalIdx]?.url || detail.photoUrl) ? (
+              <img src={modalPhotos[modalIdx]?.url || detail.photoUrl} alt="" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-[56px]">📍</div>
             )}
-            {detail.photoUrl && detail.photographer && (
+            {modalPhotos[modalIdx]?.credit && (
               <div
                 className="absolute bottom-1.5 right-2 px-1.5 py-0.5 rounded text-[calc(9px*var(--fs))] leading-none"
                 style={{ background: "rgba(0,0,0,0.42)", color: "rgba(255,255,255,0.9)" }}
               >
-                {detail.photographer} / Unsplash
+                {modalPhotos[modalIdx].credit}
+              </div>
+            )}
+            {modalPhotos.length > 1 && (
+              <div
+                className="absolute bottom-1.5 left-2 px-2 py-0.5 rounded-full text-[calc(9px*var(--fs))] leading-none"
+                style={{ background: "rgba(0,0,0,0.42)", color: "#fff" }}
+              >
+                {modalIdx + 1} / {modalPhotos.length}
               </div>
             )}
             <button
-              onClick={() => setDetail(null)}
+              onClick={(e) => { e.stopPropagation(); setDetail(null); }}
               aria-label="Close"
               className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center"
               style={{ background: "rgba(255,255,255,0.95)", color: "#16302B", fontWeight: 800 }}
@@ -258,6 +298,15 @@ export default function HomeRows({ onAction, wide = false }) {
           </div>
         </div>
       </div>
+    )}
+
+    {galleryOpen && (
+      <PhotoGalleryModal
+        photos={modalPhotos.map((p) => p.url)}
+        initialIndex={modalIdx}
+        isOpen
+        onClose={() => setGalleryOpen(false)}
+      />
     )}
 
     {dirsCard && (
