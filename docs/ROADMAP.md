@@ -18,7 +18,7 @@ Legend: ⬜ to do · ✅ done · ⏳ external/time-gated
 8. ✅ **Analytics growth pack** — DAU/WAU/MAU + return-rate + stickiness + taps/session + active-users chart LIVE (`bdce98c`, deployed `5265dcd0`); view in Admin→Analytics (test later). (Future refinements: full cohort D1/D7/D30 retention, monthly-signups rollup, onboarding funnel.)
 9. ⬜ **AdMob iOS Marketing URL** — add `https://globeskimmers.io` on the next iOS version (finishes app-ads.txt iOS verification).
 10. ⬜ **Onboarding cut** — 14 steps → essential, framed as "passport creation"; infer locale prefs, defer the rest.
-11. 🟡 **Schema check** — CONFIRMED 2026-07-19: `show_home_flag`/`show_home_country_info` were MISSING → Settings toggles silently failed to save. Fix = run the ALTER in Supabase (`add column if not exists show_home_flag boolean default false, ... show_home_country_info ...`). ⏰ **User: run the SQL**, then toggles persist.
+11. ✅ **Schema check** — DONE 2026-07-19: `show_home_flag`/`show_home_country_info` columns added to `profiles` via ALTER (Supabase). Settings home-country time/flag toggles now persist.
 12. ⬜ **"Drive X mi" → real routed time** — NOTE 2026-07-19: not a quick fix; there's no "Drive X mi" text in the app yet. This is a real reachability build (needs a routing source), part of #19.
 13. ⬜ **Wave 2 engagement** — saves→Supabase → "Because you saved" row + Wishlist Pulse.
 
