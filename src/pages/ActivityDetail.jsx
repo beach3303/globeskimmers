@@ -4,12 +4,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, MapPin, Star, Clock, DollarSign,
   Navigation, Share2, Bookmark, Camera,
-  ThumbsUp, MessageCircle, ChevronLeft, ChevronRight,
+  MessageCircle, ChevronLeft, ChevronRight,
   Info, AlertCircle, X, TrendingUp, Sun
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPageUrl } from "@/utils";
 import MapAppSelector from '../components/MapAppSelector';
+import PhotoGalleryModal from '@/components/coffee/PhotoGalleryModal';
 import { invokeLLM, callWorker } from "@/lib/callWorker";
 import { showToast } from "../components/Toast";
 import { useDismissable } from '@/lib/dismissStack';
@@ -304,7 +305,6 @@ export default function ActivityDetailPage() {
   }
 
   const photos = activity.photos || [];
-  const reviews = activity.reviews || [];
 
   return (
     <div className="min-h-screen pb-20 font-sans" style={{ background: '#FFFCF7' }}>
@@ -358,7 +358,8 @@ export default function ActivityDetailPage() {
               <img
                 src={photos[currentImageIndex]}
                 alt={activity.name}
-                className={`w-full h-full object-cover transition-opacity duration-300 ${
+                onClick={() => setShowFullGallery(true)}
+                className={`w-full h-full object-cover cursor-pointer transition-opacity duration-300 ${
                   imageLoading[currentImageIndex] ? 'opacity-100' : 'opacity-0'
                 }`}
                 onLoad={() => setImageLoading(prev => ({...prev, [currentImageIndex]: true}))}
@@ -455,39 +456,49 @@ export default function ActivityDetailPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-              <span className="font-bold text-[calc(16px*var(--fs))] text-gray-900">{activity.rating}</span>
-              <span className="text-[calc(14px*var(--fs))] text-gray-600">({activity.reviews_count})</span>
+          {(Number(activity.rating) > 0 || activity.price_level != null) && (
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
+              {Number(activity.rating) > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                  <span className="font-bold text-[calc(16px*var(--fs))] text-gray-900">{activity.rating}</span>
+                  {activity.reviews_count > 0 && (
+                    <span className="text-[calc(14px*var(--fs))] text-gray-600">({activity.reviews_count})</span>
+                  )}
+                </div>
+              )}
+              {Number(activity.rating) > 0 && activity.price_level != null && (
+                <span className="text-gray-400">•</span>
+              )}
+              {activity.price_level != null && (
+                <div className="flex items-center gap-1.5 text-[calc(14px*var(--fs))] font-semibold text-gray-700">
+                  <DollarSign className="w-4 h-4" />
+                  <span>{getPriceDisplay(activity.price_level)}</span>
+                </div>
+              )}
             </div>
+          )}
 
-            <span className="text-gray-400">•</span>
+          {/* Distance with toggle — only when we have a real distance */}
+          {Number.isFinite(activity.distance_km) && (
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-[calc(14px*var(--fs))] text-gray-700">
+                <MapPin className="w-4 h-4 text-purple-600" />
+                <span className="font-semibold">
+                  {displayDistance(activity.distance_km)} away
+                </span>
+              </div>
 
-            <div className="flex items-center gap-1.5 text-[calc(14px*var(--fs))] font-semibold text-gray-700">
-              <DollarSign className="w-4 h-4" />
-              <span>{getPriceDisplay(activity.price_level)}</span>
+              <button
+                onClick={toggleDistanceUnit}
+                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                <span className="text-[calc(13px*var(--fs))] font-semibold text-gray-700">
+                  Switch to {distanceUnit === 'km' ? 'miles' : 'km'}
+                </span>
+              </button>
             </div>
-          </div>
-
-          {/* Distance with toggle */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2 text-[calc(14px*var(--fs))] text-gray-700">
-              <MapPin className="w-4 h-4 text-purple-600" />
-              <span className="font-semibold">
-                {displayDistance(activity.distance_km)} away
-              </span>
-            </div>
-
-            <button
-              onClick={toggleDistanceUnit}
-              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-1.5"
-            >
-              <span className="text-[calc(13px*var(--fs))] font-semibold text-gray-700">
-                Switch to {distanceUnit === 'km' ? 'miles' : 'km'}
-              </span>
-            </button>
-          </div>
+          )}
 
           {/* Duration & Best Time Cards with thumbnails */}
           <div className="grid grid-cols-2 gap-3 mb-4">
@@ -592,7 +603,7 @@ export default function ActivityDetailPage() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-4 mt-4 overflow-x-auto scrollbar-hide">
-          {['overview', 'reviews'].map((tab) => (
+          {[['overview', 'Overview'], ['guestbook', 'Guestbook']].map(([tab, label]) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -602,7 +613,7 @@ export default function ActivityDetailPage() {
                   : 'bg-white text-gray-700 border border-gray-300 hover:border-purple-500'
               }`}
             >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {label}
             </button>
           ))}
         </div>
@@ -723,71 +734,33 @@ export default function ActivityDetailPage() {
           </div>
         )}
 
-        {activeTab === 'reviews' && (
+        {activeTab === 'guestbook' && (
           <div className="space-y-3">
-            <div className="bg-white rounded-xl shadow-md p-5">
-              <div className="flex items-center gap-4">
-                <div className="text-center">
-                  <div className="text-[calc(48px*var(--fs))] font-bold text-gray-900">{activity.rating}</div>
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-4 h-4 ${
-                          i < Math.floor(activity.rating)
-                            ? 'text-yellow-500 fill-yellow-500'
-                            : 'text-gray-300'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <div className="text-[calc(12px*var(--fs))] text-gray-600">{activity.reviews_count} reviews</div>
-                </div>
-              </div>
+            <div className="bg-white rounded-xl shadow-md p-8 text-center">
+              <MessageCircle className="w-12 h-12 text-purple-400 mx-auto mb-3" />
+              <p className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-1">Virtual Guestbook</p>
+              <p className="text-[calc(14px*var(--fs))] text-gray-600 leading-relaxed">
+                Leave a note, tip, or photo for the next traveler who visits {activity.name}. Coming soon —
+                be one of the first to sign this place's guestbook.
+              </p>
+              <button
+                disabled
+                className="mt-4 px-5 py-2.5 rounded-xl font-semibold text-[calc(14px*var(--fs))] bg-gray-100 text-gray-400 cursor-not-allowed"
+              >
+                ✍️ Sign the guestbook (soon)
+              </button>
             </div>
-
-            {reviews.length > 0 ? (
-              reviews.map((review, index) => (
-                <div key={index} className="bg-white rounded-xl shadow-md p-5">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-[calc(14px*var(--fs))] flex-shrink-0">
-                      {review.author_name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="font-bold text-[calc(15px*var(--fs))] text-gray-900">{review.author_name}</p>
-                        <span className="text-[calc(12px*var(--fs))] text-gray-500">
-                          {new Date(review.time * 1000).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 mb-2">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-3.5 h-3.5 ${
-                              i < review.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <p className="text-[calc(14px*var(--fs))] text-gray-700 leading-relaxed">{review.text}</p>
-                      <button className="flex items-center gap-2 mt-3 text-[calc(13px*var(--fs))] text-gray-600 hover:text-purple-600 transition-colors">
-                        <ThumbsUp className="w-4 h-4" />
-                        <span>Helpful ({review.helpful_count})</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="bg-white rounded-xl shadow-md p-8 text-center">
-                <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-[calc(15px*var(--fs))] text-gray-600">No reviews yet</p>
-              </div>
-            )}
           </div>
         )}
       </div>
+
+      {/* Fullscreen photo gallery — tap a photo or "View All"; swipe L/R; X to close */}
+      <PhotoGalleryModal
+        photos={photos}
+        initialIndex={currentImageIndex}
+        isOpen={showFullGallery}
+        onClose={() => setShowFullGallery(false)}
+      />
 
       {/* Share Modal */}
       <AnimatePresence>

@@ -87,6 +87,7 @@ export default function HomeRows({ onAction, wide = false }) {
         longitude: card.lng,
         rating: card.rating,
         free_to_visit: card.freeToVisit,
+        distance_km: Number.isFinite(card.distanceMiles) ? +(card.distanceMiles * 1.60934).toFixed(1) : undefined,
       };
       sessionStorage.setItem("current_activity", JSON.stringify(activity));
       if (loc) sessionStorage.setItem("activity_location", JSON.stringify(loc));
