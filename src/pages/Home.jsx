@@ -237,9 +237,9 @@ export default function HomePage() {
       // already guarantees a signed-in user, so there is NO Base44 auth check
       // here (and no redirect to Base44 login). We shape the profile into the
       // fields the rest of Home reads. The greeting itself reads
-      // profile.first_name directly via getFirstName(); show_home_flag /
-      // show_home_country_info aren't in the Supabase profile schema yet, so
-      // they default off until Settings is migrated to Supabase.
+      // profile.first_name directly via getFirstName(). show_home_flag /
+      // show_home_country_info live in the Supabase profiles table (added via
+      // ALTER; Settings toggles persist them) — default off when the column is null.
       const userData = {
         first_name: profile?.first_name || extractFirstName(authUser) || '',
         home_country: profile?.home_country || null,
