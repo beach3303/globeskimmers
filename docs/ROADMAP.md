@@ -10,7 +10,7 @@ Legend: ⬜ to do · ✅ done · ⏳ external/time-gated
 
 ## Tier 1 — Finish the engagement feature (test + polish)
 4. ⬜ **Device-test pass** — home-clock, auto-follow (move cities), rows render, card→detail, Settings auto-follow toggle.
-5. ⬜ **Search-location modal overflow fix** — pin the input below the notch, scroll only results (`LocationModePicker.jsx`).
+5. ✅ **Search-location modal overflow fix** — already done (LocationModePicker has `items-start` + safe-area paddingTop + maxHeight + `flex-1 overflow-y-auto`); verified 2026-07-19.
 6. ✅ **Photos on cards** — Unsplash-fallback per owned card LIVE + verified 2026-07-17 (LA 10/10 cards have photos). Later precision upgrade: backfill Wikimedia landmark photos into `ATTRACTIONS_DB` (owned, exact building).
 7. ✅ **Fuller feed** — rows draw independently; LIVE + verified 2026-07-17 (LA now 4 distinct photo-forward rows, up from 2). A bigger "lead-with-feed above the tiles" restructure is still available if wanted.
 
@@ -18,8 +18,8 @@ Legend: ⬜ to do · ✅ done · ⏳ external/time-gated
 8. ✅ **Analytics growth pack** — DAU/WAU/MAU + return-rate + stickiness + taps/session + active-users chart LIVE (`bdce98c`, deployed `5265dcd0`); view in Admin→Analytics (test later). (Future refinements: full cohort D1/D7/D30 retention, monthly-signups rollup, onboarding funnel.)
 9. ⬜ **AdMob iOS Marketing URL** — add `https://globeskimmers.io` on the next iOS version (finishes app-ads.txt iOS verification).
 10. ⬜ **Onboarding cut** — 14 steps → essential, framed as "passport creation"; infer locale prefs, defer the rest.
-11. ⬜ **Schema check** — verify `show_home_flag` / `show_home_country_info` actually persist in Supabase `profiles`.
-12. ⬜ **"Drive X mi" → real routed time** — ferry/transit-aware time instead of raw distance (immediate reachability honesty fix).
+11. 🟡 **Schema check** — CONFIRMED 2026-07-19: `show_home_flag`/`show_home_country_info` were MISSING → Settings toggles silently failed to save. Fix = run the ALTER in Supabase (`add column if not exists show_home_flag boolean default false, ... show_home_country_info ...`). ⏰ **User: run the SQL**, then toggles persist.
+12. ⬜ **"Drive X mi" → real routed time** — NOTE 2026-07-19: not a quick fix; there's no "Drive X mi" text in the app yet. This is a real reachability build (needs a routing source), part of #19.
 13. ⬜ **Wave 2 engagement** — saves→Supabase → "Because you saved" row + Wishlist Pulse.
 
 ## Tier 3 — Big roadmap (each its own project)
@@ -27,7 +27,8 @@ Legend: ⬜ to do · ✅ done · ⏳ external/time-gated
 15. ⬜ **Passport + stamps + shareable "My Passport" map** — personal collection + viral growth loop.
 16. ⬜ **Public Guestbook** — UGC + Apple 1.2 moderation (report/block/filter); photos as a fast-follow.
 17. ⬜ **Wishlist → affiliate engine** — apply to Viator/GetYourGuide NOW; SubID→D1 clicks + conversion import.
-18. 🟡 **Global places DB** — Overture/OSM pilot → regional → global; own reverse-geocode; MapLibre map (Postgres+PostGIS). **NYC pilot scaffolding built 2026-07-17** (`scripts/places-pilot/`: schema + DuckDB extract + load); next = run it locally, validate coverage, then Worker read-path.
+18. 🟡 **Global places DB** — **NYC LIVE 2026-07-19**: 484k Overture places loaded to Supabase PostGIS, read-path (`/places/nearby-owned`) + owned Wikimedia photos (`/places/wiki-photos`) deployed, and the attraction page (ActivityDetail) now shows owned photos + owned address, swipeable + fullscreen. **Next = expand coverage** (more cities/countries, free re-run) → own reverse-geocode → MapLibre map.
+    - Also done this session: attraction "Explore more" → full page, fullscreen swipe galleries everywhere, photo quality filter (iconic/real only), Reviews tab → **Guestbook placeholder** (real guestbook = #16).
 19. ⬜ **Reachability / feasibility (premium)** — ferry/cable-car-aware, day-trippable vs overnight, last-return schedules.
 20. ⬜ **AI itinerary planner (flagship subscription)** — multi-day, group/split/collaborative, food+route, personalized.
 21. ⬜ **Merchant monetization** — claim + menu + events, $19.99/large-attraction tiers, hotel front-page; web portal + Stripe.
