@@ -10480,8 +10480,8 @@ function stripHtml(s) { return (s || '').replace(/<[^>]*>/g, '').replace(/\s+/g,
 function badWikiFile(title) {
   const t = (title || '').toLowerCase();
   if (!/\.(jpe?g)$/.test(t)) return true; // photos only (no svg/png logos/maps)
-  // Drop archival collections, documents, maps, logos, and pre-2000 dated files.
-  return /logo|icon|\bmap\b|diagram|\bplan\b|seal|coat[_ ]of[_ ]arms|locator|lccn|nara|dpla|harper|weekly|evening[_ ]post|certification|engraving|\b1[6789]\d\d\b|\b19[0-9]\d\b/.test(t);
+  // Drop archival collections, documents, maps, logos, odd crops, and pre-2000 dated files.
+  return /logo|icon|\bmap\b|diagram|\bplan\b|seal|coat[_ ]of[_ ]arms|locator|lccn|nara|dpla|harper|weekly|evening[_ ]post|certification|engraving|window|interior|closeup|close-up|t-?shirt|poster|ticket|stamp|coin|postcard|drawing|painting|sketch|illustration|construction|restoration|scaffold|\b1[6789]\d\d\b|\b19[0-9]\d\b/.test(t);
 }
 function commonsThumb(file, width = 900) {
   return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=${width}`;
@@ -10494,7 +10494,7 @@ async function handleWikiPhotos(request, env) {
     const lng = parseFloat(body.lng ?? body.longitude);
     if (!name) return jsonResponse({ error: 'name is required' }, 400);
 
-    const cacheKey = 'wikiphotos:v1:' + await sha256Hex(
+    const cacheKey = 'wikiphotos:v2:' + await sha256Hex(
       name.toLowerCase() + '|' + (Number.isFinite(lat) ? lat.toFixed(2) : '') + '|' + (Number.isFinite(lng) ? lng.toFixed(2) : '')
     );
     const cached = await getFromCache(env, cacheKey);
@@ -10522,34 +10522,45 @@ async function handleWikiPhotos(request, env) {
     const p18 = claims.P18?.[0]?.mainsnak?.datavalue?.value;
     const p373 = claims.P373?.[0]?.mainsnak?.datavalue?.value;
 
-    // 3) collect filenames: canonical hero first, then filtered category photos
+    // 3) collect candidate filenames: canonical hero first, then keyword-filtered category
     const files = [];
     if (p18) files.push(p18);
     if (p373) {
-      const cm = await wikiJson(`https://commons.wikimedia.org/w/api.php?action=query&generator=categorymembers&gcmtitle=Category:${encodeURIComponent(p373)}&gcmtype=file&gcmlimit=40&format=json`);
-      const pages = cm.query?.pages || {};
-      for (const p of Object.values(pages)) {
+      const cm = await wikiJson(`https://commons.wikimedia.org/w/api.php?action=query&generator=categorymembers&gcmtitle=Category:${encodeURIComponent(p373)}&gcmtype=file&gcmlimit=60&format=json`);
+      for (const p of Object.values(cm.query?.pages || {})) {
         const title = (p.title || '').replace(/^File:/, '');
         if (!badWikiFile(title) && !files.includes(title)) files.push(title);
-        if (files.length >= 6) break;
+        if (files.length >= 18) break;
       }
     }
-    const pick = files.slice(0, 6);
-    if (!pick.length) { await setInCache(env, cacheKey, empty, 30 * 24 * 60 * 60); return jsonResponse(empty); }
+    if (!files.length) { await setInCache(env, cacheKey, empty, 30 * 24 * 60 * 60); return jsonResponse(empty); }
 
-    // 4) one call for real thumbnail URLs + author/license (attribution)
-    const info = await wikiJson(`https://commons.wikimedia.org/w/api.php?action=query&titles=${pick.map((f) => 'File:' + encodeURIComponent(f)).join('|')}&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=900&format=json`);
-    const byTitle = {};
+    // 4) one call for URL + dimensions + author/license for ALL candidates
+    const info = await wikiJson(`https://commons.wikimedia.org/w/api.php?action=query&titles=${files.map((f) => 'File:' + encodeURIComponent(f)).join('|')}&prop=imageinfo&iiprop=url|extmetadata|size&iiurlwidth=1000&format=json`);
+    const infoByTitle = {};
     for (const p of Object.values(info.query?.pages || {})) {
-      const t = (p.title || '').replace(/^File:/, '');
-      const ii = p.imageinfo?.[0] || {};
-      byTitle[t] = {
-        url: ii.thumburl || commonsThumb(t),
-        credit: stripHtml(ii.extmetadata?.Artist?.value) || 'Wikimedia Commons',
-        license: stripHtml(ii.extmetadata?.LicenseShortName?.value) || 'CC',
-      };
+      infoByTitle[(p.title || '').replace(/^File:/, '')] = p.imageinfo?.[0] || {};
     }
-    const photos = pick.map((f) => byTitle[f] || { url: commonsThumb(f), credit: 'Wikimedia Commons', license: 'CC' });
+    // 5) quality gate — high-res, landscape-ish; keep candidate order (hero first)
+    const toPhoto = (ii, f) => ({
+      url: ii.thumburl || commonsThumb(f),
+      credit: stripHtml(ii.extmetadata?.Artist?.value) || 'Wikimedia Commons',
+      license: stripHtml(ii.extmetadata?.LicenseShortName?.value) || 'CC',
+    });
+    const photos = [];
+    for (const f of files) {
+      const ii = infoByTitle[f];
+      if (!ii || !ii.thumburl) continue;
+      const w = ii.width || 0, h = ii.height || 0;
+      if (w < 1000 || h < 600) continue;   // skip low-res / likely-poor scans
+      if (w < h * 0.85) continue;          // skip tall portraits / odd crops
+      photos.push(toPhoto(ii, f));
+      if (photos.length >= 6) break;
+    }
+    // Fallback if the gate was too strict (small categories): first few candidates.
+    if (!photos.length) {
+      for (const f of files.slice(0, 3)) photos.push(toPhoto(infoByTitle[f] || {}, f));
+    }
     const payload = { photos, source: 'wikimedia' };
     await setInCache(env, cacheKey, payload, 180 * 24 * 60 * 60);
     return jsonResponse(payload);
