@@ -10586,6 +10586,153 @@ async function handleWikiPhotos(request, env) {
   }
 }
 
+// ─── Guestbook (public tips per place; visit-gated signing; report/moderation) ──
+// Generic by (entity_type, entity_id). Public reads; writes verify the caller's
+// Supabase JWT. Tables in the `api` schema; the Worker uses the service key.
+const GB_URL = (env) => env.SUPABASE_URL || 'https://bkaxadiyehddzkiuheea.supabase.co';
+const GB_KEY = (env) => env.SUPABASE_SERVICE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
+// Light auto-guard for hate slurs only — the real moderation is report→admin, and
+// we deliberately KEEP honest negativity ("slow service"), removing only abuse.
+const GB_BLOCK = /\b(nigg|faggot|\bretard|kike|spic|chink|wetback)\w*/i;
+function gbClean(s) { return String(s || '').replace(/ /g, '').trim(); }
+function gbRest(env, path, opts = {}) {
+  return fetch(`${GB_URL(env)}/rest/v1/${path}`, {
+    ...opts,
+    headers: { apikey: GB_KEY(env), Authorization: `Bearer ${GB_KEY(env)}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+  });
+}
+async function gbUser(request, env) {
+  const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!token) return null;
+  try {
+    const r = await fetch(`${GB_URL(env)}/auth/v1/user`, { headers: { apikey: GB_KEY(env), Authorization: `Bearer ${token}` } });
+    if (!r.ok) return null;
+    const u = await r.json();
+    return u && u.id ? u : null;
+  } catch { return null; }
+}
+async function gbLogEvent(env, type, payload) {
+  try {
+    if (!env.DB) return;
+    await env.DB.prepare('insert into events (ts, event_type, page, payload) values (?,?,?,?)')
+      .bind(Math.floor(Date.now() / 1000), type, 'guestbook', JSON.stringify(payload)).run();
+  } catch { /* admin signal is best-effort */ }
+}
+
+async function handleGuestbookList(request, env) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const entityId = gbClean(body.entity_id);
+    if (!entityId) return jsonResponse({ error: 'entity_id required' }, 400);
+    const limit = Math.min(parseInt(body.limit, 10) || 50, 100);
+    const q = `guestbook_entries?entity_id=eq.${encodeURIComponent(entityId)}&hidden=is.false&deleted_at=is.null&order=created_at.desc&limit=${limit}&select=id,user_id,display_name,home_city,prompt_type,body,verified_visit,created_at,edited_at`;
+    const res = await gbRest(env, q);
+    if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
+    return jsonResponse({ entries: await res.json() });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+async function handleGuestbookSign(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to leave a note' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const entityId = gbClean(b.entity_id);
+    const entityType = gbClean(b.entity_type) || 'place';
+    const text = gbClean(b.body);
+    if (!entityId) return jsonResponse({ error: 'entity_id required' }, 400);
+    if (!text || text.length < 2) return jsonResponse({ error: 'Write a short note first' }, 400);
+    if (text.length > 1000) return jsonResponse({ error: 'Note too long (max 1000 characters)' }, 400);
+    if (GB_BLOCK.test(text)) return jsonResponse({ error: "That note contains language we don't allow." }, 400);
+    const verified = b.verified === true;
+    const entityName = gbClean(b.entity_name);
+
+    // Record/mark the visit (eligibility token + "sign later" reminder queue).
+    await gbRest(env, 'guestbook_visits', {
+      method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({ user_id: user.id, entity_type: entityType, entity_id: entityId, entity_name: entityName, verified, signed: true }),
+    });
+
+    const row = {
+      entity_type: entityType, entity_id: entityId, entity_name: entityName,
+      user_id: user.id, display_name: gbClean(b.display_name) || 'A traveler',
+      home_city: gbClean(b.home_city) || null, prompt_type: gbClean(b.prompt_type) || 'tip',
+      body: text, verified_visit: verified,
+    };
+    const res = await gbRest(env, 'guestbook_entries', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
+    if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
+    const created = (await res.json())[0];
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'guestbook_sign', { entity_type: entityType, entity_id: entityId, place: entityName, prompt: row.prompt_type, verified }));
+    return jsonResponse({ entry: created });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+async function handleGuestbookEdit(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const id = gbClean(b.id), text = gbClean(b.body);
+    if (!id || !text) return jsonResponse({ error: 'id and body required' }, 400);
+    if (text.length > 1000) return jsonResponse({ error: 'Too long' }, 400);
+    if (GB_BLOCK.test(text)) return jsonResponse({ error: "Language we don't allow." }, 400);
+    const res = await gbRest(env, `guestbook_entries?id=eq.${encodeURIComponent(id)}&user_id=eq.${user.id}`, {
+      method: 'PATCH', headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ body: text, edited_at: new Date().toISOString() }),
+    });
+    if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}` }, 502);
+    const rows = await res.json();
+    if (!rows.length) return jsonResponse({ error: 'Not found or not yours' }, 403);
+    return jsonResponse({ entry: rows[0] });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+async function handleGuestbookDelete(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const id = gbClean(b.id);
+    if (!id) return jsonResponse({ error: 'id required' }, 400);
+    const res = await gbRest(env, `guestbook_entries?id=eq.${encodeURIComponent(id)}&user_id=eq.${user.id}`, {
+      method: 'PATCH', headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ deleted_at: new Date().toISOString() }),
+    });
+    if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}` }, 502);
+    const rows = await res.json();
+    if (!rows.length) return jsonResponse({ error: 'Not found or not yours' }, 403);
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+async function handleGuestbookReport(request, env, ctx) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const id = gbClean(b.id);
+    if (!id) return jsonResponse({ error: 'id required' }, 400);
+    const res = await gbRest(env, 'rpc/gb_report', { method: 'POST', body: JSON.stringify({ p_id: id }) });
+    if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'guestbook_report', { id, reason: gbClean(b.reason) }));
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+async function handleGuestbookVisit(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const entityId = gbClean(b.entity_id);
+    if (!entityId) return jsonResponse({ error: 'entity_id required' }, 400);
+    // Note: omit `signed` so we never reset an already-signed visit on upsert.
+    await gbRest(env, 'guestbook_visits', {
+      method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({ user_id: user.id, entity_type: gbClean(b.entity_type) || 'place', entity_id: entityId, entity_name: gbClean(b.entity_name), verified: b.verified === true }),
+    });
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -10621,6 +10768,12 @@ export default {
       if (pathname === '/places/dietary') return await handleDietarySearch(request, env);
       if (pathname === '/places/nearby-owned' && request.method === 'POST') return await handleNearbyOwned(request, env);
       if (pathname === '/places/wiki-photos' && request.method === 'POST') return await handleWikiPhotos(request, env);
+      if (pathname === '/guestbook/list' && request.method === 'POST') return await handleGuestbookList(request, env);
+      if (pathname === '/guestbook/sign' && request.method === 'POST') return await handleGuestbookSign(request, env, ctx);
+      if (pathname === '/guestbook/edit' && request.method === 'POST') return await handleGuestbookEdit(request, env);
+      if (pathname === '/guestbook/delete' && request.method === 'POST') return await handleGuestbookDelete(request, env);
+      if (pathname === '/guestbook/report' && request.method === 'POST') return await handleGuestbookReport(request, env, ctx);
+      if (pathname === '/guestbook/visit' && request.method === 'POST') return await handleGuestbookVisit(request, env);
       if (pathname === '/cache/stats') return await handleCacheStats(request, env);
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
