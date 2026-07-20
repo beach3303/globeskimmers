@@ -25,7 +25,7 @@ Legend: ⬜ to do · ✅ done · ⏳ external/time-gated
 ## Tier 3 — Big roadmap (each its own project)
 14. ⬜ **Push notifications** — weather-contrast push (greenfield: plugin + APNs/FCM + cron + tokens table).
 15. ⬜ **Passport + stamps + shareable "My Passport" map** — personal collection + viral growth loop.
-16. ⬜ **Public Guestbook** — UGC + Apple 1.2 moderation (report/block/filter); photos as a fast-follow.
+16. 🟡 **Public Guestbook** — BUILT 2026-07-20 (`452e77b`,`f04d9b6`): generic guestbook (schema `scripts/guestbook/01_schema.sql` in `api` schema; 6 Worker endpoints; `src/components/Guestbook.jsx` on the attraction page). Public read, JWT-gated sign, guided prompts, edit/delete own, report+auto-hide (Apple 1.2), hate-slur guard (keeps honest negativity), admin events. **Needs: run the SQL + wrangler deploy.** Fast-follows: extend to restaurant/coffee cards (component is generic), photos, GPS-verified visit gate, anonymize-on-delete in the delete-account flow.
 17. ⬜ **Wishlist → affiliate engine** — apply to Viator/GetYourGuide NOW; SubID→D1 clicks + conversion import.
 18. 🟢 **Global places DB — PLANET LIVE 2026-07-19**: ALL **~75.6M** Overture places worldwide loaded to Supabase PostGIS + serving via `/places/nearby-owned` (verified Paris/Tokyo/Sydney). Owned Wikimedia photos + owned address on attraction pages. ~$90/mo, owned forever. Pipeline in `scripts/places-pilot/planet/`. **⏰ Post-load: scale compute Large→Medium; drop table places_old.** Next moat layers: own reverse-geocode → MapLibre map → monthly refresh cron.
     - Also done this session: attraction "Explore more" → full page, fullscreen swipe galleries everywhere, photo quality filter (iconic/real only), Reviews tab → **Guestbook placeholder** (real guestbook = #16).
