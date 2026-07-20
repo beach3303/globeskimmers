@@ -20,7 +20,7 @@ COLS="id,name,category,category_alt,lat,lng,address,city,region,country,postcode
 for i in $(seq 0 19); do
   if grep -qx "$i" "$PROGRESS"; then echo "skip US chunk $i (done)"; continue; fi
   echo "loading US chunk $i/19 ..."
-  if duckdb -c "install postgres; load postgres;
+  if duckdb -c "install postgres; load postgres; set pg_null_byte_replacement='';
       attach '${PGCONN}' as pg (type postgres);
       insert into pg.places_planet (${COLS})
       select ${COLS} from read_parquet('${PARQUET}')

@@ -28,7 +28,7 @@ COUNTRIES=$(duckdb -noheader -list -c \
 for C in $COUNTRIES; do
   if grep -qx "$C" "$PROGRESS"; then echo "skip $C (done)"; continue; fi
   echo "loading $C ..."
-  if duckdb -c "install postgres; load postgres;
+  if duckdb -c "install postgres; load postgres; set pg_null_byte_replacement='';
       attach '${PGCONN}' as pg (type postgres);
       insert into pg.places_planet (${COLS})
       select ${COLS} from read_parquet('${PARQUET}')
