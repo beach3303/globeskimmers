@@ -4,12 +4,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   MapPin, Star, Clock, DollarSign,
   Navigation, Share2, Bookmark, Camera,
-  MessageCircle, ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight,
   Info, AlertCircle, X, TrendingUp, Sun
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MapAppSelector from '../components/MapAppSelector';
 import PhotoGalleryModal from '@/components/coffee/PhotoGalleryModal';
+import Guestbook from '@/components/Guestbook';
 import { invokeLLM, callWorker } from "@/lib/callWorker";
 import { showToast } from "../components/Toast";
 import { useDismissable } from '@/lib/dismissStack';
@@ -735,22 +736,7 @@ export default function ActivityDetailPage() {
         )}
 
         {activeTab === 'guestbook' && (
-          <div className="space-y-3">
-            <div className="bg-white rounded-xl shadow-md p-8 text-center">
-              <MessageCircle className="w-12 h-12 text-purple-400 mx-auto mb-3" />
-              <p className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-1">Virtual Guestbook</p>
-              <p className="text-[calc(14px*var(--fs))] text-gray-600 leading-relaxed">
-                Leave a note, tip, or photo for the next traveler who visits {activity.name}. Coming soon —
-                be one of the first to sign this place's guestbook.
-              </p>
-              <button
-                disabled
-                className="mt-4 px-5 py-2.5 rounded-xl font-semibold text-[calc(14px*var(--fs))] bg-gray-100 text-gray-400 cursor-not-allowed"
-              >
-                ✍️ Sign the guestbook (soon)
-              </button>
-            </div>
-          </div>
+          <Guestbook entityType="attraction" entityId={activity.id} entityName={activity.name} />
         )}
       </div>
 
