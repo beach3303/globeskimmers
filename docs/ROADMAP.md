@@ -27,7 +27,7 @@ Legend: ⬜ to do · ✅ done · ⏳ external/time-gated
 15. ⬜ **Passport + stamps + shareable "My Passport" map** — personal collection + viral growth loop.
 16. ⬜ **Public Guestbook** — UGC + Apple 1.2 moderation (report/block/filter); photos as a fast-follow.
 17. ⬜ **Wishlist → affiliate engine** — apply to Viator/GetYourGuide NOW; SubID→D1 clicks + conversion import.
-18. 🟡 **Global places DB** — **NYC LIVE 2026-07-19**: 484k Overture places loaded to Supabase PostGIS, read-path (`/places/nearby-owned`) + owned Wikimedia photos (`/places/wiki-photos`) deployed, and the attraction page (ActivityDetail) now shows owned photos + owned address, swipeable + fullscreen. **Next = expand coverage** (more cities/countries, free re-run) → own reverse-geocode → MapLibre map.
+18. 🟢 **Global places DB — PLANET LIVE 2026-07-19**: ALL **~75.6M** Overture places worldwide loaded to Supabase PostGIS + serving via `/places/nearby-owned` (verified Paris/Tokyo/Sydney). Owned Wikimedia photos + owned address on attraction pages. ~$90/mo, owned forever. Pipeline in `scripts/places-pilot/planet/`. **⏰ Post-load: scale compute Large→Medium; drop table places_old.** Next moat layers: own reverse-geocode → MapLibre map → monthly refresh cron.
     - Also done this session: attraction "Explore more" → full page, fullscreen swipe galleries everywhere, photo quality filter (iconic/real only), Reviews tab → **Guestbook placeholder** (real guestbook = #16).
 19. ⬜ **Reachability / feasibility (premium)** — ferry/cable-car-aware, day-trippable vs overnight, last-return schedules.
 20. ⬜ **AI itinerary planner (flagship subscription)** — multi-day, group/split/collaborative, food+route, personalized.
