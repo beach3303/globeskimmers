@@ -172,6 +172,18 @@ Let signed-in users attach ONE photo to a guestbook note. Client resizes → Wor
 - [ ] Expand → "Good for working" panel loads (wifi/outlets/noise) and AI details load for an owned shop
 - [ ] Cost check: default load fires no Google list calls; only expanded shops cost
 
+### Remaining finders (ATM / Shopping / Restroom / Convenience / Money-exchange) — `b7e9faf`…`2b84179` · **needs SQL + deploy** · Tested ⬜
+Same recipe as Coffee: list source → owned planet DB, real Google photos + hours on-tap via `/places/enrich-owned`. **Every finder's own AI-details logic is left untouched.** Shared worker helper `handleOwnedFinder(rpc, tag)` + 5 routes; owned handler now also emits top-level `lat`/`lng`.
+- [x] Worker: `/atm-owned` `/shopping-owned` `/restroom-owned` `/convenience-owned` `/moneyexchange-owned` (RPCs `nearby_atm` … `nearby_moneyexchange`), each free list + cached per-tile
+- [x] Frontend: list fetch swapped to the owned route on each page; enrich-on-expand added where the card shows photos/hours (Shopping, Restroom, Convenience) or hours (Money-exchange); ATM list-only (no photos)
+- [x] ATM: forked bank-network/fee/DCC/skimmer AI details untouched; RestroomAIDetails untouched; Money-exchange RATE fetch (`getExchangeRate`) untouched
+- [ ] **Activate:** run each `scripts/finders/<x>.sql` (`atm.sql`, `shopping.sql`, `restroom.sql`, `convenience.sql`, `moneyexchange.sql`) in Supabase + `wrangler deploy`
+- [ ] Verify each RPC: `curl -s -X POST "$SUPABASE_URL/rest/v1/rpc/nearby_atm" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' -d '{"in_lat":40.758,"in_lng":-73.9855,"in_radius_m":8000,"in_limit":40}'` → rows (repeat per finder)
+- [ ] Device (NYC): ATM / Shopping / Convenience finders list from planet DB; expand a Shopping/Convenience card → real photos + today/weekly hours; ATM cards + bank/fee/skimmer AI details still work
+- [ ] Money-exchange: LOCATIONS list from planet DB, distance + directions + map pins correct; the CONVERTER (rates) still works exactly as before; expand a store → hours load (or "Hours not listed")
+- [ ] Restroom: ⚠️ **evaluate coverage** — Overture has few restroom POIs; confirm results are reasonable, else consider keeping Google or supplementing
+- [ ] Cost check: default load fires no Google list calls on any of the five; only expanded cards cost
+
 ## Template for a new build
 ```
 ### N · <feature name>
