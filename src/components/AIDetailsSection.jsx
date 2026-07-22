@@ -120,7 +120,7 @@ function markVerdictHelperSeen() {
   try { localStorage.setItem(GS_VERDICT_HELPER_KEY, '1'); } catch { /* ignore */ }
 }
 
-export default function AIDetailsSection({ placeId, placeName, page, kind }) {
+export default function AIDetailsSection({ placeId, placeName, page, kind, lat, lng }) {
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -147,7 +147,7 @@ export default function AIDetailsSection({ placeId, placeName, page, kind }) {
     if (!placeId) return;
     setLoading(true);
     setError(null);
-    callWorker(ROUTE.getAIDetails, { placeId, kind: kind || 'restaurant' })
+    callWorker(ROUTE.getAIDetails, { placeId, kind: kind || 'restaurant', name: placeName, lat, lng })
       .then(({ data }) => {
         if (data?.error) {
           setError(data.error);

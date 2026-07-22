@@ -673,7 +673,7 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
         {/* Say it / Translate / rating / distance */}
         <div style={{display:"flex",gap:t(fs(16),fs(10)),alignItems:"center",flexWrap:"wrap",marginTop:t(fs(12),fs(8)),fontSize:t(fs(17),fs(13.5)),color:ED_INK3}}>
           <NameLanguageHelp placeId={restaurant.placeId||restaurant.id} name={name}/>
-          {restaurant.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{restaurant.rating.toFixed(1)}</span> ({(restaurant.userRatingCount||0).toLocaleString()})</span>}
+          {restaurant.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{restaurant.rating.toFixed(1)}</span></span>}
           {restaurant.distanceMiles!=null&&<span>· {formatDistance(restaurant.distanceMiles)}</span>}
           {restaurant.priceStr&&<span>· {restaurant.priceStr}</span>}
         </div>
@@ -805,7 +805,7 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
                   </div>
                 )}
 
-                <AIDetailsSection placeId={restaurant.placeId||restaurant.id} placeName={name} page="PlacesToEat" kind="restaurant"/>
+                <AIDetailsSection placeId={restaurant.placeId||restaurant.id} placeName={name} lat={restaurant.lat} lng={restaurant.lng} page="PlacesToEat" kind="restaurant"/>
 
                 {restaurant.googleMapsUri&&(
                   <a href={restaurant.googleMapsUri} target="_blank" rel="noopener noreferrer" style={{fontSize:fs(14),color:ED_INK3,textAlign:"center",textDecoration:"underline",padding:fs(4)}}>view reviews on Google Maps →</a>

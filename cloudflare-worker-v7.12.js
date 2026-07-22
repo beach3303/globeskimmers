@@ -2305,6 +2305,34 @@ async function handleAIDetails(request, env) {
   const allowedKinds = ['restaurant', 'coffee', 'attraction', 'restroom', 'atm'];
   const kind = allowedKinds.includes(body?.kind) ? body.kind : 'restaurant';
 
+  // Owned (planet-DB) ids are UUIDs, not Google place ids. Resolve to a Google id
+  // via a cached text search so the rich review-based AI details still work on-tap.
+  // Falls back to name-only synthesis below if there's no Google match.
+  let resolvedId = placeId;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(placeId) && body?.name) {
+    const mapKey = `owned2gid:${placeId}`;
+    const mapped = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(mapKey).catch(() => null) : null;
+    if (mapped) {
+      resolvedId = mapped;
+    } else if (env.GOOGLE_API_KEY) {
+      try {
+        const payload = { textQuery: body.name };
+        if (Number.isFinite(body.lat) && Number.isFinite(body.lng)) {
+          payload.locationBias = { circle: { center: { latitude: body.lat, longitude: body.lng }, radius: 800 } };
+        }
+        const sr = await fetch('https://places.googleapis.com/v1/places:searchText', {
+          method: 'POST',
+          headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': 'places.id', 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (sr.ok) {
+          const gid = (await sr.json())?.places?.[0]?.id;
+          if (gid) { resolvedId = gid; if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(mapKey, gid, { expirationTtl: 180 * 24 * 60 * 60 }).catch(() => {}); }
+        }
+      } catch { /* fall through to name-only synthesis */ }
+    }
+  }
+
   // 1) Check AI Details cache (30-day TTL). Key includes prompt version
   //    (so prompt changes invalidate cleanly) and kind (so a place opened
   //    from PlacesToEat vs RestroomFinder gets separate cached outputs
@@ -2319,7 +2347,9 @@ async function handleAIDetails(request, env) {
 
   // 2) Load Place Details — prefer the existing details_{placeId} cache (90d)
   //    so a popular place doesn't pay the $0.02 Google call here again.
-  const detailsCacheKey = `details_${placeId}`;
+  const detailsCacheKey = `details_${resolvedId}`;
+  // Name-only fallback place (owned rows with no Google match still get a panel).
+  const ownedStub = () => ({ name: body?.name || '', formattedAddress: body?.address || '', primaryType: body?.category || '', reviews: [] });
   let place;
   const cachedDetails = await getFromCache(env, detailsCacheKey);
   if (cachedDetails && cachedDetails.data) {
@@ -2329,7 +2359,7 @@ async function handleAIDetails(request, env) {
     // so any later handlePlaceDetails call benefits too.
     try {
       const apiKey = env.GOOGLE_API_KEY;
-      const detailsRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=en`, {
+      const detailsRes = await fetch(`https://places.googleapis.com/v1/places/${resolvedId}?languageCode=en`, {
         method: 'GET',
         headers: {
           'X-Goog-Api-Key': apiKey,
@@ -2337,13 +2367,16 @@ async function handleAIDetails(request, env) {
         }
       });
       if (!detailsRes.ok) {
-        return jsonResponse({ error: 'Place details fetch failed', status: detailsRes.status }, 502);
+        if (body?.name) { place = ownedStub(); }
+        else return jsonResponse({ error: 'Place details fetch failed', status: detailsRes.status }, 502);
+      } else {
+        const raw = await detailsRes.json();
+        place = normalizePlace(raw, new URL(request.url).origin, true);
+        await setInCache(env, detailsCacheKey, place, CONFIG.CACHE_TTL.DETAILS);
       }
-      const raw = await detailsRes.json();
-      place = normalizePlace(raw, new URL(request.url).origin, true);
-      await setInCache(env, detailsCacheKey, place, CONFIG.CACHE_TTL.DETAILS);
     } catch (e) {
-      return jsonResponse({ error: 'Place details error: ' + e.message }, 502);
+      if (body?.name) { place = ownedStub(); }
+      else return jsonResponse({ error: 'Place details error: ' + e.message }, 502);
     }
   }
 
@@ -10600,6 +10633,82 @@ async function handleWikiPhotos(request, env) {
   }
 }
 
+// ─── Restaurants from the OWNED planet DB (replaces Google for the list) ──────
+// Same response shape the PlacesToEat cards expect; data from Postgres, photos
+// from Unsplash (cuisine-generic, cached). Google is only touched later, on-tap,
+// for the AI-details panel of a place a user actually opens.
+async function handleRestaurantsOwned(request, env, ctx) {
+  try {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonResponse({ error: 'Supabase not configured' }, 500);
+    const b = await request.json().catch(() => ({}));
+    const lat = parseFloat(b.latitude ?? b.lat), lng = parseFloat(b.longitude ?? b.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return jsonResponse({ error: 'latitude and longitude required' }, 400);
+    const radius = Math.min(Math.max(parseFloat(b.radius) || 8000, 500), 50000);
+    const maxResults = Math.min(Math.max(parseInt(b.maxResults, 10) || 40, 1), 60);
+    const cuisine = (b.cuisine && String(b.cuisine).toLowerCase()) || 'all';
+    const query = (b.searchQuery && String(b.searchQuery).toLowerCase().trim()) || '';
+
+    // Cache the raw owned list per ~tile + radius; cuisine/query filtered in-worker.
+    const cacheKey = generateCacheKey('rest_owned', { latitude: lat, longitude: lng, radius });
+    let rows;
+    const cached = await getFromCache(env, cacheKey);
+    if (cached && cached.age < CONFIG.CACHE_TTL.NEARBY_SEARCH * 1000) {
+      rows = cached.data;
+    } else {
+      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/nearby_restaurants`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
+        body: JSON.stringify({ in_lat: lat, in_lng: lng, in_radius_m: radius, in_limit: 60 }),
+      });
+      if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
+      rows = await res.json();
+      await setInCache(env, cacheKey, rows, CONFIG.CACHE_TTL.NEARBY_SEARCH);
+    }
+    rows = Array.isArray(rows) ? rows : [];
+
+    if (cuisine && cuisine !== 'all') rows = rows.filter((r) => (r.category || '').toLowerCase().includes(cuisine));
+    if (query) rows = rows.filter((r) => `${r.name} ${r.category}`.toLowerCase().includes(query));
+    rows = rows.slice(0, maxResults);
+
+    // One Unsplash photo per DISTINCT cuisine query (cached globally → few calls ever).
+    const cuisineQuery = (cat) => {
+      const c = String(cat || 'restaurant').replace(/_/g, ' ').replace(/\brestaurant\b/g, '').trim();
+      return c ? `${c} restaurant food` : 'restaurant food';
+    };
+    const photoFor = {};
+    await Promise.all([...new Set(rows.map((r) => cuisineQuery(r.category)))].map(async (q) => {
+      photoFor[q] = await fetchUnsplashPhoto(env, q, ctx);
+    }));
+
+    const humanize = (s) => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+    const places = rows.map((r) => {
+      const ph = photoFor[cuisineQuery(r.category)];
+      const url = ph?.url || null;
+      return {
+        id: r.id, placeId: r.id, source: 'owned',
+        displayName: { text: r.name }, name: r.name,
+        location: { latitude: r.lat, longitude: r.lng }, latitude: r.lat, longitude: r.lng,
+        formattedAddress: r.address || '', shortFormattedAddress: r.address || '', vicinity: r.address || '',
+        city: r.city || '', country: r.country || '',
+        distanceKm: r.meters / 1000, distanceMiles: r.meters / 1609.34,
+        rating: null, userRatingCount: 0, priceLevel: null,
+        currentOpeningHours: null, regularOpeningHours: null, hours: null, isOpen: null,
+        photos: url ? [url] : [], photoUrl: url, photoCredit: ph?.photographer || null,
+        types: [r.category], primaryType: humanize(r.category),
+        nationalPhoneNumber: r.phone || null, internationalPhoneNumber: r.phone || null,
+        websiteUri: r.website || null,
+        googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lng}`,
+        dineIn: null, takeout: null, delivery: null, hasDriveThru: null, reservable: null,
+        customerFavorites: [], reviews: [],
+      };
+    });
+
+    return jsonResponse({ places, count: places.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
 // ─── Guestbook (public tips per place; visit-gated signing; report/moderation) ──
 // Generic by (entity_type, entity_id). Public reads; writes verify the caller's
 // Supabase JWT. Tables in the `api` schema; the Worker uses the service key.
@@ -10827,7 +10936,7 @@ export default {
       if (pathname === '/culture' && request.method === 'POST') return await handleCulture(request, env, ctx);
       if (pathname === '/money-exchange' && request.method === 'POST') return await handleMoneyExchange(request, env, ctx);
       if (pathname === '/activities' && request.method === 'POST') return await handleActivities(request, env, ctx);
-      if (pathname === '/restaurants-full' && request.method === 'POST') return await handleRestaurantsFull(request, env, ctx);
+      if (pathname === '/restaurants-full' && request.method === 'POST') return await handleRestaurantsOwned(request, env, ctx);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
       if (pathname === '/describe-item' && request.method === 'POST') return await handleDescribeItem(request, env);
       if (pathname === '/analyze-price' && request.method === 'POST') return await handleAnalyzePrice(request, env);
