@@ -180,16 +180,28 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
   const [expanded, setExpanded] = useState(false);
   const [hoursExpanded, setHoursExpanded] = useState(false);
   const [gallery, setGallery] = useState({ open: false, idx: 0 });
+  const [enriched, setEnriched] = useState(null);
   const fs = (n) => `calc(${n}px*var(--fs))`;
 
   useEffect(() => { if (forceExpanded) setExpanded(true); }, [forceExpanded]);
+  // On first expand of an OWNED restroom, fetch real Google photos + hours
+  // (resolves owned→Google once, cached). Keeps the list free; only opened
+  // cards cost. The RestroomAIDetails panel below still receives the raw `r`.
+  useEffect(() => {
+    if (!expanded || enriched || r.source !== 'owned') return;
+    callWorker('places/enrich-owned', { id: r.id || r.placeId, name: r.name, lat: r.lat, lng: r.lng, maxPhotos: 3 })
+      .then(({ data }) => { if (data && data.matched) setEnriched(data); }).catch(() => {});
+  }, [expanded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const name = r.name || "Restroom";
   const address = r.formattedAddress || "";
   const phone = r.nationalPhoneNumber || r.internationalPhoneNumber || "";
-  const openSt = computeOpenStatus(r);
+  // Layer enrich (owned) photos + hours over the owned fields for display only.
+  const photos = enriched?.photos?.length ? enriched.photos : (r.photos || []);
+  const rStatus = enriched?.hours ? { ...r, weekdayDescriptions: enriched.hours.weekdayDescriptions, isOpen: enriched.hours.openNow ?? r.isOpen } : r;
+  const openSt = computeOpenStatus(rStatus);
   const chips = getFeatureChips(r);
-  const weekdayDesc = r.weekdayDescriptions || [];
+  const weekdayDesc = enriched?.hours?.weekdayDescriptions?.length ? enriched.hours.weekdayDescriptions : (r.weekdayDescriptions || []);
   const accCfg = ACCESS_CONFIG[r.accessType] || ACCESS_CONFIG.unknown;
   const hasOpen = openSt.todayHours || openSt.isOpen !== null;
 
@@ -229,7 +241,7 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
       {/* Photo — editorial height, reuses the same PhotoStrip (rank + venue pill + open status overlays) */}
       <div style={{ position: "relative" }}>
         <PhotoStrip
-          photos={r.photos}
+          photos={photos}
           fallbackIcon={r.venueIcon || "🚻"}
           height={S.photoH}
           onPhotoClick={(i) => setGallery({ open: true, idx: i })}
@@ -384,7 +396,7 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
         userLat={userLat}
         userLng={userLng}
       />
-      <PhotoGalleryModal photos={r.photos || []} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
+      <PhotoGalleryModal photos={photos} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
     </motion.div>
   );
 }
@@ -601,13 +613,14 @@ export default function RestroomFinderPage() {
       // Phase 1 — nearest few, FAST (one distance-ranked query) so the first
       // results paint immediately. Best-effort; failures fall through to phase 2.
       try {
-        const q = await callWorker(ROUTE.getRestroomLocations, {
+        const q = await callWorker(ROUTE.getRestroomOwned, {
           latitude: lat, longitude: lng, radius: radiusMeters, maxResults: 3, venueType,
           forceRefresh: force, quick: true,
         });
-        if (!ignore && q.data?.restrooms?.length) {
+        const quickRaw = q.data?.restrooms || q.data?.places || [];
+        if (!ignore && quickRaw.length) {
           gotQuick = true;
-          setRestrooms(enrich(q.data.restrooms));
+          setRestrooms(enrich(quickRaw));
           setLoading(false);      // show the first results immediately
           setLoadingMore(true);   // …while the full list loads
         }
@@ -615,13 +628,17 @@ export default function RestroomFinderPage() {
 
       // Phase 2 — full comprehensive list; replaces the quick teaser.
       try {
-        const { data, error: workerError } = await callWorker(ROUTE.getRestroomLocations, {
+        // List source: owned planet DB (free, global). NOTE: Overture has few
+        // public-restroom POIs, so coverage may be thin in some areas — the
+        // auto-widen + empty-state fallbacks below still apply. The separate
+        // restroom-ai-details logic is untouched.
+        const { data, error: workerError } = await callWorker(ROUTE.getRestroomOwned, {
           latitude: lat, longitude: lng, radius: radiusMeters, maxResults: 30, venueType,
           forceRefresh: force,
         });
         if (ignore) return;
         if (workerError) throw new Error(workerError);
-        const raw = data?.restrooms || [];
+        const raw = data?.restrooms || data?.places || [];
         if (raw.length > 0) {
           setRestrooms(enrich(raw));
           autoExpandRef.current = false;
