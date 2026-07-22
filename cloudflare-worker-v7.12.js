@@ -10831,6 +10831,64 @@ async function handleCoffeeOwned(request, env, ctx) {
   }
 }
 
+// Generic owned-finder handler — identical shape to handleCoffeeOwned, parameterized
+// by the Supabase RPC name + cache tag. Used by the ATM/Shopping/Restroom/Convenience/
+// Money-exchange finders: same free list (no photos), real Google photos + hours on-tap
+// via /places/enrich-owned. Each finder's own AI-details logic stays untouched — this
+// only swaps the LIST source.
+async function handleOwnedFinder(request, env, rpc, tag) {
+  try {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonResponse({ error: 'Supabase not configured' }, 500);
+    const b = await request.json().catch(() => ({}));
+    const lat = parseFloat(b.latitude ?? b.lat), lng = parseFloat(b.longitude ?? b.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return jsonResponse({ error: 'latitude and longitude required' }, 400);
+    const radius = Math.min(Math.max(parseFloat(b.radius) || 8000, 500), 50000);
+    const maxResults = Math.min(Math.max(parseInt(b.maxResults, 10) || 30, 1), 60);
+    const query = (b.searchQuery && String(b.searchQuery).toLowerCase().trim()) || '';
+
+    const cacheKey = generateCacheKey(tag, { latitude: lat, longitude: lng, radius });
+    let rows;
+    const cached = await getFromCache(env, cacheKey);
+    if (cached && cached.age < CONFIG.CACHE_TTL.NEARBY_SEARCH * 1000) {
+      rows = cached.data;
+    } else {
+      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${rpc}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
+        body: JSON.stringify({ in_lat: lat, in_lng: lng, in_radius_m: radius, in_limit: 60 }),
+      });
+      if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
+      rows = await res.json();
+      await setInCache(env, cacheKey, rows, CONFIG.CACHE_TTL.NEARBY_SEARCH);
+    }
+    rows = Array.isArray(rows) ? rows : [];
+    if (query) rows = rows.filter((r) => `${r.name} ${r.category}`.toLowerCase().includes(query));
+    rows = rows.slice(0, maxResults);
+
+    const humanize = (s) => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+    const places = rows.map((r) => ({
+      id: r.id, placeId: r.id, source: 'owned',
+      displayName: { text: r.name }, name: r.name,
+      location: { latitude: r.lat, longitude: r.lng }, latitude: r.lat, longitude: r.lng,
+      formattedAddress: r.address || '', shortFormattedAddress: r.address || '', vicinity: r.address || '',
+      city: r.city || '', country: r.country || '',
+      distanceKm: r.meters / 1000, distanceMiles: r.meters / 1609.34,
+      rating: null, userRatingCount: 0, priceLevel: null,
+      currentOpeningHours: null, regularOpeningHours: null, hours: null, isOpen: null,
+      photos: [], photoUrl: null,
+      types: [r.category], primaryType: humanize(r.category),
+      nationalPhoneNumber: r.phone || null, internationalPhoneNumber: r.phone || null,
+      websiteUri: r.website || null,
+      googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lng}`,
+      parking: null, seating: null, reviews: [],
+    }));
+
+    return jsonResponse({ places, count: places.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
 // Resolve an owned (UUID) place id → a Google place id (cached 180d), for on-tap
 // panels that still need Google data (reviews-based café work profile, AI details).
 // Returns the id unchanged if it's already a Google id, or null if unresolvable.
@@ -11249,6 +11307,11 @@ export default {
       if (pathname === '/activities' && request.method === 'POST') return await handleActivities(request, env, ctx);
       if (pathname === '/restaurants-full' && request.method === 'POST') return await handleRestaurantsOwned(request, env, ctx);
       if (pathname === '/coffee-owned' && request.method === 'POST') return await handleCoffeeOwned(request, env, ctx);
+      if (pathname === '/atm-owned' && request.method === 'POST') return await handleOwnedFinder(request, env, 'nearby_atm', 'atm_owned');
+      if (pathname === '/shopping-owned' && request.method === 'POST') return await handleOwnedFinder(request, env, 'nearby_shopping', 'shopping_owned');
+      if (pathname === '/restroom-owned' && request.method === 'POST') return await handleOwnedFinder(request, env, 'nearby_restroom', 'restroom_owned');
+      if (pathname === '/convenience-owned' && request.method === 'POST') return await handleOwnedFinder(request, env, 'nearby_convenience', 'convenience_owned');
+      if (pathname === '/moneyexchange-owned' && request.method === 'POST') return await handleOwnedFinder(request, env, 'nearby_moneyexchange', 'moneyexchange_owned');
       if (pathname === '/places/enrich-owned' && request.method === 'POST') return await handleEnrichOwned(request, env);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
       if (pathname === '/describe-item' && request.method === 'POST') return await handleDescribeItem(request, env);

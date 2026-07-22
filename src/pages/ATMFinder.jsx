@@ -583,7 +583,9 @@ export default function ATMFinderPage() {
 
     (async () => {
       try {
-        const { data, error: workerError } = await callWorker(ROUTE.getATMLocations, {
+        // List source: owned planet DB (free, global). Bank-network / fee / DCC /
+        // skimmer AI details are unchanged — they resolve owned→Google on tap.
+        const { data, error: workerError } = await callWorker(ROUTE.getATMOwned, {
           latitude:  lat,
           longitude: lng,
           radius:    radius * 1609,
