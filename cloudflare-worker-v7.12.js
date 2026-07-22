@@ -10632,6 +10632,27 @@ async function gbLogEvent(env, type, payload) {
       .bind(Math.floor(Date.now() / 1000), type, 'guestbook', JSON.stringify(payload)).run();
   } catch { /* admin signal is best-effort */ }
 }
+// Multilingual moderation: local slur regex (instant, always-on) + Claude Haiku
+// (understands ALL languages + intent). Blocks profanity/slurs/harassment/threats/
+// sexual content; ALLOWS honest criticism phrased without profanity. Fails OPEN on
+// API error (the local regex still hard-blocks the worst; report→admin is backstop).
+async function gbModerate(env, text) {
+  if (GB_BLOCK.test(text)) return { allow: false };
+  if (!env.ANTHROPIC_API_KEY) return { allow: true };
+  try {
+    const system = 'You moderate notes for a public travel guestbook. Block the note if, in ANY language (incl. transliterations/leetspeak), it contains profanity/curse words, hate slurs, harassment, threats, or sexually explicit content. ALLOW honest negative feedback when phrased WITHOUT profanity or abuse (e.g. "slow service, overpriced" is fine). Reply with ONLY {"allow":true} or {"allow":false}.';
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 16, system, messages: [{ role: 'user', content: `NOTE:\n${text}` }] }),
+    });
+    if (!r.ok) return { allow: true };
+    const d = await r.json();
+    const t = (d.content && d.content[0] && d.content[0].text) || '';
+    const m = t.match(/"allow"\s*:\s*(true|false)/i);
+    return { allow: m ? m[1].toLowerCase() === 'true' : true };
+  } catch { return { allow: true }; }
+}
 
 async function handleGuestbookList(request, env) {
   try {
@@ -10657,7 +10678,9 @@ async function handleGuestbookSign(request, env, ctx) {
     if (!entityId) return jsonResponse({ error: 'entity_id required' }, 400);
     if (!text || text.length < 2) return jsonResponse({ error: 'Write a short note first' }, 400);
     if (text.length > 1000) return jsonResponse({ error: 'Note too long (max 1000 characters)' }, 400);
-    if (GB_BLOCK.test(text)) return jsonResponse({ error: "That note contains language we don't allow." }, 400);
+    if (!(await gbModerate(env, text)).allow) {
+      return jsonResponse({ error: 'Please keep it clean — no profanity, slurs, or abuse. Honest feedback is welcome.' }, 400);
+    }
     const verified = b.verified === true;
     const entityName = gbClean(b.entity_name);
 
@@ -10689,7 +10712,9 @@ async function handleGuestbookEdit(request, env) {
     const id = gbClean(b.id), text = gbClean(b.body);
     if (!id || !text) return jsonResponse({ error: 'id and body required' }, 400);
     if (text.length > 1000) return jsonResponse({ error: 'Too long' }, 400);
-    if (GB_BLOCK.test(text)) return jsonResponse({ error: "Language we don't allow." }, 400);
+    if (!(await gbModerate(env, text)).allow) {
+      return jsonResponse({ error: 'Please keep it clean — no profanity, slurs, or abuse.' }, 400);
+    }
     const res = await gbRest(env, `guestbook_entries?id=eq.${encodeURIComponent(id)}&user_id=eq.${user.id}`, {
       method: 'PATCH', headers: { Prefer: 'return=representation' },
       body: JSON.stringify({ body: text, edited_at: new Date().toISOString() }),
