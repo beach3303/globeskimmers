@@ -133,6 +133,23 @@ Turns "Explore more" into a full page powered by owned/free data. **Activate:** 
 - [ ] Device: tap a "place to go" card → Explore more → full page with **multiple swipeable photos** + credit; address shows once read-path is live
 - [ ] Quality check: photos are mostly the actual place (filter drops pre-2000/maps/docs/logos) — flag any junk
 
+## 🗺️ Finder migration → owned planet DB (2026-07-22)
+Swap the finder DATA source from rented Google to our OWNED 75M-place planet DB. Same cards / AI-details / map — just fed by free data + free photos.
+
+### Restaurants — `65afedb` · deployed `62efdbb0` · Tested ⬜
+- [x] List comes from planet DB (`/restaurants-full`), $0 per search, no Unsplash tiles
+- [x] On first expand → `/places/enrich-owned` fetches **3 real Google photos + hours** (cached), review-count removed from card
+- [ ] Device: PlacesToEat in NYC → cards show cuisine tile, expand → 3 real photos of that place + today's hours + open/closed bar
+- [ ] Cost check: default page load doesn't fire Google list calls (planet DB only); photos only on tap
+
+### Things-to-Do — `ef7945b` · **needs SQL + deploy** · Tested ⬜
+**Activate:** (1) run `scripts/finders/attractions.sql` in Supabase SQL editor, (2) `cd "…/globeskimmers-cacf36e4-10" && wrangler deploy`
+- [x] Worker: `api.nearby_attractions` RPC → mapped to card shape, Wikimedia photos hydrated top-10, deduped vs curated/Google
+- [x] Frontend: new "📍 Nearby Attractions" TierSection reads `data.nearbyAttractions` (+ cached)
+- [ ] Verify RPC: `curl -s -X POST "$SUPABASE_URL/rest/v1/rpc/nearby_attractions" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' -d '{"in_lat":40.758,"in_lng":-73.9855,"in_radius_m":20000,"in_limit":24}'` → attraction rows
+- [ ] Device: ThingsToDo in a mid-size city (not just NYC) → **National Icons / Regional rows unchanged**, plus a new "Nearby Attractions" row with real photos
+- [ ] Edge: a location with NO curated icons still shows Nearby Attractions from planet DB (global coverage proof)
+
 ## Template for a new build
 ```
 ### N · <feature name>
