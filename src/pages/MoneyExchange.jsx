@@ -421,19 +421,40 @@ export default function MoneyExchangePage() {
     try {
       const radiusInMiles = usesMiles ? searchRadius : kmToMiles(searchRadius);
 
-      const { data } = await callWorker(ROUTE.getMoneyExchangeLocations, {
+      // LOCATIONS only — the exchange-RATE fetch (getExchangeRate, above) is
+      // separate and untouched. List source: owned planet DB (free, global). The
+      // owned handler takes radius in METERS; real hours come on-tap via enrich.
+      const { data } = await callWorker(ROUTE.getMoneyExchangeOwned, {
         latitude: activeLocation.coordinates.latitude,
         longitude: activeLocation.coordinates.longitude,
         fromCurrency: fromCurrency,
         toCurrency: toCurrency,
+        radius: radiusInMiles * 1609,
         radiusMiles: radiusInMiles,
+        maxResults: 60,
         limit: null, // Fetch all stores, then slice for list view
         sortBy: sortBy,
         openOnly: openOnly,
         forceRefresh: forceRefresh
       });
 
-      setExchangeStores(data?.locations || []);
+      // Normalize to the snake_case shape this card reads. Fallbacks keep the old
+      // Google shape working too; owned rows map camelCase → snake_case.
+      const raw = data?.locations || data?.places || [];
+      const mapped = raw.map((p) => ({
+        ...p,
+        place_id: p.place_id || p.placeId || p.id,
+        name: p.name || p.displayName?.text,
+        latitude: p.latitude ?? p.lat ?? p.location?.latitude,
+        longitude: p.longitude ?? p.lng ?? p.location?.longitude,
+        address: p.address || p.formattedAddress || p.shortFormattedAddress || p.vicinity || '',
+        distance_miles: p.distance_miles ?? p.distanceMiles ?? null,
+        is_open: p.is_open ?? p.isOpen ?? undefined, // owned isOpen is null → undefined hides the badge until enrich
+        hours: p.hours || [],
+        phone: p.phone || p.nationalPhoneNumber || p.internationalPhoneNumber || null,
+        website: p.website || p.websiteUri || null,
+      }));
+      setExchangeStores(mapped);
     } catch (error) {
       console.error("Error loading exchange stores:", error);
       setExchangeStores([]);
@@ -538,6 +559,28 @@ export default function MoneyExchangePage() {
     });
     setShowMapSelector(true);
   };
+
+  // On expanding an OWNED exchange store, fetch real Google hours (resolves
+  // owned→Google once, cached) and merge them into that store. No photos in
+  // this card, so maxPhotos:0. The exchange-RATE logic stays untouched.
+  useEffect(() => {
+    const idx = expandedStoreIndex;
+    if (idx === null || idx === undefined) return;
+    const s = exchangeStores[idx];
+    if (!s || s.source !== 'owned' || s._enriched) return;
+    callWorker('places/enrich-owned', {
+      id: s.id || s.place_id, name: s.name, lat: s.latitude, lng: s.longitude, maxPhotos: 0,
+    }).then(({ data }) => {
+      if (!data || !data.matched) return;
+      setExchangeStores((prev) => prev.map((st, i) => (i === idx ? {
+        ...st,
+        _enriched: true,
+        hours: data.hours?.weekdayDescriptions?.length ? data.hours.weekdayDescriptions : st.hours,
+        is_open: data.hours?.openNow ?? st.is_open,
+        website: st.website || data.websiteUri || null,
+      } : st)));
+    }).catch(() => {});
+  }, [expandedStoreIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -1202,7 +1245,7 @@ export default function MoneyExchangePage() {
                               <Map className="w-3 h-3 mr-1" />
                               Map
                             </Button>
-                            {((store.hours && store.hours.length > 0) || store.website) && (
+                            {((store.hours && store.hours.length > 0) || store.website || store.source === 'owned') && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1215,7 +1258,7 @@ export default function MoneyExchangePage() {
                             )}
                           </div>
 
-                          {expandedStoreIndex === index && ((store.hours && store.hours.length > 0) || store.website) && (
+                          {expandedStoreIndex === index && ((store.hours && store.hours.length > 0) || store.website || store.source === 'owned') && (
                             <div
                               className="mt-2 p-3 rounded-[12px]"
                               style={{background:"#FFFFFF",border:`1px solid ${ED_RULE}`}}
@@ -1257,6 +1300,9 @@ export default function MoneyExchangePage() {
                                 >
                                   🌐 Visit Website
                                 </a>
+                              )}
+                              {(!store.hours || store.hours.length === 0) && !store.website && (
+                                <div style={{fontSize:t(fs(12),fs(12)),color:ED_INK3}}>Hours not listed for this location.</div>
                               )}
                             </div>
                           )}
