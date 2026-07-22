@@ -181,6 +181,14 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
   const [expanded,setExpanded]=useState(false);
   const [hoursExpanded,setHoursExpanded]=useState(false);
   const [showDir,setShowDir]=useState(false);
+  const [enriched,setEnriched]=useState(null);
+  // On first expand of an OWNED shop, fetch 3 real Google photos + hours (resolves
+  // owned→Google once, cached). Keeps the list free; only opened shops cost.
+  useEffect(()=>{
+    if(!expanded||enriched||shop.source!=='owned')return;
+    callWorker('places/enrich-owned',{id:shop.id||shop.placeId,name:shop.displayName?.text||shop.name,lat:shop.lat,lng:shop.lng,maxPhotos:3})
+      .then(({data})=>{ if(data&&data.matched)setEnriched(data); }).catch(()=>{});
+  },[expanded]); // eslint-disable-line react-hooks/exhaustive-deps
   const fs=(n)=>`calc(${n}px*var(--fs))`;
   // Responsive size picker — `t` (tablet) keeps the current editorial sizes,
   // `p` (phone) is the compact phone-tuned value. Every size below routes
@@ -196,7 +204,10 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
 
   const name    = shop.displayName?.text || shop.name || "Coffee Shop";
   const address = shop.shortFormattedAddress || shop.formattedAddress || "";
-  const photos  = shop.photos||(shop.photoUrl?[shop.photoUrl]:[]);
+  const photos  = enriched?.photos?.length ? enriched.photos : (shop.photos||(shop.photoUrl?[shop.photoUrl]:[]));
+  const openNow = enriched?.hours?.openNow ?? shop.isOpen;
+  const weekdays = enriched?.hours?.weekdayDescriptions?.length ? enriched.hours.weekdayDescriptions : (shop.currentOpeningHours?.weekdayDescriptions||[]);
+  const todayHrs = shop.todayHours || (weekdays.length ? ((weekdays[(new Date().getDay()+6)%7]||'').split(': ').slice(1).join(': ')||null) : null);
   const phone   = shop.nationalPhoneNumber || shop.internationalPhoneNumber || "";
   const parking = shop.parking;
   const parkingConfirmed = parking?.source==='api';
@@ -208,7 +219,7 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
     : (shop.primaryType
         ? shop.primaryType.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())
         : 'Café');
-  const openText = shop.is24Hours ? 'Open 24/7' : (shop.isOpen ? 'Open' : 'Closed');
+  const openText = shop.is24Hours ? 'Open 24/7' : (openNow===true ? 'Open' : openNow===false ? 'Closed' : '');
 
   const Tag=({bg,color,children})=>(
     <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(z(9,6))} ${fs(z(16,11))}`,fontSize:fs(z(15.5,12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
@@ -246,12 +257,12 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
           </div>
         )}
 
-        {/* Open bar */}
-        {shop.isOpen!==null&&(
-          <div style={{marginTop:fs(z(18,12)),background:shop.isOpen?"#E7F3EA":"#FBE0DC",borderRadius:z("16px","13px"),padding:`${fs(z(16,11))} ${fs(z(20,14))}`,fontSize:fs(z(18,13.5)),fontWeight:600,color:shop.isOpen?"#2E7D46":"#C2392F",display:"flex",alignItems:"center",gap:fs(z(11,9))}}>
-            <span style={{width:fs(z(10,9)),height:fs(z(10,9)),borderRadius:"50%",background:shop.is24Hours?"#00BCD4":(shop.isOpen?"#2E7D46":"#C2392F"),flexShrink:0}}/>
+        {/* Open bar — hidden until enrich resolves hours for owned shops */}
+        {openNow!==null&&openNow!==undefined&&(
+          <div style={{marginTop:fs(z(18,12)),background:openNow?"#E7F3EA":"#FBE0DC",borderRadius:z("16px","13px"),padding:`${fs(z(16,11))} ${fs(z(20,14))}`,fontSize:fs(z(18,13.5)),fontWeight:600,color:openNow?"#2E7D46":"#C2392F",display:"flex",alignItems:"center",gap:fs(z(11,9))}}>
+            <span style={{width:fs(z(10,9)),height:fs(z(10,9)),borderRadius:"50%",background:shop.is24Hours?"#00BCD4":(openNow?"#2E7D46":"#C2392F"),flexShrink:0}}/>
             <span>{openText}</span>
-            {shop.todayHours&&!shop.is24Hours&&<span style={{color:ED_INK3,fontWeight:500}}>· {shop.todayHours}</span>}
+            {todayHrs&&!shop.is24Hours&&<span style={{color:ED_INK3,fontWeight:500}}>· {todayHrs}</span>}
           </div>
         )}
 
@@ -325,8 +336,8 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
                   </div>
                 )}
 
-                {/* Daily hours — collapsed by default */}
-                {shop.currentOpeningHours?.weekdayDescriptions?.length>0&&(
+                {/* Daily hours — collapsed by default (from enrich for owned shops) */}
+                {weekdays.length>0&&(
                   <div style={{padding:fs(z(16,13)),background:"#FAF7F0",borderRadius:z("16px","13px")}}>
                     <button onClick={()=>setHoursExpanded(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
                       <span style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
@@ -334,7 +345,7 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
                     </button>
                     {hoursExpanded&&(
                       <div style={{marginTop:fs(8)}}>
-                        {shop.currentOpeningHours.weekdayDescriptions.map((day,i)=>{
+                        {weekdays.map((day,i)=>{
                           const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
                           const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
                           return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?TEAL_DEEP:ED_INK2,borderBottom:i<6?`1px solid ${ED_RULE}`:"none"}}>
@@ -347,10 +358,10 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
                 )}
 
                 {/* Good for working — wifi/outlets/seating/noise signals */}
-                <CafeWorkProfileSection placeId={shop.placeId || shop.id} placeName={name}/>
+                <CafeWorkProfileSection placeId={shop.placeId || shop.id} placeName={name} lat={shop.lat} lng={shop.lng}/>
 
                 {/* AI Details — shared component */}
-                <AIDetailsSection placeId={shop.placeId || shop.id} placeName={name} page="CoffeeFinder" kind="coffee"/>
+                <AIDetailsSection placeId={shop.placeId || shop.id} placeName={name} lat={shop.lat} lng={shop.lng} page="CoffeeFinder" kind="coffee"/>
 
                 {/* Website */}
                 {(shop.websiteUri||shop.website)&&(
@@ -466,7 +477,9 @@ export default function CoffeeFinderPage() {
     const force = forceNextRef.current; forceNextRef.current = false;
     (async()=>{
       try {
-        const {data, error: workerError} = await callWorker(ROUTE.getCoffeeShops,{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,forceRefresh:force});
+        // Owned planet DB (free list, no per-search Google cost). Real photos +
+        // hours come on-tap via enrich-owned. Same card, same downstream panels.
+        const {data, error: workerError} = await callWorker(ROUTE.getCoffeeOwned,{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,forceRefresh:force});
         if (workerError) throw new Error(workerError);
         const places = data?.places||data?.shops||[];
         if(places.length>0){

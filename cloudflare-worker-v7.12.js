@@ -3102,15 +3102,18 @@ async function handleCafeWorkProfile(request, env) {
     }
   }
 
-  // 2) Place Details — reuse the details_{placeId} cache (no new Google cost when warm).
-  const detailsCacheKey = `details_${placeId}`;
+  // 2) Place Details — resolve owned (UUID) → Google id first, then reuse the
+  //    details_{gid} cache (shared with enrich-owned; no new Google cost when warm).
+  const gid = await resolveOwnedGid(env, placeId, body?.placeName, body?.lat ?? body?.latitude, body?.lng ?? body?.longitude);
+  if (!gid) return jsonResponse({ workProfile: null, _cache: 'unresolved' });
+  const detailsCacheKey = `details_${gid}`;
   let place;
   const cachedDetails = await getFromCache(env, detailsCacheKey);
   if (cachedDetails && cachedDetails.data) {
     place = cachedDetails.data;
   } else {
     try {
-      const detailsRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=en`, {
+      const detailsRes = await fetch(`https://places.googleapis.com/v1/places/${gid}?languageCode=en`, {
         method: 'GET',
         headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': CONFIG.DETAILS_FIELD_MASK }
       });
@@ -10771,6 +10774,90 @@ async function handleRestaurantsOwned(request, env, ctx) {
   }
 }
 
+// Coffee shops from the OWNED planet DB (replaces Google for the list). Mirrors
+// handleRestaurantsOwned: free list (no photos), real Google photos + hours on-tap
+// via /places/enrich-owned. The café work-profile + AI details resolve owned→Google
+// by name too, so those panels keep working.
+async function handleCoffeeOwned(request, env, ctx) {
+  try {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonResponse({ error: 'Supabase not configured' }, 500);
+    const b = await request.json().catch(() => ({}));
+    const lat = parseFloat(b.latitude ?? b.lat), lng = parseFloat(b.longitude ?? b.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return jsonResponse({ error: 'latitude and longitude required' }, 400);
+    const radius = Math.min(Math.max(parseFloat(b.radius) || 8000, 500), 50000);
+    const maxResults = Math.min(Math.max(parseInt(b.maxResults, 10) || 30, 1), 60);
+    const query = (b.searchQuery && String(b.searchQuery).toLowerCase().trim()) || '';
+
+    const cacheKey = generateCacheKey('coffee_owned', { latitude: lat, longitude: lng, radius });
+    let rows;
+    const cached = await getFromCache(env, cacheKey);
+    if (cached && cached.age < CONFIG.CACHE_TTL.NEARBY_SEARCH * 1000) {
+      rows = cached.data;
+    } else {
+      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/nearby_coffee`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
+        body: JSON.stringify({ in_lat: lat, in_lng: lng, in_radius_m: radius, in_limit: 60 }),
+      });
+      if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
+      rows = await res.json();
+      await setInCache(env, cacheKey, rows, CONFIG.CACHE_TTL.NEARBY_SEARCH);
+    }
+    rows = Array.isArray(rows) ? rows : [];
+    if (query) rows = rows.filter((r) => `${r.name} ${r.category}`.toLowerCase().includes(query));
+    rows = rows.slice(0, maxResults);
+
+    const humanize = (s) => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+    const places = rows.map((r) => ({
+      id: r.id, placeId: r.id, source: 'owned',
+      displayName: { text: r.name }, name: r.name,
+      location: { latitude: r.lat, longitude: r.lng }, latitude: r.lat, longitude: r.lng,
+      formattedAddress: r.address || '', shortFormattedAddress: r.address || '', vicinity: r.address || '',
+      city: r.city || '', country: r.country || '',
+      distanceKm: r.meters / 1000, distanceMiles: r.meters / 1609.34,
+      rating: null, userRatingCount: 0, priceLevel: null,
+      currentOpeningHours: null, regularOpeningHours: null, hours: null, isOpen: null,
+      photos: [], photoUrl: null,
+      types: [r.category], primaryType: humanize(r.category),
+      nationalPhoneNumber: r.phone || null, internationalPhoneNumber: r.phone || null,
+      websiteUri: r.website || null,
+      googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lng}`,
+      parking: null, seating: null, reviews: [],
+    }));
+
+    return jsonResponse({ places, count: places.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
+// Resolve an owned (UUID) place id → a Google place id (cached 180d), for on-tap
+// panels that still need Google data (reviews-based café work profile, AI details).
+// Returns the id unchanged if it's already a Google id, or null if unresolvable.
+async function resolveOwnedGid(env, id, name, lat, lng) {
+  id = String(id || '');
+  if (!id) return null;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id)) return id; // already a Google id
+  const mapKey = `owned2gid:${id}`;
+  let gid = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(mapKey).catch(() => null) : null;
+  if (gid) return gid;
+  if (!name || !env.GOOGLE_API_KEY) return null;
+  try {
+    const payload = { textQuery: String(name) };
+    const la = parseFloat(lat), ln = parseFloat(lng);
+    if (Number.isFinite(la) && Number.isFinite(ln)) payload.locationBias = { circle: { center: { latitude: la, longitude: ln }, radius: 800 } };
+    const sr = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST', headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': 'places.id', 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (sr.ok) {
+      gid = (await sr.json())?.places?.[0]?.id || null;
+      if (gid && env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(mapKey, gid, { expirationTtl: 180 * 24 * 60 * 60 }).catch(() => {});
+    }
+  } catch { /* no match */ }
+  return gid || null;
+}
+
 // On-tap enrich for an owned place: resolve to a Google place id (cached), fetch
 // Place Details, return up to N real photos + open/close + daily hours. Called when
 // a card is OPENED, so the free list stays free and only opened places cost.
@@ -11161,6 +11248,7 @@ export default {
       if (pathname === '/money-exchange' && request.method === 'POST') return await handleMoneyExchange(request, env, ctx);
       if (pathname === '/activities' && request.method === 'POST') return await handleActivities(request, env, ctx);
       if (pathname === '/restaurants-full' && request.method === 'POST') return await handleRestaurantsOwned(request, env, ctx);
+      if (pathname === '/coffee-owned' && request.method === 'POST') return await handleCoffeeOwned(request, env, ctx);
       if (pathname === '/places/enrich-owned' && request.method === 'POST') return await handleEnrichOwned(request, env);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
       if (pathname === '/describe-item' && request.method === 'POST') return await handleDescribeItem(request, env);

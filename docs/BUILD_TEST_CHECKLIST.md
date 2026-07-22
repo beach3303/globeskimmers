@@ -163,6 +163,15 @@ Let signed-in users attach ONE photo to a guestbook note. Client resizes → Wor
 - [ ] Must-Try prompt shows "Add a photo of your dish" copy
 - [ ] Confirm NO passport stamp fires for a food-photo post
 
+### Coffee — `PENDING` · **needs SQL + deploy** · Tested ⬜
+**Activate:** (1) run `scripts/finders/coffee.sql` in Supabase, (2) `wrangler deploy`
+- [x] Worker `/coffee-owned` (RPC `nearby_coffee`) → card shape, free list, cached per-tile
+- [x] Frontend fetch swapped to `getCoffeeOwned`; card enrich-on-expand (3 Google photos + hours), open bar + daily hours from enrich
+- [x] Owned→Google resolver shared: café work-profile + AI details now pass name+lat/lng and resolve the UUID (reuse enrich's warm cache)
+- [ ] Device: Coffee finder in NYC → cards (chains detected by name, ☕ tile), expand → 3 real photos + open/closed + daily hours
+- [ ] Expand → "Good for working" panel loads (wifi/outlets/noise) and AI details load for an owned shop
+- [ ] Cost check: default load fires no Google list calls; only expanded shops cost
+
 ## Template for a new build
 ```
 ### N · <feature name>

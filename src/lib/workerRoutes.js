@@ -24,6 +24,7 @@ export const ROUTE = {
   getExchangeRate: 'exchange-rate',
   getWeatherForecast: 'weather-forecast',
   getCoffeeShops: 'coffee-shops',
+  getCoffeeOwned: 'coffee-owned',
   getShoppingPlaces: 'shopping',
   getConvenienceStores: 'convenience-stores',
   getATMLocations: 'atm-locations',

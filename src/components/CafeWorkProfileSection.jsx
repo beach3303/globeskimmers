@@ -87,7 +87,7 @@ function Body({ loading, error, d }) {
   );
 }
 
-export default function CafeWorkProfileSection({ placeId, placeName, page = 'CoffeeFinder' }) {
+export default function CafeWorkProfileSection({ placeId, placeName, lat, lng, page = 'CoffeeFinder' }) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -103,7 +103,7 @@ export default function CafeWorkProfileSection({ placeId, placeName, page = 'Cof
     if (!open || data || loading || !placeId) return;
     setLoading(true);
     setError(null);
-    callWorker(ROUTE.getCafeWorkProfile, { placeId, placeName })
+    callWorker(ROUTE.getCafeWorkProfile, { placeId, placeName, lat, lng })
       .then(({ data: res }) => {
         if (res?.error) setError(res.error);
         else if (res?.workProfile) setData(res.workProfile);
