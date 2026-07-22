@@ -113,9 +113,21 @@ function PhotoStrip({photos,fallback="🛍️",bg,height}){
 function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet}){
   const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false);
   const [hoursExpanded,setHoursExpanded]=useState(false);
+  const [enriched,setEnriched]=useState(null);
   useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
+  // On first expand of an OWNED shop, fetch real Google photos + hours (resolves
+  // owned→Google once, cached). Keeps the list free; only opened shops cost.
+  useEffect(()=>{
+    if(!exp||enriched||p.source!=='owned')return;
+    callWorker('places/enrich-owned',{id:p.id||p.placeId,name:p.displayName?.text||p.name,lat:p.lat,lng:p.lng,maxPhotos:3})
+      .then(({data})=>{ if(data&&data.matched)setEnriched(data); }).catch(()=>{});
+  },[exp]); // eslint-disable-line react-hooks/exhaustive-deps
   const name=p.displayName?.text||p.name||"Shop";
-  const st=openStatus(p);
+  // Layer enrich (owned) photos + hours over the owned fields before deriving status.
+  const photos=enriched?.photos?.length?enriched.photos:p.photos;
+  const dailyHours=enriched?.hours?.weekdayDescriptions?.length?enriched.hours.weekdayDescriptions:(p.hours||[]);
+  const pStatus=enriched?.hours?{...p,currentOpeningHours:{weekdayDescriptions:enriched.hours.weekdayDescriptions},isOpen:enriched.hours.openNow??p.isOpen}:p;
+  const st=openStatus(pStatus);
   const openText=st.label;
   const activeTags=PROP_TAGS.filter(t=>p.props?.[t.key]);
   const vColor=p.venueColor||T.accent;
@@ -135,7 +147,7 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
 
       {/* Photo — editorial hero with rank badge + venue category tag */}
       <div style={{position:"relative"}}>
-        <PhotoStrip photos={p.photos} fallback={p.venueIcon||"🛍️"} bg={`linear-gradient(135deg,${vColor}dd,${vColor}99)`} height={v(360,200)}/>
+        <PhotoStrip photos={photos} fallback={p.venueIcon||"🛍️"} bg={`linear-gradient(135deg,${vColor}dd,${vColor}99)`} height={v(360,200)}/>
         <div style={{position:"absolute",top:fs(14),left:fs(14),width:v(fs(38),fs(32)),height:v(fs(38),fs(32)),borderRadius:"50%",background:index===0?"linear-gradient(135deg,#FFD700,#FFA000)":index===1?"linear-gradient(135deg,#B0BEC5,#78909C)":index===2?"linear-gradient(135deg,#FFAB40,#F57C00)":T.accent,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",fontSize:v(fs(16),fs(13)),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
         {p.venueLabel&&<div style={{position:"absolute",top:fs(14),right:fs(14),background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:v(`${fs(5)} ${fs(12)}`,`${fs(4)} ${fs(10)}`),borderRadius:"999px",fontSize:v(fs(14),fs(11)),fontWeight:"800",color:vColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{p.venueIcon} {p.venueLabel}</div>}
       </div>
@@ -202,7 +214,7 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
                   </div>
                 )}
 
-                {p.hours?.length>0&&(
+                {dailyHours.length>0&&(
                   <div style={{padding:v(fs(16),fs(13)),background:"#FAF7F0",borderRadius:"16px"}}>
                     <button onClick={()=>setHoursExpanded(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
                       <span style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 WEEKLY HOURS</span>
@@ -210,11 +222,11 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
                     </button>
                     {hoursExpanded&&(
                       <div style={{marginTop:fs(8)}}>
-                        {p.hours.map((day,i)=>{
+                        {dailyHours.map((day,i)=>{
                           const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
                           const isToday=DAY.findIndex(d=>day.toLowerCase().startsWith(d.toLowerCase()))===new Date().getDay();
                           const hrs=day.split(':').slice(1).join(':').trim();
-                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:v(fs(15),fs(13)),fontWeight:isToday?700:400,color:isToday?T.accentD:ED_INK2,borderBottom:i<p.hours.length-1?`1px solid ${ED_RULE}`:"none"}}>
+                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:v(fs(15),fs(13)),fontWeight:isToday?700:400,color:isToday?T.accentD:ED_INK2,borderBottom:i<dailyHours.length-1?`1px solid ${ED_RULE}`:"none"}}>
                             <span>{day.split(':')[0]}</span><span style={{color:hrs.toLowerCase()==="closed"?"#C2392F":isToday?T.accentD:ED_INK3}}>{hrs}</span>
                           </div>;
                         })}
@@ -272,7 +284,9 @@ export default function ShoppingFinder() {
     if(!lat||!lng) return; setLoading(true); setError(null);
     (async()=>{
       try{
-        const {data, error: workerError}=await callWorker(ROUTE.getShoppingPlaces,{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,category});
+        // List source: owned planet DB (free, global). Real Google photos + hours
+        // come on-tap via enrich-owned. `category` is passed through (harmless).
+        const {data, error: workerError}=await callWorker(ROUTE.getShoppingOwned,{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,category});
         if (workerError) throw new Error(workerError);
         const raw=data?.places||[];
         // Compute distanceMiles client-side so the unit formatter has a raw number.

@@ -10870,6 +10870,9 @@ async function handleOwnedFinder(request, env, rpc, tag) {
       id: r.id, placeId: r.id, source: 'owned',
       displayName: { text: r.name }, name: r.name,
       location: { latitude: r.lat, longitude: r.lng }, latitude: r.lat, longitude: r.lng,
+      // Also expose top-level lat/lng — several finder pages (Shopping, Restroom,
+      // Convenience, Money-exchange) read r.lat/r.lng directly for map pins + distance.
+      lat: r.lat, lng: r.lng,
       formattedAddress: r.address || '', shortFormattedAddress: r.address || '', vicinity: r.address || '',
       city: r.city || '', country: r.country || '',
       distanceKm: r.meters / 1000, distanceMiles: r.meters / 1609.34,
