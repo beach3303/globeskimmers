@@ -38,5 +38,16 @@ binding = "ATTRACTIONS_DB"
 database_name = "globeskimmers-attractions"
 database_id = "f27d0c24-786b-4422-b0bb-e19e8b7c70c6"
 
+# ── R2 MEDIA BINDING (guestbook / crowdsourced photos) ──────────────────
+# Stores user-uploaded guestbook photos (food, drinks, places). Zero-egress —
+# served back through the Worker at GET /gb-photo/<key>, cached at the edge.
+# One-time provisioning (on the Mac):
+#   wrangler r2 bucket create globeskimmers-media
+#   wrangler deploy
+# Binding name MUST be "MEDIA" — matches handleGuestbookPhotoUpload/Serve.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "globeskimmers-media"
+
 # Your GOOGLE_API_KEY is already set as a secret in Cloudflare
 # If you need to update it: wrangler secret put GOOGLE_API_KEY

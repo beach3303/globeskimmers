@@ -1,6 +1,7 @@
 // Guestbook — public tips-for-the-next-traveler on any place (generic by entity).
 // Read by anyone; signing requires sign-in. Guided prompts, edit/delete your own,
-// report others (Apple 1.2). Warm notes, NOT star reviews.
+// report others (Apple 1.2). Optional ONE crowdsourced photo per note (food / drink /
+// place) — resized client-side, moderated + stored server-side. Warm notes, NOT reviews.
 import { useEffect, useState, useCallback } from "react";
 import { callWorker } from "@/lib/callWorker";
 import { useAuth } from "@/lib/AuthContext";
@@ -25,6 +26,27 @@ function timeAgo(iso) {
   } catch { return ""; }
 }
 
+// Downscale to a max edge + re-encode JPEG so uploads stay small (keeps R2 + moderation cheap).
+function resizePhoto(file, maxDim = 1280, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      const scale = Math.min(1, maxDim / Math.max(width, height));
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      resolve({ dataUrl: canvas.toDataURL("image/jpeg", quality), w: width, h: height });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Could not read image")); };
+    img.src = url;
+  });
+}
+
 export default function Guestbook({ entityType = "place", entityId, entityName }) {
   const { user, profile, isAuthenticated } = useAuth();
   const [entries, setEntries] = useState([]);
@@ -36,6 +58,10 @@ export default function Guestbook({ entityType = "place", entityId, entityName }
   const [busy, setBusy] = useState(false);
   const [editId, setEditId] = useState(null);
   const [editBody, setEditBody] = useState("");
+  const [photoPreview, setPhotoPreview] = useState(null); // local resized dataURL
+  const [photoData, setPhotoData] = useState(null);        // { key, url, w, h } from server
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [lightbox, setLightbox] = useState(null);          // full-size photo url
 
   const load = useCallback(async () => {
     if (!entityId) return;
@@ -50,6 +76,32 @@ export default function Guestbook({ entityType = "place", entityId, entityName }
   const displayName = profile?.first_name || "A traveler";
   const homeCity = profile?.home_city || null;
 
+  const resetCompose = () => {
+    setComposing(false); setBody("");
+    setPhotoPreview(null); setPhotoData(null); setUploadingPhoto(false);
+  };
+
+  const onPickPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // let the user re-pick the same file
+    if (!file) return;
+    if (!file.type?.startsWith("image/")) { showToast("Please pick an image", "error"); return; }
+    setUploadingPhoto(true);
+    try {
+      const { dataUrl, w, h } = await resizePhoto(file);
+      setPhotoPreview(dataUrl);
+      const { data, error } = await callWorker("guestbook/photo-upload", {
+        entity_id: String(entityId), image: dataUrl, w, h,
+      });
+      if (error || !data?.key) { setPhotoPreview(null); setPhotoData(null); showToast(error || "Photo couldn't be added", "error"); }
+      else setPhotoData({ key: data.key, url: data.url, w: data.w || w, h: data.h || h });
+    } catch {
+      setPhotoPreview(null); setPhotoData(null); showToast("Could not read that image", "error");
+    } finally { setUploadingPhoto(false); }
+  };
+
+  const removePhoto = () => { setPhotoPreview(null); setPhotoData(null); };
+
   const submit = async () => {
     const text = body.trim();
     if (text.length < 2) { showToast("Write a short note first", "error"); return; }
@@ -58,12 +110,13 @@ export default function Guestbook({ entityType = "place", entityId, entityName }
       entity_type: entityType, entity_id: String(entityId), entity_name: entityName,
       display_name: displayName, home_city: showCity ? homeCity : null,
       prompt_type: prompt, body: text,
+      photo_key: photoData?.key, photo_url: photoData?.url, photo_w: photoData?.w, photo_h: photoData?.h,
     });
     setBusy(false);
     if (error) { showToast(error, "error"); return; }
     if (data?.entry) {
       setEntries((prev) => [data.entry, ...prev]);
-      setBody(""); setComposing(false);
+      resetCompose();
       showToast("Thanks for signing the guestbook! ✍️", "success");
     }
   };
@@ -123,18 +176,42 @@ export default function Guestbook({ entityType = "place", entityId, entityName }
               placeholder={PROMPTS.find((p) => p.key === prompt)?.hint || "Leave a tip…"}
               className="w-full p-3 rounded-lg border border-gray-300 text-[calc(14px*var(--fs))] resize-none focus:outline-none focus:border-purple-500"
             />
+
+            {/* Photo — crowdsource food / place photos */}
+            {photoPreview ? (
+              <div className="relative inline-block">
+                <img src={photoPreview} alt="Your upload" className="h-24 w-24 object-cover rounded-lg border border-gray-200" />
+                {uploadingPhoto && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/75 rounded-lg text-[calc(11px*var(--fs))] text-gray-600">Checking…</div>
+                )}
+                <button
+                  onClick={removePhoto}
+                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-black/70 text-white text-[11px] flex items-center justify-center"
+                  aria-label="Remove photo"
+                >✕</button>
+              </div>
+            ) : (
+              <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-gray-300 text-[calc(12.5px*var(--fs))] text-gray-600 cursor-pointer hover:border-purple-400">
+                📸 {prompt === "musttry" ? "Add a photo of your dish" : "Add a photo"}
+                <input type="file" accept="image/*" className="hidden" onChange={onPickPhoto} disabled={uploadingPhoto} />
+              </label>
+            )}
+
             {homeCity && (
               <label className="flex items-center gap-2 text-[calc(12.5px*var(--fs))] text-gray-600">
                 <input type="checkbox" checked={showCity} onChange={(e) => setShowCity(e.target.checked)} />
                 Show &ldquo;from {homeCity}&rdquo; on my note
               </label>
             )}
+            <p className="text-[calc(10.5px*var(--fs))] text-gray-400 leading-snug">
+              Notes &amp; photos post publicly. By posting you grant Globeskimmers a license to display them. Please don&apos;t post photos of people without their OK.
+            </p>
             <div className="flex items-center justify-between">
               <span className="text-[calc(11px*var(--fs))] text-gray-400">{body.length}/1000 · posts publicly as {displayName}</span>
               <div className="flex gap-2">
-                <button onClick={() => { setComposing(false); setBody(""); }} className="px-4 py-2 rounded-lg text-[calc(13px*var(--fs))] text-gray-600">Cancel</button>
-                <button onClick={submit} disabled={busy} className="px-5 py-2 rounded-lg font-semibold text-white text-[calc(13px*var(--fs))] disabled:opacity-50" style={{ background: "#17A38F" }}>
-                  {busy ? "Signing…" : "Sign"}
+                <button onClick={resetCompose} className="px-4 py-2 rounded-lg text-[calc(13px*var(--fs))] text-gray-600">Cancel</button>
+                <button onClick={submit} disabled={busy || uploadingPhoto} className="px-5 py-2 rounded-lg font-semibold text-white text-[calc(13px*var(--fs))] disabled:opacity-50" style={{ background: "#17A38F" }}>
+                  {busy ? "Signing…" : uploadingPhoto ? "Photo…" : "Sign"}
                 </button>
               </div>
             </div>
@@ -183,7 +260,16 @@ export default function Guestbook({ entityType = "place", entityId, entityName }
                   </div>
                 </div>
               ) : (
-                <p className="text-[calc(14px*var(--fs))] text-gray-700 leading-relaxed mt-1">{e.body}</p>
+                <>
+                  <p className="text-[calc(14px*var(--fs))] text-gray-700 leading-relaxed mt-1">{e.body}</p>
+                  {e.photo_url && (
+                    <img
+                      src={e.photo_url} alt="" loading="lazy"
+                      onClick={() => setLightbox(e.photo_url)}
+                      className="mt-2 rounded-lg w-full max-h-72 object-cover border border-gray-100 cursor-zoom-in"
+                    />
+                  )}
+                </>
               )}
               <div className="flex gap-4 mt-2 text-[calc(11.5px*var(--fs))]">
                 {mine ? (
@@ -198,6 +284,13 @@ export default function Guestbook({ entityType = "place", entityId, entityName }
             </div>
           );
         })
+      )}
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="" className="max-w-full max-h-full rounded-lg" />
+        </div>
       )}
     </div>
   );

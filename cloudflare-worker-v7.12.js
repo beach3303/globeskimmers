@@ -889,10 +889,21 @@ async function handleDeleteAccount(request, env) {
     // 1b) Anonymize their PUBLIC guestbook notes (keep the tip, drop the identity —
     //     Apple 5.1.1 / GDPR) + remove their PRIVATE visit records. Best-effort.
     try {
+      // Purge their uploaded photos from R2 first (the tips stay, anonymized; the
+      // photos come DOWN — honoring deletion, not just anonymizing).
+      try {
+        const pr = await fetch(`${SUPABASE_URL}/rest/v1/guestbook_entries?user_id=eq.${userId}&photo_key=not.is.null&select=photo_key`, {
+          headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+        });
+        if (pr.ok && env.MEDIA) {
+          const withPhotos = await pr.json();
+          await Promise.all((withPhotos || []).map((r) => env.MEDIA.delete(r.photo_key).catch(() => {})));
+        }
+      } catch { /* R2 purge best-effort */ }
       await fetch(`${SUPABASE_URL}/rest/v1/guestbook_entries?user_id=eq.${userId}`, {
         method: 'PATCH',
         headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify({ user_id: null, display_name: 'A traveler', home_city: null }),
+        body: JSON.stringify({ user_id: null, display_name: 'A traveler', home_city: null, photo_key: null, photo_url: null }),
       });
       await fetch(`${SUPABASE_URL}/rest/v1/guestbook_visits?user_id=eq.${userId}`, {
         method: 'DELETE',
@@ -10871,13 +10882,100 @@ async function gbModerate(env, text) {
   } catch { return { allow: true }; }
 }
 
+// Moderate a user-uploaded photo with Claude vision. Blocks nudity/sexual, gore/
+// violence, hate symbols, illegal content, private documents, and non-travel junk
+// (memes/text screenshots). Fails CLOSED on error — a bad photo is public + permanent,
+// so we'd rather reject than let one slip (text moderation fails open; images do not).
+async function gbModeratePhoto(env, base64, mediaType) {
+  if (!env.ANTHROPIC_API_KEY) return { allow: false, reason: 'moderation-unavailable' };
+  try {
+    const system = 'You are an image safety reviewer for a public travel app where people share photos of food, drinks, dishes, cafes, storefronts, attractions, landmarks, and scenery. Reply with ONLY {"allow":true} or {"allow":false}. Set allow=false if the image contains ANY of: nudity or sexual content, graphic violence or gore, hate symbols, illegal drugs, weapons brandished as a threat, personal documents / credit cards / screens showing private info, or content that is clearly not a travel/food/place photo (memes, pure-text screenshots, spam, ads). Allow ordinary photos of food, drinks, interiors, storefronts, landmarks, nature, and people enjoying a place.';
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001', max_tokens: 16, system,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+          { type: 'text', text: 'Is this photo allowed?' },
+        ] }],
+      }),
+    });
+    if (!r.ok) return { allow: false, reason: 'moderation-error' };
+    const d = await r.json();
+    const t = (d.content && d.content[0] && d.content[0].text) || '';
+    const m = t.match(/"allow"\s*:\s*(true|false)/i);
+    return { allow: m ? m[1].toLowerCase() === 'true' : false };
+  } catch { return { allow: false, reason: 'moderation-exception' }; }
+}
+
+// Upload one guestbook photo → moderate → store in R2 → return a servable URL.
+// The client resizes to ~1280px JPEG before sending (keeps payload small). The photo
+// is NOT attached to an entry here; the returned {key,url} is passed to /guestbook/sign.
+async function handleGuestbookPhotoUpload(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to add a photo' }, 401);
+    if (!env.MEDIA) return jsonResponse({ error: 'Photo storage not configured' }, 500);
+    const b = await request.json().catch(() => ({}));
+    const entityId = gbClean(b.entity_id);
+    if (!entityId) return jsonResponse({ error: 'entity_id required' }, 400);
+
+    // Accept a data URL or a bare base64 string; jpeg/png/webp only.
+    let data = String(b.image || '');
+    let mediaType = 'image/jpeg';
+    const m = data.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.*)$/i);
+    if (m) { mediaType = m[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : m[1].toLowerCase(); data = m[2]; }
+    else if (b.content_type && /^image\/(jpeg|png|webp)$/i.test(b.content_type)) { mediaType = String(b.content_type).toLowerCase(); }
+    data = data.replace(/\s/g, '');
+    if (!data) return jsonResponse({ error: 'No image data' }, 400);
+
+    let bytes;
+    try { bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0)); }
+    catch { return jsonResponse({ error: 'Bad image data' }, 400); }
+    if (bytes.length > 4 * 1024 * 1024) return jsonResponse({ error: 'Photo too large (please pick a smaller image)' }, 400);
+    if (bytes.length < 500) return jsonResponse({ error: 'That image is too small' }, 400);
+
+    // Moderate BEFORE storing (fails closed).
+    const mod = await gbModeratePhoto(env, data, mediaType);
+    if (!mod.allow) {
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'guestbook_photo_blocked', { entity_id: entityId, reason: mod.reason || 'content' }));
+      return jsonResponse({ error: "That photo can't be posted. Please share a photo of the food, drink, or place." }, 400);
+    }
+
+    const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
+    const key = `gb/${entityId}/${user.id}/${crypto.randomUUID()}.${ext}`;
+    await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'guestbook_photo_upload', { entity_id: entityId, bytes: bytes.length }));
+    const origin = new URL(request.url).origin;
+    return jsonResponse({ key, url: `${origin}/gb-photo/${key}`, w: parseInt(b.w, 10) || null, h: parseInt(b.h, 10) || null });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// Serve a stored guestbook photo from R2 (zero-egress; long-cached at the edge).
+async function handleGuestbookPhotoServe(request, env) {
+  try {
+    if (!env.MEDIA) return new Response('Not found', { status: 404 });
+    const key = decodeURIComponent(new URL(request.url).pathname.replace(/^\/gb-photo\//, ''));
+    if (!key || key.includes('..') || !key.startsWith('gb/')) return new Response('Bad key', { status: 400 });
+    const obj = await env.MEDIA.get(key);
+    if (!obj) return new Response('Not found', { status: 404 });
+    const headers = new Headers();
+    headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/jpeg');
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    headers.set('Access-Control-Allow-Origin', '*');
+    if (obj.httpEtag) headers.set('ETag', obj.httpEtag);
+    return new Response(obj.body, { headers });
+  } catch { return new Response('Error', { status: 500 }); }
+}
+
 async function handleGuestbookList(request, env) {
   try {
     const body = await request.json().catch(() => ({}));
     const entityId = gbClean(body.entity_id);
     if (!entityId) return jsonResponse({ error: 'entity_id required' }, 400);
     const limit = Math.min(parseInt(body.limit, 10) || 50, 100);
-    const q = `guestbook_entries?entity_id=eq.${encodeURIComponent(entityId)}&hidden=is.false&deleted_at=is.null&order=created_at.desc&limit=${limit}&select=id,user_id,display_name,home_city,prompt_type,body,verified_visit,created_at,edited_at`;
+    const q = `guestbook_entries?entity_id=eq.${encodeURIComponent(entityId)}&hidden=is.false&deleted_at=is.null&order=created_at.desc&limit=${limit}&select=id,user_id,display_name,home_city,prompt_type,body,verified_visit,created_at,edited_at,photo_url,photo_w,photo_h`;
     const res = await gbRest(env, q);
     if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
     return jsonResponse({ entries: await res.json() });
@@ -10907,11 +11005,19 @@ async function handleGuestbookSign(request, env, ctx) {
       body: JSON.stringify({ user_id: user.id, entity_type: entityType, entity_id: entityId, entity_name: entityName, verified, signed: true }),
     });
 
+    // Optional photo (already moderated + stored at /guestbook/photo-upload).
+    // Only trust a key that came from our own upload path (gb/ prefix).
+    let photoKey = gbClean(b.photo_key);
+    let photoUrl = String(b.photo_url || '').trim();
+    if (!photoKey.startsWith('gb/') || !/\/gb-photo\/gb\//.test(photoUrl)) { photoKey = ''; photoUrl = ''; }
+
     const row = {
       entity_type: entityType, entity_id: entityId, entity_name: entityName,
       user_id: user.id, display_name: gbClean(b.display_name) || 'A traveler',
       home_city: gbClean(b.home_city) || null, prompt_type: gbClean(b.prompt_type) || 'tip',
       body: text, verified_visit: verified,
+      photo_key: photoKey || null, photo_url: photoUrl || null,
+      photo_w: parseInt(b.photo_w, 10) || null, photo_h: parseInt(b.photo_h, 10) || null,
     };
     const res = await gbRest(env, 'guestbook_entries', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
     if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
@@ -10950,13 +11056,21 @@ async function handleGuestbookDelete(request, env) {
     const b = await request.json().catch(() => ({}));
     const id = gbClean(b.id);
     if (!id) return jsonResponse({ error: 'id required' }, 400);
+    // Look up the photo key first (ownership enforced by the same filter) so we can
+    // purge it from R2 — honoring deletion (Apple 5.1.1 / GDPR), not just soft-hiding.
+    let photoKey = null;
+    try {
+      const cur = await gbRest(env, `guestbook_entries?id=eq.${encodeURIComponent(id)}&user_id=eq.${user.id}&select=photo_key`);
+      if (cur.ok) photoKey = (await cur.json())[0]?.photo_key || null;
+    } catch { /* best-effort */ }
     const res = await gbRest(env, `guestbook_entries?id=eq.${encodeURIComponent(id)}&user_id=eq.${user.id}`, {
       method: 'PATCH', headers: { Prefer: 'return=representation' },
-      body: JSON.stringify({ deleted_at: new Date().toISOString() }),
+      body: JSON.stringify({ deleted_at: new Date().toISOString(), photo_key: null, photo_url: null }),
     });
     if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}` }, 502);
     const rows = await res.json();
     if (!rows.length) return jsonResponse({ error: 'Not found or not yours' }, 403);
+    if (photoKey && env.MEDIA) await env.MEDIA.delete(photoKey).catch(() => {});
     return jsonResponse({ ok: true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -11024,6 +11138,8 @@ export default {
       if (pathname === '/places/dietary') return await handleDietarySearch(request, env);
       if (pathname === '/places/nearby-owned' && request.method === 'POST') return await handleNearbyOwned(request, env);
       if (pathname === '/places/wiki-photos' && request.method === 'POST') return await handleWikiPhotos(request, env);
+      if (pathname.startsWith('/gb-photo/') && request.method === 'GET') return await handleGuestbookPhotoServe(request, env);
+      if (pathname === '/guestbook/photo-upload' && request.method === 'POST') return await handleGuestbookPhotoUpload(request, env, ctx);
       if (pathname === '/guestbook/list' && request.method === 'POST') return await handleGuestbookList(request, env);
       if (pathname === '/guestbook/sign' && request.method === 'POST') return await handleGuestbookSign(request, env, ctx);
       if (pathname === '/guestbook/edit' && request.method === 'POST') return await handleGuestbookEdit(request, env);

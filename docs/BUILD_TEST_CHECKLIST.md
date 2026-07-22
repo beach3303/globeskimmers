@@ -150,6 +150,19 @@ Swap the finder DATA source from rented Google to our OWNED 75M-place planet DB.
 - [ ] Device: ThingsToDo in a mid-size city (not just NYC) → **National Icons / Regional rows unchanged**, plus a new "Nearby Attractions" row with real photos
 - [ ] Edge: a location with NO curated icons still shows Nearby Attractions from planet DB (global coverage proof)
 
+## 📸 Guestbook photo upload — crowdsource food/place photos (2026-07-22)
+Let signed-in users attach ONE photo to a guestbook note. Client resizes → Worker moderates (Claude vision, fails closed) → stores in R2 → serves at `/gb-photo/<key>`. Photos purged from R2 on note-delete + account-delete. **No passport stamp** (stamps stay travel-only).
+**Activate:** (1) run `scripts/guestbook/02_photos.sql` in Supabase, (2) `wrangler r2 bucket create globeskimmers-media`, (3) `wrangler deploy`, (4) publish `legal/terms.html` (UGC-license + DMCA) to globeskimmers.io.
+- [x] Worker: `/guestbook/photo-upload` (moderate→R2), `/gb-photo/<key>` serve, sign saves photo cols, delete + account-delete purge R2
+- [x] Frontend: photo picker + client resize + preview + lightbox + public/license disclosure
+- [x] SQL migration + R2 binding + Terms draft committed
+- [ ] Verify bucket: `wrangler r2 bucket list` shows `globeskimmers-media`
+- [ ] Device: open a place → Guestbook → Sign → "📸 Add a photo" → pick a food photo → "Checking…" → preview → Sign → photo shows in the note
+- [ ] Moderation: try a clearly non-food/inappropriate image → rejected with a friendly message, note not blocked
+- [ ] Delete: delete your note → photo 404s at its URL (purged from R2)
+- [ ] Must-Try prompt shows "Add a photo of your dish" copy
+- [ ] Confirm NO passport stamp fires for a food-photo post
+
 ## Template for a new build
 ```
 ### N · <feature name>

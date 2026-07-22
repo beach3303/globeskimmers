@@ -47,3 +47,8 @@ android/.gradle/
 android/build/
 android/app/build/
 android/captures/
+
+# Large local data extracts (never commit)
+*.parquet
+scripts/places-pilot/planet/.planet_loaded_countries
+scripts/places-pilot/planet/.us_loaded_chunks
