@@ -7351,6 +7351,41 @@ function gaMapD1ToActivity(d) {
   };
 }
 
+// Map an owned planet-DB (Overture) attraction row to the same activity shape the
+// Things-to-Do cards read. Photos are hydrated separately (Wikimedia).
+function gaOvertureCat(cat) {
+  const c = (cat || '').toLowerCase();
+  for (const k of Object.keys(GA_D1_CAT_TABLE)) if (c.includes(k)) return GA_D1_CAT_TABLE[k];
+  if (c.includes('museum') || c.includes('gallery')) return { icon: '🏛️', label: 'Museum / Gallery', color: '#7C3AED', cat: 'culture' };
+  if (c.includes('park') || c.includes('garden')) return { icon: '🌳', label: 'Park', color: '#16A34A', cat: 'outdoor' };
+  return { icon: '⭐', label: 'Attraction', color: '#F59E0B', cat: 'attraction' };
+}
+function gaMapOvertureToActivity(r) {
+  const distMi = (r.meters || 0) / 1609.34;
+  const ct = gaOvertureCat(r.category);
+  const outdoor = /park|garden|beach|mountain|lake|waterfall|viewpoint|scenic|national_park/.test(r.category || '');
+  const cultural = /museum|gallery|historic|monument|temple|cathedral|palace|castle|shrine|memorial/.test(r.category || '');
+  return {
+    id: r.id, placeId: r.id, displayName: { text: r.name }, name: r.name,
+    location: { latitude: r.lat, longitude: r.lng }, lat: r.lat, lng: r.lng,
+    formattedAddress: r.address || [r.city, r.country].filter(Boolean).join(', '),
+    shortFormattedAddress: r.city || r.country || '',
+    distanceKm: (r.meters || 0) / 1000, distanceMiles: distMi, distance: `${distMi.toFixed(1)} mi`,
+    rating: null, userRatingCount: 0,
+    isOpen: null, hours: [], currentOpeningHours: { openNow: null, weekdayDescriptions: [] },
+    photos: [], photoUrl: null, photoUrl2: null, photoCredit: null,
+    nationalPhoneNumber: r.phone || '', websiteUri: r.website || '',
+    googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lng}`,
+    activityIcon: ct.icon, activityLabel: ct.label, activityColor: ct.color, activityCategory: ct.cat,
+    editorialSummary: '', outdoorContext: null, types: [r.category],
+    badges: [], qualityScore: 70, highlights: [], warnings: [], bestTime: '',
+    props: { isPhotoWorthy: true, isCultural: cultural, isOutdoor: outdoor, isIndoor: !outdoor && cultural },
+    tourMode: undefined,
+    travelType: distMi > 100 ? '✈️ Flights Required' : distMi > 50 ? '🚗 Drive' : distMi > 15 ? '🚗 Short Drive' : '📍 Nearby',
+    whyVisit: '', typicalMinutes: null, _source: 'owned',
+  };
+}
+
 // Internal search helpers — call the Worker's own handlers (no HTTP hop).
 async function gaText(env, ctx, origin, { query, latitude, longitude, radius, maxResults, forceRefresh }) {
   const p = new URLSearchParams({
@@ -7396,6 +7431,26 @@ async function handleActivities(request, env, ctx) {
 
     // ── STAGE 0: D1 attractions seed (fast path) ──
     const d1Promise = gaAttractions(env, ctx, origin, { latitude, longitude, cityName, countryName });
+
+    // ── OWNED planet-DB nearby attractions (free, global) + Wikimedia photos ──
+    const ownedNearbyPromise = (async () => {
+      try {
+        if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return [];
+        const r = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/nearby_attractions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
+          body: JSON.stringify({ in_lat: latitude, in_lng: longitude, in_radius_m: Math.min(radius || 20000, 50000), in_limit: 24 }),
+        });
+        if (!r.ok) return [];
+        const mapped = (await r.json() || []).map(gaMapOvertureToActivity);
+        // Hydrate real Wikimedia photos for the top 10 (free, cached 180d).
+        await Promise.all(mapped.slice(0, 10).map(async (a) => {
+          const wp = await getWikiPhotos(env, a.name, a.lat, a.lng);
+          if (wp.photos?.length) { a.photos = wp.photos.map((p) => p.url); a.photoUrl = a.photos[0]; a.photoCredit = wp.photos[0].credit; }
+        }));
+        return mapped;
+      } catch { return []; }
+    })();
 
     const map = {
       culture:['museum','gallery','historic','heritage','ancient ruins','cultural center','fine arts'],
@@ -7606,7 +7661,7 @@ async function handleActivities(request, env, ctx) {
     nearby.sort((a, b) => b.qualityScore - a.qualityScore || (b.rating || 0) - (a.rating || 0));
 
     // ── Merge D1 layer with the existing icons/regional stage ──
-    const [d1Raw, stageB] = await Promise.all([d1Promise, iconsAndRegionalPromise]);
+    const [d1Raw, stageB, ownedNearby] = await Promise.all([d1Promise, iconsAndRegionalPromise, ownedNearbyPromise]);
     const d1Mapped = (d1Raw || []).map(gaMapD1ToActivity);
     const d1Marquees = d1Mapped.filter(a => a.props?.isBucketList);
     const d1Regulars = d1Mapped.filter(a => !a.props?.isBucketList);
@@ -7654,8 +7709,12 @@ async function handleActivities(request, env, ctx) {
       a.aboutText = parts.join(' ');
     }
 
-    const total = dedupedNearby.length + nationalIcons.length + regionalGems.length;
-    return jsonResponse({ activities: dedupedNearby, nationalIcons, regionalGems, count: total, version: 'v6.1-d1-worker' });
+    // Owned planet-DB nearby attractions — dedupe against curated + Google nearby.
+    const shownIds = new Set([...iconIds, ...dedupedNearby.map((a) => a.id)]);
+    const nearbyAttractions = (ownedNearby || []).filter((a) => a && !shownIds.has(a.id)).slice(0, 20);
+
+    const total = dedupedNearby.length + nationalIcons.length + regionalGems.length + nearbyAttractions.length;
+    return jsonResponse({ activities: dedupedNearby, nationalIcons, regionalGems, nearbyAttractions, count: total, version: 'v6.2-owned' });
   } catch (e) {
     return jsonResponse({ error: e.message, activities: [] }, 200);
   }
@@ -10535,26 +10594,23 @@ function badWikiFile(title) {
 function commonsThumb(file, width = 900) {
   return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=${width}`;
 }
-async function handleWikiPhotos(request, env) {
+// Core: owned Wikimedia photos for a place (name + coords). Cached 180d. Callable
+// internally (finders hydrate photos with it) or via handleWikiPhotos.
+async function getWikiPhotos(env, name, lat, lng) {
+  name = (name || '').toString().trim();
+  const empty = { photos: [], source: 'wikimedia' };
+  if (!name) return empty;
   try {
-    const body = await request.json().catch(() => ({}));
-    const name = (body.name || '').toString().trim();
-    const lat = parseFloat(body.lat ?? body.latitude);
-    const lng = parseFloat(body.lng ?? body.longitude);
-    if (!name) return jsonResponse({ error: 'name is required' }, 400);
-
     const cacheKey = 'wikiphotos:v3:' + await sha256Hex(
       name.toLowerCase() + '|' + (Number.isFinite(lat) ? lat.toFixed(2) : '') + '|' + (Number.isFinite(lng) ? lng.toFixed(2) : '')
     );
     const cached = await getFromCache(env, cacheKey);
-    if (cached && cached.age < 180 * 24 * 60 * 60 * 1000) return jsonResponse({ cached: true, ...cached.data });
-
-    const empty = { photos: [], source: 'wikimedia' };
+    if (cached && cached.age < 180 * 24 * 60 * 60 * 1000) return cached.data;
 
     // 1) candidate Wikidata entities for this name
     const s = await wikiJson(`https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=en&format=json&limit=5`);
     const cands = (s.search || []).map((x) => x.id);
-    if (!cands.length) { await setInCache(env, cacheKey, empty, 30 * 24 * 60 * 60); return jsonResponse(empty); }
+    if (!cands.length) { await setInCache(env, cacheKey, empty, 30 * 24 * 60 * 60); return empty; }
 
     // 2) pick the entity whose coordinates are nearest the attraction (kills wrong matches)
     const e = await wikiJson(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${cands.join('|')}&props=claims|sitelinks&sitefilter=enwiki&format=json`);
@@ -10597,7 +10653,7 @@ async function handleWikiPhotos(request, env) {
         if (files.length >= 18) break;
       }
     }
-    if (!files.length) { await setInCache(env, cacheKey, empty, 30 * 24 * 60 * 60); return jsonResponse(empty); }
+    if (!files.length) { await setInCache(env, cacheKey, empty, 30 * 24 * 60 * 60); return empty; }
 
     // 4) one call for URL + dimensions + author/license for ALL candidates
     const info = await wikiJson(`https://commons.wikimedia.org/w/api.php?action=query&titles=${files.map((f) => 'File:' + encodeURIComponent(f)).join('|')}&prop=imageinfo&iiprop=url|extmetadata|size&iiurlwidth=1000&format=json`);
@@ -10627,10 +10683,15 @@ async function handleWikiPhotos(request, env) {
     }
     const payload = { photos, source: 'wikimedia' };
     await setInCache(env, cacheKey, payload, 180 * 24 * 60 * 60);
-    return jsonResponse(payload);
-  } catch (e) {
-    return jsonResponse({ error: 'wiki photos failed', details: e.message }, 500);
-  }
+    return payload;
+  } catch { return empty; }
+}
+async function handleWikiPhotos(request, env) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    if (!body.name) return jsonResponse({ error: 'name is required' }, 400);
+    return jsonResponse(await getWikiPhotos(env, body.name, parseFloat(body.lat ?? body.latitude), parseFloat(body.lng ?? body.longitude)));
+  } catch (e) { return jsonResponse({ error: 'wiki photos failed', details: e.message }, 500); }
 }
 
 // ─── Restaurants from the OWNED planet DB (replaces Google for the list) ──────

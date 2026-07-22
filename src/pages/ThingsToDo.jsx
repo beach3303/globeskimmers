@@ -756,6 +756,7 @@ export default function ThingsToDoFinder() {
   const [activities,setActivities]=useState([]);
   const [nationalIcons,setNationalIcons]=useState([]);
   const [regionalGems,setRegionalGems]=useState([]);
+  const [nearbyAttractions,setNearbyAttractions]=useState([]);
   const [loading,setLoading]=useState(true);
   const [refreshTick,setRefreshTick]=useState(0);
   const forceNextRef=useRef(false);
@@ -805,6 +806,7 @@ export default function ThingsToDoFinder() {
     if (cached) {
       setNationalIcons(cached.nationalIcons || []);
       setRegionalGems(cached.regionalGems || []);
+      setNearbyAttractions(cached.nearbyAttractions || []);
       setActivities(cached.activities || []);
       setError(null);
       setLoading(true); // background refresh in flight — keep top chip visible
@@ -821,12 +823,13 @@ export default function ThingsToDoFinder() {
         const rg=data?.regionalGems||[];
         setNationalIcons(ni);
         setRegionalGems(rg);
+        setNearbyAttractions(data?.nearbyAttractions||[]);
         if(raw.length||ni.length||rg.length){
           setActivities(raw);
           // Persist fresh data to localStorage so the next page open
           // hits the instant path above. Only store on success — never
           // cache an error / empty response.
-          writeTtdCache(lat,lng,category,radius,{activities:raw,nationalIcons:ni,regionalGems:rg});
+          writeTtdCache(lat,lng,category,radius,{activities:raw,nationalIcons:ni,regionalGems:rg,nearbyAttractions:data?.nearbyAttractions||[]});
         }else if(!cached){
           // No cache to fall back on AND the fresh fetch is empty —
           // show the error state. If we DID have cache, leave it
@@ -982,6 +985,7 @@ export default function ThingsToDoFinder() {
         : {padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"4px"}}>
         <TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet}/>
         <TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet}/>
+        <TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet}/>
         {(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Near You</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
         {filtered.length===0&&nationalIcons.length===0&&regionalGems.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Try a different category or expand your radius</div></div>:null}
         <div style={{display:"flex",flexDirection:"column",gap:isTablet?"30px":"16px"}}>{filtered.map((a,i)=>{
