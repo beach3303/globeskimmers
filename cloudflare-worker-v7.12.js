@@ -886,6 +886,20 @@ async function handleDeleteAccount(request, env) {
     const userId = who?.id;
     if (!userId) return jsonResponse({ error: 'Could not identify account' }, 401);
 
+    // 1b) Anonymize their PUBLIC guestbook notes (keep the tip, drop the identity —
+    //     Apple 5.1.1 / GDPR) + remove their PRIVATE visit records. Best-effort.
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/guestbook_entries?user_id=eq.${userId}`, {
+        method: 'PATCH',
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ user_id: null, display_name: 'A traveler', home_city: null }),
+      });
+      await fetch(`${SUPABASE_URL}/rest/v1/guestbook_visits?user_id=eq.${userId}`, {
+        method: 'DELETE',
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      });
+    } catch { /* anonymization is best-effort; still delete the account */ }
+
     // 2) Hard-delete the auth user (cascades profiles + login_events).
     const delRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
       method: 'DELETE',
