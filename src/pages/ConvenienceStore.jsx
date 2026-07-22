@@ -171,7 +171,7 @@ function normalizeStore(store) {
     longitude: store.longitude || store.lng || store.location?.longitude,
     lat: store.lat || store.latitude || store.location?.latitude,
     lng: store.lng || store.longitude || store.location?.longitude,
-    distance: store.distance_miles ?? store.distance ?? null,
+    distance: store.distance_miles ?? store.distance ?? store.distanceMiles ?? null,
     rating: store.rating,
     reviewCount: store.review_count || store.userRatingCount || 0,
     isOpen: store.is_open ?? store.isOpen ?? null,
@@ -411,8 +411,22 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
   const [photoError, setPhotoError] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [showDirs, setShowDirs] = useState(false);
+  const [enriched, setEnriched] = useState(null);
   const touchStartX = useRef(0);
   const fs = (n) => `calc(${n}px*var(--fs))`;
+
+  // On first expand of an OWNED store, fetch real Google photos + hours (resolves
+  // owned→Google once, cached). Keeps the list free; only opened cards cost.
+  useEffect(() => {
+    if (!expanded || enriched || rawStore.source !== 'owned') return;
+    callWorker('places/enrich-owned', {
+      id: rawStore.id || rawStore.placeId,
+      name: rawStore.name || rawStore.displayName?.text,
+      lat: rawStore.lat ?? rawStore.latitude,
+      lng: rawStore.lng ?? rawStore.longitude,
+      maxPhotos: 3,
+    }).then(({ data }) => { if (data && data.matched) setEnriched(data); }).catch(() => {});
+  }, [expanded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Phone-tuned vs tablet sizing. Tablet values are unchanged from the
   // original editorial card; phone values are the compact set from the spec.
@@ -437,7 +451,14 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
   };
 
   // Normalize the store data (same as StoreCard)
-  const store = normalizeStore(rawStore);
+  const store0 = normalizeStore(rawStore);
+  // Layer enrich (owned) photos + hours over the owned fields for display only.
+  const store = enriched ? {
+    ...store0,
+    photos: enriched.photos?.length ? enriched.photos : store0.photos,
+    hours: enriched.hours?.weekdayDescriptions?.length ? enriched.hours.weekdayDescriptions : store0.hours,
+    isOpen: enriched.hours?.openNow ?? store0.isOpen,
+  } : store0;
   const chainInfo = detectChain(store.name);
   const photos = store.photos || [];
   const mainPhotoUrl = photos.length > 0 && !photoError ? getPhotoUrl(photos[0], 800) : null;
@@ -803,10 +824,14 @@ export default function ConvenienceStorePage() {
     const force = forceNextRef.current; forceNextRef.current = false;
 
     try {
-      const { data: result, error: workerError } = await callWorker(ROUTE.getConvenienceStores, {
+      // List source: owned planet DB (free, global). The owned handler takes radius
+      // in METERS (searchRadius is miles here), so convert. Real Google photos +
+      // hours come on-tap via enrich-owned. Filters are passed through harmlessly.
+      const { data: result, error: workerError } = await callWorker(ROUTE.getConvenienceOwned, {
         latitude: location.latitude,
         longitude: location.longitude,
-        radius: searchRadius,
+        radius: searchRadius * 1609,
+        maxResults: 50,
         limit: 50,
         sortBy: 'traveler_best',
         ...activeFilters,
