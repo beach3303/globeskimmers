@@ -62,6 +62,10 @@ as $$
 $$;
 grant execute on function api.gb_report to anon, authenticated, service_role;
 
--- Let PostgREST see them.
+-- Grants. The Worker uses the SERVICE key (service_role), which needs explicit
+-- table privileges on custom-schema tables. anon/authenticated get read on entries
+-- (RLS still gates to visible rows); visits are Worker-only.
+grant all privileges on api.guestbook_entries to service_role;
+grant all privileges on api.guestbook_visits  to service_role;
 grant select on api.guestbook_entries to anon, authenticated;
 notify pgrst, 'reload schema';
