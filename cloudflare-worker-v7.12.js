@@ -10670,20 +10670,10 @@ async function handleRestaurantsOwned(request, env, ctx) {
     if (query) rows = rows.filter((r) => `${r.name} ${r.category}`.toLowerCase().includes(query));
     rows = rows.slice(0, maxResults);
 
-    // One Unsplash photo per DISTINCT cuisine query (cached globally → few calls ever).
-    const cuisineQuery = (cat) => {
-      const c = String(cat || 'restaurant').replace(/_/g, ' ').replace(/\brestaurant\b/g, '').trim();
-      return c ? `${c} restaurant food` : 'restaurant food';
-    };
-    const photoFor = {};
-    await Promise.all([...new Set(rows.map((r) => cuisineQuery(r.category)))].map(async (q) => {
-      photoFor[q] = await fetchUnsplashPhoto(env, q, ctx);
-    }));
-
+    // No list photos: real Google photos + hours are fetched on-tap (enrich-owned)
+    // to keep the list free. The card shows a clean cuisine tile until then.
     const humanize = (s) => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
     const places = rows.map((r) => {
-      const ph = photoFor[cuisineQuery(r.category)];
-      const url = ph?.url || null;
       return {
         id: r.id, placeId: r.id, source: 'owned',
         displayName: { text: r.name }, name: r.name,
@@ -10693,7 +10683,7 @@ async function handleRestaurantsOwned(request, env, ctx) {
         distanceKm: r.meters / 1000, distanceMiles: r.meters / 1609.34,
         rating: null, userRatingCount: 0, priceLevel: null,
         currentOpeningHours: null, regularOpeningHours: null, hours: null, isOpen: null,
-        photos: url ? [url] : [], photoUrl: url, photoCredit: ph?.photographer || null,
+        photos: [], photoUrl: null,
         types: [r.category], primaryType: humanize(r.category),
         nationalPhoneNumber: r.phone || null, internationalPhoneNumber: r.phone || null,
         websiteUri: r.website || null,
@@ -10707,6 +10697,63 @@ async function handleRestaurantsOwned(request, env, ctx) {
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
   }
+}
+
+// On-tap enrich for an owned place: resolve to a Google place id (cached), fetch
+// Place Details, return up to N real photos + open/close + daily hours. Called when
+// a card is OPENED, so the free list stays free and only opened places cost.
+async function handleEnrichOwned(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.id || b.placeId || '');
+    const name = String(b.name || '');
+    const lat = parseFloat(b.lat ?? b.latitude), lng = parseFloat(b.lng ?? b.longitude);
+    const maxPhotos = Math.min(Math.max(parseInt(b.maxPhotos, 10) || 3, 0), 6);
+    if (!name && !id) return jsonResponse({ error: 'name or id required' }, 400);
+
+    // Resolve owned uuid → Google place id (cached), else use a passed Google id.
+    let gid = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id) ? null : (id || null);
+    if (!gid && id) {
+      const mapKey = `owned2gid:${id}`;
+      gid = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(mapKey).catch(() => null) : null;
+      if (!gid && name && env.GOOGLE_API_KEY) {
+        try {
+          const payload = { textQuery: name };
+          if (Number.isFinite(lat) && Number.isFinite(lng)) payload.locationBias = { circle: { center: { latitude: lat, longitude: lng }, radius: 800 } };
+          const sr = await fetch('https://places.googleapis.com/v1/places:searchText', {
+            method: 'POST', headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': 'places.id', 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (sr.ok) { gid = (await sr.json())?.places?.[0]?.id || null; if (gid && env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(mapKey, gid, { expirationTtl: 180 * 24 * 60 * 60 }).catch(() => {}); }
+        } catch { /* no match */ }
+      }
+    }
+    if (!gid) return jsonResponse({ matched: false, photos: [], hours: null });
+
+    // Place details (90d KV cache — shared with AI-details / place-details).
+    const dk = `details_${gid}`;
+    let place; const cd = await getFromCache(env, dk);
+    if (cd && cd.data) place = cd.data;
+    else {
+      if (!env.GOOGLE_API_KEY) return jsonResponse({ matched: false, photos: [], hours: null });
+      const dr = await fetch(`https://places.googleapis.com/v1/places/${gid}?languageCode=en`, {
+        headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': CONFIG.DETAILS_FIELD_MASK },
+      });
+      if (!dr.ok) return jsonResponse({ matched: false, photos: [], hours: null });
+      place = normalizePlace(await dr.json(), new URL(request.url).origin, true);
+      await setInCache(env, dk, place, CONFIG.CACHE_TTL.DETAILS);
+    }
+
+    const photos = (place.photos || []).slice(0, maxPhotos).map((p) => p.full || p.url || p).filter(Boolean);
+    const oh = place.currentOpeningHours || place.regularOpeningHours || null;
+    return jsonResponse({
+      matched: true, placeId: gid, photos,
+      hours: oh ? { openNow: oh.openNow ?? null, weekdayDescriptions: oh.weekdayDescriptions || oh.weekday_text || [] } : null,
+      isOpen: place.currentOpeningHours?.openNow ?? null,
+      rating: place.rating ?? null, priceLevel: place.priceLevel ?? null,
+      nationalPhoneNumber: place.nationalPhoneNumber ?? null, websiteUri: place.websiteUri ?? null,
+    });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
 // ─── Guestbook (public tips per place; visit-gated signing; report/moderation) ──
@@ -10937,6 +10984,7 @@ export default {
       if (pathname === '/money-exchange' && request.method === 'POST') return await handleMoneyExchange(request, env, ctx);
       if (pathname === '/activities' && request.method === 'POST') return await handleActivities(request, env, ctx);
       if (pathname === '/restaurants-full' && request.method === 'POST') return await handleRestaurantsOwned(request, env, ctx);
+      if (pathname === '/places/enrich-owned' && request.method === 'POST') return await handleEnrichOwned(request, env);
       if (pathname === '/scan-prices' && request.method === 'POST') return await handlePriceScan(request, env);
       if (pathname === '/describe-item' && request.method === 'POST') return await handleDescribeItem(request, env);
       if (pathname === '/analyze-price' && request.method === 'POST') return await handleAnalyzePrice(request, env);

@@ -640,6 +640,14 @@ function AlsoServesBanner({ banner, onExpandRadius }) {
 function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, formatDistance, isTablet }) {
   const [expanded,setExpanded]=useState(false);
   const [hoursExpanded,setHoursExpanded]=useState(false);
+  const [enriched,setEnriched]=useState(null);
+  // On first expand of an OWNED restaurant, fetch 3 real Google photos + hours
+  // (resolves to Google once, cached). Keeps the list free; only opened places cost.
+  useEffect(()=>{
+    if(!expanded||enriched||restaurant.source!=='owned')return;
+    callWorker('places/enrich-owned',{id:restaurant.id||restaurant.placeId,name:restaurant.displayName?.text||restaurant.name,lat:restaurant.lat,lng:restaurant.lng,maxPhotos:3})
+      .then(({data})=>{ if(data&&data.matched)setEnriched(data); }).catch(()=>{});
+  },[expanded]); // eslint-disable-line react-hooks/exhaustive-deps
   const fs=(n)=>`calc(${n}px*var(--fs))`;
   // Pick tablet vs phone-tuned value.
   const t=(tab,phone)=>isTablet?tab:phone;
@@ -653,7 +661,12 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
   const cuisineLabel = restaurant.primaryType
     ? restaurant.primaryType.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())
     : restaurant.types?.[0]?.replace(/_/g,' ')?.replace(/\b\w/g,l=>l.toUpperCase()) || null;
-  const openText = restaurant.is24Hours ? 'Open 24/7' : (restaurant.isOpen ? 'Open' : 'Closed');
+  const openNow = enriched?.hours?.openNow ?? restaurant.isOpen;
+  const weekdays = (enriched?.hours?.weekdayDescriptions?.length ? enriched.hours.weekdayDescriptions
+    : (restaurant.currentOpeningHours?.weekdayDescriptions || restaurant.regularOpeningHours?.weekdayDescriptions || restaurant.hours || []));
+  const photosToShow = (enriched?.photos?.length ? enriched.photos : (restaurant.photos || (restaurant.photoUrl ? [restaurant.photoUrl] : [])));
+  const todayHrs = restaurant.todayHours || (weekdays.length ? ((weekdays[(new Date().getDay()+6)%7]||'').split(': ').slice(1).join(': ')||null) : null);
+  const openText = restaurant.is24Hours ? 'Open 24/7' : (openNow===true ? 'Open' : openNow===false ? 'Closed' : '');
 
   const Tag=({bg,color,children})=>(
     <span style={{background:bg,color,borderRadius:"999px",padding:`${t(fs(9),fs(5))} ${t(fs(16),fs(11))}`,fontSize:t(fs(15.5),fs(12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
@@ -664,7 +677,7 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
       style={{background:"#fff",borderRadius:t("28px","20px"),overflow:"hidden",boxShadow:t("0 24px 50px -30px rgba(22,17,13,.4)","0 12px 28px -18px rgba(22,17,13,.4)"),border:`1px solid ${ED_RULE}`}}>
 
       {/* Photo — reuse the carousel (rank badge + smart badges incl. Dish Specialist) at editorial height */}
-      <PhotoCarousel photos={restaurant.photos||(restaurant.photoUrl?[restaurant.photoUrl]:[])} rank={rank} badges={restaurant.badges||[]} height={t(360,200)}/>
+      <PhotoCarousel photos={photosToShow} rank={rank} badges={restaurant.badges||[]} height={t(360,200)}/>
 
       <div style={{padding:t(`${fs(28)} ${fs(32)} ${fs(32)}`,`${fs(16)} ${fs(16)} ${fs(18)}`)}}>
         {cuisineLabel&&<div style={{color:ED_EAT,fontWeight:600,fontSize:t(fs(17),fs(13)),letterSpacing:"0.2px"}}>{cuisineLabel}</div>}
@@ -696,11 +709,11 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
         </div>
 
         {/* Open bar */}
-        {restaurant.isOpen!==null&&(
-          <div style={{marginTop:t(fs(18),fs(12)),background:restaurant.isOpen?"#E7F3EA":"#FBE0DC",borderRadius:t("16px","12px"),padding:t(`${fs(16)} ${fs(20)}`,`${fs(10)} ${fs(13)}`),fontSize:t(fs(18),fs(13.5)),fontWeight:600,color:restaurant.isOpen?"#2E7D46":"#C2392F",display:"flex",alignItems:"center",gap:t(fs(11),fs(8))}}>
-            <span style={{width:t(fs(10),fs(8)),height:t(fs(10),fs(8)),borderRadius:"50%",background:restaurant.is24Hours?"#00BCD4":(restaurant.isOpen?"#2E7D46":"#C2392F"),flexShrink:0}}/>
+        {(openNow!==null||restaurant.is24Hours)&&(
+          <div style={{marginTop:t(fs(18),fs(12)),background:openNow===false?"#FBE0DC":"#E7F3EA",borderRadius:t("16px","12px"),padding:t(`${fs(16)} ${fs(20)}`,`${fs(10)} ${fs(13)}`),fontSize:t(fs(18),fs(13.5)),fontWeight:600,color:openNow===false?"#C2392F":"#2E7D46",display:"flex",alignItems:"center",gap:t(fs(11),fs(8))}}>
+            <span style={{width:t(fs(10),fs(8)),height:t(fs(10),fs(8)),borderRadius:"50%",background:restaurant.is24Hours?"#00BCD4":(openNow===false?"#C2392F":"#2E7D46"),flexShrink:0}}/>
             <span>{openText}</span>
-            {restaurant.todayHours&&!restaurant.is24Hours&&<span style={{color:ED_INK3,fontWeight:500}}>· {restaurant.todayHours}</span>}
+            {todayHrs&&!restaurant.is24Hours&&<span style={{color:ED_INK3,fontWeight:500}}>· {todayHrs}</span>}
           </div>
         )}
 
@@ -785,7 +798,7 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
                   </div>
                 )}
 
-                {restaurant.currentOpeningHours?.weekdayDescriptions?.length>0&&(
+                {weekdays.length>0&&(
                   <div style={{padding:fs(16),background:"#FAF7F0",borderRadius:"16px"}}>
                     <button onClick={()=>setHoursExpanded(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
                       <span style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
@@ -793,7 +806,7 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
                     </button>
                     {hoursExpanded&&(
                       <div style={{marginTop:fs(8)}}>
-                        {restaurant.currentOpeningHours.weekdayDescriptions.map((day,i)=>{
+                        {weekdays.map((day,i)=>{
                           const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
                           const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
                           return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?TEAL_DEEP:ED_INK2,borderBottom:i<6?`1px solid ${ED_RULE}`:"none"}}>
