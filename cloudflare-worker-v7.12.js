@@ -10778,6 +10778,26 @@ async function handleRestaurantsOwned(request, env, ctx) {
 // handleRestaurantsOwned: free list (no photos), real Google photos + hours on-tap
 // via /places/enrich-owned. The café work-profile + AI details resolve owned→Google
 // by name too, so those panels keep working.
+// Serve the legal pages (Terms / Privacy) from R2 so they have real public URLs
+// (the Base44 web app catch-alls every path, so static files can't live there).
+// Upload the HTML with: wrangler r2 object put globeskimmers-media/legal/<f>.html
+//   --file=legal/<f>.html --content-type="text/html; charset=utf-8"
+async function handleLegalPage(request, env) {
+  try {
+    if (!env.MEDIA) return new Response('Not found', { status: 404 });
+    const slug = new URL(request.url).pathname.replace(/^\/legal\//, '').replace(/\.html$/, '');
+    const KEYS = { terms: 'legal/terms.html', privacy: 'legal/privacy.html' };
+    const key = KEYS[slug];
+    if (!key) return new Response('Not found', { status: 404 });
+    const obj = await env.MEDIA.get(key);
+    if (!obj) return new Response('This page has not been published yet.', { status: 404 });
+    const headers = new Headers();
+    headers.set('Content-Type', 'text/html; charset=utf-8');
+    headers.set('Cache-Control', 'public, max-age=3600');
+    return new Response(obj.body, { headers });
+  } catch { return new Response('Error', { status: 500 }); }
+}
+
 // Restroom HYBRID: owned literal public toilets (free — parks, transit, plazas)
 // MERGED with Google's venue-based restrooms (gas stations / cafés / malls that
 // have a restroom). Overture only tags rare standalone toilets, so Google stays
@@ -11350,6 +11370,7 @@ export default {
       if (pathname === '/places/nearby-owned' && request.method === 'POST') return await handleNearbyOwned(request, env);
       if (pathname === '/places/wiki-photos' && request.method === 'POST') return await handleWikiPhotos(request, env);
       if (pathname.startsWith('/gb-photo/') && request.method === 'GET') return await handleGuestbookPhotoServe(request, env);
+      if (pathname.startsWith('/legal/') && request.method === 'GET') return await handleLegalPage(request, env);
       if (pathname === '/guestbook/photo-upload' && request.method === 'POST') return await handleGuestbookPhotoUpload(request, env, ctx);
       if (pathname === '/guestbook/list' && request.method === 'POST') return await handleGuestbookList(request, env);
       if (pathname === '/guestbook/sign' && request.method === 'POST') return await handleGuestbookSign(request, env, ctx);
