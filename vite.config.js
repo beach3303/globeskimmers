@@ -1,5 +1,5 @@
-import base44 from "@base44/vite-plugin"
 import react from '@vitejs/plugin-react'
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
@@ -22,14 +22,14 @@ export default defineConfig({
     pure: ['console.log', 'console.debug', 'console.info', 'console.warn'],
   },
   plugins: [
-    base44({
-      // Support for legacy code that imports the base44 SDK with @/integrations, @/entities, etc.
-      // can be removed if the code has been updated to use the new SDK imports from @base44/sdk
-      legacySDKImports: process.env.BASE44_LEGACY_SDK_IMPORTS === 'true',
-      hmrNotifier: true,
-      navigationNotifier: true,
-      visualEditAgent: true
-    }),
     react(),
-  ]
+  ],
+  // `@/*` → `./src/*`. This alias was previously provided implicitly by the
+  // Base44 Vite plugin; now that the project is standalone it's declared here
+  // explicitly (mirrors the `paths` mapping in jsconfig.json).
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
 });
