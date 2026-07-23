@@ -10828,8 +10828,11 @@ async function handleRestroomHybrid(request, env, ctx) {
       const dlat = (A.lat - B.lat) * 111000, dlng = (A.lng - B.lng) * 111000 * Math.cos(A.lat * Math.PI / 180);
       return Math.hypot(dlat, dlng) < 40;
     };
-    const merged = [...owned];
-    for (const g of google) if (!merged.some((m) => near(m, g))) merged.push(g);
+    // Google (reliable venue-based) leads; owned public toilets append after,
+    // deduped. Owned Overture toilet tags are noisy, so they supplement rather
+    // than displace the trustworthy venue results.
+    const merged = [...google];
+    for (const o of owned) if (!merged.some((m) => near(m, o))) merged.push(o);
     const maxResults = Math.min(Math.max(parseInt(body.maxResults, 10) || 30, 1), 60);
     const top = merged.slice(0, maxResults);
     return jsonResponse({ restrooms: top, count: top.length, country: gData.country, countryTip: gData.countryTip, source: 'hybrid', version: 'v4.2-hybrid' });
