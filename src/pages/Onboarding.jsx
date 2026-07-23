@@ -6,33 +6,28 @@ import { createPageUrl } from "@/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { extractFirstName } from "@/lib/extractFirstName";
+import { inferProfileDefaults } from "@/lib/inferProfileDefaults";
 
-// Existing (reused) steps
+// Essential steps only — the rest is inferred or deferred.
 import LocationStep from "../components/onboarding/LocationStep";
 import HomeCountryStep from "../components/onboarding/HomeCountryStep";
-import CurrencyStep from "../components/onboarding/CurrencyStep";
-import LanguageStep from "../components/onboarding/LanguageStep";
-import TemperatureStep from "../components/onboarding/TemperatureStep";
-// New steps (Phase 5)
 import FirstNameStep from "../components/onboarding/FirstNameStep";
-import DistanceUnitStep from "../components/onboarding/DistanceUnitStep";
-import TravelFrequencyStep from "../components/onboarding/TravelFrequencyStep";
-import TravelPurposeStep from "../components/onboarding/TravelPurposeStep";
-import TravelerTypeStep from "../components/onboarding/TravelerTypeStep";
-import FavoriteCountriesStep from "../components/onboarding/FavoriteCountriesStep";
-import NextDestinationStep from "../components/onboarding/NextDestinationStep";
-import TravelBudgetStep from "../components/onboarding/TravelBudgetStep";
-import AccommodationStyleStep from "../components/onboarding/AccommodationStyleStep";
 
 // Account-tied onboarding. The user is ALWAYS authenticated here (App.jsx's
-// forced gate guarantees a Supabase session). Steps collect answers; on the
-// final step we write them all to public.profiles and flip
-// onboarding_completed = true (the once-ever flag the Layout gate reads).
+// forced gate guarantees a Supabase session). On the final step we write the
+// answers to public.profiles and flip onboarding_completed = true (the
+// once-ever flag the Layout gate reads).
 //
-// Required: first name (only if we don't already have one), location, home
-// country, currency, language, temperature, distance unit, travel frequency,
-// travel purpose, traveler type. Optional: favorite countries, next
-// destination, travel budget, accommodation style.
+// FRICTION CUT (2026-07-23): reduced from ~14 screens to the essentials —
+//   1. first name (skipped if we already know it from the provider),
+//   2. location (also grants the OS location permission early),
+//   3. home city (gives country + exact timezone for the home clock).
+// Everything the old flow ASKED for is now INFERRED (currency / language /
+// temperature / distance unit — from home country + device locale, see
+// inferProfileDefaults) or DEFERRED (travel frequency / purpose / traveler
+// type / favorite countries / next destination / budget / accommodation — the
+// step components still exist for Settings + in-context prompts; they're just
+// no longer a wall at signup). Users can change any inferred default in Settings.
 export default function OnboardingPage() {
   const navigate = useNavigate();
   const { user, profile, refreshProfile } = useAuth();
@@ -47,11 +42,7 @@ export default function OnboardingPage() {
   const steps = useMemo(() => {
     const list = [];
     if (!initialFirstName) list.push("first_name");
-    list.push(
-      "location", "home_country", "currency", "language", "temperature",
-      "distance", "frequency", "purpose", "traveler",      // required
-      "favorites", "next_destination", "budget", "accommodation" // optional
-    );
+    list.push("location", "home_country");
     return list;
   }, [initialFirstName]);
 
@@ -101,6 +92,16 @@ export default function OnboardingPage() {
     if (collected.travel_budget?.length) update.travel_budget = collected.travel_budget;
     if (collected.accommodation_style?.length) update.accommodation_style = collected.accommodation_style;
 
+    // Infer the values we no longer ASK for (currency / language / temp /
+    // distance) from home country + device locale. Only fill gaps — an explicit
+    // answer (if a step is ever re-added) always wins. Soft defaults; editable
+    // in Settings.
+    const inferred = inferProfileDefaults(collected.home_country);
+    if (!update.preferred_currency) update.preferred_currency = inferred.currency;
+    if (!update.preferred_language) update.preferred_language = inferred.language;
+    if (!update.temp_unit) update.temp_unit = inferred.tempUnit;
+    if (!update.distance_unit) update.distance_unit = inferred.distanceUnit;
+
     try {
       if (user?.id) await supabase.from("profiles").update(update).eq("id", user.id);
     } catch (e) {
@@ -148,39 +149,6 @@ export default function OnboardingPage() {
       break;
     case "home_country":
       content = <HomeCountryStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.home_country} />;
-      break;
-    case "currency":
-      content = <CurrencyStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.preferred_currency} />;
-      break;
-    case "language":
-      content = <LanguageStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.preferred_language} />;
-      break;
-    case "temperature":
-      content = <TemperatureStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.preferred_temperature_scale} />;
-      break;
-    case "distance":
-      content = <DistanceUnitStep onNext={(d) => advance(d)} onBack={onBack} value={data.distance_unit} />;
-      break;
-    case "frequency":
-      content = <TravelFrequencyStep onNext={(d) => advance(d)} onBack={onBack} value={data.travel_frequency} />;
-      break;
-    case "purpose":
-      content = <TravelPurposeStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.travel_purpose} />;
-      break;
-    case "traveler":
-      content = <TravelerTypeStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.traveler_type} />;
-      break;
-    case "favorites":
-      content = <FavoriteCountriesStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.frequent_countries} />;
-      break;
-    case "next_destination":
-      content = <NextDestinationStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.next_destination} />;
-      break;
-    case "budget":
-      content = <TravelBudgetStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.travel_budget} />;
-      break;
-    case "accommodation":
-      content = <AccommodationStyleStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.accommodation_style} />;
       break;
     default:
       content = null;

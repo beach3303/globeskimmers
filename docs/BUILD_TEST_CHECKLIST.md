@@ -184,6 +184,17 @@ Same recipe as Coffee: list source → owned planet DB, real Google photos + hou
 - [ ] Restroom: ⚠️ **evaluate coverage** — Overture has few restroom POIs; confirm results are reasonable, else consider keeping Google or supplementing
 - [ ] Cost check: default load fires no Google list calls on any of the five; only expanded cards cost
 
+## ✂️ Onboarding-friction cut (2026-07-23)
+Cut signup from ~14 tap-through screens to **3 essentials** — name (if unknown) · location · home city. Currency/language/temperature/distance are **inferred** (home country + device locale, `src/lib/inferProfileDefaults.js`); the 7 travel-preference steps are **deferred** (components kept for Settings/contextual use, removed from signup).
+- [x] `Onboarding.jsx` steps trimmed to first_name?/location/home_country; `finish()` fills inferred currency/language/temp/distance
+- [x] Lint + build clean
+- [ ] **Fresh-account test:** new email → onboarding shows only ~3 screens → lands on Home (not stuck)
+- [ ] Profile after onboarding has: home_city/country + coords + timezone, and **inferred** preferred_currency / preferred_language / temp_unit / distance_unit (check a US home → USD/F/mi; a France home → EUR/C/km)
+- [ ] Google/Apple signup (first name already known) → first_name step is **skipped** (2 screens)
+- [ ] Skipping the home-city step still completes onboarding (inference falls back: USD / device language / C / km)
+- [ ] Settings still lets the user change currency/language/temp/distance/home city afterward
+- [ ] ⚠️ Deferred data (travel purpose/budget/etc.) is no longer collected at signup by design — confirm no feature hard-crashes on those being null (they were already optional)
+
 ## Template for a new build
 ```
 ### N · <feature name>
