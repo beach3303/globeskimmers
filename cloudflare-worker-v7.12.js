@@ -10778,6 +10778,66 @@ async function handleRestaurantsOwned(request, env, ctx) {
 // handleRestaurantsOwned: free list (no photos), real Google photos + hours on-tap
 // via /places/enrich-owned. The café work-profile + AI details resolve owned→Google
 // by name too, so those panels keep working.
+// Restroom HYBRID: owned literal public toilets (free — parks, transit, plazas)
+// MERGED with Google's venue-based restrooms (gas stations / cafés / malls that
+// have a restroom). Overture only tags rare standalone toilets, so Google stays
+// the primary source; owned adds real public toilets on top. Same `restrooms`
+// response shape the page already reads — no frontend change. Cost = same as the
+// old Google restroom path (owned query is free); quick teaser stays Google-fast.
+async function handleRestroomHybrid(request, env, ctx) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const lat = parseFloat(body.latitude ?? body.lat), lng = parseFloat(body.longitude ?? body.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return jsonResponse({ error: 'latitude and longitude required', restrooms: [] }, 400);
+    const mkReq = () => new Request(request.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+    // Google (venue-based) — the primary source. Quick teaser delegates straight through.
+    const gResp = await handleRestroomSearch(mkReq(), env, ctx);
+    const gData = await gResp.json().catch(() => ({ restrooms: [] }));
+    if (body.quick) return jsonResponse(gData);
+    const google = Array.isArray(gData.restrooms) ? gData.restrooms : [];
+
+    // Owned literal public toilets (free) — only on the full pass.
+    let owned = [];
+    if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+      try {
+        const radius = Math.min(Math.max(parseFloat(body.radius) || 8000, 500), 50000);
+        const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/nearby_restroom`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
+          body: JSON.stringify({ in_lat: lat, in_lng: lng, in_radius_m: radius, in_limit: 20 }),
+        });
+        if (res.ok) {
+          owned = (await res.json() || []).map((r) => ({
+            id: r.id, placeId: r.id, source: 'owned',
+            displayName: { text: r.name }, name: r.name,
+            location: { latitude: r.lat, longitude: r.lng }, lat: r.lat, lng: r.lng, latitude: r.lat, longitude: r.lng,
+            formattedAddress: r.address || '', shortFormattedAddress: r.address || '', vicinity: r.address || '',
+            distanceKm: r.meters / 1000, distanceMiles: r.meters / 1609.34,
+            venueType: 'public_restroom', primaryType: 'Public Restroom', types: [r.category],
+            rating: null, userRatingCount: 0, photos: [], photoUrl: null,
+          }));
+        }
+      } catch { /* owned is a free bonus; Google carries the result */ }
+    }
+
+    // Merge: owned public toilets first, then Google, dedupe by ~40m proximity.
+    const xy = (p) => ({ lat: p.lat ?? p.location?.latitude ?? 0, lng: p.lng ?? p.location?.longitude ?? 0 });
+    const near = (a, b) => {
+      const A = xy(a), B = xy(b);
+      const dlat = (A.lat - B.lat) * 111000, dlng = (A.lng - B.lng) * 111000 * Math.cos(A.lat * Math.PI / 180);
+      return Math.hypot(dlat, dlng) < 40;
+    };
+    const merged = [...owned];
+    for (const g of google) if (!merged.some((m) => near(m, g))) merged.push(g);
+    const maxResults = Math.min(Math.max(parseInt(body.maxResults, 10) || 30, 1), 60);
+    const top = merged.slice(0, maxResults);
+    return jsonResponse({ restrooms: top, count: top.length, country: gData.country, countryTip: gData.countryTip, source: 'hybrid', version: 'v4.2-hybrid' });
+  } catch (e) {
+    return jsonResponse({ error: e.message, restrooms: [] }, 200);
+  }
+}
+
 async function handleCoffeeOwned(request, env, ctx) {
   try {
     if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonResponse({ error: 'Supabase not configured' }, 500);
@@ -11312,7 +11372,7 @@ export default {
       if (pathname === '/coffee-owned' && request.method === 'POST') return await handleCoffeeOwned(request, env, ctx);
       if (pathname === '/atm-owned' && request.method === 'POST') return await handleOwnedFinder(request, env, 'nearby_atm', 'atm_owned');
       if (pathname === '/shopping-owned' && request.method === 'POST') return await handleOwnedFinder(request, env, 'nearby_shopping', 'shopping_owned');
-      if (pathname === '/restroom-owned' && request.method === 'POST') return await handleOwnedFinder(request, env, 'nearby_restroom', 'restroom_owned');
+      if (pathname === '/restroom-owned' && request.method === 'POST') return await handleRestroomHybrid(request, env, ctx);
       if (pathname === '/convenience-owned' && request.method === 'POST') return await handleOwnedFinder(request, env, 'nearby_convenience', 'convenience_owned');
       if (pathname === '/moneyexchange-owned' && request.method === 'POST') return await handleOwnedFinder(request, env, 'nearby_moneyexchange', 'moneyexchange_owned');
       if (pathname === '/places/enrich-owned' && request.method === 'POST') return await handleEnrichOwned(request, env);
