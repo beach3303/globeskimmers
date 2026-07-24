@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { MapPin, Cloud, ChevronRight } from "lucide-react";
+import { MapPin, Cloud } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -77,7 +77,6 @@ const PHONE_FEATURES = [
 // the tablet GradCards). Weather lives here on phone (it is a finder tile on
 // tablet); Price + Text scanners are separate cards so BOTH stay reachable.
 const PHONE_EXPLORE = [
-  { grad: 'linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%)',             emoji: '🚗', title: 'Book a Ride',    action: 'Get A Ride' },
   { grad: `linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 100%)`,     emoji: '🎟️', title: 'Things to do',  action: 'Things to Do' },
   { grad: `linear-gradient(135deg, ${CAT.shopping.ink} 0%, #A855F7 100%)`, emoji: '🛍️', title: 'Shopping',      action: 'Shopping' },
   { grad: `linear-gradient(135deg, ${CAT.culture.ink} 0%, #D97706 100%)`,  emoji: '🏛️', title: 'Cultural Info', action: 'Culture Information' },
@@ -727,33 +726,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* FEATURED MONEY EXCHANGE — compact green hero ----------------------- */}
-      <div className="px-4 pb-3">
-        <div className="max-w-md mx-auto">
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={() => handleQuickAction('Money Exchange')}
-            className="w-full rounded-[18px] p-4 relative overflow-hidden flex items-center gap-3 text-left"
-            style={{
-              background: 'linear-gradient(110deg, #15A06A, #0C7B50)',
-              boxShadow: '0 12px 28px -16px rgba(12,123,80,.55)',
-            }}
-          >
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center flex-none font-serif italic text-[calc(16px*var(--fs))] text-white"
-              style={{ background: 'rgba(255,255,255,0.18)' }}
-            >
-              $€¥
-            </div>
-            <div className="flex-1 text-white min-w-0">
-              <div className="font-serif text-[calc(21px*var(--fs))] leading-[1.05]">Money Exchange</div>
-              <div className="text-[calc(12px*var(--fs))] opacity-90 mt-0.5">Compare rates near you</div>
-            </div>
-            <ChevronRight size={20} color="#fff" strokeWidth={2.2} className="flex-none" />
-          </motion.button>
-        </div>
-      </div>
-
       {/* LIVING ROWS — photo-forward carousels assembled by /home/rows from
           OWNED attraction data (zero Places spend). Renders nothing when there's
           no owned coverage, so the tiles below stand alone. Swipe sideways;
@@ -765,6 +737,9 @@ export default function HomePage() {
           grows the tile instead of clipping. */}
       <div className="px-4 pb-3">
         <div className="max-w-md mx-auto grid grid-cols-2 gap-2.5">
+          {/* Row 1: Book a Ride (left) + Money Exchange (right) */}
+          <PhoneTile cat={{ ink: '#2563EB' }} emoji="🚗" title="Book a Ride" sub="Cars · transfers · rides" onClick={() => handleQuickAction('Get A Ride')} />
+          <PhoneTile cat={CAT.money} emoji="💱" title="Money Exchange" sub="Compare rates near you" onClick={() => handleQuickAction('Money Exchange')} />
           {PHONE_FEATURES.map((f) => (
             <PhoneTile key={f.title} cat={f.cat} emoji={f.emoji} title={f.title} sub={f.sub} onClick={() => handleQuickAction(f.action)} />
           ))}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Cloud, ChevronRight } from 'lucide-react';
+import { MapPin, Cloud } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { CAT, TEAL_DEEP } from '@/components/redesign/constants';
 import FontScaleButton from '@/components/a11y/FontScaleButton';
@@ -31,7 +31,6 @@ const FEATURES = [
 
 // Explore More — 3-up gradient cards (same gradients as the phone GradCards).
 const EXPLORE = [
-  { grad: 'linear-gradient(135deg, #1E3A8A 0%, #3B82F6 60%, #60A5FA 100%)',             emoji: '🚗', title: 'Book a Ride',            sub: 'Cars · transfers · rides', action: 'Get A Ride' },
   { grad: `linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 60%, #FF7DB1 100%)`,     emoji: '🎟️', title: 'Things to do',         sub: 'Sights · tours',         action: 'Things to Do' },
   { grad: `linear-gradient(135deg, ${CAT.shopping.ink} 0%, #A855F7 60%, #C084FC 100%)`, emoji: '🛍️', title: 'Shopping',             sub: 'Markets · malls',        action: 'Shopping' },
   { grad: `linear-gradient(135deg, ${CAT.culture.ink} 0%, #D97706 60%, #FBBF24 100%)`,  emoji: '🏛️', title: 'Cultural Info',        sub: 'Museums · sights',       action: 'Culture Information' },
@@ -160,21 +159,6 @@ export default function HomeTablet({
         </div>
       )}
 
-      {/* ── MONEY EXCHANGE HERO ───────────────────────────────────────── */}
-      <motion.button
-        whileTap={{ scale: 0.99 }}
-        onClick={() => onAction('Money Exchange')}
-        className="w-full mt-6 rounded-[28px] p-7 flex items-center gap-5 text-left relative overflow-hidden"
-        style={{ background: 'linear-gradient(110deg,#15A06A,#0C7B50)', boxShadow: '0 18px 44px -18px rgba(12,123,80,.55)' }}
-      >
-        <div className="flex-none flex items-center justify-center rounded-2xl font-serif italic text-white" style={{ width: 74, height: 74, fontSize: 'calc(28px*var(--fs))', background: 'rgba(255,255,255,0.18)' }}>$€¥</div>
-        <div className="flex-1 text-white">
-          <div className="font-serif text-[calc(42px*var(--fs))] leading-tight">Money Exchange</div>
-          <div className="text-[calc(17px*var(--fs))] opacity-90 mt-1">Compare rates near you</div>
-        </div>
-        <ChevronRight size={30} color="#fff" strokeWidth={2.2} className="flex-none" />
-      </motion.button>
-
       {/* ── LIVING ROWS — owned-data carousels (/home/rows), phone-parity.
           Full-width on tablet; renders nothing when there's no owned coverage. */}
       <HomeRows onAction={onAction} wide />
@@ -185,6 +169,9 @@ export default function HomeTablet({
           iPad — and only grow a little in height as the text scale increases.
           Weather rides along as a 7th small tile (no longer full-width). ──── */}
       <div className="grid grid-cols-3 gap-5 mt-6">
+        {/* Book a Ride + Money Exchange lead the grid (Money Exchange is no longer a hero) */}
+        <TabletTile cat={{ ink: '#2563EB' }} emoji="🚗" title="Book a Ride" sub="Cars · transfers · rides" onClick={() => onAction('Get A Ride')} />
+        <TabletTile cat={CAT.money} emoji="💱" title="Money Exchange" sub="Compare rates near you" onClick={() => onAction('Money Exchange')} />
         {FEATURES.map((f) => (
           <TabletTile key={f.title} cat={f.cat} emoji={f.emoji} title={f.title} sub={f.sub} onClick={() => onAction(f.action)} />
         ))}
