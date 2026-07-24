@@ -14,6 +14,7 @@ import { motion } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import { CAT } from "../components/redesign/constants";
 import { trackAffiliateClick } from "@/lib/affiliate";
+import { getRideProviders, ccFromLocation, openRide } from "@/lib/rideProviders";
 
 const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const ED_INK = "#16110D";
@@ -45,22 +46,12 @@ const OPTIONS = [
     link: null, // slots in when Travelpayouts approves (Welcome Pickups / Kiwitaxi)
     soon: true,
   },
-  {
-    key: "ride",
-    emoji: "🚦",
-    title: "Same-day ride",
-    sub: "Open Uber and book a ride right now",
-    cta: "Open Uber",
-    partner: "uber",
-    accent: CAT.coffee,
-    link: "https://m.uber.com/ul/?action=setPickup&pickup=my_location", // utility deep-link
-    utility: true, // no commission — opens the app
-  },
 ];
 
 export default function GetARide() {
   const navigate = useNavigate();
   const { activeLocation } = useLocation();
+  const rideProviders = getRideProviders(ccFromLocation(activeLocation));
 
   // Options that hand off to a booking partner get a gentle heads-up first (honest
   // "you're leaving the app" moment). Uber is the user's own app → open directly.
@@ -163,6 +154,35 @@ export default function GetARide() {
             </motion.button>
           );
         })}
+
+        {/* Same-day ride — region-aware rider apps (deep-links, utility) */}
+        <div className="pt-2">
+          <div className="flex items-center gap-4 px-1 mb-2.5">
+            <div
+              className="w-12 h-12 rounded-[14px] flex items-center justify-center flex-none"
+              style={{ background: CAT.coffee.bg, fontSize: fs(24) }}
+            >
+              🚦
+            </div>
+            <div>
+              <div className="font-bold text-[calc(16px*var(--fs))]" style={{ color: ED_INK }}>Same-day ride</div>
+              <div className="text-[calc(12.5px*var(--fs))] text-[#6B7280]">Rider apps available where you are</div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {rideProviders.map((p) => (
+              <button
+                key={p.key}
+                onClick={() => openRide(p)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-[14px] font-semibold text-[calc(14px*var(--fs))]"
+                style={{ background: "#FFFFFF", border: "1px solid #F0E9DC", color: ED_INK }}
+              >
+                <span style={{ fontSize: fs(18) }}>{p.logo}</span>
+                {p.name}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Honest-UX affiliate disclosure (FTC) */}
         <p className="text-[calc(10.5px*var(--fs))] text-[#9AA0A6] leading-snug pt-2 px-1">
