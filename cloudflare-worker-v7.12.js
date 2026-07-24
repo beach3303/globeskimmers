@@ -11200,6 +11200,48 @@ async function handleGuestbookPhotoServe(request, env) {
   } catch { return new Response('Error', { status: 500 }); }
 }
 
+// ─── AFFILIATE CLICK-OWNERSHIP (SubID → D1) ──────────────────────────────────
+// Every outbound affiliate tap goes through here: we mint a SubID, log the click
+// (+ user + place context) to D1, and hand back the partner URL with the SubID
+// appended. Later we import each network's conversion report and join on SubID →
+// full clicks→bookings→commission attribution. ONE table, ALL partners.
+// Per-partner SubID query-param name (refine as real links get wired; default sub_id).
+const AFF_SUBID_PARAM = {
+  travelpayouts: 'sub_id', viator: 'pid', getyourguide: 'partner_id',
+  discovercars: 'subId', airalo: 'subId1', wise: 'clickref',
+  welcomepickups: 'sub_id', kiwitaxi: 'sub_id', booking: 'sub_id', agoda: 'sub_id',
+};
+async function handleAffiliateClick(request, env, ctx) {
+  try {
+    if (!env.DB) return jsonResponse({ error: 'analytics DB not configured' }, 500);
+    const user = await gbUser(request, env).catch(() => null); // attribution is optional
+    const b = await request.json().catch(() => ({}));
+    const partner = gbClean(b.partner).toLowerCase();
+    const target = String(b.target_url || b.url || '').trim();
+    if (!partner || !target) return jsonResponse({ error: 'partner and target_url required' }, 400);
+    let u;
+    try { u = new URL(target); } catch { return jsonResponse({ error: 'bad target_url' }, 400); }
+    if (u.protocol !== 'https:') return jsonResponse({ error: 'target_url must be https' }, 400);
+
+    const subid = crypto.randomUUID().replace(/-/g, '');
+    u.searchParams.set(AFF_SUBID_PARAM[partner] || 'sub_id', subid);
+    const trackedUrl = u.toString();
+
+    const clip = (s, n = 200) => (s == null ? null : String(s).slice(0, n));
+    const ts = Math.floor(Date.now() / 1000);
+    if (ctx) ctx.waitUntil(
+      env.DB.prepare(
+        'insert into affiliate_clicks (subid,ts,user_id,partner,product_id,product_name,category,dest_country,dest_city,target_url) values (?,?,?,?,?,?,?,?,?,?)'
+      ).bind(
+        subid, ts, user?.id || null, partner,
+        clip(b.product_id, 120), clip(b.product_name), clip(b.category, 60),
+        clip(b.dest_country, 80), clip(b.dest_city, 120), clip(trackedUrl, 1000)
+      ).run().catch(() => {})
+    );
+    return jsonResponse({ subid, url: trackedUrl });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleGuestbookList(request, env) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -11372,6 +11414,7 @@ export default {
       if (pathname.startsWith('/gb-photo/') && request.method === 'GET') return await handleGuestbookPhotoServe(request, env);
       if (pathname.startsWith('/legal/') && request.method === 'GET') return await handleLegalPage(request, env);
       if (pathname === '/guestbook/photo-upload' && request.method === 'POST') return await handleGuestbookPhotoUpload(request, env, ctx);
+      if (pathname === '/aff/click' && request.method === 'POST') return await handleAffiliateClick(request, env, ctx);
       if (pathname === '/guestbook/list' && request.method === 'POST') return await handleGuestbookList(request, env);
       if (pathname === '/guestbook/sign' && request.method === 'POST') return await handleGuestbookSign(request, env, ctx);
       if (pathname === '/guestbook/edit' && request.method === 'POST') return await handleGuestbookEdit(request, env);
