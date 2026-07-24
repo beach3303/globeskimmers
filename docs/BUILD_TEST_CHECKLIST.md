@@ -195,6 +195,17 @@ Cut signup from ~14 tap-through screens to **3 essentials** — name (if unknown
 - [ ] Settings still lets the user change currency/language/temp/distance/home city afterward
 - [ ] ⚠️ Deferred data (travel purpose/budget/etc.) is no longer collected at signup by design — confirm no feature hard-crashes on those being null (they were already optional)
 
+## 🚗 Get A Ride — bookable transport (Home tile → page) (2026-07-23)
+"Book a ride" as its own Home surface, OUTSIDE transit directions. Car rental (Discover Cars, LIVE `a_aid=beach3303`) + Airport transfer ("Soon" until Travelpayouts approves) + Same-day ride (Uber deep-link, utility). Every bookable tap → `trackAffiliateClick` (SubID→D1) → opens partner site. FTC disclosure at the bottom.
+- [x] New page `src/pages/GetARide.jsx` + registered in `pages.config.js`
+- [x] Home tile "🚗 Book a Ride" on phone (PHONE_EXPLORE) + tablet (HomeTablet EXPLORE) → route `Get A Ride`→`GetARide`
+- [x] Lint + build clean
+- [ ] Device: Home → "Book a Ride" tile opens the page (phone + iPad)
+- [ ] Tap **Rent a car** → opens Discover Cars with `a_aid=beach3303` in the URL (commission tracked)
+- [ ] **Airport transfer** shows a greyed "Soon" card, not tappable (wires in when TP approves — just set its `link`)
+- [ ] Tap **Same-day ride** → opens Uber (app or m.uber.com)
+- [ ] Note: our own D1 click-logging (`/aff/click`) only records once the affiliate schema + worker are deployed; until then the link still works + earns via `a_aid` (helper falls back to the raw URL)
+
 ## Template for a new build
 ```
 ### N · <feature name>

@@ -77,6 +77,7 @@ const PHONE_FEATURES = [
 // the tablet GradCards). Weather lives here on phone (it is a finder tile on
 // tablet); Price + Text scanners are separate cards so BOTH stay reachable.
 const PHONE_EXPLORE = [
+  { grad: 'linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%)',             emoji: '🚗', title: 'Book a Ride',    action: 'Get A Ride' },
   { grad: `linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 100%)`,     emoji: '🎟️', title: 'Things to do',  action: 'Things to Do' },
   { grad: `linear-gradient(135deg, ${CAT.shopping.ink} 0%, #A855F7 100%)`, emoji: '🛍️', title: 'Shopping',      action: 'Shopping' },
   { grad: `linear-gradient(135deg, ${CAT.culture.ink} 0%, #D97706 100%)`,  emoji: '🏛️', title: 'Cultural Info', action: 'Culture Information' },
@@ -416,6 +417,7 @@ export default function HomePage() {
       "Restroom": "RestroomFinder",
       "Places to Eat": "PlacesToEat",
       "Transportation": "Transportation",
+      "Get A Ride": "GetARide",
       "Shopping": "Shopping",
       "Smart Text Scanner": "SmartTextScanner",
     };
