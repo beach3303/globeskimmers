@@ -7,7 +7,7 @@
 // airport transfer shows a "Soon" state until Travelpayouts approves, then it
 // slots in with zero rework (just set its `link`). Same-day ride (Uber) is a
 // utility deep-link — no commission, opens the app.
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { motion } from "framer-motion";
@@ -29,6 +29,7 @@ const OPTIONS = [
     sub: "Compare deals worldwide · free cancellation, no card fees",
     cta: "Find cars",
     partner: "discovercars",
+    partnerName: "Discover Cars",
     accent: CAT.transit,
     link: "https://www.discovercars.com/?a_aid=beach3303", // LIVE
   },
@@ -39,6 +40,7 @@ const OPTIONS = [
     sub: "Private meet & greet · fixed price · flight tracking",
     cta: "Book transfer",
     partner: "kiwitaxi",
+    partnerName: "our transfer partner",
     accent: CAT.atm,
     link: null, // slots in when Travelpayouts approves (Welcome Pickups / Kiwitaxi)
     soon: true,
@@ -60,12 +62,23 @@ export default function GetARide() {
   const navigate = useNavigate();
   const { activeLocation } = useLocation();
 
-  const open = async (opt) => {
+  // Options that hand off to a booking partner get a gentle heads-up first (honest
+  // "you're leaving the app" moment). Uber is the user's own app → open directly.
+  const [confirm, setConfirm] = useState(null);
+
+  const startOpen = (opt) => {
     if (!opt.link || opt.soon) return;
     if (opt.utility) {
       window.open(opt.link, "_blank");
       return;
     }
+    setConfirm(opt);
+  };
+
+  const proceed = async () => {
+    const opt = confirm;
+    setConfirm(null);
+    if (!opt) return;
     const url = await trackAffiliateClick({
       partner: opt.partner,
       targetUrl: opt.link,
@@ -106,7 +119,7 @@ export default function GetARide() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(i, 6) * 0.04 }}
-              onClick={() => open(opt)}
+              onClick={() => startOpen(opt)}
               disabled={disabled}
               className="w-full flex items-center gap-4 px-4 py-4 rounded-[18px] text-left transition-transform active:scale-[0.99]"
               style={{
@@ -157,6 +170,41 @@ export default function GetARide() {
           changes the price you pay.
         </p>
       </div>
+
+      {/* Gentle "you're leaving to a partner" heads-up */}
+      {confirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40"
+          onClick={() => setConfirm(null)}
+        >
+          <div
+            className="w-full sm:max-w-sm bg-white rounded-t-[22px] sm:rounded-[22px] p-5 sm:m-4"
+            onClick={(e) => e.stopPropagation()}
+            style={{ boxShadow: "0 -8px 40px -12px rgba(0,0,0,0.25)" }}
+          >
+            <div className="text-[calc(15px*var(--fs))] leading-snug" style={{ color: ED_INK }}>
+              Heads up — we'll pop you over to our partner{" "}
+              <span className="font-bold">{confirm.partnerName}</span> for live results. Your price won't change 🚗
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setConfirm(null)}
+                className="flex-1 py-3 rounded-[14px] font-semibold text-[calc(14px*var(--fs))]"
+                style={{ background: "#F1EADF", color: ED_INK }}
+              >
+                Not now
+              </button>
+              <button
+                onClick={proceed}
+                className="flex-1 py-3 rounded-[14px] font-bold text-white text-[calc(14px*var(--fs))]"
+                style={{ background: confirm.accent?.ink || "#2563EB" }}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
