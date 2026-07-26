@@ -5768,6 +5768,35 @@ async function buildWhereToNextRow(env, seasonKey, ctx) {
   return { key: 'whereToNext', title: 'Where to next ✈️', subtitle: 'Dreaming of your next trip', seeAll: { action: 'Things to Do' }, cards };
 }
 
+// Fallback pool for the living home rows when there's no CURATED owned coverage
+// (i.e. outside the ~seeded cities): pull nearby attractions from the OWNED PLANET
+// DB (75M places) so the carousels populate almost everywhere, not just seeded
+// cities. Hydrates Wikimedia photos for the top cards so the rows stay photo-forward.
+// Shape matches what handleHomeRows' `trim()` expects.
+async function homeRowsPlanetPool(env, latitude, longitude) {
+  try {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return [];
+    const r = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/nearby_attractions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
+      body: JSON.stringify({ in_lat: latitude, in_lng: longitude, in_radius_m: 60000, in_limit: 40 }),
+    });
+    if (!r.ok) return [];
+    const rows = (await r.json()) || [];
+    const cards = rows.map((p) => ({
+      id: p.id, name: p.name, category: p.category, city: p.city || '', country: p.country || '',
+      photoUrl: null, rating: null, whyVisit: '',
+      distanceMiles: (p.meters || 0) / 1609.34, freeToVisit: null, lat: p.lat, lng: p.lng,
+    }));
+    // Hydrate real Wikimedia photos for the top cards (free, cached 180d) — the
+    // rows are photo-forward, and the client also hydrates any left without one.
+    await Promise.all(cards.slice(0, 12).map(async (c) => {
+      try { const wp = await getWikiPhotos(env, c.name, c.lat, c.lng); if (wp.photos?.length) c.photoUrl = wp.photos[0].url; } catch { /* leave photoless; client hydrates */ }
+    }));
+    return cards;
+  } catch (e) { console.error('home/rows planet pool failed:', e?.message); return []; }
+}
+
 async function handleHomeRows(request, env, ctx) {
   const startedAt = Date.now();
   let body;
@@ -5810,7 +5839,14 @@ async function handleHomeRows(request, env, ctx) {
     console.error('home/rows attractions fetch failed:', e?.message);
   }
 
-  // No owned coverage here (outside seeded cities) → empty rows so the client
+  // No CURATED coverage → fall back to the owned PLANET DB (75M places) so the
+  // living rows populate everywhere, not just seeded cities. This is the fix for
+  // "Home goes empty in suburbs like Santa Clarita."
+  if (attractions.length === 0) {
+    attractions = await homeRowsPlanetPool(env, latitude, longitude);
+  }
+
+  // Still nothing (rare) → empty rows so the client
   // shows its cold-start fallback, never an empty carousel. Unsplash inspiration
   // rows will fill this globally once wired.
   if (attractions.length === 0) {
