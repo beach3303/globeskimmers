@@ -440,6 +440,16 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
 // fields, handlers, and sub-components. fs() stays on every text size so the
 // 4-step glasses control scales card text gracefully (serif name has a 2-line
 // clamp + the card uses min-height so it GROWS instead of clipping).
+// Only surface "Book a tour here" (Viator) where a bookable experience actually
+// exists — real attractions / landmarks / museums / ticketed sights — NOT on
+// generic parks, beaches, plazas, or spots with no comparable tour. Keeps the
+// affiliate honest (no dead "book a tour" that returns nothing relevant).
+const TOURABLE_RE = /tourist_attraction|attraction|museum|gallery|monument|memorial|landmark|historic|heritage|castle|palace|\bfort\b|ruin|temple|cathedral|basilica|shrine|mosque|tower|observation|viewpoint|zoo|aquarium|theme_park|amusement|water_?park|national_park|waterfall|cave|volcano|cruise|\bboat\b|harbou?r|botanical|winery|distillery|culture|cultural/i;
+function isTourable(a) {
+  const hay = `${a?.category || ''} ${(a?.types || []).join(' ')} ${a?.activityLabel || ''} ${a?.activityCategory || ''}`.toLowerCase();
+  return TOURABLE_RE.test(hay);
+}
+
 function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet}){
   const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false); const [hoursExp,setHoursExp]=useState(false); const [gallery,setGallery]=useState({open:false,idx:0});
   const fs=(n)=>`calc(${n}px*var(--fs))`;
@@ -543,10 +553,13 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
           <button onClick={()=>setExp(e=>!e)} style={{flex:1,borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:exp?ED_INK:ED_IVORY2,color:exp?"#fff":ED_INK2}}>{exp?"Less ▴":"More ▾"}</button>
         </div>
 
-        {/* Book a tour — Viator affiliate (opens a Viator search for this place). */}
-        <button onClick={openViatorTour} style={{width:"100%",marginTop:fs(t(12,8)),borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(17,13.5)),fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:fs(7),background:"#127a5e",color:"#fff"}}>
-          🎟️ Book a tour here <span style={{fontSize:fs(t(13,11)),opacity:0.85,fontWeight:600}}>· Viator ↗</span>
-        </button>
+        {/* Book a tour — Viator affiliate. ONLY on tour-able attractions/experiences
+            (see isTourable) — never on generic parks/spots or non-bookable places. */}
+        {isTourable(a) && (
+          <button onClick={openViatorTour} style={{width:"100%",marginTop:fs(t(12,8)),borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(17,13.5)),fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:fs(7),background:"#127a5e",color:"#fff"}}>
+            🎟️ Book a tour here <span style={{fontSize:fs(t(13,11)),opacity:0.85,fontWeight:600}}>· Viator ↗</span>
+          </button>
+        )}
 
         {/* Expanded details */}
         <AnimatePresence>
