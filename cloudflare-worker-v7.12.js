@@ -11277,9 +11277,12 @@ async function handleGuestbookPhotoServe(request, env) {
 // full clicks→bookings→commission attribution. ONE table, ALL partners.
 // Per-partner SubID query-param name (refine as real links get wired; default sub_id).
 const AFF_SUBID_PARAM = {
-  travelpayouts: 'sub_id', viator: 'campaign', getyourguide: 'cmp',
-  discovercars: 'subId', airalo: 'subId1', wise: 'clickref',
-  welcomepickups: 'sub_id', kiwitaxi: 'sub_id', booking: 'sub_id', agoda: 'sub_id',
+  // Viator = direct (campaign); Discover Cars = direct PostAffiliatePro; everything
+  // else here is a Travelpayouts tpx.lt link → our sub-id rides in `sub_id`.
+  travelpayouts: 'sub_id', viator: 'campaign', discovercars: 'subId', wise: 'clickref',
+  getyourguide: 'sub_id', welcomepickups: 'sub_id', kiwitaxi: 'sub_id',
+  booking: 'sub_id', agoda: 'sub_id', airalo: 'sub_id', radicalstorage: 'sub_id',
+  tiqets: 'sub_id', gigsky: 'sub_id',
 };
 async function handleAffiliateClick(request, env, ctx) {
   try {

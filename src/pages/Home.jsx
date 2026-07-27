@@ -78,6 +78,7 @@ const PHONE_FEATURES = [
 // tablet); Price + Text scanners are separate cards so BOTH stay reachable.
 const PHONE_EXPLORE = [
   { grad: `linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 100%)`,     emoji: '🎟️', title: 'Things to do',  action: 'Things to Do' },
+  { grad: 'linear-gradient(135deg, #0E7C66 0%, #14B8A6 100%)',             emoji: '🧳', title: 'Essentials',    action: 'Travel Essentials' },
   { grad: `linear-gradient(135deg, ${CAT.shopping.ink} 0%, #A855F7 100%)`, emoji: '🛍️', title: 'Shopping',      action: 'Shopping' },
   { grad: `linear-gradient(135deg, ${CAT.culture.ink} 0%, #D97706 100%)`,  emoji: '🏛️', title: 'Cultural Info', action: 'Culture Information' },
   { grad: `linear-gradient(135deg, ${CAT.weather.ink} 0%, #F4B740 100%)`,  emoji: '☀️', title: 'Weather',       action: 'Weather' },
@@ -417,6 +418,7 @@ export default function HomePage() {
       "Places to Eat": "PlacesToEat",
       "Transportation": "Transportation",
       "Get A Ride": "GetARide",
+      "Travel Essentials": "TravelEssentials",
       "Shopping": "Shopping",
       "Smart Text Scanner": "SmartTextScanner",
     };
