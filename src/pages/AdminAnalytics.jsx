@@ -96,7 +96,7 @@ export default function AdminAnalytics() {
       // Fan out over the live Worker /analytics-query route (one D1 query per
       // type), assembling the bundle the renderer expects. Native-safe via
       // callWorker — replaces the Base44 getAnalytics function (403s on device).
-      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'rows_per_session_7d'];
+      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d'];
       const pairs = await Promise.all(TYPES.map(async (type) => {
         const { data: qd, error: qe } = await callWorker(`analytics-query?type=${encodeURIComponent(type)}`, {});
         return [type, { results: qd?.results || [], error: qe || qd?.error || null }];
@@ -125,6 +125,13 @@ export default function AdminAnalytics() {
   const topSearches = data?.top_searches_7d?.results || [];
   const demandByCity = data?.demand_by_city?.results || [];        // travel-demand (30d)
   const trendingPlaces = data?.trending_places?.results || [];     // most-tapped places (30d)
+  const affByPartner = data?.affiliate_by_partner_30d?.results || [];   // affiliate clicks/conversions/$ per partner (30d)
+  const affByDay = data?.affiliate_by_day_14d?.results || [];           // affiliate clicks per day (14d)
+  const affTopProducts = data?.affiliate_top_products_30d?.results || []; // most-tapped affiliate products (30d)
+  const affByCountry = data?.affiliate_by_country_30d?.results || [];   // affiliate clicks by destination country (30d)
+  const affTotalClicks = affByPartner.reduce((s, r) => s + (r.clicks || 0), 0);
+  const affTotalConversions = affByPartner.reduce((s, r) => s + (r.conversions || 0), 0);
+  const affTotalCommission = affByPartner.reduce((s, r) => s + (r.commission || 0), 0);
   const activeUsers = data?.active_users?.results?.[0] || {};       // DAU/WAU/MAU
   const activeByDay = data?.active_users_by_day_30d?.results || [];
   const retention = data?.retention_7d?.results?.[0] || {};
@@ -356,6 +363,27 @@ export default function AdminAnalytics() {
               </div>
               {trendingPlaces.map((t, i) => (
                 <BarRow key={i} label={`${t.place || '(unknown)'}${t.city ? ' · ' + t.city : ''}`} count={t.taps} max={maxTrending} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="💸 Affiliate performance (30d)" icon={Sparkles} empty={affByPartner.length === 0 ? 'No affiliate clicks yet — taps on Book a Ride / Book a tour appear here once affiliate_clicks is created + the worker deployed.' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>
+                <strong style={{ color: COLORS.dark }}>{affTotalClicks}</strong> clicks · <strong style={{ color: COLORS.dark }}>{affTotalConversions}</strong> conversions · <strong style={{ color: COLORS.green }}>${affTotalCommission.toFixed(2)}</strong> commission (conversions fill in once we import each network's report)
+              </div>
+              {affByPartner.map((r, i) => (
+                <BarRow key={i} label={`${r.partner} · ${r.conversions || 0} conv · $${(r.commission || 0).toFixed(2)}`} count={r.clicks} max={Math.max(...affByPartner.map(x => x.clicks || 0), 1)} color={COLORS.green} />
+              ))}
+            </Section>
+
+            <Section title="🎟️ Top affiliate taps (30d)" icon={Sparkles} empty={affTopProducts.length === 0 ? 'No product taps yet.' : null}>
+              {affTopProducts.map((p, i) => (
+                <BarRow key={i} label={`${p.name}${p.partner ? ' · ' + p.partner : ''}`} count={p.clicks} max={Math.max(...affTopProducts.map(x => x.clicks || 0), 1)} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="🌍 Affiliate taps by destination (30d)" icon={Search} empty={affByCountry.length === 0 ? 'No destination data yet.' : null}>
+              {affByCountry.map((c, i) => (
+                <BarRow key={i} label={c.country} count={c.clicks} max={Math.max(...affByCountry.map(x => x.clicks || 0), 1)} color={COLORS.accent} />
               ))}
             </Section>
 

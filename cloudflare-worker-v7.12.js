@@ -1018,6 +1018,40 @@ async function handleAdminUserStats(request, env) {
 // is acceptable for now (the data is aggregate, no PII), but if that
 // changes we'd add a shared-secret header check here.
 const ANALYTICS_QUERIES = {
+  // ── Affiliate (from affiliate_clicks; needs scripts/affiliate/01_schema.sql) ──
+  affiliate_by_partner_30d: `
+    SELECT partner,
+      COUNT(*) AS clicks,
+      SUM(CASE WHEN converted = 1 THEN 1 ELSE 0 END) AS conversions,
+      ROUND(COALESCE(SUM(commission), 0), 2) AS commission
+    FROM affiliate_clicks
+    WHERE ts >= strftime('%s','now','-30 days')
+    GROUP BY partner
+    ORDER BY clicks DESC
+  `,
+  affiliate_by_day_14d: `
+    SELECT date(ts,'unixepoch') AS day, COUNT(*) AS clicks
+    FROM affiliate_clicks
+    WHERE ts >= strftime('%s','now','-14 days')
+    GROUP BY day
+    ORDER BY day
+  `,
+  affiliate_top_products_30d: `
+    SELECT product_name AS name, partner, category, COUNT(*) AS clicks
+    FROM affiliate_clicks
+    WHERE ts >= strftime('%s','now','-30 days') AND product_name IS NOT NULL AND product_name <> ''
+    GROUP BY product_name, partner
+    ORDER BY clicks DESC
+    LIMIT 20
+  `,
+  affiliate_by_country_30d: `
+    SELECT dest_country AS country, COUNT(*) AS clicks
+    FROM affiliate_clicks
+    WHERE ts >= strftime('%s','now','-30 days') AND dest_country IS NOT NULL AND dest_country <> ''
+    GROUP BY dest_country
+    ORDER BY clicks DESC
+    LIMIT 20
+  `,
   // Total events + unique sessions in the last 7 days
   totals_7d: `
     SELECT
