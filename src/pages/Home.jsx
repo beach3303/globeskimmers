@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { trackEvent } from "../Layout";
 import { useLocation } from "../components/location/LocationContext";
+import { getTravelMode } from "@/lib/homeContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import HomeBanner from "../components/ads/HomeBanner";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
@@ -487,6 +488,21 @@ export default function HomePage() {
     || activeLocation?.address?.city
     || (activeLocation?.coordinates ? 'Detecting your location…' : 'Set location');
 
+  // Travel mode (home/domestic/international/planning/discovery) → drives the
+  // contextual "arrival essentials" strip below. present = physically there
+  // (GPS/current mode); a manually-navigated place = planning/browsing.
+  const travelMode = getTravelMode({
+    present: locationMode !== 'navigate',
+    activeCountry: activeLocation?.address?.country,
+    activeCity: cityName,
+    activeLat: activeLocation?.coordinates?.latitude,
+    activeLng: activeLocation?.coordinates?.longitude,
+    homeCountry: profile?.home_country,
+    homeCity: profile?.home_city,
+    homeLat: profile?.home_lat,
+    homeLng: profile?.home_lng,
+  });
+
   // Flag-background greeting card: active when the Show Home Country Flag toggle
   // is on and we can resolve the home country's flag. The flag fills the whole
   // card; chips are kept compact and right-aligned so the flag stays visible.
@@ -724,6 +740,40 @@ export default function HomePage() {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* TRAVEL-MODE LEAD — surfaces what matters for the user's situation:
+          arrival essentials when abroad, planning prompts when browsing a place.
+          Nothing shows at home / same-country (the default Home + rows serve
+          those). Same handlers as the tiles — a contextual shortcut, not new UI. */}
+      {(travelMode === 'international' || travelMode === 'planning') && (
+        <div className="px-4 pb-3">
+          <div
+            className="max-w-md mx-auto rounded-[18px] p-3.5"
+            style={{ background: travelMode === 'international' ? '#EAF3FF' : '#FBEFF6', border: '1px solid #F0E9DC' }}
+          >
+            <div className="text-[calc(12.5px*var(--fs))] font-semibold mb-2" style={{ color: '#3A3128' }}>
+              {travelMode === 'international'
+                ? `✈️ Just landed${cityName ? ` in ${cityName}` : ''}? Get set:`
+                : `🗺️ Planning${cityName ? ` ${cityName}` : ' a trip'}?`}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(travelMode === 'international'
+                ? [{ e: '💱', t: 'Exchange', a: 'Money Exchange' }, { e: '🏧', t: 'ATM', a: 'ATM' }, { e: '💬', t: 'Phrases', a: 'Basic Phrases' }, { e: '🚌', t: 'Transit', a: 'Transportation' }]
+                : [{ e: '🎟️', t: 'Things to do', a: 'Things to Do' }, { e: '🏛️', t: 'Culture', a: 'Culture Information' }]
+              ).map((b) => (
+                <button
+                  key={b.a}
+                  onClick={() => handleQuickAction(b.a)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-full text-[calc(12.5px*var(--fs))] font-semibold"
+                  style={{ background: '#fff', border: '1px solid #E6DCC9', color: '#16110D' }}
+                >
+                  <span>{b.e}</span>{b.t}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
