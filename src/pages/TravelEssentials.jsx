@@ -27,8 +27,7 @@ const OPTIONS = [
     partner: "airalo",
     partnerName: "Airalo",
     accent: CAT.transit,
-    link: null, // ← paste the Airalo TP link (tpx.lt/…)
-    soon: true,
+    link: "https://airalo.tpx.lt/4IXeNrtl", // LIVE — Airalo eSIM via Travelpayouts (marker 554304)
   },
   {
     key: "luggage",
@@ -39,8 +38,7 @@ const OPTIONS = [
     partner: "radicalstorage",
     partnerName: "Radical Storage",
     accent: CAT.convenience,
-    link: null, // ← paste the Radical Storage TP link
-    soon: true,
+    link: "https://radicalstorage.tpx.lt/kZr1lVil", // LIVE — Radical Storage via Travelpayouts
   },
   {
     key: "hotel",
@@ -51,7 +49,7 @@ const OPTIONS = [
     partner: "booking",
     partnerName: "Booking.com",
     accent: CAT.money,
-    link: null, // ← paste the Booking (or Agoda) TP link
+    link: null, // Booking/Agoda are traffic-gated on TP (need ~3mo stable traffic) — stays Soon
     soon: true,
   },
 ];
