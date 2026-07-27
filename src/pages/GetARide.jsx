@@ -40,11 +40,10 @@ const OPTIONS = [
     title: "Airport transfer",
     sub: "Private meet & greet · fixed price · flight tracking",
     cta: "Book transfer",
-    partner: "kiwitaxi",
-    partnerName: "our transfer partner",
+    partner: "welcomepickups",
+    partnerName: "Welcome Pickups",
     accent: CAT.atm,
-    link: null, // slots in when Travelpayouts approves (Welcome Pickups / Kiwitaxi)
-    soon: true,
+    link: "https://tpx.lt/BtYj7zv4", // LIVE — Travelpayouts tracked link (marker 554304)
   },
 ];
 
