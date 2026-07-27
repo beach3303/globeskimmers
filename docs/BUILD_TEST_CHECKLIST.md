@@ -206,6 +206,15 @@ Cut signup from ~14 tap-through screens to **3 essentials** — name (if unknown
 - [ ] Tap **Same-day ride** → opens Uber (app or m.uber.com)
 - [ ] Note: our own D1 click-logging (`/aff/click`) only records once the affiliate schema + worker are deployed; until then the link still works + earns via `a_aid` (helper falls back to the raw URL)
 
+## 🎟️ Viator "Book a tour here" on Things-to-Do (2026-07-26)
+First live affiliate revenue surface. Each attraction card (ActivityCardTablet) gets a "🎟️ Book a tour here · Viator ↗" button → Viator search deep-link for that place → earns via `pid=P00311514`. Routed through `/aff/click` (SubID→D1); our sub-id rides in Viator's `campaign` param (doesn't touch payout).
+- [x] `src/lib/viator.js` (viatorSearchLink; pid P00311514 + mcid 42383 + medium=link)
+- [x] Worker AFF_SUBID_PARAM.viator: 'pid' → 'campaign' (was clobbering the payout id)
+- [x] ThingsToDo card button + handler; lint + build clean
+- [ ] ⚠️ **VERIFY pid + mcid** — generate one link in Viator dashboard (Tools → Create links) and confirm mcid=42383 matches this account; fix `src/lib/viator.js` if different (payout depends on it)
+- [ ] Device: Things-to-Do → attraction card → "Book a tour here" opens Viator search for that place with `pid=P00311514` in the URL
+- [ ] Activate full tracking: run `scripts/affiliate/01_schema.sql` (D1) + `wrangler deploy` — until then the link still earns via pid (helper falls back to the raw URL)
+
 ## Template for a new build
 ```
 ### N · <feature name>

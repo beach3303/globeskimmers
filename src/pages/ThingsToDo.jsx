@@ -8,6 +8,8 @@ import RadiusRow from "@/components/location/RadiusRow";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
+import { trackAffiliateClick } from "@/lib/affiliate";
+import { viatorSearchLink } from "@/lib/viator";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import MapAppSelector from "@/components/MapAppSelector";
 import AttractionAIDetails from "@/components/AttractionAIDetails";
@@ -446,6 +448,12 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
   const t=(tab,ph)=>isTablet?tab:ph;
   useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
   const name=a.displayName?.text||a.name||"Activity"; const st=openStatus(a);
+  // Book a tour — Viator affiliate deep-link (search for this attraction). High
+  // intent; earns via pid. Logged through /aff/click (SubID→D1).
+  const openViatorTour=async()=>{
+    const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorSearchLink(name),category:"tour",productName:name,destCity:a.city,destCountry:a.country});
+    window.open(url,"_blank");
+  };
   const activeTags=PROP_TAGS.filter(t=>a.props?.[t.key]);
   const aColor=a.activityColor||T.accent;
   const photos=(a.photos||[]).filter(Boolean);
@@ -534,6 +542,11 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
           <button onClick={()=>onMap?.(index)} style={{flex:1,borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
           <button onClick={()=>setExp(e=>!e)} style={{flex:1,borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:exp?ED_INK:ED_IVORY2,color:exp?"#fff":ED_INK2}}>{exp?"Less ▴":"More ▾"}</button>
         </div>
+
+        {/* Book a tour — Viator affiliate (opens a Viator search for this place). */}
+        <button onClick={openViatorTour} style={{width:"100%",marginTop:fs(t(12,8)),borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(17,13.5)),fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:fs(7),background:"#127a5e",color:"#fff"}}>
+          🎟️ Book a tour here <span style={{fontSize:fs(t(13,11)),opacity:0.85,fontWeight:600}}>· Viator ↗</span>
+        </button>
 
         {/* Expanded details */}
         <AnimatePresence>

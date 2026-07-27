@@ -11243,7 +11243,7 @@ async function handleGuestbookPhotoServe(request, env) {
 // full clicks→bookings→commission attribution. ONE table, ALL partners.
 // Per-partner SubID query-param name (refine as real links get wired; default sub_id).
 const AFF_SUBID_PARAM = {
-  travelpayouts: 'sub_id', viator: 'pid', getyourguide: 'partner_id',
+  travelpayouts: 'sub_id', viator: 'campaign', getyourguide: 'cmp',
   discovercars: 'subId', airalo: 'subId1', wise: 'clickref',
   welcomepickups: 'sub_id', kiwitaxi: 'sub_id', booking: 'sub_id', agoda: 'sub_id',
 };
