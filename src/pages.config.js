@@ -57,6 +57,7 @@ import ConvenienceStore from './pages/ConvenienceStore';
 import CultureInformation from './pages/CultureInformation';
 import GetARide from './pages/GetARide';
 import Home from './pages/Home';
+import Insight from './pages/Insight';
 import Map from './pages/Map';
 import MoneyExchange from './pages/MoneyExchange';
 import Onboarding from './pages/Onboarding';
@@ -85,6 +86,7 @@ export const PAGES = {
     "CultureInformation": CultureInformation,
     "GetARide": GetARide,
     "Home": Home,
+    "Insight": Insight,
     "Map": Map,
     "MoneyExchange": MoneyExchange,
     "Onboarding": Onboarding,

@@ -79,6 +79,7 @@ const PHONE_FEATURES = [
 // tablet); Price + Text scanners are separate cards so BOTH stay reachable.
 const PHONE_EXPLORE = [
   { grad: `linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 100%)`,     emoji: '🎟️', title: 'Things to do',  action: 'Things to Do' },
+  { grad: 'linear-gradient(135deg, #4338CA 0%, #6366F1 100%)',             emoji: '💡', title: 'Insight',       action: 'Insight' },
   { grad: 'linear-gradient(135deg, #0E7C66 0%, #14B8A6 100%)',             emoji: '🧳', title: 'Essentials',    action: 'Travel Essentials' },
   { grad: `linear-gradient(135deg, ${CAT.shopping.ink} 0%, #A855F7 100%)`, emoji: '🛍️', title: 'Shopping',      action: 'Shopping' },
   { grad: `linear-gradient(135deg, ${CAT.culture.ink} 0%, #D97706 100%)`,  emoji: '🏛️', title: 'Cultural Info', action: 'Culture Information' },
@@ -414,6 +415,7 @@ export default function HomePage() {
       "Weather": "Weather",
       "Things to Do": "ThingsToDo",
       "Culture Information": "CultureInformation",
+      "Insight": "Insight",
       "Coffee": "CoffeeFinder",
       "Restroom": "RestroomFinder",
       "Places to Eat": "PlacesToEat",
@@ -762,7 +764,7 @@ export default function HomePage() {
             <div className="flex flex-wrap gap-2">
               {(travelMode === 'international'
                 ? [{ e: '💱', t: 'Exchange', a: 'Money Exchange' }, { e: '🏧', t: 'ATM', a: 'ATM' }, { e: '💬', t: 'Phrases', a: 'Basic Phrases' }, { e: '🚌', t: 'Transit', a: 'Transportation' }]
-                : [{ e: '🎟️', t: 'Things to do', a: 'Things to Do' }, { e: '🏛️', t: 'Culture', a: 'Culture Information' }]
+                : [{ e: '🎟️', t: 'Things to do', a: 'Things to Do' }, { e: '💡', t: 'Insight', a: 'Insight' }]
               ).map((b) => (
                 <button
                   key={b.a}
