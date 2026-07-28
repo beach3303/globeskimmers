@@ -5760,42 +5760,46 @@ function homeRowsDayPart(hour) {
   return 'lateNight';
 }
 
-// Fetch a representative photo for a place from Unsplash, cached in KV (30d).
-// Gated on UNSPLASH_ACCESS_KEY (returns null when not configured). Fires the
-// Unsplash "download" trigger (required by their API ToS) and returns attribution.
-async function fetchUnsplashPhoto(env, query, ctx) {
-  if (!env.UNSPLASH_ACCESS_KEY) return null;
-  const cacheKey = `unsplash:v1:${String(query).toLowerCase()}`;
+// Fetch a real Creative-Commons photo for a place from Openverse (free, no API
+// key; aggregates Flickr + Wikimedia + museums). Commercial-licensed photos only,
+// cached in KV (30d). Returns { url, photographer, license, link, credit } or null.
+// Replaces Unsplash (Getty-owned, strict per-photo photographer+UTM attribution).
+async function fetchOpenversePhoto(env, query, _ctx) {
+  const q = String(query || '').trim();
+  if (!q) return null;
+  const cacheKey = `openverse:v1:${q.toLowerCase()}`;
   const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
   if (cached && cached.url) return cached;
   try {
-    const res = await fetch(`https://api.unsplash.com/search/photos?per_page=1&orientation=landscape&content_filter=high&query=${encodeURIComponent(query)}`, {
-      headers: { Authorization: `Client-ID ${env.UNSPLASH_ACCESS_KEY}` },
-    });
-    if (!res.ok) return null;
+    const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&license_type=commercial&mature=false&aspect_ratio=wide&page_size=3`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'Globeskimmers/1.0 (+https://globeskimmers.io)' } });
+    if (!res.ok) return null; // rate-limited/none → caller falls back gracefully
     const data = await res.json();
-    const p = data?.results?.[0];
-    const photo = { url: p?.urls?.regular || p?.urls?.small || '', photographer: p?.user?.name || '', link: p?.links?.html || '' };
-    if (!photo.url) return null;
-    // Unsplash ToS: trigger a download event when a photo is used.
-    if (ctx && ctx.waitUntil && p?.links?.download_location) {
-      ctx.waitUntil(fetch(p.links.download_location, { headers: { Authorization: `Client-ID ${env.UNSPLASH_ACCESS_KEY}` } }).catch(() => {}));
-    }
+    const p = (data?.results || []).find((x) => x && x.url) || null;
+    if (!p?.url) return null;
+    const lic = (p.license || '').toUpperCase();
+    const photo = {
+      url: p.url,
+      photographer: p.creator || '',
+      license: lic,
+      link: p.foreign_landing_url || p.creator_url || '',
+      // Simple credit line — a one-liner, not Unsplash's photographer-UTM gauntlet.
+      credit: `${p.creator || 'Unknown'}${lic ? ` · CC ${lic}` : ''}`,
+    };
     await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(photo), { expirationTtl: 30 * 24 * 60 * 60 }).catch(() => {});
     return photo;
   } catch { return null; }
 }
 
-// Build the global "Where to next" inspiration row from Unsplash destination
-// photos. Returns null if Unsplash isn't configured or too few photos resolve.
+// Build the global "Where to next" inspiration row from Openverse destination
+// photos. No API key needed now (free) — returns null only if too few resolve.
 async function buildWhereToNextRow(env, seasonKey, ctx) {
-  if (!env.UNSPLASH_ACCESS_KEY) return null;
   const dests = (HOME_SEASONAL_DESTINATIONS[seasonKey] || HOME_SEASONAL_DESTINATIONS.summer).slice(0, 6);
   const cards = [];
   for (const dest of dests) {
-    const photo = await fetchUnsplashPhoto(env, dest, ctx);
+    const photo = await fetchOpenversePhoto(env, dest, ctx);
     if (photo?.url) {
-      cards.push({ id: `esc_${dest}`, name: dest.split(',')[0].trim(), whyVisit: dest, photoUrl: photo.url, photographer: photo.photographer, credit: 'Unsplash' });
+      cards.push({ id: `esc_${dest}`, name: dest.split(',')[0].trim(), whyVisit: dest, photoUrl: photo.url, photographer: photo.photographer, credit: photo.credit, creditLink: photo.link });
     }
   }
   if (cards.length < 3) return null;
@@ -5962,17 +5966,18 @@ async function handleHomeRows(request, env, ctx) {
     if (seasonCards.length) rows.push({ key: 'seasonal', title: seasonCfg.title, subtitle: seasonCfg.subtitle, seeAll: { action: 'Things to Do' }, cards: seasonCards });
   }
 
-  // Where to next — global Unsplash inspiration (gated on key), a nice closer.
+  // Where to next — global Creative-Commons inspiration (Openverse), a nice closer.
   const wtn = await buildWhereToNextRow(env, seasonKey, ctx);
   if (wtn) rows.push(wtn);
 
-  // Photo fallback: owned attraction cards have no photo_url in D1 → fetch an
-  // Unsplash photo by "{name}, {city}" so the feed is photo-forward (cached 30d,
-  // gated on key). Parallel + capped so first build stays fast; the "Where to
-  // next" cards already have photos and are skipped.
-  if (env.UNSPLASH_ACCESS_KEY) {
-    // Dedup by "{name}, {city}" so cards repeated across rows don't waste the
-    // budget — fetch each unique place once, apply the photo to all its cards.
+  // Photo fallback: owned attraction cards with no photo yet → fetch a real
+  // Creative-Commons photo (Openverse aggregates Wikimedia + Flickr) by
+  // "{name}, {city}" so the feed is photo-forward (cached 30d). No API key needed.
+  // Parallel + capped so first build stays fast; cards that already have a photo
+  // are skipped.
+  {
+    // Dedup by "{name}, {city}" so cards repeated across rows fetch each unique
+    // place once, applying the photo to all its cards.
     const byQuery = new Map();
     for (const r of rows) for (const c of r.cards) {
       if (c.photoUrl || !c.name) continue;
@@ -5981,8 +5986,8 @@ async function handleHomeRows(request, env, ctx) {
       byQuery.get(q).push(c);
     }
     await Promise.all([...byQuery.keys()].slice(0, 30).map(async (q) => {
-      const photo = await fetchUnsplashPhoto(env, q, ctx);
-      if (photo?.url) for (const c of byQuery.get(q)) { c.photoUrl = photo.url; c.photographer = photo.photographer; c.credit = 'Unsplash'; }
+      const photo = await fetchOpenversePhoto(env, q, ctx);
+      if (photo?.url) for (const c of byQuery.get(q)) { c.photoUrl = photo.url; c.photographer = photo.photographer; c.credit = photo.credit; c.creditLink = photo.link; }
     }));
   }
 

@@ -42,12 +42,12 @@ function HomeRowCard({ card, onOpen, wide }) {
         ) : (
           <div className="w-full h-full flex items-center justify-center text-[28px]">📍</div>
         )}
-        {card.photoUrl && card.photographer && (
+        {card.photoUrl && (card.credit || card.photographer) && (
           <div
             className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[calc(8px*var(--fs))] leading-none"
             style={{ background: "rgba(0,0,0,0.42)", color: "rgba(255,255,255,0.9)" }}
           >
-            {card.photographer} / Unsplash
+            {card.credit || card.photographer}
           </div>
         )}
       </div>
@@ -87,7 +87,7 @@ export default function HomeRows({ onAction, wide = false }) {
     setDetail(card);
     setModalIdx(0);
     setGalleryOpen(false);
-    setModalPhotos(card.photoUrl ? [{ url: card.photoUrl, credit: card.photographer ? `${card.photographer} / Unsplash` : "" }] : []);
+    setModalPhotos(card.photoUrl ? [{ url: card.photoUrl, credit: card.credit || card.photographer || "" }] : []);
     if (card.name && Number.isFinite(card.lat)) {
       callWorker("places/wiki-photos", { name: card.name, lat: card.lat, lng: card.lng })
         .then(({ data }) => {

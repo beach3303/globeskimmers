@@ -271,12 +271,6 @@ export default function ActivityDetailPage() {
     return categoryMap[category] || '🎯';
   };
 
-  const getSimilarActivityImage = (activityName, category) => {
-    // Use Unsplash Source API for relevant images
-    const searchQuery = activityName.replace(/\s+/g, ',');
-    return `https://source.unsplash.com/400x400/?${encodeURIComponent(searchQuery)},landmark,travel`;
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
