@@ -24,7 +24,13 @@ as $$
   where st_dwithin(p.geom::geography, st_setsrid(st_makepoint(in_lng, in_lat), 4326)::geography, in_radius_m)
     and p.name is not null
     and (
-      p.category ilike any (array['%shopping%','%department_store%','%mall%','%market%','%boutique%'])
+      -- Broadened so the food-shopping chips (Groceries / Warehouse / Butcher…)
+      -- have raw material: %market% alone missed grocery_store / greengrocer /
+      -- butcher / wholesale / outlet / duty_free / souvenir / craft.
+      p.category ilike any (array[
+        '%shopping%','%department_store%','%mall%','%market%','%boutique%',
+        '%grocery%','%supermarket%','%greengrocer%','%butcher%','%warehouse%',
+        '%wholesale%','%outlet%','%duty_free%','%souvenir%','%gift%','%craft%','%bazaar%'])
       or p.category in ('shopping_center','shopping_mall','clothing_store','shoe_store')
     )
   order by p.geom <-> st_setsrid(st_makepoint(in_lng, in_lat), 4326)

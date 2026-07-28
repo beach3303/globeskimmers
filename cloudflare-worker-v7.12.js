@@ -6663,7 +6663,7 @@ function shopDetectKind(name, types = [], rev = '') {
   if (/souk|bazaar|bazar/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'bazaar', venueIcon: '🏺', venueLabel: 'Souk / Bazaar', venueColor: '#B45309' };
   if (/souvenir|handicraft|gift shop|tourist shop/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'souvenir', venueIcon: '🎁', venueLabel: 'Souvenir Market', venueColor: '#7C3AED' };
   if (/craft|artisan|handmade/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'crafts', venueIcon: '🧶', venueLabel: 'Craft Market', venueColor: '#D97706' };
-  if (/luxury|designer boutique|high.end shopping/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'luxury', venueIcon: '💎', venueLabel: 'Luxury Shopping', venueColor: '#BE185D' };
+  if (/luxury|designer boutique|designer brands|high.end shopping|upscale boutique|gucci|louis vuitton|chanel|prada|herm[eè]s|burberry|rolex|cartier|tiffany|dior|fendi|versace|balenciaga|bvlgari|bulgari|saint laurent/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'luxury', venueIcon: '💎', venueLabel: 'Luxury Shopping', venueColor: '#BE185D' };
   if (/duty.free|tax.free/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'duty_free', venueIcon: '✈️', venueLabel: 'Duty Free', venueColor: '#0891B2' };
   if (/mall|shopping center|shopping centre|department store|nordstrom|macy|saks|selfridge|harrods|galeries/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'mall', venueIcon: '🏬', venueLabel: 'Shopping Mall', venueColor: '#7C3AED' };
   return { shoppingFamily: 'general_shopping', shoppingSubtype: 'shopping', venueIcon: '🛍️', venueLabel: 'Shopping', venueColor: '#7C3AED' };
@@ -11028,11 +11028,90 @@ async function handleCoffeeOwned(request, env, ctx) {
   }
 }
 
+// Frontend Shopping chip id → predicate over the shopDetectKind result, so a
+// selected filter actually NARROWS to that store type. Previously the chip was
+// sent but ignored (every filter returned the same set). See src/pages/Shopping.jsx.
+const SHOP_OWNED_FILTER = {
+  all: () => true,
+  food_shopping: (k) => k.shoppingFamily === 'food_shopping',
+  general_shopping: (k) => k.shoppingFamily === 'general_shopping',
+  supermarkets: (k) => k.shoppingSubtype === 'supermarket',
+  warehouse_clubs: (k) => k.shoppingSubtype === 'warehouse_club',
+  farmers_markets: (k) => k.shoppingSubtype === 'farmers_market',
+  wet_markets: (k) => k.shoppingSubtype === 'fresh_market',
+  bodegas_corner_stores: (k) => k.shoppingSubtype === 'bodega',
+  butcher_shops: (k) => k.shoppingSubtype === 'butcher_shop',
+  souvenir_shopping: (k) => k.shoppingSubtype === 'souvenir',
+  markets_bazaars: (k) => k.shoppingSubtype === 'bazaar',
+  night_markets: (k) => k.shoppingSubtype === 'night_market',
+  local_crafts: (k) => k.shoppingSubtype === 'crafts',
+  luxury_shopping: (k) => k.shoppingSubtype === 'luxury',
+  malls: (k) => k.shoppingSubtype === 'mall',
+  outlets: (k) => k.shoppingSubtype === 'outlet',
+  duty_free: (k) => k.shoppingSubtype === 'duty_free',
+};
+
+// Map owned Shopping rows → cards the Shopping page understands. Fixes two bugs:
+// (1) NO PHOTOS — hydrate a real Wikimedia photo for the top notable venues
+//     (famous malls/markets exist on Commons; an ordinary supermarket resolves to
+//     nothing → keeps the clean category-emoji placeholder — honest, no fake stock).
+// (2) BROKEN FILTERS — classify each row with shopDetectKind (venue label/icon/
+//     color + family/subtype) so the selected chip filters correctly AND the
+//     client's Food-only / Luxury toggles (which read shoppingFamily / props.isLuxury)
+//     have fields to match. Runs BEFORE the generic slice so filtering picks from
+//     the full nearby set.
+async function buildOwnedShoppingPlaces(env, rows, category, maxResults, humanize) {
+  const pred = SHOP_OWNED_FILTER[category] || SHOP_OWNED_FILTER.all;
+  const classified = rows
+    .map((r) => ({
+      r,
+      // underscores→spaces so Overture categories ("shopping_center") match the
+      // space-delimited detector regexes ("shopping center").
+      kind: shopDetectKind(r.name, [String(r.category || '').replace(/_/g, ' ')], ''),
+    }))
+    .filter(({ kind }) => pred(kind));
+
+  const top = classified.slice(0, maxResults);
+  // Photo hydration for the top notable venues only (free, cached 180d).
+  await Promise.all(top.slice(0, 12).map(async (item) => {
+    try {
+      const wp = await getWikiPhotos(env, item.r.name, item.r.lat, item.r.lng);
+      if (wp.photos?.length) item.photos = wp.photos.map((p) => p.url).slice(0, 3);
+    } catch { /* keep the category-emoji fallback */ }
+  }));
+
+  return top.map(({ r, kind, photos }) => ({
+    id: r.id, placeId: r.id, source: 'owned',
+    displayName: { text: r.name }, name: r.name,
+    location: { latitude: r.lat, longitude: r.lng }, latitude: r.lat, longitude: r.lng, lat: r.lat, lng: r.lng,
+    formattedAddress: r.address || '', shortFormattedAddress: r.address || '', vicinity: r.address || '',
+    city: r.city || '', country: r.country || '',
+    distanceKm: r.meters / 1000, distanceMiles: r.meters / 1609.34,
+    rating: null, userRatingCount: 0, priceLevel: null,
+    currentOpeningHours: null, regularOpeningHours: null, hours: null, isOpen: null,
+    photos: photos || [], photoUrl: (photos && photos[0]) || null,
+    types: [r.category], primaryType: humanize(r.category),
+    nationalPhoneNumber: r.phone || null, internationalPhoneNumber: r.phone || null,
+    websiteUri: r.website || null,
+    googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lng}`,
+    parking: null, seating: null, reviews: [],
+    // Shopping-specific fields the card + toggles read.
+    shoppingFamily: kind.shoppingFamily, shoppingSubtype: kind.shoppingSubtype,
+    venueLabel: kind.venueLabel, venueIcon: kind.venueIcon, venueColor: kind.venueColor,
+    props: {
+      isLuxury: kind.shoppingSubtype === 'luxury',
+      isFoodShopping: kind.shoppingFamily === 'food_shopping',
+      isDutyFree: kind.shoppingSubtype === 'duty_free',
+      hasLocalCrafts: kind.shoppingSubtype === 'crafts',
+    },
+  }));
+}
+
 // Generic owned-finder handler — identical shape to handleCoffeeOwned, parameterized
 // by the Supabase RPC name + cache tag. Used by the ATM/Shopping/Restroom/Convenience/
 // Money-exchange finders: same free list (no photos), real Google photos + hours on-tap
 // via /places/enrich-owned. Each finder's own AI-details logic stays untouched — this
-// only swaps the LIST source.
+// only swaps the LIST source. Shopping is enriched further (photos + working filters).
 async function handleOwnedFinder(request, env, rpc, tag) {
   try {
     if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return jsonResponse({ error: 'Supabase not configured' }, 500);
@@ -11060,9 +11139,19 @@ async function handleOwnedFinder(request, env, rpc, tag) {
     }
     rows = Array.isArray(rows) ? rows : [];
     if (query) rows = rows.filter((r) => `${r.name} ${r.category}`.toLowerCase().includes(query));
-    rows = rows.slice(0, maxResults);
 
     const humanize = (s) => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+
+    // Shopping owned path: classify + apply the selected category chip + hydrate
+    // photos. Runs BEFORE the generic slice so the filter picks from the full
+    // nearby set. Other finders (ATM/restroom/convenience/money-exchange) fall
+    // through to the generic mapping below unchanged.
+    if (rpc === 'nearby_shopping') {
+      const places = await buildOwnedShoppingPlaces(env, rows, String(b.category || 'all'), maxResults, humanize);
+      return jsonResponse({ places, count: places.length, version: 'owned-shop-1', source: 'owned', fallbackInfo: null });
+    }
+
+    rows = rows.slice(0, maxResults);
     const places = rows.map((r) => ({
       id: r.id, placeId: r.id, source: 'owned',
       displayName: { text: r.name }, name: r.name,

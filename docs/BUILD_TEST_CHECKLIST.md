@@ -215,6 +215,39 @@ First live affiliate revenue surface. Each attraction card (ActivityCardTablet) 
 - [ ] Device: Things-to-Do → attraction card → "Book a tour here" opens Viator search for that place with `pid=P00311514` in the URL
 - [ ] Activate full tracking: run `scripts/affiliate/01_schema.sql` (D1) + `wrangler deploy` — until then the link still earns via pid (helper falls back to the raw URL)
 
+## 💡 Insight page (2026-07-28)
+New per-city planning surface alongside Cultural Info + Things to Do. Answers the "how do I actually DO this trip" questions: **Do you need a car here? · 1-day/3-day plan · Skip the crowds · Do it like a local · Day trips.** Content is AI-estimated (reuses the generic `/culture` Worker endpoint — cached Haiku + SWR, honest "Updated <date>" + double-check disclaimer). **Frontend-only — NO worker deploy needed.** Routes into Book a Ride + Travel Essentials at the useful moment (honest affiliate placement, no neutral comparison to muddy). Culture was pulled from the *planning* lead-strip and replaced by Insight; Culture tile/page kept.
+- [x] `src/pages/Insight.jsx` (5 AI sections + Plan-ahead strip + personalization teaser); lint + build clean
+- [x] Registered in pages.config.js; Home route `"Insight"→"Insight"`; planning strip Culture→💡 Insight; Insight added to phone Explore grid + tablet EXPLORE
+- [ ] Device: Home → **Explore more → 💡 Insight** opens the page; title shows your city; 5 cards each load ("Thinking it through…" → content)
+- [ ] "Do you need a car here?" shows a verdict pill (Skip the car / Get wheels / etc.) — set Simulator to **New York** (expect "Skip the car") vs **Los Angeles** (expect "Get wheels/Nice to have")
+- [ ] "🚗 Rent a car…" / "Book a ride" button → opens **Get A Ride**; Plan-ahead tiles → **Get A Ride** / **Travel Essentials**
+- [ ] Each card footer shows "Updated <date>"; top amber note = AI-estimated disclaimer visible
+- [ ] Planning mode (navigate to a place you're NOT at): Home lead-strip shows **Things to do + 💡 Insight** (no more Culture there)
+- [ ] Change location → cards refetch for the new city; per-card 🔄 refresh works
+- [ ] Cost check: first open of a city = 5 Haiku calls (~cheap), cached 180–365d; re-open = instant (KV hit)
+
+## 🏙️ Living Rows quality fixes — Cebu/Manila (2026-07-28)
+Coverage check found the home carousels populate globally, but in less-curated regions (esp. PH/SE-Asia) they showed **residential condos mis-tagged as landmarks** (Cebu: "Sundance Residences", "M5 Staffhouse") and **photoless real attractions** (Manila: non-Latin / ALL-CAPS names missed photo search). Three fixes, all in the planet-fallback path (curated seeded cities like NYC were already fine).
+- [x] SQL: residential exclusion in `nearby_attractions` (scripts/finders/attractions.sql + RUN_ALL.sql) — condos/staffhouses/townhomes/dorms; keeps Villa/Palace/Basilica
+- [x] Worker: `looksResidential()` gate in `homeRowsPlanetPool` (works on deploy, before SQL re-run) + `cleanPhotoQuery()` (strips non-Latin, de-shouts CAPS, appends city/country) in the home-rows photo fallback
+- [ ] **RUN SQL:** paste `scripts/finders/attractions.sql` in Supabase SQL editor (also cleans ThingsToDo)
+- [ ] **DEPLOY:** `wrangler deploy`
+- [ ] After both: re-check Cebu (10.3157, 123.8854) + Manila (14.5995, 120.9842) — condos gone from Home rows + ThingsToDo; more real sights get photos
+- [ ] Sanity: NYC / London / Bangkok still perfect (no regressions)
+
+## 🛍️ Shopping fix — photos + working filters (2026-07-28)
+Two real bugs found + fixed. (1) **No photos:** owned path hard-coded `photos:[]` + never hydrated. (2) **Filters broken:** the category chip was passed but IGNORED (every filter = same list), and the Food/Luxury toggles read fields (`shoppingFamily`/`props.isLuxury`) the worker never set → returned 0. Fix spans SQL + worker; **no frontend change** (the card already read these fields).
+- [x] Worker: `buildOwnedShoppingPlaces()` — classify each row (`shopDetectKind`, underscores→spaces), apply the selected chip via `SHOP_OWNED_FILTER`, hydrate top-12 Wikimedia photos (notable venues; ordinary shops keep the category-emoji placeholder — honest), set venueLabel/icon/color + shoppingFamily + props
+- [x] Worker: strengthened luxury detection (brand names LV/Gucci/Rolex…; excludes budget "Designer Warehouse")
+- [x] SQL: broadened `nearby_shopping` category filter (grocery/supermarket/butcher/warehouse/outlet/duty_free/souvenir/craft) so food chips have raw material
+- [ ] **RUN SQL:** paste `scripts/finders/shopping.sql` in Supabase SQL editor
+- [ ] **DEPLOY:** `wrangler deploy`
+- [ ] Device: Shopping → tap a category chip (Malls / Groceries / Luxury) → list narrows to THAT store type (previously unchanged). "🛒 Food Only" and "💎 Luxury" toggles now return matching stores (previously 0)
+- [ ] Notable malls/markets show a real photo in the list; ordinary shops show a category emoji (🛒/🏬/🥩) not a blank bag
+- [ ] Card kicker + top-right tag show the store type (e.g. "Shopping Mall"); map pins use the category icon
+- [ ] ⚠️ Known limit: "🟢 Open Now" toggle returns nothing on owned list (no live hours until a card is tapped) — separate follow-up, not in this fix
+
 ## Template for a new build
 ```
 ### N · <feature name>
