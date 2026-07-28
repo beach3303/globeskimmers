@@ -302,47 +302,35 @@ export default function ActivityDetailPage() {
 
   return (
     <div className="min-h-screen pb-20 font-sans" style={{ background: '#FFFCF7' }}>
-      {/* Floating Header - Over Photo */}
-      <div className="fixed top-0 left-0 right-0 z-30">
-        <div className="absolute inset-0 bg-gradient-to-b from-black/50 to-transparent pointer-events-none"></div>
-
-        <div className="relative max-w-[600px] mx-auto flex items-center justify-between px-5 py-4">
+      {/* Image Gallery */}
+      <div className="relative mt-0">
+        {/* Close / share / save — overlaid on the photo (below the app header, so
+            they're always reachable; a fixed top-0 header was hidden behind it). */}
+        <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
           <button
             onClick={() => navigate(-1)}
             aria-label="Close"
-            className="w-11 h-11 rounded-full bg-white/90 backdrop-blur-md hover:bg-white flex items-center justify-center transition-all shadow-lg"
+            className="pointer-events-auto w-11 h-11 rounded-full bg-white/90 backdrop-blur-md hover:bg-white flex items-center justify-center transition-all shadow-lg"
           >
             <X className="w-6 h-6 text-gray-900" />
           </button>
-
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pointer-events-auto">
             <button
               onClick={handleShare}
               className="w-11 h-11 rounded-full bg-white/90 backdrop-blur-md hover:bg-white flex items-center justify-center transition-all shadow-lg"
             >
               <Share2 className="w-5 h-5 text-gray-900" />
             </button>
-
             <button
               onClick={handleSaveActivity}
               className={`w-11 h-11 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-lg ${
-                isSaved
-                  ? 'bg-red-500 hover:bg-red-600'
-                  : 'bg-white/90 hover:bg-white'
+                isSaved ? 'bg-red-500 hover:bg-red-600' : 'bg-white/90 hover:bg-white'
               }`}
             >
-              <Bookmark
-                className={`w-5 h-5 ${
-                  isSaved ? 'fill-white text-white' : 'text-gray-900'
-                }`}
-              />
+              <Bookmark className={`w-5 h-5 ${isSaved ? 'fill-white text-white' : 'text-gray-900'}`} />
             </button>
           </div>
         </div>
-      </div>
-
-      {/* Image Gallery */}
-      <div className="relative mt-0">
         <div className="h-[300px] bg-gray-200 relative overflow-hidden" {...photoSwipe}>
           {photos.length > 0 ? (
             <>

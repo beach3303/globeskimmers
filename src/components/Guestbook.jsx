@@ -157,6 +157,16 @@ export default function Guestbook({ entityType = "place", entityId, entityName }
           >✍️ Sign our Guestbook</button>
         ) : (
           <div className="bg-white rounded-xl shadow-md p-4 space-y-3">
+            {/* Header with an always-visible exit — so you can back out of writing
+                even while the keyboard covers the Cancel button below. */}
+            <div className="flex items-center justify-between">
+              <span className="text-[calc(13.5px*var(--fs))] font-bold text-gray-800">Leave a note</span>
+              <button
+                onClick={resetCompose}
+                aria-label="Close"
+                className="w-8 h-8 -mr-1 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-[calc(18px*var(--fs))] leading-none"
+              >✕</button>
+            </div>
             <div className="flex flex-wrap gap-2">
               {PROMPTS.map((p) => (
                 <button
