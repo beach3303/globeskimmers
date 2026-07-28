@@ -5864,10 +5864,19 @@ async function homeRowsPlanetPool(env, latitude, longitude) {
       }));
     // Hydrate real Wikimedia photos for the top cards (free, cached 180d) — the
     // rows are photo-forward, and the client also hydrates any left without one.
-    await Promise.all(cards.slice(0, 12).map(async (c) => {
+    // Go a bit deeper (24) so the notability gate below has photo signal.
+    await Promise.all(cards.slice(0, 24).map(async (c) => {
       try { const wp = await getWikiPhotos(env, c.name, c.lat, c.lng); if (wp.photos?.length) c.photoUrl = wp.photos[0].url; } catch { /* leave photoless; client hydrates */ }
     }));
-    return cards;
+    // Notability gate for Overture's generic 'landmark_and_historical_building' —
+    // a pollution-heavy catch-all in less-curated regions (Cebu: condos, boarding
+    // houses, "Cdc Building" mis-tagged as landmarks). Keep such a row ONLY if it
+    // resolved a REAL photo: famous historic buildings have a Wikidata/Commons
+    // image, ordinary condos don't. Specific-category attractions (church_cathedral,
+    // monument, temple, museum, park…) are NEVER gated, so genuine sights with
+    // sparse free-photo coverage (many PH temples) still show. Globally safe:
+    // real historic buildings in well-mapped cities keep their photo → survive.
+    return cards.filter((c) => String(c.category || '') !== 'landmark_and_historical_building' || c.photoUrl);
   } catch (e) { console.error('home/rows planet pool failed:', e?.message); return []; }
 }
 
