@@ -452,6 +452,7 @@ function isTourable(a) {
 
 function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet}){
   const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false); const [hoursExp,setHoursExp]=useState(false); const [gallery,setGallery]=useState({open:false,idx:0});
+  const [viatorMatch,setViatorMatch]=useState(null); // null=checking · true=Viator has products · false=no · 'na'=can't verify (no key/rate-limited)
   const fs=(n)=>`calc(${n}px*var(--fs))`;
   // t(tabletValue, phoneValue) — pick the size for the active platform. Used for
   // BOTH fs()-wrapped type sizes and raw px (photo height, radius, paddings).
@@ -464,6 +465,17 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
     const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorSearchLink(name),category:"tour",productName:name,destCity:a.city,destCountry:a.country});
     window.open(url,"_blank");
   };
+  // Only show "Book a tour" when Viator actually has products for THIS attraction.
+  // Pre-filter with isTourable (cheap, no API) to skip non-attractions; the API
+  // confirms a real match. 'na' (no key / rate-limited) → fall back to heuristic.
+  useEffect(()=>{
+    if(!isTourable(a)){setViatorMatch(false);return;}
+    let cancelled=false;
+    callWorker('viator/match',{name})
+      .then(({data})=>{if(!cancelled)setViatorMatch(data?.match===true?true:data?.match===false?false:'na');})
+      .catch(()=>{if(!cancelled)setViatorMatch('na');});
+    return()=>{cancelled=true;};
+  },[]); // eslint-disable-line react-hooks/exhaustive-deps
   const activeTags=PROP_TAGS.filter(t=>a.props?.[t.key]);
   const aColor=a.activityColor||T.accent;
   const photos=(a.photos||[]).filter(Boolean);
@@ -553,9 +565,10 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
           <button onClick={()=>setExp(e=>!e)} style={{flex:1,borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:exp?ED_INK:ED_IVORY2,color:exp?"#fff":ED_INK2}}>{exp?"Less ▴":"More ▾"}</button>
         </div>
 
-        {/* Book a tour — Viator affiliate. ONLY on tour-able attractions/experiences
-            (see isTourable) — never on generic parks/spots or non-bookable places. */}
-        {isTourable(a) && (
+        {/* Book a tour — Viator affiliate. Shows ONLY when Viator actually has
+            products for this attraction (verified via /viator/match). 'na' = can't
+            verify (no API key / rate-limited) → falls back to the isTourable gate. */}
+        {(viatorMatch === true || viatorMatch === 'na') && (
           <button onClick={openViatorTour} style={{width:"100%",marginTop:fs(t(12,8)),borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(17,13.5)),fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:fs(7),background:"#127a5e",color:"#fff"}}>
             🎟️ Book a tour here <span style={{fontSize:fs(t(13,11)),opacity:0.85,fontWeight:600}}>· Viator ↗</span>
           </button>

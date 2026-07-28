@@ -11289,6 +11289,48 @@ const AFF_SUBID_PARAM = {
   booking: 'sub_id', agoda: 'sub_id', airalo: 'sub_id', radicalstorage: 'sub_id',
   tiqets: 'sub_id', gigsky: 'sub_id',
 };
+// Does Viator actually have bookable products for this attraction? Powers the
+// gate so "Book a tour here" only shows on real matches (not a category guess).
+// Returns { match: true|false } — or { match: null } when VIATOR_API_KEY isn't set
+// (the client then falls back to its category heuristic, so no regression). Free
+// content endpoint; cached 60d + only called for plausible attractions to respect
+// Viator's search rate limit.
+async function handleViatorMatch(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const name = String(b.name || '').trim();
+    if (!name || !env.VIATOR_API_KEY) return jsonResponse({ match: null });
+    const cacheKey = `viatormatch:v1:${name.toLowerCase().slice(0, 120)}`;
+    const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+    if (cached && typeof cached.match === 'boolean') return jsonResponse(cached);
+    let match = null;
+    try {
+      const res = await fetch('https://api.viator.com/partner/search/freetext', {
+        method: 'POST',
+        headers: {
+          'exp-api-key': env.VIATOR_API_KEY,
+          Accept: 'application/json;version=2.0',
+          'Accept-Language': 'en-US',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          searchTerm: name,
+          searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count: 1 } }],
+          currency: 'USD',
+        }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const prod = d?.products || {};
+        const count = typeof prod.totalCount === 'number' ? prod.totalCount : (prod.results?.length || 0);
+        match = count > 0;
+      } // non-ok (rate limit/error) → leave null; client uses heuristic
+    } catch { /* network → null → heuristic */ }
+    if (typeof match === 'boolean') await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify({ match }), { expirationTtl: 60 * 24 * 60 * 60 }).catch(() => {});
+    return jsonResponse({ match });
+  } catch { return jsonResponse({ match: null }); }
+}
+
 async function handleAffiliateClick(request, env, ctx) {
   try {
     if (!env.DB) return jsonResponse({ error: 'analytics DB not configured' }, 500);
@@ -11493,6 +11535,7 @@ export default {
       if (pathname.startsWith('/legal/') && request.method === 'GET') return await handleLegalPage(request, env);
       if (pathname === '/guestbook/photo-upload' && request.method === 'POST') return await handleGuestbookPhotoUpload(request, env, ctx);
       if (pathname === '/aff/click' && request.method === 'POST') return await handleAffiliateClick(request, env, ctx);
+      if (pathname === '/viator/match' && request.method === 'POST') return await handleViatorMatch(request, env);
       if (pathname === '/guestbook/list' && request.method === 'POST') return await handleGuestbookList(request, env);
       if (pathname === '/guestbook/sign' && request.method === 'POST') return await handleGuestbookSign(request, env, ctx);
       if (pathname === '/guestbook/edit' && request.method === 'POST') return await handleGuestbookEdit(request, env);
