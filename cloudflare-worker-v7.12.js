@@ -7580,12 +7580,17 @@ async function handleActivities(request, env, ctx) {
         });
         if (!r.ok) return [];
         const mapped = (await r.json() || []).map(gaMapOvertureToActivity);
-        // Hydrate real Wikimedia photos for the top 10 (free, cached 180d).
-        await Promise.all(mapped.slice(0, 10).map(async (a) => {
+        // Hydrate real Wikimedia photos for the top 20 (free, cached 180d) — a bit
+        // deeper so the notability gate below has photo signal for the cards shown.
+        await Promise.all(mapped.slice(0, 20).map(async (a) => {
           const wp = await getWikiPhotos(env, a.name, a.lat, a.lng);
           if (wp.photos?.length) { a.photos = wp.photos.map((p) => p.url); a.photoUrl = a.photos[0]; a.photoCredit = wp.photos[0].credit; }
         }));
-        return mapped;
+        // Same notability gate as the Living Rows planet pool: drop residential
+        // junk + Overture's generic 'landmark_and_historical_building' catch-all
+        // unless it resolved a real photo (condos don't; real historic buildings
+        // do). Specific-category attractions (museum/monument/temple/park…) untouched.
+        return mapped.filter((a) => !looksResidential(a.name) && (String(a.types?.[0] || '') !== 'landmark_and_historical_building' || a.photoUrl));
       } catch { return []; }
     })();
 
