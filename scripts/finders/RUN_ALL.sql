@@ -36,6 +36,10 @@ as $$
         '%theme_park%','%waterfall%','%lighthouse%','%memorial%'])
       or p.category in ('park','garden','beach','mountain','lake')
     )
+    -- Exclude RESIDENTIAL buildings Overture mis-tags as landmarks (condos /
+    -- staffhouses / townhomes — rampant in PH/SE-Asia). Safe: real attractions
+    -- are never named these tokens. See scripts/finders/attractions.sql.
+    and p.name !~* '(\m(condo|condominium|condominiums|residence|residences|townhome|townhomes|townhouse|townhouses|apartment|apartments|apartelle|staff\s*house|staffhouse|subdivision|dormitory|dorm)\M)'
   order by p.geom <-> st_setsrid(st_makepoint(in_lng, in_lat), 4326)
   limit in_limit;
 $$;

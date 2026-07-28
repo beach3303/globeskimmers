@@ -29,6 +29,12 @@ as $$
         '%theme_park%','%waterfall%','%lighthouse%','%memorial%'])
       or p.category in ('park','garden','beach','mountain','lake')
     )
+    -- Exclude RESIDENTIAL buildings that Overture mis-tags as
+    -- 'landmark_and_historical_building' (rampant in PH/SE-Asia: condos,
+    -- staffhouses, townhomes surface as "attractions" with no photos + wrong
+    -- content). Tourist attractions are effectively never named these tokens,
+    -- so this is safe for real landmarks. Word-boundary regex, case-insensitive.
+    and p.name !~* '(\m(condo|condominium|condominiums|residence|residences|townhome|townhomes|townhouse|townhouses|apartment|apartments|apartelle|staff\s*house|staffhouse|subdivision|dormitory|dorm)\M)'
   order by p.geom <-> st_setsrid(st_makepoint(in_lng, in_lat), 4326)
   limit in_limit;
 $$;

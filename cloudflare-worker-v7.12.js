@@ -5806,6 +5806,38 @@ async function buildWhereToNextRow(env, seasonKey, ctx) {
   return { key: 'whereToNext', title: 'Where to next ✈️', subtitle: 'Dreaming of your next trip', seeAll: { action: 'Things to Do' }, cards };
 }
 
+// Residential junk that Overture mis-tags as 'landmark_and_historical_building'
+// (condos, staffhouses, townhomes — rampant in PH/SE-Asia). Mirrors the SQL
+// exclusion in scripts/finders/attractions.sql, but applied HERE too so the
+// filter takes effect the moment the worker deploys — even before that SQL is
+// re-run in Supabase. Word-boundary so "Palace" etc. is never hit.
+const HOMEROW_RESIDENTIAL_RE = /\b(condo|condominium|condominiums|residence|residences|townhome|townhomes|townhouse|townhouses|apartment|apartments|apartelle|staff\s*house|staffhouse|subdivision|dormitory|dorm)\b/i;
+function looksResidential(name) {
+  return HOMEROW_RESIDENTIAL_RE.test(String(name || ''));
+}
+
+// Build a clean photo-search query from a (possibly messy) owned place name.
+// Overture names in less-curated regions carry non-Latin scripts ("Seng Guan
+// Temple 信願寺"), ALL-CAPS shouting ("Hindu Temple MANILA"), and no city context
+// — all of which make Openverse/Wikimedia text search MISS the real attraction
+// and fall back to the brown placeholder. This normalizes the name and always
+// appends "{city}, {country}" so the search lands. Returns a plain string.
+function cleanPhotoQuery(name, city, country) {
+  let n = String(name || '')
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7E]/g, ' ')          // drop non-Latin (CJK/Thai/etc.)
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  // De-shout ALL-CAPS words (>=3 letters) → Title Case so search matches.
+  n = n.replace(/\b[A-Z]{3,}\b/g, (w) => w.charAt(0) + w.slice(1).toLowerCase());
+  const parts = [];
+  const nLow = n.toLowerCase();
+  if (n) parts.push(n);
+  if (city && !nLow.includes(String(city).toLowerCase())) parts.push(String(city).trim());
+  if (country && !nLow.includes(String(country).toLowerCase())) parts.push(String(country).trim());
+  return parts.filter(Boolean).join(', ') || String(city || country || '').trim();
+}
+
 // Fallback pool for the living home rows when there's no CURATED owned coverage
 // (i.e. outside the ~seeded cities): pull nearby attractions from the OWNED PLANET
 // DB (75M places) so the carousels populate almost everywhere, not just seeded
@@ -5821,11 +5853,15 @@ async function homeRowsPlanetPool(env, latitude, longitude) {
     });
     if (!r.ok) return [];
     const rows = (await r.json()) || [];
-    const cards = rows.map((p) => ({
-      id: p.id, name: p.name, category: p.category, city: p.city || '', country: p.country || '',
-      photoUrl: null, rating: null, whyVisit: '',
-      distanceMiles: (p.meters || 0) / 1609.34, freeToVisit: null, lat: p.lat, lng: p.lng,
-    }));
+    const cards = rows
+      // Drop residential junk mis-tagged as landmarks (belt-and-suspenders with
+      // the SQL exclusion) so tourists never see condos where sights should be.
+      .filter((p) => !looksResidential(p.name))
+      .map((p) => ({
+        id: p.id, name: p.name, category: p.category, city: p.city || '', country: p.country || '',
+        photoUrl: null, rating: null, whyVisit: '',
+        distanceMiles: (p.meters || 0) / 1609.34, freeToVisit: null, lat: p.lat, lng: p.lng,
+      }));
     // Hydrate real Wikimedia photos for the top cards (free, cached 180d) — the
     // rows are photo-forward, and the client also hydrates any left without one.
     await Promise.all(cards.slice(0, 12).map(async (c) => {
@@ -5981,7 +6017,10 @@ async function handleHomeRows(request, env, ctx) {
     const byQuery = new Map();
     for (const r of rows) for (const c of r.cards) {
       if (c.photoUrl || !c.name) continue;
-      const q = c.city ? `${c.name}, ${c.city}` : c.name;
+      // Normalize non-Latin / ALL-CAPS names + add city+country context so the
+      // photo search actually lands (fixes Manila-style photoless real sights).
+      const q = cleanPhotoQuery(c.name, c.city, c.country);
+      if (!q) continue;
       if (!byQuery.has(q)) byQuery.set(q, []);
       byQuery.get(q).push(c);
     }
