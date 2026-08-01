@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { ChevronLeft, Loader2, Plus, Trash2, Calendar, RefreshCw, X } from "lucide-react";
+import { ChevronLeft, Loader2, Plus, Trash2, Calendar, RefreshCw, X, UserPlus } from "lucide-react";
 import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto } from "@/lib/passport";
+import { listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, tagFriend, listTags, respondTag } from "@/lib/passport";
 
 // ============================================================================
 // Passport — the personal, private travel journal. Stamps you EARN by being
@@ -75,13 +75,26 @@ function Stat({ n, label }) {
   );
 }
 
-function StampCard({ stamp, onChanged, onEnlarge }) {
+function StampCard({ stamp, onChanged, onEnlarge, fromName }) {
   const k = KIND[stamp.kind] || KIND.attraction;
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [showDate, setShowDate] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [dateVal, setDateVal] = useState(stamp.visited_on || "");
+  const [showTag, setShowTag] = useState(false);
+  const [tagEmail, setTagEmail] = useState("");
+  const [tagBusy, setTagBusy] = useState(false);
+
+  const sendTag = async () => {
+    const email = tagEmail.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast("Enter a valid email", "error"); return; }
+    setTagBusy(true);
+    const { error } = await tagFriend({ stamp_id: stamp.id, email, from_name: fromName });
+    setTagBusy(false);
+    if (error) showToast(error, "error");
+    else { showToast("We'll let them know 👍", "success"); setTagEmail(""); setShowTag(false); }
+  };
   const place = [stamp.city, stamp.region, stamp.country].filter(Boolean).join(", ");
   const photos = stamp.photos || [];
 
@@ -180,6 +193,54 @@ function StampCard({ stamp, onChanged, onEnlarge }) {
         {photos.length ? "Add another photo" : stamp.verified === "self" ? "Add a photo to verify ✓" : "Add a memory photo"}
       </button>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
+
+      {/* Tag who you were with — they Allow/Decline the stamp on their own passport */}
+      <button onClick={() => setShowTag((s) => !s)} className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
+        style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13), fontWeight: 600 }}>
+        <UserPlus size={15} strokeWidth={2.2} /> Tag who you were with
+      </button>
+      {showTag && (
+        <div className="mt-2">
+          <div className="flex gap-2">
+            <input type="email" value={tagEmail} onChange={(e) => setTagEmail(e.target.value)} placeholder="friend@email.com"
+              inputMode="email" autoCapitalize="none" autoCorrect="off"
+              className="flex-1 rounded-lg px-3 py-2" style={{ border: `1px solid ${RULE}`, fontSize: fs(13), color: INK }} />
+            <button onClick={sendTag} disabled={tagBusy} className="rounded-lg px-3.5 py-2 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12.5) }}>{tagBusy ? "…" : "Send"}</button>
+          </div>
+          <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.4, marginTop: 5 }}>They choose whether to add this stamp to their own passport — we never add it without their OK.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// "Tagged you" inbox card — someone tagged you at a place; Allow → the stamp is
+// minted on your passport, Decline → nothing.
+function TagInbox({ tag, onDone }) {
+  const [busy, setBusy] = useState(false);
+  const k = KIND[tag.kind] || KIND.attraction;
+  const place = [tag.city, tag.country].filter(Boolean).join(", ");
+  const who = tag.from_name || "A traveler";
+  const respond = async (action) => {
+    setBusy(true);
+    const { error } = await respondTag(tag.id, action);
+    setBusy(false);
+    if (error) showToast(error, "error");
+    else { showToast(action === "accept" ? "Added to your passport 🛂" : "Declined", "success"); onDone(); }
+  };
+  return (
+    <div className="rounded-[18px] p-3.5" style={{ boxShadow: SHADOW_CARD_SOFT, border: "1px solid #EAD9AE", background: "#FFFBF0" }}>
+      <div className="flex items-start gap-2.5">
+        <div className="shrink-0 rounded-xl flex items-center justify-center" style={{ width: 40, height: 40, background: IVORY_2, fontSize: 20 }}>{k.icon}</div>
+        <div className="min-w-0 flex-1">
+          <p style={{ color: INK, fontSize: fs(13.5), lineHeight: 1.4 }}><b>{who}</b> tagged you at <b>{tag.name}</b>{place ? ` · ${place}` : ""}</p>
+          <p style={{ color: INK3, fontSize: fs(11.5), marginTop: 1 }}>Add this stamp to your passport?</p>
+        </div>
+      </div>
+      <div className="flex gap-2 mt-2.5">
+        <button onClick={() => respond("decline")} disabled={busy} className="flex-1 rounded-lg py-2 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>Decline</button>
+        <button onClick={() => respond("accept")} disabled={busy} className="flex-1 rounded-lg py-2 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13) }}>{busy ? "…" : "Allow ✓"}</button>
+      </div>
     </div>
   );
 }
@@ -192,12 +253,13 @@ export default function PassportPage() {
   const [loading, setLoading] = useState(true);
   const [stamps, setStamps] = useState([]);
   const [stats, setStats] = useState({});
+  const [tags, setTags] = useState([]);
   const [lightbox, setLightbox] = useState(null); // { url, caption }
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { stamps, stats } = await listPassport();
-    setStamps(stamps); setStats(stats); setLoading(false);
+    const [pp, tg] = await Promise.all([listPassport(), listTags()]);
+    setStamps(pp.stamps); setStats(pp.stats); setTags(tg.tags || []); setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -237,6 +299,14 @@ export default function PassportPage() {
           </div>
         )}
 
+        {/* Tagged-you inbox — someone said you were with them */}
+        {tags.length > 0 && (
+          <div className="mb-4 space-y-2">
+            <p className="uppercase font-semibold px-1" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", color: STAMP }}>🙌 Tagged you</p>
+            {tags.map((t) => <TagInbox key={t.id} tag={t} onDone={load} />)}
+          </div>
+        )}
+
         {loading && stamps.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-10 h-10 animate-spin mb-3" style={{ color: STAMP }} />
@@ -263,13 +333,13 @@ export default function PassportPage() {
             {pages.length > 0 && (
               <>
                 <p className="uppercase font-semibold px-1" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", color: INK3 }}>Passport pages</p>
-                {pages.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} />)}
+                {pages.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} />)}
               </>
             )}
             {marks.length > 0 && (
               <>
                 <p className="uppercase font-semibold px-1 pt-2" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", color: INK3 }}>Places visited</p>
-                {marks.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} />)}
+                {marks.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} />)}
               </>
             )}
           </div>

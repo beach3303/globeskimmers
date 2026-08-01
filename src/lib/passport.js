@@ -47,3 +47,20 @@ export async function deleteStampPhoto(photo_id) {
   const { data, error } = await callWorker('passport/photo/delete', { photo_id });
   return { data, error };
 }
+
+// Buddy tagging (consent-gated). Tag by email → a pending stamp the recipient
+// Allows/Declines. Response never reveals whether the email is a user.
+export async function tagFriend({ stamp_id, email, from_name }) {
+  const { data, error } = await callWorker('passport/tag', { stamp_id, email, from_name });
+  return { data, error };
+}
+// My incoming pending tags (the "Tagged you" inbox).
+export async function listTags() {
+  const { data, error } = await callWorker('passport/tags', {});
+  return { tags: data?.tags || [], error };
+}
+// Accept (mint the stamp on my passport) or decline a tag.
+export async function respondTag(tag_id, action) {
+  const { data, error } = await callWorker('passport/tag/respond', { tag_id, action });
+  return { data, error };
+}

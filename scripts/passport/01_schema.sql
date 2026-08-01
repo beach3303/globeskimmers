@@ -44,6 +44,40 @@ create table if not exists api.passport_stamp_photos (
 create index if not exists passport_photos_stamp_idx on api.passport_stamp_photos (stamp_id);
 create index if not exists passport_photos_user_idx  on api.passport_stamp_photos (user_id);
 
+-- Buddy tagging — "you were here with me". A tag is a PENDING stamp the recipient
+-- must ACCEPT (consent required — never auto-stamp anyone). Keyed by EMAIL so we
+-- can tag someone who isn't a user yet; they claim it when they join (Phase B =
+-- invite email w/ app-download links). Provenance: an accepted stamp records who
+-- tagged you (passport_stamps.tagged_by).
+create table if not exists api.passport_tags (
+  id           uuid primary key default gen_random_uuid(),
+  from_user_id uuid not null,
+  from_name    text,                           -- tagger's display name (snapshot, for the prompt)
+  to_user_id   uuid,                           -- resolved recipient (null until they're a user)
+  to_email     text not null,                  -- lowercased tagged email (claim key for non-users)
+  kind text, tier text, entity_type text, entity_id text,
+  name text not null, city text, region text, country text,
+  lat double precision, lng double precision, visited_on date,
+  status       text not null default 'pending', -- pending | accepted | declined
+  created_at   timestamptz default now(),
+  responded_at timestamptz
+);
+create index if not exists passport_tags_to_user_idx  on api.passport_tags (to_user_id, status);
+create index if not exists passport_tags_to_email_idx on api.passport_tags (lower(to_email), status);
+create index if not exists passport_tags_from_idx     on api.passport_tags (from_user_id, created_at desc);
+alter table api.passport_tags enable row level security; -- Worker-only
+
+alter table api.passport_stamps add column if not exists tagged_by uuid;
+
+-- Resolve an email → user id. SECURITY DEFINER so it can read auth.users, but
+-- granted ONLY to service_role (the Worker) → clients can never enumerate users.
+create or replace function api.user_id_by_email(p_email text)
+returns uuid language sql security definer set search_path = auth, public as $$
+  select id from auth.users where lower(email) = lower(p_email) limit 1;
+$$;
+revoke all on function api.user_id_by_email(text) from anon, authenticated, public;
+grant execute on function api.user_id_by_email(text) to service_role;
+
 -- RLS on; NO client policies → private to the Worker (service-role bypasses RLS).
 alter table api.passport_stamps       enable row level security;
 alter table api.passport_stamp_photos enable row level security;

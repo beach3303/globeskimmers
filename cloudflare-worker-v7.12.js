@@ -928,6 +928,11 @@ async function handleDeleteAccount(request, env) {
         method: 'DELETE',
         headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
       });
+      // Remove buddy-tags they sent or received.
+      await fetch(`${SUPABASE_URL}/rest/v1/passport_tags?or=(from_user_id.eq.${userId},to_user_id.eq.${userId})`, {
+        method: 'DELETE',
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      });
     } catch { /* passport purge best-effort; still delete the account */ }
 
     // 2) Hard-delete the auth user (cascades profiles + login_events).
@@ -11656,6 +11661,100 @@ async function handlePassportPhotoDelete(request, env, ctx) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// Buddy tagging — tag someone (by email) to also get this stamp, WITH CONSENT.
+// Phase A: creates a pending tag; if the email is a user, it shows in their in-app
+// "Tagged you" inbox to Allow/Decline. (Phase B will email users + invite non-users
+// with app-download links.) Never reveals whether the email is a user (no
+// enumeration); rate-limited (anti-spam); consent-gated (no auto-stamp).
+async function handlePassportTag(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to tag a friend' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const email = String(b.email || '').trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return jsonResponse({ error: 'Enter a valid email' }, 400);
+    if (email === String(user.email || '').toLowerCase()) return jsonResponse({ error: "That's your own email 🙂" }, 400);
+    const stampId = String(b.stamp_id || '');
+    if (!stampId) return jsonResponse({ error: 'stamp_id required' }, 400);
+    // Pull the tagger's OWN stamp for the payload.
+    const sq = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}&select=*`, {});
+    const stamp = (sq.ok ? await sq.json() : [])[0];
+    if (!stamp) return jsonResponse({ error: 'Stamp not found' }, 404);
+    // Rate limit: max 30 tags / user / day (anti-spam).
+    const since = new Date(Date.now() - 86400000).toISOString();
+    const rc = await gbRest(env, `passport_tags?from_user_id=eq.${user.id}&created_at=gte.${since}&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } });
+    const count = parseInt((rc.headers.get('content-range') || '').split('/')[1] || '0', 10);
+    if (count >= 30) return jsonResponse({ error: 'Daily tag limit reached — try again tomorrow.' }, 429);
+    // Dedupe: don't re-tag the same person for the same place while pending.
+    const dq = await gbRest(env, `passport_tags?from_user_id=eq.${user.id}&to_email=eq.${encodeURIComponent(email)}&entity_id=eq.${encodeURIComponent(stamp.entity_id || '')}&status=eq.pending&select=id`, {});
+    if ((dq.ok ? await dq.json() : []).length) return jsonResponse({ status: 'sent', already: true });
+    // Resolve email → user (service-role RPC; result never returned to the caller).
+    let toUserId = null;
+    try {
+      const r = await gbRest(env, 'rpc/user_id_by_email', { method: 'POST', body: JSON.stringify({ p_email: email }) });
+      if (r.ok) { const v = await r.json(); toUserId = (typeof v === 'string' ? v : (Array.isArray(v) ? v[0] : v?.user_id)) || null; }
+    } catch { /* lookup best-effort */ }
+    const row = {
+      from_user_id: user.id, from_name: b.from_name ? String(b.from_name).slice(0, 60) : null,
+      to_user_id: toUserId, to_email: email,
+      kind: stamp.kind, tier: stamp.tier, entity_type: stamp.entity_type, entity_id: stamp.entity_id,
+      name: stamp.name, city: stamp.city, region: stamp.region, country: stamp.country,
+      lat: stamp.lat, lng: stamp.lng, visited_on: stamp.visited_on,
+    };
+    const ins = await gbRest(env, 'passport_tags', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+    if (!ins.ok) return jsonResponse({ error: 'Could not send tag', details: await ins.text().catch(() => '') }, 502);
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag', { is_user: !!toUserId }));
+    // Phase B (email): if toUserId → "you were tagged" email; else → invite email
+    // with app-download links. Deferred until an email provider is wired.
+    return jsonResponse({ status: 'sent' }); // same response whether or not they're a user
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// My incoming pending tags (the "Tagged you" inbox).
+async function handlePassportTagsList(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ tags: [] });
+    const q = await gbRest(env, `passport_tags?to_user_id=eq.${user.id}&status=eq.pending&order=created_at.desc&select=*`, {});
+    return jsonResponse({ tags: q.ok ? await q.json() : [] });
+  } catch (e) { return jsonResponse({ error: e.message, tags: [] }, 500); }
+}
+
+// Accept (→ mint the stamp on MY passport) or decline a tag.
+async function handlePassportTagRespond(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const tagId = String(b.tag_id || '');
+    const accept = b.action === 'accept';
+    if (!tagId) return jsonResponse({ error: 'tag_id required' }, 400);
+    const tq = await gbRest(env, `passport_tags?id=eq.${tagId}&to_user_id=eq.${user.id}&status=eq.pending&select=*`, {});
+    const tag = (tq.ok ? await tq.json() : [])[0];
+    if (!tag) return jsonResponse({ error: 'Tag not found' }, 404);
+    if (accept) {
+      // Skip if they already have this stamp (unique per user+kind+entity).
+      let exists = null;
+      if (tag.entity_id) {
+        const eq = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&kind=eq.${tag.kind}&entity_id=eq.${encodeURIComponent(tag.entity_id)}&select=id`, {});
+        exists = (eq.ok ? await eq.json() : [])[0] || null;
+      }
+      if (!exists) {
+        const row = {
+          user_id: user.id, kind: tag.kind || 'attraction', tier: tag.tier || 'mark',
+          entity_type: tag.entity_type, entity_id: tag.entity_id, name: tag.name,
+          city: tag.city, region: tag.region, country: tag.country, lat: tag.lat, lng: tag.lng,
+          visited_on: tag.visited_on, verified: 'self', tagged_by: tag.from_user_id,
+        };
+        await gbRest(env, 'passport_stamps', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+      }
+    }
+    await gbRest(env, `passport_tags?id=eq.${tagId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: accept ? 'accepted' : 'declined', responded_at: new Date().toISOString() }) });
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag_respond', { accept }));
+    return jsonResponse({ ok: true, accepted: accept });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // ─── AFFILIATE CLICK-OWNERSHIP (SubID → D1) ──────────────────────────────────
 // Every outbound affiliate tap goes through here: we mint a SubID, log the click
 // (+ user + place context) to D1, and hand back the partner URL with the SubID
@@ -11932,6 +12031,9 @@ export default {
       if (pathname === '/passport/stamp/date' && request.method === 'POST') return await handlePassportStampDate(request, env);
       if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
       if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);
+      if (pathname === '/passport/tag' && request.method === 'POST') return await handlePassportTag(request, env, ctx);
+      if (pathname === '/passport/tags' && request.method === 'POST') return await handlePassportTagsList(request, env);
+      if (pathname === '/passport/tag/respond' && request.method === 'POST') return await handlePassportTagRespond(request, env, ctx);
       if (pathname === '/cache/stats') return await handleCacheStats(request, env);
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
