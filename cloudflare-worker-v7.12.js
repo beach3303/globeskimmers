@@ -11065,6 +11065,18 @@ const SHOP_OWNED_FILTER = {
   duty_free: (k) => k.shoppingSubtype === 'duty_free',
 };
 
+// B2B / office tenants Overture mixes into retail categories — wholesalers,
+// distributors, marketing/promo firms, ".com" brands, and high-floor office
+// suites — are NOT places a traveler can walk in and shop. Drop them from the
+// Shopping list. Careful exemptions: we do NOT match bare "wholesale" (Costco /
+// BJ's / Sam's are consumer warehouse clubs), we require a 3+ digit suite number
+// (so strip-mall "Suite 5/12" retail survives), and we avoid the "FL" state code.
+const SHOP_B2B_NAME_RE = /\b(distribution|distributors?|imports?|importers?|trading|manufactur\w+|mfg|promotions?|marketing|advertis\w+|enterprises?|holdings?|logistics|consult\w+|corporation|corp|incorporated|inc|llc|ltd)\b|\.(com|net|org|io|co)\b/i;
+const SHOP_OFFICE_ADDR_RE = /\b(?:suite|ste)\.?\s*#?\s*\d{3,}\b/i;
+function looksB2BOffice(name, address) {
+  return SHOP_B2B_NAME_RE.test(String(name || '')) || SHOP_OFFICE_ADDR_RE.test(String(address || ''));
+}
+
 // Map owned Shopping rows → cards the Shopping page understands. Fixes two bugs:
 // (1) NO PHOTOS — hydrate a real Wikimedia photo for the top notable venues
 //     (famous malls/markets exist on Commons; an ordinary supermarket resolves to
@@ -11077,6 +11089,8 @@ const SHOP_OWNED_FILTER = {
 async function buildOwnedShoppingPlaces(env, rows, category, maxResults, humanize) {
   const pred = SHOP_OWNED_FILTER[category] || SHOP_OWNED_FILTER.all;
   const classified = rows
+    // Drop B2B offices / wholesalers / marketing firms mislabeled as retail.
+    .filter((r) => !looksB2BOffice(r.name, r.address))
     .map((r) => ({
       r,
       // underscores→spaces so Overture categories ("shopping_center") match the
