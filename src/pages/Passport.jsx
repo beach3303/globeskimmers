@@ -5,6 +5,7 @@ import { ChevronLeft, Loader2, Plus, Trash2, Calendar, RefreshCw, X } from "luci
 import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
+import { showToast } from "@/components/Toast";
 import { listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto } from "@/lib/passport";
 
 // ============================================================================
@@ -79,6 +80,7 @@ function StampCard({ stamp, onChanged, onEnlarge }) {
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [showDate, setShowDate] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
   const [dateVal, setDateVal] = useState(stamp.visited_on || "");
   const place = [stamp.city, stamp.region, stamp.country].filter(Boolean).join(", ");
   const photos = stamp.photos || [];
@@ -91,8 +93,8 @@ function StampCard({ stamp, onChanged, onEnlarge }) {
     try {
       const image = await resizePhoto(file);
       const { error } = await uploadStampPhoto({ stamp_id: stamp.id, image, visited_on: stamp.visited_on || undefined });
-      if (error) alert(error); else onChanged();
-    } catch (err) { alert(err?.message || "Upload failed"); }
+      if (error) showToast(error, "error"); else { showToast("Photo added 📸", "success"); onChanged(); }
+    } catch (err) { showToast(err?.message || "Upload failed", "error"); }
     finally { setBusy(false); }
   };
   const saveDate = async () => {
@@ -100,19 +102,17 @@ function StampCard({ stamp, onChanged, onEnlarge }) {
     setBusy(true);
     const { error } = await setStampDate(stamp.id, dateVal);
     setBusy(false); setShowDate(false);
-    if (error) alert(error); else onChanged();
+    if (error) showToast(error, "error"); else { showToast("Date updated", "success"); onChanged(); }
   };
   const removeStamp = async () => {
-    if (!confirm(`Remove your ${k.label.toLowerCase()} stamp for "${stamp.name}"? Its photos are removed too.`)) return;
     setBusy(true);
     const { error } = await deleteStamp(stamp.id);
-    setBusy(false);
-    if (error) alert(error); else onChanged();
+    setBusy(false); setConfirmDel(false);
+    if (error) showToast(error, "error"); else { showToast("Stamp removed", "success"); onChanged(); }
   };
   const removePhoto = async (photoId) => {
-    if (!confirm("Remove this photo?")) return;
     const { error } = await deleteStampPhoto(photoId);
-    if (error) alert(error); else onChanged();
+    if (error) showToast(error, "error"); else { showToast("Photo removed", "success"); onChanged(); }
   };
 
   return (
@@ -125,10 +125,21 @@ function StampCard({ stamp, onChanged, onEnlarge }) {
             {place && <p className="truncate" style={{ color: INK3, fontSize: fs(12), fontFamily: MONO }}>{place}</p>}
           </div>
         </div>
-        <button onClick={removeStamp} disabled={busy} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5" title="Remove stamp">
-          <Trash2 size={14} color={INK3} strokeWidth={2} />
+        <button onClick={() => setConfirmDel(true)} disabled={busy} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5" title="Delete stamp" aria-label="Delete stamp">
+          <Trash2 size={15} color="#C2392F" strokeWidth={2} />
         </button>
       </div>
+
+      {/* In-app delete confirm (no native dialog — reliable in the iOS WebView) */}
+      {confirmDel && (
+        <div className="mt-3 rounded-xl p-3" style={{ background: "#FBE0DC", border: "1px solid #F1B8B0" }}>
+          <p style={{ color: "#A82C24", fontSize: fs(13), fontWeight: 600, lineHeight: 1.4 }}>Delete this stamp? Its photos are removed too.</p>
+          <div className="flex gap-2 mt-2">
+            <button onClick={() => setConfirmDel(false)} disabled={busy} className="flex-1 rounded-lg py-2 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>Cancel</button>
+            <button onClick={removeStamp} disabled={busy} className="flex-1 rounded-lg py-2 font-semibold" style={{ background: "#C2392F", color: "#fff", fontSize: fs(13) }}>{busy ? "Removing…" : "Delete"}</button>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 flex-wrap mt-2.5">
         <VerifiedBadge verified={stamp.verified} />
