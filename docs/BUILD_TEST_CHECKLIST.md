@@ -248,6 +248,20 @@ Two real bugs found + fixed. (1) **No photos:** owned path hard-coded `photos:[]
 - [ ] Card kicker + top-right tag show the store type (e.g. "Shopping Mall"); map pins use the category icon
 - [ ] ⚠️ Known limit: "🟢 Open Now" toggle returns nothing on owned list (no live hours until a card is tapped) — separate follow-up, not in this fix
 
+## 🛂 Passport Phase 1 (2026-08-01)
+The retention core: "I was here" → an EARNED stamp → memory photos, private per user. Memory-journal first, tiered stamps, GPS/photo-proof/self earning. Spec: docs/PASSPORT_MEANING_MODEL.md. Reuses the existing MEDIA R2 bucket + JWT auth (gbUser) — no new infra.
+- [x] Worker `/passport/*` (stamp/list/photo/serve/date/delete) + account-delete purge; syntax clean
+- [x] `src/lib/passport.js`, `src/pages/Passport.jsx`, ActivityDetail "I was here", registered + Home/tablet Explore tile; lint + build clean
+- [ ] **RUN SQL:** paste `scripts/passport/01_schema.sql` in Supabase SQL editor (creates api.passport_stamps + passport_stamp_photos)
+- [ ] **DEPLOY:** `wrangler deploy` + `git push`
+- [ ] Device: Things to Do → open an attraction → **📍 I was here** → toast "added to your passport"; if you're physically there (GPS), toast says **✓ Verified**
+- [ ] Home → Explore → **🛂 Passport** opens; the stamp is there with holder name + stats
+- [ ] On a stamp → **Add a photo** → uploads; a self-added stamp flips to **✓ Verified · photo**; tap photo → lightbox "I was here! {name}"
+- [ ] **Photo-proof backfill:** stamp a place you're NOT at (self) → add your own photo + set an earlier date → earns ✓ + shows that date
+- [ ] Edit date + delete photo + delete stamp all work; refresh persists (Supabase)
+- [ ] Signed-out: Passport shows the "sign in to start" empty state (no crash)
+- [ ] ⚠️ Not yet built (Phase 1 remainder): onboarding page-one reframe; city/airport/icon/wonder auto-stamps; share card (P2)
+
 ## Template for a new build
 ```
 ### N · <feature name>
