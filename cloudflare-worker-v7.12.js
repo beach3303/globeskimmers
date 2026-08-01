@@ -11072,7 +11072,10 @@ const SHOP_OWNED_FILTER = {
 // BJ's / Sam's are consumer warehouse clubs), we require a 3+ digit suite number
 // (so strip-mall "Suite 5/12" retail survives), and we avoid the "FL" state code.
 const SHOP_B2B_NAME_RE = /\b(distribution|distributors?|imports?|importers?|trading|manufactur\w+|mfg|promotions?|marketing|advertis\w+|enterprises?|holdings?|logistics|consult\w+|corporation|corp|incorporated|inc|llc|ltd)\b|\.(com|net|org|io|co)\b/i;
-const SHOP_OFFICE_ADDR_RE = /\b(?:suite|ste)\.?\s*#?\s*\d{3,}\b/i;
+// "Room/Rm/Apt/Floor <n>" = an office tenant (never a walk-in store), any number.
+// "Suite/Ste <n>" needs 3+ digits so strip-mall + mall retail ("Suite 12") survives.
+// NOT "unit" (malls list real stores as units) and NOT bare "fl" (the FL state code).
+const SHOP_OFFICE_ADDR_RE = /\b(?:room|rm|apt|floor)\b\.?\s*#?\s*\d+|\b(?:suite|ste)\.?\s*#?\s*\d{3,}\b/i;
 function looksB2BOffice(name, address) {
   return SHOP_B2B_NAME_RE.test(String(name || '')) || SHOP_OFFICE_ADDR_RE.test(String(address || ''));
 }
