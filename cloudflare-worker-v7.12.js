@@ -911,6 +911,25 @@ async function handleDeleteAccount(request, env) {
       });
     } catch { /* anonymization is best-effort; still delete the account */ }
 
+    // 1c) Passport is PRIVATE (not public UGC) → fully DELETE the user's stamps +
+    //     memory photos + their R2 objects. Best-effort.
+    try {
+      try {
+        const pr = await fetch(`${SUPABASE_URL}/rest/v1/passport_stamp_photos?user_id=eq.${userId}&select=photo_key`, {
+          headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+        });
+        if (pr.ok && env.MEDIA) {
+          const rows = await pr.json();
+          await Promise.all((rows || []).map((r) => env.MEDIA.delete(r.photo_key).catch(() => {})));
+        }
+      } catch { /* R2 purge best-effort */ }
+      // Delete stamps (cascades photo rows via FK).
+      await fetch(`${SUPABASE_URL}/rest/v1/passport_stamps?user_id=eq.${userId}`, {
+        method: 'DELETE',
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      });
+    } catch { /* passport purge best-effort; still delete the account */ }
+
     // 2) Hard-delete the auth user (cascades profiles + login_events).
     const delRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
       method: 'DELETE',
@@ -11434,6 +11453,209 @@ async function handleGuestbookPhotoServe(request, env) {
   } catch { return new Response('Error', { status: 500 }); }
 }
 
+// ─── PASSPORT (personal, private) ────────────────────────────────────────────
+// "I was here" → an EARNED, permanent stamp with the user's own photos. Private
+// per user (RLS on, no client policies; Worker reads/writes with the service key,
+// scoped to the user_id resolved from their JWT via gbUser). Tiered stamps (page
+// vs attraction mark); three earning paths — gps / photo-proof / self — where gps
+// and photo earn the ✓. See docs/PASSPORT_MEANING_MODEL.md.
+const PP_KINDS = ['country', 'city', 'airport', 'icon', 'wonder', 'attraction'];
+const PP_VERIFY_RANK = { self: 0, photo: 1, gps: 2 };
+const ppDate = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? String(s) : null);
+
+// Create or update a stamp (idempotent per user+kind+entity). Keeps the STRONGEST
+// verification when re-stamping (gps > photo > self).
+async function handlePassportStamp(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to stamp your passport' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const name = String(b.name || '').trim();
+    if (!name) return jsonResponse({ error: 'name required' }, 400);
+    const kind = PP_KINDS.includes(String(b.kind || '').toLowerCase()) ? String(b.kind).toLowerCase() : 'attraction';
+    const tier = kind === 'attraction' ? 'mark' : 'page';
+    const verified = ['gps', 'photo', 'self'].includes(b.verified) ? b.verified : 'self';
+    const entityId = b.entity_id != null && String(b.entity_id) ? String(b.entity_id) : null;
+    const visitedOn = ppDate(b.visited_on);
+    const row = {
+      user_id: user.id, kind, tier,
+      entity_type: b.entity_type ? String(b.entity_type) : null,
+      entity_id: entityId, name,
+      city: b.city ? String(b.city).slice(0, 120) : null,
+      region: b.region ? String(b.region).slice(0, 120) : null,
+      country: b.country ? String(b.country).slice(0, 120) : null,
+      lat: Number.isFinite(+b.lat) ? +b.lat : null,
+      lng: Number.isFinite(+b.lng) ? +b.lng : null,
+      visited_on: visitedOn, verified,
+    };
+    // Existing stamp for this (user, kind, entity)? → update, keeping strongest ✓.
+    let existing = null;
+    if (entityId) {
+      const q = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&kind=eq.${kind}&entity_id=eq.${encodeURIComponent(entityId)}&select=id,verified`, {});
+      existing = (q.ok ? await q.json() : [])[0] || null;
+    }
+    if (existing) {
+      const best = PP_VERIFY_RANK[verified] > PP_VERIFY_RANK[existing.verified] ? verified : existing.verified;
+      const patch = { verified: best, updated_at: new Date().toISOString() };
+      if (visitedOn) patch.visited_on = visitedOn;
+      await gbRest(env, `passport_stamps?id=eq.${existing.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, verified: best, updated: true }));
+      return jsonResponse({ id: existing.id, updated: true, verified: best });
+    }
+    const ins = await gbRest(env, 'passport_stamps', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
+    if (!ins.ok) return jsonResponse({ error: 'save failed', details: await ins.text().catch(() => '') }, 502);
+    const created = (await ins.json())[0] || {};
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, verified, updated: false }));
+    return jsonResponse({ id: created.id, created: true, verified });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// The user's whole passport: stamps (newest visit first) + their photos + stats.
+async function handlePassportList(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ stamps: [], stats: {} });
+    const q = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&order=visited_on.desc.nullslast,created_at.desc&select=*`, {});
+    const stamps = q.ok ? await q.json() : [];
+    let photos = [];
+    if (stamps.length) {
+      const ids = stamps.map((s) => s.id).join(',');
+      const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption`, {});
+      photos = pq.ok ? await pq.json() : [];
+    }
+    const byStamp = {};
+    for (const p of photos) (byStamp[p.stamp_id] = byStamp[p.stamp_id] || []).push(p);
+    const out = stamps.map((s) => ({ ...s, photos: byStamp[s.id] || [] }));
+    const distinct = (pred, key) => new Set(out.filter(pred).map(key).filter(Boolean)).size;
+    const stats = {
+      total: out.length,
+      countries: distinct(() => true, (s) => (s.country || '').toLowerCase()),
+      cities: distinct((s) => s.kind === 'city', (s) => (s.entity_id || s.name || '').toLowerCase()),
+      airports: out.filter((s) => s.kind === 'airport').length,
+      icons: out.filter((s) => s.kind === 'icon').length,
+      wonders: out.filter((s) => s.kind === 'wonder').length,
+      attractions: out.filter((s) => s.kind === 'attraction').length,
+      verified: out.filter((s) => s.verified === 'gps' || s.verified === 'photo').length,
+    };
+    return jsonResponse({ stamps: out, stats });
+  } catch (e) { return jsonResponse({ error: e.message, stamps: [], stats: {} }, 500); }
+}
+
+// Attach one of the user's OWN photos to a stamp (R2). A photo on a 'self' stamp
+// is also the PROOF that upgrades it to ✓ 'photo' (and lets them set the date).
+// Private memory photos → no AI moderation (it's the user's own journal); the
+// client resizes to ~1280px JPEG (which also drops EXIF/GPS). Key is UUID-based
+// (unguessable) — private-by-obscurity, consistent with the guestbook serve path.
+async function handlePassportPhotoUpload(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to add a photo' }, 401);
+    if (!env.MEDIA) return jsonResponse({ error: 'Photo storage not configured' }, 500);
+    const b = await request.json().catch(() => ({}));
+    const stampId = String(b.stamp_id || '');
+    if (!stampId) return jsonResponse({ error: 'stamp_id required' }, 400);
+    const sq = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}&select=id,verified`, {});
+    const stamp = (sq.ok ? await sq.json() : [])[0];
+    if (!stamp) return jsonResponse({ error: 'Stamp not found' }, 404);
+
+    let data = String(b.image || ''); let mediaType = 'image/jpeg';
+    const m = data.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.*)$/i);
+    if (m) { mediaType = m[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : m[1].toLowerCase(); data = m[2]; }
+    else if (b.content_type && /^image\/(jpeg|png|webp)$/i.test(b.content_type)) { mediaType = String(b.content_type).toLowerCase(); }
+    data = data.replace(/\s/g, '');
+    if (!data) return jsonResponse({ error: 'No image data' }, 400);
+    let bytes;
+    try { bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0)); } catch { return jsonResponse({ error: 'Bad image data' }, 400); }
+    if (bytes.length > 4 * 1024 * 1024) return jsonResponse({ error: 'Photo too large (please pick a smaller image)' }, 400);
+    if (bytes.length < 500) return jsonResponse({ error: 'That image is too small' }, 400);
+
+    const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
+    const key = `pp/${user.id}/${stampId}/${crypto.randomUUID()}.${ext}`;
+    await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
+    const origin = new URL(request.url).origin;
+    const photoUrl = `${origin}/pp-photo/${key}`;
+    await gbRest(env, 'passport_stamp_photos', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ stamp_id: stampId, user_id: user.id, photo_key: key, photo_url: photoUrl, caption: b.caption ? String(b.caption).slice(0, 200) : null }) });
+
+    // Photo-proof: a photo on a 'self' stamp earns the ✓; also set the date if given.
+    const patch = {};
+    if (stamp.verified === 'self') patch.verified = 'photo';
+    const visitedOn = ppDate(b.visited_on);
+    if (visitedOn) patch.visited_on = visitedOn;
+    if (Object.keys(patch).length) {
+      patch.updated_at = new Date().toISOString();
+      await gbRest(env, `passport_stamps?id=eq.${stampId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
+    }
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_photo', { bytes: bytes.length }));
+    return jsonResponse({ key, url: photoUrl, verified: patch.verified || stamp.verified });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// Serve a stamp photo from R2 (unguessable key). Private-by-obscurity.
+async function handlePassportPhotoServe(request, env) {
+  try {
+    if (!env.MEDIA) return new Response('Not found', { status: 404 });
+    const key = decodeURIComponent(new URL(request.url).pathname.replace(/^\/pp-photo\//, ''));
+    if (!key || key.includes('..') || !key.startsWith('pp/')) return new Response('Bad key', { status: 400 });
+    const obj = await env.MEDIA.get(key);
+    if (!obj) return new Response('Not found', { status: 404 });
+    const headers = new Headers();
+    headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/jpeg');
+    headers.set('Cache-Control', 'private, max-age=31536000, immutable');
+    headers.set('Access-Control-Allow-Origin', '*');
+    if (obj.httpEtag) headers.set('ETag', obj.httpEtag);
+    return new Response(obj.body, { headers });
+  } catch { return new Response('Error', { status: 500 }); }
+}
+
+// Edit the visit DATE (photo-proof / self stamps — "I actually went in 2019").
+async function handlePassportStampDate(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const stampId = String(b.stamp_id || '');
+    const visitedOn = ppDate(b.visited_on);
+    if (!stampId || !visitedOn) return jsonResponse({ error: 'stamp_id + visited_on (YYYY-MM-DD) required' }, 400);
+    const r = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ visited_on: visitedOn, updated_at: new Date().toISOString() }) });
+    if (!r.ok) return jsonResponse({ error: 'update failed' }, 502);
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// Delete a stamp (cascades photo rows) + purge its R2 objects.
+async function handlePassportDelete(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const stampId = String(b.stamp_id || '');
+    if (!stampId) return jsonResponse({ error: 'stamp_id required' }, 400);
+    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=eq.${stampId}&user_id=eq.${user.id}&select=photo_key`, {});
+    const keys = (pq.ok ? await pq.json() : []).map((p) => p.photo_key).filter(Boolean);
+    const del = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+    if (!del.ok) return jsonResponse({ error: 'delete failed' }, 502);
+    if (keys.length && env.MEDIA && ctx) ctx.waitUntil(Promise.all(keys.map((k) => env.MEDIA.delete(k).catch(() => {}))));
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// Delete one photo + its R2 object.
+async function handlePassportPhotoDelete(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const photoId = String(b.photo_id || '');
+    if (!photoId) return jsonResponse({ error: 'photo_id required' }, 400);
+    const pq = await gbRest(env, `passport_stamp_photos?id=eq.${photoId}&user_id=eq.${user.id}&select=photo_key`, {});
+    const row = (pq.ok ? await pq.json() : [])[0];
+    if (!row) return jsonResponse({ error: 'not found' }, 404);
+    await gbRest(env, `passport_stamp_photos?id=eq.${photoId}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+    if (row.photo_key && env.MEDIA && ctx) ctx.waitUntil(env.MEDIA.delete(row.photo_key).catch(() => {}));
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // ─── AFFILIATE CLICK-OWNERSHIP (SubID → D1) ──────────────────────────────────
 // Every outbound affiliate tap goes through here: we mint a SubID, log the click
 // (+ user + place context) to D1, and hand back the partner URL with the SubID
@@ -11701,6 +11923,15 @@ export default {
       if (pathname === '/guestbook/delete' && request.method === 'POST') return await handleGuestbookDelete(request, env);
       if (pathname === '/guestbook/report' && request.method === 'POST') return await handleGuestbookReport(request, env, ctx);
       if (pathname === '/guestbook/visit' && request.method === 'POST') return await handleGuestbookVisit(request, env);
+
+      // Passport (personal, private)
+      if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
+      if (pathname === '/passport/stamp' && request.method === 'POST') return await handlePassportStamp(request, env, ctx);
+      if (pathname === '/passport/list' && request.method === 'POST') return await handlePassportList(request, env);
+      if (pathname === '/passport/photo' && request.method === 'POST') return await handlePassportPhotoUpload(request, env, ctx);
+      if (pathname === '/passport/stamp/date' && request.method === 'POST') return await handlePassportStampDate(request, env);
+      if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
+      if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);
       if (pathname === '/cache/stats') return await handleCacheStats(request, env);
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);

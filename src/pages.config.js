@@ -61,6 +61,7 @@ import Insight from './pages/Insight';
 import Map from './pages/Map';
 import MoneyExchange from './pages/MoneyExchange';
 import Onboarding from './pages/Onboarding';
+import Passport from './pages/Passport';
 import PlacesToEat from './pages/PlacesToEat';
 import RestroomFinder from './pages/RestroomFinder';
 import SavedLocations from './pages/SavedLocations';
@@ -90,6 +91,7 @@ export const PAGES = {
     "Map": Map,
     "MoneyExchange": MoneyExchange,
     "Onboarding": Onboarding,
+    "Passport": Passport,
     "PlacesToEat": PlacesToEat,
     "RestroomFinder": RestroomFinder,
     "SavedLocations": SavedLocations,

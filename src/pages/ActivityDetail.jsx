@@ -12,6 +12,7 @@ import MapAppSelector from '../components/MapAppSelector';
 import PhotoGalleryModal from '@/components/coffee/PhotoGalleryModal';
 import Guestbook from '@/components/Guestbook';
 import { invokeLLM, callWorker } from "@/lib/callWorker";
+import { addStamp, metersBetween, GPS_VERIFY_RADIUS_M } from "@/lib/passport";
 import { showToast } from "../components/Toast";
 import { useDismissable } from '@/lib/dismissStack';
 import useHorizontalSwipe from '@/lib/useHorizontalSwipe';
@@ -206,6 +207,40 @@ export default function ActivityDetailPage() {
       console.error('Error loading enhanced details:', error);
     }
     setLoadingDetails(false);
+  };
+
+  // "I was here" → an EARNED passport stamp. Takes a fresh GPS fix at tap time:
+  // within ~250m of the place → ✓ Verified; otherwise self-declared (a photo can
+  // upgrade it to ✓ later, in the Passport). Idempotent (worker upserts).
+  const [stamping, setStamping] = useState(false);
+  const [stamped, setStamped] = useState(false);
+  const handleStamp = async () => {
+    if (stamping || stamped) return;
+    setStamping(true);
+    const placeLat = Number(activity.latitude ?? activityLocation?.latitude);
+    const placeLng = Number(activity.longitude ?? activityLocation?.longitude);
+    let verified = 'self';
+    try {
+      const pos = await new Promise((res, rej) => {
+        if (!navigator.geolocation) return rej(new Error('no geo'));
+        navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 });
+      });
+      if (metersBetween(pos.coords.latitude, pos.coords.longitude, placeLat, placeLng) <= GPS_VERIFY_RADIUS_M) verified = 'gps';
+    } catch { /* no fix → self-declared */ }
+    const { error } = await addStamp({
+      kind: 'attraction', entity_type: 'place', entity_id: activity.id, name: activity.name,
+      city: activity.city || activity.address?.city || null,
+      region: activity.region || activity.state || null,
+      country: activity.country || null,
+      lat: Number.isFinite(placeLat) ? placeLat : null,
+      lng: Number.isFinite(placeLng) ? placeLng : null,
+      visited_on: new Date().toISOString().slice(0, 10),
+      verified,
+    });
+    setStamping(false);
+    if (error) { showToast(/sign in/i.test(error) ? 'Sign in to stamp your passport' : 'Could not add stamp'); return; }
+    setStamped(true);
+    showToast(verified === 'gps' ? '✓ Verified — added to your passport 🛂' : 'Added to your passport 🛂 — add a photo to verify');
   };
 
   const handleSaveActivity = () => {
@@ -461,6 +496,16 @@ export default function ActivityDetailPage() {
               )}
             </div>
           )}
+
+          {/* I was here → earn a passport stamp (GPS ✓ when you're there) */}
+          <button
+            onClick={handleStamp}
+            disabled={stamping || stamped}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl py-3 mb-4 font-bold transition-transform active:scale-[.99]"
+            style={{ background: stamped ? '#E7F3EA' : '#B0472F', color: stamped ? '#266A3B' : '#fff', fontSize: 'calc(15px*var(--fs))' }}
+          >
+            {stamping ? 'Stamping…' : stamped ? '✓ In your passport' : '📍 I was here'}
+          </button>
 
           {/* Distance with toggle — only when we have a real distance */}
           {Number.isFinite(activity.distance_km) && (

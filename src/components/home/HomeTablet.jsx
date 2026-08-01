@@ -32,6 +32,7 @@ const FEATURES = [
 // Explore More — 3-up gradient cards (same gradients as the phone GradCards).
 const EXPLORE = [
   { grad: `linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 60%, #FF7DB1 100%)`,     emoji: '🎟️', title: 'Things to do',         sub: 'Sights · tours',         action: 'Things to Do' },
+  { grad: 'linear-gradient(135deg, #8B3A1E 0%, #B0472F 60%, #D98A6A 100%)',             emoji: '🛂', title: 'Passport',               sub: 'Stamps · memories',      action: 'Passport' },
   { grad: 'linear-gradient(135deg, #4338CA 0%, #6366F1 60%, #A5B4FC 100%)',             emoji: '💡', title: 'Insight',               sub: 'Plan it like a pro',     action: 'Insight' },
   { grad: 'linear-gradient(135deg, #0E7C66 0%, #14B8A6 60%, #5EEAD4 100%)',             emoji: '🧳', title: 'Travel essentials',      sub: 'eSIM · bags · stays',    action: 'Travel Essentials' },
   { grad: `linear-gradient(135deg, ${CAT.shopping.ink} 0%, #A855F7 60%, #C084FC 100%)`, emoji: '🛍️', title: 'Shopping',             sub: 'Markets · malls',        action: 'Shopping' },
