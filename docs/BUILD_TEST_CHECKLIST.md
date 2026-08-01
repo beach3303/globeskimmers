@@ -260,7 +260,9 @@ The retention core: "I was here" → an EARNED stamp → memory photos, private 
 - [ ] **Photo-proof backfill:** stamp a place you're NOT at (self) → add your own photo + set an earlier date → earns ✓ + shows that date
 - [ ] Edit date + delete photo + delete stamp all work; refresh persists (Supabase)
 - [ ] Signed-out: Passport shows the "sign in to start" empty state (no crash)
-- [ ] ⚠️ Not yet built (Phase 1 remainder): onboarding page-one reframe; city/airport/icon/wonder auto-stamps; share card (P2)
+- [ ] **Buddy tagging (in-app):** on a stamp → "Tag who you were with" → enter another test account's email → "We'll let them know". Sign in as that account → Passport shows "🙌 Tagged you" → **Allow** mints the stamp on their passport; **Decline** = nothing. (Same worker deploy + the updated `01_schema.sql` covers this — re-run it, it's idempotent.)
+- [ ] Tag privacy/anti-spam: response is identical whether the email is a user or not; 30 tags/day cap; can't tag yourself
+- [ ] ⚠️ Not yet built: **Phase B email** (notify existing users + invite non-users w/ download links — needs an email provider); onboarding page-one reframe; city/airport/icon/wonder auto-stamps; share card (P2)
 
 ## Template for a new build
 ```
