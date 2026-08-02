@@ -164,3 +164,129 @@ identical across all 100 — only the landmark/city/country/name/ink change.
 | 98 | Galápagos Islands | Galápagos | Ecuador |
 | 99 | Cartagena Old Town | Cartagena | Colombia |
 | 100 | Angel Falls | Canaima | Venezuela |
+
+# Batch 2 — icons #101–200 (same ink-by-region scheme)
+
+## 🌍 Europe — navy `#2B4A7E`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 101 | Notre-Dame Cathedral | Paris | France |
+| 102 | Palace of Versailles | Versailles | France |
+| 103 | Sacré-Cœur | Paris | France |
+| 104 | St. Peter's Basilica | Vatican City | Vatican |
+| 105 | Pantheon | Rome | Italy |
+| 106 | Cinque Terre | Liguria | Italy |
+| 107 | Pompeii | Naples | Italy |
+| 108 | Milan Cathedral | Milan | Italy |
+| 109 | Buckingham Palace | London | United Kingdom |
+| 110 | Roman Baths | Bath | United Kingdom |
+| 111 | Giant's Causeway | Antrim | United Kingdom |
+| 112 | Park Güell | Barcelona | Spain |
+| 113 | Plaza Mayor | Madrid | Spain |
+| 114 | Cologne Cathedral | Cologne | Germany |
+| 115 | Hallstatt | Hallstatt | Austria |
+| 116 | Schönbrunn Palace | Vienna | Austria |
+| 117 | Bruges Canals | Bruges | Belgium |
+| 118 | Nyhavn | Copenhagen | Denmark |
+| 119 | Geirangerfjord | Geiranger | Norway |
+| 120 | Pena Palace | Sintra | Portugal |
+| 121 | Plitvice Lakes | Plitvice | Croatia |
+| 122 | Dubrovnik Old Town | Dubrovnik | Croatia |
+
+## 🕌 Middle East & Africa — amber `#A9741F`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 123 | Karnak Temple | Luxor | Egypt |
+| 124 | Wadi Rum | Wadi Rum | Jordan |
+| 125 | Palm Jumeirah | Dubai | United Arab Emirates |
+| 126 | Blue Mosque | Istanbul | Turkey |
+| 127 | Pamukkale | Pamukkale | Turkey |
+| 128 | Chefchaouen | Chefchaouen | Morocco |
+| 129 | Fez Medina | Fez | Morocco |
+| 130 | Registan | Samarkand | Uzbekistan |
+| 131 | Lalibela | Lalibela | Ethiopia |
+| 132 | Zanzibar Stone Town | Zanzibar | Tanzania |
+| 133 | Masai Mara | Masai Mara | Kenya |
+| 134 | Sossusvlei | Namib Desert | Namibia |
+| 135 | Cape of Good Hope | Cape Town | South Africa |
+| 136 | Dead Sea | Dead Sea | Jordan |
+
+## 🏯 Asia — crimson `#B0472F`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 137 | Shwedagon Pagoda | Yangon | Myanmar |
+| 138 | Bagan Temples | Bagan | Myanmar |
+| 139 | Hoi An | Hoi An | Vietnam |
+| 140 | Arashiyama Bamboo Grove | Kyoto | Japan |
+| 141 | Great Buddha of Kamakura | Kamakura | Japan |
+| 142 | Himeji Castle | Himeji | Japan |
+| 143 | Osaka Castle | Osaka | Japan |
+| 144 | Todai-ji | Nara | Japan |
+| 145 | Shibuya Crossing | Tokyo | Japan |
+| 146 | Gardens by the Bay | Singapore | Singapore |
+| 147 | Batu Caves | Kuala Lumpur | Malaysia |
+| 148 | Phi Phi Islands | Krabi | Thailand |
+| 149 | White Temple (Wat Rong Khun) | Chiang Rai | Thailand |
+| 150 | Ubud Rice Terraces | Bali | Indonesia |
+| 151 | Komodo Island | Komodo | Indonesia |
+| 152 | El Nido | Palawan | Philippines |
+| 153 | Boracay | Aklan | Philippines |
+| 154 | Intramuros | Manila | Philippines |
+| 155 | Sigiriya | Sigiriya | Sri Lanka |
+| 156 | Tiger's Nest Monastery | Paro | Bhutan |
+| 157 | Boudhanath Stupa | Kathmandu | Nepal |
+| 158 | Mount Everest | Solukhumbu | Nepal |
+| 159 | Amber Fort | Jaipur | India |
+| 160 | Hawa Mahal | Jaipur | India |
+| 161 | Varanasi Ghats | Varanasi | India |
+| 162 | Kerala Backwaters | Kerala | India |
+| 163 | Potala Palace | Lhasa | Tibet |
+| 164 | Zhangjiajie | Zhangjiajie | China |
+| 165 | Li River | Guilin | China |
+| 166 | Leshan Giant Buddha | Leshan | China |
+
+## 🏝️ Oceania — teal `#1F6E6A`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 167 | Twelve Apostles | Great Ocean Road | Australia |
+| 168 | Bondi Beach | Sydney | Australia |
+| 169 | Whitsunday Islands | Queensland | Australia |
+| 170 | Blue Mountains | New South Wales | Australia |
+| 171 | Bora Bora | Bora Bora | French Polynesia |
+| 172 | Queenstown | Queenstown | New Zealand |
+| 173 | Franz Josef Glacier | Westland | New Zealand |
+
+## 🗽 North America — forest green `#2E6B4E`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 174 | Yosemite (Half Dome) | California | United States |
+| 175 | Antelope Canyon | Arizona | United States |
+| 176 | Monument Valley | Utah | United States |
+| 177 | Zion National Park | Utah | United States |
+| 178 | Cloud Gate (The Bean) | Chicago | United States |
+| 179 | French Quarter | New Orleans | United States |
+| 180 | Diamond Head | Honolulu | United States |
+| 181 | Gateway Arch | St. Louis | United States |
+| 182 | Château Frontenac | Quebec City | Canada |
+| 183 | Stanley Park | Vancouver | Canada |
+| 184 | Teotihuacán | Mexico City | Mexico |
+| 185 | Cancún | Quintana Roo | Mexico |
+| 186 | Old Havana | Havana | Cuba |
+| 187 | Tikal | Petén | Guatemala |
+| 188 | Arenal Volcano | La Fortuna | Costa Rica |
+
+## ⛰️ South America — plum `#6D3A6E`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 189 | Copacabana Beach | Rio de Janeiro | Brazil |
+| 190 | Amazon Rainforest | Manaus | Brazil |
+| 191 | Perito Moreno Glacier | Santa Cruz | Argentina |
+| 192 | La Boca | Buenos Aires | Argentina |
+| 193 | Atacama Desert | Atacama | Chile |
+| 194 | Valparaíso | Valparaíso | Chile |
+| 195 | Nazca Lines | Nazca | Peru |
+| 196 | Lake Titicaca | Puno | Peru |
+| 197 | Guatapé | Antioquia | Colombia |
+| 198 | Cocora Valley | Quindío | Colombia |
+| 199 | Quito Old Town | Quito | Ecuador |
+| 200 | Mount Roraima | Gran Sabana | Venezuela |
