@@ -7,7 +7,7 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { addStamp, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink } from "@/lib/passport";
+import { addStamp, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
 
 const citySlug = (s) => "city:" + String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 // Country name → flag emoji (renders as a real flag on iOS/Android; no network).
@@ -84,7 +84,7 @@ function Stat({ n, label }) {
   );
 }
 
-function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity }) {
+function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }) {
   const isHome = stamp.kind === "city" && homeCity && String(stamp.city || "").toLowerCase() === String(homeCity).toLowerCase();
   const k = KIND[stamp.kind] || KIND.attraction;
   const fileRef = useRef(null);
@@ -150,9 +150,11 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity }) {
             {place && <p className="truncate" style={{ color: INK3, fontSize: fs(12), fontFamily: MONO }}>{place}</p>}
           </div>
         </div>
-        <button onClick={() => setConfirmDel(true)} disabled={busy} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5" title="Delete stamp" aria-label="Delete stamp">
-          <Trash2 size={15} color="#C2392F" strokeWidth={2} />
-        </button>
+        {!readOnly && (
+          <button onClick={() => setConfirmDel(true)} disabled={busy} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5" title="Delete stamp" aria-label="Delete stamp">
+            <Trash2 size={15} color="#C2392F" strokeWidth={2} />
+          </button>
+        )}
       </div>
 
       {/* In-app delete confirm (no native dialog — reliable in the iOS WebView) */}
@@ -169,12 +171,16 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity }) {
       <div className="flex items-center gap-2 flex-wrap mt-2.5">
         {isHome && <Chip bg="#F3E2C7" color={STAMP}>🏠 Home</Chip>}
         <VerifiedBadge verified={stamp.verified} />
-        <button onClick={() => setShowDate((s) => !s)} className="inline-flex items-center gap-1" style={{ color: INK2, fontSize: fs(12) }}>
-          <Calendar size={12} color={INK3} /> {stamp.visited_on ? fmtDate(stamp.visited_on) : "Add date"}
-        </button>
+        {readOnly ? (
+          stamp.visited_on && <span className="inline-flex items-center gap-1" style={{ color: INK3, fontSize: fs(12) }}><Calendar size={12} color={INK3} /> {fmtDate(stamp.visited_on)}</span>
+        ) : (
+          <button onClick={() => setShowDate((s) => !s)} className="inline-flex items-center gap-1" style={{ color: INK2, fontSize: fs(12) }}>
+            <Calendar size={12} color={INK3} /> {stamp.visited_on ? fmtDate(stamp.visited_on) : "Add date"}
+          </button>
+        )}
       </div>
 
-      {showDate && (
+      {!readOnly && showDate && (
         <div className="flex items-center gap-2 mt-2">
           <input type="date" value={dateVal} onChange={(e) => setDateVal(e.target.value)} max={new Date().toISOString().slice(0, 10)}
             className="rounded-lg px-2 py-1" style={{ border: `1px solid ${RULE}`, fontSize: fs(13), color: INK }} />
@@ -190,15 +196,18 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity }) {
               <img src={p.photo_url} alt="" loading="lazy" onClick={() => onEnlarge(p.photo_url, stamp)}
                 className="cursor-pointer active:scale-95 transition-transform"
                 style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 12, border: `1px solid ${RULE}` }} />
-              <button onClick={() => removePhoto(p.id)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.6)" }}>
-                <X size={11} color="#fff" strokeWidth={2.5} />
-              </button>
+              {!readOnly && (
+                <button onClick={() => removePhoto(p.id)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.6)" }}>
+                  <X size={11} color="#fff" strokeWidth={2.5} />
+                </button>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {/* Add photo (also the photo-proof that earns the ✓ on a self-added stamp) */}
+      {/* Add photo + tag — owner-only (hidden in a friend's read-only view) */}
+      {!readOnly && (<>
       <button onClick={() => fileRef.current?.click()} disabled={busy}
         className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
         style={{ background: IVORY_2, color: INK2, border: `1px dashed ${RULE}`, fontSize: fs(13), fontWeight: 600 }}>
@@ -213,6 +222,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity }) {
         style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13), fontWeight: 600 }}>
         <UserPlus size={15} strokeWidth={2.2} /> {tagBusy ? "Preparing…" : "Tag who you were with"}
       </button>
+      </>)}
     </div>
   );
 }
@@ -261,16 +271,35 @@ export default function PassportPage() {
 
   const [claim, setClaim] = useState(null); // { token, tag } from a shared invite link
 
+  // Read-only friend view: a shared link (globeskimmers://passport/view?u=slug)
+  // drops the slug in sessionStorage; web can pass ?view_slug=. When set, we load
+  // that PUBLIC passport read-only (no owner actions).
+  const [viewSlug] = useState(() => {
+    try { return sessionStorage.getItem("pp_view_slug") || new URLSearchParams(window.location.search).get("view_slug") || null; }
+    catch { return null; }
+  });
+  const readOnly = !!viewSlug;
+  const [viewHolder, setViewHolder] = useState(null);
+  // Consume the slug once so it doesn't leak into the user's OWN passport later.
+  useEffect(() => { try { sessionStorage.removeItem("pp_view_slug"); } catch { /* ignore */ } }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
+    if (viewSlug) {
+      const { data } = await getPublicPassport(viewSlug);
+      if (data && !data.private) { setStamps(data.stamps || []); setStats(data.stats || {}); setViewHolder(data.holder || "A traveler"); }
+      else { setStamps([]); setStats({}); setViewHolder(null); }
+      setTags([]); setLoading(false); return;
+    }
     const [pp, tg] = await Promise.all([listPassport(), listTags()]);
     setStamps(pp.stamps); setStats(pp.stats); setTags(tg.tags || []); setLoading(false);
-  }, []);
+  }, [viewSlug]);
   useEffect(() => { load(); }, [load]);
 
   // A shared invite link (globeskimmers://passport/claim?token=…) drops the token
   // in sessionStorage (see Layout deep-link handler); web can pass ?claim_token=.
   useEffect(() => {
+    if (readOnly) return;
     let token = null;
     try { token = sessionStorage.getItem("pp_claim_token"); } catch { /* ignore */ }
     if (!token) { try { token = new URLSearchParams(window.location.search).get("claim_token"); } catch { /* ignore */ } }
@@ -299,7 +328,7 @@ export default function PassportPage() {
   // scheme so it dedupes with any later home-city visit.
   const homeSeeded = useRef(false);
   useEffect(() => {
-    if (loading || homeSeeded.current) return;
+    if (readOnly || loading || homeSeeded.current) return;
     const hc = profile?.home_city;
     if (!hc) return;
     if (stamps.some((s) => s.kind === "city" && String(s.city || "").toLowerCase() === String(hc).toLowerCase())) { homeSeeded.current = true; return; }
@@ -333,7 +362,8 @@ export default function PassportPage() {
 
   const pages = stamps.filter((s) => s.tier !== "mark");
   const marks = stamps.filter((s) => s.tier === "mark");
-  const holder = profile?.first_name || profile?.display_name || "Traveler";
+  const holder = readOnly ? (viewHolder || "A traveler") : (profile?.first_name || profile?.display_name || "Traveler");
+  const exitView = () => { try { sessionStorage.removeItem("pp_view_slug"); } catch { /* ignore */ } window.location.assign(createPageUrl("Passport")); };
 
   // Booklet view: one swipeable page per country (like a real passport).
   const [view, setView] = useState(() => { try { return localStorage.getItem("pp_view") || "booklet"; } catch { return "booklet"; } });
@@ -371,6 +401,12 @@ export default function PassportPage() {
           <p className="uppercase" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".18em", color: INK3 }}>🛂 Virtual Passport</p>
           <h1 className="italic leading-tight" style={{ fontFamily: SERIF, fontSize: fs(32), color: STAMP, marginTop: 4 }}>{holder}&rsquo;s Virtual Passport</h1>
         </div>
+        {readOnly && (
+          <div className="mb-4 rounded-[16px] px-3.5 py-2.5 flex items-center justify-between gap-2" style={{ background: "#F3E2C7", border: "1px solid #E5CA98" }}>
+            <span style={{ color: "#7E601F", fontSize: fs(12.5), lineHeight: 1.4 }}>👀 You&rsquo;re viewing a shared passport.</span>
+            <button onClick={exitView} className="shrink-0 rounded-lg px-3 py-1.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12) }}>My passport</button>
+          </div>
+        )}
         {stamps.length > 0 && (
           <div className="bg-white rounded-[18px] p-3 mb-4 flex items-center justify-around" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
             <Stat n={stats.countries || 0} label="Countries" />
@@ -381,7 +417,7 @@ export default function PassportPage() {
         )}
 
         {/* Share my passport (privacy toggle + link) */}
-        {stamps.length > 0 && (
+        {!readOnly && stamps.length > 0 && (
           <div className="mb-4">
             {!shareOpen ? (
               <button onClick={openShare} className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13), fontWeight: 600 }}>🔗 Share my passport</button>
@@ -422,7 +458,7 @@ export default function PassportPage() {
         )}
 
         {/* Have an invite link? (deferred-install fallback — paste it to claim) */}
-        {!claim && (
+        {!readOnly && !claim && (
           <div className="mb-4">
             {!pasteOpen ? (
               <button onClick={() => setPasteOpen(true)} className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
@@ -467,31 +503,41 @@ export default function PassportPage() {
         ) : stamps.length === 0 ? (
           <div className="bg-white rounded-[22px] p-6 text-center mt-2" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
             <div style={{ fontSize: 48 }}>🛂</div>
-            <p style={{ fontFamily: SERIF, fontSize: fs(22), color: INK, marginTop: 6 }}>Your Virtual Passport is empty</p>
-            <p style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.5, marginTop: 6 }}>
-              {isAuthenticated
-                ? <>Tap <b>“📍 I was here”</b> on any place you’ve visited — attractions, a city, a landmark. Your first stamp starts your story, and every place you go adds a page.</>
-                : <>Sign in to start collecting stamps — a permanent record of everywhere you’ve been, with your own photos.</>}
-            </p>
-            <button onClick={() => navigate(createPageUrl("ThingsToDo"))} className="mt-4 rounded-xl px-5 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>
-              Find places to stamp
-            </button>
-            <p style={{ color: INK3, fontSize: fs(11.5), lineHeight: 1.5, marginTop: 12 }}>
-              Went somewhere before you had the app? Add a stamp, upload your photo, set the date — you’ll earn the ✓.
-            </p>
+            {readOnly ? (
+              <>
+                <p style={{ fontFamily: SERIF, fontSize: fs(22), color: INK, marginTop: 6 }}>Nothing to show</p>
+                <p style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.5, marginTop: 6 }}>This passport is private, empty, or the link isn’t valid.</p>
+                <button onClick={exitView} className="mt-4 rounded-xl px-5 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>Start my own passport</button>
+              </>
+            ) : (
+              <>
+                <p style={{ fontFamily: SERIF, fontSize: fs(22), color: INK, marginTop: 6 }}>Your Virtual Passport is empty</p>
+                <p style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.5, marginTop: 6 }}>
+                  {isAuthenticated
+                    ? <>Tap <b>“📍 I was here”</b> on any place you’ve visited — attractions, a city, a landmark. Your first stamp starts your story, and every place you go adds a page.</>
+                    : <>Sign in to start collecting stamps — a permanent record of everywhere you’ve been, with your own photos.</>}
+                </p>
+                <button onClick={() => navigate(createPageUrl("ThingsToDo"))} className="mt-4 rounded-xl px-5 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>
+                  Find places to stamp
+                </button>
+                <p style={{ color: INK3, fontSize: fs(11.5), lineHeight: 1.5, marginTop: 12 }}>
+                  Went somewhere before you had the app? Add a stamp, upload your photo, set the date — you’ll earn the ✓.
+                </p>
+              </>
+            )}
           </div>
         ) : view === "list" ? (
           <div className="space-y-3">
             {pages.length > 0 && (
               <>
                 <p className="uppercase font-semibold px-1" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", color: INK3 }}>Passport pages</p>
-                {pages.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} homeCity={profile?.home_city} />)}
+                {pages.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} homeCity={profile?.home_city} readOnly={readOnly} />)}
               </>
             )}
             {marks.length > 0 && (
               <>
                 <p className="uppercase font-semibold px-1 pt-2" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", color: INK3 }}>Places visited</p>
-                {marks.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} homeCity={profile?.home_city} />)}
+                {marks.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} homeCity={profile?.home_city} readOnly={readOnly} />)}
               </>
             )}
           </div>
@@ -519,7 +565,7 @@ export default function PassportPage() {
                     <span className="uppercase shrink-0" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", color: INK3 }}>{byCountry.groups[c].length} stamp{byCountry.groups[c].length > 1 ? "s" : ""}</span>
                   </div>
                   <div className="space-y-3" style={{ position: "relative" }}>
-                    {byCountry.groups[c].map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} homeCity={profile?.home_city} />)}
+                    {byCountry.groups[c].map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} homeCity={profile?.home_city} readOnly={readOnly} />)}
                   </div>
                 </section>
               ))}

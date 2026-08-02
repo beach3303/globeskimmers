@@ -160,6 +160,17 @@ export const AuthProvider = ({ children }) => {
           } catch { /* ignore malformed deep link */ }
           return;
         }
+        // Read-only friend view: globeskimmers://passport/view?u=<slug>
+        if (url && url.includes('passport/view')) {
+          try {
+            const slug = (url.split(/[?&]u=/)[1] || '').split(/[&#]/)[0];
+            if (slug) {
+              try { sessionStorage.setItem('pp_view_slug', decodeURIComponent(slug)); } catch { /* ignore */ }
+              window.location.assign('/Passport'); // full reload so the view slug is picked up on mount
+            }
+          } catch { /* ignore malformed deep link */ }
+          return;
+        }
         if (!url || !url.startsWith(OAUTH_REDIRECT_TO)) return;
         try { await Browser.close(); } catch { /* no-op on Android */ }
         try {
