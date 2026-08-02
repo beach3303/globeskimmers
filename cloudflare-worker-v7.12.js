@@ -11739,6 +11739,26 @@ async function handlePassportPhotoUpload(request, env, ctx) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// Serve bespoke landmark STAMP ART from R2 (shared, public, long-cached). Files
+// live at stamp-art/<slug>.png (e.g. stamp-art/eiffel-tower.png). Add art by
+// uploading to R2 — no app release. Returns 404 when a landmark has no bespoke
+// art yet (the app falls back to a category/emoji stamp). See docs/PASSPORT_ICON_LIST.md.
+async function handleStampArtServe(request, env) {
+  try {
+    if (!env.MEDIA) return new Response('Not found', { status: 404 });
+    const rel = decodeURIComponent(new URL(request.url).pathname.replace(/^\/stamp-art\//, ''));
+    if (!rel || rel.includes('..') || rel.includes('/')) return new Response('Bad key', { status: 400 });
+    const obj = await env.MEDIA.get(`stamp-art/${rel}`);
+    if (!obj) return new Response('Not found', { status: 404 });
+    const headers = new Headers();
+    headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/png');
+    headers.set('Cache-Control', 'public, max-age=2592000'); // 30d
+    headers.set('Access-Control-Allow-Origin', '*');
+    if (obj.httpEtag) headers.set('ETag', obj.httpEtag);
+    return new Response(obj.body, { headers });
+  } catch { return new Response('Error', { status: 500 }); }
+}
+
 // Serve a stamp photo from R2 (unguessable key). Private-by-obscurity.
 async function handlePassportPhotoServe(request, env) {
   try {
@@ -12251,6 +12271,7 @@ export default {
 
       // Passport (personal, private)
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
+      if (pathname.startsWith('/stamp-art/') && request.method === 'GET') return await handleStampArtServe(request, env);
       if (pathname === '/passport/stamp' && request.method === 'POST') return await handlePassportStamp(request, env, ctx);
       if (pathname === '/passport/list' && request.method === 'POST') return await handlePassportList(request, env);
       if (pathname === '/passport/photo' && request.method === 'POST') return await handlePassportPhotoUpload(request, env, ctx);

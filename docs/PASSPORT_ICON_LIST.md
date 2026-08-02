@@ -15,6 +15,20 @@ admin Passport analytics (which attractions/countries actually get stamped).
 **Rules:** no baked-in date (the app adds the real date + ✓). Keep style words
 identical across all 100 — only the landmark/city/country/name/ink change.
 
+## How to wire a stamp into the app (art-loading layer — BUILT)
+1. Generate the stamp (locked template above), export a **square PNG** (transparent or white bg).
+2. **Name it by the clean slug** of the landmark: lowercase, spaces→hyphens, no punctuation.
+   `Eiffel Tower` → `eiffel-tower.png` · `Statue of Liberty` → `statue-of-liberty.png` · `Christ the Redeemer` → `christ-the-redeemer.png`
+3. **Upload to R2** (bucket `globeskimmers-media`, prefix `stamp-art/`):
+   ```
+   cd "/Users/globeskimmers/Desktop/CODES PROTECT/globeskimmers-cacf36e4-10" && wrangler r2 object put globeskimmers-media/stamp-art/eiffel-tower.png --file=./eiffel-tower.png --remote
+   ```
+4. Done — the passport shows it automatically for matching stamps (no app release).
+   The Worker serves it at `/stamp-art/<slug>.png`; the card tries that URL and
+   falls back to the category emoji if it 404s. Name variants (Tour Eiffel, etc.)
+   are handled by the alias map in `src/lib/stampArt.js` — add to it if a landmark
+   isn't matching. (Tip: name each file to match this list's **Landmark** column slug.)
+
 ## Ink by region (variety + cohesion)
 - Europe → **navy** `#2B4A7E`
 - Middle East & Africa → **amber** `#A9741F`

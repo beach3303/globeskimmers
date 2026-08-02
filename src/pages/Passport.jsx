@@ -8,6 +8,7 @@ import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
 import { addStamp, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
+import { stampArtUrl } from "@/lib/stampArt";
 
 const citySlug = (s) => "city:" + String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 // Country name → flag emoji (renders as a real flag on iOS/Android; no network).
@@ -87,6 +88,11 @@ function Stat({ n, label }) {
 function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }) {
   const isHome = stamp.kind === "city" && homeCity && String(stamp.city || "").toLowerCase() === String(homeCity).toLowerCase();
   const k = KIND[stamp.kind] || KIND.attraction;
+  // Bespoke landmark stamp art (falls back to the category emoji if none exists).
+  // Country stamps use the flag, not bespoke art.
+  const artUrl = stamp.kind === "country" ? null : stampArtUrl(stamp.name);
+  const [artFailed, setArtFailed] = useState(false);
+  const showArt = !!artUrl && !artFailed;
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [showDate, setShowDate] = useState(false);
@@ -142,9 +148,16 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
 
   return (
     <div className="bg-white rounded-[20px] p-4" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
+      {showArt && (
+        <div className="flex justify-center mb-3">
+          <img src={artUrl} alt={stamp.name} onError={() => setArtFailed(true)} onClick={() => onEnlarge(artUrl, stamp)}
+            className="cursor-pointer active:scale-95 transition-transform"
+            style={{ width: 138, height: 138, objectFit: "contain" }} />
+        </div>
+      )}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2.5 min-w-0">
-          <div className="shrink-0 rounded-xl flex items-center justify-center" style={{ width: 42, height: 42, background: IVORY_2, fontSize: 22 }}>{k.icon}</div>
+          {!showArt && <div className="shrink-0 rounded-xl flex items-center justify-center" style={{ width: 42, height: 42, background: IVORY_2, fontSize: 22 }}>{k.icon}</div>}
           <div className="min-w-0">
             <p className="truncate" style={{ fontFamily: SERIF, fontSize: fs(19), color: INK, lineHeight: 1.15 }}>{stamp.name}</p>
             {place && <p className="truncate" style={{ color: INK3, fontSize: fs(12), fontFamily: MONO }}>{place}</p>}
