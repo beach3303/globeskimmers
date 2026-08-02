@@ -75,3 +75,16 @@ export async function respondTag(tag_id, action) {
   const { data, error } = await callWorker('passport/tag/respond', { tag_id, action });
   return { data, error };
 }
+
+// Shareable booklet. getShareLink() reads the current state; pass a boolean to
+// toggle public/private. Returns { slug, is_public, url }.
+export async function getShareLink(is_public) {
+  const body = typeof is_public === "boolean" ? { is_public } : {};
+  const { data, error } = await callWorker('passport/share', body);
+  return { data, error };
+}
+// A public passport by slug (read-only friend view). Returns { holder, stamps, stats } or { private:true }.
+export async function getPublicPassport(slug) {
+  const { data, error } = await callWorker('passport/public', { slug });
+  return { data, error };
+}

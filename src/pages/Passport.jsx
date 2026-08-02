@@ -7,7 +7,7 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { addStamp, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag } from "@/lib/passport";
+import { addStamp, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink } from "@/lib/passport";
 
 const citySlug = (s) => "city:" + String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 // Country name → flag emoji (renders as a real flag on iOS/Android; no network).
@@ -308,6 +308,20 @@ export default function PassportPage() {
       .then(({ error }) => { if (!error) load(); });
   }, [loading, stamps, profile, load]);
 
+  // Shareable booklet (privacy toggle + link).
+  const [shareOpen, setShareOpen] = useState(false);
+  const [share, setShare] = useState(null); // { slug, is_public, url }
+  const [shareBusy, setShareBusy] = useState(false);
+  const openShare = async () => { setShareOpen(true); if (!share) { const { data } = await getShareLink(); if (data) setShare(data); } };
+  const setPublic = async (pub) => { setShareBusy(true); const { data, error } = await getShareLink(pub); setShareBusy(false); if (error) showToast(error, "error"); else setShare(data); };
+  const shareNow = async () => {
+    if (!share?.url) return;
+    try {
+      if (navigator.share) await navigator.share({ title: "Globeskimmers", text: "Check out my Virtual Passport on Globeskimmers 🛂", url: share.url });
+      else if (navigator.clipboard) { await navigator.clipboard.writeText(share.url); showToast("Link copied", "success"); }
+    } catch { /* dismissed */ }
+  };
+
   const respondClaim = async (action) => {
     if (!claim) return;
     const { error } = await claimTag(claim.token, action);
@@ -363,6 +377,31 @@ export default function PassportPage() {
             <Stat n={stats.cities || 0} label="Cities" />
             <Stat n={stamps.length} label="Stamps" />
             <Stat n={stats.verified || 0} label="Verified" />
+          </div>
+        )}
+
+        {/* Share my passport (privacy toggle + link) */}
+        {stamps.length > 0 && (
+          <div className="mb-4">
+            {!shareOpen ? (
+              <button onClick={openShare} className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13), fontWeight: 600 }}>🔗 Share my passport</button>
+            ) : (
+              <div className="bg-white rounded-[16px] p-3.5" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
+                <p style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", textTransform: "uppercase", color: INK3 }}>Who can see it</p>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => setPublic(false)} disabled={shareBusy} className="flex-1 rounded-lg py-2 font-semibold" style={{ background: share && !share.is_public ? STAMP : "#fff", color: share && !share.is_public ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(12.5) }}>🔒 Private</button>
+                  <button onClick={() => setPublic(true)} disabled={shareBusy} className="flex-1 rounded-lg py-2 font-semibold" style={{ background: share && share.is_public ? STAMP : "#fff", color: share && share.is_public ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(12.5) }}>🔗 Anyone with link</button>
+                </div>
+                {share && share.is_public && (
+                  <>
+                    <button onClick={shareNow} className="w-full rounded-lg py-2.5 font-semibold mt-2.5" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>Share link</button>
+                    <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.4, marginTop: 6, wordBreak: "break-all" }}>{share.url}</p>
+                  </>
+                )}
+                <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.45, marginTop: 6 }}>Friends open the link → download the app → view your booklet. Switch back to Private anytime.</p>
+                <button onClick={() => setShareOpen(false)} style={{ color: INK3, fontSize: fs(11.5), marginTop: 6 }}>Close</button>
+              </div>
+            )}
           </div>
         )}
 

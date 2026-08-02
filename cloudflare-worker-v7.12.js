@@ -928,8 +928,12 @@ async function handleDeleteAccount(request, env) {
         method: 'DELETE',
         headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
       });
-      // Remove buddy-tags they sent or received.
+      // Remove buddy-tags they sent or received + their share link.
       await fetch(`${SUPABASE_URL}/rest/v1/passport_tags?or=(from_user_id.eq.${userId},to_user_id.eq.${userId})`, {
+        method: 'DELETE',
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      });
+      await fetch(`${SUPABASE_URL}/rest/v1/passport_shares?user_id=eq.${userId}`, {
         method: 'DELETE',
         headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
       });
@@ -11574,35 +11578,116 @@ async function handlePassportStamp(request, env, ctx) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
-// The user's whole passport: stamps (newest visit first) + their photos + stats.
+// Load a user's whole passport (stamps + photos + stats). Shared by the owner's
+// list and the public read-only view.
+async function ppLoad(env, userId) {
+  const q = await gbRest(env, `passport_stamps?user_id=eq.${userId}&order=visited_on.desc.nullslast,created_at.desc&select=*`, {});
+  const stamps = q.ok ? await q.json() : [];
+  let photos = [];
+  if (stamps.length) {
+    const ids = stamps.map((s) => s.id).join(',');
+    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption`, {});
+    photos = pq.ok ? await pq.json() : [];
+  }
+  const byStamp = {};
+  for (const p of photos) (byStamp[p.stamp_id] = byStamp[p.stamp_id] || []).push(p);
+  const out = stamps.map((s) => ({ ...s, photos: byStamp[s.id] || [] }));
+  const distinct = (pred, key) => new Set(out.filter(pred).map(key).filter(Boolean)).size;
+  const stats = {
+    total: out.length,
+    countries: distinct(() => true, (s) => (s.country || '').toLowerCase()),
+    cities: distinct((s) => s.kind === 'city', (s) => (s.entity_id || s.name || '').toLowerCase()),
+    airports: out.filter((s) => s.kind === 'airport').length,
+    icons: out.filter((s) => s.kind === 'icon').length,
+    wonders: out.filter((s) => s.kind === 'wonder').length,
+    attractions: out.filter((s) => s.kind === 'attraction').length,
+    verified: out.filter((s) => s.verified === 'gps' || s.verified === 'photo').length,
+  };
+  return { stamps: out, stats };
+}
 async function handlePassportList(request, env) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ stamps: [], stats: {} });
-    const q = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&order=visited_on.desc.nullslast,created_at.desc&select=*`, {});
-    const stamps = q.ok ? await q.json() : [];
-    let photos = [];
-    if (stamps.length) {
-      const ids = stamps.map((s) => s.id).join(',');
-      const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption`, {});
-      photos = pq.ok ? await pq.json() : [];
-    }
-    const byStamp = {};
-    for (const p of photos) (byStamp[p.stamp_id] = byStamp[p.stamp_id] || []).push(p);
-    const out = stamps.map((s) => ({ ...s, photos: byStamp[s.id] || [] }));
-    const distinct = (pred, key) => new Set(out.filter(pred).map(key).filter(Boolean)).size;
-    const stats = {
-      total: out.length,
-      countries: distinct(() => true, (s) => (s.country || '').toLowerCase()),
-      cities: distinct((s) => s.kind === 'city', (s) => (s.entity_id || s.name || '').toLowerCase()),
-      airports: out.filter((s) => s.kind === 'airport').length,
-      icons: out.filter((s) => s.kind === 'icon').length,
-      wonders: out.filter((s) => s.kind === 'wonder').length,
-      attractions: out.filter((s) => s.kind === 'attraction').length,
-      verified: out.filter((s) => s.verified === 'gps' || s.verified === 'photo').length,
-    };
-    return jsonResponse({ stamps: out, stats });
+    return jsonResponse(await ppLoad(env, user.id));
   } catch (e) { return jsonResponse({ error: e.message, stamps: [], stats: {} }, 500); }
+}
+
+// Passport holder's display name (profiles is in the public schema).
+async function ppHolder(env, userId) {
+  try {
+    const pr = await gbRest(env, `profiles?id=eq.${userId}&select=first_name,display_name`, { headers: { 'Accept-Profile': 'public' } });
+    const p = (pr.ok ? await pr.json() : [])[0] || {};
+    return p.first_name || p.display_name || 'A traveler';
+  } catch { return 'A traveler'; }
+}
+
+// Get-or-create the user's share row; toggle is_public if provided. Returns the link.
+async function handlePassportShare(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const q = await gbRest(env, `passport_shares?user_id=eq.${user.id}&select=slug,is_public`, {});
+    let row = (q.ok ? await q.json() : [])[0] || null;
+    if (!row) {
+      const slug = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+      const ins = await gbRest(env, 'passport_shares', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ user_id: user.id, slug, is_public: b.is_public === true }) });
+      row = (ins.ok ? (await ins.json())[0] : { slug, is_public: b.is_public === true });
+    } else if (typeof b.is_public === 'boolean') {
+      await gbRest(env, `passport_shares?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ is_public: b.is_public, updated_at: new Date().toISOString() }) });
+      row.is_public = b.is_public;
+    }
+    const origin = new URL(request.url).origin;
+    return jsonResponse({ slug: row.slug, is_public: !!row.is_public, url: `${origin}/p/${row.slug}` });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// Public read-only passport by slug (only if the owner made it public).
+async function handlePassportPublic(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const slug = String(b.slug || '').replace(/[^a-z0-9]/gi, '');
+    if (!slug) return jsonResponse({ private: true });
+    const q = await gbRest(env, `passport_shares?slug=eq.${slug}&select=user_id,is_public`, {});
+    const share = (q.ok ? await q.json() : [])[0];
+    if (!share || !share.is_public) return jsonResponse({ private: true });
+    const holder = await ppHolder(env, share.user_id);
+    const { stamps, stats } = await ppLoad(env, share.user_id);
+    return jsonResponse({ holder, stamps, stats });
+  } catch (e) { return jsonResponse({ error: e.message, private: true }, 500); }
+}
+
+// Shared-booklet landing page (web teaser + open-in-app + download).
+async function handlePassportShareLanding(request, env) {
+  try {
+    const slug = decodeURIComponent(new URL(request.url).pathname.replace(/^\/p\//, '')).replace(/[^a-z0-9]/gi, '');
+    let holder = null, stats = null, sample = [];
+    if (slug) {
+      const q = await gbRest(env, `passport_shares?slug=eq.${slug}&select=user_id,is_public`, {});
+      const share = (q.ok ? await q.json() : [])[0];
+      if (share && share.is_public) {
+        holder = await ppHolder(env, share.user_id);
+        const loaded = await ppLoad(env, share.user_id);
+        stats = loaded.stats; sample = loaded.stamps.slice(0, 8);
+      }
+    }
+    const esc = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const scheme = `globeskimmers://passport/view?u=${encodeURIComponent(slug)}`;
+    const chips = sample.map((s) => `<span class="chip">${esc(s.name)}</span>`).join('');
+    const inner = !holder
+      ? '<div class="stamp">🛂</div><h1>This passport is private</h1><p class="muted">The owner hasn’t shared this passport, or the link is invalid.</p>'
+      : `<div class="stamp">🛂</div><div class="eyebrow">Globeskimmers · Virtual Passport</div>
+         <h1>${esc(holder)}&rsquo;s Virtual Passport</h1>
+         <div class="stats"><b>${stats.total || 0}</b> stamps · <b>${stats.countries || 0}</b> countries · <b>${stats.cities || 0}</b> cities</div>
+         <div class="chips">${chips}</div>
+         <p>See the full booklet — stamps, photos & memories — in the app.</p>
+         <a class="btn primary" href="${scheme}">Open in Globeskimmers</a>
+         <a class="btn" href="${PP_IOS_URL}">Download for iPhone</a>
+         <a class="btn" href="${PP_PLAY_URL}">Download for Android</a>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Globeskimmers — Virtual Passport</title><style>body{font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;background:#FFFCF7;color:#16110D;margin:0;padding:36px 20px;text-align:center}.wrap{max-width:440px;margin:0 auto}.stamp{font-size:60px;margin:6px 0}.eyebrow{font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:#B0472F}h1{font-size:27px;margin:8px 0}.stats{color:#3A3128;font-size:15px;margin:2px 0 14px}.chips{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-bottom:16px}.chip{background:#F3E2C7;color:#8A5410;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px}p{font-size:15px;line-height:1.5;color:#3A3128}.btn{display:block;margin:10px auto;max-width:320px;padding:14px;border-radius:14px;text-decoration:none;font-weight:700;background:#fff;color:#16110D;border:1px solid rgba(0,0,0,.12)}.btn.primary{background:#B0472F;color:#fff;border:none}.muted{color:#736657}</style></head><body><div class="wrap">${inner}</div></body></html>`;
+    return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' } });
+  } catch { return new Response('Error', { status: 500 }); }
 }
 
 // Attach one of the user's OWN photos to a stamp (R2). A photo on a 'self' stamp
@@ -12178,6 +12263,9 @@ export default {
       if (pathname === '/passport/tag/by-token' && request.method === 'POST') return await handlePassportTagByToken(request, env);
       if (pathname === '/passport/tag/claim' && request.method === 'POST') return await handlePassportTagClaim(request, env, ctx);
       if (pathname.startsWith('/t/') && request.method === 'GET') return await handlePassportTagLanding(request, env);
+      if (pathname === '/passport/share' && request.method === 'POST') return await handlePassportShare(request, env);
+      if (pathname === '/passport/public' && request.method === 'POST') return await handlePassportPublic(request, env);
+      if (pathname.startsWith('/p/') && request.method === 'GET') return await handlePassportShareLanding(request, env);
       if (pathname === '/cache/stats') return await handleCacheStats(request, env);
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);

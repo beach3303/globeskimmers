@@ -86,6 +86,18 @@ $$;
 revoke all on function api.user_id_by_email(text) from anon, authenticated, public;
 grant execute on function api.user_id_by_email(text) to service_role;
 
+-- Shareable booklet: one row per user with a public link toggle. Default PRIVATE.
+-- When is_public, anyone with the slug link can view the booklet (read-only, in
+-- the app after downloading). Worker-only access.
+create table if not exists api.passport_shares (
+  user_id    uuid primary key,
+  slug       text unique not null,
+  is_public  boolean not null default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+alter table api.passport_shares enable row level security;
+
 -- RLS on; NO client policies → private to the Worker (service-role bypasses RLS).
 alter table api.passport_stamps       enable row level security;
 alter table api.passport_stamp_photos enable row level security;
