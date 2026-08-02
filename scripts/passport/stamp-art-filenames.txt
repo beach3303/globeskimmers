@@ -1,0 +1,103 @@
+# Stamp-art filenames — rename each generated PNG to this, then run upload-stamp-art.sh
+# Format: <#> <Landmark>  ->  <file>
+
+  1  Eiffel Tower  ->  eiffel-tower.png
+  2  Arc de Triomphe  ->  arc-de-triomphe.png
+  3  Louvre Pyramid  ->  louvre-pyramid.png
+  4  Mont-Saint-Michel  ->  mont-saint-michel.png
+  5  Colosseum  ->  colosseum.png
+  6  Trevi Fountain  ->  trevi-fountain.png
+  7  Leaning Tower of Pisa  ->  leaning-tower-of-pisa.png
+  8  St. Mark's Basilica  ->  st-marks-basilica.png
+  9  Florence Duomo  ->  florence-duomo.png
+ 10  Big Ben (Elizabeth Tower)  ->  big-ben-elizabeth-tower.png
+ 11  Tower Bridge  ->  tower-bridge.png
+ 12  London Eye  ->  london-eye.png
+ 13  Stonehenge  ->  stonehenge.png
+ 14  Edinburgh Castle  ->  edinburgh-castle.png
+ 15  Sagrada Família  ->  sagrada-familia.png
+ 16  Alhambra  ->  alhambra.png
+ 17  Parthenon (Acropolis)  ->  parthenon-acropolis.png
+ 18  Santorini  ->  santorini.png
+ 19  Brandenburg Gate  ->  brandenburg-gate.png
+ 20  Neuschwanstein Castle  ->  neuschwanstein-castle.png
+ 21  Amsterdam Canals  ->  amsterdam-canals.png
+ 22  Charles Bridge  ->  charles-bridge.png
+ 23  St. Basil's Cathedral  ->  st-basils-cathedral.png
+ 24  Belém Tower  ->  belem-tower.png
+ 25  Matterhorn  ->  matterhorn.png
+ 26  Pyramids of Giza  ->  pyramids-of-giza.png
+ 27  Abu Simbel  ->  abu-simbel.png
+ 28  Petra  ->  petra.png
+ 29  Burj Khalifa  ->  burj-khalifa.png
+ 30  Sheikh Zayed Grand Mosque  ->  sheikh-zayed-grand-mosque.png
+ 31  Hagia Sophia  ->  hagia-sophia.png
+ 32  Cappadocia  ->  cappadocia.png
+ 33  Dome of the Rock  ->  dome-of-the-rock.png
+ 34  Table Mountain  ->  table-mountain.png
+ 35  Victoria Falls  ->  victoria-falls.png
+ 36  Mount Kilimanjaro  ->  mount-kilimanjaro.png
+ 37  Koutoubia Mosque  ->  koutoubia-mosque.png
+ 38  Serengeti  ->  serengeti.png
+ 39  Taj Mahal  ->  taj-mahal.png
+ 40  Golden Temple  ->  golden-temple.png
+ 41  Gateway of India  ->  gateway-of-india.png
+ 42  Great Wall of China  ->  great-wall-of-china.png
+ 43  Forbidden City  ->  forbidden-city.png
+ 44  Terracotta Army  ->  terracotta-army.png
+ 45  The Bund  ->  the-bund.png
+ 46  Victoria Harbour  ->  victoria-harbour.png
+ 47  Mount Fuji  ->  mount-fuji.png
+ 48  Tokyo Tower  ->  tokyo-tower.png
+ 49  Senso-ji Temple  ->  senso-ji-temple.png
+ 50  Fushimi Inari Shrine  ->  fushimi-inari-shrine.png
+ 51  Kinkaku-ji (Golden Pavilion)  ->  kinkaku-ji-golden-pavilion.png
+ 52  Gyeongbokgung Palace  ->  gyeongbokgung-palace.png
+ 53  N Seoul Tower  ->  n-seoul-tower.png
+ 54  Marina Bay Sands  ->  marina-bay-sands.png
+ 55  Merlion  ->  merlion.png
+ 56  Petronas Towers  ->  petronas-towers.png
+ 57  Grand Palace  ->  grand-palace.png
+ 58  Wat Arun  ->  wat-arun.png
+ 59  Angkor Wat  ->  angkor-wat.png
+ 60  Ha Long Bay  ->  ha-long-bay.png
+ 61  Borobudur  ->  borobudur.png
+ 62  Tanah Lot  ->  tanah-lot.png
+ 63  Taipei 101  ->  taipei-101.png
+ 64  Chocolate Hills  ->  chocolate-hills.png
+ 65  Mayon Volcano  ->  mayon-volcano.png
+ 66  Banaue Rice Terraces  ->  banaue-rice-terraces.png
+ 67  Sydney Opera House  ->  sydney-opera-house.png
+ 68  Sydney Harbour Bridge  ->  sydney-harbour-bridge.png
+ 69  Uluru  ->  uluru.png
+ 70  Great Barrier Reef  ->  great-barrier-reef.png
+ 71  Milford Sound  ->  milford-sound.png
+ 72  Hobbiton  ->  hobbiton.png
+ 73  Statue of Liberty  ->  statue-of-liberty.png
+ 74  Empire State Building  ->  empire-state-building.png
+ 75  Brooklyn Bridge  ->  brooklyn-bridge.png
+ 76  Golden Gate Bridge  ->  golden-gate-bridge.png
+ 77  Hollywood Sign  ->  hollywood-sign.png
+ 78  Grand Canyon  ->  grand-canyon.png
+ 79  Las Vegas Strip  ->  las-vegas-strip.png
+ 80  Space Needle  ->  space-needle.png
+ 81  Mount Rushmore  ->  mount-rushmore.png
+ 82  The White House  ->  the-white-house.png
+ 83  Grand Prismatic (Yellowstone)  ->  grand-prismatic-yellowstone.png
+ 84  Niagara Falls  ->  niagara-falls.png
+ 85  CN Tower  ->  cn-tower.png
+ 86  Lake Louise  ->  lake-louise.png
+ 87  Chichén Itzá  ->  chichen-itza.png
+ 88  Tulum Ruins  ->  tulum-ruins.png
+ 89  Cabo Arch  ->  cabo-arch.png
+ 90  Christ the Redeemer  ->  christ-the-redeemer.png
+ 91  Sugarloaf Mountain  ->  sugarloaf-mountain.png
+ 92  Iguazú Falls  ->  iguazu-falls.png
+ 93  Machu Picchu  ->  machu-picchu.png
+ 94  Rainbow Mountain  ->  rainbow-mountain.png
+ 95  Easter Island Moai  ->  easter-island-moai.png
+ 96  Torres del Paine  ->  torres-del-paine.png
+ 97  Salar de Uyuni  ->  salar-de-uyuni.png
+ 98  Galápagos Islands  ->  galapagos-islands.png
+ 99  Cartagena Old Town  ->  cartagena-old-town.png
+100  Angel Falls  ->  angel-falls.png

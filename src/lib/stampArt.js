@@ -5,7 +5,12 @@
 // the curated set: docs/PASSPORT_ICON_LIST.md (name files by the clean slug,
 // e.g. "Eiffel Tower" → eiffel-tower.png).
 const WORKER = "https://globeskimmers-api.maizasimeon.workers.dev";
-const slug = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+// Strip diacritics + apostrophes so international names get clean ASCII slugs:
+// "Sagrada Família" → sagrada-familia, "St. Mark's Basilica" → st-marks-basilica.
+const slug = (s) => String(s || "")
+  .normalize("NFKD").replace(/[̀-ͯ]/g, "")
+  .toLowerCase().replace(/['’]/g, "")
+  .trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 // Name variants (incl. local-language) → the canonical file slug. Grow this as
 // analytics show the real attraction names people stamp.
@@ -14,7 +19,7 @@ const ALIAS = {
   "big-ben-elizabeth-tower": "big-ben", "elizabeth-tower": "big-ben",
   "colosseo": "colosseum",
   "leaning-tower": "leaning-tower-of-pisa", "torre-di-pisa": "leaning-tower-of-pisa",
-  "acropolis": "parthenon-acropolis", "parthenon": "parthenon-acropolis",
+  "acropolis": "parthenon",
   "great-wall": "great-wall-of-china",
   "sensoji": "senso-ji-temple", "senso-ji": "senso-ji-temple",
   "kinkaku-ji": "kinkaku-ji-golden-pavilion", "golden-pavilion": "kinkaku-ji-golden-pavilion",
