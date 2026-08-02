@@ -16,8 +16,8 @@ export default function FirstNameStep({ defaultValue, onNext, onBack }) {
   return (
     <OnboardingStepLayout
       icon={<UserRound className="w-8 h-8 text-white" />}
-      title="What should we call you?"
-      subtitle="We'll use your first name to make Globeskimmers feel like home. 👋"
+      title="Let's make your passport ✈️"
+      subtitle="Two taps and you're in — we'll stamp the rest as you travel. First, the name that goes on it. 🛂"
       onBack={onBack}
       footer={
         <Button
