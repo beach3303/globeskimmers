@@ -1076,6 +1076,47 @@ const ANALYTICS_QUERIES = {
     ORDER BY clicks DESC
     LIMIT 20
   `,
+  // ── Passport stamps (from 'passport_stamp' events; payload has kind/country/city/name) ──
+  passport_totals: `
+    SELECT COUNT(*) AS total_stamps,
+      COUNT(DISTINCT json_extract(payload,'$.country')) AS countries,
+      SUM(CASE WHEN json_extract(payload,'$.kind')='attraction' THEN 1 ELSE 0 END) AS attraction_stamps,
+      SUM(CASE WHEN json_extract(payload,'$.kind')='city' THEN 1 ELSE 0 END) AS city_stamps
+    FROM events WHERE event_type='passport_stamp'
+  `,
+  passport_by_country: `
+    SELECT json_extract(payload,'$.country') AS country, COUNT(*) AS stamps
+    FROM events
+    WHERE event_type='passport_stamp' AND json_extract(payload,'$.country') IS NOT NULL AND json_extract(payload,'$.country') <> ''
+    GROUP BY country ORDER BY stamps DESC LIMIT 100
+  `,
+  passport_by_city: `
+    SELECT json_extract(payload,'$.city') AS city, json_extract(payload,'$.country') AS country, COUNT(*) AS stamps
+    FROM events
+    WHERE event_type='passport_stamp' AND json_extract(payload,'$.city') IS NOT NULL AND json_extract(payload,'$.city') <> ''
+    GROUP BY city, country ORDER BY stamps DESC LIMIT 100
+  `,
+  passport_by_attraction: `
+    SELECT json_extract(payload,'$.name') AS name, json_extract(payload,'$.city') AS city, json_extract(payload,'$.country') AS country, COUNT(*) AS stamps
+    FROM events
+    WHERE event_type='passport_stamp' AND json_extract(payload,'$.kind')='attraction' AND json_extract(payload,'$.name') IS NOT NULL
+    GROUP BY name, city ORDER BY stamps DESC LIMIT 100
+  `,
+  passport_by_day_30d: `
+    SELECT date(ts,'unixepoch') AS day, COUNT(*) AS stamps
+    FROM events WHERE event_type='passport_stamp' AND ts >= strftime('%s','now','-30 days')
+    GROUP BY day ORDER BY day
+  `,
+  passport_by_month_12m: `
+    SELECT strftime('%Y-%m', ts, 'unixepoch') AS month, COUNT(*) AS stamps
+    FROM events WHERE event_type='passport_stamp' AND ts >= strftime('%s','now','-365 days')
+    GROUP BY month ORDER BY month
+  `,
+  passport_by_year: `
+    SELECT strftime('%Y', ts, 'unixepoch') AS year, COUNT(*) AS stamps
+    FROM events WHERE event_type='passport_stamp'
+    GROUP BY year ORDER BY year
+  `,
   // Total events + unique sessions in the last 7 days
   totals_7d: `
     SELECT
@@ -11528,7 +11569,7 @@ async function handlePassportStamp(request, env, ctx) {
         });
       } catch { /* city derive is best-effort */ }
     }
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, verified: result.verified, updated: !!result.updated }));
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, country: row.country, city: row.city, name: row.name, verified: result.verified, updated: !!result.updated }));
     return jsonResponse({ id: result.id, created: !!result.created, updated: !!result.updated, verified: result.verified });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -11772,7 +11813,10 @@ async function handlePassportTagClaim(request, env, ctx) {
       }
     }
     await gbRest(env, `passport_tags?token=eq.${token}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: accept ? 'accepted' : 'declined', to_user_id: user.id, responded_at: new Date().toISOString() }) });
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag_claim', { accept }));
+    if (ctx) {
+      ctx.waitUntil(gbLogEvent(env, 'passport_tag_claim', { accept }));
+      if (accept) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind: tag.kind, country: tag.country, city: tag.city, name: tag.name, verified: 'self', via: 'tag' }));
+    }
     return jsonResponse({ ok: true, accepted: accept });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }

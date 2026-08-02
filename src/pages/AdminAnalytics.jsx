@@ -96,7 +96,7 @@ export default function AdminAnalytics() {
       // Fan out over the live Worker /analytics-query route (one D1 query per
       // type), assembling the bundle the renderer expects. Native-safe via
       // callWorker — replaces the Base44 getAnalytics function (403s on device).
-      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d'];
+      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year'];
       const pairs = await Promise.all(TYPES.map(async (type) => {
         const { data: qd, error: qe } = await callWorker(`analytics-query?type=${encodeURIComponent(type)}`, {});
         return [type, { results: qd?.results || [], error: qe || qd?.error || null }];
@@ -132,6 +132,15 @@ export default function AdminAnalytics() {
   const affTotalClicks = affByPartner.reduce((s, r) => s + (r.clicks || 0), 0);
   const affTotalConversions = affByPartner.reduce((s, r) => s + (r.conversions || 0), 0);
   const affTotalCommission = affByPartner.reduce((s, r) => s + (r.commission || 0), 0);
+  // 🛂 Passport stamps (from 'passport_stamp' events)
+  const ppTotals = data?.passport_totals?.results?.[0] || {};
+  const ppByCountry = data?.passport_by_country?.results || [];
+  const ppByCity = data?.passport_by_city?.results || [];
+  const ppByAttraction = data?.passport_by_attraction?.results || [];
+  const ppByDay = data?.passport_by_day_30d?.results || [];
+  const ppByMonth = data?.passport_by_month_12m?.results || [];
+  const ppByYear = data?.passport_by_year?.results || [];
+
   const activeUsers = data?.active_users?.results?.[0] || {};       // DAU/WAU/MAU
   const activeByDay = data?.active_users_by_day_30d?.results || [];
   const retention = data?.retention_7d?.results?.[0] || {};
@@ -384,6 +393,52 @@ export default function AdminAnalytics() {
             <Section title="🌍 Affiliate taps by destination (30d)" icon={Search} empty={affByCountry.length === 0 ? 'No destination data yet.' : null}>
               {affByCountry.map((c, i) => (
                 <BarRow key={i} label={c.country} count={c.clicks} max={Math.max(...affByCountry.map(x => x.clicks || 0), 1)} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            {/* 🛂 PASSPORT STAMPS */}
+            <Section title="🛂 Passport — totals" icon={Sparkles}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 13, color: COLORS.dark }}>
+                <div><b style={{ fontSize: 20 }}>{ppTotals.total_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Total stamps</div></div>
+                <div><b style={{ fontSize: 20 }}>{ppTotals.countries || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Countries</div></div>
+                <div><b style={{ fontSize: 20 }}>{ppTotals.attraction_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Attractions</div></div>
+                <div><b style={{ fontSize: 20 }}>{ppTotals.city_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Cities</div></div>
+              </div>
+            </Section>
+
+            <Section title="🛂 Stamps by country (all-time)" icon={Search} empty={ppByCountry.length === 0 ? 'No country stamps yet.' : null}>
+              {ppByCountry.map((c, i) => (
+                <BarRow key={i} label={c.country} count={c.stamps} max={Math.max(...ppByCountry.map(x => x.stamps || 0), 1)} color={COLORS.green} />
+              ))}
+            </Section>
+
+            <Section title="🛬 Stamps by city / arrival point (all-time)" icon={Search} empty={ppByCity.length === 0 ? 'No city stamps yet.' : null}>
+              {ppByCity.map((c, i) => (
+                <BarRow key={i} label={`${c.city}${c.country ? ' · ' + c.country : ''}`} count={c.stamps} max={Math.max(...ppByCity.map(x => x.stamps || 0), 1)} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="📍 Stamps by attraction (all-time)" icon={Sparkles} empty={ppByAttraction.length === 0 ? 'No attraction stamps yet.' : null}>
+              {ppByAttraction.map((a, i) => (
+                <BarRow key={i} label={`${a.name}${a.city ? ' · ' + a.city : ''}`} count={a.stamps} max={Math.max(...ppByAttraction.map(x => x.stamps || 0), 1)} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="🛂 Stamps per day (30d)" icon={Activity} empty={ppByDay.length === 0 ? 'No stamps in the last 30 days.' : null}>
+              {ppByDay.map((d, i) => (
+                <BarRow key={i} label={d.day} count={d.stamps} max={Math.max(...ppByDay.map(x => x.stamps || 0), 1)} color={COLORS.green} />
+              ))}
+            </Section>
+
+            <Section title="🛂 Stamps per month (12m)" icon={Activity} empty={ppByMonth.length === 0 ? 'No stamps in the last year.' : null}>
+              {ppByMonth.map((d, i) => (
+                <BarRow key={i} label={d.month} count={d.stamps} max={Math.max(...ppByMonth.map(x => x.stamps || 0), 1)} color={COLORS.green} />
+              ))}
+            </Section>
+
+            <Section title="🛂 Stamps per year" icon={Activity} empty={ppByYear.length === 0 ? 'No stamps yet.' : null}>
+              {ppByYear.map((d, i) => (
+                <BarRow key={i} label={d.year} count={d.stamps} max={Math.max(...ppByYear.map(x => x.stamps || 0), 1)} color={COLORS.green} />
               ))}
             </Section>
 
