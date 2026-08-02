@@ -11661,22 +11661,24 @@ async function handlePassportPhotoDelete(request, env, ctx) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
-// Buddy tagging — tag someone (by email) to also get this stamp, WITH CONSENT.
-// Phase A: creates a pending tag; if the email is a user, it shows in their in-app
-// "Tagged you" inbox to Allow/Decline. (Phase B will email users + invite non-users
-// with app-download links.) Never reveals whether the email is a user (no
-// enumeration); rate-limited (anti-spam); consent-gated (no auto-stamp).
+// Buddy tagging via a SHARE LINK (no app-sent email/SMS). Tag → mint a pending
+// tag with an unguessable token → the app shares a link through the native share
+// sheet (WhatsApp / iMessage / whatever the user picks). The recipient taps the
+// link → /t/<token> landing → opens the app (globeskimmers://) → Allow/Decline.
+// Consent-gated (never auto-stamp), rate-limited (anti-spam). Email is OPTIONAL
+// (kept only for the passive inbox path when the tagger knows it).
+const PP_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.globeskimmers.app';
+const PP_IOS_URL = 'https://apps.apple.com/app/globeskimmers/id0000000000'; // TODO: real App Store numeric ID
 async function handlePassportTag(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in to tag a friend' }, 401);
     const b = await request.json().catch(() => ({}));
-    const email = String(b.email || '').trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return jsonResponse({ error: 'Enter a valid email' }, 400);
-    if (email === String(user.email || '').toLowerCase()) return jsonResponse({ error: "That's your own email 🙂" }, 400);
     const stampId = String(b.stamp_id || '');
     if (!stampId) return jsonResponse({ error: 'stamp_id required' }, 400);
-    // Pull the tagger's OWN stamp for the payload.
+    const email = String(b.email || '').trim().toLowerCase() || null;
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return jsonResponse({ error: 'Enter a valid email' }, 400);
+    if (email && email === String(user.email || '').toLowerCase()) return jsonResponse({ error: "That's your own email 🙂" }, 400);
     const sq = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}&select=*`, {});
     const stamp = (sq.ok ? await sq.json() : [])[0];
     if (!stamp) return jsonResponse({ error: 'Stamp not found' }, 404);
@@ -11685,29 +11687,106 @@ async function handlePassportTag(request, env, ctx) {
     const rc = await gbRest(env, `passport_tags?from_user_id=eq.${user.id}&created_at=gte.${since}&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } });
     const count = parseInt((rc.headers.get('content-range') || '').split('/')[1] || '0', 10);
     if (count >= 30) return jsonResponse({ error: 'Daily tag limit reached — try again tomorrow.' }, 429);
-    // Dedupe: don't re-tag the same person for the same place while pending.
-    const dq = await gbRest(env, `passport_tags?from_user_id=eq.${user.id}&to_email=eq.${encodeURIComponent(email)}&entity_id=eq.${encodeURIComponent(stamp.entity_id || '')}&status=eq.pending&select=id`, {});
-    if ((dq.ok ? await dq.json() : []).length) return jsonResponse({ status: 'sent', already: true });
-    // Resolve email → user (service-role RPC; result never returned to the caller).
+    // Optional email → user resolution (passive inbox path; never returned to caller).
     let toUserId = null;
-    try {
-      const r = await gbRest(env, 'rpc/user_id_by_email', { method: 'POST', body: JSON.stringify({ p_email: email }) });
-      if (r.ok) { const v = await r.json(); toUserId = (typeof v === 'string' ? v : (Array.isArray(v) ? v[0] : v?.user_id)) || null; }
-    } catch { /* lookup best-effort */ }
+    if (email) {
+      try {
+        const r = await gbRest(env, 'rpc/user_id_by_email', { method: 'POST', body: JSON.stringify({ p_email: email }) });
+        if (r.ok) { const v = await r.json(); toUserId = (typeof v === 'string' ? v : (Array.isArray(v) ? v[0] : v?.user_id)) || null; }
+      } catch { /* best-effort */ }
+    }
+    const token = crypto.randomUUID().replace(/-/g, '');
     const row = {
       from_user_id: user.id, from_name: b.from_name ? String(b.from_name).slice(0, 60) : null,
-      to_user_id: toUserId, to_email: email,
+      to_user_id: toUserId, to_email: email, token,
       kind: stamp.kind, tier: stamp.tier, entity_type: stamp.entity_type, entity_id: stamp.entity_id,
       name: stamp.name, city: stamp.city, region: stamp.region, country: stamp.country,
       lat: stamp.lat, lng: stamp.lng, visited_on: stamp.visited_on,
     };
     const ins = await gbRest(env, 'passport_tags', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
-    if (!ins.ok) return jsonResponse({ error: 'Could not send tag', details: await ins.text().catch(() => '') }, 502);
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag', { is_user: !!toUserId }));
-    // Phase B (email): if toUserId → "you were tagged" email; else → invite email
-    // with app-download links. Deferred until an email provider is wired.
-    return jsonResponse({ status: 'sent' }); // same response whether or not they're a user
+    if (!ins.ok) return jsonResponse({ error: 'Could not create invite', details: await ins.text().catch(() => '') }, 502);
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag', { is_user: !!toUserId, via: 'link' }));
+    const origin = new URL(request.url).origin;
+    return jsonResponse({ status: 'created', token, url: `${origin}/t/${token}` });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// Preview a tag by its token (no auth — the token is the secret). For the in-app
+// claim card + the landing page.
+async function handlePassportTagByToken(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const token = String(b.token || '').replace(/[^a-f0-9]/gi, '');
+    if (!token) return jsonResponse({ tag: null });
+    const q = await gbRest(env, `passport_tags?token=eq.${token}&select=from_name,name,city,region,country,kind,status`, {});
+    return jsonResponse({ tag: (q.ok ? await q.json() : [])[0] || null });
+  } catch (e) { return jsonResponse({ tag: null, error: e.message }); }
+}
+
+// Claim a tag from its token (recipient must be signed in). Accept → mint the
+// stamp on MY passport; decline → nothing. Consent-gated; can't claim your own.
+async function handlePassportTagClaim(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to add this stamp' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const token = String(b.token || '').replace(/[^a-f0-9]/gi, '');
+    const accept = b.action === 'accept';
+    if (!token) return jsonResponse({ error: 'token required' }, 400);
+    const tq = await gbRest(env, `passport_tags?token=eq.${token}&status=eq.pending&select=*`, {});
+    const tag = (tq.ok ? await tq.json() : [])[0];
+    if (!tag) return jsonResponse({ error: 'This invite was already used or has expired.' }, 404);
+    if (tag.from_user_id === user.id) return jsonResponse({ error: "That's your own tag 🙂" }, 400);
+    if (accept) {
+      let exists = null;
+      if (tag.entity_id) {
+        const e2 = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&kind=eq.${tag.kind}&entity_id=eq.${encodeURIComponent(tag.entity_id)}&select=id`, {});
+        exists = (e2.ok ? await e2.json() : [])[0] || null;
+      }
+      if (!exists) {
+        const row = {
+          user_id: user.id, kind: tag.kind || 'attraction', tier: tag.tier || 'mark',
+          entity_type: tag.entity_type, entity_id: tag.entity_id, name: tag.name,
+          city: tag.city, region: tag.region, country: tag.country, lat: tag.lat, lng: tag.lng,
+          visited_on: tag.visited_on, verified: 'self', tagged_by: tag.from_user_id,
+        };
+        await gbRest(env, 'passport_stamps', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+      }
+    }
+    await gbRest(env, `passport_tags?token=eq.${token}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: accept ? 'accepted' : 'declined', to_user_id: user.id, responded_at: new Date().toISOString() }) });
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag_claim', { accept }));
+    return jsonResponse({ ok: true, accepted: accept });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// The shared link's landing page: preview + open-in-app (globeskimmers://) +
+// app-store download buttons. Works when opened in ANY messaging app's browser.
+async function handlePassportTagLanding(request, env) {
+  try {
+    const token = decodeURIComponent(new URL(request.url).pathname.replace(/^\/t\//, '')).replace(/[^a-f0-9]/gi, '');
+    let tag = null;
+    if (token) {
+      const q = await gbRest(env, `passport_tags?token=eq.${token}&select=from_name,name,city,country,status`, {});
+      tag = (q.ok ? await q.json() : [])[0] || null;
+    }
+    const esc = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const who = esc(tag?.from_name || 'A friend');
+    const place = tag ? esc([tag.name, tag.city, tag.country].filter(Boolean).join(', ')) : '';
+    const scheme = `globeskimmers://passport/claim?token=${encodeURIComponent(token)}`;
+    const inner = !tag
+      ? '<h1>Invite not found</h1><p class="muted">This link may be broken or expired.</p>'
+      : (tag.status !== 'pending')
+      ? '<div class="stamp">🛂</div><h1>Already handled</h1><p class="muted">This stamp invite was already used.</p>'
+      : `<div class="stamp">🛂</div><h1>${who} tagged you</h1><p class="place">${place}</p>`
+        + '<p>Add this stamp to your <b>Virtual Passport</b> on Globeskimmers.</p>'
+        + `<a class="btn primary" href="${scheme}">Open in Globeskimmers</a>`
+        + '<p class="muted">Don’t have the app yet?</p>'
+        + `<a class="btn" href="${PP_IOS_URL}">Download for iPhone</a>`
+        + `<a class="btn" href="${PP_PLAY_URL}">Download for Android</a>`
+        + '<p class="muted small">After installing, tap this link again to add your stamp.</p>';
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Globeskimmers — Virtual Passport</title><style>body{font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;background:#FFFCF7;color:#16110D;margin:0;padding:36px 20px;text-align:center}.wrap{max-width:420px;margin:0 auto}.stamp{font-size:64px;margin:8px 0}h1{font-size:26px;margin:8px 0}.place{color:#736657;font-size:15px;margin:2px 0 18px}p{font-size:15px;line-height:1.5}.btn{display:block;margin:10px auto;max-width:320px;padding:14px;border-radius:14px;text-decoration:none;font-weight:700;background:#fff;color:#16110D;border:1px solid rgba(0,0,0,.12)}.btn.primary{background:#B0472F;color:#fff;border:none}.muted{color:#736657;margin-top:18px}.small{font-size:12px}</style></head><body><div class="wrap">${inner}</div></body></html>`;
+    return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' } });
+  } catch { return new Response('Error', { status: 500 }); }
 }
 
 // My incoming pending tags (the "Tagged you" inbox).
@@ -12034,6 +12113,9 @@ export default {
       if (pathname === '/passport/tag' && request.method === 'POST') return await handlePassportTag(request, env, ctx);
       if (pathname === '/passport/tags' && request.method === 'POST') return await handlePassportTagsList(request, env);
       if (pathname === '/passport/tag/respond' && request.method === 'POST') return await handlePassportTagRespond(request, env, ctx);
+      if (pathname === '/passport/tag/by-token' && request.method === 'POST') return await handlePassportTagByToken(request, env);
+      if (pathname === '/passport/tag/claim' && request.method === 'POST') return await handlePassportTagClaim(request, env, ctx);
+      if (pathname.startsWith('/t/') && request.method === 'GET') return await handlePassportTagLanding(request, env);
       if (pathname === '/cache/stats') return await handleCacheStats(request, env);
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);

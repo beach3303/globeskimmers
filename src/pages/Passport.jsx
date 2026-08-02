@@ -6,7 +6,7 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, tagFriend, listTags, respondTag } from "@/lib/passport";
+import { listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag } from "@/lib/passport";
 
 // ============================================================================
 // Passport — the personal, private travel journal. Stamps you EARN by being
@@ -82,18 +82,20 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName }) {
   const [showDate, setShowDate] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [dateVal, setDateVal] = useState(stamp.visited_on || "");
-  const [showTag, setShowTag] = useState(false);
-  const [tagEmail, setTagEmail] = useState("");
   const [tagBusy, setTagBusy] = useState(false);
-
-  const sendTag = async () => {
-    const email = tagEmail.trim();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast("Enter a valid email", "error"); return; }
+  // Create a share-link invite → hand it to the native share sheet so the user
+  // sends it via WhatsApp / iMessage / whatever they use. No app-sent email.
+  const shareInvite = async () => {
     setTagBusy(true);
-    const { error } = await tagFriend({ stamp_id: stamp.id, email, from_name: fromName });
+    const { data, error } = await createTagInvite({ stamp_id: stamp.id, from_name: fromName });
     setTagBusy(false);
-    if (error) showToast(error, "error");
-    else { showToast("We'll let them know 👍", "success"); setTagEmail(""); setShowTag(false); }
+    if (error || !data?.url) { showToast(error || "Couldn't create invite", "error"); return; }
+    const text = `I tagged you at ${stamp.name} on Globeskimmers 🛂 — add it to your Virtual Passport:`;
+    try {
+      if (navigator.share) await navigator.share({ title: "Globeskimmers", text, url: data.url });
+      else if (navigator.clipboard) { await navigator.clipboard.writeText(`${text} ${data.url}`); showToast("Invite link copied — paste it to your friend", "success"); }
+      else showToast("Invite ready", "success");
+    } catch { /* user dismissed the share sheet — no-op */ }
   };
   const place = [stamp.city, stamp.region, stamp.country].filter(Boolean).join(", ");
   const photos = stamp.photos || [];
@@ -194,22 +196,12 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName }) {
       </button>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
 
-      {/* Tag who you were with — they Allow/Decline the stamp on their own passport */}
-      <button onClick={() => setShowTag((s) => !s)} className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
+      {/* Tag who you were with — share a link (their app of choice); they
+          Allow/Decline the stamp on their own Virtual Passport */}
+      <button onClick={shareInvite} disabled={tagBusy} className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
         style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13), fontWeight: 600 }}>
-        <UserPlus size={15} strokeWidth={2.2} /> Tag who you were with
+        <UserPlus size={15} strokeWidth={2.2} /> {tagBusy ? "Preparing…" : "Tag who you were with"}
       </button>
-      {showTag && (
-        <div className="mt-2">
-          <div className="flex gap-2">
-            <input type="email" value={tagEmail} onChange={(e) => setTagEmail(e.target.value)} placeholder="friend@email.com"
-              inputMode="email" autoCapitalize="none" autoCorrect="off"
-              className="flex-1 rounded-lg px-3 py-2" style={{ border: `1px solid ${RULE}`, fontSize: fs(13), color: INK }} />
-            <button onClick={sendTag} disabled={tagBusy} className="rounded-lg px-3.5 py-2 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12.5) }}>{tagBusy ? "…" : "Send"}</button>
-          </div>
-          <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.4, marginTop: 5 }}>They choose whether to add this stamp to their own Virtual Passport — we never add it without their OK.</p>
-        </div>
-      )}
     </div>
   );
 }
@@ -256,12 +248,36 @@ export default function PassportPage() {
   const [tags, setTags] = useState([]);
   const [lightbox, setLightbox] = useState(null); // { url, caption }
 
+  const [claim, setClaim] = useState(null); // { token, tag } from a shared invite link
+
   const load = useCallback(async () => {
     setLoading(true);
     const [pp, tg] = await Promise.all([listPassport(), listTags()]);
     setStamps(pp.stamps); setStats(pp.stats); setTags(tg.tags || []); setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // A shared invite link (globeskimmers://passport/claim?token=…) drops the token
+  // in sessionStorage (see Layout deep-link handler); web can pass ?claim_token=.
+  useEffect(() => {
+    let token = null;
+    try { token = sessionStorage.getItem("pp_claim_token"); } catch { /* ignore */ }
+    if (!token) { try { token = new URLSearchParams(window.location.search).get("claim_token"); } catch { /* ignore */ } }
+    if (!token) return;
+    getTagByToken(token).then(({ tag }) => {
+      if (tag && tag.status === "pending") setClaim({ token, tag });
+      else { try { sessionStorage.removeItem("pp_claim_token"); } catch { /* ignore */ } }
+    });
+  }, []);
+
+  const respondClaim = async (action) => {
+    if (!claim) return;
+    const { error } = await claimTag(claim.token, action);
+    try { sessionStorage.removeItem("pp_claim_token"); } catch { /* ignore */ }
+    setClaim(null);
+    if (error) showToast(error, "error");
+    else { showToast(action === "accept" ? "Added to your Virtual Passport 🛂" : "Declined", "success"); load(); }
+  };
 
   const pages = stamps.filter((s) => s.tier !== "mark");
   const marks = stamps.filter((s) => s.tier === "mark");
@@ -287,8 +303,8 @@ export default function PassportPage() {
       <div className={`${colWrap} mx-auto px-4 pb-28`}>
         {/* Holder + stats */}
         <div className="text-center pt-1 pb-3">
-          <p className="uppercase" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".18em", color: INK3 }}>Virtual Passport of</p>
-          <h1 className="italic leading-none" style={{ fontFamily: SERIF, fontSize: fs(34), color: STAMP, marginTop: 4 }}>{holder}</h1>
+          <p className="uppercase" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".18em", color: INK3 }}>🛂 Virtual Passport</p>
+          <h1 className="italic leading-tight" style={{ fontFamily: SERIF, fontSize: fs(32), color: STAMP, marginTop: 4 }}>{holder}&rsquo;s Virtual Passport</h1>
         </div>
         {stamps.length > 0 && (
           <div className="bg-white rounded-[18px] p-3 mb-4 flex items-center justify-around" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
@@ -296,6 +312,22 @@ export default function PassportPage() {
             <Stat n={stats.cities || 0} label="Cities" />
             <Stat n={stamps.length} label="Stamps" />
             <Stat n={stats.verified || 0} label="Verified" />
+          </div>
+        )}
+
+        {/* Claim card — arrived via a shared invite link */}
+        {claim && (
+          <div className="mb-4 rounded-[18px] p-4" style={{ boxShadow: SHADOW_CARD_SOFT, border: "2px solid #EAD9AE", background: "#FFFBF0" }}>
+            <p className="uppercase font-semibold" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", color: STAMP }}>🙌 You were tagged</p>
+            <p style={{ color: INK, fontSize: fs(15), lineHeight: 1.4, marginTop: 4 }}>
+              <b>{claim.tag.from_name || "A friend"}</b> tagged you at <b>{claim.tag.name}</b>
+              {[claim.tag.city, claim.tag.country].filter(Boolean).length ? ` · ${[claim.tag.city, claim.tag.country].filter(Boolean).join(", ")}` : ""}
+            </p>
+            <p style={{ color: INK3, fontSize: fs(12), marginTop: 1 }}>Add this stamp to your Virtual Passport?</p>
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => respondClaim("decline")} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13.5) }}>Decline</button>
+              <button onClick={() => respondClaim("accept")} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>Allow ✓</button>
+            </div>
           </div>
         )}
 

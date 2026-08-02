@@ -147,6 +147,19 @@ export const AuthProvider = ({ children }) => {
     // 3) Native OAuth callback: catch globeskimmers://auth/callback, exchange code.
     if (Capacitor.isNativePlatform()) {
       App.addListener('appUrlOpen', async ({ url }) => {
+        // Passport buddy-tag claim: globeskimmers://passport/claim?token=… →
+        // stash the token + route to the Passport page (which shows the claim card).
+        if (url && url.includes('passport/claim')) {
+          try {
+            const token = (url.split('token=')[1] || '').split(/[&#]/)[0];
+            if (token) {
+              try { sessionStorage.setItem('pp_claim_token', decodeURIComponent(token)); } catch { /* ignore */ }
+              window.history.pushState({}, '', '/Passport');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }
+          } catch { /* ignore malformed deep link */ }
+          return;
+        }
         if (!url || !url.startsWith(OAUTH_REDIRECT_TO)) return;
         try { await Browser.close(); } catch { /* no-op on Android */ }
         try {

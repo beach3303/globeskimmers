@@ -69,6 +69,14 @@ alter table api.passport_tags enable row level security; -- Worker-only
 
 alter table api.passport_stamps add column if not exists tagged_by uuid;
 
+-- Share-link tagging: the invite is a link carrying an unguessable token, shared
+-- via the native share sheet (WhatsApp / iMessage / whatever the user picks) —
+-- the app never sends email/SMS itself. Email is now OPTIONAL (kept for the
+-- inbox path when known). Token is the claim key.
+alter table api.passport_tags alter column to_email drop not null;
+alter table api.passport_tags add column if not exists token text;
+create unique index if not exists passport_tags_token_idx on api.passport_tags (token) where token is not null;
+
 -- Resolve an email → user id. SECURITY DEFINER so it can read auth.users, but
 -- granted ONLY to service_role (the Worker) → clients can never enumerate users.
 create or replace function api.user_id_by_email(p_email text)

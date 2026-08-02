@@ -48,18 +48,29 @@ export async function deleteStampPhoto(photo_id) {
   return { data, error };
 }
 
-// Buddy tagging (consent-gated). Tag by email → a pending stamp the recipient
-// Allows/Declines. Response never reveals whether the email is a user.
-export async function tagFriend({ stamp_id, email, from_name }) {
-  const { data, error } = await callWorker('passport/tag', { stamp_id, email, from_name });
+// Buddy tagging via a SHARE LINK (consent-gated). Creates a pending tag + an
+// unguessable token link the user shares through the native share sheet
+// (WhatsApp / iMessage / etc.). Returns { token, url }.
+export async function createTagInvite({ stamp_id, from_name }) {
+  const { data, error } = await callWorker('passport/tag', { stamp_id, from_name });
   return { data, error };
 }
-// My incoming pending tags (the "Tagged you" inbox).
+// Preview a tag by its share token (for the claim card). No auth needed.
+export async function getTagByToken(token) {
+  const { data, error } = await callWorker('passport/tag/by-token', { token });
+  return { tag: data?.tag || null, error };
+}
+// Claim a shared tag (recipient signed in): accept → stamp on my passport.
+export async function claimTag(token, action) {
+  const { data, error } = await callWorker('passport/tag/claim', { token, action });
+  return { data, error };
+}
+// My incoming pending tags (the passive "Tagged you" inbox — email path).
 export async function listTags() {
   const { data, error } = await callWorker('passport/tags', {});
   return { tags: data?.tags || [], error };
 }
-// Accept (mint the stamp on my passport) or decline a tag.
+// Accept/decline an inbox tag.
 export async function respondTag(tag_id, action) {
   const { data, error } = await callWorker('passport/tag/respond', { tag_id, action });
   return { data, error };
