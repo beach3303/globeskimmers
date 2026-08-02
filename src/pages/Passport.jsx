@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { countryCode } from "@/lib/countries";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { ChevronLeft, Loader2, Plus, Trash2, Calendar, RefreshCw, X, UserPlus } from "lucide-react";
@@ -9,6 +10,12 @@ import { showToast } from "@/components/Toast";
 import { addStamp, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag } from "@/lib/passport";
 
 const citySlug = (s) => "city:" + String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+// Country name → flag emoji (renders as a real flag on iOS/Android; no network).
+const flagFor = (country) => {
+  const cc = countryCode(country);
+  if (!cc || !/^[a-z]{2}$/i.test(cc)) return "🗺️";
+  return String.fromCodePoint(...[...cc.toUpperCase()].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
+};
 
 // ============================================================================
 // Passport — the personal, private travel journal. Stamps you EARN by being
@@ -314,6 +321,19 @@ export default function PassportPage() {
   const marks = stamps.filter((s) => s.tier === "mark");
   const holder = profile?.first_name || profile?.display_name || "Traveler";
 
+  // Booklet view: one swipeable page per country (like a real passport).
+  const [view, setView] = useState(() => { try { return localStorage.getItem("pp_view") || "booklet"; } catch { return "booklet"; } });
+  const setViewP = (v) => { setView(v); try { localStorage.setItem("pp_view", v); } catch { /* ignore */ } };
+  const pageRefs = useRef([]);
+  const byCountry = useMemo(() => {
+    const groups = {};
+    for (const s of stamps) { const k = s.country || "Other places"; (groups[k] = groups[k] || []).push(s); }
+    const t = (s) => Date.parse(s.visited_on || s.created_at) || 0;
+    const order = Object.keys(groups).sort((a, b) => Math.max(...groups[b].map(t)) - Math.max(...groups[a].map(t)));
+    for (const k of order) groups[k].sort((a, b) => (a.tier === "mark") - (b.tier === "mark") || t(b) - t(a));
+    return { order, groups };
+  }, [stamps]);
+
   return (
     <div className="min-h-screen" style={{ background: IVORY, fontFamily: SANS }}>
       {/* HEADER */}
@@ -392,6 +412,14 @@ export default function PassportPage() {
           </div>
         )}
 
+        {/* View toggle */}
+        {stamps.length > 0 && (
+          <div className="flex items-center justify-center gap-1.5 mb-3">
+            <button onClick={() => setViewP("booklet")} className="px-3.5 py-1.5 rounded-full font-semibold" style={{ background: view === "booklet" ? STAMP : "#fff", color: view === "booklet" ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>📖 Booklet</button>
+            <button onClick={() => setViewP("list")} className="px-3.5 py-1.5 rounded-full font-semibold" style={{ background: view === "list" ? STAMP : "#fff", color: view === "list" ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>☰ List</button>
+          </div>
+        )}
+
         {loading && stamps.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-10 h-10 animate-spin mb-3" style={{ color: STAMP }} />
@@ -413,7 +441,7 @@ export default function PassportPage() {
               Went somewhere before you had the app? Add a stamp, upload your photo, set the date — you’ll earn the ✓.
             </p>
           </div>
-        ) : (
+        ) : view === "list" ? (
           <div className="space-y-3">
             {pages.length > 0 && (
               <>
@@ -427,6 +455,37 @@ export default function PassportPage() {
                 {marks.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} homeCity={profile?.home_city} />)}
               </>
             )}
+          </div>
+        ) : (
+          /* BOOKLET — one swipeable page per country */
+          <div>
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-1" style={{ scrollbarWidth: "none" }}>
+              {byCountry.order.map((c, i) => (
+                <button key={c} onClick={() => pageRefs.current[i]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" })}
+                  className="flex-none inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(12.5), fontWeight: 600, color: INK2 }}>
+                  <span style={{ fontSize: 16 }}>{flagFor(c)}</span>{c}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 14, overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", margin: "0 -4px", padding: "2px 4px 4px" }}>
+              {byCountry.order.map((c, i) => (
+                <section key={c} ref={(el) => { pageRefs.current[i] = el; }}
+                  style={{ flex: "0 0 100%", scrollSnapAlign: "center", background: "#FBF6EC", border: "1px solid #EADFC9", borderRadius: 18, padding: 14, position: "relative", overflow: "hidden" }}>
+                  <div aria-hidden style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: 0.06, fontSize: 170, pointerEvents: "none" }}>{flagFor(c)}</div>
+                  <div className="flex items-center justify-between mb-3" style={{ position: "relative" }}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span style={{ fontSize: 26, lineHeight: 1 }}>{flagFor(c)}</span>
+                      <h2 className="truncate" style={{ fontFamily: SERIF, fontSize: fs(24), color: INK, lineHeight: 1.05 }}>{c}</h2>
+                    </div>
+                    <span className="uppercase shrink-0" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", color: INK3 }}>{byCountry.groups[c].length} stamp{byCountry.groups[c].length > 1 ? "s" : ""}</span>
+                  </div>
+                  <div className="space-y-3" style={{ position: "relative" }}>
+                    {byCountry.groups[c].map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} homeCity={profile?.home_city} />)}
+                  </div>
+                </section>
+              ))}
+            </div>
+            {byCountry.order.length > 1 && <p className="text-center mt-2" style={{ color: INK3, fontSize: fs(11.5) }}>← swipe between countries →</p>}
           </div>
         )}
       </div>
