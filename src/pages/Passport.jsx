@@ -270,6 +270,19 @@ export default function PassportPage() {
     });
   }, []);
 
+  // Deferred-install fallback: a brand-new user pastes the invite link a friend
+  // sent (the link/token survives even when deep-link attribution doesn't). We
+  // pull the 32-hex token out of a pasted URL or bare token and show the claim.
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteVal, setPasteVal] = useState("");
+  const openPasted = async () => {
+    const token = (String(pasteVal || "").match(/[a-f0-9]{32}/i) || [])[0] || "";
+    if (!token) { showToast("Paste the full invite link", "error"); return; }
+    const { tag } = await getTagByToken(token);
+    if (tag && tag.status === "pending") { setClaim({ token, tag }); setPasteOpen(false); setPasteVal(""); }
+    else showToast("That invite was already used or isn’t valid", "error");
+  };
+
   const respondClaim = async (action) => {
     if (!claim) return;
     const { error } = await claimTag(claim.token, action);
@@ -328,6 +341,28 @@ export default function PassportPage() {
               <button onClick={() => respondClaim("decline")} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13.5) }}>Decline</button>
               <button onClick={() => respondClaim("accept")} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>Allow ✓</button>
             </div>
+          </div>
+        )}
+
+        {/* Have an invite link? (deferred-install fallback — paste it to claim) */}
+        {!claim && (
+          <div className="mb-4">
+            {!pasteOpen ? (
+              <button onClick={() => setPasteOpen(true)} className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
+                style={{ background: "#fff", color: INK2, border: `1px dashed ${RULE}`, fontSize: fs(12.5), fontWeight: 600 }}>
+                🔗 A friend sent you an invite link? Add it
+              </button>
+            ) : (
+              <div className="bg-white rounded-[16px] p-3" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
+                <div className="flex gap-2">
+                  <input value={pasteVal} onChange={(e) => setPasteVal(e.target.value)} placeholder="Paste the invite link"
+                    autoCapitalize="none" autoCorrect="off"
+                    className="flex-1 rounded-lg px-3 py-2" style={{ border: `1px solid ${RULE}`, fontSize: fs(13), color: INK }} />
+                  <button onClick={openPasted} className="rounded-lg px-3.5 py-2 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12.5) }}>Add</button>
+                </div>
+                <button onClick={() => { setPasteOpen(false); setPasteVal(""); }} style={{ color: INK3, fontSize: fs(11.5), marginTop: 6 }}>Cancel</button>
+              </div>
+            )}
           </div>
         )}
 
