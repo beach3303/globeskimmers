@@ -6,7 +6,9 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag } from "@/lib/passport";
+import { addStamp, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag } from "@/lib/passport";
+
+const citySlug = (s) => "city:" + String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 // ============================================================================
 // Passport — the personal, private travel journal. Stamps you EARN by being
@@ -75,7 +77,8 @@ function Stat({ n, label }) {
   );
 }
 
-function StampCard({ stamp, onChanged, onEnlarge, fromName }) {
+function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity }) {
+  const isHome = stamp.kind === "city" && homeCity && String(stamp.city || "").toLowerCase() === String(homeCity).toLowerCase();
   const k = KIND[stamp.kind] || KIND.attraction;
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -157,6 +160,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName }) {
       )}
 
       <div className="flex items-center gap-2 flex-wrap mt-2.5">
+        {isHome && <Chip bg="#F3E2C7" color={STAMP}>🏠 Home</Chip>}
         <VerifiedBadge verified={stamp.verified} />
         <button onClick={() => setShowDate((s) => !s)} className="inline-flex items-center gap-1" style={{ color: INK2, fontSize: fs(12) }}>
           <Calendar size={12} color={INK3} /> {stamp.visited_on ? fmtDate(stamp.visited_on) : "Add date"}
@@ -283,6 +287,20 @@ export default function PassportPage() {
     else showToast("That invite was already used or isn’t valid", "error");
   };
 
+  // Page one: issue the home-city stamp once, so a new passport opens with the
+  // user's origin instead of "member since". Matches the worker's city entity_id
+  // scheme so it dedupes with any later home-city visit.
+  const homeSeeded = useRef(false);
+  useEffect(() => {
+    if (loading || homeSeeded.current) return;
+    const hc = profile?.home_city;
+    if (!hc) return;
+    if (stamps.some((s) => s.kind === "city" && String(s.city || "").toLowerCase() === String(hc).toLowerCase())) { homeSeeded.current = true; return; }
+    homeSeeded.current = true;
+    addStamp({ kind: "city", tier: "page", entity_type: "city", entity_id: citySlug(hc), name: hc, city: hc, country: profile?.home_country || null, verified: "self" })
+      .then(({ error }) => { if (!error) load(); });
+  }, [loading, stamps, profile, load]);
+
   const respondClaim = async (action) => {
     if (!claim) return;
     const { error } = await claimTag(claim.token, action);
@@ -400,13 +418,13 @@ export default function PassportPage() {
             {pages.length > 0 && (
               <>
                 <p className="uppercase font-semibold px-1" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", color: INK3 }}>Passport pages</p>
-                {pages.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} />)}
+                {pages.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} homeCity={profile?.home_city} />)}
               </>
             )}
             {marks.length > 0 && (
               <>
                 <p className="uppercase font-semibold px-1 pt-2" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", color: INK3 }}>Places visited</p>
-                {marks.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} />)}
+                {marks.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} homeCity={profile?.home_city} />)}
               </>
             )}
           </div>

@@ -11467,6 +11467,28 @@ async function handleGuestbookPhotoServe(request, env) {
 const PP_KINDS = ['country', 'city', 'airport', 'icon', 'wonder', 'attraction'];
 const PP_VERIFY_RANK = { self: 0, photo: 1, gps: 2 };
 const ppDate = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? String(s) : null);
+const ppSlug = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+// Create or update a stamp (idempotent per user+kind+entity), keeping the
+// strongest verification (gps > photo > self). Returns { id, created|updated }.
+async function ppUpsertStamp(env, row) {
+  let existing = null;
+  if (row.entity_id) {
+    const q = await gbRest(env, `passport_stamps?user_id=eq.${row.user_id}&kind=eq.${row.kind}&entity_id=eq.${encodeURIComponent(row.entity_id)}&select=id,verified`, {});
+    existing = (q.ok ? await q.json() : [])[0] || null;
+  }
+  if (existing) {
+    const best = PP_VERIFY_RANK[row.verified] > PP_VERIFY_RANK[existing.verified] ? row.verified : existing.verified;
+    const patch = { verified: best, updated_at: new Date().toISOString() };
+    if (row.visited_on) patch.visited_on = row.visited_on;
+    await gbRest(env, `passport_stamps?id=eq.${existing.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
+    return { id: existing.id, updated: true, verified: best };
+  }
+  const ins = await gbRest(env, 'passport_stamps', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
+  if (!ins.ok) throw new Error(await ins.text().catch(() => 'insert failed'));
+  const created = (await ins.json())[0] || {};
+  return { id: created.id, created: true, verified: row.verified };
+}
 
 // Create or update a stamp (idempotent per user+kind+entity). Keeps the STRONGEST
 // verification when re-stamping (gps > photo > self).
@@ -11493,25 +11515,21 @@ async function handlePassportStamp(request, env, ctx) {
       lng: Number.isFinite(+b.lng) ? +b.lng : null,
       visited_on: visitedOn, verified,
     };
-    // Existing stamp for this (user, kind, entity)? → update, keeping strongest ✓.
-    let existing = null;
-    if (entityId) {
-      const q = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&kind=eq.${kind}&entity_id=eq.${encodeURIComponent(entityId)}&select=id,verified`, {});
-      existing = (q.ok ? await q.json() : [])[0] || null;
+    const result = await ppUpsertStamp(env, row);
+    // Tiered passport: visiting an attraction in a city auto-stamps that CITY as
+    // a page (consented — they tapped "I was here"; inherits the ✓ if GPS-verified).
+    if (kind === 'attraction' && row.city) {
+      try {
+        await ppUpsertStamp(env, {
+          user_id: user.id, kind: 'city', tier: 'page',
+          entity_type: 'city', entity_id: `city:${ppSlug(row.city)}`,
+          name: row.city, city: row.city, region: row.region, country: row.country,
+          lat: null, lng: null, visited_on: visitedOn, verified: verified === 'gps' ? 'gps' : 'self',
+        });
+      } catch { /* city derive is best-effort */ }
     }
-    if (existing) {
-      const best = PP_VERIFY_RANK[verified] > PP_VERIFY_RANK[existing.verified] ? verified : existing.verified;
-      const patch = { verified: best, updated_at: new Date().toISOString() };
-      if (visitedOn) patch.visited_on = visitedOn;
-      await gbRest(env, `passport_stamps?id=eq.${existing.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
-      if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, verified: best, updated: true }));
-      return jsonResponse({ id: existing.id, updated: true, verified: best });
-    }
-    const ins = await gbRest(env, 'passport_stamps', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
-    if (!ins.ok) return jsonResponse({ error: 'save failed', details: await ins.text().catch(() => '') }, 502);
-    const created = (await ins.json())[0] || {};
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, verified, updated: false }));
-    return jsonResponse({ id: created.id, created: true, verified });
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, verified: result.verified, updated: !!result.updated }));
+    return jsonResponse({ id: result.id, created: !!result.created, updated: !!result.updated, verified: result.verified });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
