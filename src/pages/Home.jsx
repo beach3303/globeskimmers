@@ -14,6 +14,7 @@ import { extractFirstName } from "@/lib/extractFirstName";
 import { isLocationPermissionGranted } from "@/lib/geolocation";
 import { callWorker } from "@/lib/callWorker";
 import HomeRows from "@/components/home/HomeRows";
+import CountryArrivalPrompt from "@/components/CountryArrivalPrompt";
 import { ROUTE } from "@/lib/workerRoutes";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
@@ -848,6 +849,9 @@ export default function HomePage() {
       {profile?.onboarding_completed && !showWelcome && !showLocationPicker && <HomeBanner />}
 
       <LocationModePicker isOpen={showLocationPicker} onClose={() => setShowLocationPicker(false)} />
+
+      {/* Country arrival stamp — prompts to stamp a new country when you're there */}
+      {profile?.onboarding_completed && !showWelcome && <CountryArrivalPrompt />}
     </div>
   );
 }
