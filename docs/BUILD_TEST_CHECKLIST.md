@@ -260,8 +260,12 @@ The retention core: "I was here" → an EARNED stamp → memory photos, private 
 - [ ] **Photo-proof backfill:** stamp a place you're NOT at (self) → add your own photo + set an earlier date → earns ✓ + shows that date
 - [ ] Edit date + delete photo + delete stamp all work; refresh persists (Supabase)
 - [ ] Signed-out: Passport shows the "sign in to start" empty state (no crash)
-- [ ] **Buddy tagging (in-app):** on a stamp → "Tag who you were with" → enter another test account's email → "We'll let them know". Sign in as that account → Passport shows "🙌 Tagged you" → **Allow** mints the stamp on their passport; **Decline** = nothing. (Same worker deploy + the updated `01_schema.sql` covers this — re-run it, it's idempotent.)
-- [ ] Tag privacy/anti-spam: response is identical whether the email is a user or not; 30 tags/day cap; can't tag yourself
+- [ ] **Buddy tagging (share link):** on a stamp → "Tag who you were with" → the **native share sheet** opens with an invite link → send via WhatsApp/iMessage/etc. (Re-run `01_schema.sql` — idempotent — for the `token` column.)
+- [ ] Recipient with app: tap the link → `/t/<token>` landing → "Open in Globeskimmers" → app opens to a **claim card** → **Allow** mints the stamp on their passport / **Decline** = nothing (consent-gated; can't claim your own)
+- [ ] Recipient without app: link → landing page shows stamp preview + **Download for iPhone/Android** buttons
+- [ ] Anti-spam: 30 tags/day cap; landing page shows "already used" for a claimed token
+- [ ] ⚠️ Set the real **iOS App Store numeric ID** in `PP_IOS_URL` (worker) once assigned — the iPhone download button is a placeholder until then
+- [ ] Email inbox path ("🙌 Tagged you") still works if a tag ever carries an email
 - [ ] ⚠️ Not yet built: **Phase B email** (notify existing users + invite non-users w/ download links — needs an email provider); onboarding page-one reframe; city/airport/icon/wonder auto-stamps; share card (P2)
 
 ## Template for a new build
