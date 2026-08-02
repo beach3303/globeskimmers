@@ -11668,7 +11668,7 @@ async function handlePassportPhotoDelete(request, env, ctx) {
 // Consent-gated (never auto-stamp), rate-limited (anti-spam). Email is OPTIONAL
 // (kept only for the passive inbox path when the tagger knows it).
 const PP_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.globeskimmers.app';
-const PP_IOS_URL = 'https://apps.apple.com/app/globeskimmers/id0000000000'; // TODO: real App Store numeric ID
+const PP_IOS_URL = 'https://apps.apple.com/us/app/globeskimmers/id6753154199';
 async function handlePassportTag(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
