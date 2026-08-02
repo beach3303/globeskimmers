@@ -238,9 +238,9 @@ export default function ActivityDetailPage() {
       verified,
     });
     setStamping(false);
-    if (error) { showToast(/sign in/i.test(error) ? 'Sign in to stamp your passport' : 'Could not add stamp'); return; }
+    if (error) { showToast(/sign in/i.test(error) ? 'Sign in to stamp your Virtual Passport' : 'Could not add stamp'); return; }
     setStamped(true);
-    showToast(verified === 'gps' ? '✓ Verified — added to your passport 🛂' : 'Added to your passport 🛂 — add a photo to verify');
+    showToast(verified === 'gps' ? '✓ Verified — added to your Virtual Passport 🛂' : 'Added to your Virtual Passport 🛂 — add a photo to verify');
   };
 
   const handleSaveActivity = () => {
@@ -504,7 +504,7 @@ export default function ActivityDetailPage() {
             className="w-full flex items-center justify-center gap-2 rounded-2xl py-3 mb-4 font-bold transition-transform active:scale-[.99]"
             style={{ background: stamped ? '#E7F3EA' : '#B0472F', color: stamped ? '#266A3B' : '#fff', fontSize: 'calc(15px*var(--fs))' }}
           >
-            {stamping ? 'Stamping…' : stamped ? '✓ In your passport' : '📍 I was here'}
+            {stamping ? 'Stamping…' : stamped ? '✓ In your Virtual Passport' : '📍 I was here'}
           </button>
 
           {/* Distance with toggle — only when we have a real distance */}

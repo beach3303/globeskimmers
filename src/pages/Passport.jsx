@@ -207,7 +207,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName }) {
               className="flex-1 rounded-lg px-3 py-2" style={{ border: `1px solid ${RULE}`, fontSize: fs(13), color: INK }} />
             <button onClick={sendTag} disabled={tagBusy} className="rounded-lg px-3.5 py-2 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12.5) }}>{tagBusy ? "…" : "Send"}</button>
           </div>
-          <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.4, marginTop: 5 }}>They choose whether to add this stamp to their own passport — we never add it without their OK.</p>
+          <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.4, marginTop: 5 }}>They choose whether to add this stamp to their own Virtual Passport — we never add it without their OK.</p>
         </div>
       )}
     </div>
@@ -226,7 +226,7 @@ function TagInbox({ tag, onDone }) {
     const { error } = await respondTag(tag.id, action);
     setBusy(false);
     if (error) showToast(error, "error");
-    else { showToast(action === "accept" ? "Added to your passport 🛂" : "Declined", "success"); onDone(); }
+    else { showToast(action === "accept" ? "Added to your Virtual Passport 🛂" : "Declined", "success"); onDone(); }
   };
   return (
     <div className="rounded-[18px] p-3.5" style={{ boxShadow: SHADOW_CARD_SOFT, border: "1px solid #EAD9AE", background: "#FFFBF0" }}>
@@ -234,7 +234,7 @@ function TagInbox({ tag, onDone }) {
         <div className="shrink-0 rounded-xl flex items-center justify-center" style={{ width: 40, height: 40, background: IVORY_2, fontSize: 20 }}>{k.icon}</div>
         <div className="min-w-0 flex-1">
           <p style={{ color: INK, fontSize: fs(13.5), lineHeight: 1.4 }}><b>{who}</b> tagged you at <b>{tag.name}</b>{place ? ` · ${place}` : ""}</p>
-          <p style={{ color: INK3, fontSize: fs(11.5), marginTop: 1 }}>Add this stamp to your passport?</p>
+          <p style={{ color: INK3, fontSize: fs(11.5), marginTop: 1 }}>Add this stamp to your Virtual Passport?</p>
         </div>
       </div>
       <div className="flex gap-2 mt-2.5">
@@ -276,7 +276,7 @@ export default function PassportPage() {
             <ChevronLeft size={18} color={INK} strokeWidth={2.2} />
           </button>
           <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full uppercase" style={{ background: "#F3E2C7", color: STAMP, fontFamily: MONO, fontSize: fs(11), letterSpacing: ".08em", fontWeight: 600 }}>
-            🛂 Passport
+            🛂 Virtual Passport
           </div>
           <button onClick={load} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/5" style={{ background: "#fff", border: `1px solid ${RULE}` }} title="Refresh">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} color={INK} strokeWidth={2} />
@@ -287,7 +287,7 @@ export default function PassportPage() {
       <div className={`${colWrap} mx-auto px-4 pb-28`}>
         {/* Holder + stats */}
         <div className="text-center pt-1 pb-3">
-          <p className="uppercase" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".18em", color: INK3 }}>Passport of</p>
+          <p className="uppercase" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".18em", color: INK3 }}>Virtual Passport of</p>
           <h1 className="italic leading-none" style={{ fontFamily: SERIF, fontSize: fs(34), color: STAMP, marginTop: 4 }}>{holder}</h1>
         </div>
         {stamps.length > 0 && (
@@ -310,12 +310,12 @@ export default function PassportPage() {
         {loading && stamps.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-10 h-10 animate-spin mb-3" style={{ color: STAMP }} />
-            <p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(11), letterSpacing: ".1em" }}>Opening your passport…</p>
+            <p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(11), letterSpacing: ".1em" }}>Opening your Virtual Passport…</p>
           </div>
         ) : stamps.length === 0 ? (
           <div className="bg-white rounded-[22px] p-6 text-center mt-2" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
             <div style={{ fontSize: 48 }}>🛂</div>
-            <p style={{ fontFamily: SERIF, fontSize: fs(22), color: INK, marginTop: 6 }}>Your passport is empty</p>
+            <p style={{ fontFamily: SERIF, fontSize: fs(22), color: INK, marginTop: 6 }}>Your Virtual Passport is empty</p>
             <p style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.5, marginTop: 6 }}>
               {isAuthenticated
                 ? <>Tap <b>“📍 I was here”</b> on any place you’ve visited — attractions, a city, a landmark. Your first stamp starts your story, and every place you go adds a page.</>
