@@ -1,0 +1,108 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "onboarding_completed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the user has completed onboarding"
+    },
+    "custom_location": {
+      "type": "object",
+      "description": "User's custom location settings"
+    },
+    "location_mode": {
+      "type": "string",
+      "enum": [
+        "current",
+        "navigate"
+      ],
+      "description": "User's preferred location mode"
+    },
+    "selected_location": {
+      "type": "object",
+      "description": "User's selected navigate location"
+    },
+    "last_used_location": {
+      "type": "object",
+      "description": "Last location used by the user"
+    },
+    "location_permission_granted": {
+      "type": "boolean",
+      "description": "Whether user granted location permission"
+    },
+    "saved_locations": {
+      "type": "array",
+      "description": "User's saved favorite locations",
+      "items": {
+        "type": "object"
+      }
+    },
+    "preferred_currency": {
+      "type": "string",
+      "description": "User's preferred currency"
+    },
+    "preferred_language": {
+      "type": "string",
+      "description": "User's preferred app language"
+    },
+    "preferred_temperature_scale": {
+      "type": "string",
+      "enum": [
+        "celsius",
+        "fahrenheit"
+      ],
+      "description": "User's preferred temperature scale"
+    },
+    "preferred_distance_unit": {
+      "type": "string",
+      "enum": [
+        "miles",
+        "kilometers"
+      ],
+      "description": "User's preferred distance unit"
+    },
+    "home_country": {
+      "type": "string",
+      "description": "User's home country"
+    },
+    "show_home_country_info": {
+      "type": "boolean",
+      "description": "Show home country time and info"
+    },
+    "first_name": {
+      "type": "string",
+      "description": "User's first name"
+    },
+    "native_language": {
+      "type": "string",
+      "description": "User's native language for reverse translation"
+    },
+    "home_country_language": {
+      "type": "string",
+      "description": "Primary language of user's home country"
+    },
+    "referral_source": {
+      "type": "string",
+      "description": "How user heard about the app"
+    }
+  },
+  "required": [
+    "custom_location",
+    "location_mode",
+    "selected_location",
+    "last_used_location",
+    "location_permission_granted",
+    "saved_locations",
+    "preferred_currency",
+    "preferred_language",
+    "preferred_temperature_scale",
+    "preferred_distance_unit",
+    "home_country",
+    "show_home_country_info",
+    "first_name",
+    "native_language",
+    "home_country_language",
+    "referral_source"
+  ]
+}

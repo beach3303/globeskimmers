@@ -1,0 +1,34 @@
+{
+  "name": "FeatureRequest",
+  "type": "object",
+  "properties": {
+    "feature_name": {
+      "type": "string",
+      "description": "Name of the feature being requested"
+    },
+    "request_message": {
+      "type": "string",
+      "description": "User's request or suggestion"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Email of the user who submitted the request"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "reviewed",
+        "planned",
+        "completed"
+      ],
+      "default": "pending",
+      "description": "Status of the feature request"
+    }
+  },
+  "required": [
+    "feature_name",
+    "request_message",
+    "user_email"
+  ]
+}

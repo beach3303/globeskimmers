@@ -1,0 +1,44 @@
+{
+  "name": "activities_cache",
+  "type": "object",
+  "properties": {
+    "cache_key": {
+      "type": "string",
+      "description": "Unique cache key based on location, radius, and category"
+    },
+    "activities": {
+      "type": "array",
+      "description": "Full array of activities with photos"
+    },
+    "fetched_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when data was fetched"
+    },
+    "latitude": {
+      "type": "number",
+      "description": "Search center latitude"
+    },
+    "longitude": {
+      "type": "number",
+      "description": "Search center longitude"
+    },
+    "radius_miles": {
+      "type": "number",
+      "description": "Search radius in miles"
+    },
+    "category": {
+      "type": "string",
+      "description": "Activity category filter"
+    },
+    "country": {
+      "type": "string",
+      "description": "Country for the search"
+    }
+  },
+  "required": [
+    "cache_key",
+    "activities",
+    "fetched_at"
+  ]
+}

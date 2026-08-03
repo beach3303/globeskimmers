@@ -1,0 +1,42 @@
+{
+  "name": "UserEvent",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "description": "Email of the user who triggered the event"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "login",
+        "logout",
+        "feature_used",
+        "page_view",
+        "session_start",
+        "session_end"
+      ],
+      "description": "Type of event"
+    },
+    "feature_name": {
+      "type": "string",
+      "description": "Name of the feature used (e.g., 'coffee_finder', 'weather')"
+    },
+    "page_name": {
+      "type": "string",
+      "description": "Name of the page viewed"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Unique session identifier"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional event data (coordinates, search terms, etc.)"
+    }
+  },
+  "required": [
+    "user_email",
+    "event_type"
+  ]
+}

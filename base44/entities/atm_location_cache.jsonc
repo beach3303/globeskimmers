@@ -1,0 +1,57 @@
+{
+  "name": "atm_location_cache",
+  "type": "object",
+  "properties": {
+    "cache_key": {
+      "type": "string",
+      "description": "Unique cache key based on search parameters"
+    },
+    "locations": {
+      "type": "array",
+      "description": "Filtered and limited ATM list for display"
+    },
+    "all_locations": {
+      "type": "array",
+      "description": "Complete ATM list for map view"
+    },
+    "available_banks": {
+      "type": "array",
+      "description": "List of available banks with counts"
+    },
+    "fetched_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when data was fetched"
+    },
+    "latitude": {
+      "type": "number",
+      "description": "Search center latitude"
+    },
+    "longitude": {
+      "type": "number",
+      "description": "Search center longitude"
+    },
+    "radius_miles": {
+      "type": "number",
+      "description": "Search radius in miles"
+    },
+    "open_only": {
+      "type": "boolean",
+      "description": "Whether to show only open locations"
+    },
+    "bank_name": {
+      "type": "string",
+      "description": "Specific bank filter (null for all)"
+    },
+    "country": {
+      "type": "string",
+      "description": "Country for the search"
+    }
+  },
+  "required": [
+    "cache_key",
+    "locations",
+    "all_locations",
+    "fetched_at"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "name": "restaurant_cache",
+  "type": "object",
+  "properties": {
+    "cache_key": {
+      "type": "string",
+      "description": "Unique cache key based on location and filters"
+    },
+    "restaurants": {
+      "type": "string",
+      "description": "JSON stringified restaurant data"
+    },
+    "fetched_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the data was fetched"
+    },
+    "latitude": {
+      "type": "number",
+      "description": "Search latitude"
+    },
+    "longitude": {
+      "type": "number",
+      "description": "Search longitude"
+    },
+    "category": {
+      "type": "string",
+      "description": "Food category"
+    },
+    "vibe": {
+      "type": "string",
+      "description": "Vibe filter"
+    }
+  },
+  "required": [
+    "cache_key",
+    "restaurants",
+    "fetched_at"
+  ]
+}
