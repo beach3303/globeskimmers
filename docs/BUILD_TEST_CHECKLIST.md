@@ -268,6 +268,18 @@ The retention core: "I was here" → an EARNED stamp → memory photos, private 
 - [ ] Email inbox path ("🙌 Tagged you") still works if a tag ever carries an email
 - [ ] ⚠️ Not yet built: **Phase B email** (notify existing users + invite non-users w/ download links — needs an email provider); onboarding page-one reframe; city/airport/icon/wonder auto-stamps; share card (P2)
 
+## 📡 Capgo OTA live updates (2026-08-05)
+Push JS/HTML/CSS updates to installed apps with **no App Store resubmission** — only native changes (new plugins/permissions) still need a store build. Capgo cloud app = `com.globeskimmers.app` (org "Globeskimmers"); plugin `@capgo/capacitor-updater@8`; `notifyAppReady()` in `src/main.jsx`.
+State: Committed <hash> · Native build required (this build adds the plugin) · Tested ⬜
+- [x] Capgo cloud app created with correct bundle id `com.globeskimmers.app` (wrong `com.globeskimmers.globeskimmers` deleted)
+- [x] Plugin installed + `notifyAppReady()` wired + `cap sync` (plugin shows in iOS/Android)
+- [ ] **Capgo dashboard:** create a **production** channel + set it as the **default / self-assign, auto-update** channel (Settings → Channels)
+- [ ] **⚠️ Native build required THIS once:** archive + submit a new App Store (and Play) build that includes the Capgo plugin — OTA only reaches versions that ship the updater
+- [ ] After that build is live + installed: `npx @capgo/cli bundle upload com.globeskimmers.app --channel production` pushes a JS change
+- [ ] Device: make a small visible JS tweak → upload bundle → reopen app → change appears **without** a store update
+- [ ] Rollback sanity: `notifyAppReady()` fires (no auto-revert on next launch)
+- [ ] ⏰ MAU/plan: on Solo (2K). Upgrade before 2K→Maker→Team(100K) or OTA stops past the cap
+
 ## Template for a new build
 ```
 ### N · <feature name>

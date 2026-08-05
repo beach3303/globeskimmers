@@ -59,6 +59,15 @@ const config: CapacitorConfig = {
     CapacitorHttp: {
       enabled: true,
     },
+
+    // Capgo OTA live updates. appId MUST match the native bundle id
+    // (com.globeskimmers.app) and the app registered on console.capgo.app —
+    // this is how the updater knows which cloud app / channel to pull
+    // bundles from. Pair with CapacitorUpdater.notifyAppReady() in
+    // src/main.jsx or updates auto-roll-back on next launch.
+    CapacitorUpdater: {
+      appId: 'com.globeskimmers.app',
+    },
   },
 };
 
