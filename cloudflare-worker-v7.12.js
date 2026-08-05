@@ -11589,18 +11589,7 @@ async function handlePassportStamp(request, env, ctx) {
       visited_on: visitedOn, verified,
     };
     const result = await ppUpsertStamp(env, row);
-    // Tiered passport: visiting an attraction in a city auto-stamps that CITY as
-    // a page (consented — they tapped "I was here"; inherits the ✓ if GPS-verified).
-    if (kind === 'attraction' && row.city) {
-      try {
-        await ppUpsertStamp(env, {
-          user_id: user.id, kind: 'city', tier: 'page',
-          entity_type: 'city', entity_id: `city:${ppSlug(row.city)}`,
-          name: row.city, city: row.city, region: row.region, country: row.country,
-          lat: null, lng: null, visited_on: visitedOn, verified: verified === 'gps' ? 'gps' : 'self',
-        });
-      } catch { /* city derive is best-effort */ }
-    }
+    // Stamps are airport-arrival + iconic-attraction only — we do NOT auto-stamp cities.
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, country: row.country, city: row.city, name: row.name, verified: result.verified, updated: !!result.updated }));
     return jsonResponse({ id: result.id, created: !!result.created, updated: !!result.updated, verified: result.verified });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }

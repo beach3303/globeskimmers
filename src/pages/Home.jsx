@@ -12,7 +12,6 @@ import { useAuth } from "@/lib/AuthContext";
 import { extractFirstName } from "@/lib/extractFirstName";
 import { isLocationPermissionGranted } from "@/lib/geolocation";
 import { callWorker } from "@/lib/callWorker";
-import CountryArrivalPrompt from "@/components/CountryArrivalPrompt";
 import AirportArrivalPrompt from "@/components/AirportArrivalPrompt";
 import { ROUTE } from "@/lib/workerRoutes";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
@@ -795,7 +794,6 @@ export default function HomePage() {
       <LocationModePicker isOpen={showLocationPicker} onClose={() => setShowLocationPicker(false)} />
 
       {/* Country arrival stamp — prompts to stamp a new country when you're there */}
-      {profile?.onboarding_completed && !showWelcome && <CountryArrivalPrompt />}
       {profile?.onboarding_completed && !showWelcome && <AirportArrivalPrompt />}
     </div>
   );

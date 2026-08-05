@@ -12,7 +12,7 @@ export default function HomeCountryStep({ onNext, onSkip, onBack }) {
     <OnboardingStepLayout
       icon={<Globe className="w-8 h-8 text-white" />}
       title="Where's home?"
-      subtitle="Your home city becomes page one of your passport — and sets your local time & flag. 🏠"
+      subtitle="Sets your accurate local time and your home flag. 🏠"
       onBack={onBack}
       footer={
         <button

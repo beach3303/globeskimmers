@@ -382,20 +382,6 @@ export default function PassportPage() {
   }, []);
 
 
-  // Page one: issue the home-city stamp once, so a new passport opens with the
-  // user's origin instead of "member since". Matches the worker's city entity_id
-  // scheme so it dedupes with any later home-city visit.
-  const homeSeeded = useRef(false);
-  useEffect(() => {
-    if (readOnly || loading || homeSeeded.current) return;
-    const hc = profile?.home_city;
-    if (!hc) return;
-    if (stamps.some((s) => s.kind === "city" && String(s.city || "").toLowerCase() === String(hc).toLowerCase())) { homeSeeded.current = true; return; }
-    homeSeeded.current = true;
-    addStamp({ kind: "city", tier: "page", entity_type: "city", entity_id: citySlug(hc), name: hc, city: hc, country: profile?.home_country || null, verified: "self" })
-      .then(({ error }) => { if (!error) load(); });
-  }, [loading, stamps, profile, load]);
-
   // Shareable booklet (privacy toggle + link).
   const [shareOpen, setShareOpen] = useState(false);
   const [share, setShare] = useState(null); // { slug, is_public, url }
@@ -493,7 +479,7 @@ export default function PassportPage() {
         {!readOnly && explainArrivals && (
           <div className="mb-4 rounded-[16px] p-3.5" style={{ background: "#FFFBF0", border: `1px solid #EAD9AE` }}>
             <p style={{ color: INK2, fontSize: fs(13), lineHeight: 1.5 }}>
-              ✈️ As you travel, we&rsquo;ll offer to stamp your passport when you reach a new country or airport — you always tap to confirm, we never stamp automatically. Your passport is <b>private</b> (only you can see it) unless you choose to share a link. You can turn suggestions off anytime in Settings.
+              ✈️ You&rsquo;ll get an arrival stamp when you land at an airport in a new country, and you can stamp iconic attractions you visit — you always tap to confirm, we never stamp automatically. Your passport is <b>private</b> (only you can see it) unless you choose to share a link. You can turn suggestions off anytime in Settings.
             </p>
             <button onClick={() => { try { localStorage.setItem("pp_arrival_explained", "1"); } catch { /* ignore */ } setExplainArrivals(false); }} className="mt-2 rounded-lg px-3 py-1.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12) }}>Got it</button>
           </div>
@@ -501,7 +487,6 @@ export default function PassportPage() {
         {stamps.length > 0 && (
           <div className="bg-white rounded-[18px] p-3 mb-4 flex items-center justify-around" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
             <Stat n={stats.countries || 0} label="Countries" />
-            <Stat n={stats.cities || 0} label="Cities" />
             <Stat n={stamps.length} label="Stamps" />
             <Stat n={stats.verified || 0} label="Verified" />
           </div>
@@ -575,7 +560,7 @@ export default function PassportPage() {
                 <p style={{ fontFamily: SERIF, fontSize: fs(22), color: INK, marginTop: 6 }}>Your Virtual Passport is empty</p>
                 <p style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.5, marginTop: 6 }}>
                   {isAuthenticated
-                    ? <>Tap <b>“📍 I was here”</b> on any place you’ve visited — attractions, a city, a landmark. Your first stamp starts your story, and every place you go adds a page.</>
+                    ? <>Tap <b>“📍 I was here”</b> at iconic attractions and landmarks you’ve visited — and you’ll get an arrival stamp when you land at an airport in a new country. Every place adds to your story.</>
                     : <>Sign in to start collecting stamps — a permanent record of everywhere you’ve been, with your own photos.</>}
                 </p>
                 <button onClick={() => navigate(createPageUrl("ThingsToDo"))} className="mt-4 rounded-xl px-5 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>
