@@ -41,6 +41,4 @@ export const ROUTE = {
   getAnalytics: 'analytics-bundle',
   InvokeLLM: 'invoke-llm',
 
-  // Engagement — living homepage rows (owned-data carousels, POST /home/rows)
-  getHomeRows: 'home/rows',
 };

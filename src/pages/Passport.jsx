@@ -294,6 +294,41 @@ function TagInbox({ tag, onDone }) {
   );
 }
 
+// Compact stamp "token" for the flip-book page — the visual placed at a slight
+// angle, like a real stamp pressed on the page; tap to open the full stamp
+// (photos, date, delete, share) in a modal.
+function StampToken({ stamp, idx, onOpen }) {
+  const [artFail, setArtFail] = useState(false);
+  const rot = ((idx * 53) % 12) - 6; // deterministic -6..+5°
+  const art = stamp.kind === "country" ? null : stampArtUrl(stamp.name);
+  const showArt = !!art && !artFail;
+  const flag = stamp.kind === "country" ? flagFor(stamp.country || stamp.name) : null;
+  const dateStr = stamp.visited_on
+    ? new Date(stamp.visited_on).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+    : "";
+  return (
+    <button onClick={() => onOpen(stamp)} className="relative active:scale-95 transition-transform" style={{ transform: `rotate(${rot}deg)`, width: 128 }}>
+      {stamp.kind === "airport" ? (
+        <AirportStamp iata={stamp.entity_id} city={stamp.city} countryCode={stamp.country} date={stamp.visited_on} width={128} />
+      ) : showArt ? (
+        <div className="flex flex-col items-center">
+          <img src={art} alt={stamp.name} onError={() => setArtFail(true)} style={{ width: 106, height: 106, objectFit: "contain" }} />
+          {dateStr && <span style={{ fontFamily: MONO, fontSize: fs(8.5), color: INK3, marginTop: -2 }}>{dateStr}</span>}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center text-center" style={{ width: 116, height: 116, borderRadius: 999, border: `2px solid ${STAMP}`, background: "rgba(255,255,255,.45)", padding: 8 }}>
+          <span style={{ fontSize: 22, lineHeight: 1 }}>{flag || (KIND[stamp.kind] || KIND.attraction).icon}</span>
+          <span className="leading-tight" style={{ fontFamily: SERIF, fontSize: fs(12), color: STAMP, marginTop: 2 }}>{stamp.name}</span>
+          {dateStr && <span style={{ fontFamily: MONO, fontSize: fs(8), color: INK3, marginTop: 1 }}>{dateStr}</span>}
+        </div>
+      )}
+      {stamp.verified === "gps" && (
+        <span className="absolute" style={{ top: -4, right: 6, background: "#2E6B4E", color: "#fff", fontSize: 11, fontWeight: 700, width: 18, height: 18, borderRadius: 999, display: "grid", placeItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }}>✓</span>
+      )}
+    </button>
+  );
+}
+
 export default function PassportPage() {
   const navigate = useNavigate();
   const isTablet = useIsTablet();
@@ -346,18 +381,6 @@ export default function PassportPage() {
     });
   }, []);
 
-  // Deferred-install fallback: a brand-new user pastes the invite link a friend
-  // sent (the link/token survives even when deep-link attribution doesn't). We
-  // pull the 32-hex token out of a pasted URL or bare token and show the claim.
-  const [pasteOpen, setPasteOpen] = useState(false);
-  const [pasteVal, setPasteVal] = useState("");
-  const openPasted = async () => {
-    const token = (String(pasteVal || "").match(/[a-f0-9]{32}/i) || [])[0] || "";
-    if (!token) { showToast("Paste the full invite link", "error"); return; }
-    const { tag } = await getTagByToken(token);
-    if (tag && tag.status === "pending") { setClaim({ token, tag }); setPasteOpen(false); setPasteVal(""); }
-    else showToast("That invite was already used or isn’t valid", "error");
-  };
 
   // Page one: issue the home-city stamp once, so a new passport opens with the
   // user's origin instead of "member since". Matches the worker's city entity_id
@@ -399,15 +422,12 @@ export default function PassportPage() {
     else { showToast(action === "accept" ? "Added to your Virtual Passport 🛂" : "Declined", "success"); load(); }
   };
 
-  const pages = stamps.filter((s) => s.tier !== "mark");
-  const marks = stamps.filter((s) => s.tier === "mark");
   const holder = readOnly ? (viewHolder || "A traveler") : (profile?.first_name || profile?.display_name || "Traveler");
   const exitView = () => { try { sessionStorage.removeItem("pp_view_slug"); } catch { /* ignore */ } window.location.assign(createPageUrl("Passport")); };
 
   // Booklet view: one swipeable page per country (like a real passport).
-  const [view, setView] = useState(() => { try { return localStorage.getItem("pp_view") || "booklet"; } catch { return "booklet"; } });
-  const setViewP = (v) => { setView(v); try { localStorage.setItem("pp_view", v); } catch { /* ignore */ } };
   const pageRefs = useRef([]);
+  const [openStampId, setOpenStampId] = useState(null);
   const byCountry = useMemo(() => {
     // Canonicalize country to a display name so ISO-2 airport stamps (e.g. "FR")
     // group with name-based country/city stamps (e.g. "France") on one page.
@@ -420,6 +440,21 @@ export default function PassportPage() {
     for (const k of order) groups[k].sort((a, b) => (a.tier === "mark") - (b.tier === "mark") || t(b) - t(a));
     return { order, groups };
   }, [stamps]);
+
+  // Book pages: chunk each country's stamps so a busy country spans multiple pages.
+  const bookPages = useMemo(() => {
+    const PER = 6, out = [];
+    byCountry.order.forEach((c) => {
+      const list = byCountry.groups[c];
+      const total = Math.max(1, Math.ceil(list.length / PER));
+      for (let p = 0; p < total; p++) out.push({ key: `${c}-${p}`, country: c, idx: p + 1, total, stamps: list.slice(p * PER, p * PER + PER) });
+    });
+    return out;
+  }, [byCountry]);
+
+  // The stamp open in the detail modal — re-derived from fresh data (auto-closes if deleted).
+  const openStamp = openStampId ? stamps.find((s) => s.id === openStampId) : null;
+  useEffect(() => { if (openStampId && !stamps.some((s) => s.id === openStampId)) setOpenStampId(null); }, [stamps, openStampId]);
 
   return (
     <div className="min-h-screen" style={{ background: IVORY, fontFamily: SANS }}>
@@ -513,41 +548,11 @@ export default function PassportPage() {
           </div>
         )}
 
-        {/* Have an invite link? (deferred-install fallback — paste it to claim) */}
-        {!readOnly && !claim && (
-          <div className="mb-4">
-            {!pasteOpen ? (
-              <button onClick={() => setPasteOpen(true)} className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
-                style={{ background: "#fff", color: INK2, border: `1px dashed ${RULE}`, fontSize: fs(12.5), fontWeight: 600 }}>
-                🔗 A friend sent you an invite link? Add it
-              </button>
-            ) : (
-              <div className="bg-white rounded-[16px] p-3" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
-                <div className="flex gap-2">
-                  <input value={pasteVal} onChange={(e) => setPasteVal(e.target.value)} placeholder="Paste the invite link"
-                    autoCapitalize="none" autoCorrect="off"
-                    className="flex-1 rounded-lg px-3 py-2" style={{ border: `1px solid ${RULE}`, fontSize: fs(13), color: INK }} />
-                  <button onClick={openPasted} className="rounded-lg px-3.5 py-2 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12.5) }}>Add</button>
-                </div>
-                <button onClick={() => { setPasteOpen(false); setPasteVal(""); }} style={{ color: INK3, fontSize: fs(11.5), marginTop: 6 }}>Cancel</button>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Tagged-you inbox — someone said you were with them */}
         {tags.length > 0 && (
           <div className="mb-4 space-y-2">
             <p className="uppercase font-semibold px-1" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", color: STAMP }}>🙌 Tagged you</p>
             {tags.map((t) => <TagInbox key={t.id} tag={t} onDone={load} />)}
-          </div>
-        )}
-
-        {/* View toggle */}
-        {stamps.length > 0 && (
-          <div className="flex items-center justify-center gap-1.5 mb-3">
-            <button onClick={() => setViewP("booklet")} className="px-3.5 py-1.5 rounded-full font-semibold" style={{ background: view === "booklet" ? STAMP : "#fff", color: view === "booklet" ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>📖 Booklet</button>
-            <button onClick={() => setViewP("list")} className="px-3.5 py-1.5 rounded-full font-semibold" style={{ background: view === "list" ? STAMP : "#fff", color: view === "list" ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>☰ List</button>
           </div>
         )}
 
@@ -582,54 +587,42 @@ export default function PassportPage() {
               </>
             )}
           </div>
-        ) : view === "list" ? (
-          <div className="space-y-3">
-            {pages.length > 0 && (
-              <>
-                <p className="uppercase font-semibold px-1" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", color: INK3 }}>Passport pages</p>
-                {pages.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} homeCity={profile?.home_city} readOnly={readOnly} />)}
-              </>
-            )}
-            {marks.length > 0 && (
-              <>
-                <p className="uppercase font-semibold px-1 pt-2" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", color: INK3 }}>Places visited</p>
-                {marks.map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} homeCity={profile?.home_city} readOnly={readOnly} />)}
-              </>
-            )}
-          </div>
         ) : (
-          /* BOOKLET — one swipeable page per country */
+          /* PAGE-FLIP BOOK — swipe left/right to turn pages; stamps sit on the page */
           <div>
-            <div className="flex gap-2 overflow-x-auto pb-2 mb-1" style={{ scrollbarWidth: "none" }}>
-              {byCountry.order.map((c, i) => (
-                <button key={c} onClick={() => pageRefs.current[i]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" })}
-                  className="flex-none inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(12.5), fontWeight: 600, color: INK2 }}>
-                  <span style={{ fontSize: 16 }}>{flagFor(c)}</span>{c}
-                </button>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 14, overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", margin: "0 -4px", padding: "2px 4px 4px" }}>
-              {byCountry.order.map((c, i) => (
-                <section key={c} ref={(el) => { pageRefs.current[i] = el; }}
-                  style={{ flex: "0 0 100%", scrollSnapAlign: "center", background: "#FBF6EC", border: "1px solid #EADFC9", borderRadius: 18, padding: 14, position: "relative", overflow: "hidden" }}>
-                  <div aria-hidden style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: 0.06, fontSize: 170, pointerEvents: "none" }}>{flagFor(c)}</div>
+            <div style={{ display: "flex", overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", gap: 12, margin: "0 -4px", padding: "2px 4px 6px" }}>
+              {bookPages.map((pg, i) => (
+                <section key={pg.key} ref={(el) => { pageRefs.current[i] = el; }}
+                  style={{ flex: "0 0 100%", scrollSnapAlign: "center", background: "#FBF6EC", border: "1px solid #EADFC9", borderRadius: 18, padding: 16, position: "relative", overflow: "hidden", minHeight: 360, boxShadow: "inset -14px 0 22px -18px rgba(0,0,0,.35)" }}>
+                  <div aria-hidden style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: 0.06, fontSize: 190, pointerEvents: "none" }}>{flagFor(pg.country)}</div>
                   <div className="flex items-center justify-between mb-3" style={{ position: "relative" }}>
                     <div className="flex items-center gap-2 min-w-0">
-                      <span style={{ fontSize: 26, lineHeight: 1 }}>{flagFor(c)}</span>
-                      <h2 className="truncate" style={{ fontFamily: SERIF, fontSize: fs(24), color: INK, lineHeight: 1.05 }}>{c}</h2>
+                      <span style={{ fontSize: 26, lineHeight: 1 }}>{flagFor(pg.country)}</span>
+                      <h2 className="truncate" style={{ fontFamily: SERIF, fontSize: fs(24), color: INK, lineHeight: 1.05 }}>{pg.country}</h2>
                     </div>
-                    <span className="uppercase shrink-0" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", color: INK3 }}>{byCountry.groups[c].length} stamp{byCountry.groups[c].length > 1 ? "s" : ""}</span>
+                    <span className="uppercase shrink-0" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", color: INK3 }}>{pg.total > 1 ? `Page ${pg.idx} / ${pg.total}` : `${pg.stamps.length} stamp${pg.stamps.length > 1 ? "s" : ""}`}</span>
                   </div>
-                  <div className="space-y-3" style={{ position: "relative" }}>
-                    {byCountry.groups[c].map((s) => <StampCard key={s.id} stamp={s} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: s.name })} fromName={holder} homeCity={profile?.home_city} readOnly={readOnly} />)}
+                  <div className="flex flex-wrap justify-center items-start gap-x-3 gap-y-6" style={{ position: "relative", paddingTop: 6 }}>
+                    {pg.stamps.map((s, j) => <StampToken key={s.id} stamp={s} idx={j} onOpen={() => setOpenStampId(s.id)} />)}
                   </div>
                 </section>
               ))}
             </div>
-            {byCountry.order.length > 1 && <p className="text-center mt-2" style={{ color: INK3, fontSize: fs(11.5) }}>← swipe between countries →</p>}
+            {bookPages.length > 1 && <p className="text-center mt-2" style={{ color: INK3, fontSize: fs(11.5) }}>‹ swipe to turn the page ›</p>}
           </div>
         )}
       </div>
+
+      {/* Stamp detail — opened by tapping a token on a page */}
+      {openStamp && (
+        <div onClick={() => setOpenStampId(null)} className="fixed inset-0 z-[9998] flex items-start justify-center p-4 overflow-y-auto"
+          style={{ background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)" }}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full" style={{ maxWidth: 380, marginTop: 32, marginBottom: 40 }}>
+            <StampCard stamp={openStamp} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: openStamp.name })} fromName={holder} homeCity={profile?.home_city} readOnly={readOnly} />
+            <button onClick={() => setOpenStampId(null)} className="mt-2 w-full rounded-xl py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>Close</button>
+          </div>
+        </div>
+      )}
 
       {/* Photo lightbox */}
       {lightbox && (
