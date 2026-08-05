@@ -402,6 +402,7 @@ export default function SettingsPage() {
   const isTablet = useIsTablet(); // gates the iPad editorial layout; phone untouched
   const { step: fontStep } = useFontScale(); // larger steps → rows stack value below
   const { autoFollow, setAutoFollow } = useLocation(); // silent auto-follow toggle (localStorage-backed)
+  const [suggestArrivals, setSuggestArrivals] = useState(() => { try { return localStorage.getItem("pp_suggest_arrivals") !== "0"; } catch { return true; } });
 
   const { logout, deleteAccount, profile, user: authUser, refreshProfile } = useAuth(); // Supabase
   const countryBoxRef = useRef(null);
@@ -669,6 +670,14 @@ export default function SettingsPage() {
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Update to my location as I travel" desc="Refresh results when you move to a new city"
               control={{ node: <EdToggle on={autoFollow} onClick={() => setAutoFollow(!autoFollow)} label="Toggle auto-follow location" /> }}
+              last
+            />
+          </EdGroup>
+
+          {/* Virtual Passport group */}
+          <EdGroup kicker="Virtual Passport" isTablet={isTablet}>
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Suggest arrival stamps" desc="Offer a passport stamp when you reach a new country or airport. Your passport stays private — only you can see it."
+              control={{ node: <EdToggle on={suggestArrivals} onClick={() => { const next = !suggestArrivals; setSuggestArrivals(next); try { localStorage.setItem("pp_suggest_arrivals", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle arrival stamp suggestions" /> }}
               last
             />
           </EdGroup>

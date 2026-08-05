@@ -20,6 +20,8 @@ const flagEmoji = (country) => {
   return String.fromCodePoint(...[...cc.toUpperCase()].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
 };
 const norm = (s) => String(s || "").trim().toLowerCase();
+// User can turn arrival suggestions off in Settings (default ON).
+const suggestOn = () => { try { return localStorage.getItem("pp_suggest_arrivals") !== "0"; } catch { return true; } };
 
 export default function CountryArrivalPrompt() {
   const { activeLocation, locationMode } = useLocation();
@@ -28,7 +30,7 @@ export default function CountryArrivalPrompt() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated || locationMode !== "current") return;
+    if (!isAuthenticated || locationMode !== "current" || !suggestOn()) return;
     const country = activeLocation?.address?.country;
     if (!country) return;
     if (profile?.home_country && norm(profile.home_country) === norm(country)) return; // skip home
@@ -45,16 +47,17 @@ export default function CountryArrivalPrompt() {
     if (!pending || busy) return;
     setBusy(true);
     const cc = countryCode(pending.country);
-    const { error } = await addStamp({
+    const { data, error } = await addStamp({
       kind: "country", tier: "page", entity_type: "country",
       entity_id: `country:${cc || norm(pending.country).replace(/[^a-z0-9]+/g, "-")}`,
       name: pending.country, city: pending.city || null, country: pending.country,
-      visited_on: new Date().toISOString().slice(0, 10), verified: "gps",
+      cc: cc || undefined, visited_on: new Date().toISOString().slice(0, 10), verified: "gps",
     });
     setBusy(false);
     close(true);
     if (error) showToast(error, "error");
-    else showToast(`${flagEmoji(pending.country)} ${pending.country} added to your passport 🛂 ✓`, "success");
+    // Reflect the server's verdict: show the ✓ only if the GPS claim was corroborated.
+    else showToast(`${flagEmoji(pending.country)} ${pending.country} added to your passport 🛂${data?.verified === "gps" ? " ✓" : ""}`, "success");
   };
 
   if (!pending) return null;

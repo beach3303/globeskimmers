@@ -377,8 +377,11 @@ export default function PassportPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [share, setShare] = useState(null); // { slug, is_public, url }
   const [shareBusy, setShareBusy] = useState(false);
+  const [explainArrivals, setExplainArrivals] = useState(() => { try { return !localStorage.getItem("pp_arrival_explained"); } catch { return false; } });
   const openShare = async () => { setShareOpen(true); if (!share) { const { data } = await getShareLink(); if (data) setShare(data); } };
   const setPublic = async (pub) => { setShareBusy(true); const { data, error } = await getShareLink(pub); setShareBusy(false); if (error) showToast(error, "error"); else setShare(data); };
+  // Read share state on mount so the privacy badge reflects the real status (default private).
+  useEffect(() => { if (readOnly) return; (async () => { const { data } = await getShareLink(); if (data) setShare(data); })(); }, [readOnly]);
   const shareNow = async () => {
     if (!share?.url) return;
     try {
@@ -440,11 +443,24 @@ export default function PassportPage() {
         <div className="text-center pt-1 pb-3">
           <p className="uppercase" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".18em", color: INK3 }}>🛂 Virtual Passport</p>
           <h1 className="italic leading-tight" style={{ fontFamily: SERIF, fontSize: fs(32), color: STAMP, marginTop: 4 }}>{holder}&rsquo;s Virtual Passport</h1>
+          {!readOnly && (
+            <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full" style={{ background: share?.is_public ? "#F3E2C7" : IVORY_2, color: share?.is_public ? "#7E601F" : INK3, fontSize: fs(11.5), fontWeight: 600 }}>
+              {share?.is_public ? "🔗 Shared — anyone with your link can view" : "🔒 Only you can see this"}
+            </div>
+          )}
         </div>
         {readOnly && (
           <div className="mb-4 rounded-[16px] px-3.5 py-2.5 flex items-center justify-between gap-2" style={{ background: "#F3E2C7", border: "1px solid #E5CA98" }}>
             <span style={{ color: "#7E601F", fontSize: fs(12.5), lineHeight: 1.4 }}>👀 You&rsquo;re viewing a shared passport.</span>
             <button onClick={exitView} className="shrink-0 rounded-lg px-3 py-1.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12) }}>My passport</button>
+          </div>
+        )}
+        {!readOnly && explainArrivals && (
+          <div className="mb-4 rounded-[16px] p-3.5" style={{ background: "#FFFBF0", border: `1px solid #EAD9AE` }}>
+            <p style={{ color: INK2, fontSize: fs(13), lineHeight: 1.5 }}>
+              ✈️ As you travel, we&rsquo;ll offer to stamp your passport when you reach a new country or airport — you always tap to confirm, we never stamp automatically. Your passport is <b>private</b> (only you can see it) unless you choose to share a link. You can turn suggestions off anytime in Settings.
+            </p>
+            <button onClick={() => { try { localStorage.setItem("pp_arrival_explained", "1"); } catch { /* ignore */ } setExplainArrivals(false); }} className="mt-2 rounded-lg px-3 py-1.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12) }}>Got it</button>
           </div>
         )}
         {stamps.length > 0 && (

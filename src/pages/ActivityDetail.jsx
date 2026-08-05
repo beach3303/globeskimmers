@@ -13,6 +13,7 @@ import PhotoGalleryModal from '@/components/coffee/PhotoGalleryModal';
 import Guestbook from '@/components/Guestbook';
 import { invokeLLM, callWorker } from "@/lib/callWorker";
 import { addStamp, metersBetween, GPS_VERIFY_RADIUS_M } from "@/lib/passport";
+import { countryCode } from "@/lib/countries";
 import { showToast } from "../components/Toast";
 import { useDismissable } from '@/lib/dismissStack';
 import useHorizontalSwipe from '@/lib/useHorizontalSwipe';
@@ -227,11 +228,12 @@ export default function ActivityDetailPage() {
       });
       if (metersBetween(pos.coords.latitude, pos.coords.longitude, placeLat, placeLng) <= GPS_VERIFY_RADIUS_M) verified = 'gps';
     } catch { /* no fix → self-declared */ }
-    const { error } = await addStamp({
+    const { data, error } = await addStamp({
       kind: 'attraction', entity_type: 'place', entity_id: activity.id, name: activity.name,
       city: activity.city || activity.address?.city || null,
       region: activity.region || activity.state || null,
       country: activity.country || null,
+      cc: countryCode(activity.country) || undefined,
       lat: Number.isFinite(placeLat) ? placeLat : null,
       lng: Number.isFinite(placeLng) ? placeLng : null,
       visited_on: new Date().toISOString().slice(0, 10),
@@ -240,7 +242,8 @@ export default function ActivityDetailPage() {
     setStamping(false);
     if (error) { showToast(/sign in/i.test(error) ? 'Sign in to stamp your Virtual Passport' : 'Could not add stamp'); return; }
     setStamped(true);
-    showToast(verified === 'gps' ? '✓ Verified — added to your Virtual Passport 🛂' : 'Added to your Virtual Passport 🛂 — add a photo to verify');
+    // Reflect the server's verdict (GPS ✓ only if corroborated).
+    showToast(data?.verified === 'gps' ? '✓ Verified — added to your Virtual Passport 🛂' : 'Added to your Virtual Passport 🛂');
   };
 
   const handleSaveActivity = () => {

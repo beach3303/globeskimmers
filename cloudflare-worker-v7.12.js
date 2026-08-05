@@ -11546,9 +11546,38 @@ async function handlePassportStamp(request, env, ctx) {
     if (!name) return jsonResponse({ error: 'name required' }, 400);
     const kind = PP_KINDS.includes(String(b.kind || '').toLowerCase()) ? String(b.kind).toLowerCase() : 'attraction';
     const tier = kind === 'attraction' ? 'mark' : 'page';
-    const verified = ['gps', 'photo', 'self'].includes(b.verified) ? b.verified : 'self';
+    let verified = ['gps', 'photo', 'self'].includes(b.verified) ? b.verified : 'self';
     const entityId = b.entity_id != null && String(b.entity_id) ? String(b.entity_id) : null;
     const visitedOn = ppDate(b.visited_on);
+    const lat = Number.isFinite(+b.lat) ? +b.lat : null;
+    const lng = Number.isFinite(+b.lng) ? +b.lng : null;
+
+    // Anti-spoof: GPS is client-reported and spoofable, so a claimed 'gps' ✓ must be
+    // corroborated. We cross-check against (1) the request's IP country (free via
+    // Cloudflare's CF-IPCountry) and (2) impossible travel vs the user's last GPS
+    // stamp. On any mismatch we KEEP the stamp but downgrade to 'self' (no ✓) —
+    // never reject. Checks skip gracefully when the needed signal is missing.
+    if (verified === 'gps') {
+      const ipCC = String(request.headers.get('CF-IPCountry') || '').toUpperCase();
+      const claimCC = String(b.cc || '').toUpperCase();
+      // (1) GPS vs IP country — only when both are real 2-letter codes
+      if (/^[A-Z]{2}$/.test(ipCC) && ipCC !== 'XX' && ipCC !== 'T1' && /^[A-Z]{2}$/.test(claimCC) && ipCC !== claimCC) {
+        verified = 'self';
+      }
+      // (2) impossible travel vs the most-recent GPS stamp (>620 mph = faster than a jet)
+      if (verified === 'gps' && lat != null && lng != null) {
+        try {
+          const q = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&verified=eq.gps&lat=not.is.null&order=updated_at.desc&limit=1&select=lat,lng,updated_at`, {});
+          const last = (q.ok ? await q.json() : [])[0];
+          if (last && last.lat != null && last.lng != null) {
+            const miles = haversineMilesLoc(+last.lat, +last.lng, lat, lng);
+            const hrs = (Date.now() - Date.parse(last.updated_at || 0)) / 3.6e6;
+            if (hrs > 0 && miles / hrs > 620) verified = 'self';
+          }
+        } catch { /* best-effort */ }
+      }
+    }
+
     const row = {
       user_id: user.id, kind, tier,
       entity_type: b.entity_type ? String(b.entity_type) : null,
@@ -11556,8 +11585,7 @@ async function handlePassportStamp(request, env, ctx) {
       city: b.city ? String(b.city).slice(0, 120) : null,
       region: b.region ? String(b.region).slice(0, 120) : null,
       country: b.country ? String(b.country).slice(0, 120) : null,
-      lat: Number.isFinite(+b.lat) ? +b.lat : null,
-      lng: Number.isFinite(+b.lng) ? +b.lng : null,
+      lat, lng,
       visited_on: visitedOn, verified,
     };
     const result = await ppUpsertStamp(env, row);
@@ -11601,7 +11629,7 @@ async function ppLoad(env, userId) {
     icons: out.filter((s) => s.kind === 'icon').length,
     wonders: out.filter((s) => s.kind === 'wonder').length,
     attractions: out.filter((s) => s.kind === 'attraction').length,
-    verified: out.filter((s) => s.verified === 'gps' || s.verified === 'photo').length,
+    verified: out.filter((s) => s.verified === 'gps').length,
   };
   return { stamps: out, stats };
 }

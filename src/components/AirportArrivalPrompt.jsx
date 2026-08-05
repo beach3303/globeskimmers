@@ -19,6 +19,8 @@ const regionName = (cc) => {
 };
 const getSet = () => { try { return new Set(JSON.parse(localStorage.getItem(KEY) || "[]")); } catch { return new Set(); } };
 const saveSet = (s) => { try { localStorage.setItem(KEY, JSON.stringify([...s])); } catch { /* ignore */ } };
+// User can turn arrival suggestions off in Settings (default ON).
+const suggestOn = () => { try { return localStorage.getItem("pp_suggest_arrivals") !== "0"; } catch { return true; } };
 
 export default function AirportArrivalPrompt() {
   const { activeLocation, locationMode } = useLocation();
@@ -29,7 +31,7 @@ export default function AirportArrivalPrompt() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!isAuthenticated || locationMode !== "current") return;
+      if (!isAuthenticated || locationMode !== "current" || !suggestOn()) return;
       const c = activeLocation?.coordinates;
       if (!c || !Number.isFinite(c.latitude) || !Number.isFinite(c.longitude)) return;
       const ap = await nearestAirport(c.latitude, c.longitude, 6);
@@ -48,15 +50,16 @@ export default function AirportArrivalPrompt() {
     if (!pending || busy) return;
     setBusy(true);
     const today = new Date().toISOString().slice(0, 10);
-    const { error } = await addStamp({
+    const { data, error } = await addStamp({
       kind: "airport", tier: "page", entity_type: "airport", entity_id: pending.iata,
       name: `${pending.city} (${pending.iata})`, city: pending.city, country: pending.countryCode,
-      lat: pending.lat, lng: pending.lng, visited_on: today, verified: "gps",
+      cc: pending.countryCode, lat: pending.lat, lng: pending.lng, visited_on: today, verified: "gps",
     });
     setBusy(false);
     close(true);
     if (error) showToast(error, "error");
-    else showToast(`✈️ ${pending.city} (${pending.iata}) arrival stamped 🛂 ✓`, "success");
+    // Reflect the server's verdict: show the ✓ only if the GPS claim was corroborated.
+    else showToast(`✈️ ${pending.city} (${pending.iata}) arrival stamped 🛂${data?.verified === "gps" ? " ✓" : ""}`, "success");
   };
 
   if (!pending) return null;
