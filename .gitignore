@@ -52,3 +52,6 @@ android/captures/
 *.parquet
 scripts/places-pilot/planet/.planet_loaded_countries
 scripts/places-pilot/planet/.us_loaded_chunks
+
+# Locally-generated passport stamp art (already uploaded to R2)
+stamp-out/

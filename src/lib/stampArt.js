@@ -9,7 +9,8 @@ const WORKER = "https://globeskimmers-api.maizasimeon.workers.dev";
 // "Sagrada Família" → sagrada-familia, "St. Mark's Basilica" → st-marks-basilica.
 const slug = (s) => String(s || "")
   .normalize("NFKD").replace(/[̀-ͯ]/g, "")
-  .toLowerCase().replace(/['’]/g, "")
+  .replace(/\([^)]*\)/g, " ")            // drop parentheticals: "Parthenon (Acropolis)" → parthenon
+  .toLowerCase().replace(/['’]/g, "").replace(/œ/g, "oe").replace(/æ/g, "ae")
   .trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 // Name variants (incl. local-language) → the canonical file slug. Grow this as
@@ -22,7 +23,7 @@ const ALIAS = {
   "acropolis": "parthenon",
   "great-wall": "great-wall-of-china",
   "sensoji": "senso-ji-temple", "senso-ji": "senso-ji-temple",
-  "kinkaku-ji": "kinkaku-ji-golden-pavilion", "golden-pavilion": "kinkaku-ji-golden-pavilion",
+  "kinkaku-ji-golden-pavilion": "kinkaku-ji", "golden-pavilion": "kinkaku-ji",
   "cristo-redentor": "christ-the-redeemer",
   "ayers-rock": "uluru",
   "giza-pyramids": "pyramids-of-giza", "the-pyramids-of-giza": "pyramids-of-giza",

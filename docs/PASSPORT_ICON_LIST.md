@@ -290,3 +290,355 @@ identical across all 100 — only the landmark/city/country/name/ink change.
 | 198 | Cocora Valley | Quindío | Colombia |
 | 199 | Quito Old Town | Quito | Ecuador |
 | 200 | Mount Roraima | Gran Sabana | Venezuela |
+
+# Batch 3 — icons #201–300 (same ink-by-region scheme)
+
+## 🌍 Europe — navy `#2B4A7E`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 201 | Trolltunga | Odda | Norway |
+| 202 | Blue Lagoon | Grindavík | Iceland |
+| 203 | Gullfoss | Selfoss | Iceland |
+| 204 | Hallgrímskirkja | Reykjavík | Iceland |
+| 205 | Meteora | Kalambaka | Greece |
+| 206 | Mykonos Windmills | Mykonos | Greece |
+| 207 | Amalfi Coast | Amalfi | Italy |
+| 208 | Lake Como | Como | Italy |
+| 209 | Rialto Bridge | Venice | Italy |
+| 210 | Sistine Chapel | Vatican City | Vatican |
+| 211 | Hungarian Parliament | Budapest | Hungary |
+| 212 | Fisherman's Bastion | Budapest | Hungary |
+| 213 | Wawel Castle | Kraków | Poland |
+| 214 | Bran Castle | Transylvania | Romania |
+| 215 | Red Square & Kremlin | Moscow | Russia |
+| 216 | Church of the Savior on Blood | St. Petersburg | Russia |
+| 217 | Hermitage Museum | St. Petersburg | Russia |
+| 218 | Château de Chambord | Loire Valley | France |
+| 219 | Carcassonne | Carcassonne | France |
+| 220 | Guggenheim Bilbao | Bilbao | Spain |
+| 221 | Plaza de España | Seville | Spain |
+| 222 | Grand Place | Brussels | Belgium |
+
+## 🕌 Middle East & Africa — amber `#A9741F`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 223 | Valley of the Kings | Luxor | Egypt |
+| 224 | Great Sphinx of Giza | Giza | Egypt |
+| 225 | Ephesus | İzmir | Turkey |
+| 226 | Mount Nemrut | Adıyaman | Turkey |
+| 227 | Persepolis | Shiraz | Iran |
+| 228 | Nasir al-Mulk Mosque | Shiraz | Iran |
+| 229 | Hassan II Mosque | Casablanca | Morocco |
+| 230 | Aït Benhaddou | Ouarzazate | Morocco |
+| 231 | Museum of Islamic Art | Doha | Qatar |
+| 232 | Louvre Abu Dhabi | Abu Dhabi | United Arab Emirates |
+| 233 | Jerash | Jerash | Jordan |
+| 234 | Ngorongoro Crater | Ngorongoro | Tanzania |
+| 235 | Okavango Delta | Okavango | Botswana |
+| 236 | Bwindi Gorilla Forest | Bwindi | Uganda |
+| 237 | Kruger National Park | Mpumalanga | South Africa |
+
+## 🏯 Asia — crimson `#B0472F`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 238 | Temple of Heaven | Beijing | China |
+| 239 | Summer Palace | Beijing | China |
+| 240 | Huangshan (Yellow Mountains) | Anhui | China |
+| 241 | West Lake | Hangzhou | China |
+| 242 | Jiuzhaigou Valley | Sichuan | China |
+| 243 | Chengdu Panda Base | Chengdu | China |
+| 244 | Golden Bridge (Ba Na Hills) | Da Nang | Vietnam |
+| 245 | Sapa Rice Terraces | Lào Cai | Vietnam |
+| 246 | Luang Prabang | Luang Prabang | Laos |
+| 247 | Temple of the Tooth | Kandy | Sri Lanka |
+| 248 | Maldives Overwater Villas | Malé | Maldives |
+| 249 | Red Fort | Delhi | India |
+| 250 | India Gate | Delhi | India |
+| 251 | City Palace | Udaipur | India |
+| 252 | Ellora Caves | Aurangabad | India |
+| 253 | Itsukushima Shrine (Miyajima) | Hiroshima | Japan |
+| 254 | Kiyomizu-dera | Kyoto | Japan |
+| 255 | Shirakawa-go | Gifu | Japan |
+| 256 | Bukchon Hanok Village | Seoul | South Korea |
+| 257 | Jeju Island | Jeju | South Korea |
+| 258 | Ayutthaya | Ayutthaya | Thailand |
+| 259 | Wat Pho (Reclining Buddha) | Bangkok | Thailand |
+| 260 | Mount Bromo | East Java | Indonesia |
+| 261 | Prambanan | Yogyakarta | Indonesia |
+| 262 | Puerto Princesa Underground River | Palawan | Philippines |
+| 263 | Taal Volcano | Batangas | Philippines |
+
+## 🏝️ Oceania — teal `#1F6E6A`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 264 | Waitomo Glowworm Caves | Waitomo | New Zealand |
+| 265 | Aoraki / Mount Cook | Canterbury | New Zealand |
+| 266 | Lake Tekapo | Canterbury | New Zealand |
+| 267 | Cradle Mountain | Tasmania | Australia |
+| 268 | Kangaroo Island | South Australia | Australia |
+| 269 | Ningaloo Reef | Western Australia | Australia |
+| 270 | Fiji Islands | Nadi | Fiji |
+| 271 | Tahiti | Papeete | French Polynesia |
+
+## 🗽 North America — forest green `#2E6B4E`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 272 | Times Square | New York | United States |
+| 273 | Central Park | New York | United States |
+| 274 | Old Faithful (Yellowstone) | Wyoming | United States |
+| 275 | Bryce Canyon | Utah | United States |
+| 276 | Delicate Arch (Arches) | Utah | United States |
+| 277 | Denali | Alaska | United States |
+| 278 | Sedona Red Rocks | Arizona | United States |
+| 279 | Alcatraz | San Francisco | United States |
+| 280 | Kennedy Space Center | Cape Canaveral | United States |
+| 281 | Willis Tower Skydeck | Chicago | United States |
+| 282 | Moraine Lake | Banff | Canada |
+| 283 | Peggy's Cove | Nova Scotia | Canada |
+| 284 | Butchart Gardens | Victoria | Canada |
+| 285 | Palenque | Chiapas | Mexico |
+| 286 | Copper Canyon | Chihuahua | Mexico |
+| 287 | Panama Canal | Panama City | Panama |
+| 288 | Great Blue Hole | Lighthouse Reef | Belize |
+
+## ⛰️ South America — plum `#6D3A6E`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 289 | Ipanema Beach | Rio de Janeiro | Brazil |
+| 290 | Pantanal | Mato Grosso | Brazil |
+| 291 | Lençóis Maranhenses | Maranhão | Brazil |
+| 292 | Ushuaia (End of the World) | Tierra del Fuego | Argentina |
+| 293 | Fitz Roy (Los Glaciares) | El Chaltén | Argentina |
+| 294 | Mendoza Vineyards | Mendoza | Argentina |
+| 295 | Colca Canyon | Arequipa | Peru |
+| 296 | Sacsayhuamán | Cusco | Peru |
+| 297 | Chan Chan | Trujillo | Peru |
+| 298 | Tayrona National Park | Magdalena | Colombia |
+| 299 | Cotopaxi | Latacunga | Ecuador |
+| 300 | Kaieteur Falls | Potaro-Siparuni | Guyana |
+
+# Batch 4 — icons #301–500 (national parks + natural wonders + more · same ink-by-region scheme)
+
+## 🌍 Europe — navy `#2B4A7E`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 301 | Windsor Castle | Windsor | United Kingdom |
+| 302 | Loch Ness | Scottish Highlands | United Kingdom |
+| 303 | Cliffs of Moher | County Clare | Ireland |
+| 304 | Keukenhof Gardens | Lisse | Netherlands |
+| 305 | Kinderdijk Windmills | Kinderdijk | Netherlands |
+| 306 | Atomium | Brussels | Belgium |
+| 307 | The Little Mermaid | Copenhagen | Denmark |
+| 308 | Tivoli Gardens | Copenhagen | Denmark |
+| 309 | Gamla Stan | Stockholm | Sweden |
+| 310 | Lofoten Islands | Lofoten | Norway |
+| 311 | Jökulsárlón Glacier Lagoon | Vatnajökull | Iceland |
+| 312 | Reynisfjara Black Sand Beach | Vík | Iceland |
+| 313 | Jungfraujoch | Bernese Alps | Switzerland |
+| 314 | Chapel Bridge | Lucerne | Switzerland |
+| 315 | Zugspitze | Bavaria | Germany |
+| 316 | Black Forest | Baden-Württemberg | Germany |
+| 317 | Rhine Valley (Lorelei) | Rhine Gorge | Germany |
+| 318 | Sanssouci Palace | Potsdam | Germany |
+| 319 | Château de Chenonceau | Loire Valley | France |
+| 320 | Mont Blanc | Chamonix | France |
+| 321 | Verdon Gorge | Provence | France |
+| 322 | Seville Cathedral & Giralda | Seville | Spain |
+| 323 | Mezquita of Córdoba | Córdoba | Spain |
+| 324 | Montserrat | Catalonia | Spain |
+| 325 | City of Arts and Sciences | Valencia | Spain |
+| 326 | Douro Valley | Douro | Portugal |
+| 327 | Sete Cidades | Azores | Portugal |
+| 328 | Delphi | Delphi | Greece |
+| 329 | Lindos Acropolis | Rhodes | Greece |
+| 330 | Lake Bled | Bled | Slovenia |
+| 331 | Postojna Cave | Postojna | Slovenia |
+| 332 | Peleș Castle | Sinaia | Romania |
+| 333 | Český Krumlov | Český Krumlov | Czech Republic |
+| 334 | Trakai Island Castle | Trakai | Lithuania |
+| 335 | Tallinn Old Town | Tallinn | Estonia |
+
+## 🕌 Middle East & Africa — amber `#A9741F`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 336 | Sahara Desert (Erg Chebbi) | Merzouga | Morocco |
+| 337 | Jemaa el-Fnaa | Marrakech | Morocco |
+| 338 | White Desert | Farafra | Egypt |
+| 339 | Luxor Temple | Luxor | Egypt |
+| 340 | Sheikh Lotfollah Mosque | Isfahan | Iran |
+| 341 | Naqsh-e Jahan Square | Isfahan | Iran |
+| 342 | Sumela Monastery | Trabzon | Turkey |
+| 343 | Grand Bazaar | Istanbul | Turkey |
+| 344 | Masada | Dead Sea | Israel |
+| 345 | Western Wall | Jerusalem | Israel |
+| 346 | Museum of the Future | Dubai | United Arab Emirates |
+| 347 | Baalbek | Baalbek | Lebanon |
+| 348 | Jeita Grotto | Jeita | Lebanon |
+| 349 | Great Mosque of Djenné | Djenné | Mali |
+| 350 | Pyramids of Meroë | Meroë | Sudan |
+| 351 | Mount Kenya | Mount Kenya | Kenya |
+| 352 | Lake Nakuru | Nakuru | Kenya |
+| 353 | Etosha Pan | Etosha | Namibia |
+| 354 | Fish River Canyon | Fish River | Namibia |
+| 355 | Chobe National Park | Chobe | Botswana |
+| 356 | Blyde River Canyon | Mpumalanga | South Africa |
+| 357 | Robben Island | Cape Town | South Africa |
+| 358 | Garden Route | Western Cape | South Africa |
+| 359 | Volcanoes National Park | Musanze | Rwanda |
+| 360 | Sultan Qaboos Grand Mosque | Muscat | Oman |
+| 361 | Wahiba Sands | Sharqiya | Oman |
+| 362 | Qal'at al-Bahrain Fort | Manama | Bahrain |
+| 363 | Dana Biosphere Reserve | Dana | Jordan |
+
+## 🏯 Asia — crimson `#B0472F`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 364 | Zhangye Danxia (Rainbow Mountains) | Gansu | China |
+| 365 | Wulingyuan | Hunan | China |
+| 366 | Reed Flute Cave | Guilin | China |
+| 367 | Mogao Caves | Dunhuang | China |
+| 368 | Mount Tai | Shandong | China |
+| 369 | Hongcun Village | Anhui | China |
+| 370 | Tian Tan Big Buddha | Hong Kong | Hong Kong |
+| 371 | Sun Moon Lake | Nantou | Taiwan |
+| 372 | Taroko Gorge | Hualien | Taiwan |
+| 373 | Nikkō Tōshōgū | Nikkō | Japan |
+| 374 | Hakone & Lake Ashi | Hakone | Japan |
+| 375 | Nachi Falls | Wakayama | Japan |
+| 376 | Shurijō Castle | Okinawa | Japan |
+| 377 | Otaru Canal | Hokkaido | Japan |
+| 378 | Haeinsa Temple | Gyeongsang | South Korea |
+| 379 | Gamcheon Culture Village | Busan | South Korea |
+| 380 | Son Doong / Phong Nha Caves | Quảng Bình | Vietnam |
+| 381 | Trang An | Ninh Bình | Vietnam |
+| 382 | Mekong Delta | Cần Thơ | Vietnam |
+| 383 | Bayon Temple | Siem Reap | Cambodia |
+| 384 | Kuang Si Falls | Luang Prabang | Laos |
+| 385 | Plain of Jars | Xiangkhoang | Laos |
+| 386 | Inle Lake | Shan | Myanmar |
+| 387 | Golden Rock (Kyaiktiyo) | Mon State | Myanmar |
+| 388 | Cameron Highlands | Pahang | Malaysia |
+| 389 | Langkawi Sky Bridge | Langkawi | Malaysia |
+| 390 | Sentosa | Singapore | Singapore |
+| 391 | Mount Rinjani | Lombok | Indonesia |
+| 392 | Lake Toba | Sumatra | Indonesia |
+| 393 | Gili Islands | Lombok | Indonesia |
+| 394 | Kawasan Falls | Cebu | Philippines |
+| 395 | Vigan | Ilocos Sur | Philippines |
+| 396 | Sagada | Mountain Province | Philippines |
+| 397 | Lotus Temple | Delhi | India |
+| 398 | Mysore Palace | Mysore | India |
+| 399 | Hampi | Karnataka | India |
+| 400 | Ajanta Caves | Aurangabad | India |
+| 401 | Jaisalmer Fort | Jaisalmer | India |
+| 402 | Ranthambore National Park | Rajasthan | India |
+| 403 | Munnar Tea Gardens | Munnar | India |
+| 404 | Nine Arch Bridge, Ella | Ella | Sri Lanka |
+| 405 | Punakha Dzong | Punakha | Bhutan |
+| 406 | Annapurna Circuit | Annapurna | Nepal |
+| 407 | Chitwan National Park | Chitwan | Nepal |
+| 408 | Charyn Canyon | Almaty | Kazakhstan |
+
+## 🏝️ Oceania — teal `#1F6E6A`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 409 | Kakadu National Park | Northern Territory | Australia |
+| 410 | Daintree Rainforest | Queensland | Australia |
+| 411 | K'gari (Fraser Island) | Queensland | Australia |
+| 412 | Bungle Bungles (Purnululu) | Western Australia | Australia |
+| 413 | The Grampians | Victoria | Australia |
+| 414 | Rottnest Island | Western Australia | Australia |
+| 415 | Wineglass Bay | Tasmania | Australia |
+| 416 | Rotorua Geothermal | Rotorua | New Zealand |
+| 417 | Tongariro Alpine Crossing | Tongariro | New Zealand |
+| 418 | Abel Tasman | Nelson | New Zealand |
+| 419 | Bay of Islands | Northland | New Zealand |
+| 420 | Aitutaki Lagoon | Aitutaki | Cook Islands |
+| 421 | Jellyfish Lake | Koror | Palau |
+| 422 | To Sua Ocean Trench | Upolu | Samoa |
+| 423 | Mount Yasur | Tanna | Vanuatu |
+
+## 🗽 North America — forest green `#2E6B4E`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 424 | Glacier National Park | Montana | United States |
+| 425 | Rocky Mountain National Park | Colorado | United States |
+| 426 | Great Smoky Mountains | Tennessee | United States |
+| 427 | Acadia National Park | Maine | United States |
+| 428 | Olympic National Park | Washington | United States |
+| 429 | Mount Rainier | Washington | United States |
+| 430 | Crater Lake | Oregon | United States |
+| 431 | Redwood National Park | California | United States |
+| 432 | Sequoia National Park | California | United States |
+| 433 | Joshua Tree National Park | California | United States |
+| 434 | Death Valley | California | United States |
+| 435 | Everglades | Florida | United States |
+| 436 | Hawaiʻi Volcanoes | Hawaii | United States |
+| 437 | Haleakalā | Maui | United States |
+| 438 | Nā Pali Coast | Kauai | United States |
+| 439 | Grand Teton | Wyoming | United States |
+| 440 | Badlands | South Dakota | United States |
+| 441 | Mesa Verde | Colorado | United States |
+| 442 | Carlsbad Caverns | New Mexico | United States |
+| 443 | Big Bend | Texas | United States |
+| 444 | Shenandoah | Virginia | United States |
+| 445 | Kenai Fjords | Alaska | United States |
+| 446 | Horseshoe Bend | Arizona | United States |
+| 447 | White Sands | New Mexico | United States |
+| 448 | Mammoth Cave | Kentucky | United States |
+| 449 | Lincoln Memorial | Washington, D.C. | United States |
+| 450 | Washington Monument | Washington, D.C. | United States |
+| 451 | The Alamo | San Antonio | United States |
+| 452 | South Beach (Art Deco) | Miami | United States |
+| 453 | Savannah Historic District | Savannah | United States |
+| 454 | Mackinac Island | Michigan | United States |
+| 455 | Napa Valley | California | United States |
+| 456 | Jasper National Park | Alberta | Canada |
+| 457 | Gros Morne | Newfoundland | Canada |
+| 458 | Bay of Fundy | New Brunswick | Canada |
+| 459 | Old Montreal | Montreal | Canada |
+| 460 | Parliament Hill | Ottawa | Canada |
+| 461 | Whistler | British Columbia | Canada |
+| 462 | Cabot Trail | Nova Scotia | Canada |
+| 463 | Zócalo & Metropolitan Cathedral | Mexico City | Mexico |
+| 464 | Guanajuato | Guanajuato | Mexico |
+| 465 | San Miguel de Allende | Guanajuato | Mexico |
+| 466 | Ik Kil Cenote | Yucatán | Mexico |
+| 467 | Monte Albán | Oaxaca | Mexico |
+| 468 | Sumidero Canyon | Chiapas | Mexico |
+| 469 | Antigua Guatemala | Antigua | Guatemala |
+| 470 | Lake Atitlán | Sololá | Guatemala |
+| 471 | Monteverde Cloud Forest | Monteverde | Costa Rica |
+| 472 | Manuel Antonio | Quepos | Costa Rica |
+| 473 | Dunn's River Falls | Ocho Rios | Jamaica |
+| 474 | The Pitons | Soufrière | Saint Lucia |
+| 475 | Harbour Island Pink Sands | Harbour Island | Bahamas |
+
+## ⛰️ South America — plum `#6D3A6E`
+| # | Landmark | City | Country |
+|---|---|---|---|
+| 476 | Selarón Steps | Rio de Janeiro | Brazil |
+| 477 | Fernando de Noronha | Pernambuco | Brazil |
+| 478 | Chapada Diamantina | Bahia | Brazil |
+| 479 | Bonito | Mato Grosso do Sul | Brazil |
+| 480 | Ouro Preto | Minas Gerais | Brazil |
+| 481 | Marble Caves | General Carrera Lake | Chile |
+| 482 | Chiloé Churches | Chiloé | Chile |
+| 483 | Elqui Valley | Coquimbo | Chile |
+| 484 | Bariloche | Río Negro | Argentina |
+| 485 | Quebrada de Humahuaca | Jujuy | Argentina |
+| 486 | Sacred Valley | Cusco | Peru |
+| 487 | Huacachina Oasis | Ica | Peru |
+| 488 | Gocta Falls | Amazonas | Peru |
+| 489 | Ciudad Perdida | Santa Marta | Colombia |
+| 490 | Caño Cristales | Meta | Colombia |
+| 491 | Comuna 13 | Medellín | Colombia |
+| 492 | Baños de Agua Santa | Tungurahua | Ecuador |
+| 493 | Quilotoa Lagoon | Cotopaxi | Ecuador |
+| 494 | Cuenca Historic Center | Cuenca | Ecuador |
+| 495 | Isla del Sol | Lake Titicaca | Bolivia |
+| 496 | Madidi National Park | La Paz | Bolivia |
+| 497 | Jesuit Missions of Trinidad | Trinidad | Paraguay |
+| 498 | Montevideo Rambla | Montevideo | Uruguay |
+| 499 | Punta del Este | Maldonado | Uruguay |
+| 500 | Los Roques | Los Roques | Venezuela |

@@ -15,6 +15,7 @@ import { isLocationPermissionGranted } from "@/lib/geolocation";
 import { callWorker } from "@/lib/callWorker";
 import HomeRows from "@/components/home/HomeRows";
 import CountryArrivalPrompt from "@/components/CountryArrivalPrompt";
+import AirportArrivalPrompt from "@/components/AirportArrivalPrompt";
 import { ROUTE } from "@/lib/workerRoutes";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
@@ -852,6 +853,7 @@ export default function HomePage() {
 
       {/* Country arrival stamp — prompts to stamp a new country when you're there */}
       {profile?.onboarding_completed && !showWelcome && <CountryArrivalPrompt />}
+      {profile?.onboarding_completed && !showWelcome && <AirportArrivalPrompt />}
     </div>
   );
 }

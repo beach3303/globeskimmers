@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
 import { addStamp, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
 import { stampArtUrl } from "@/lib/stampArt";
+import AirportStamp from "@/components/passport/AirportStamp";
 
 const citySlug = (s) => "city:" + String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 // Country name → flag emoji (renders as a real flag on iOS/Android; no network).
@@ -68,9 +69,11 @@ function resizePhoto(file, maxDim = 1280, quality = 0.82) {
 }
 
 function VerifiedBadge({ verified }) {
+  // Only a live GPS visit earns the ✓ (it's the only real proof of presence).
+  // A photo is a memory, not verification; self-added shows no badge.
   if (verified === "gps") return <Chip bg="#E7F3EA" color="#266A3B">✓ Verified visit</Chip>;
-  if (verified === "photo") return <Chip bg="#E7F3EA" color="#266A3B">✓ Verified · photo</Chip>;
-  return <Chip bg={IVORY_2} color={INK3}>Self-added</Chip>;
+  if (verified === "photo") return <Chip bg={IVORY_2} color={INK3}>📸 With photo</Chip>;
+  return null;
 }
 function Chip({ children, bg, color }) {
   return <span style={{ background: bg, color, fontSize: fs(10.5), fontFamily: SANS, fontWeight: 600 }} className="px-2 py-0.5 rounded-full leading-tight inline-block">{children}</span>;
@@ -145,6 +148,26 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
     const { error } = await deleteStampPhoto(photoId);
     if (error) showToast(error, "error"); else { showToast("Photo removed", "success"); onChanged(); }
   };
+
+  // Airport arrival stamps render the authentic in-app stamp (no bespoke art / photos).
+  if (stamp.kind === "airport") {
+    return (
+      <div className="bg-white rounded-[20px] p-3 flex flex-col items-center" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
+        <AirportStamp iata={stamp.entity_id} city={stamp.city} countryCode={stamp.country} date={stamp.visited_on} width={264} />
+        <div className="flex items-center gap-2 mt-1.5">
+          <VerifiedBadge verified={stamp.verified} />
+          {!readOnly && (confirmDel ? (
+            <span className="inline-flex items-center gap-1.5">
+              <button onClick={removeStamp} disabled={busy} className="rounded-lg px-2.5 py-1 font-semibold" style={{ background: "#B0472F", color: "#fff", fontSize: fs(11.5) }}>Remove</button>
+              <button onClick={() => setConfirmDel(false)} className="rounded-lg px-2.5 py-1" style={{ background: IVORY_2, color: INK2, fontSize: fs(11.5) }}>Keep</button>
+            </span>
+          ) : (
+            <button onClick={() => setConfirmDel(true)} className="rounded-lg px-2 py-1" style={{ background: IVORY_2, color: INK3, fontSize: fs(11.5) }} title="Remove">🗑</button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-[20px] p-4" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
@@ -225,7 +248,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
         className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
         style={{ background: IVORY_2, color: INK2, border: `1px dashed ${RULE}`, fontSize: fs(13), fontWeight: 600 }}>
         {busy ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} strokeWidth={2.4} />}
-        {photos.length ? "Add another photo" : stamp.verified === "self" ? "Add a photo to verify ✓" : "Add a memory photo"}
+        {photos.length ? "Add another photo" : "Add a memory photo"}
       </button>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
 
@@ -383,8 +406,12 @@ export default function PassportPage() {
   const setViewP = (v) => { setView(v); try { localStorage.setItem("pp_view", v); } catch { /* ignore */ } };
   const pageRefs = useRef([]);
   const byCountry = useMemo(() => {
+    // Canonicalize country to a display name so ISO-2 airport stamps (e.g. "FR")
+    // group with name-based country/city stamps (e.g. "France") on one page.
+    const rn = (() => { try { return new Intl.DisplayNames(["en"], { type: "region" }); } catch { return null; } })();
+    const label = (c) => { const s = String(c || "").trim(); return (rn && /^[A-Za-z]{2}$/.test(s)) ? (rn.of(s.toUpperCase()) || s) : s; };
     const groups = {};
-    for (const s of stamps) { const k = s.country || "Other places"; (groups[k] = groups[k] || []).push(s); }
+    for (const s of stamps) { const k = label(s.country) || "Other places"; (groups[k] = groups[k] || []).push(s); }
     const t = (s) => Date.parse(s.visited_on || s.created_at) || 0;
     const order = Object.keys(groups).sort((a, b) => Math.max(...groups[b].map(t)) - Math.max(...groups[a].map(t)));
     for (const k of order) groups[k].sort((a, b) => (a.tier === "mark") - (b.tier === "mark") || t(b) - t(a));
@@ -534,7 +561,7 @@ export default function PassportPage() {
                   Find places to stamp
                 </button>
                 <p style={{ color: INK3, fontSize: fs(11.5), lineHeight: 1.5, marginTop: 12 }}>
-                  Went somewhere before you had the app? Add a stamp, upload your photo, set the date — you’ll earn the ✓.
+                  Went somewhere before you had the app? Add a stamp, drop in your photo, and set the real date — a lasting keepsake of every trip you’ve taken.
                 </p>
               </>
             )}

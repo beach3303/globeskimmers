@@ -17,8 +17,12 @@ seen="$(mktemp)"; : > "$seen"
 echo "Scanning $DIR for numbered stamp PNGs …"
 find "$DIR" -type f -iname '*.png' -print0 | while IFS= read -r -d '' f; do
   base="$(basename "$f" .png)"
-  case "$base" in [0-9]*) : ;; *) continue ;; esac        # numbered files only
-  name="$(printf '%s' "$base" | sed -E 's/^[0-9]+[ _.-]+//')"
+  # accept numbered ("115_Hallstatt") OR clean-slug ("hallstatt") stamp files;
+  # skip obvious non-stamps (screenshots, unprocessed AI exports, files w/ spaces)
+  case "$base" in
+    *" "*|ChatGPT*|chatgpt*|Screenshot*|Screen\ Shot*|Untitled*|IMG_*) continue ;;
+  esac
+  name="$(printf '%s' "$base" | sed -E 's/^[0-9]+[ _.-]+//')"   # strip optional "115_" prefix
   slug="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
   [ -z "$slug" ] && continue
   grep -qxF "$slug" "$seen" && continue                    # dedupe (same slug in 2 folders)
