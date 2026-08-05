@@ -9,7 +9,7 @@ import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { trackAffiliateClick } from "@/lib/affiliate";
-import { viatorSearchLink } from "@/lib/viator";
+import { viatorSearchLink, viatorProductLink } from "@/lib/viator";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import MapAppSelector from "@/components/MapAppSelector";
 import AttractionAIDetails from "@/components/AttractionAIDetails";
@@ -893,8 +893,12 @@ export default function ThingsToDoFinder() {
       const isHighlyRated=(a.userRatingCount||0)>=200&&(a.rating||0)>=4.0;
       return isIconic||isHighlyRated||a.props?.isBucketList;
     });
+    if(submitted){
+      const needle=submitted.toLowerCase();
+      r=r.filter(a=>`${a.displayName?.text||a.name||""} ${(a.types||[]).join(" ")} ${a.category||""} ${a.activityLabel||""} ${a.editorialSummary?.text||""}`.toLowerCase().includes(needle));
+    }
     return r;
-  },[activities,radius,openOnly,outdoorOnly,popularOnly,category]);
+  },[activities,radius,openOnly,outdoorOnly,popularOnly,category,submitted]);
 
   const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const a=filtered[i];if(mapInst.current&&a?.lat&&a?.lng){mapInst.current.setView([a.lat,a.lng],17);markers.current[i]?.openPopup();}},350);};
 
@@ -925,6 +929,29 @@ export default function ThingsToDoFinder() {
   const stats={total:filtered.length};
   const advFilterCount=[openOnly,outdoorOnly,popularOnly,category!=='all'].filter(Boolean).length;
   const clearFilters=()=>{setOpenOnly(false);setOutdoorOnly(false);setPopularOnly(false);setCategory('all');};
+
+  // Activity search — surfaces bookable EXPERIENCES (Viator) the owned attractions
+  // DB can't cover (zip lining, whale watching, ATV…) + filters nearby places.
+  const [q,setQ]=useState("");
+  const [submitted,setSubmitted]=useState("");
+  const [tours,setTours]=useState(null); // null=not searched · []=none · [...]=results
+  const [tourBusy,setTourBusy]=useState(false);
+  const runActivitySearch=async()=>{
+    const query=q.trim(); if(!query) return;
+    setSubmitted(query); setTourBusy(true); setTours(null);
+    try{ const {data}=await callWorker(ROUTE.searchActivities,{query,city,country}); setTours(Array.isArray(data?.products)?data.products:[]); }
+    catch{ setTours([]); }
+    setTourBusy(false);
+  };
+  const clearSearch=()=>{setQ("");setSubmitted("");setTours(null);};
+  const openTour=async(p)=>{
+    const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorProductLink(p.url)||viatorSearchLink(p.title),category:"tour",productName:p.title,destCity:city,destCountry:country});
+    if(url) window.open(url,"_blank");
+  };
+  const openViatorFallback=async()=>{
+    const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorSearchLink(`${submitted} ${city}`.trim()),category:"tour",productName:submitted,destCity:city,destCountry:country});
+    if(url) window.open(url,"_blank");
+  };
 
   return(
     <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
@@ -967,6 +994,15 @@ export default function ThingsToDoFinder() {
       {/* Filters band */}
       <div className={`px-4 ${colWrap} mx-auto pb-2`}>
         <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.todo.ink} unit={unit} setUnit={setUnit} />
+      </div>
+
+      {/* Activity search — bookable experiences (Viator) + nearby matches */}
+      <div className={`px-4 ${colWrap} mx-auto pb-2`}>
+        <form onSubmit={(e)=>{e.preventDefault();runActivitySearch();}} style={{display:"flex",gap:"8px"}}>
+          <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search anything to do — zip lining, snorkeling…" autoCapitalize="none" style={{flex:1,minWidth:0,padding:"11px 14px",borderRadius:"12px",border:"1.5px solid #E2E8F0",fontSize:"calc(14px*var(--fs))",fontFamily:"inherit",color:T.dark,background:"#fff"}}/>
+          <button type="submit" disabled={!q.trim()||tourBusy} style={{padding:"11px 16px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(13px*var(--fs))",fontFamily:"inherit",cursor:"pointer",opacity:(!q.trim()||tourBusy)?0.6:1}}>{tourBusy?"…":"Search"}</button>
+          {submitted&&<button type="button" onClick={clearSearch} style={{padding:"11px 12px",borderRadius:"12px",border:"1.5px solid #E2E8F0",background:"#fff",color:T.gray,fontWeight:"700",fontSize:"calc(13px*var(--fs))",fontFamily:"inherit",cursor:"pointer"}}>✕</button>}
+        </form>
       </div>
 
       <div style={{background:"#fff",padding:"10px 14px",borderBottom:"1px solid #E8EDF2"}}>
@@ -1022,10 +1058,35 @@ export default function ThingsToDoFinder() {
       :viewMode==="list"?(<div style={isTablet
         ? {maxWidth:1024,margin:"0 auto",padding:"14px 24px 170px",display:"flex",flexDirection:"column",gap:"4px"}
         : {padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"4px"}}>
-        <TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet}/>
-        <TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet}/>
-        <TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet}/>
-        {(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Near You</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
+        {submitted&&(
+          <div style={{marginBottom:"6px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 10px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🎟️</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>&ldquo;{submitted}&rdquo; — book an experience</span></div>
+            {tourBusy?(<div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",padding:"6px 4px"}}>Searching tours…</div>)
+            :(tours&&tours.length>0)?(<>
+              <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>{tours.map((tp)=>(
+                <button key={tp.code||tp.url} onClick={()=>openTour(tp)} style={{display:"flex",gap:"12px",alignItems:"center",textAlign:"left",background:"#fff",border:"1px solid #E8EDF2",borderRadius:"16px",padding:"10px",cursor:"pointer",fontFamily:"inherit"}}>
+                  {tp.thumbnail&&<img src={tp.thumbnail} alt="" style={{width:88,height:66,objectFit:"cover",borderRadius:"10px",flexShrink:0}}/>}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:"700",fontSize:"calc(13.5px*var(--fs))",color:T.dark,lineHeight:1.3,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{tp.title}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:"8px",marginTop:"3px",flexWrap:"wrap"}}>
+                      {tp.rating!=null&&<span style={{fontSize:"calc(11.5px*var(--fs))",color:T.gray}}>⭐ {Number(tp.rating).toFixed(1)}{tp.reviews?` (${tp.reviews})`:""}</span>}
+                      {tp.fromPrice!=null&&<span style={{fontSize:"calc(12px*var(--fs))",fontWeight:"700",color:T.accentD}}>from {tp.currency==="USD"?"$":""}{Math.round(tp.fromPrice)}{tp.currency&&tp.currency!=="USD"?` ${tp.currency}`:""}</span>}
+                    </div>
+                  </div>
+                  <span style={{background:T.accent,color:"#fff",padding:"7px 12px",borderRadius:"10px",fontWeight:"700",fontSize:"calc(12px*var(--fs))",flexShrink:0}}>Book</span>
+                </button>
+              ))}</div>
+              <div style={{fontSize:"calc(10.5px*var(--fs))",color:T.gray,margin:"6px 4px 0"}}>Tours by Viator · we may earn a commission</div>
+            </>):(
+              <button onClick={openViatorFallback} style={{width:"100%",padding:"12px",borderRadius:"12px",border:`1.5px dashed ${T.accent}`,background:T.accentL,color:T.accentD,fontWeight:"700",fontSize:"calc(13px*var(--fs))",fontFamily:"inherit",cursor:"pointer"}}>Search &ldquo;{submitted}&rdquo; on Viator →</button>
+            )}
+            {filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"14px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Places matching &ldquo;{submitted}&rdquo;</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
+          </div>
+        )}
+        {!submitted&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet}/>}
+        {!submitted&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet}/>}
+        {!submitted&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet}/>}
+        {!submitted&&(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Near You</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
         {filtered.length===0&&nationalIcons.length===0&&regionalGems.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Try a different category or expand your radius</div></div>:null}
         <div style={{display:"flex",flexDirection:"column",gap:isTablet?"30px":"16px"}}>{filtered.map((a,i)=>{
           // Editorial card at BOTH widths now — responsive via isTablet.

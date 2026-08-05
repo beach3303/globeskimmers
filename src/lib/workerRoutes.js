@@ -37,6 +37,7 @@ export const ROUTE = {
   getMoneyExchangeLocations: 'money-exchange',
   getMoneyExchangeOwned: 'moneyexchange-owned',
   getActivities: 'activities',
+  searchActivities: 'activities/search',
   getRestaurants: 'restaurants-full',
   getAnalytics: 'analytics-bundle',
   InvokeLLM: 'invoke-llm',

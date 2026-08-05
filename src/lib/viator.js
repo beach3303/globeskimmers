@@ -22,3 +22,10 @@ export function viatorSearchLink(query) {
   const q = encodeURIComponent((query || "").toString().trim());
   return withTracking(`https://www.viator.com/searchResults/all?text=${q}`);
 }
+
+// Add affiliate tracking (pid+mcid) to a specific Viator product URL returned by
+// the /activities/search API, so booking a searched tour pays out correctly.
+export function viatorProductLink(url) {
+  if (!url) return null;
+  return withTracking(String(url));
+}

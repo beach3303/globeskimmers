@@ -12074,6 +12074,63 @@ async function handleViatorMatch(request, env) {
   } catch { return jsonResponse({ match: null }); }
 }
 
+// Free-text Tours & Activities search (Viator) → surfaces bookable EXPERIENCES the
+// owned attractions DB can't cover (zip lining, whale watching, ATV, snorkeling,
+// hot air balloon, etc). Returns products; the client tracks the affiliate click
+// on tap (partner:viator). Geo-biased by appending the city to the search term.
+// Cached per query+geo for 3 days.
+async function handleActivitySearch(request, env, ctx) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const query = String(b.query || '').trim().slice(0, 80);
+    if (!query) return jsonResponse({ products: [] });
+    if (!env.VIATOR_API_KEY) return jsonResponse({ products: [], unavailable: true });
+    const city = String(b.city || '').trim().slice(0, 80);
+    const term = city ? `${query} ${city}` : query;
+    const cacheKey = `actsearch:v1:${term.toLowerCase()}`;
+    const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+    if (cached) return jsonResponse(cached);
+    let products = [];
+    try {
+      const res = await fetch('https://api.viator.com/partner/search/freetext', {
+        method: 'POST',
+        headers: {
+          'exp-api-key': env.VIATOR_API_KEY,
+          Accept: 'application/json;version=2.0',
+          'Accept-Language': 'en-US',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          searchTerm: term,
+          searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count: 12 } }],
+          currency: 'USD',
+        }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const results = Array.isArray(d?.products?.results) ? d.products.results : [];
+        products = results.map((p) => {
+          const variants = (p?.images?.[0]?.variants) || [];
+          const img = variants.find((v) => v.width >= 360 && v.width <= 720)?.url || variants[variants.length - 1]?.url || null;
+          return {
+            code: p.productCode || null,
+            title: p.title || null,
+            thumbnail: img,
+            url: p.productUrl || null,
+            fromPrice: (p?.pricing?.summary?.fromPrice ?? null),
+            currency: (p?.pricing?.currency || 'USD'),
+            rating: (p?.reviews?.combinedAverageRating ?? null),
+            reviews: (p?.reviews?.totalReviews ?? null),
+          };
+        }).filter((p) => p.title && p.url);
+      }
+    } catch { /* network / rate-limit → empty */ }
+    const payload = { products };
+    if (products.length && ctx) ctx.waitUntil(env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: 3 * 24 * 60 * 60 }).catch(() => {}));
+    return jsonResponse(payload);
+  } catch (e) { return jsonResponse({ products: [], error: e.message }); }
+}
+
 async function handleAffiliateClick(request, env, ctx) {
   try {
     if (!env.DB) return jsonResponse({ error: 'analytics DB not configured' }, 500);
@@ -12279,6 +12336,7 @@ export default {
       if (pathname === '/guestbook/photo-upload' && request.method === 'POST') return await handleGuestbookPhotoUpload(request, env, ctx);
       if (pathname === '/aff/click' && request.method === 'POST') return await handleAffiliateClick(request, env, ctx);
       if (pathname === '/viator/match' && request.method === 'POST') return await handleViatorMatch(request, env);
+      if (pathname === '/activities/search' && request.method === 'POST') return await handleActivitySearch(request, env, ctx);
       if (pathname === '/guestbook/list' && request.method === 'POST') return await handleGuestbookList(request, env);
       if (pathname === '/guestbook/sign' && request.method === 'POST') return await handleGuestbookSign(request, env, ctx);
       if (pathname === '/guestbook/edit' && request.method === 'POST') return await handleGuestbookEdit(request, env);
