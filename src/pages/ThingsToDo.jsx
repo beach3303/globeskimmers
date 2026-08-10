@@ -16,6 +16,7 @@ import AttractionAIDetails from "@/components/AttractionAIDetails";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
+import { matchesQuery } from "@/lib/searchText";
 import { ChevronLeft, MapPin, Star } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
@@ -909,8 +910,8 @@ export default function ThingsToDoFinder() {
   // No radius filter here — the within/beyond split happens below.
   const searchMerged=useMemo(()=>{
     if(!submitted) return [];
-    const needle=submitted.toLowerCase();
-    const owned=ownedPool.filter(a=>`${a.displayName?.text||a.name||""} ${(a.types||[]).join(" ")} ${a.category||""} ${a.activityLabel||""} ${a.editorialSummary?.text||a.editorialSummary||""}`.toLowerCase().includes(needle));
+    // Accent/Unicode-insensitive owned match (see @/lib/searchText).
+    const owned=ownedPool.filter(a=>matchesQuery(`${a.displayName?.text||a.name||""} ${(a.types||[]).join(" ")} ${a.category||""} ${a.activityLabel||""} ${a.editorialSummary?.text||a.editorialSummary||""}`, submitted));
     const seen=new Set(),out=[];
     const push=(a)=>{const k=a.placeId||a.id||`${a.lat},${a.lng}`;if(k&&!seen.has(k)){seen.add(k);out.push(a);}};
     owned.forEach(push);          // owned first — free + trusted

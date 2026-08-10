@@ -11,6 +11,7 @@ import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
+import { matchesQuery } from "@/lib/searchText";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import { ChevronLeft, MapPin, Coffee as CoffeeIcon } from "lucide-react";
@@ -503,8 +504,8 @@ export default function CoffeeFinderPage() {
   // live Google café search, deduped, distance-sorted. No radius filter here.
   const searchMerged = useMemo(()=>{
     if(!submitted) return [];
-    const needle=submitted.toLowerCase();
-    const owned=shops.filter(s=>`${s.name||''} ${Object.keys(s.detectedDrinks||{}).join(' ')} ${(s.types||[]).join(' ')}`.toLowerCase().includes(needle));
+    // Accent/Unicode-insensitive owned match (see @/lib/searchText).
+    const owned=shops.filter(s=>matchesQuery(`${s.name||''} ${Object.keys(s.detectedDrinks||{}).join(' ')} ${(s.types||[]).join(' ')}`, submitted));
     const seen=new Set(),out=[];
     const push=(s)=>{const k=s.id||s.placeId||`${s.lat},${s.lng}`;if(k&&!seen.has(k)){seen.add(k);out.push(s);}};
     owned.forEach(push);            // owned first — free + trusted
