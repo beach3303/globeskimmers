@@ -316,6 +316,17 @@ State: Committed 7aa2682 (#9) · 83c2a54 (#10) · 9c70203 (#11) · **Worker need
 - [ ] **#11:** Things to Do → search "spectacular views" → returns viewpoints/lookouts (synonym expansion); typed text still displays as-is
 - [ ] Analytics: `activity_search`, `coffee_search`, and Eat `search`/`search_zero_results` all land in D1 (AdminAnalytics)
 
+## 🏨 Find a Hotel — goal-based Stay22 finder (2026-08-09)
+New Home tile → Find a Hotel page. Goal (this area/airport/centre/sights) + dates + guests → Stay22 multi-OTA best-price handoff. Amenities filtered on results page (meta-search); Agoda in-app amenity filtering is the follow-up.
+State: Committed 4afe7fc · Frontend auto-deploys on push · **Worker needs `wrangler deploy`** (stay22→campaign SubID map) · Tested ⬜
+- [ ] **DEPLOY WORKER:** `cd "/Users/globeskimmers/Desktop/CODES PROTECT/globeskimmers-cacf36e4-10" && wrangler deploy`
+- [ ] **⚠️ Paste real Stay22 aid** into `src/lib/stay22.js` (STAY22_AID) once approved — until then links work but don't earn
+- [ ] Home → **🏨 Find a Hotel** tile opens the page
+- [ ] Pick a goal + dates + guests → **Find hotels** → heads-up modal → opens Stay22 with a price comparison for the right place/dates/occupancy
+- [ ] "This area" uses your coords; "Near the airport" / "City centre" / "Near the sights" pass the right address
+- [ ] Affiliate: click logs to D1 with partner "stay22" (SubID in Stay22 `campaign`); disclosure + "filter amenities on results page" note visible
+- [ ] Signed-out / no-location: button disabled with "Set your location to search"
+
 ## Template for a new build
 ```
 ### N · <feature name>
