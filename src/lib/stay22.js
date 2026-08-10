@@ -13,7 +13,7 @@
 // refrigerator) are chosen on the results page — that's inherent to a price-
 // comparison meta-search. In-app amenity pre-filtering is the planned Agoda
 // follow-up. Params verified against dev.stay22.com/docs/allez/parameters.
-export const STAY22_AID = 'PLACEHOLDER_STAY22_AID'; // TODO: replace with real Stay22 aid
+export const STAY22_AID = 'globeskimmers'; // real Stay22 AID (hub.stay22.com)
 
 // Build a Stay22 allez/roam URL. Location comes from EITHER lat/lng OR a text
 // address (a goal like "Tokyo airport" / "Paris city centre"). Dates are
