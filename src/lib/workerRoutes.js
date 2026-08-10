@@ -26,6 +26,7 @@ export const ROUTE = {
   getCoffeeShops: 'coffee-shops',
   getCoffeeOwned: 'coffee-owned',
   searchCoffee: 'coffee/search',
+  coffeeWorkProfiles: 'coffee/work-profiles',
   getShoppingPlaces: 'shopping',
   getShoppingOwned: 'shopping-owned',
   getConvenienceStores: 'convenience-stores',

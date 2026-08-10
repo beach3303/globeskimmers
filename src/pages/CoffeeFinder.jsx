@@ -461,6 +461,15 @@ export default function CoffeeFinderPage() {
   const [submitted,setSubmitted]                 = useState("");
   const [searchShops,setSearchShops]             = useState([]);
   const [searchBusy,setSearchBusy]               = useState(false);
+  // Work-amenity filters (💻 good for working) — backed by the Haiku work-profile
+  // (wifi/outlets/quiet/AC), honest & estimated. workProfiles is a {placeId: wp}
+  // map filled lazily from /coffee/work-profiles when a work filter is active.
+  const [filterWork,setFilterWork]               = useState(false);
+  const [filterOutlets,setFilterOutlets]         = useState(false);
+  const [filterQuiet,setFilterQuiet]             = useState(false);
+  const [filterAC,setFilterAC]                   = useState(false);
+  const [workProfiles,setWorkProfiles]           = useState({});
+  const [workBusy,setWorkBusy]                   = useState(false);
   const [selectedMapIndex, setSelectedMapIndex] = useState(null);
   const cardRefs = useRef({}); const mapRef = useRef(null); const mapInstanceRef = useRef(null);
 
@@ -477,7 +486,24 @@ export default function CoffeeFinderPage() {
     setRadius(activeLocation?.suggestedRadius ?? 10);
   }, [activeLocation?.placeId]);
 
-  const activeFilterCount = [filterOpenNow,filterShopType!=="all",filterWifi].filter(Boolean).length;
+  const activeFilterCount = [filterOpenNow,filterShopType!=="all",filterWifi,filterWork,filterOutlets,filterQuiet,filterAC].filter(Boolean).length;
+  const workFilterActive = filterWork||filterOutlets||filterQuiet||filterAC;
+
+  // Lazily fetch work-profiles for the nearest cafes when a work filter is on.
+  // Free cache reads for all + a bounded handful computed on demand (cached
+  // forever). Only fires on explicit work-intent.
+  useEffect(()=>{
+    if(!workFilterActive||!shops.length) return;
+    const pool=[...shops].sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
+    const need=pool.filter(s=>{const k=s.id||s.placeId;return k&&!workProfiles[k];}).slice(0,15);
+    if(!need.length) return;
+    let cancelled=false; setWorkBusy(true);
+    callWorker(ROUTE.coffeeWorkProfiles,{cafes:need.map(s=>({placeId:s.id||s.placeId,placeName:s.name,lat:s.lat,lng:s.lng})),maxCompute:8})
+      .then(({data})=>{ if(!cancelled&&data?.profiles) setWorkProfiles(p=>({...p,...data.profiles})); })
+      .catch(()=>{})
+      .finally(()=>{ if(!cancelled) setWorkBusy(false); });
+    return()=>{cancelled=true;};
+  },[workFilterActive,shops]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(()=>{
     if(!lat||!lng)return;
@@ -530,6 +556,12 @@ export default function CoffeeFinderPage() {
     if(filterWifi)          r=r.filter(s=>s.hasWifi);
     if(filterShopType==="chain")      r=r.filter(s=>s.isChain);
     if(filterShopType==="specialty")  r=r.filter(s=>s.isSpecialty);
+    // Work-amenity filters — match the Haiku work-profile (estimated, honest).
+    // A cafe with no profile yet is excluded from the strict match (never faked).
+    if(filterWork)    r=r.filter(s=>{const w=workProfiles[s.id||s.placeId];return w&&(w.laptopFriendly==='great'||w.laptopFriendly==='ok');});
+    if(filterOutlets) r=r.filter(s=>{const w=workProfiles[s.id||s.placeId];return w&&(w.outlets?.status==='yes'||w.outlets?.status==='limited');});
+    if(filterQuiet)   r=r.filter(s=>{const w=workProfiles[s.id||s.placeId];return w&&w.noise==='quiet';});
+    if(filterAC)      r=r.filter(s=>{const w=workProfiles[s.id||s.placeId];return w&&w.ac?.status==='yes';});
     if(sortBy==="nearby")  r.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
     else if(sortBy==="rating") r.sort((a,b)=>{
       // Weight rating by log(reviews) so a 5.0 with 1 review can't beat a 4.5
@@ -539,9 +571,9 @@ export default function CoffeeFinderPage() {
       return sb-sa;
     });
     return r;
-  },[shops,searchMerged,submitted,radius,quickFilter,sortBy,filterOpenNow,filterWifi,filterShopType]);
+  },[shops,searchMerged,submitted,radius,quickFilter,sortBy,filterOpenNow,filterWifi,filterShopType,filterWork,filterOutlets,filterQuiet,filterAC,workProfiles]);
 
-  const clearFilters=()=>{setFilterOpenNow(false);setFilterShopType("all");setFilterWifi(false);};
+  const clearFilters=()=>{setFilterOpenNow(false);setFilterShopType("all");setFilterWifi(false);setFilterWork(false);setFilterOutlets(false);setFilterQuiet(false);setFilterAC(false);};
 
   const runSearch=async()=>{
     const query=q.trim(); if(!query) return;
@@ -692,6 +724,17 @@ export default function CoffeeFinderPage() {
                   <ToggleChip label="Has WiFi" icon="📶" active={filterWifi} onClick={()=>setFilterWifi(!filterWifi)}/>
                 </div>
 
+                <div>
+                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>💻 Good for working</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+                    <ToggleChip label="Good for work" icon="💻" active={filterWork} onClick={()=>setFilterWork(!filterWork)}/>
+                    <ToggleChip label="Outlets" icon="🔌" active={filterOutlets} onClick={()=>setFilterOutlets(!filterOutlets)}/>
+                    <ToggleChip label="Quiet" icon="🔇" active={filterQuiet} onClick={()=>setFilterQuiet(!filterQuiet)}/>
+                    <ToggleChip label="A/C" icon="❄️" active={filterAC} onClick={()=>setFilterAC(!filterAC)}/>
+                  </div>
+                  <div style={{fontSize:"calc(10.5px*var(--fs))",color:GRAY,marginTop:"6px",lineHeight:1.4}}>⚠️ Estimated from customer reviews{workBusy?" · checking cafés…":""} — call ahead to confirm.</div>
+                </div>
+
 
                 {/* Trust legend */}
                 <div style={{padding:"10px 12px",background:"#F8FAFC",borderRadius:"8px",border:"1px solid #E8EDF2"}}>
@@ -734,8 +777,8 @@ export default function CoffeeFinderPage() {
           : {width:"100%",padding:"0 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>
           {submitted&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"-4px 0 2px"}}><span style={{fontSize:"calc(16px*var(--fs))"}}>☕</span><span style={{fontWeight:"800",fontSize:"calc(14px*var(--fs))",color:DARK}}>Caf&eacute;s matching &ldquo;{submitted}&rdquo;</span><span style={{fontSize:"calc(12px*var(--fs))",color:GRAY}}>({filtered.length})</span></div>}
           {filtered.length===0?(
-            searchBusy?(
-              <div style={{textAlign:"center",padding:"40px 20px",background:"#fff",borderRadius:"12px"}}><div style={{fontSize:"calc(32px*var(--fs))",marginBottom:"10px",animation:"pulse 1.5s infinite"}}>☕</div><div style={{fontWeight:"600",color:GRAY}}>Searching caf&eacute;s…</div></div>
+            (searchBusy||workBusy)?(
+              <div style={{textAlign:"center",padding:"40px 20px",background:"#fff",borderRadius:"12px"}}><div style={{fontSize:"calc(32px*var(--fs))",marginBottom:"10px",animation:"pulse 1.5s infinite"}}>☕</div><div style={{fontWeight:"600",color:GRAY}}>{workBusy?"Checking cafés for work-friendliness…":"Searching cafés…"}</div></div>
             ):(
             <div style={{textAlign:"center",padding:"40px 20px",background:"#fff",borderRadius:"12px"}}>
               <div style={{fontSize:"calc(32px*var(--fs))",marginBottom:"10px"}}>🔍</div>

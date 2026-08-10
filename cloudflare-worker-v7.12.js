@@ -3178,37 +3178,36 @@ evidenceCount = how many of the provided reviews actually touched on work topics
 laptopFriendly: "great" = several positive work signals; "ok" = mixed/some positives; "not_ideal" = reviews say loud/cramped/no outlets/no wifi/laptops discouraged; "unknown" = reviews do not cover it.`;
 }
 
-async function handleCafeWorkProfile(request, env) {
-  if (!env.ANTHROPIC_API_KEY) {
-    return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
-  }
-  let body;
-  try { body = await request.json(); } catch (_e) {
-    return jsonResponse({ error: 'Invalid JSON body' }, 400);
-  }
-  const placeId = body?.placeId;
-  if (!placeId) {
-    return jsonResponse({ error: 'placeId required' }, 400);
-  }
+// Core cafe work-profile resolver — shared by the single-cafe endpoint AND the
+// list-time batch. Returns { workProfile, _cache }; workProfile is the object,
+// the UNKNOWN stub, or null (unresolved / compute skipped / error). Pass
+// allowCompute:false for a FREE cache-only read (D1+KV) — no Google/Haiku spend —
+// which the batch uses to fold in already-known cafes at zero cost.
+async function getCafeWorkProfile(env, origin, { placeId, placeName, lat, lng, allowCompute = true }) {
+  if (!placeId) return { workProfile: null, _cache: 'no-id' };
 
   // 0) D1 permanent cache — pay Haiku once per cafe, ever.
   const d1Cached = await readCafeWorkFromD1(env, placeId, CAFE_WORK_PROMPT_VERSION);
-  if (d1Cached) return jsonResponse({ workProfile: d1Cached, _cache: 'hit-d1' });
+  if (d1Cached) return { workProfile: d1Cached, _cache: 'hit-d1' };
 
   // 1) KV 30-day secondary (backfills D1 on hit).
   const kvKey = `place:${placeId}:cafe_work_${CAFE_WORK_PROMPT_VERSION}`;
   if (env.GLOBESKIMMERS_KV) {
     const cached = await env.GLOBESKIMMERS_KV.get(kvKey, { type: 'json' }).catch(() => null);
     if (cached) {
-      await writeCafeWorkToD1(env, placeId, CAFE_WORK_PROMPT_VERSION, cached, body?.placeName || null);
-      return jsonResponse({ workProfile: cached, _cache: 'hit-kv' });
+      await writeCafeWorkToD1(env, placeId, CAFE_WORK_PROMPT_VERSION, cached, placeName || null);
+      return { workProfile: cached, _cache: 'hit-kv' };
     }
   }
 
-  // 2) Place Details — resolve owned (UUID) → Google id first, then reuse the
-  //    details_{gid} cache (shared with enrich-owned; no new Google cost when warm).
-  const gid = await resolveOwnedGid(env, placeId, body?.placeName, body?.lat ?? body?.latitude, body?.lng ?? body?.longitude);
-  if (!gid) return jsonResponse({ workProfile: null, _cache: 'unresolved' });
+  // Cache-only mode → stop here (no spend).
+  if (!allowCompute) return { workProfile: null, _cache: 'miss-skip' };
+  if (!env.ANTHROPIC_API_KEY) return { workProfile: null, _cache: 'no-key' };
+
+  // 2) Resolve owned (UUID) → Google id, then reuse the details_{gid} cache
+  //    (shared with enrich-owned; no new Google cost when warm).
+  const gid = await resolveOwnedGid(env, placeId, placeName, lat, lng);
+  if (!gid) return { workProfile: null, _cache: 'unresolved' };
   const detailsCacheKey = `details_${gid}`;
   let place;
   const cachedDetails = await getFromCache(env, detailsCacheKey);
@@ -3220,16 +3219,14 @@ async function handleCafeWorkProfile(request, env) {
         method: 'GET',
         headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': CONFIG.DETAILS_FIELD_MASK }
       });
-      if (!detailsRes.ok) return jsonResponse({ error: 'Place details fetch failed', status: detailsRes.status }, 502);
-      place = normalizePlace(await detailsRes.json(), new URL(request.url).origin, true);
+      if (!detailsRes.ok) return { workProfile: null, _cache: 'details-fail' };
+      place = normalizePlace(await detailsRes.json(), origin, true);
       await setInCache(env, detailsCacheKey, place, CONFIG.CACHE_TTL.DETAILS);
-    } catch (e) {
-      return jsonResponse({ error: 'Place details error: ' + e.message }, 502);
-    }
+    } catch { return { workProfile: null, _cache: 'details-error' }; }
   }
 
   const reviewSnippets = (place.reviews || []).slice(0, 5).map(r => ({ text: r.text || '', rating: r.rating })).filter(r => r.text);
-  const placeName = place.name || place.displayName?.text || null;
+  const resolvedName = place.name || place.displayName?.text || placeName || null;
   const editorialSummary = place.editorialSummary || null;
 
   const UNKNOWN = {
@@ -3243,17 +3240,17 @@ async function handleCafeWorkProfile(request, env) {
     summary: 'Not enough reviews yet to assess work-friendliness.',
     bestForWork: null,
     evidenceCount: 0,
-    placeName,
+    placeName: resolvedName,
   };
 
   // 3) No review/editorial signal → cache an "unknown" stub so we do not re-check.
   if (reviewSnippets.length === 0 && !editorialSummary) {
     if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(kvKey, JSON.stringify(UNKNOWN), { expirationTtl: CAFE_WORK_TTL_SECONDS }).catch(() => {});
-    await writeCafeWorkToD1(env, placeId, CAFE_WORK_PROMPT_VERSION, UNKNOWN, placeName);
-    return jsonResponse({ workProfile: UNKNOWN, _cache: 'miss-stub' });
+    await writeCafeWorkToD1(env, placeId, CAFE_WORK_PROMPT_VERSION, UNKNOWN, resolvedName);
+    return { workProfile: UNKNOWN, _cache: 'miss-stub' };
   }
 
-  const userContent = `CAFE: ${JSON.stringify({ name: placeName, primaryType: place.primaryTypeDisplay || place.primaryType, editorialSummary })}\n\nREVIEW SNIPPETS (up to 5 from Google):\n${JSON.stringify(reviewSnippets, null, 2)}\n\nReturn the work-friendliness JSON per the rules. Use "unknown" for anything the reviews do not mention — never guess.`;
+  const userContent = `CAFE: ${JSON.stringify({ name: resolvedName, primaryType: place.primaryTypeDisplay || place.primaryType, editorialSummary })}\n\nREVIEW SNIPPETS (up to 5 from Google):\n${JSON.stringify(reviewSnippets, null, 2)}\n\nReturn the work-friendliness JSON per the rules. Use "unknown" for anything the reviews do not mention — never guess.`;
 
   let workProfile;
   try {
@@ -3267,10 +3264,7 @@ async function handleCafeWorkProfile(request, env) {
         messages: [{ role: 'user', content: userContent }]
       })
     });
-    if (!apiRes.ok) {
-      const errText = await apiRes.text();
-      return jsonResponse({ error: 'Claude API error', status: apiRes.status, details: errText }, 502);
-    }
+    if (!apiRes.ok) return { workProfile: null, _cache: 'llm-fail' };
     const data = await apiRes.json();
     const raw = data?.content?.[0]?.text?.trim() || '';
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
@@ -3283,14 +3277,59 @@ async function handleCafeWorkProfile(request, env) {
       if (!workProfile[k] || typeof workProfile[k] !== 'object') workProfile[k] = { status: 'unknown', note: '' };
     }
     workProfile.evidenceCount = Number.isFinite(workProfile.evidenceCount) ? workProfile.evidenceCount : 0;
-    workProfile.placeName = placeName;
-  } catch (e) {
-    return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
-  }
+    workProfile.placeName = resolvedName;
+  } catch { return { workProfile: null, _cache: 'parse-fail' }; }
 
   if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(kvKey, JSON.stringify(workProfile), { expirationTtl: CAFE_WORK_TTL_SECONDS }).catch(() => {});
-  await writeCafeWorkToD1(env, placeId, CAFE_WORK_PROMPT_VERSION, workProfile, placeName);
-  return jsonResponse({ workProfile, _cache: 'miss' });
+  await writeCafeWorkToD1(env, placeId, CAFE_WORK_PROMPT_VERSION, workProfile, resolvedName);
+  return { workProfile, _cache: 'miss' };
+}
+
+async function handleCafeWorkProfile(request, env) {
+  let body;
+  try { body = await request.json(); } catch (_e) { return jsonResponse({ error: 'Invalid JSON body' }, 400); }
+  if (!body?.placeId) return jsonResponse({ error: 'placeId required' }, 400);
+  const { workProfile, _cache } = await getCafeWorkProfile(env, new URL(request.url).origin, {
+    placeId: body.placeId, placeName: body.placeName, lat: body.lat ?? body.latitude, lng: body.lng ?? body.longitude, allowCompute: true,
+  });
+  return jsonResponse({ workProfile, _cache });
+}
+
+// List-time work-profile batch — powers the "Good for working" / Outlets / Quiet
+// / AC filters. Reads the FREE cache (D1+KV) for every listed cafe, then computes
+// up to `maxCompute` of the still-unknown ones on demand (Haiku+Google, cached
+// forever) so a work filter returns real results in a new area WITHOUT an
+// unbounded bill. Only ever called on explicit work-intent (a work filter tapped).
+// The client sends cafes pre-sorted (nearest/best first) so the compute budget is
+// spent on the most relevant. Returns { profiles: { placeId: workProfile } }.
+async function handleCafeWorkProfilesBatch(request, env, ctx) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const cafes = Array.isArray(b.cafes) ? b.cafes.slice(0, 30) : [];
+    if (!cafes.length) return jsonResponse({ profiles: {} });
+    const maxCompute = Math.min(Math.max(parseInt(b.maxCompute, 10) || 8, 0), 12);
+    const origin = new URL(request.url).origin;
+    const profiles = {};
+
+    // 1) FREE cache reads for everyone.
+    const unknown = [];
+    for (const c of cafes) {
+      if (!c?.placeId) continue;
+      const { workProfile } = await getCafeWorkProfile(env, origin, { placeId: c.placeId, placeName: c.placeName, lat: c.lat, lng: c.lng, allowCompute: false });
+      if (workProfile) profiles[c.placeId] = workProfile; else unknown.push(c);
+    }
+
+    // 2) Bounded on-demand compute for the first N unknowns (parallel, cached forever).
+    const toCompute = unknown.slice(0, maxCompute);
+    const results = await Promise.all(toCompute.map((c) =>
+      getCafeWorkProfile(env, origin, { placeId: c.placeId, placeName: c.placeName, lat: c.lat, lng: c.lng, allowCompute: true })
+        .then((r) => ({ id: c.placeId, wp: r.workProfile }))
+        .catch(() => ({ id: c.placeId, wp: null }))
+    ));
+    for (const r of results) if (r.wp) profiles[r.id] = r.wp;
+
+    return jsonResponse({ profiles, computed: toCompute.length });
+  } catch (e) { return jsonResponse({ profiles: {}, error: e.message }); }
 }
 
 // ============================================================================
@@ -12546,6 +12585,7 @@ export default {
       if (pathname === '/attraction-ai-details' && request.method === 'POST') return await handleAttractionAIDetails(request, env);
       if (pathname === '/atm-ai-details' && request.method === 'POST') return await handleAtmAIDetails(request, env);
       if (pathname === '/cafe-work-profile' && request.method === 'POST') return await handleCafeWorkProfile(request, env);
+      if (pathname === '/coffee/work-profiles' && request.method === 'POST') return await handleCafeWorkProfilesBatch(request, env, ctx);
       if (pathname === '/restroom-ai-details' && request.method === 'POST') return await handleRestroomAIDetails(request, env);
       if (pathname === '/reverse-geocode' && request.method === 'POST') return await handleReverseGeocode(request, env);
       if (pathname === '/search-location' && request.method === 'POST') return await handleSearchLocation(request, env);
