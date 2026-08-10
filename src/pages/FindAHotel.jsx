@@ -18,7 +18,10 @@
 // pre-filtering is the planned Agoda-API follow-up.
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ExternalLink, MapPin, Minus, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, ExternalLink, MapPin, Minus, Plus, Search, X, Calendar as CalendarIcon } from "lucide-react";
+import { DayPicker } from "react-day-picker";
+import { format } from "date-fns";
+import "react-day-picker/dist/style.css";
 import { useLocation } from "../components/location/LocationContext";
 import { getLocationLabel } from "@/components/location/locationLabel";
 import LocationModePicker from "@/components/location/LocationModePicker";
@@ -77,11 +80,12 @@ export default function FindAHotel() {
   const [airports, setAirports] = useState([]);
   const [airportsBusy, setAirportsBusy] = useState(false);
   const [airport, setAirport] = useState(null); // chosen airport {iata,city,lat,lng,km}
+  const [apOpen, setApOpen] = useState(true);    // airport list expanded/collapsed
   const [sight, setSight] = useState(null);      // top attraction {name,lat,lng}
   const [sightBusy, setSightBusy] = useState(false);
 
-  const [checkin, setCheckin] = useState("");
-  const [checkout, setCheckout] = useState("");
+  const [range, setRange] = useState();        // { from: Date, to: Date } | undefined
+  const [dateOpen, setDateOpen] = useState(false);
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
   const [confirm, setConfirm] = useState(false);
@@ -104,13 +108,16 @@ export default function FindAHotel() {
   const dest = destMode === "other" ? (picked || { lat: undefined, lng: undefined, city: "", country: "", label: "" }) : here;
   const hasCoords = Number.isFinite(dest.lat) && Number.isFinite(dest.lng);
   const hasDest = hasCoords || !!dest.city;
-  const today = new Date().toISOString().slice(0, 10);
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  // Derived YYYY-MM-DD strings for the Stay22 link (empty = flexible dates).
+  const checkin = range?.from ? format(range.from, "yyyy-MM-dd") : "";
+  const checkout = range?.to ? format(range.to, "yyyy-MM-dd") : "";
 
   // Resolve airport list / top sight when the goal or destination changes.
   useEffect(() => {
     let cancelled = false;
     if (goal === "airport" && hasCoords) {
-      setAirportsBusy(true); setAirport(null);
+      setAirportsBusy(true); setAirport(null); setApOpen(true);
       nearestAirports(dest.lat, dest.lng, 6, 130)
         .then((list) => { if (!cancelled) { setAirports(list); setAirportsBusy(false); } })
         .catch(() => { if (!cancelled) { setAirports([]); setAirportsBusy(false); } });
@@ -256,25 +263,39 @@ export default function FindAHotel() {
 
         {/* Airport picker */}
         {goal === "airport" && (
-          <div className="rounded-[16px] p-2 mb-3" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
-            <div className="px-2 py-1.5 font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: "#94A3B8" }}>Pick an airport</div>
-            {!hasCoords ? (
-              <div className="px-2 py-2 text-[calc(13px*var(--fs))]" style={{ color: INK2 }}>Choose a destination first.</div>
-            ) : airportsBusy ? (
-              <div className="px-2 py-2 text-[calc(13px*var(--fs))]" style={{ color: INK2 }}>Finding nearby airports…</div>
-            ) : airports.length === 0 ? (
-              <div className="px-2 py-2 text-[calc(13px*var(--fs))]" style={{ color: INK2 }}>No airports found near {dest.city || "here"}. Try another goal.</div>
-            ) : airports.map((ap) => {
-              const on = airport?.iata === ap.iata;
-              return (
-                <button key={ap.iata} onClick={() => setAirport(ap)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-[12px] text-left"
-                  style={{ background: on ? ACCENT_BG : "transparent", border: `1.5px solid ${on ? ACCENT : "transparent"}`, marginTop: 2 }}>
-                  <span className="font-bold text-[calc(13px*var(--fs))] px-2 py-1 rounded-[8px] flex-none" style={{ background: on ? ACCENT : "#F1EADF", color: on ? "#fff" : ED_INK, minWidth: 44, textAlign: "center" }}>{ap.iata}</span>
-                  <span className="flex-1 min-w-0 truncate text-[calc(14px*var(--fs))]" style={{ color: ED_INK }}>{ap.city}</span>
-                  <span className="text-[calc(12px*var(--fs))] flex-none" style={{ color: INK2 }}>{mi(ap.km)}</span>
-                </button>
-              );
-            })}
+          <div className="rounded-[16px] mb-3" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
+            {/* Collapsible header — shows the chosen airport when collapsed */}
+            <button onClick={() => setApOpen((o) => !o)} className="w-full flex items-center gap-2 px-4 py-3 text-left">
+              <span className="flex-1 min-w-0">
+                <span className="block font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: "#94A3B8" }}>Airport</span>
+                <span className="block font-bold text-[calc(14.5px*var(--fs))] mt-0.5 truncate" style={{ color: ED_INK }}>
+                  {airport ? `${airport.iata} · ${airport.city}` : "Pick an airport"}
+                </span>
+              </span>
+              {airport && <span className="text-[calc(12px*var(--fs))] flex-none" style={{ color: INK2 }}>{mi(airport.km)}</span>}
+              <span className="flex-none text-[calc(13px*var(--fs))]" style={{ color: INK2 }}>{apOpen ? "▲" : "▼"}</span>
+            </button>
+            {apOpen && (
+              <div className="px-2 pb-2">
+                {!hasCoords ? (
+                  <div className="px-2 py-2 text-[calc(13px*var(--fs))]" style={{ color: INK2 }}>Choose a destination first.</div>
+                ) : airportsBusy ? (
+                  <div className="px-2 py-2 text-[calc(13px*var(--fs))]" style={{ color: INK2 }}>Finding nearby airports…</div>
+                ) : airports.length === 0 ? (
+                  <div className="px-2 py-2 text-[calc(13px*var(--fs))]" style={{ color: INK2 }}>No airports found near {dest.city || "here"}. Try another goal.</div>
+                ) : airports.map((ap) => {
+                  const on = airport?.iata === ap.iata;
+                  return (
+                    <button key={ap.iata} onClick={() => { setAirport(ap); setApOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-[12px] text-left"
+                      style={{ background: on ? ACCENT_BG : "transparent", border: `1.5px solid ${on ? ACCENT : "transparent"}`, marginTop: 2 }}>
+                      <span className="font-bold text-[calc(13px*var(--fs))] px-2 py-1 rounded-[8px] flex-none" style={{ background: on ? ACCENT : "#F1EADF", color: on ? "#fff" : ED_INK, minWidth: 44, textAlign: "center" }}>{ap.iata}</span>
+                      <span className="flex-1 min-w-0 truncate text-[calc(14px*var(--fs))]" style={{ color: ED_INK }}>{ap.city}</span>
+                      <span className="text-[calc(12px*var(--fs))] flex-none" style={{ color: INK2 }}>{mi(ap.km)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -285,23 +306,19 @@ export default function FindAHotel() {
           </div>
         )}
 
-        {/* When */}
-        <div className="rounded-[16px] px-4 py-2 mb-3" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
-          <div className="flex items-center gap-3 py-2">
-            <div className="flex-1">
-              <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: "#94A3B8" }}>Check-in</div>
-              <input type="date" value={checkin} min={today} onChange={(e) => { setCheckin(e.target.value); if (checkout && e.target.value && checkout <= e.target.value) setCheckout(""); }}
-                className="w-full bg-transparent font-bold text-[calc(14.5px*var(--fs))] mt-0.5" style={{ color: ED_INK, fontFamily: "inherit" }} />
-            </div>
-            <div className="w-px h-9" style={{ background: "#F0E9DC" }} />
-            <div className="flex-1">
-              <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: "#94A3B8" }}>Check-out</div>
-              <input type="date" value={checkout} min={checkin || today} onChange={(e) => setCheckout(e.target.value)}
-                className="w-full bg-transparent font-bold text-[calc(14.5px*var(--fs))] mt-0.5" style={{ color: ED_INK, fontFamily: "inherit" }} />
+        {/* When — one calendar popup, tap check-in then check-out */}
+        <button onClick={() => setDateOpen(true)} className="w-full rounded-[16px] px-4 py-3.5 mb-3 text-left flex items-center gap-3" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
+          <CalendarIcon size={18} color={ACCENT} strokeWidth={2} className="flex-none" />
+          <div className="flex-1 min-w-0">
+            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: "#94A3B8" }}>Dates</div>
+            <div className="font-bold text-[calc(14.5px*var(--fs))] mt-0.5 truncate" style={{ color: ED_INK }}>
+              {range?.from
+                ? (range?.to ? `${format(range.from, "EEE, MMM d")} → ${format(range.to, "EEE, MMM d")}` : `${format(range.from, "EEE, MMM d")} → …`)
+                : "Any dates (flexible)"}
             </div>
           </div>
-          <div className="text-[calc(11px*var(--fs))] pb-1.5" style={{ color: INK2 }}>Leave blank to browse flexible dates.</div>
-        </div>
+          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{ background: ACCENT_BG, color: ACCENT }}>{range?.from ? "Edit" : "Pick"}</span>
+        </button>
 
         {/* Who */}
         <div className="rounded-[16px] px-4 mb-4" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
@@ -331,6 +348,23 @@ export default function FindAHotel() {
           Hotel results open on our partner Stay22, which compares Booking, Expedia, Agoda and more. We may earn a commission on some bookings — it never changes the price you pay.
         </p>
       </div>
+
+      {/* Date-range calendar — one popup, tap check-in then check-out */}
+      {dateOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={() => setDateOpen(false)}>
+          <div className="w-full sm:max-w-sm bg-white rounded-t-[22px] sm:rounded-[22px] p-4 sm:m-4" onClick={(e) => e.stopPropagation()} style={{ boxShadow: "0 -8px 40px -12px rgba(0,0,0,0.25)" }}>
+            <div className="flex items-center justify-between mb-1 px-1">
+              <div className="font-bold text-[calc(15px*var(--fs))]" style={{ color: ED_INK }}>Select dates</div>
+              <button onClick={() => setRange(undefined)} className="text-[calc(13px*var(--fs))] font-semibold" style={{ color: ACCENT }}>Clear</button>
+            </div>
+            <div className="text-[calc(12px*var(--fs))] mb-1 px-1" style={{ color: INK2 }}>Tap your check-in, then your check-out.</div>
+            <div style={{ "--rdp-accent-color": ACCENT, "--rdp-background-color": ACCENT_BG, display: "flex", justifyContent: "center" }}>
+              <DayPicker mode="range" selected={range} onSelect={setRange} numberOfMonths={1} disabled={{ before: todayStart }} />
+            </div>
+            <button onClick={() => setDateOpen(false)} className="w-full mt-1 py-3 rounded-[14px] font-bold text-white text-[calc(14px*var(--fs))]" style={{ background: ACCENT }}>Done</button>
+          </div>
+        </div>
+      )}
 
       {/* Leaving-to-partner heads-up */}
       {confirm && (
