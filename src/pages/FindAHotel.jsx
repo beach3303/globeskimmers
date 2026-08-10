@@ -84,6 +84,7 @@ export default function FindAHotel() {
   const [sights, setSights] = useState([]);        // nearby attractions to pick from
   const [sightPick, setSightPick] = useState(null); // chosen: {label, lat?, lng?, address?}
   const [sightQuery, setSightQuery] = useState(""); // free-text "near what?"
+  const [sightInputOpen, setSightInputOpen] = useState(false); // free-text bar expanded
   const [sightBusy, setSightBusy] = useState(false);
   const [maxPrice, setMaxPrice] = useState(null);   // client-side price cap on results
 
@@ -128,7 +129,7 @@ export default function FindAHotel() {
         .catch(() => { if (!cancelled) { setAirports([]); setAirportsBusy(false); } });
     }
     if (goal === "sights" && hasCoords) {
-      setSightBusy(true); setSights([]); setSightPick(null); setSightQuery("");
+      setSightBusy(true); setSights([]); setSightPick(null); setSightQuery(""); setSightInputOpen(false);
       callWorker("attractions/nearby", { latitude: dest.lat, longitude: dest.lng, radiusKm: 40, limit: 8, cityName: dest.city, countryName: dest.country })
         .then(({ data }) => { if (!cancelled) { setSights((data?.attractions || []).map((a) => ({ name: a.name, lat: a.lat, lng: a.lng }))); setSightBusy(false); } })
         .catch(() => { if (!cancelled) { setSights([]); setSightBusy(false); } });
@@ -336,29 +337,40 @@ export default function FindAHotel() {
           </div>
         )}
 
-        {/* Near the sights — type a place, pick a nearby sight, or city view */}
+        {/* Near the sights — pick a nearby sight (tap again to undo) or City
+            view; expand the bar to type any place. Bar stays collapsed until
+            asked, and re-collapses when a chip is picked or unselected. */}
         {goal === "sights" && hasCoords && (
           <div className="mb-3">
-            <div className="flex items-center gap-2 px-3 rounded-[12px] mb-2" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
-              <Search size={16} color="#94A3B8" strokeWidth={2} />
-              <input value={sightQuery} onChange={(e) => { setSightQuery(e.target.value); setSightPick(null); }} placeholder="Near what? e.g. Eiffel Tower" autoCapitalize="words"
-                className="flex-1 py-3 bg-transparent text-[calc(14px*var(--fs))]" style={{ color: ED_INK, fontFamily: "inherit", outline: "none" }} />
-            </div>
             <div className="flex flex-wrap gap-2">
               {[{ label: "🌆 City view", pick: { label: "City view", address: `${dest.city} city centre` } },
                 ...sights.slice(0, 6).map((s) => ({ label: `📍 ${s.name}`, pick: { label: s.name, lat: s.lat, lng: s.lng } }))
               ].map((c) => {
                 const on = sightPick?.label === c.pick.label;
                 return (
-                  <button key={c.label} onClick={() => { setSightPick(c.pick); setSightQuery(""); }}
-                    className="inline-flex items-center px-3 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
+                  <button key={c.label} onClick={() => { if (on) { setSightPick(null); setSightInputOpen(false); } else { setSightPick(c.pick); setSightQuery(""); setSightInputOpen(false); } }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
                     style={{ background: on ? ACCENT : "#FFFFFF", color: on ? "#fff" : ED_INK, border: `1.5px solid ${on ? ACCENT : "#F0E9DC"}` }}>
-                    {c.label}
+                    {c.label}{on ? " ✕" : ""}
                   </button>
                 );
               })}
               {sightBusy && <span className="text-[calc(12px*var(--fs))] self-center" style={{ color: INK2 }}>finding sights…</span>}
             </div>
+            {sightInputOpen ? (
+              <div className="flex items-center gap-2 px-3 rounded-[12px] mt-2" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
+                <Search size={16} color="#94A3B8" strokeWidth={2} />
+                <input autoFocus value={sightQuery} onChange={(e) => { setSightQuery(e.target.value); setSightPick(null); }} placeholder="Near what? e.g. Eiffel Tower" autoCapitalize="words"
+                  className="flex-1 py-3 bg-transparent text-[calc(14px*var(--fs))]" style={{ color: ED_INK, fontFamily: "inherit", outline: "none" }} />
+                <button onClick={() => { setSightInputOpen(false); setSightQuery(""); }} aria-label="Close" className="flex-none w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "#F1EADF" }}>
+                  <X size={14} color={ED_INK} strokeWidth={2.2} />
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => { setSightInputOpen(true); setSightPick(null); }} className="mt-2 inline-flex items-center gap-1.5 text-[calc(12.5px*var(--fs))] font-semibold" style={{ color: ACCENT }}>
+                <Search size={13} strokeWidth={2.2} /> Type a specific place
+              </button>
+            )}
           </div>
         )}
 
