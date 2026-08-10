@@ -251,8 +251,11 @@ export default function FindAHotel() {
         <div className="flex flex-wrap gap-2 mb-3">
           {GOALS.map((g) => {
             const active = goal === g.key;
+            // Tapping the active chip again deselects it, reverting to the base
+            // "This area" (the destination itself). "This area" is the base, so
+            // re-tapping it just stays there.
             return (
-              <button key={g.key} onClick={() => setGoal(g.key)}
+              <button key={g.key} onClick={() => setGoal(active ? "area" : g.key)}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full font-semibold text-[calc(13px*var(--fs))]"
                 style={{ background: active ? ACCENT : "#FFFFFF", color: active ? "#fff" : ED_INK, border: `1.5px solid ${active ? ACCENT : "#F0E9DC"}` }}>
                 <span>{g.emoji}</span>{g.label}
