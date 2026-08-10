@@ -55,6 +55,7 @@ import BasicPhrases from './pages/BasicPhrases';
 import CoffeeFinder from './pages/CoffeeFinder';
 import ConvenienceStore from './pages/ConvenienceStore';
 import CultureInformation from './pages/CultureInformation';
+import FindAHotel from './pages/FindAHotel';
 import GetARide from './pages/GetARide';
 import Home from './pages/Home';
 import Insight from './pages/Insight';
@@ -85,6 +86,7 @@ export const PAGES = {
     "CoffeeFinder": CoffeeFinder,
     "ConvenienceStore": ConvenienceStore,
     "CultureInformation": CultureInformation,
+    "FindAHotel": FindAHotel,
     "GetARide": GetARide,
     "Home": Home,
     "Insight": Insight,

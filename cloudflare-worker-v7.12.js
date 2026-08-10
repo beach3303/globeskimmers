@@ -12146,7 +12146,7 @@ const AFF_SUBID_PARAM = {
   travelpayouts: 'sub_id', viator: 'campaign', discovercars: 'subId', wise: 'clickref',
   getyourguide: 'sub_id', welcomepickups: 'sub_id', kiwitaxi: 'sub_id',
   booking: 'sub_id', agoda: 'sub_id', airalo: 'sub_id', radicalstorage: 'sub_id',
-  tiqets: 'sub_id', gigsky: 'sub_id',
+  tiqets: 'sub_id', gigsky: 'sub_id', stay22: 'campaign',
 };
 // Does Viator actually have bookable products for this attraction? Powers the
 // gate so "Book a tour here" only shows on real matches (not a category guess).

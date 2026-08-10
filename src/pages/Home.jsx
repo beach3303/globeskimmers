@@ -422,6 +422,7 @@ export default function HomePage() {
       "Places to Eat": "PlacesToEat",
       "Transportation": "Transportation",
       "Get A Ride": "GetARide",
+      "Find a Hotel": "FindAHotel",
       "Travel Essentials": "TravelEssentials",
       "Shopping": "Shopping",
       "Smart Text Scanner": "SmartTextScanner",
@@ -737,8 +738,9 @@ export default function HomePage() {
           grows the tile instead of clipping. */}
       <div className="px-4 pb-3">
         <div className="max-w-md mx-auto grid grid-cols-2 gap-2.5">
-          {/* Row 1: Book a Ride (left) + Money Exchange (right) */}
+          {/* Row 1: Book a Ride + Find a Hotel (both travel-booking) */}
           <PhoneTile cat={{ ink: '#2563EB' }} emoji="🚗" title="Book a Ride" sub="Cars · transfers · rides" onClick={() => handleQuickAction('Get A Ride')} />
+          <PhoneTile cat={{ ink: '#2563EB' }} emoji="🏨" title="Find a Hotel" sub="Best price · all sites" onClick={() => handleQuickAction('Find a Hotel')} />
           <PhoneTile cat={CAT.money} emoji="💱" title="Money Exchange" sub="Compare rates near you" onClick={() => handleQuickAction('Money Exchange')} />
           {PHONE_FEATURES.map((f) => (
             <PhoneTile key={f.title} cat={f.cat} emoji={f.emoji} title={f.title} sub={f.sub} onClick={() => handleQuickAction(f.action)} />
