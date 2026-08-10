@@ -813,6 +813,15 @@ export default function ThingsToDoFinder() {
   const [highlight,setHighlight]=useState(null);
   const [expandedIdx,setExpandedIdx]=useState(null);
   const [activePin,setActivePin]=useState(null);
+  // Activity search — surfaces bookable EXPERIENCES (Viator) the owned attractions
+  // DB can't cover (zip lining, whale watching, ATV…) + filters nearby places.
+  // NOTE: declared here (with the other state) rather than lower, because the
+  // `filtered` useMemo below reads `submitted` — declaring it after `filtered`
+  // hit the temporal dead zone and crashed the whole page on render.
+  const [q,setQ]=useState("");
+  const [submitted,setSubmitted]=useState("");
+  const [tours,setTours]=useState(null); // null=not searched · []=none · [...]=results
+  const [tourBusy,setTourBusy]=useState(false);
   const cardRefs=useRef({});
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
   const {activeLocation}=useLocation();
@@ -930,12 +939,8 @@ export default function ThingsToDoFinder() {
   const advFilterCount=[openOnly,outdoorOnly,popularOnly,category!=='all'].filter(Boolean).length;
   const clearFilters=()=>{setOpenOnly(false);setOutdoorOnly(false);setPopularOnly(false);setCategory('all');};
 
-  // Activity search — surfaces bookable EXPERIENCES (Viator) the owned attractions
-  // DB can't cover (zip lining, whale watching, ATV…) + filters nearby places.
-  const [q,setQ]=useState("");
-  const [submitted,setSubmitted]=useState("");
-  const [tours,setTours]=useState(null); // null=not searched · []=none · [...]=results
-  const [tourBusy,setTourBusy]=useState(false);
+  // Activity search handlers — state (q/submitted/tours/tourBusy) is declared
+  // higher up with the rest of the component state (see note there).
   const runActivitySearch=async()=>{
     const query=q.trim(); if(!query) return;
     setSubmitted(query); setTourBusy(true); setTours(null);
