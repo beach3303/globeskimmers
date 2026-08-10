@@ -919,8 +919,13 @@ export default function ThingsToDoFinder() {
     return out;
   },[submitted,ownedPool,searchPlaces]);
 
+  // Browsing (no search) with any advanced filter on → filter across the WHOLE
+  // owned pool (main list + all three tiers) and show one flat list. Otherwise
+  // the toggles only touch the small main list and the big tier strips ignore
+  // them, so filters look like they do nothing.
+  const browseFilterActive=!submitted&&(openOnly||outdoorOnly||popularOnly||category!=='all');
   const filtered=useMemo(()=>{
-    let r=submitted?[...searchMerged]:[...activities];
+    let r=submitted?[...searchMerged]:(browseFilterActive?[...ownedPool]:[...activities]);
     r=r.filter(a=>(a.distanceMiles||999)<=radius); // within-radius
     if(openOnly)    r=r.filter(a=>a.isOpen===true);
     if(outdoorOnly) r=r.filter(a=>a.props?.isOutdoor);
@@ -929,8 +934,9 @@ export default function ThingsToDoFinder() {
       const isHighlyRated=(a.userRatingCount||0)>=200&&(a.rating||0)>=4.0;
       return isIconic||isHighlyRated||a.props?.isBucketList;
     });
+    if(!submitted&&category!=='all') r=r.filter(a=>a.activityCategory===category); // category chip (client-side, across the pool)
     return r;
-  },[activities,searchMerged,submitted,radius,openOnly,outdoorOnly,popularOnly,category]);
+  },[activities,ownedPool,searchMerged,submitted,browseFilterActive,radius,openOnly,outdoorOnly,popularOnly,category]);
 
   // "A bit farther — worth the trip": search matches just beyond the radius,
   // closest few. So an empty in-radius result still surfaces nearby options
@@ -1108,17 +1114,18 @@ export default function ThingsToDoFinder() {
             {tourBusy&&filtered.length===0&&<div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",padding:"6px 4px"}}>Searching nearby…</div>}
           </div>
         )}
-        {!submitted&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
-        {!submitted&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
-        {!submitted&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet}/>}
-        {!submitted&&(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Near You</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
+        {browseFilterActive&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🔧</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Filtered results</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
+        {!submitted&&!browseFilterActive&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
+        {!submitted&&!browseFilterActive&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
+        {!submitted&&!browseFilterActive&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet}/>}
+        {!submitted&&!browseFilterActive&&(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Near You</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
         {/* Empty state */}
         {submitted
           ? (!tourBusy&&cardsList.length===0&&(!tours||tours.length===0)
               ? <div style={{textAlign:"center",padding:"40px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"12px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(17px*var(--fs))",color:T.dark}}>Nothing for &ldquo;{submitted}&rdquo; nearby</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Try a broader term or a wider radius.</div></div>
               : null)
-          : (filtered.length===0&&nationalIcons.length===0&&regionalGems.length===0
-              ? <div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Try a different category or expand your radius</div></div>
+          : (filtered.length===0&&(browseFilterActive||(nationalIcons.length===0&&regionalGems.length===0))
+              ? <div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>{browseFilterActive?"No spots match these filters — try clearing one or widening your radius":"Try a different category or expand your radius"}</div></div>
               : null)}
 
         {/* Main cards — within-radius (both modes). When searching, the
