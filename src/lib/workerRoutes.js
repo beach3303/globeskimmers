@@ -25,6 +25,7 @@ export const ROUTE = {
   getWeatherForecast: 'weather-forecast',
   getCoffeeShops: 'coffee-shops',
   getCoffeeOwned: 'coffee-owned',
+  searchCoffee: 'coffee/search',
   getShoppingPlaces: 'shopping',
   getShoppingOwned: 'shopping-owned',
   getConvenienceStores: 'convenience-stores',

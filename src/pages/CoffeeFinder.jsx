@@ -453,6 +453,13 @@ export default function CoffeeFinderPage() {
   const [filterOpenNow,setFilterOpenNow]       = useState(false);
   const [filterShopType,setFilterShopType]     = useState("all");
   const [filterWifi,setFilterWifi]               = useState(false);
+  // Café / drink search — name (e.g. "Blue Bottle") or a drink (latte, cold
+  // brew, caramel macchiato). Owned-first (client filter over `shops`) merged
+  // with a live Google café search (searchShops).
+  const [q,setQ]                                 = useState("");
+  const [submitted,setSubmitted]                 = useState("");
+  const [searchShops,setSearchShops]             = useState([]);
+  const [searchBusy,setSearchBusy]               = useState(false);
   const [selectedMapIndex, setSelectedMapIndex] = useState(null);
   const cardRefs = useRef({}); const mapRef = useRef(null); const mapInstanceRef = useRef(null);
 
@@ -492,8 +499,29 @@ export default function CoffeeFinderPage() {
     })();
   },[lat,lng,radius,refreshTick]);
 
+  // Search results = owned café/drink matches (free, instant) merged with the
+  // live Google café search, deduped, distance-sorted. No radius filter here.
+  const searchMerged = useMemo(()=>{
+    if(!submitted) return [];
+    const needle=submitted.toLowerCase();
+    const owned=shops.filter(s=>`${s.name||''} ${Object.keys(s.detectedDrinks||{}).join(' ')} ${(s.types||[]).join(' ')}`.toLowerCase().includes(needle));
+    const seen=new Set(),out=[];
+    const push=(s)=>{const k=s.id||s.placeId||`${s.lat},${s.lng}`;if(k&&!seen.has(k)){seen.add(k);out.push(s);}};
+    owned.forEach(push);            // owned first — free + trusted
+    (searchShops||[]).forEach(push); // then live Google cafés
+    out.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
+    return out;
+  },[submitted,shops,searchShops]);
+
   const filtered = useMemo(()=>{
-    let r=[...shops];
+    // Searching: within-radius merged results, or the closest few beyond if
+    // nothing is within radius (better than an empty screen). Else: browse.
+    let base;
+    if(submitted){
+      const within=searchMerged.filter(s=>(s.distanceMiles||999)<=radius);
+      base=within.length?within:searchMerged.slice(0,8);
+    } else base=shops;
+    let r=[...base];
     if(quickFilter==="open")         r=r.filter(s=>s.isOpen===true);
     if(quickFilter==="specialty")    r=r.filter(s=>s.isSpecialty);
     if(quickFilter==="wifi")         r=r.filter(s=>s.hasWifi);
@@ -510,9 +538,22 @@ export default function CoffeeFinderPage() {
       return sb-sa;
     });
     return r;
-  },[shops,quickFilter,sortBy,filterOpenNow,filterWifi,filterShopType]);
+  },[shops,searchMerged,submitted,radius,quickFilter,sortBy,filterOpenNow,filterWifi,filterShopType]);
 
   const clearFilters=()=>{setFilterOpenNow(false);setFilterShopType("all");setFilterWifi(false);};
+
+  const runSearch=async()=>{
+    const query=q.trim(); if(!query) return;
+    setSubmitted(query); setSearchBusy(true); setSearchShops([]);
+    logEvent('coffee_search',{query,radius},'CoffeeFinder'); // intent signal
+    try{
+      const {data}=await callWorker(ROUTE.searchCoffee,{query,latitude:lat,longitude:lng,radiusMiles:radius});
+      const raw=Array.isArray(data?.places)?data.places:[];
+      setSearchShops(raw.map(p=>processShop(p,lat,lng)));
+    }catch{ setSearchShops([]); }
+    setSearchBusy(false);
+  };
+  const clearSearch=()=>{setQ("");setSubmitted("");setSearchShops([]);};
 
   const handleShowOnMap=(index)=>{setSelectedMapIndex(index);setViewMode("map");setTimeout(()=>{const s=filtered[index];if(mapInstanceRef.current&&s?.lat&&s?.lng)mapInstanceRef.current.setView([s.lat,s.lng],16);},300);};
 
@@ -603,6 +644,13 @@ export default function CoffeeFinderPage() {
 
         <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={BROWN} unit={unit} setUnit={setUnit} />
 
+        {/* Café / drink search */}
+        <form onSubmit={(e)=>{e.preventDefault();runSearch();}} style={{display:"flex",gap:"8px",margin:"8px 0 2px"}}>
+          <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search a café or a drink — latte, matcha, cold brew…" autoCapitalize="none" style={{flex:1,minWidth:0,padding:"11px 14px",borderRadius:"12px",border:"1.5px solid #E2E8F0",fontSize:"calc(14px*var(--fs))",fontFamily:"inherit",color:DARK,background:"#fff"}}/>
+          <button type="submit" disabled={!q.trim()||searchBusy} style={{padding:"11px 16px",borderRadius:"12px",border:"none",background:BROWN,color:"#fff",fontWeight:"700",fontSize:"calc(13px*var(--fs))",fontFamily:"inherit",cursor:"pointer",opacity:(!q.trim()||searchBusy)?0.6:1}}>{searchBusy?"…":"Search"}</button>
+          {submitted&&<button type="button" onClick={clearSearch} style={{padding:"11px 12px",borderRadius:"12px",border:"1.5px solid #E2E8F0",background:"#fff",color:GRAY,fontWeight:"700",fontSize:"calc(13px*var(--fs))",fontFamily:"inherit",cursor:"pointer"}}>✕</button>}
+        </form>
+
         {/* Sort + quick filters */}
         <div style={{display:"flex",gap:"8px",overflowX:"auto",padding:"4px 0 8px",scrollbarWidth:"none",alignItems:"center"}}>
           <div style={{display:"flex",background:"#F1F5F9",borderRadius:"10px",padding:"2px",flexShrink:0}}>
@@ -683,13 +731,18 @@ export default function CoffeeFinderPage() {
         <div style={isTablet
           ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
           : {width:"100%",padding:"0 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>
+          {submitted&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"-4px 0 2px"}}><span style={{fontSize:"calc(16px*var(--fs))"}}>☕</span><span style={{fontWeight:"800",fontSize:"calc(14px*var(--fs))",color:DARK}}>Caf&eacute;s matching &ldquo;{submitted}&rdquo;</span><span style={{fontSize:"calc(12px*var(--fs))",color:GRAY}}>({filtered.length})</span></div>}
           {filtered.length===0?(
+            searchBusy?(
+              <div style={{textAlign:"center",padding:"40px 20px",background:"#fff",borderRadius:"12px"}}><div style={{fontSize:"calc(32px*var(--fs))",marginBottom:"10px",animation:"pulse 1.5s infinite"}}>☕</div><div style={{fontWeight:"600",color:GRAY}}>Searching caf&eacute;s…</div></div>
+            ):(
             <div style={{textAlign:"center",padding:"40px 20px",background:"#fff",borderRadius:"12px"}}>
               <div style={{fontSize:"calc(32px*var(--fs))",marginBottom:"10px"}}>🔍</div>
-              <div style={{fontWeight:"600",color:DARK,marginBottom:"8px"}}>No matches found</div>
-              <div style={{fontSize:"calc(13px*var(--fs))",color:GRAY,marginBottom:"14px"}}>Try adjusting filters or expanding the radius</div>
+              <div style={{fontWeight:"600",color:DARK,marginBottom:"8px"}}>{submitted?`No cafés for "${submitted}" nearby`:"No matches found"}</div>
+              <div style={{fontSize:"calc(13px*var(--fs))",color:GRAY,marginBottom:"14px"}}>{submitted?"Try a different drink or café name, or widen the radius":"Try adjusting filters or expanding the radius"}</div>
               {activeFilterCount>0&&<button onClick={clearFilters} style={{padding:"9px 18px",borderRadius:"8px",border:"none",background:BROWN,color:"#fff",fontWeight:"600",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Clear Filters</button>}
             </div>
+            )
           ):filtered.map((shop,i)=>{
             const Card = CoffeeCardTablet;
             return (

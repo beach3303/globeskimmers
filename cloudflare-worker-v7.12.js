@@ -7593,14 +7593,57 @@ function gaMapOvertureToActivity(r) {
 }
 
 // Internal search helpers — call the Worker's own handlers (no HTTP hop).
-async function gaText(env, ctx, origin, { query, latitude, longitude, radius, maxResults, forceRefresh }) {
+async function gaText(env, ctx, origin, { query, latitude, longitude, radius, maxResults, forceRefresh, includedType }) {
   const p = new URLSearchParams({
     query, latitude: String(latitude), longitude: String(longitude),
     radius: String(radius), maxResults: String(maxResults),
     ...(forceRefresh ? { forceRefresh: 'true' } : {}),
+    ...(includedType ? { includedType } : {}),
   });
   const res = await handleTextSearch(new Request(`${origin}/places/text-search?${p}`), env, ctx);
   return (await res.json()).places || [];
+}
+
+// Coffee keyword search — real cafés matching a typed query (a café NAME or a
+// DRINK like "latte" / "cold brew" / "caramel macchiato"). Owned-first is done
+// on the client over the already-loaded list; this is the live Google layer
+// that catches cafés not in the owned set. Biased to type 'cafe'. Returns raw
+// normalized Google places (+ distanceMiles) so the frontend's processShop can
+// derive drinks/amenities/tier exactly as it does for the owned list. Cached
+// in KV per query+geo+radius (3-day TTL).
+async function handleCoffeeKeywordSearch(request, env, ctx) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const query = String(b.query || '').trim().slice(0, 80);
+    if (!query) return jsonResponse({ places: [] });
+    const lat = parseFloat(b.latitude), lng = parseFloat(b.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return jsonResponse({ places: [] });
+    const radiusMiles = Math.max(parseFloat(b.radiusMiles) || 10, 5);
+    const geoKey = `${lat.toFixed(2)}_${lng.toFixed(2)}`;
+    const cacheKey = `coffeesearch:v1:${query.toLowerCase()}:${geoKey}:${Math.round(radiusMiles)}`;
+    const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+    if (cached) return jsonResponse(cached);
+
+    const origin = new URL(request.url).origin;
+    const capMi = Math.max(radiusMiles * 2.5, 30); // "sort of close by"
+    const searchRadiusM = Math.min(Math.round(radiusMiles * 1609 * 2), 50000);
+    let places = [];
+    try {
+      const raw = await gaText(env, ctx, origin, { query, latitude: lat, longitude: lng, radius: searchRadiusM, maxResults: 20, includedType: 'cafe' });
+      places = raw
+        .map((p) => {
+          const plat = p.location?.latitude ?? p.lat, plng = p.location?.longitude ?? p.lng;
+          if (plat == null || plng == null) return null;
+          return { ...p, distanceMiles: haversineMilesLoc(lat, lng, plat, plng) };
+        })
+        .filter((p) => p && p.distanceMiles <= capMi)
+        .sort((a, b) => (a.distanceMiles ?? 1e9) - (b.distanceMiles ?? 1e9));
+    } catch { places = []; }
+
+    const payload = { places, query };
+    if (places.length && ctx) ctx.waitUntil(env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: 3 * 24 * 60 * 60 }).catch(() => {}));
+    return jsonResponse(payload);
+  } catch (e) { return jsonResponse({ places: [], error: e.message }); }
 }
 async function gaNearby(env, ctx, origin, { type, latitude, longitude, radius, maxResults, forceRefresh }) {
   const p = new URLSearchParams({
@@ -12453,6 +12496,7 @@ export default {
       if (pathname === '/activities' && request.method === 'POST') return await handleActivities(request, env, ctx);
       if (pathname === '/restaurants-full' && request.method === 'POST') return await handleRestaurantsOwned(request, env, ctx);
       if (pathname === '/coffee-owned' && request.method === 'POST') return await handleCoffeeOwned(request, env, ctx);
+      if (pathname === '/coffee/search' && request.method === 'POST') return await handleCoffeeKeywordSearch(request, env, ctx);
       if (pathname === '/atm-owned' && request.method === 'POST') return await handleOwnedFinder(request, env, 'nearby_atm', 'atm_owned');
       if (pathname === '/shopping-owned' && request.method === 'POST') return await handleOwnedFinder(request, env, 'nearby_shopping', 'shopping_owned');
       if (pathname === '/restroom-owned' && request.method === 'POST') return await handleRestroomHybrid(request, env, ctx);
