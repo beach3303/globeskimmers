@@ -822,6 +822,7 @@ export default function ThingsToDoFinder() {
   const [submitted,setSubmitted]=useState("");
   const [tours,setTours]=useState(null); // null=not searched · []=none · [...]=results
   const [tourBusy,setTourBusy]=useState(false);
+  const [searchPlaces,setSearchPlaces]=useState([]); // live Google Places keyword results
   const cardRefs=useRef({});
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
   const {activeLocation}=useLocation();
@@ -892,9 +893,35 @@ export default function ThingsToDoFinder() {
     })();
   },[lat,lng,country,region,category,refreshTick]);
 
+  // All owned/cached places from the getActivities call, deduped — the FREE,
+  // instant first layer of search (main list + national icons + regional +
+  // nearby). Searching hits this whole set, not just the cards on screen.
+  const ownedPool=useMemo(()=>{
+    const seen=new Set(),out=[];
+    for(const a of [...activities,...nationalIcons,...regionalGems,...nearbyAttractions]){
+      const k=a.placeId||a.id; if(k&&!seen.has(k)){seen.add(k);out.push(a);}
+    }
+    return out;
+  },[activities,nationalIcons,regionalGems,nearbyAttractions]);
+
+  // Search results = owned/cached keyword matches (free, instant, trusted)
+  // MERGED with live Google Places results, deduped by id, sorted by distance.
+  // No radius filter here — the within/beyond split happens below.
+  const searchMerged=useMemo(()=>{
+    if(!submitted) return [];
+    const needle=submitted.toLowerCase();
+    const owned=ownedPool.filter(a=>`${a.displayName?.text||a.name||""} ${(a.types||[]).join(" ")} ${a.category||""} ${a.activityLabel||""} ${a.editorialSummary?.text||a.editorialSummary||""}`.toLowerCase().includes(needle));
+    const seen=new Set(),out=[];
+    const push=(a)=>{const k=a.placeId||a.id||`${a.lat},${a.lng}`;if(k&&!seen.has(k)){seen.add(k);out.push(a);}};
+    owned.forEach(push);          // owned first — free + trusted
+    (searchPlaces||[]).forEach(push); // then live Google businesses
+    out.sort((a,b)=>(a.distanceMiles??1e9)-(b.distanceMiles??1e9));
+    return out;
+  },[submitted,ownedPool,searchPlaces]);
+
   const filtered=useMemo(()=>{
-    let r=[...activities];
-    r=r.filter(a=>(a.distanceMiles||999)<=radius); // client-side radius filter
+    let r=submitted?[...searchMerged]:[...activities];
+    r=r.filter(a=>(a.distanceMiles||999)<=radius); // within-radius
     if(openOnly)    r=r.filter(a=>a.isOpen===true);
     if(outdoorOnly) r=r.filter(a=>a.props?.isOutdoor);
     if(popularOnly) r=r.filter(a=>{
@@ -902,14 +929,21 @@ export default function ThingsToDoFinder() {
       const isHighlyRated=(a.userRatingCount||0)>=200&&(a.rating||0)>=4.0;
       return isIconic||isHighlyRated||a.props?.isBucketList;
     });
-    if(submitted){
-      const needle=submitted.toLowerCase();
-      r=r.filter(a=>`${a.displayName?.text||a.name||""} ${(a.types||[]).join(" ")} ${a.category||""} ${a.activityLabel||""} ${a.editorialSummary?.text||""}`.toLowerCase().includes(needle));
-    }
     return r;
-  },[activities,radius,openOnly,outdoorOnly,popularOnly,category,submitted]);
+  },[activities,searchMerged,submitted,radius,openOnly,outdoorOnly,popularOnly,category]);
 
-  const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const a=filtered[i];if(mapInst.current&&a?.lat&&a?.lng){mapInst.current.setView([a.lat,a.lng],17);markers.current[i]?.openPopup();}},350);};
+  // "A bit farther — worth the trip": search matches just beyond the radius,
+  // closest few. So an empty in-radius result still surfaces nearby options
+  // (activities are destination-y — people drive to a zipline).
+  const searchBeyond=useMemo(()=>{
+    if(!submitted) return [];
+    return searchMerged.filter(a=>(a.distanceMiles??999)>radius).slice(0,6);
+  },[submitted,searchMerged,radius]);
+
+  // Cards rendered in the main list + plotted on the map + counted in stats.
+  const cardsList=useMemo(()=>submitted?[...filtered,...searchBeyond]:filtered,[submitted,filtered,searchBeyond]);
+
+  const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const a=cardsList[i];if(mapInst.current&&a?.lat&&a?.lng){mapInst.current.setView([a.lat,a.lng],17);markers.current[i]?.openPopup();}},350);};
 
   useEffect(()=>{
     if(viewMode!=="map"||!mapRef.current||!lat||!lng) return;
@@ -919,9 +953,9 @@ export default function ThingsToDoFinder() {
       window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OSM"}).addTo(map);
       mapInst.current=map; window._gsTDMapInst=map;
       window._gsTDView=(i)=>{map.closePopup();setViewMode("list");setExpandedIdx(i);setHighlight(i);setTimeout(()=>cardRefs.current[i]?.scrollIntoView({behavior:"smooth",block:"center"}),150);setTimeout(()=>setHighlight(null),2800);};
-      window._gsTDDirs=(i)=>setDirsA(filtered[i]);
+      window._gsTDDirs=(i)=>setDirsA(cardsList[i]);
       window.L.marker([lat,lng],{icon:window.L.divIcon({html:'<div style="width:14px;height:14px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',iconSize:[14,14],className:""})}).addTo(map).bindTooltip('<div style="font-family:-apple-system,sans-serif;padding:5px 9px;"><span style="font-weight:700;color:#1A2332;font-size:calc(11px*var(--fs));">📍 You are here</span></div>',{permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip',interactive:false});
-      filtered.forEach((a,i)=>{
+      cardsList.forEach((a,i)=>{
         if(!a.lat||!a.lng) return;
         const active=activePin===i; const color=active?"#FF6B35":a.activityColor||T.accent; const sz=active?36:30;
         const mk=window.L.marker([a.lat,a.lng],{icon:window.L.divIcon({html:`<div style="width:${sz}px;height:${sz}px;background:${color};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:${active?14:12}px;box-shadow:0 3px 12px ${color}70;border:${active?3:2}px solid #fff;">${a.activityIcon||"⭐"}</div>`,iconSize:[sz,sz],className:""})}).addTo(map);
@@ -933,9 +967,9 @@ export default function ThingsToDoFinder() {
     };
     if(!window.L){const lk=document.createElement("link");lk.rel="stylesheet";lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(lk);const sc=document.createElement("script");sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";sc.onload=init;document.head.appendChild(sc);}else init();
     return()=>{delete window._gsTDMapInst;delete window._gsTDView;delete window._gsTDDirs;if(mapInst.current){mapInst.current.remove();mapInst.current=null;}};
-  },[viewMode,filtered,lat,lng,activePin]);
+  },[viewMode,cardsList,lat,lng,activePin]);
 
-  const stats={total:filtered.length};
+  const stats={total:cardsList.length};
   const advFilterCount=[openOnly,outdoorOnly,popularOnly,category!=='all'].filter(Boolean).length;
   const clearFilters=()=>{setOpenOnly(false);setOutdoorOnly(false);setPopularOnly(false);setCategory('all');};
 
@@ -943,12 +977,17 @@ export default function ThingsToDoFinder() {
   // higher up with the rest of the component state (see note there).
   const runActivitySearch=async()=>{
     const query=q.trim(); if(!query) return;
-    setSubmitted(query); setTourBusy(true); setTours(null);
-    try{ const {data}=await callWorker(ROUTE.searchActivities,{query,city,country}); setTours(Array.isArray(data?.products)?data.products:[]); }
-    catch{ setTours([]); }
+    setSubmitted(query); setTourBusy(true); setTours(null); setSearchPlaces([]);
+    // Log the search term — intent signal: what are people actually looking for.
+    logEvent('activity_search',{query,city,country,radius},'ThingsToDo');
+    try{
+      const {data}=await callWorker(ROUTE.searchActivities,{query,city,country,latitude:lat,longitude:lng,radiusMiles:radius});
+      setSearchPlaces(Array.isArray(data?.places)?data.places:[]);
+      setTours(Array.isArray(data?.products)?data.products:[]);
+    }catch{ setTours([]); setSearchPlaces([]); }
     setTourBusy(false);
   };
-  const clearSearch=()=>{setQ("");setSubmitted("");setTours(null);};
+  const clearSearch=()=>{setQ("");setSubmitted("");setTours(null);setSearchPlaces([]);};
   const openTour=async(p)=>{
     const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorProductLink(p.url)||viatorSearchLink(p.title),category:"tour",productName:p.title,destCity:city,destCountry:country});
     if(url) window.open(url,"_blank");
@@ -1064,10 +1103,40 @@ export default function ThingsToDoFinder() {
         ? {maxWidth:1024,margin:"0 auto",padding:"14px 24px 170px",display:"flex",flexDirection:"column",gap:"4px"}
         : {padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"4px"}}>
         {submitted&&(
-          <div style={{marginBottom:"6px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 10px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🎟️</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>&ldquo;{submitted}&rdquo; — book an experience</span></div>
-            {tourBusy?(<div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",padding:"6px 4px"}}>Searching tours…</div>)
-            :(tours&&tours.length>0)?(<>
+          <div style={{marginBottom:"2px"}}>
+            {filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Places matching &ldquo;{submitted}&rdquo;</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
+            {tourBusy&&filtered.length===0&&<div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",padding:"6px 4px"}}>Searching nearby…</div>}
+          </div>
+        )}
+        {!submitted&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
+        {!submitted&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
+        {!submitted&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet}/>}
+        {!submitted&&(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Near You</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
+        {/* Empty state */}
+        {submitted
+          ? (!tourBusy&&cardsList.length===0&&(!tours||tours.length===0)
+              ? <div style={{textAlign:"center",padding:"40px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"12px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(17px*var(--fs))",color:T.dark}}>Nothing for &ldquo;{submitted}&rdquo; nearby</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Try a broader term or a wider radius.</div></div>
+              : null)
+          : (filtered.length===0&&nationalIcons.length===0&&regionalGems.length===0
+              ? <div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Try a different category or expand your radius</div></div>
+              : null)}
+
+        {/* Main cards — within-radius (both modes). When searching, the
+            "a bit farther" divider is injected before the first beyond card. */}
+        <div style={{display:"flex",flexDirection:"column",gap:isTablet?"30px":"16px"}}>{cardsList.map((a,i)=>{
+          const showBeyondHeader=submitted&&searchBeyond.length>0&&i===filtered.length;
+          return (<React.Fragment key={a.id||i}>
+            {showBeyondHeader&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:isTablet?"14px 4px 4px":"6px 4px 2px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🧭</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>A bit farther — worth the trip</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({searchBeyond.length})</span></div>}
+            <ActivityCardTablet a={a} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet}/>
+          </React.Fragment>);
+        })}</div>
+
+        {/* Bookable experiences (Viator) — AFTER the in-app results; monetized,
+            direct product deep-links. Demoted from the old top-of-page slot. */}
+        {submitted&&(tourBusy||(tours&&tours.length>0))&&(
+          <div style={{marginTop:"18px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 10px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🎟️</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Book &ldquo;{submitted}&rdquo; experiences</span></div>
+            {tourBusy?(<div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",padding:"6px 4px"}}>Searching tours…</div>):(<>
               <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>{tours.map((tp)=>(
                 <button key={tp.code||tp.url} onClick={()=>openTour(tp)} style={{display:"flex",gap:"12px",alignItems:"center",textAlign:"left",background:"#fff",border:"1px solid #E8EDF2",borderRadius:"16px",padding:"10px",cursor:"pointer",fontFamily:"inherit"}}>
                   {tp.thumbnail&&<img src={tp.thumbnail} alt="" style={{width:88,height:66,objectFit:"cover",borderRadius:"10px",flexShrink:0}}/>}
@@ -1082,21 +1151,14 @@ export default function ThingsToDoFinder() {
                 </button>
               ))}</div>
               <div style={{fontSize:"calc(10.5px*var(--fs))",color:T.gray,margin:"6px 4px 0"}}>Tours by Viator · we may earn a commission</div>
-            </>):(
-              <button onClick={openViatorFallback} style={{width:"100%",padding:"12px",borderRadius:"12px",border:`1.5px dashed ${T.accent}`,background:T.accentL,color:T.accentD,fontWeight:"700",fontSize:"calc(13px*var(--fs))",fontFamily:"inherit",cursor:"pointer"}}>Search &ldquo;{submitted}&rdquo; on Viator →</button>
-            )}
-            {filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"14px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Places matching &ldquo;{submitted}&rdquo;</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
+            </>)}
           </div>
         )}
-        {!submitted&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
-        {!submitted&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
-        {!submitted&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet}/>}
-        {!submitted&&(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Near You</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
-        {filtered.length===0&&nationalIcons.length===0&&regionalGems.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Try a different category or expand your radius</div></div>:null}
-        <div style={{display:"flex",flexDirection:"column",gap:isTablet?"30px":"16px"}}>{filtered.map((a,i)=>{
-          // Editorial card at BOTH widths now — responsive via isTablet.
-          return <ActivityCardTablet key={a.id||i} a={a} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet}/>;
-        })}</div>
+
+        {/* Exit-to-Viator — LAST RESORT only: nothing in-app AND no products. */}
+        {submitted&&!tourBusy&&cardsList.length===0&&(!tours||tours.length===0)&&(
+          <button onClick={openViatorFallback} style={{width:"100%",marginTop:"14px",padding:"12px",borderRadius:"12px",border:`1.5px dashed ${T.accent}`,background:T.accentL,color:T.accentD,fontWeight:"700",fontSize:"calc(13px*var(--fs))",fontFamily:"inherit",cursor:"pointer"}}>Search &ldquo;{submitted}&rdquo; on Viator →</button>
+        )}
       </div>)
       :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:T.dark}}>✕</button></div>)}
 

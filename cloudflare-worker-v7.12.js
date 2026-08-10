@@ -12079,37 +12079,108 @@ async function handleViatorMatch(request, env) {
 // hot air balloon, etc). Returns products; the client tracks the affiliate click
 // on tap (partner:viator). Geo-biased by appending the city to the search term.
 // Cached per query+geo for 3 days.
+// Lightweight map of a raw Google Places result (from /places/text-search)
+// into the activity-card shape the Things-to-Do frontend renders. Reuses
+// gaActivityType for icon/label/color and haversineMilesLoc for distance.
+// Lighter than handleActivities' processPlaceH (no review-signal scoring) —
+// enough for on-the-fly keyword search results (zipline, kayaking, ATV…).
+function gaMapSearchPlace(p, userLat, userLng) {
+  const lat = p.location?.latitude ?? p.lat;
+  const lng = p.location?.longitude ?? p.lng;
+  if (lat == null || lng == null) return null;
+  const name = p.displayName?.text || p.name || 'Activity';
+  const types = p.types || [];
+  const at = gaActivityType(name, types);
+  const distMi = haversineMilesLoc(userLat, userLng, lat, lng);
+  const photos = (p.photos || []).map((ph) => ph.url || ph).filter(Boolean).slice(0, 3);
+  const hours = p.currentOpeningHours?.weekdayDescriptions || p.regularOpeningHours?.weekdayDescriptions || p.hours || [];
+  return {
+    id: p.id, placeId: p.id, displayName: p.displayName || { text: name }, name,
+    location: { latitude: lat, longitude: lng }, lat, lng,
+    formattedAddress: p.formattedAddress || '', shortFormattedAddress: p.shortFormattedAddress || '',
+    distanceKm: distMi / 0.621371, distanceMiles: distMi, distance: `${distMi.toFixed(1)} mi`,
+    rating: p.rating || null, userRatingCount: p.userRatingCount || 0,
+    isOpen: p.isOpen ?? null, hours,
+    currentOpeningHours: { openNow: p.isOpen ?? null, weekdayDescriptions: hours },
+    photos, photoUrl: photos[0] || null, photoUrl2: photos[1] || null,
+    nationalPhoneNumber: p.nationalPhoneNumber || '',
+    websiteUri: p.websiteUri || '', googleMapsUri: p.googleMapsUri || '',
+    activityIcon: at.icon, activityLabel: at.label, activityColor: at.color, activityCategory: at.category,
+    editorialSummary: p.editorialSummary?.text || p.editorialSummary || '',
+    outdoorContext: null, types,
+    badges: [], qualityScore: 60, highlights: [], warnings: [], bestTime: '',
+    props: { isOutdoor: at.category === 'outdoor', isIndoor: at.category === 'culture', isPhotoWorthy: true },
+    travelType: distMi > 100 ? '✈️ Flights Required' : distMi > 50 ? '🚗 Drive' : distMi > 15 ? '🚗 Short Drive' : '📍 Nearby',
+    _source: 'search',
+  };
+}
+
+// Activity search — runs TWO sources in parallel and returns both:
+//   places[]   → real in-app businesses via Google Places keyword search
+//                (the ziplines / kayak rentals / ATV tours the tiered load
+//                 misses). This is the in-app experience.
+//   products[] → bookable Viator experiences (monetized; direct product links).
+// The frontend leads with places[], shows products[] as bookable cards, and
+// only falls back to a Viator exit link when BOTH are empty.
 async function handleActivitySearch(request, env, ctx) {
   try {
     const b = await request.json().catch(() => ({}));
     const query = String(b.query || '').trim().slice(0, 80);
-    if (!query) return jsonResponse({ products: [] });
-    if (!env.VIATOR_API_KEY) return jsonResponse({ products: [], unavailable: true });
+    if (!query) return jsonResponse({ places: [], products: [] });
     const city = String(b.city || '').trim().slice(0, 80);
+    const lat = parseFloat(b.latitude);
+    const lng = parseFloat(b.longitude);
+    const hasGeo = Number.isFinite(lat) && Number.isFinite(lng);
+    const radiusMiles = Math.max(parseFloat(b.radiusMiles) || 25, 25);
     const term = city ? `${query} ${city}` : query;
-    const cacheKey = `actsearch:v1:${term.toLowerCase()}`;
+
+    // Cache key includes query + ~1km geo grid + radius so a different city or
+    // a wider radius doesn't return a stale set. 3-day TTL like other searches.
+    const geoKey = hasGeo ? `${lat.toFixed(2)}_${lng.toFixed(2)}` : (city.toLowerCase() || 'na');
+    const cacheKey = `actsearch:v2:${query.toLowerCase()}:${geoKey}:${Math.round(radiusMiles)}`;
     const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
     if (cached) return jsonResponse(cached);
-    let products = [];
-    try {
-      const res = await fetch('https://api.viator.com/partner/search/freetext', {
-        method: 'POST',
-        headers: {
-          'exp-api-key': env.VIATOR_API_KEY,
-          Accept: 'application/json;version=2.0',
-          'Accept-Language': 'en-US',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          searchTerm: term,
-          searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count: 12 } }],
-          currency: 'USD',
-        }),
-      });
-      if (res.ok) {
+
+    const origin = new URL(request.url).origin;
+    // "sort of close by" cap — keeps snorkeling-in-a-landlocked-city from
+    // returning cross-country hits. Frontend splits within-radius vs a-bit-farther.
+    const capMi = Math.max(radiusMiles * 2.5, 75);
+
+    // 1) Google Places keyword search → real in-app businesses.
+    const placesP = (async () => {
+      if (!hasGeo) return [];
+      try {
+        const searchRadiusM = Math.min(Math.round(radiusMiles * 1609 * 2), 50000); // widen the net
+        const raw = await gaText(env, ctx, origin, { query, latitude: lat, longitude: lng, radius: searchRadiusM, maxResults: 20 });
+        return raw
+          .map((p) => gaMapSearchPlace(p, lat, lng))
+          .filter((a) => a && a.distanceMiles <= capMi)
+          .sort((a, b) => (a.distanceMiles ?? 1e9) - (b.distanceMiles ?? 1e9));
+      } catch { return []; }
+    })();
+
+    // 2) Viator products → bookable experiences (monetized).
+    const productsP = (async () => {
+      if (!env.VIATOR_API_KEY) return [];
+      try {
+        const res = await fetch('https://api.viator.com/partner/search/freetext', {
+          method: 'POST',
+          headers: {
+            'exp-api-key': env.VIATOR_API_KEY,
+            Accept: 'application/json;version=2.0',
+            'Accept-Language': 'en-US',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            searchTerm: term,
+            searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count: 12 } }],
+            currency: 'USD',
+          }),
+        });
+        if (!res.ok) return [];
         const d = await res.json();
         const results = Array.isArray(d?.products?.results) ? d.products.results : [];
-        products = results.map((p) => {
+        return results.map((p) => {
           const variants = (p?.images?.[0]?.variants) || [];
           const img = variants.find((v) => v.width >= 360 && v.width <= 720)?.url || variants[variants.length - 1]?.url || null;
           return {
@@ -12123,12 +12194,16 @@ async function handleActivitySearch(request, env, ctx) {
             reviews: (p?.reviews?.totalReviews ?? null),
           };
         }).filter((p) => p.title && p.url);
-      }
-    } catch { /* network / rate-limit → empty */ }
-    const payload = { products };
-    if (products.length && ctx) ctx.waitUntil(env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: 3 * 24 * 60 * 60 }).catch(() => {}));
+      } catch { return []; }
+    })();
+
+    const [places, products] = await Promise.all([placesP, productsP]);
+    const payload = { places, products, query };
+    if ((places.length || products.length) && ctx) {
+      ctx.waitUntil(env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: 3 * 24 * 60 * 60 }).catch(() => {}));
+    }
     return jsonResponse(payload);
-  } catch (e) { return jsonResponse({ products: [], error: e.message }); }
+  } catch (e) { return jsonResponse({ places: [], products: [], error: e.message }); }
 }
 
 async function handleAffiliateClick(request, env, ctx) {
