@@ -10948,6 +10948,15 @@ async function handleWikiPhotos(request, env) {
   } catch (e) { return jsonResponse({ error: 'wiki photos failed', details: e.message }, 500); }
 }
 
+// Accent/Unicode-insensitive fold for owned substring matching — mirrors the
+// frontend @/lib/searchText foldText so restaurant name/cuisine search is global
+// (NFKD + strip combining diacritics + lowercase): "cafe"→"Café", "sao"→"São".
+function gsFold(s) {
+  if (s == null) return '';
+  try { return String(s).normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim(); }
+  catch { return String(s).toLowerCase().trim(); }
+}
+
 // ─── Restaurants from the OWNED planet DB (replaces Google for the list) ──────
 // Same response shape the PlacesToEat cards expect; data from Postgres, photos
 // from Unsplash (cuisine-generic, cached). Google is only touched later, on-tap,
@@ -10981,8 +10990,8 @@ async function handleRestaurantsOwned(request, env, ctx) {
     }
     rows = Array.isArray(rows) ? rows : [];
 
-    if (cuisine && cuisine !== 'all') rows = rows.filter((r) => (r.category || '').toLowerCase().includes(cuisine));
-    if (query) rows = rows.filter((r) => `${r.name} ${r.category}`.toLowerCase().includes(query));
+    if (cuisine && cuisine !== 'all') rows = rows.filter((r) => gsFold(r.category).includes(gsFold(cuisine)));
+    if (query) rows = rows.filter((r) => gsFold(`${r.name} ${r.category}`).includes(gsFold(query)));
     rows = rows.slice(0, maxResults);
 
     // No list photos: real Google photos + hours are fetched on-tap (enrich-owned)
