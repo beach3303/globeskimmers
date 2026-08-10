@@ -84,6 +84,33 @@ const TOUR_MODE_LABELS = {
   boating: { icon: "⛵", label: "Boat tour" },
 };
 
+// Synonym map for fuzzy/conceptual activity searches — concrete terms (zipline,
+// kayaking, ATV) already match Google well, but vague ones return junk. We expand
+// ONLY the query sent to Google; the typed text stays as-is for display + the
+// owned-data match, so results still read as what the user asked for.
+const ACTIVITY_SYNONYMS = {
+  "views": "scenic viewpoint lookout",
+  "view": "scenic viewpoint lookout",
+  "scenic views": "scenic viewpoint lookout",
+  "great views": "scenic viewpoint lookout",
+  "amazing views": "scenic viewpoint lookout",
+  "spectacular views": "scenic viewpoint lookout",
+  "lookout": "scenic viewpoint lookout",
+  "sand boarding": "sandboarding dune",
+  "sandboarding": "sandboarding dune",
+  "mountain coaster": "mountain coaster alpine slide",
+  "tubing": "river tubing",
+  "cable car": "cable car aerial tramway",
+  "hot spring": "hot springs thermal bath",
+  "hot springs": "hot springs thermal bath",
+  "banana boat": "banana boat ride watersports",
+  "whale watching": "whale watching tour",
+};
+function expandActivityQuery(q) {
+  const key = (q || "").trim().toLowerCase();
+  return ACTIVITY_SYNONYMS[key] || q;
+}
+
 // ── localStorage cache for instant ThingsToDo page open ──────────────
 // User sees their LAST results within 50ms of tapping the tile, while
 // a fresh fetch happens in the background. The fresh data quietly
@@ -988,7 +1015,7 @@ export default function ThingsToDoFinder() {
     // Log the search term — intent signal: what are people actually looking for.
     logEvent('activity_search',{query,city,country,radius},'ThingsToDo');
     try{
-      const {data}=await callWorker(ROUTE.searchActivities,{query,city,country,latitude:lat,longitude:lng,radiusMiles:radius});
+      const {data}=await callWorker(ROUTE.searchActivities,{query:expandActivityQuery(query),city,country,latitude:lat,longitude:lng,radiusMiles:radius});
       setSearchPlaces(Array.isArray(data?.places)?data.places:[]);
       setTours(Array.isArray(data?.products)?data.products:[]);
     }catch{ setTours([]); setSearchPlaces([]); }
