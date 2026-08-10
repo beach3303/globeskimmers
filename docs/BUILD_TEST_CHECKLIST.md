@@ -294,6 +294,18 @@ State: Committed f14da06 · Frontend auto-deploys on push · **Worker needs `wra
 - [ ] Analytics: `activity_search` events land in D1 with the query term (AdminAnalytics)
 - [ ] Cost sanity: repeat the same search → served from KV (no new Google call)
 
+## ☕ Coffee — café + drink search (2026-08-09)
+Adds the missing search box to CoffeeFinder: search a café NAME or a DRINK (latte, cold brew, caramel macchiato). Owned-first client match + live Google café search (`/coffee/search`, biased to type 'cafe'), merged/deduped/distance-sorted; within-radius or closest-few-beyond. Also: Things to Do advanced filters now filter across all tiers in browse mode (`ce24c15`).
+State: Committed 49c4849 (+ce24c15) · Frontend auto-deploys on push · **Worker needs `wrangler deploy`** · Tested ⬜
+- [ ] **DEPLOY WORKER:** `cd "/Users/globeskimmers/Desktop/CODES PROTECT/globeskimmers-cacf36e4-10" && wrangler deploy` (café search returns places only after this)
+- [ ] Coffee: search a **drink** ("latte", "cold brew", "matcha") → real cafés appear under "Cafés matching…"; search a **café name** → that café appears
+- [ ] Owned-first: a name matching a loaded shop shows instantly before the Google call returns
+- [ ] Existing filters (Open Now / Specialty / WiFi / sort) still apply to search results; map + Directions work on results
+- [ ] Empty/edge: a nonsense query shows "No cafés for … nearby"; clearing (✕) returns to nearby browse
+- [ ] `coffee_search` events land in D1 (AdminAnalytics)
+- [ ] Things to Do: with nothing typed, tap Open Now / Outdoors / Popular / a category → tiers collapse into one "Filtered results" list that reflects the filter (not ignored)
+- [ ] Cost: repeat a search → served from KV (no new Google call)
+
 ## Template for a new build
 ```
 ### N · <feature name>
