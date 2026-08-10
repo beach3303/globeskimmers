@@ -18,7 +18,7 @@
 // pre-filtering is the planned Agoda-API follow-up.
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ExternalLink, MapPin, Minus, Plus, Search, X, Calendar as CalendarIcon } from "lucide-react";
+import { ArrowLeft, MapPin, Minus, Plus, Search, X, Calendar as CalendarIcon } from "lucide-react";
 import { DayPicker } from "react-day-picker";
 import { format } from "date-fns";
 import "react-day-picker/dist/style.css";
@@ -81,14 +81,18 @@ export default function FindAHotel() {
   const [airportsBusy, setAirportsBusy] = useState(false);
   const [airport, setAirport] = useState(null); // chosen airport {iata,city,lat,lng,km}
   const [apOpen, setApOpen] = useState(true);    // airport list expanded/collapsed
-  const [sight, setSight] = useState(null);      // top attraction {name,lat,lng}
+  const [sights, setSights] = useState([]);        // nearby attractions to pick from
+  const [sightPick, setSightPick] = useState(null); // chosen: {label, lat?, lng?, address?}
+  const [sightQuery, setSightQuery] = useState(""); // free-text "near what?"
   const [sightBusy, setSightBusy] = useState(false);
+  const [maxPrice, setMaxPrice] = useState(null);   // client-side price cap on results
 
   const [range, setRange] = useState();        // { from: Date, to: Date } | undefined
   const [dateOpen, setDateOpen] = useState(false);
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
-  const [confirm, setConfirm] = useState(false);
+  const [hotels, setHotels] = useState(null);   // null=not searched · []=none · [...]=results
+  const [hotelsBusy, setHotelsBusy] = useState(false);
 
   // Effective destination.
   const here = {
@@ -116,6 +120,7 @@ export default function FindAHotel() {
   // Resolve airport list / top sight when the goal or destination changes.
   useEffect(() => {
     let cancelled = false;
+    setHotels(null); // clear stale results when goal/destination changes
     if (goal === "airport" && hasCoords) {
       setAirportsBusy(true); setAirport(null); setApOpen(true);
       nearestAirports(dest.lat, dest.lng, 6, 130)
@@ -123,10 +128,10 @@ export default function FindAHotel() {
         .catch(() => { if (!cancelled) { setAirports([]); setAirportsBusy(false); } });
     }
     if (goal === "sights" && hasCoords) {
-      setSightBusy(true); setSight(null);
-      callWorker("attractions/nearby", { latitude: dest.lat, longitude: dest.lng, radiusKm: 40, limit: 5, cityName: dest.city, countryName: dest.country })
-        .then(({ data }) => { if (!cancelled) { const a = (data?.attractions || [])[0]; setSight(a ? { name: a.name, lat: a.lat, lng: a.lng } : null); setSightBusy(false); } })
-        .catch(() => { if (!cancelled) { setSight(null); setSightBusy(false); } });
+      setSightBusy(true); setSights([]); setSightPick(null); setSightQuery("");
+      callWorker("attractions/nearby", { latitude: dest.lat, longitude: dest.lng, radiusKm: 40, limit: 8, cityName: dest.city, countryName: dest.country })
+        .then(({ data }) => { if (!cancelled) { setSights((data?.attractions || []).map((a) => ({ name: a.name, lat: a.lat, lng: a.lng }))); setSightBusy(false); } })
+        .catch(() => { if (!cancelled) { setSights([]); setSightBusy(false); } });
     }
     return () => { cancelled = true; };
   }, [goal, dest.lat, dest.lng]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -142,26 +147,55 @@ export default function FindAHotel() {
   };
   const pickCity = (r) => { setPickedCity(r); setCityResults([]); setCityQuery(""); };
 
-  const buildUrl = () => {
-    const base = { checkin: checkin || undefined, checkout: checkout || undefined, adults, children };
-    if (goal === "airport" && airport) return buildStay22Url({ ...base, lat: airport.lat, lng: airport.lng });
-    if (goal === "centre" && dest.city) return buildStay22Url({ ...base, address: `${dest.city} city centre` });
-    if (goal === "sights" && sight) return buildStay22Url({ ...base, lat: sight.lat, lng: sight.lng });
-    if (hasCoords) return buildStay22Url({ ...base, lat: dest.lat, lng: dest.lng });
-    return buildStay22Url({ ...base, address: dest.city });
+  // Resolve the search location from the active goal → {lat,lng} or {address}.
+  const locParams = () => {
+    if (goal === "airport" && airport) return { lat: airport.lat, lng: airport.lng };
+    if (goal === "sights") {
+      if (sightPick?.lat != null) return { lat: sightPick.lat, lng: sightPick.lng };
+      if (sightPick?.address) return { address: sightPick.address };
+      const q = sightQuery.trim();
+      if (q) return { address: `${q} ${dest.city}`.trim() };
+      return { address: `${dest.city} city centre` };
+    }
+    if (goal === "centre" && dest.city) return { address: `${dest.city} city centre` };
+    if (hasCoords) return { lat: dest.lat, lng: dest.lng };
+    return { address: dest.city };
   };
 
   // Find is blocked until we have a destination, and (for the airport goal) an
   // airport is chosen.
   const blocked = !hasDest || (goal === "airport" && !airport);
 
-  const proceed = async () => {
-    setConfirm(false);
-    const url = await trackAffiliateClick({ partner: "stay22", targetUrl: buildUrl(), category: "hotel", destCity: dest.city, destCountry: dest.country });
-    if (url) window.open(url, "_blank");
+  // Fetch native hotel results (Stay22 Direct Travel API via our Worker).
+  const findHotels = async () => {
+    if (blocked) return;
+    const lp = locParams();
+    setHotelsBusy(true); setHotels(null); setMaxPrice(null);
+    try {
+      const { data } = await callWorker(ROUTE.searchHotels, { latitude: lp.lat, longitude: lp.lng, address: lp.address, checkin, checkout, adults, children });
+      setHotels(Array.isArray(data?.hotels) ? data.hotels : []);
+    } catch { setHotels([]); }
+    setHotelsBusy(false);
+  };
+  // Open one hotel's booking (attributed via trackAffiliateClick → SubID→D1).
+  const openHotel = async (url) => {
+    const t = await trackAffiliateClick({ partner: "stay22", targetUrl: url, category: "hotel", destCity: dest.city, destCountry: dest.country });
+    if (t) window.open(t, "_blank");
+  };
+  // "See all on Stay22" — the full comparison page for this search.
+  const compareAll = async () => {
+    const lp = locParams();
+    const url = buildStay22Url({ lat: lp.lat, lng: lp.lng, address: lp.address, checkin: checkin || undefined, checkout: checkout || undefined, adults, children });
+    const t = await trackAffiliateClick({ partner: "stay22", targetUrl: url, category: "hotel", destCity: dest.city, destCountry: dest.country });
+    if (t) window.open(t, "_blank");
   };
 
   const mi = (km) => `${Math.round(km * 0.621371)} mi`;
+  const money = (n) => `$${Math.round(n).toLocaleString()}`;
+  // Client-side price cap on the live results (the API returns no amenity data,
+  // but it does return price — so price filtering is real).
+  const PRICE_CAPS = [null, 100, 200, 300, 500];
+  const shownHotels = (hotels || []).filter((h) => maxPrice == null || (h.price != null && h.price <= maxPrice));
 
   return (
     <div className="min-h-screen" style={{ background: "#FFFCF7" }}>
@@ -302,10 +336,29 @@ export default function FindAHotel() {
           </div>
         )}
 
-        {/* Near the sights — resolved top attraction */}
+        {/* Near the sights — type a place, pick a nearby sight, or city view */}
         {goal === "sights" && hasCoords && (
-          <div className="rounded-[14px] px-4 py-3 mb-3 text-[calc(13px*var(--fs))]" style={{ background: ACCENT_BG, color: "#1E3A8A" }}>
-            {sightBusy ? "Finding the top sight…" : sight ? <>Searching hotels near <b>{sight.name}</b>.</> : "We'll search the central sightseeing area."}
+          <div className="mb-3">
+            <div className="flex items-center gap-2 px-3 rounded-[12px] mb-2" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
+              <Search size={16} color="#94A3B8" strokeWidth={2} />
+              <input value={sightQuery} onChange={(e) => { setSightQuery(e.target.value); setSightPick(null); }} placeholder="Near what? e.g. Eiffel Tower" autoCapitalize="words"
+                className="flex-1 py-3 bg-transparent text-[calc(14px*var(--fs))]" style={{ color: ED_INK, fontFamily: "inherit", outline: "none" }} />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[{ label: "🌆 City view", pick: { label: "City view", address: `${dest.city} city centre` } },
+                ...sights.slice(0, 6).map((s) => ({ label: `📍 ${s.name}`, pick: { label: s.name, lat: s.lat, lng: s.lng } }))
+              ].map((c) => {
+                const on = sightPick?.label === c.pick.label;
+                return (
+                  <button key={c.label} onClick={() => { setSightPick(c.pick); setSightQuery(""); }}
+                    className="inline-flex items-center px-3 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
+                    style={{ background: on ? ACCENT : "#FFFFFF", color: on ? "#fff" : ED_INK, border: `1.5px solid ${on ? ACCENT : "#F0E9DC"}` }}>
+                    {c.label}
+                  </button>
+                );
+              })}
+              {sightBusy && <span className="text-[calc(12px*var(--fs))] self-center" style={{ color: INK2 }}>finding sights…</span>}
+            </div>
           </div>
         )}
 
@@ -331,10 +384,10 @@ export default function FindAHotel() {
         </div>
 
         {/* Find */}
-        <button onClick={() => !blocked && setConfirm(true)} disabled={blocked}
+        <button onClick={() => !blocked && findHotels()} disabled={blocked || hotelsBusy}
           className="w-full py-4 rounded-[16px] font-bold text-white text-[calc(16px*var(--fs))] flex items-center justify-center gap-2"
-          style={{ background: ACCENT, opacity: blocked ? 0.5 : 1 }}>
-          🏨 Find hotels <ExternalLink size={15} color="#fff" strokeWidth={2.4} />
+          style={{ background: ACCENT, opacity: (blocked || hotelsBusy) ? 0.6 : 1 }}>
+          {hotelsBusy ? "Searching hotels…" : "🏨 Find hotels"}
         </button>
         {blocked && (
           <div className="text-center text-[calc(12px*var(--fs))] mt-2" style={{ color: INK2 }}>
@@ -342,13 +395,76 @@ export default function FindAHotel() {
           </div>
         )}
 
-        {/* Honest amenity note */}
+        {/* Native results — real hotels with live prices + attributed Book links */}
+        {hotels && !hotelsBusy && (
+          hotels.length === 0 ? (
+            <div className="mt-4 text-center rounded-[16px] px-4 py-6" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
+              <div className="text-[calc(28px*var(--fs))] mb-1">🔍</div>
+              <div className="font-bold text-[calc(15px*var(--fs))]" style={{ color: ED_INK }}>No stays found</div>
+              <div className="text-[calc(12.5px*var(--fs))] mt-1" style={{ color: INK2 }}>Try flexible dates, a wider area, or a different goal.</div>
+            </div>
+          ) : (
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2 px-1">
+                <span className="font-bold text-[calc(14px*var(--fs))]" style={{ color: ED_INK }}>{shownHotels.length} stays{range?.from ? "" : " · flexible"}</span>
+                <button onClick={compareAll} className="text-[calc(12.5px*var(--fs))] font-semibold" style={{ color: ACCENT }}>See all on Stay22 →</button>
+              </div>
+              {/* Price filter */}
+              <div className="flex gap-1.5 overflow-x-auto pb-2 mb-1" style={{ scrollbarWidth: "none" }}>
+                {PRICE_CAPS.map((cap) => {
+                  const on = maxPrice === cap;
+                  return (
+                    <button key={String(cap)} onClick={() => setMaxPrice(cap)}
+                      className="flex-none px-3 py-1.5 rounded-full font-semibold text-[calc(12px*var(--fs))]"
+                      style={{ background: on ? ACCENT : "#FFFFFF", color: on ? "#fff" : ED_INK, border: `1.5px solid ${on ? ACCENT : "#F0E9DC"}` }}>
+                      {cap == null ? "Any price" : `Under $${cap}`}
+                    </button>
+                  );
+                })}
+              </div>
+              {shownHotels.length === 0 ? (
+                <div className="text-center rounded-[16px] px-4 py-5" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
+                  <div className="font-semibold text-[calc(13.5px*var(--fs))]" style={{ color: ED_INK }}>No stays under ${maxPrice}</div>
+                  <button onClick={() => setMaxPrice(null)} className="text-[calc(12.5px*var(--fs))] font-semibold mt-1" style={{ color: ACCENT }}>Clear price filter</button>
+                </div>
+              ) : (
+              <div className="flex flex-col gap-2.5">
+                {shownHotels.slice(0, 20).map((h) => (
+                  <button key={h.id} onClick={() => openHotel(h.bookUrl)} className="w-full flex gap-3 p-2.5 rounded-[16px] text-left" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
+                    {h.thumbnail
+                      ? <img src={h.thumbnail} alt="" className="flex-none rounded-[12px] object-cover" style={{ width: 92, height: 92 }} />
+                      : <div className="flex-none rounded-[12px] flex items-center justify-center" style={{ width: 92, height: 92, background: ACCENT_BG, fontSize: fs(30) }}>🏨</div>}
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <div className="font-bold text-[calc(14px*var(--fs))] leading-snug" style={{ color: ED_INK, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{h.name}</div>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {h.stars ? <span className="text-[calc(11.5px*var(--fs))]" style={{ color: "#E0922F" }}>{"★".repeat(Math.min(h.stars, 5))}</span> : null}
+                        {h.reviewScore != null && <span className="text-[calc(11px*var(--fs))] font-bold px-1.5 py-0.5 rounded-[6px]" style={{ background: "#E7F3EA", color: "#2E7D46" }}>{h.reviewScore}{h.reviewCount ? ` · ${h.reviewCount}` : ""}</span>}
+                      </div>
+                      <div className="text-[calc(11.5px*var(--fs))] mt-1" style={{ color: INK2 }}>
+                        {[h.guests ? `Sleeps ${h.guests}` : "", h.bedrooms ? `${h.bedrooms} bdrm` : "", h.freeCancellation ? "free cancellation" : ""].filter(Boolean).join(" · ")}
+                      </div>
+                      <div className="mt-auto flex items-center justify-between pt-1">
+                        <span>{h.price != null
+                          ? <><span className="font-bold text-[calc(15px*var(--fs))]" style={{ color: ED_INK }}>{money(h.price)}</span><span className="text-[calc(10.5px*var(--fs))]" style={{ color: INK2 }}> total</span></>
+                          : <span className="text-[calc(12px*var(--fs))]" style={{ color: INK2 }}>See price</span>}</span>
+                        <span className="px-3 py-1.5 rounded-[10px] font-bold text-[calc(12px*var(--fs))] text-white flex-none" style={{ background: ACCENT }}>Book</span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              )}
+            </div>
+          )
+        )}
+
+        {/* Honest note — amenities are refined on the booking site */}
         <div className="mt-4 rounded-[14px] px-4 py-3 text-[calc(12.5px*var(--fs))] leading-relaxed" style={{ background: ACCENT_BG, color: "#1E3A8A" }}>
-          💡 On the results page you can filter for <b>breakfast, pool, gym, in-hotel restaurant, A/C, microwave &amp; fridge</b>, and set your price — across every site at once.
+          💡 Tap a stay to book on the best site (Booking, Expedia, Agoda…), where you can also filter for <b>breakfast, pool, gym, A/C</b> and more.
         </div>
 
         <p className="text-[calc(10.5px*var(--fs))] leading-snug pt-3 px-1" style={{ color: "#9AA0A6" }}>
-          Hotel results open on our partner Stay22, which compares Booking, Expedia, Agoda and more. We may earn a commission on some bookings — it never changes the price you pay.
+          Live prices via Stay22, which compares Booking, Expedia, Agoda and more. We may earn a commission on some bookings — it never changes the price you pay.
         </p>
       </div>
 
@@ -365,21 +481,6 @@ export default function FindAHotel() {
               <DayPicker mode="range" selected={range} onSelect={setRange} numberOfMonths={1} disabled={{ before: todayStart }} />
             </div>
             <button onClick={() => setDateOpen(false)} className="w-full mt-1 py-3 rounded-[14px] font-bold text-white text-[calc(14px*var(--fs))]" style={{ background: ACCENT }}>Done</button>
-          </div>
-        </div>
-      )}
-
-      {/* Leaving-to-partner heads-up */}
-      {confirm && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={() => setConfirm(false)}>
-          <div className="w-full sm:max-w-sm bg-white rounded-t-[22px] sm:rounded-[22px] p-5 sm:m-4" onClick={(e) => e.stopPropagation()} style={{ boxShadow: "0 -8px 40px -12px rgba(0,0,0,0.25)" }}>
-            <div className="text-[calc(15px*var(--fs))] leading-snug" style={{ color: ED_INK }}>
-              Heads up — we'll pop you over to <span className="font-bold">Stay22</span> to compare live hotel prices across every site. Your price won't change 🏨
-            </div>
-            <div className="flex gap-2 mt-4">
-              <button onClick={() => setConfirm(false)} className="flex-1 py-3 rounded-[14px] font-semibold text-[calc(14px*var(--fs))]" style={{ background: "#F1EADF", color: ED_INK }}>Not now</button>
-              <button onClick={proceed} className="flex-1 py-3 rounded-[14px] font-bold text-white text-[calc(14px*var(--fs))]" style={{ background: ACCENT }}>Compare prices</button>
-            </div>
           </div>
         </div>
       )}

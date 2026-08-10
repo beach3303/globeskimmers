@@ -12322,6 +12322,86 @@ async function handleActivitySearch(request, env, ctx) {
   } catch (e) { return jsonResponse({ places: [], products: [], error: e.message }); }
 }
 
+// Native in-app hotel results via the Stay22 Direct Travel API — live prices +
+// ratings + a per-hotel booking deeplink that already carries our aid (multi-OTA:
+// Booking / Expedia / VRBO / Hotels.com). Token (env.STAY22_API_TOKEN, a SECRET
+// set via `wrangler secret put`) lifts the rate limit to 100/min; without it the
+// call still works in demo mode (5/min). Cached 1h per location+dates+guests so
+// we're not re-pricing on every open. Note: the API returns price/rating/
+// capacity but NOT amenities — amenity filtering stays an Agoda-API job.
+async function handleHotelSearch(request, env, ctx) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const lat = parseFloat(b.latitude), lng = parseFloat(b.longitude);
+    const address = String(b.address || '').trim().slice(0, 120);
+    const checkin = String(b.checkin || '').slice(0, 10);
+    const checkout = String(b.checkout || '').slice(0, 10);
+    const adults = Math.min(Math.max(parseInt(b.adults, 10) || 2, 1), 16);
+    const children = Math.min(Math.max(parseInt(b.children, 10) || 0, 0), 16);
+    const hasGeo = Number.isFinite(lat) && Number.isFinite(lng);
+    if (!hasGeo && !address) return jsonResponse({ hotels: [] });
+
+    const geoKey = hasGeo ? `${lat.toFixed(3)}_${lng.toFixed(3)}` : address.toLowerCase();
+    const cacheKey = `hotels:v1:${geoKey}:${checkin}:${checkout}:${adults}_${children}`;
+    const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+    if (cached) return jsonResponse(cached);
+
+    const p = new URLSearchParams();
+    p.set('aid', 'globeskimmers');
+    if (hasGeo) { p.set('lat', String(lat)); p.set('lng', String(lng)); } else p.set('address', address);
+    if (checkin) p.set('checkin', checkin);
+    if (checkout) p.set('checkout', checkout);
+    p.set('adults', String(adults));
+    if (children) p.set('children', String(children));
+    p.set('currency', 'USD');
+
+    const headers = { Accept: 'application/json' };
+    if (env.STAY22_API_TOKEN) headers['X-API-KEY'] = env.STAY22_API_TOKEN;
+    let results = [];
+    try {
+      const res = await fetch(`https://api.stay22.com/v2/accommodations?${p.toString()}`, { headers });
+      if (res.ok) { const d = await res.json(); results = Array.isArray(d?.results) ? d.results : []; }
+    } catch { results = []; }
+
+    const hotels = results.map((r) => {
+      const suppliers = r.suppliers || {};
+      // Cheapest supplier that quotes a price → the headline; else any with a link.
+      let best = null;
+      for (const [name, s] of Object.entries(suppliers)) {
+        if (!s || !s.link) continue;
+        const price = s.price?.total;
+        if (price != null) { if (!best || best.price == null || price < best.price) best = { name, price, link: s.link, logo: s.media?.logoSquare }; }
+        else if (!best) best = { name, price: null, link: s.link, logo: s.media?.logoSquare };
+      }
+      if (!best) return null;
+      return {
+        id: r.id,
+        name: r.name || 'Hotel',
+        thumbnail: r.media?.thumbnail || null,
+        stars: r.rating?.hotelStars ?? null,
+        reviewScore: r.rating?.value ?? null,
+        reviewCount: r.rating?.count ?? null,
+        guests: r.capacity?.guests ?? null,
+        bedrooms: r.capacity?.bedrooms ?? null,
+        freeCancellation: r.policies?.freeCancellation === true,
+        price: best.price,
+        currency: 'USD',
+        supplier: best.name,
+        supplierLogo: best.logo || null,
+        bookUrl: best.link,
+        compareUrl: r.url || best.link,
+        address: r.location?.address || '',
+      };
+    }).filter(Boolean);
+    // Priced first, cheapest → dearest; unpriced trail.
+    hotels.sort((a, b) => (a.price != null && b.price != null) ? a.price - b.price : (a.price != null ? -1 : (b.price != null ? 1 : 0)));
+
+    const payload = { hotels };
+    if (hotels.length && ctx) ctx.waitUntil(env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: 60 * 60 }).catch(() => {}));
+    return jsonResponse(payload);
+  } catch (e) { return jsonResponse({ hotels: [], error: e.message }); }
+}
+
 async function handleAffiliateClick(request, env, ctx) {
   try {
     if (!env.DB) return jsonResponse({ error: 'analytics DB not configured' }, 500);
@@ -12528,6 +12608,7 @@ export default {
       if (pathname === '/aff/click' && request.method === 'POST') return await handleAffiliateClick(request, env, ctx);
       if (pathname === '/viator/match' && request.method === 'POST') return await handleViatorMatch(request, env);
       if (pathname === '/activities/search' && request.method === 'POST') return await handleActivitySearch(request, env, ctx);
+      if (pathname === '/hotels/search' && request.method === 'POST') return await handleHotelSearch(request, env, ctx);
       if (pathname === '/guestbook/list' && request.method === 'POST') return await handleGuestbookList(request, env);
       if (pathname === '/guestbook/sign' && request.method === 'POST') return await handleGuestbookSign(request, env, ctx);
       if (pathname === '/guestbook/edit' && request.method === 'POST') return await handleGuestbookEdit(request, env);
