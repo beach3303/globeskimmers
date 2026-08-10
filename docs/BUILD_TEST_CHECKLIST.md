@@ -280,6 +280,20 @@ State: Committed <hash> · Native build required (this build adds the plugin) ·
 - [ ] Rollback sanity: `notifyAppReady()` fires (no auto-revert on next launch)
 - [ ] ⏰ MAU/plan: on Solo (2K). Upgrade before 2K→Maker→Team(100K) or OTA stops past the cap
 
+## 🔎 Things to Do — real in-app activity search (2026-08-09)
+Search bar now finds activities NOT in the tiered load (zipline, snorkeling, kayaking, ATV, ice skating, water parks, hot springs, jet ski…) as real in-app businesses, instead of always exiting to Viator. Worker `/activities/search` = Google Places keyword search ∥ Viator; frontend merges owned/cached + live Google, splits within-radius / a-bit-farther, demotes Viator below in-app results, logs search terms.
+State: Committed f14da06 · Frontend auto-deploys on push · **Worker needs `wrangler deploy`** · Tested ⬜
+- [ ] **DEPLOY WORKER:** `cd "/Users/globeskimmers/Desktop/CODES PROTECT/globeskimmers-cacf36e4-10" && wrangler deploy` (search returns `places` only after this)
+- [ ] Device (coastal/varied city): search **"zipline"**, **"kayaking"**, **"ATV"**, **"ice skating"** → real local businesses appear under **"Places matching …"** as full cards (photo, rating, hours, Directions, I-was-here)
+- [ ] Search something genuinely far (snorkeling in an inland city) → few/none within radius, **"A bit farther — worth the trip"** shows the closest options beyond radius (honest)
+- [ ] **Viator "Book … experiences"** section appears BELOW the in-app results (not above); tapping a tour opens the **exact product page** (direct deep-link), not a Viator search
+- [ ] Exit-to-Viator dashed link shows **only** when there are zero in-app places AND zero Viator products
+- [ ] Owned-data-first: a term that matches a loaded attraction shows instantly (before the live Google call returns)
+- [ ] No duplicate cards when a place is in both owned + Google (dedupe by placeId)
+- [ ] Map View plots the searched places (within + a-bit-farther); Directions works
+- [ ] Analytics: `activity_search` events land in D1 with the query term (AdminAnalytics)
+- [ ] Cost sanity: repeat the same search → served from KV (no new Google call)
+
 ## Template for a new build
 ```
 ### N · <feature name>
