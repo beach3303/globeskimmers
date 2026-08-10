@@ -306,6 +306,16 @@ State: Committed 49c4849 (+ce24c15) · Frontend auto-deploys on push · **Worker
 - [ ] Things to Do: with nothing typed, tap Open Now / Outdoors / Popular / a category → tiers collapse into one "Filtered results" list that reflects the filter (not ignored)
 - [ ] Cost: repeat a search → served from KV (no new Google call)
 
+## 🍽️☕ Eat + Coffee search overhaul #9–#11 (2026-08-09)
+State: Committed 7aa2682 (#9) · 83c2a54 (#10) · 9c70203 (#11) · **Worker needs `wrangler deploy`** (for #9 + #10) · Tested ⬜
+- [ ] **DEPLOY WORKER:** `cd "/Users/globeskimmers/Desktop/CODES PROTECT/globeskimmers-cacf36e4-10" && wrangler deploy`
+- [ ] **#9 Restaurants:** Places to Eat → search a **dish** ("ramen", "tacos", "adobo") → relevant results with tier badges (Dish Specialist / Authentic / Serves It); tap **halal** / **kosher** dietary chip → certified-leaning results; plain browse (no query/filter) still loads the free owned list instantly
+- [ ] #9 safety: if the engine errors it silently falls back to the owned list (search never blank) — spot-check a few searches return *something*
+- [ ] **#10 Coffee:** Advanced Filters → **💻 Good for working / 🔌 Outlets / 🔇 Quiet / ❄️ A/C** → list narrows to matching cafés; "checking cafés…" shows briefly on first use in a new area; "⚠️ estimated · call ahead" label present; cafés w/o data aren't shown as false matches
+- [ ] #10 cost: re-toggle the same work filter in the same area → instant (cached, no recompute)
+- [ ] **#11:** Things to Do → search "spectacular views" → returns viewpoints/lookouts (synonym expansion); typed text still displays as-is
+- [ ] Analytics: `activity_search`, `coffee_search`, and Eat `search`/`search_zero_results` all land in D1 (AdminAnalytics)
+
 ## Template for a new build
 ```
 ### N · <feature name>
