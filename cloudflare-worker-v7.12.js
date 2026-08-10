@@ -10957,6 +10957,31 @@ function gsFold(s) {
   catch { return String(s).toLowerCase().trim(); }
 }
 
+// Restaurant dispatch (owned-first hybrid). Plain nearby browse is served FREE
+// from the owned DB; the moment there's real intent — a typed query, a specific
+// cuisine, a dietary chip (halal/kosher/vegan…), or any active filter — escalate
+// to the full intent engine (handleRestaurantsFull: DISH_MAP dish tiers, dietary
+// scoring, strict-type mode, the Semantic filter compiler). Falls back to the
+// owned list if the engine throws, so search never dead-ends. Both take the same
+// POST body; request.clone() lets us peek at the body and keep a spare for the
+// fallback before the chosen handler consumes the original.
+async function handleRestaurantsDispatch(request, env, ctx) {
+  let b = {};
+  try { b = await request.clone().json(); } catch { b = {}; }
+  const hasQuery   = !!(b.searchQuery && String(b.searchQuery).trim());
+  const hasCuisine = !!(b.cuisine && b.cuisine !== 'all');
+  const hasDietary = !!b.activeDietary || (b.filterDietary && Object.values(b.filterDietary).some(Boolean));
+  const hasFilter  = b.filterOpenNow || (b.filterMinRating > 0) || (b.filterMaxPrice > 0) ||
+    b.filterDriveThru || b.filterOutdoor || b.filterIndoor || b.filterParking ||
+    b.filterBakery || b.filterBars || (b.filterVibes && Object.values(b.filterVibes).some(Boolean));
+  if (hasQuery || hasCuisine || hasDietary || hasFilter) {
+    const fallbackReq = request.clone(); // clone BEFORE the engine reads the body
+    try { return await handleRestaurantsFull(request, env, ctx); }
+    catch { return await handleRestaurantsOwned(fallbackReq, env, ctx); }
+  }
+  return await handleRestaurantsOwned(request, env, ctx);
+}
+
 // ─── Restaurants from the OWNED planet DB (replaces Google for the list) ──────
 // Same response shape the PlacesToEat cards expect; data from Postgres, photos
 // from Unsplash (cuisine-generic, cached). Google is only touched later, on-tap,
@@ -12503,7 +12528,7 @@ export default {
       if (pathname === '/culture' && request.method === 'POST') return await handleCulture(request, env, ctx);
       if (pathname === '/money-exchange' && request.method === 'POST') return await handleMoneyExchange(request, env, ctx);
       if (pathname === '/activities' && request.method === 'POST') return await handleActivities(request, env, ctx);
-      if (pathname === '/restaurants-full' && request.method === 'POST') return await handleRestaurantsOwned(request, env, ctx);
+      if (pathname === '/restaurants-full' && request.method === 'POST') return await handleRestaurantsDispatch(request, env, ctx);
       if (pathname === '/coffee-owned' && request.method === 'POST') return await handleCoffeeOwned(request, env, ctx);
       if (pathname === '/coffee/search' && request.method === 'POST') return await handleCoffeeKeywordSearch(request, env, ctx);
       if (pathname === '/atm-owned' && request.method === 'POST') return await handleOwnedFinder(request, env, 'nearby_atm', 'atm_owned');
