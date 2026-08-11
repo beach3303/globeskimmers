@@ -38,9 +38,11 @@ const flagFor = (country) => {
   return String.fromCodePoint(...[...cc.toUpperCase()].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
 };
 
-// A large stamp pressed onto the page. Airport ≈ ⅓ page; iconic ≈ ½ page with
-// "I was here!", a big ink date, and up to 4 memory photos in a 2×2 grid.
-function StampToken({ stamp, idx, onOpen }) {
+// A large stamp pressed onto the page, sized off the page width so heights are a
+// constant fraction across phones (lets pagination fit each page with no scroll).
+// Airport ≈ ⅓ page; iconic ≈ ½ page with "I was here!", a big ink date, and up
+// to 4 memory photos in a 2×2 grid.
+function StampToken({ stamp, idx, onOpen, pageW }) {
   const [artFail, setArtFail] = useState(false);
   const rot = ((idx * 47 + 3) % 9) - 4;   // deterministic -4..+4°
   const nudge = ((idx * 53) % 26) - 13;    // deterministic -13..+12px horizontal
@@ -52,24 +54,28 @@ function StampToken({ stamp, idx, onOpen }) {
     ? new Date(stamp.visited_on + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "";
   const photos = (stamp.photos || []).slice(0, 4);
+  const artW = Math.round(0.50 * pageW);
+  const badgeW = Math.round(0.5 * pageW);
+  const airportW = Math.round(0.82 * pageW);
+  const thumbW = Math.round(0.185 * pageW);
   return (
     <button
       onClick={() => onOpen(stamp)}
       aria-label={`Open stamp: ${stamp.name}`}
       className="relative active:scale-95 transition-transform"
-      style={{ transform: `translateX(${nudge}px) rotate(${rot}deg)`, width: isAirport ? "94%" : "88%", maxWidth: isAirport ? 340 : 320 }}
+      style={{ transform: `translateX(${nudge}px) rotate(${rot}deg)`, maxWidth: "100%" }}
     >
       {isAirport ? (
-        <div className="flex flex-col items-center w-full">
-          <AirportStamp iata={stamp.entity_id} city={stamp.city} countryCode={stamp.country} date={stamp.visited_on} width={320} />
+        <div className="flex flex-col items-center">
+          <AirportStamp iata={stamp.entity_id} city={stamp.city} countryCode={stamp.country} date={stamp.visited_on} width={airportW} />
         </div>
       ) : (
-        <div className="flex flex-col items-center w-full">
+        <div className="flex flex-col items-center">
           {showArt ? (
-            <img src={art} alt={stamp.name} loading="lazy" onError={() => setArtFail(true)} style={{ width: 210, height: 210, objectFit: "contain" }} />
+            <img src={art} alt={stamp.name} loading="lazy" onError={() => setArtFail(true)} style={{ width: artW, height: artW, objectFit: "contain" }} />
           ) : (
-            <div className="flex flex-col items-center justify-center text-center" style={{ width: 190, height: 190, borderRadius: 20, border: `2.5px solid ${STAMP}`, background: "rgba(255,255,255,.45)", padding: 12 }}>
-              <span style={{ fontSize: 40, lineHeight: 1 }}>{flag || KIND[stamp.kind] || KIND.attraction}</span>
+            <div className="flex flex-col items-center justify-center text-center" style={{ width: badgeW, height: badgeW, borderRadius: 20, border: `2.5px solid ${STAMP}`, background: "rgba(255,255,255,.45)", padding: 12 }}>
+              <span style={{ fontSize: Math.round(0.1 * pageW), lineHeight: 1 }}>{flag || KIND[stamp.kind] || KIND.attraction}</span>
               <span className="leading-tight" style={{ fontFamily: SERIF, fontSize: fs(22), color: STAMP, marginTop: 4 }}>{stamp.name}</span>
             </div>
           )}
@@ -80,10 +86,10 @@ function StampToken({ stamp, idx, onOpen }) {
 
       {/* Memory photos — 2×2 grid, max 4, under the date */}
       {photos.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12, width: 168, marginLeft: "auto", marginRight: "auto" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12, width: thumbW * 2 + 8, marginLeft: "auto", marginRight: "auto" }}>
           {photos.map((p) => (
             <img key={p.id} src={p.photo_url} alt="" loading="lazy"
-              style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 10, border: `1px solid ${PAPER_EDGE}` }} />
+              style={{ width: thumbW, height: thumbW, objectFit: "cover", borderRadius: 10, border: `1px solid ${PAPER_EDGE}` }} />
           ))}
         </div>
       )}
@@ -108,7 +114,7 @@ function Paper({ children, coverH, pageNo, watermark }) {
       {watermark && (
         <div aria-hidden style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: 0.06, fontSize: 180, pointerEvents: "none" }}>{watermark}</div>
       )}
-      <div style={{ position: "relative", height: "100%", overflowY: "auto", scrollbarWidth: "none" }}>{children}</div>
+      <div style={{ position: "relative", height: "100%", overflow: "hidden" }}>{children}</div>
       {pageNo != null && (
         <div aria-hidden style={{ position: "absolute", bottom: 10, [pageNo % 2 === 0 ? "left" : "right"]: 16, fontFamily: MONO, fontSize: fs(10.5), color: INK3, opacity: 0.75, pointerEvents: "none" }}>{pageNo}</div>
       )}
@@ -153,11 +159,12 @@ function OwnershipPage({ holder, homeCountry, countries, totalStamps, coverH, pa
 }
 
 // A page of big stamps — can mix countries (each stamp carries its own place).
-function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark }) {
+// Pagination upstream guarantees the stamps fit, so there is never any scrolling.
+function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW }) {
   return (
     <Paper coverH={coverH} pageNo={pageNo} watermark={watermark}>
-      <div style={{ position: "relative", minHeight: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: pg.stamps.length <= 1 ? "center" : "space-around", gap: 20, paddingTop: 12, paddingBottom: 22 }}>
-        {pg.stamps.map((s, j) => <StampToken key={s.id} stamp={s} idx={j} onOpen={() => onOpenStamp(s.id)} />)}
+      <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: pg.stamps.length <= 1 ? "center" : "space-around", gap: 18, paddingTop: 12, paddingBottom: 22 }}>
+        {pg.stamps.map((s, j) => <StampToken key={s.id} stamp={s} idx={j} onOpen={() => onOpenStamp(s.id)} pageW={pageW} />)}
       </div>
     </Paper>
   );
@@ -169,7 +176,7 @@ function EmptyCollectionPage({ coverH, pageNo, watermark }) {
 }
 
 export default function PassportBook({
-  pages, holder, homeCountry, countries, totalStamps, onOpenStamp,
+  stamps, holder, homeCountry, countries, totalStamps, onOpenStamp,
   coverUrl = PASSPORT_COVER_URL,
 }) {
   const reduce = useReducedMotion();
@@ -181,7 +188,45 @@ export default function PassportBook({
   });
   useEffect(() => { firstRender.current = false; }, []);
 
-  const stampCount = pages.length;
+  // Page width drives every stamp size, so heights stay a constant fraction of
+  // the page across phones — which lets us paginate to fit with NO scrolling.
+  const [pageW, setPageW] = useState(() => {
+    try { return Math.min(0.94 * window.innerWidth, 440); } catch { return 360; }
+  });
+  useEffect(() => {
+    const onR = () => { try { setPageW(Math.min(0.94 * window.innerWidth, 440)); } catch { /* ignore */ } };
+    window.addEventListener("resize", onR);
+    window.addEventListener("orientationchange", onR);
+    return () => { window.removeEventListener("resize", onR); window.removeEventListener("orientationchange", onR); };
+  }, []);
+
+  // First-fit packing: each stamp goes on the earliest page it fits (so a later
+  // small stamp can back-fill an earlier page's gap); if it fits nowhere, a new
+  // page. Estimated heights slightly over-count so a page never overflows.
+  const bookPages = useMemo(() => {
+    const pageH = pageW * 1.6, USABLE = pageH - 70, GAP = 18;
+    const thumbW = 0.185 * pageW, airportW = 0.82 * pageW;
+    const estH = (s) => {
+      if (s.kind === "airport") return (0.659 * airportW + 14) * 1.03;
+      const n = Math.min(4, (s.photos || []).length);
+      const rows = n > 0 ? Math.ceil(n / 2) : 0;
+      const photosH = rows > 0 ? rows * thumbW + (rows - 1) * 8 + 14 : 0;
+      return (0.50 * pageW + 52 + photosH) * 1.03;
+    };
+    const packed = [];
+    for (const s of (stamps || [])) {
+      const h = estH(s);
+      let placed = false;
+      for (const pg of packed) {
+        const cost = h + (pg.items.length ? GAP : 0);
+        if (pg.used + cost <= USABLE) { pg.items.push(s); pg.used += cost; placed = true; break; }
+      }
+      if (!placed) packed.push({ items: [s], used: h });
+    }
+    return packed.map((p, i) => ({ key: `pg-${i}`, stamps: p.items }));
+  }, [stamps, pageW]);
+
+  const stampCount = bookPages.length;
   const MIN_TOTAL = 10; // a fresh passport ships as a 10-page booklet to flip through
   // ownership + every stamp page + always ≥1 trailing blank (auto-grows as stamps fill up)
   const total = Math.max(MIN_TOTAL, 1 + stampCount + 1);
@@ -244,7 +289,7 @@ export default function PassportBook({
     const watermark = idx % 2 === 0 ? "🌍" : "✈️"; // alternate earth / airplane
     if (idx === 0) return <OwnershipPage holder={holder} homeCountry={homeCountry} countries={countries} totalStamps={totalStamps} coverH={coverH} pageNo={pageNo} watermark={watermark} />;
     const ci = idx - 1; // 0-based index into the collection (stamp pages, then blanks)
-    if (ci < stampCount) return <StampPage pg={pages[ci]} onOpenStamp={onOpenStamp} coverH={coverH} pageNo={pageNo} watermark={watermark} />;
+    if (ci < stampCount) return <StampPage pg={bookPages[ci]} onOpenStamp={onOpenStamp} coverH={coverH} pageNo={pageNo} watermark={watermark} pageW={pageW} />;
     return <EmptyCollectionPage coverH={coverH} pageNo={pageNo} watermark={watermark} />;
   };
 

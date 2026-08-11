@@ -420,20 +420,11 @@ export default function PassportPage() {
   const [preview, setPreview] = useState(false);
   const stampsView = preview ? SAMPLE_STAMPS : stamps;
   const statsView = preview ? SAMPLE_STATS : stats;
-  // Book pages: stamps flow across pages by size (airport ≈ ⅓ page, iconic ≈ ½
-  // page), newest first — a page can mix countries, like a real passport.
-  const bookPages = useMemo(() => {
+  // Flat, newest-first stamp list — PassportBook paginates it to fit each page
+  // (no scrolling), packing by real size and mixing countries like a passport.
+  const bookStamps = useMemo(() => {
     const t = (s) => Date.parse(s.visited_on || s.created_at) || 0;
-    const ordered = [...stampsView].sort((a, b) => t(b) - t(a));
-    const CAP = 6, weight = (s) => (s.kind === "airport" ? 2 : 3);
-    const pages = []; let cur = [], used = 0;
-    for (const s of ordered) {
-      const w = weight(s);
-      if (cur.length && used + w > CAP) { pages.push(cur); cur = []; used = 0; }
-      cur.push(s); used += w;
-    }
-    if (cur.length) pages.push(cur);
-    return pages.map((stamps, i) => ({ key: `pg-${i}`, stamps }));
+    return [...stampsView].sort((a, b) => t(b) - t(a));
   }, [stampsView]);
 
   // The stamp open in the detail modal — re-derived from fresh data (auto-closes if deleted).
@@ -575,7 +566,7 @@ export default function PassportPage() {
           /* THE BOOK — tap the cover to open, then flip through the pages */
           <div className="mt-1 mb-2">
             <PassportBook
-              pages={bookPages}
+              stamps={bookStamps}
               holder={holder}
               homeCountry={readOnly ? null : (profile?.home_country || null)}
               countries={statsView.countries || 0}
