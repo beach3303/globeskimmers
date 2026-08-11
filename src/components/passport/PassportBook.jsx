@@ -26,6 +26,9 @@ const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const SANS = '"Inter Tight", ui-sans-serif, system-ui, -apple-system, sans-serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const INK = "#243447", INK3 = "#66717D", STAMP = "#B0472F";
+// Cool inks for city/place visit stamps — a different one per stamp (deterministic).
+const CITY_INKS = ["#1F6E6A", "#2B4A7E", "#3E5AA8", "#0E7C86", "#2E6B4E", "#5B4B8A", "#6D3A6E", "#2C6E9B", "#3A7D5B", "#4453A6"];
+const hashStr = (s) => { let h = 0; const str = String(s || ""); for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0; return h; };
 const PAPER = "#FBF6EC", PAPER_EDGE = "#EADFC9";
 const NAVY = "#0C2B50", NAVY_DEEP = "#071B33", GOLD = "#D6A64A";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
@@ -53,6 +56,7 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
   const isAirport = stamp.kind === "airport";
   const isCity = stamp.kind === "city";
   const venue = isCity && stamp.name && stamp.name !== stamp.city ? stamp.name : null;
+  const cityInk = CITY_INKS[hashStr(stamp.id || stamp.entity_id || stamp.name) % CITY_INKS.length];
   const bigDate = stamp.visited_on
     ? new Date(stamp.visited_on + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "";
@@ -76,11 +80,11 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
         // A city / place visit — a fat, borderless ink line (differs from the
         // bordered iconic art and the rectangular airport arrival stamp).
         <div className="flex flex-col items-center text-center" style={{ maxWidth: airportW, padding: "0 6px" }}>
-          <div style={{ fontFamily: SANS, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".012em", color: STAMP, fontSize: fs(21), lineHeight: 1.08 }}>
+          <div style={{ fontFamily: SANS, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".012em", color: cityInk, fontSize: fs(21), lineHeight: 1.08 }}>
             Visited {stamp.city || stamp.name}{stamp.country ? `, ${stamp.country}` : ""}
           </div>
-          {venue && <div style={{ fontFamily: SERIF, fontStyle: "italic", color: STAMP, fontSize: fs(17), marginTop: 5, lineHeight: 1.1 }}>I was here @ {venue}</div>}
-          {bigDate && <div style={{ fontFamily: MONO, color: INK3, fontSize: fs(11.5), letterSpacing: ".03em", marginTop: 6 }}>{bigDate}</div>}
+          {venue && <div style={{ fontFamily: SERIF, fontStyle: "italic", color: cityInk, fontSize: fs(17), marginTop: 5, lineHeight: 1.1 }}>I was here @ {venue}</div>}
+          {bigDate && <div style={{ fontFamily: MONO, color: cityInk, opacity: 0.7, fontSize: fs(11.5), letterSpacing: ".03em", marginTop: 6 }}>{bigDate}</div>}
         </div>
       ) : (
         <div className="flex flex-col items-center">

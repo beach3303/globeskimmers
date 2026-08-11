@@ -706,7 +706,7 @@ export default function PassportPage() {
         <div onClick={() => setOpenStampId(null)} className="fixed inset-0 z-[9998] flex items-start justify-center p-4 overflow-y-auto"
           style={{ background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)" }}>
           <div onClick={(e) => e.stopPropagation()} className="w-full" style={{ maxWidth: 380, marginTop: 32, marginBottom: 40 }}>
-            <StampCard stamp={openStamp} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: openStamp.name })} fromName={holder} homeCity={profile?.home_city} readOnly={readOnly || preview} />
+            <StampCard stamp={openStamp} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: openStamp.name, date: openStamp.visited_on })} fromName={holder} homeCity={profile?.home_city} readOnly={readOnly || preview} />
             <button onClick={() => setOpenStampId(null)} className="mt-2 w-full rounded-xl py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>Close</button>
           </div>
         </div>
@@ -717,10 +717,15 @@ export default function PassportPage() {
 
       {/* Photo lightbox */}
       {lightbox && (
-        <div onClick={() => setLightbox(null)} className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-6"
+        <div onClick={() => setLightbox(null)} className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-4"
           style={{ background: "rgba(22,17,13,0.82)", backdropFilter: "blur(6px)" }}>
-          <img src={lightbox.url} alt="" style={{ maxWidth: "92vw", maxHeight: "76vh", objectFit: "contain", borderRadius: 14, border: "3px solid #fff" }} />
-          {lightbox.caption && <p className="mt-3 text-center" style={{ color: "#fff", fontFamily: SERIF, fontSize: fs(18) }}>I was here! {lightbox.caption}</p>}
+          <img src={lightbox.url} alt="" style={{ width: "94vw", maxHeight: "80vh", objectFit: "contain", borderRadius: 14, border: "3px solid #fff" }} />
+          {(lightbox.caption || lightbox.date) && (
+            <div className="mt-3 text-center">
+              {lightbox.caption && <p style={{ color: "#fff", fontFamily: SERIF, fontSize: fs(20) }}>I was here! {lightbox.caption}</p>}
+              {lightbox.date && <p style={{ color: "rgba(255,255,255,.82)", fontFamily: MONO, fontSize: fs(12.5), marginTop: 3 }}>{fmtDate(lightbox.date)}</p>}
+            </div>
+          )}
         </div>
       )}
     </div>
