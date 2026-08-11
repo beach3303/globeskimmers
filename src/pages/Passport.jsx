@@ -6,7 +6,8 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
+import { addStamp, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
+import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import AirportStamp from "@/components/passport/AirportStamp";
 import PassportBook from "@/components/passport/PassportBook";
@@ -328,8 +329,120 @@ const SAMPLE_STAMPS = [
   { id: "sample-jp-hnd", kind: "airport", tier: "page", entity_type: "airport", entity_id: "HND", name: "Tokyo (HND)", city: "Tokyo", country: "JP", visited_on: "2025-11-20", verified: "gps", photos: [] },
   { id: "sample-jp-fuji", kind: "attraction", tier: "mark", name: "Mount Fuji", city: "Fujinomiya", country: "Japan", visited_on: "2025-11-21", verified: "self", photos: [{ id: "sp-jp1", photo_url: "https://picsum.photos/seed/gs-fuji-1/220/220" }, { id: "sp-jp2", photo_url: "https://picsum.photos/seed/gs-fuji-2/220/220" }, { id: "sp-jp3", photo_url: "https://picsum.photos/seed/gs-fuji-3/220/220" }] },
   { id: "sample-jp-fushimi", kind: "attraction", tier: "mark", name: "Fushimi Inari Shrine", city: "Kyoto", country: "Japan", visited_on: "2025-11-22", verified: "gps", photos: [] },
+  // City / place visits (borderless fat-ink stamp)
+  { id: "sample-kc", kind: "city", tier: "page", name: "Cracker Barrel", city: "Kansas City", region: "Missouri", country: "United States", visited_on: "2026-05-10", verified: "self", photos: [{ id: "sp-kc1", photo_url: "https://picsum.photos/seed/gs-kc-1/220/220" }] },
+  { id: "sample-med", kind: "city", tier: "page", name: "Medellín", city: "Medellín", country: "Colombia", visited_on: "2026-04-02", verified: "self", photos: [] },
 ];
 const SAMPLE_STATS = { countries: 3, verified: 6 };
+
+// "Stamp a place" — a user-initiated (never prompted) stamp for a city or spot
+// you visited. Free OSM place search + free-text; date + memory photos. Creates
+// a kind:'city' stamp rendered as a borderless fat-ink line.
+function StampPlaceModal({ onClose, onDone }) {
+  const [cityQ, setCityQ] = useState("");
+  const [city, setCity] = useState("");
+  const [country, setCountry] = useState("");
+  const [cc, setCc] = useState("");
+  const [coords, setCoords] = useState(null);
+  const [venue, setVenue] = useState("");
+  const [dateVal, setDateVal] = useState(new Date().toISOString().slice(0, 10));
+  const [results, setResults] = useState(null);
+  const [searchFor, setSearchFor] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [photos, setPhotos] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef(null);
+
+  const runSearch = async (which) => {
+    const q = which === "city" ? cityQ : venue;
+    if (!q || q.trim().length < 2) return;
+    setSearching(true); setSearchFor(which); setResults(null);
+    const res = await placeSearch(q, coords);
+    setResults(res); setSearching(false);
+  };
+  const pick = (r) => {
+    if (searchFor === "city") { setCity(r.city || r.name); setCityQ(r.city || r.name); setCountry(r.country || ""); setCc(r.cc || ""); setCoords({ lat: r.lat, lng: r.lng }); }
+    else { setVenue(r.name); if (!city) { setCity(r.city || ""); setCityQ(r.city || ""); } if (!country) setCountry(r.country || ""); if (!cc) setCc(r.cc || ""); if (!coords) setCoords({ lat: r.lat, lng: r.lng }); }
+    setResults(null); setSearchFor(null);
+  };
+  const onPickPhotos = (e) => { const f = [...(e.target.files || [])]; e.target.value = ""; setPhotos((p) => [...p, ...f].slice(0, 4)); };
+  const submit = async () => {
+    const cityName = (city || cityQ).trim();
+    if (!cityName) { showToast("Add a city first", "error"); return; }
+    setBusy(true);
+    const sl = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    const entity_id = `visit:${sl(cityName)}:${sl(venue)}:${dateVal}`;
+    const { data, error } = await addStamp({
+      kind: "city", entity_type: "visit", entity_id,
+      name: venue.trim() || cityName, city: cityName, region: null,
+      country: country || null, cc: cc || undefined,
+      lat: coords?.lat ?? null, lng: coords?.lng ?? null,
+      visited_on: dateVal, local_hour: new Date().getHours(), verified: "self",
+    });
+    if (error || !data?.id) { setBusy(false); showToast(error || "Could not add stamp", "error"); return; }
+    for (const f of photos) { try { const image = await resizePhoto(f); await uploadStampPhoto({ stamp_id: data.id, image, visited_on: dateVal }); } catch { /* skip a bad photo */ } }
+    setBusy(false); showToast("Place stamped 🛂", "success"); onDone();
+  };
+
+  const inputStyle = { width: "100%", border: `1px solid ${RULE}`, borderRadius: 12, padding: "10px 12px", fontSize: fs(14), color: INK, fontFamily: SANS, background: "#fff" };
+  const labelStyle = { fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", textTransform: "uppercase", color: INK3, display: "block", marginTop: 14 };
+  return (
+    <div onClick={onClose} className="fixed inset-0 z-[9998] flex items-start justify-center p-4 overflow-y-auto" style={{ background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)" }}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full bg-white" style={{ maxWidth: 400, marginTop: 28, marginBottom: 40, borderRadius: 22, padding: 20, boxShadow: SHADOW_CARD_SOFT }}>
+        <p style={{ fontFamily: SERIF, fontSize: fs(24), color: INK }}>Stamp a place</p>
+        <p style={{ color: INK3, fontSize: fs(12.5), lineHeight: 1.4, marginTop: 2 }}>A quick ink stamp for a city or spot you visited — with your own photos.</p>
+
+        <label style={labelStyle}>City</label>
+        <div className="flex gap-2 mt-1">
+          <input value={cityQ} onChange={(e) => { setCityQ(e.target.value); setCity(e.target.value); }} placeholder="e.g. Medellín, Colombia" style={inputStyle} />
+          <button onClick={() => runSearch("city")} disabled={searching} className="shrink-0 rounded-xl px-3 font-semibold" style={{ background: IVORY_2, color: INK2, fontSize: fs(12.5) }}>Search</button>
+        </div>
+
+        <label style={labelStyle}>Spot / place (optional)</label>
+        <div className="flex gap-2 mt-1">
+          <input value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="e.g. Cracker Barrel" style={inputStyle} />
+          <button onClick={() => runSearch("venue")} disabled={searching} className="shrink-0 rounded-xl px-3 font-semibold" style={{ background: IVORY_2, color: INK2, fontSize: fs(12.5) }}>Search</button>
+        </div>
+
+        {searching && <p style={{ color: INK3, fontSize: fs(12), marginTop: 8 }}>Searching…</p>}
+        {results && (
+          <div className="mt-2 rounded-xl overflow-hidden" style={{ border: `1px solid ${RULE}` }}>
+            {results.length === 0 ? (
+              <p style={{ color: INK3, fontSize: fs(12.5), padding: 10 }}>No matches — just type it above and tap Stamp it.</p>
+            ) : results.map((r, i) => (
+              <button key={i} onClick={() => pick(r)} className="w-full text-left" style={{ padding: "9px 12px", borderTop: i ? `1px solid ${RULE}` : "none", background: "#fff" }}>
+                <div style={{ fontSize: fs(13.5), color: INK, fontFamily: SANS, fontWeight: 600 }}>{r.name}</div>
+                <div className="truncate" style={{ fontSize: fs(11), color: INK3 }}>{r.display}</div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <label style={labelStyle}>Date</label>
+        <input type="date" value={dateVal} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setDateVal(e.target.value)} style={{ ...inputStyle, marginTop: 4 }} />
+
+        <label style={labelStyle}>Memory photos (up to 4)</label>
+        <div className="flex gap-2 mt-1 flex-wrap items-center">
+          {photos.map((f, i) => (
+            <div key={i} className="relative">
+              <img src={URL.createObjectURL(f)} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10, border: `1px solid ${RULE}` }} />
+              <button onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,.7)" }}><X size={11} color="#fff" strokeWidth={2.5} /></button>
+            </div>
+          ))}
+          {photos.length < 4 && (
+            <button onClick={() => fileRef.current?.click()} className="rounded-xl flex items-center justify-center" style={{ width: 56, height: 56, border: `1px dashed ${RULE}`, background: IVORY_2 }}><Plus size={18} color={INK3} /></button>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPickPhotos} />
+        </div>
+
+        <div className="flex gap-2 mt-5">
+          <button onClick={onClose} disabled={busy} className="flex-1 rounded-xl py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>Cancel</button>
+          <button onClick={submit} disabled={busy} className="flex-1 rounded-xl py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>{busy ? "Stamping…" : "Stamp it"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function PassportPage() {
   const navigate = useNavigate();
@@ -418,6 +531,7 @@ export default function PassportPage() {
   const [openStampId, setOpenStampId] = useState(null);
   // "See a sample passport" preview — sample stamps, view-only, never saved.
   const [preview, setPreview] = useState(false);
+  const [showStampPlace, setShowStampPlace] = useState(false); // "Stamp a place" form
   const stampsView = preview ? SAMPLE_STAMPS : stamps;
   const statsView = preview ? SAMPLE_STATS : stats;
   // Flat, newest-first stamp list — PassportBook paginates it to fit each page
@@ -573,8 +687,13 @@ export default function PassportPage() {
               totalStamps={stampsView.length}
               onOpenStamp={(id) => setOpenStampId(id)}
             />
-            {isDev && !readOnly && !preview && (
+            {!readOnly && isAuthenticated && !preview && (
               <div className="text-center mt-4">
+                <button onClick={() => setShowStampPlace(true)} className="rounded-full px-5 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>✍️ Stamp a place</button>
+              </div>
+            )}
+            {isDev && !readOnly && !preview && (
+              <div className="text-center mt-3">
                 <button onClick={() => setPreview(true)} className="rounded-full px-4 py-2" style={{ background: "#fff", border: `1px solid ${RULE}`, color: INK2, fontSize: fs(12.5), fontWeight: 600 }}>👁 See a sample passport (admin)</button>
               </div>
             )}
@@ -592,6 +711,9 @@ export default function PassportPage() {
           </div>
         </div>
       )}
+
+      {/* Stamp a place — manual city/spot visit stamp */}
+      {showStampPlace && <StampPlaceModal onClose={() => setShowStampPlace(false)} onDone={() => { setShowStampPlace(false); load(); }} />}
 
       {/* Photo lightbox */}
       {lightbox && (

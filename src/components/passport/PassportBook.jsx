@@ -23,6 +23,7 @@ export const PASSPORT_COVER_URL =
   "https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/passport-cover-default-v2.jpg";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
+const SANS = '"Inter Tight", ui-sans-serif, system-ui, -apple-system, sans-serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const INK = "#243447", INK3 = "#66717D", STAMP = "#B0472F";
 const PAPER = "#FBF6EC", PAPER_EDGE = "#EADFC9";
@@ -50,6 +51,8 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
   const showArt = !!art && !artFail;
   const flag = stamp.kind === "country" ? flagFor(stamp.country || stamp.name) : null;
   const isAirport = stamp.kind === "airport";
+  const isCity = stamp.kind === "city";
+  const venue = isCity && stamp.name && stamp.name !== stamp.city ? stamp.name : null;
   const bigDate = stamp.visited_on
     ? new Date(stamp.visited_on + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "";
@@ -68,6 +71,16 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
       {isAirport ? (
         <div className="flex flex-col items-center">
           <AirportStamp iata={stamp.entity_id} city={stamp.city} countryCode={stamp.country} date={stamp.visited_on} width={airportW} />
+        </div>
+      ) : isCity ? (
+        // A city / place visit — a fat, borderless ink line (differs from the
+        // bordered iconic art and the rectangular airport arrival stamp).
+        <div className="flex flex-col items-center text-center" style={{ maxWidth: airportW, padding: "0 6px" }}>
+          <div style={{ fontFamily: SANS, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".012em", color: STAMP, fontSize: fs(21), lineHeight: 1.08 }}>
+            Visited {stamp.city || stamp.name}{stamp.country ? `, ${stamp.country}` : ""}
+          </div>
+          {venue && <div style={{ fontFamily: SERIF, fontStyle: "italic", color: STAMP, fontSize: fs(17), marginTop: 5, lineHeight: 1.1 }}>I was here @ {venue}</div>}
+          {bigDate && <div style={{ fontFamily: MONO, color: INK3, fontSize: fs(11.5), letterSpacing: ".03em", marginTop: 6 }}>{bigDate}</div>}
         </div>
       ) : (
         <div className="flex flex-col items-center">
@@ -207,10 +220,11 @@ export default function PassportBook({
     const pageH = pageW * 1.6, USABLE = pageH - 70, GAP = 18;
     const thumbW = 0.185 * pageW, airportW = 0.82 * pageW;
     const estH = (s) => {
-      if (s.kind === "airport") return (0.659 * airportW + 14) * 1.03;
       const n = Math.min(4, (s.photos || []).length);
       const rows = n > 0 ? Math.ceil(n / 2) : 0;
       const photosH = rows > 0 ? rows * thumbW + (rows - 1) * 8 + 14 : 0;
+      if (s.kind === "airport") return (0.659 * airportW + 14 + photosH) * 1.03;
+      if (s.kind === "city") return (110 + photosH) * 1.05; // short: a couple ink lines
       return (0.50 * pageW + 52 + photosH) * 1.03;
     };
     const packed = [];

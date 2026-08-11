@@ -11959,6 +11959,33 @@ async function handleAirportAt(request, env) {
   } catch (e) { return jsonResponse({ error: e.message, airport: null }, 500); }
 }
 
+// ── Free place/city search for "Stamp a place" — proxies OSM Nominatim (free),
+// cached 30d in KV. On-demand search (not per-keystroke) to respect OSM policy.
+async function handlePlaceSearch(request, env) {
+  try {
+    const url = new URL(request.url);
+    const q = (url.searchParams.get('q') || '').trim();
+    if (q.length < 2) return jsonResponse({ results: [] });
+    const near = url.searchParams.get('near'); // "lat,lng" (optional bias)
+    const cacheKey = `place:${q.toLowerCase().slice(0, 80)}${near ? '@' + near : ''}`;
+    if (env.GLOBESKIMMERS_KV) { const c = await env.GLOBESKIMMERS_KV.get(cacheKey); if (c) return jsonResponse({ results: JSON.parse(c), cached: true }); }
+    let viewbox = '';
+    if (near) { const [la, ln] = near.split(',').map(Number); if (Number.isFinite(la) && Number.isFinite(ln)) viewbox = `&viewbox=${ln - 1.5},${la + 1.5},${ln + 1.5},${la - 1.5}`; }
+    const nom = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(q)}${viewbox}`;
+    const r = await fetch(nom, { headers: { 'User-Agent': 'Globeskimmers/1.0 (travel app place stamps; support@globeskimmers.io)', 'Accept': 'application/json' } });
+    if (!r.ok) return jsonResponse({ results: [] });
+    const raw = await r.json();
+    const results = (Array.isArray(raw) ? raw : []).map((p) => {
+      const a = p.address || {};
+      const city = a.city || a.town || a.village || a.hamlet || a.municipality || a.county || '';
+      const name = p.name || String(p.display_name || '').split(',')[0] || '';
+      return { name, display: p.display_name, city, country: a.country || '', cc: String(a.country_code || '').toUpperCase(), lat: +p.lat, lng: +p.lon, type: p.type };
+    }).filter((x) => Number.isFinite(x.lat));
+    if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(results), { expirationTtl: 2592000 });
+    return jsonResponse({ results });
+  } catch (e) { return jsonResponse({ error: e.message, results: [] }, 500); }
+}
+
 async function handleStampArtServe(request, env) {
   try {
     if (!env.MEDIA) return new Response('Not found', { status: 404 });
@@ -12702,6 +12729,7 @@ export default {
       // Passport (personal, private)
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
       if (pathname === '/airport-at' && request.method === 'GET') return await handleAirportAt(request, env);
+      if (pathname === '/place-search' && request.method === 'GET') return await handlePlaceSearch(request, env);
       if (pathname.startsWith('/stamp-art/') && request.method === 'GET') return await handleStampArtServe(request, env);
       if (pathname === '/passport/stamp' && request.method === 'POST') return await handlePassportStamp(request, env, ctx);
       if (pathname === '/passport/list' && request.method === 'POST') return await handlePassportList(request, env);
