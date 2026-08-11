@@ -403,6 +403,7 @@ export default function SettingsPage() {
   const { step: fontStep } = useFontScale(); // larger steps → rows stack value below
   const { autoFollow, setAutoFollow } = useLocation(); // silent auto-follow toggle (localStorage-backed)
   const [suggestArrivals, setSuggestArrivals] = useState(() => { try { return localStorage.getItem("pp_suggest_arrivals") !== "0"; } catch { return true; } });
+  const [cityPrompt, setCityPrompt] = useState(() => { try { return localStorage.getItem("pp_city_prompt") !== "0"; } catch { return true; } });
 
   const { logout, deleteAccount, profile, user: authUser, refreshProfile } = useAuth(); // Supabase
   const countryBoxRef = useRef(null);
@@ -676,8 +677,11 @@ export default function SettingsPage() {
 
           {/* Virtual Passport group */}
           <EdGroup kicker="Virtual Passport" isTablet={isTablet}>
-            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Suggest arrival stamps" desc="Offer a passport stamp when you reach a new country or airport. Your passport stays private — only you can see it."
-              control={{ node: <EdToggle on={suggestArrivals} onClick={() => { const next = !suggestArrivals; setSuggestArrivals(next); try { localStorage.setItem("pp_suggest_arrivals", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle arrival stamp suggestions" /> }}
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Airport arrival stamps" desc="Offer a passport stamp when you land at an airport. Your passport stays private — only you can see it."
+              control={{ node: <EdToggle on={suggestArrivals} onClick={() => { const next = !suggestArrivals; setSuggestArrivals(next); try { localStorage.setItem("pp_suggest_arrivals", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle airport arrival stamps" /> }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="New-city pop-ups" desc="Offer a stamp when you arrive in — or open the app in — a new city or country. Turn off to never be prompted (you can still add stamps yourself)."
+              control={{ node: <EdToggle on={cityPrompt} onClick={() => { const next = !cityPrompt; setCityPrompt(next); try { localStorage.setItem("pp_city_prompt", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle new-city pop-ups" /> }}
               last
             />
           </EdGroup>

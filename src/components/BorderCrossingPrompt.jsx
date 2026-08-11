@@ -14,7 +14,9 @@ import { countryCode } from "@/lib/countries";
 // tracking. `pp_last_country` is the shared "where you were last" marker.
 // ============================================================================
 const LAST = "pp_last_country";
-const suggestOn = () => { try { return localStorage.getItem("pp_suggest_arrivals") !== "0"; } catch { return true; } };
+// Dedicated toggle for the new-city / border pop-up (default on; Settings +
+// inline turn-off both flip pp_city_prompt).
+const suggestOn = () => { try { return localStorage.getItem("pp_city_prompt") !== "0"; } catch { return true; } };
 const readLast = () => { try { return (localStorage.getItem(LAST) || "").toUpperCase(); } catch { return ""; } };
 const writeLast = (cc) => { try { localStorage.setItem(LAST, cc); } catch { /* ignore */ } };
 const regionName = (cc) => { try { return new Intl.DisplayNames(["en"], { type: "region" }).of(cc) || cc; } catch { return cc; } };
@@ -48,6 +50,7 @@ export default function BorderCrossingPrompt() {
   }, [activeLocation, locationMode, isAuthenticated]);
 
   const close = () => { if (pending) writeLast(pending.cc); setPending(null); };
+  const turnOff = () => { try { localStorage.setItem("pp_city_prompt", "0"); } catch { /* ignore */ } if (pending) writeLast(pending.cc); setPending(null); };
   const add = async () => {
     if (!pending || busy) return;
     setBusy(true);
@@ -77,6 +80,7 @@ export default function BorderCrossingPrompt() {
           <button onClick={add} disabled={busy} style={{ flex: 1, borderRadius: 12, padding: "11px", fontWeight: 700, background: "#B0472F", color: "#fff", border: "none", fontSize: 14 }}>{busy ? "Stamping…" : "Stamp it ✓"}</button>
         </div>
         <p style={{ color: "#736657", fontSize: 11, lineHeight: 1.4, marginTop: 10 }}>Just passing through? Tap “Not now.”</p>
+        <button onClick={turnOff} disabled={busy} style={{ marginTop: 8, color: "#736657", fontSize: 12, textDecoration: "underline", background: "none", border: "none" }}>Turn off new-city pop-ups</button>
       </div>
     </div>
   );
