@@ -1121,6 +1121,39 @@ const ANALYTICS_QUERIES = {
     FROM events WHERE event_type='passport_stamp'
     GROUP BY year ORDER BY year
   `,
+  // Distinct countries stamped in the last day / week / month (single row).
+  passport_countries_periods: `
+    SELECT
+      (SELECT COUNT(DISTINCT json_extract(payload,'$.country')) FROM events WHERE event_type='passport_stamp' AND IFNULL(json_extract(payload,'$.country'),'')<>'' AND date(ts,'unixepoch')=date('now')) AS today,
+      (SELECT COUNT(DISTINCT json_extract(payload,'$.country')) FROM events WHERE event_type='passport_stamp' AND IFNULL(json_extract(payload,'$.country'),'')<>'' AND ts>=strftime('%s','now','-7 days')) AS week,
+      (SELECT COUNT(DISTINCT json_extract(payload,'$.country')) FROM events WHERE event_type='passport_stamp' AND IFNULL(json_extract(payload,'$.country'),'')<>'' AND ts>=strftime('%s','now','-30 days')) AS month
+  `,
+  // Distinct countries + total stamps per calendar month (12 months).
+  passport_countries_by_month: `
+    SELECT strftime('%Y-%m', ts,'unixepoch') AS month,
+      COUNT(DISTINCT json_extract(payload,'$.country')) AS countries,
+      COUNT(*) AS stamps
+    FROM events WHERE event_type='passport_stamp' AND ts>=strftime('%s','now','-365 days')
+    GROUP BY month ORDER BY month
+  `,
+  // What hour of day people stamp (local hour when logged, else UTC), split by kind.
+  passport_by_hour: `
+    SELECT CAST(COALESCE(json_extract(payload,'$.local_hour'), CAST(strftime('%H', ts,'unixepoch') AS INTEGER)) AS INTEGER) AS hour,
+      SUM(CASE WHEN json_extract(payload,'$.kind')='airport' THEN 1 ELSE 0 END) AS airport,
+      SUM(CASE WHEN IFNULL(json_extract(payload,'$.kind'),'')<>'airport' THEN 1 ELSE 0 END) AS attraction,
+      COUNT(*) AS total
+    FROM events WHERE event_type='passport_stamp'
+    GROUP BY hour ORDER BY hour
+  `,
+  // Stamps per day (30d), split airport vs attraction.
+  passport_by_day_kind_30d: `
+    SELECT date(ts,'unixepoch') AS day,
+      SUM(CASE WHEN json_extract(payload,'$.kind')='airport' THEN 1 ELSE 0 END) AS airport,
+      SUM(CASE WHEN IFNULL(json_extract(payload,'$.kind'),'')<>'airport' THEN 1 ELSE 0 END) AS attraction,
+      COUNT(*) AS total
+    FROM events WHERE event_type='passport_stamp' AND ts>=strftime('%s','now','-30 days')
+    GROUP BY day ORDER BY day
+  `,
   // Total events + unique sessions in the last 7 days
   totals_7d: `
     SELECT
@@ -11706,7 +11739,8 @@ async function handlePassportStamp(request, env, ctx) {
     };
     const result = await ppUpsertStamp(env, row);
     // Stamps are airport-arrival + iconic-attraction only — we do NOT auto-stamp cities.
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, country: row.country, city: row.city, name: row.name, verified: result.verified, updated: !!result.updated }));
+    const localHour = Number.isFinite(+b.local_hour) && +b.local_hour >= 0 && +b.local_hour <= 23 ? Math.floor(+b.local_hour) : null;
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, country: row.country, city: row.city, name: row.name, verified: result.verified, updated: !!result.updated, local_hour: localHour }));
     return jsonResponse({ id: result.id, created: !!result.created, updated: !!result.updated, verified: result.verified });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }

@@ -5,7 +5,6 @@ import { addStamp } from "@/lib/passport";
 import { showToast } from "@/components/Toast";
 import { nearestAirport } from "@/lib/airports";
 import AirportStamp from "@/components/passport/AirportStamp";
-import { countryCode } from "@/lib/countries";
 
 // ============================================================================
 // ✈️ Airport arrival stamp — when a signed-in user opens the app while physically
@@ -25,7 +24,7 @@ const suggestOn = () => { try { return localStorage.getItem("pp_suggest_arrivals
 
 export default function AirportArrivalPrompt() {
   const { activeLocation, locationMode } = useLocation();
-  const { isAuthenticated, profile } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [pending, setPending] = useState(null); // { iata, city, countryCode, lat, lng }
   const [busy, setBusy] = useState(false);
 
@@ -37,14 +36,13 @@ export default function AirportArrivalPrompt() {
       if (!c || !Number.isFinite(c.latitude) || !Number.isFinite(c.longitude)) return;
       const ap = await nearestAirport(c.latitude, c.longitude, 6);
       if (cancelled || !ap) return;
-      // International arrivals only — skip airports in the user's home country.
-      const homeCC = (countryCode(profile?.home_country) || "").toUpperCase();
-      if (homeCC && String(ap.countryCode || "").toUpperCase() === homeCC) return;
+      // Any airport — domestic or international. Consent-gated, one prompt per
+      // airport (localStorage guard) so it never spams.
       if (getSet().has(ap.iata)) return; // already handled this airport
       setPending(ap);
     })();
     return () => { cancelled = true; };
-  }, [activeLocation, locationMode, isAuthenticated, profile]);
+  }, [activeLocation, locationMode, isAuthenticated]);
 
   const close = (markHandled) => {
     if (markHandled && pending) { const s = getSet(); s.add(pending.iata); saveSet(s); }
@@ -58,6 +56,7 @@ export default function AirportArrivalPrompt() {
       kind: "airport", tier: "page", entity_type: "airport", entity_id: pending.iata,
       name: `${pending.city} (${pending.iata})`, city: pending.city, country: pending.countryCode,
       cc: pending.countryCode, lat: pending.lat, lng: pending.lng, visited_on: today, verified: "gps",
+      local_hour: new Date().getHours(),
     });
     setBusy(false);
     close(true);

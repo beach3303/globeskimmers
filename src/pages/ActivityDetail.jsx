@@ -249,6 +249,7 @@ export default function ActivityDetailPage() {
       lat: Number.isFinite(placeLat) ? placeLat : null,
       lng: Number.isFinite(placeLng) ? placeLng : null,
       visited_on: new Date().toISOString().slice(0, 10),
+      local_hour: new Date().getHours(),
       verified,
     });
     setStamping(false);

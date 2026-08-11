@@ -13,6 +13,7 @@ import { extractFirstName } from "@/lib/extractFirstName";
 import { isLocationPermissionGranted } from "@/lib/geolocation";
 import { callWorker } from "@/lib/callWorker";
 import AirportArrivalPrompt from "@/components/AirportArrivalPrompt";
+import BorderCrossingPrompt from "@/components/BorderCrossingPrompt";
 import { ROUTE } from "@/lib/workerRoutes";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
@@ -795,8 +796,9 @@ export default function HomePage() {
 
       <LocationModePicker isOpen={showLocationPicker} onClose={() => setShowLocationPicker(false)} />
 
-      {/* Country arrival stamp — prompts to stamp a new country when you're there */}
+      {/* Arrival stamps — airport (domestic + international) + land/boat border crossings */}
       {profile?.onboarding_completed && !showWelcome && <AirportArrivalPrompt />}
+      {profile?.onboarding_completed && !showWelcome && <BorderCrossingPrompt />}
     </div>
   );
 }
