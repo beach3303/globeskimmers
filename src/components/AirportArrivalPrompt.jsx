@@ -3,7 +3,7 @@ import { useLocation } from "@/components/location/LocationContext";
 import { useAuth } from "@/lib/AuthContext";
 import { addStamp } from "@/lib/passport";
 import { showToast } from "@/components/Toast";
-import { nearestAirport } from "@/lib/airports";
+import { airportAt } from "@/lib/airports";
 import AirportStamp from "@/components/passport/AirportStamp";
 
 // ============================================================================
@@ -34,12 +34,13 @@ export default function AirportArrivalPrompt() {
       if (!isAuthenticated || locationMode !== "current" || !suggestOn()) return;
       const c = activeLocation?.coordinates;
       if (!c || !Number.isFinite(c.latitude) || !Number.isFinite(c.longitude)) return;
-      const ap = await nearestAirport(c.latitude, c.longitude, 6);
-      if (cancelled || !ap) return;
-      // Any airport — domestic or international. Consent-gated, one prompt per
-      // airport (localStorage guard) so it never spams.
+      // Only prompt when GPS is INSIDE the airport perimeter (terminals/runways/
+      // planes) — not drive-bys or people waiting outside. Any airport, domestic
+      // or international; consent-gated; one prompt per airport (localStorage).
+      const ap = await airportAt(c.latitude, c.longitude, c.accuracy);
+      if (cancelled || !ap || !ap.iata) return;
       if (getSet().has(ap.iata)) return; // already handled this airport
-      setPending(ap);
+      setPending({ iata: ap.iata, city: ap.city || ap.name, countryCode: ap.cc, lat: ap.lat, lng: ap.lng });
     })();
     return () => { cancelled = true; };
   }, [activeLocation, locationMode, isAuthenticated]);

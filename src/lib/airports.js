@@ -47,3 +47,22 @@ export async function nearestAirports(lat, lng, n = 6, maxKm = 130) {
   scored.sort((x, y) => x.km - y.km);
   return scored.slice(0, n);
 }
+
+// True "inside the fence" check via the Worker's airport-boundary geofences
+// (OSM aeroway=aerodrome polygons). Returns { iata, name, city, cc, lat, lng }
+// only when the point is INSIDE an airport perimeter, else null — so drive-bys
+// and people waiting outside don't get an arrival stamp.
+const AIRPORT_WORKER = "https://globeskimmers-api.maizasimeon.workers.dev";
+export async function airportAt(lat, lng, acc) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  try {
+    const u = new URL(AIRPORT_WORKER + "/airport-at");
+    u.searchParams.set("lat", lat);
+    u.searchParams.set("lng", lng);
+    if (Number.isFinite(acc)) u.searchParams.set("acc", acc);
+    const r = await fetch(u.toString());
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d && d.airport ? d.airport : null;
+  } catch { return null; }
+}

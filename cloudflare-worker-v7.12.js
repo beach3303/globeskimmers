@@ -11910,6 +11910,55 @@ async function handlePassportPhotoUpload(request, env, ctx) {
 // live at stamp-art/<slug>.png (e.g. stamp-art/eiffel-tower.png). Add art by
 // uploading to R2 — no app release. Returns 404 when a landmark has no bespoke
 // art yet (the app falls back to a category/emoji stamp). See docs/PASSPORT_ICON_LIST.md.
+// ── Airport boundary geofence: is this GPS point INSIDE an airport? ──────────
+// Uses aeroway=aerodrome polygons (OSM) bucketed by geohash-4 in KV (key
+// aero:<gh4>). True "inside the fence" (terminals/runways/planes), not drive-by.
+const GH_B32 = "0123456789bcdefghjkmnpqrstuvwxyz";
+function geohash4(lat, lng) {
+  let idx = 0, bit = 0, even = true, hash = "";
+  let latMin = -90, latMax = 90, lngMin = -180, lngMax = 180;
+  while (hash.length < 4) {
+    if (even) { const mid = (lngMin + lngMax) / 2; if (lng >= mid) { idx = idx * 2 + 1; lngMin = mid; } else { idx *= 2; lngMax = mid; } }
+    else { const mid = (latMin + latMax) / 2; if (lat >= mid) { idx = idx * 2 + 1; latMin = mid; } else { idx *= 2; latMax = mid; } }
+    even = !even;
+    if (++bit === 5) { hash += GH_B32[idx]; bit = 0; idx = 0; }
+  }
+  return hash;
+}
+function pointInRing(lat, lng, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const yi = ring[i][0], xi = ring[i][1], yj = ring[j][0], xj = ring[j][1];
+    if (((yi > lat) !== (yj > lat)) && (lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+async function handleAirportAt(request, env) {
+  try {
+    const url = new URL(request.url);
+    const lat = parseFloat(url.searchParams.get('lat'));
+    const lng = parseFloat(url.searchParams.get('lng'));
+    const acc = parseFloat(url.searchParams.get('acc'));
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return jsonResponse({ error: 'lat/lng required' }, 400);
+    if (Number.isFinite(acc) && acc > 300) return jsonResponse({ airport: null, reason: 'low_accuracy' });
+    if (!env.GLOBESKIMMERS_KV) return jsonResponse({ airport: null });
+    const raw = await env.GLOBESKIMMERS_KV.get(`aero:${geohash4(lat, lng)}`);
+    if (!raw) return jsonResponse({ airport: null });
+    const recs = JSON.parse(raw);
+    const BUF = 0.0006; // ~65 m fence tolerance for GPS jitter
+    for (const a of recs) {
+      const [s, w, n, e] = a.bbox;
+      if (lat < s - BUF || lat > n + BUF || lng < w - BUF || lng > e + BUF) continue;
+      for (const ring of (a.rings || [])) {
+        if (pointInRing(lat, lng, ring)) {
+          return jsonResponse({ airport: { iata: a.iata, name: a.name, city: a.city, cc: a.cc, lat: (s + n) / 2, lng: (w + e) / 2 } });
+        }
+      }
+    }
+    return jsonResponse({ airport: null });
+  } catch (e) { return jsonResponse({ error: e.message, airport: null }, 500); }
+}
+
 async function handleStampArtServe(request, env) {
   try {
     if (!env.MEDIA) return new Response('Not found', { status: 404 });
@@ -12652,6 +12701,7 @@ export default {
 
       // Passport (personal, private)
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
+      if (pathname === '/airport-at' && request.method === 'GET') return await handleAirportAt(request, env);
       if (pathname.startsWith('/stamp-art/') && request.method === 'GET') return await handleStampArtServe(request, env);
       if (pathname === '/passport/stamp' && request.method === 'POST') return await handlePassportStamp(request, env, ctx);
       if (pathname === '/passport/list' && request.method === 'POST') return await handlePassportList(request, env);
