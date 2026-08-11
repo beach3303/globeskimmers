@@ -444,7 +444,28 @@ function StampPlaceModal({ onClose, onDone }) {
   );
 }
 
-export default function PassportPage() {
+// Error boundary — never white-screen the passport; show what went wrong.
+class PassportBoundary extends React.Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) { try { console.error("Passport crash:", err, info); } catch { /* ignore */ } }
+  render() {
+    if (this.state.err) {
+      return (
+        <div style={{ minHeight: "100vh", background: IVORY, padding: 20, fontFamily: MONO }}>
+          <p style={{ fontFamily: SERIF, fontSize: 22, color: STAMP }}>Passport hit a snag</p>
+          <p style={{ fontSize: 12.5, color: INK2, marginTop: 8, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{String(this.state.err?.stack || this.state.err?.message || this.state.err)}</p>
+          <button onClick={() => { try { window.location.assign(createPageUrl("Home")); } catch { /* ignore */ } }} className="mt-4 rounded-xl px-4 py-2 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: 14 }}>Back to Home</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function PassportPage() { return <PassportBoundary><PassportInner /></PassportBoundary>; }
+
+function PassportInner() {
   const navigate = useNavigate();
   const isTablet = useIsTablet();
   const colWrap = isTablet ? "max-w-[820px]" : "max-w-md";
