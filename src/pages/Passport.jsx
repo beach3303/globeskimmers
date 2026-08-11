@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { countryCode } from "@/lib/countries";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { ChevronLeft, Loader2, Plus, Trash2, Calendar, RefreshCw, X, UserPlus } from "lucide-react";
@@ -7,17 +6,12 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { addStamp, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
+import { listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
 import { stampArtUrl } from "@/lib/stampArt";
 import AirportStamp from "@/components/passport/AirportStamp";
+import PassportBook from "@/components/passport/PassportBook";
+import { isAdminEmail } from "@/lib/admins";
 
-const citySlug = (s) => "city:" + String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-// Country name → flag emoji (renders as a real flag on iOS/Android; no network).
-const flagFor = (country) => {
-  const cc = countryCode(country);
-  if (!cc || !/^[a-z]{2}$/i.test(cc)) return "🗺️";
-  return String.fromCodePoint(...[...cc.toUpperCase()].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
-};
 
 // ============================================================================
 // Passport — the personal, private travel journal. Stamps you EARN by being
@@ -149,7 +143,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
     if (error) showToast(error, "error"); else { showToast("Photo removed", "success"); onChanged(); }
   };
 
-  // Airport arrival stamps render the authentic in-app stamp (no bespoke art / photos).
+  // Airport arrival stamps render the authentic in-app stamp; memory photos welcome.
   if (stamp.kind === "airport") {
     return (
       <div className="bg-white rounded-[20px] p-3 flex flex-col items-center" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
@@ -165,6 +159,33 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
             <button onClick={() => setConfirmDel(true)} className="rounded-lg px-2 py-1" style={{ background: IVORY_2, color: INK3, fontSize: fs(11.5) }} title="Remove">🗑</button>
           ))}
         </div>
+
+        {/* Memory photos — thumbnails you can enlarge (same as iconic stamps) */}
+        {photos.length > 0 && (
+          <div className="flex gap-2 mt-3 flex-wrap justify-center">
+            {photos.map((p) => (
+              <div key={p.id} className="relative shrink-0">
+                <img src={p.photo_url} alt="" loading="lazy" onClick={() => onEnlarge(p.photo_url, stamp)}
+                  className="cursor-pointer active:scale-95 transition-transform"
+                  style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 12, border: `1px solid ${RULE}` }} />
+                {!readOnly && (
+                  <button onClick={() => removePhoto(p.id)} className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.72)", border: "1.5px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,.4)" }}>
+                    <X size={13} color="#fff" strokeWidth={2.75} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {!readOnly && (<>
+          <button onClick={() => fileRef.current?.click()} disabled={busy}
+            className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
+            style={{ background: IVORY_2, color: INK2, border: `1px dashed ${RULE}`, fontSize: fs(13), fontWeight: 600 }}>
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} strokeWidth={2.4} />}
+            {photos.length ? "Add another photo" : "Add a memory photo"}
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
+        </>)}
       </div>
     );
   }
@@ -233,8 +254,8 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
                 className="cursor-pointer active:scale-95 transition-transform"
                 style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 12, border: `1px solid ${RULE}` }} />
               {!readOnly && (
-                <button onClick={() => removePhoto(p.id)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.6)" }}>
-                  <X size={11} color="#fff" strokeWidth={2.5} />
+                <button onClick={() => removePhoto(p.id)} className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.72)", border: "1.5px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,.4)" }}>
+                  <X size={13} color="#fff" strokeWidth={2.75} />
                 </button>
               )}
             </div>
@@ -294,46 +315,28 @@ function TagInbox({ tag, onDone }) {
   );
 }
 
-// Compact stamp "token" for the flip-book page — the visual placed at a slight
-// angle, like a real stamp pressed on the page; tap to open the full stamp
-// (photos, date, delete, share) in a modal.
-function StampToken({ stamp, idx, onOpen }) {
-  const [artFail, setArtFail] = useState(false);
-  const rot = ((idx * 53) % 12) - 6; // deterministic -6..+5°
-  const art = stamp.kind === "country" ? null : stampArtUrl(stamp.name);
-  const showArt = !!art && !artFail;
-  const flag = stamp.kind === "country" ? flagFor(stamp.country || stamp.name) : null;
-  const dateStr = stamp.visited_on
-    ? new Date(stamp.visited_on).toLocaleDateString("en-US", { month: "short", year: "numeric" })
-    : "";
-  return (
-    <button onClick={() => onOpen(stamp)} className="relative active:scale-95 transition-transform" style={{ transform: `rotate(${rot}deg)`, width: 128 }}>
-      {stamp.kind === "airport" ? (
-        <AirportStamp iata={stamp.entity_id} city={stamp.city} countryCode={stamp.country} date={stamp.visited_on} width={128} />
-      ) : showArt ? (
-        <div className="flex flex-col items-center">
-          <img src={art} alt={stamp.name} onError={() => setArtFail(true)} style={{ width: 106, height: 106, objectFit: "contain" }} />
-          {dateStr && <span style={{ fontFamily: MONO, fontSize: fs(8.5), color: INK3, marginTop: -2 }}>{dateStr}</span>}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center text-center" style={{ width: 116, height: 116, borderRadius: 999, border: `2px solid ${STAMP}`, background: "rgba(255,255,255,.45)", padding: 8 }}>
-          <span style={{ fontSize: 22, lineHeight: 1 }}>{flag || (KIND[stamp.kind] || KIND.attraction).icon}</span>
-          <span className="leading-tight" style={{ fontFamily: SERIF, fontSize: fs(12), color: STAMP, marginTop: 2 }}>{stamp.name}</span>
-          {dateStr && <span style={{ fontFamily: MONO, fontSize: fs(8), color: INK3, marginTop: 1 }}>{dateStr}</span>}
-        </div>
-      )}
-      {stamp.verified === "gps" && (
-        <span className="absolute" style={{ top: -4, right: 6, background: "#2E6B4E", color: "#fff", fontSize: 11, fontWeight: 700, width: 18, height: 18, borderRadius: 999, display: "grid", placeItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }}>✓</span>
-      )}
-    </button>
-  );
-}
+// Sample stamps for the in-app "See a sample passport" preview (never saved to
+// the server; view-only). Shows a range: airport arrivals + iconic stamps, GPS ✓
+// vs self-declared, with/without memory photos, across three country pages.
+const SAMPLE_STAMPS = [
+  { id: "sample-fr-cdg", kind: "airport", tier: "page", entity_type: "airport", entity_id: "CDG", name: "Paris (CDG)", city: "Paris", country: "FR", visited_on: "2026-06-14", verified: "gps", photos: [] },
+  { id: "sample-fr-eiffel", kind: "attraction", tier: "mark", name: "Eiffel Tower", city: "Paris", region: "Île-de-France", country: "France", visited_on: "2026-06-14", verified: "gps", photos: [{ id: "sp-fr1", photo_url: "https://picsum.photos/seed/gs-paris-1/220/220" }, { id: "sp-fr2", photo_url: "https://picsum.photos/seed/gs-paris-2/220/220" }, { id: "sp-fr3", photo_url: "https://picsum.photos/seed/gs-paris-3/220/220" }, { id: "sp-fr4", photo_url: "https://picsum.photos/seed/gs-paris-4/220/220" }] },
+  { id: "sample-fr-arc", kind: "attraction", tier: "mark", name: "Arc de Triomphe", city: "Paris", country: "France", visited_on: "2026-06-15", verified: "self", photos: [] },
+  { id: "sample-us-jfk", kind: "airport", tier: "page", entity_type: "airport", entity_id: "JFK", name: "New York (JFK)", city: "New York", country: "US", visited_on: "2026-03-02", verified: "gps", photos: [] },
+  { id: "sample-us-liberty", kind: "attraction", tier: "mark", name: "Statue of Liberty", city: "New York", region: "New York", country: "United States", visited_on: "2026-03-02", verified: "gps", photos: [{ id: "sp-us1", photo_url: "https://picsum.photos/seed/gs-ny-1/220/220" }, { id: "sp-us2", photo_url: "https://picsum.photos/seed/gs-ny-2/220/220" }] },
+  { id: "sample-us-gc", kind: "attraction", tier: "mark", name: "Grand Canyon West Rim", city: "Peach Springs", region: "Arizona", country: "United States", visited_on: "2026-03-05", verified: "gps", photos: [] },
+  { id: "sample-jp-hnd", kind: "airport", tier: "page", entity_type: "airport", entity_id: "HND", name: "Tokyo (HND)", city: "Tokyo", country: "JP", visited_on: "2025-11-20", verified: "gps", photos: [] },
+  { id: "sample-jp-fuji", kind: "attraction", tier: "mark", name: "Mount Fuji", city: "Fujinomiya", country: "Japan", visited_on: "2025-11-21", verified: "self", photos: [{ id: "sp-jp1", photo_url: "https://picsum.photos/seed/gs-fuji-1/220/220" }, { id: "sp-jp2", photo_url: "https://picsum.photos/seed/gs-fuji-2/220/220" }, { id: "sp-jp3", photo_url: "https://picsum.photos/seed/gs-fuji-3/220/220" }] },
+  { id: "sample-jp-fushimi", kind: "attraction", tier: "mark", name: "Fushimi Inari Shrine", city: "Kyoto", country: "Japan", visited_on: "2025-11-22", verified: "gps", photos: [] },
+];
+const SAMPLE_STATS = { countries: 3, verified: 6 };
 
 export default function PassportPage() {
   const navigate = useNavigate();
   const isTablet = useIsTablet();
   const colWrap = isTablet ? "max-w-[820px]" : "max-w-md";
-  const { isAuthenticated, profile } = useAuth();
+  const { isAuthenticated, profile, user } = useAuth();
+  const isDev = isAdminEmail(user?.email); // sample-passport preview is admin-only
   const [loading, setLoading] = useState(true);
   const [stamps, setStamps] = useState([]);
   const [stats, setStats] = useState({});
@@ -412,35 +415,30 @@ export default function PassportPage() {
   const exitView = () => { try { sessionStorage.removeItem("pp_view_slug"); } catch { /* ignore */ } window.location.assign(createPageUrl("Passport")); };
 
   // Booklet view: one swipeable page per country (like a real passport).
-  const pageRefs = useRef([]);
   const [openStampId, setOpenStampId] = useState(null);
-  const byCountry = useMemo(() => {
-    // Canonicalize country to a display name so ISO-2 airport stamps (e.g. "FR")
-    // group with name-based country/city stamps (e.g. "France") on one page.
-    const rn = (() => { try { return new Intl.DisplayNames(["en"], { type: "region" }); } catch { return null; } })();
-    const label = (c) => { const s = String(c || "").trim(); return (rn && /^[A-Za-z]{2}$/.test(s)) ? (rn.of(s.toUpperCase()) || s) : s; };
-    const groups = {};
-    for (const s of stamps) { const k = label(s.country) || "Other places"; (groups[k] = groups[k] || []).push(s); }
-    const t = (s) => Date.parse(s.visited_on || s.created_at) || 0;
-    const order = Object.keys(groups).sort((a, b) => Math.max(...groups[b].map(t)) - Math.max(...groups[a].map(t)));
-    for (const k of order) groups[k].sort((a, b) => (a.tier === "mark") - (b.tier === "mark") || t(b) - t(a));
-    return { order, groups };
-  }, [stamps]);
-
-  // Book pages: chunk each country's stamps so a busy country spans multiple pages.
+  // "See a sample passport" preview — sample stamps, view-only, never saved.
+  const [preview, setPreview] = useState(false);
+  const stampsView = preview ? SAMPLE_STAMPS : stamps;
+  const statsView = preview ? SAMPLE_STATS : stats;
+  // Book pages: stamps flow across pages by size (airport ≈ ⅓ page, iconic ≈ ½
+  // page), newest first — a page can mix countries, like a real passport.
   const bookPages = useMemo(() => {
-    const PER = 6, out = [];
-    byCountry.order.forEach((c) => {
-      const list = byCountry.groups[c];
-      const total = Math.max(1, Math.ceil(list.length / PER));
-      for (let p = 0; p < total; p++) out.push({ key: `${c}-${p}`, country: c, idx: p + 1, total, stamps: list.slice(p * PER, p * PER + PER) });
-    });
-    return out;
-  }, [byCountry]);
+    const t = (s) => Date.parse(s.visited_on || s.created_at) || 0;
+    const ordered = [...stampsView].sort((a, b) => t(b) - t(a));
+    const CAP = 6, weight = (s) => (s.kind === "airport" ? 2 : 3);
+    const pages = []; let cur = [], used = 0;
+    for (const s of ordered) {
+      const w = weight(s);
+      if (cur.length && used + w > CAP) { pages.push(cur); cur = []; used = 0; }
+      cur.push(s); used += w;
+    }
+    if (cur.length) pages.push(cur);
+    return pages.map((stamps, i) => ({ key: `pg-${i}`, stamps }));
+  }, [stampsView]);
 
   // The stamp open in the detail modal — re-derived from fresh data (auto-closes if deleted).
-  const openStamp = openStampId ? stamps.find((s) => s.id === openStampId) : null;
-  useEffect(() => { if (openStampId && !stamps.some((s) => s.id === openStampId)) setOpenStampId(null); }, [stamps, openStampId]);
+  const openStamp = openStampId ? stampsView.find((s) => s.id === openStampId) : null;
+  useEffect(() => { if (openStampId && !stampsView.some((s) => s.id === openStampId)) setOpenStampId(null); }, [stampsView, openStampId]);
 
   return (
     <div className="min-h-screen" style={{ background: IVORY, fontFamily: SANS }}>
@@ -457,9 +455,14 @@ export default function PassportPage() {
       </div>
 
       <div className={`${colWrap} mx-auto px-4 pb-28`}>
+        {preview && (
+          <div className="mb-4 rounded-[16px] px-3.5 py-2.5 flex items-center justify-between gap-2" style={{ background: "#EAF2FF", border: "1px solid #C7DBF5" }}>
+            <span style={{ color: "#2B4A7E", fontSize: fs(12.5), lineHeight: 1.4 }}>👁 Preview — sample stamps (not saved to your passport).</span>
+            <button onClick={() => setPreview(false)} className="shrink-0 rounded-lg px-3 py-1.5 font-semibold" style={{ background: "#2B4A7E", color: "#fff", fontSize: fs(12) }}>Exit</button>
+          </div>
+        )}
         {/* Holder + stats */}
         <div className="text-center pt-1 pb-3">
-          <h1 className="italic leading-tight" style={{ fontFamily: SERIF, fontSize: fs(32), color: STAMP, marginTop: 4 }}>{holder}&rsquo;s Virtual Passport</h1>
           {!readOnly && (
             <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full" style={{ background: share?.is_public ? "#F3E2C7" : IVORY_2, color: share?.is_public ? "#7E601F" : INK3, fontSize: fs(11.5), fontWeight: 600 }}>
               {share?.is_public ? "🔗 Shared — anyone with your link can view" : "🔒 Only you can see this"}
@@ -480,11 +483,11 @@ export default function PassportPage() {
             <button onClick={() => { try { localStorage.setItem("pp_arrival_explained", "1"); } catch { /* ignore */ } setExplainArrivals(false); }} className="mt-2 rounded-lg px-3 py-1.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12) }}>Got it</button>
           </div>
         )}
-        {stamps.length > 0 && (
+        {stampsView.length > 0 && (
           <div className="bg-white rounded-[18px] p-3 mb-4 flex items-center justify-around" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
-            <Stat n={stats.countries || 0} label="Countries" />
-            <Stat n={stamps.length} label="Stamps" />
-            <Stat n={stats.verified || 0} label="Verified" />
+            <Stat n={statsView.countries || 0} label="Countries" />
+            <Stat n={stampsView.length} label="Stamps" />
+            <Stat n={statsView.verified || 0} label="Verified" />
           </div>
         )}
 
@@ -537,12 +540,12 @@ export default function PassportPage() {
           </div>
         )}
 
-        {loading && stamps.length === 0 ? (
+        {loading && stampsView.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-10 h-10 animate-spin mb-3" style={{ color: STAMP }} />
             <p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(11), letterSpacing: ".1em" }}>Opening your Virtual Passport…</p>
           </div>
-        ) : stamps.length === 0 ? (
+        ) : stampsView.length === 0 && (readOnly || !isAuthenticated) ? (
           <div className="bg-white rounded-[22px] p-6 text-center mt-2" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
             <div style={{ fontSize: 48 }}>🛂</div>
             {readOnly ? (
@@ -569,27 +572,21 @@ export default function PassportPage() {
             )}
           </div>
         ) : (
-          /* PAGE-FLIP BOOK — swipe left/right to turn pages; stamps sit on the page */
-          <div>
-            <div style={{ display: "flex", overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", gap: 12, margin: "0 -4px", padding: "2px 4px 6px" }}>
-              {bookPages.map((pg, i) => (
-                <section key={pg.key} ref={(el) => { pageRefs.current[i] = el; }}
-                  style={{ flex: "0 0 100%", scrollSnapAlign: "center", background: "#FBF6EC", border: "1px solid #EADFC9", borderRadius: 18, padding: 16, position: "relative", overflow: "hidden", minHeight: 360, boxShadow: "inset -14px 0 22px -18px rgba(0,0,0,.35)" }}>
-                  <div aria-hidden style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: 0.06, fontSize: 190, pointerEvents: "none" }}>{flagFor(pg.country)}</div>
-                  <div className="flex items-center justify-between mb-3" style={{ position: "relative" }}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span style={{ fontSize: 26, lineHeight: 1 }}>{flagFor(pg.country)}</span>
-                      <h2 className="truncate" style={{ fontFamily: SERIF, fontSize: fs(24), color: INK, lineHeight: 1.05 }}>{pg.country}</h2>
-                    </div>
-                    <span className="uppercase shrink-0" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", color: INK3 }}>{pg.total > 1 ? `Page ${pg.idx} / ${pg.total}` : `${pg.stamps.length} stamp${pg.stamps.length > 1 ? "s" : ""}`}</span>
-                  </div>
-                  <div className="flex flex-wrap justify-center items-start gap-x-3 gap-y-6" style={{ position: "relative", paddingTop: 6 }}>
-                    {pg.stamps.map((s, j) => <StampToken key={s.id} stamp={s} idx={j} onOpen={() => setOpenStampId(s.id)} />)}
-                  </div>
-                </section>
-              ))}
-            </div>
-            {bookPages.length > 1 && <p className="text-center mt-2" style={{ color: INK3, fontSize: fs(11.5) }}>‹ swipe to turn the page ›</p>}
+          /* THE BOOK — tap the cover to open, then flip through the pages */
+          <div className="mt-1 mb-2">
+            <PassportBook
+              pages={bookPages}
+              holder={holder}
+              homeCountry={readOnly ? null : (profile?.home_country || null)}
+              countries={statsView.countries || 0}
+              totalStamps={stampsView.length}
+              onOpenStamp={(id) => setOpenStampId(id)}
+            />
+            {isDev && !readOnly && !preview && (
+              <div className="text-center mt-4">
+                <button onClick={() => setPreview(true)} className="rounded-full px-4 py-2" style={{ background: "#fff", border: `1px solid ${RULE}`, color: INK2, fontSize: fs(12.5), fontWeight: 600 }}>👁 See a sample passport (admin)</button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -599,7 +596,7 @@ export default function PassportPage() {
         <div onClick={() => setOpenStampId(null)} className="fixed inset-0 z-[9998] flex items-start justify-center p-4 overflow-y-auto"
           style={{ background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)" }}>
           <div onClick={(e) => e.stopPropagation()} className="w-full" style={{ maxWidth: 380, marginTop: 32, marginBottom: 40 }}>
-            <StampCard stamp={openStamp} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: openStamp.name })} fromName={holder} homeCity={profile?.home_city} readOnly={readOnly} />
+            <StampCard stamp={openStamp} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: openStamp.name })} fromName={holder} homeCity={profile?.home_city} readOnly={readOnly || preview} />
             <button onClick={() => setOpenStampId(null)} className="mt-2 w-full rounded-xl py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>Close</button>
           </div>
         </div>

@@ -327,6 +327,21 @@ State: Committed 4afe7fc · Frontend auto-deploys on push · **Worker needs `wra
 - [ ] Affiliate: click logs to D1 with partner "stay22" (SubID in Stay22 `campaign`); disclosure + "filter amenities on results page" note visible
 - [ ] Signed-out / no-location: button disabled with "Set your location to search"
 
+## 🛂 Virtual Passport → real page-flip book (2026-08-10)
+Passport now opens like a physical booklet: the navy **"My Virtual Passport"** cover (R2 hero, `/stamp-art/passport-cover-default.jpg`) swings open from the left spine → ownership page → one portrait page per country with stamps pressed on ivory paper. `src/components/passport/PassportBook.jsx` (framer-motion 3D hinge + swipe/keyboard flip), wired into `src/pages/Passport.jsx` (old scroll-snap book removed; all stamp/share/tag/claim/detail features preserved). Single portrait page per view (mobile-first). **No Worker deploy** (cover reuses the stamp-art passthrough). No local asset added — cover served from R2.
+State: Uncommitted · Frontend auto-deploys on push · Tested ⬜
+- [ ] Passport (with ≥1 stamp) shows the **closed navy cover** centered, 2:3, with contact shadow + "Tap to open" hint
+- [ ] **Tap the cover** → it swings open from the left spine (~0.85s) → **ownership page** appears (Globeskimmers · My Virtual Passport · your name · Traveler Since / Countries / Stamps · "Not a government document")
+- [ ] **Swipe left / ›** turns to the next page; **swipe right / ‹** goes back; **Close** returns to the closed cover
+- [ ] Each country page shows flag + name + stamps scattered at slight angles; **tap a stamp** → detail modal (photos, date, delete, share) still works
+- [ ] GPS-verified stamps show the green ✓; airport stamps render the arrival stamp; landmark stamps show the illustrated art
+- [ ] Page indicator "Page X / N" + prev/next buttons show **outside** the book; keyboard: Enter opens, ← → flip, Esc closes
+- [ ] **Reduced motion** (iOS: Settings → Accessibility → Motion → Reduce Motion) → cover/pages crossfade instead of 3D turn
+- [ ] Read-only shared view: book opens, stamps view-only (no edit/delete), ownership page shows the holder's name, no home-country leak
+- [ ] Narrow phone (320px) + tablet: book scales, no horizontal page scroll, stamps stay tappable (44px targets)
+- [ ] **0 stamps (signed in):** still shows the closed cover → open → ownership page + a **"My Travel Collection · Your first destination stamp will appear here" + "Find places to stamp"** page (→ Things to Do)
+- [ ] **0 stamps (signed out):** shows the sign-in prompt (not the book); **read-only friend, empty:** shows "Nothing to show"
+
 ## Template for a new build
 ```
 ### N · <feature name>
