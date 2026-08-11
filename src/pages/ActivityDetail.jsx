@@ -13,6 +13,7 @@ import PhotoGalleryModal from '@/components/coffee/PhotoGalleryModal';
 import Guestbook from '@/components/Guestbook';
 import { invokeLLM, callWorker } from "@/lib/callWorker";
 import { addStamp, metersBetween, GPS_VERIFY_RADIUS_M } from "@/lib/passport";
+import { resolveStampVariant } from "@/lib/stampVariants";
 import { countryCode } from "@/lib/countries";
 import { showToast } from "../components/Toast";
 import { useDismissable } from '@/lib/dismissStack';
@@ -221,15 +222,26 @@ export default function ActivityDetailPage() {
     const placeLat = Number(activity.latitude ?? activityLocation?.latitude);
     const placeLng = Number(activity.longitude ?? activityLocation?.longitude);
     let verified = 'self';
+    let gpsLat = null, gpsLng = null;
     try {
       const pos = await new Promise((res, rej) => {
         if (!navigator.geolocation) return rej(new Error('no geo'));
         navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 });
       });
-      if (metersBetween(pos.coords.latitude, pos.coords.longitude, placeLat, placeLng) <= GPS_VERIFY_RADIUS_M) verified = 'gps';
+      gpsLat = pos.coords.latitude; gpsLng = pos.coords.longitude;
+      if (metersBetween(gpsLat, gpsLng, placeLat, placeLng) <= GPS_VERIFY_RADIUS_M) verified = 'gps';
     } catch { /* no fix → self-declared */ }
+    // Multi-viewpoint landmarks (Grand Canyon rims, Niagara sides) → resolve the
+    // specific variant. Use the live GPS fix only when it corroborates presence
+    // (verified), otherwise the selected place's own coordinates.
+    const vLat = verified === 'gps' ? gpsLat : placeLat;
+    const vLng = verified === 'gps' ? gpsLng : placeLng;
+    const variant = resolveStampVariant({ name: activity.name, lat: vLat, lng: vLng, country: activity.country });
     const { data, error } = await addStamp({
-      kind: 'attraction', entity_type: 'place', entity_id: activity.id, name: activity.name,
+      kind: 'attraction',
+      entity_type: variant ? 'landmark' : 'place',
+      entity_id: variant ? variant.entity_id : activity.id,
+      name: variant ? variant.name : activity.name,
       city: activity.city || activity.address?.city || null,
       region: activity.region || activity.state || null,
       country: activity.country || null,
