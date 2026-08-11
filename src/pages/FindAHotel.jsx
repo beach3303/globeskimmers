@@ -155,7 +155,9 @@ export default function FindAHotel() {
       if (sightPick?.lat != null) return { lat: sightPick.lat, lng: sightPick.lng };
       if (sightPick?.address) return { address: sightPick.address };
       const q = sightQuery.trim();
-      if (q) return { address: `${q} ${dest.city}`.trim() };
+      // Typed place geocodes on its own (globally) — do NOT append the current
+      // city, or "Disneyland" (Anaheim) wrongly resolves to the current city.
+      if (q) return { address: q };
       return { address: `${dest.city} city centre` };
     }
     if (goal === "centre" && dest.city) return { address: `${dest.city} city centre` };
@@ -217,7 +219,7 @@ export default function FindAHotel() {
           {[{ k: "here", t: "📍 Where I am" }, { k: "other", t: "🔎 Another city" }].map((m) => {
             const active = destMode === m.k;
             return (
-              <button key={m.k} onClick={() => setDestMode(m.k)}
+              <button key={m.k} onClick={() => setDestMode(m.k === "other" && destMode === "other" ? "here" : m.k)}
                 className="flex-1 py-2.5 rounded-[12px] font-semibold text-[calc(13.5px*var(--fs))]"
                 style={{ background: active ? ACCENT : "#FFFFFF", color: active ? "#fff" : ED_INK, border: `1.5px solid ${active ? ACCENT : "#F0E9DC"}` }}>
                 {m.t}
