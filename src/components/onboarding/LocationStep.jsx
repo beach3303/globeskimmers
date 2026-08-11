@@ -495,7 +495,9 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
             ) : granted ? (
               "Location Enabled ✓"
             ) : (
-              "Allow Location Access"
+              // Apple 5.1.1(iv): the pre-permission button must NOT say "Allow"
+              // (that pressures the choice). Neutral "Continue" per Apple's note.
+              "Continue"
             )}
           </Button>
         </div>
