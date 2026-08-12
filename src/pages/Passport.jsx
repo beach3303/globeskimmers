@@ -451,11 +451,22 @@ class PassportBoundary extends React.Component {
   componentDidCatch(err, info) { try { console.error("Passport crash:", err, info); } catch { /* ignore */ } }
   render() {
     if (this.state.err) {
+      const dev = (() => { try { return !!import.meta.env.DEV; } catch { return false; } })();
       return (
-        <div style={{ minHeight: "100vh", background: IVORY, padding: 20, fontFamily: MONO }}>
-          <p style={{ fontFamily: SERIF, fontSize: 22, color: STAMP }}>Passport hit a snag</p>
-          <p style={{ fontSize: 12.5, color: INK2, marginTop: 8, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{String(this.state.err?.stack || this.state.err?.message || this.state.err)}</p>
-          <button onClick={() => { try { window.location.assign(createPageUrl("Home")); } catch { /* ignore */ } }} className="mt-4 rounded-xl px-4 py-2 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: 14 }}>Back to Home</button>
+        <div style={{ minHeight: "100vh", background: IVORY, padding: 24, fontFamily: SERIF, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+          <div style={{ fontSize: 44 }}>🛂</div>
+          <p style={{ fontSize: 22, color: STAMP, marginTop: 8 }}>Your passport didn’t open</p>
+          <p style={{ fontSize: 15, color: INK3, marginTop: 8, maxWidth: 320, lineHeight: 1.5 }}>Something hiccuped while loading your stamps. Your collection is safe — give it another try.</p>
+          <div className="flex gap-3" style={{ marginTop: 18 }}>
+            <button onClick={() => this.setState({ err: null })} className="rounded-xl px-5 py-2 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: 14 }}>Try again</button>
+            <button onClick={() => { try { window.location.assign(createPageUrl("Home")); } catch { /* ignore */ } }} className="rounded-xl px-5 py-2 font-semibold" style={{ background: "transparent", color: INK, border: `1.5px solid ${INK3}`, fontSize: 14 }}>Back to Home</button>
+          </div>
+          {dev && (
+            <div style={{ marginTop: 22, textAlign: "left", maxWidth: 520, fontFamily: MONO }}>
+              <p style={{ fontSize: 13, color: INK, fontWeight: 700, whiteSpace: "pre-wrap", lineHeight: 1.4 }}>{String(this.state.err?.name || "Error")}: {String(this.state.err?.message || "(no message)")}</p>
+              <p style={{ fontSize: 10.5, color: INK3, marginTop: 8, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{String(this.state.err?.stack || "")}</p>
+            </div>
+          )}
         </div>
       );
     }
