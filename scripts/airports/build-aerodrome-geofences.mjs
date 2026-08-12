@@ -64,29 +64,59 @@ function simplify(pts, tol) {
 }
 
 // ---- Overpass ---------------------------------------------------------------
+const OVERPASS_MIRRORS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+];
 async function overpass(bbox) {
   const [s, w, n, e] = bbox;
   const q = `[out:json][timeout:180];(way["aeroway"="aerodrome"](${s},${w},${n},${e});relation["aeroway"="aerodrome"](${s},${w},${n},${e}););out tags geom;`;
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const url = OVERPASS_MIRRORS[attempt % OVERPASS_MIRRORS.length]; // rotate mirrors
     try {
-      const r = await fetch("https://overpass-api.de/api/interpreter", {
+      const r = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json", "User-Agent": "globeskimmers-aerodrome-build/1.0 (travel app airport geofences)" },
         body: "data=" + encodeURIComponent(q),
       });
-      if (r.status === 429 || r.status === 504) { await sleep(15000 * (attempt + 1)); continue; }
+      if (r.status === 429 || r.status === 504) { await sleep(12000 * (attempt + 1)); continue; }
       if (!r.ok) throw new Error("HTTP " + r.status);
       return (await r.json()).elements || [];
-    } catch (err) { if (attempt === 3) throw err; await sleep(8000 * (attempt + 1)); }
+    } catch (err) { if (attempt === 5) throw err; await sleep(7000 * (attempt + 1)); }
   }
   return [];
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---- extract rings from an element -----------------------------------------
+// Stitch relation outer member ways into closed rings (a multipolygon's outer
+// boundary is often split across several ways that must be joined end-to-end).
+function assembleRings(ways) {
+  const rings = [];
+  const pool = ways.filter((w) => w && w.length >= 2).map((w) => w.slice());
+  const key = (p) => `${p[0].toFixed(7)},${p[1].toFixed(7)}`;
+  while (pool.length) {
+    let ring = pool.shift();
+    let guard = 0;
+    while (key(ring[0]) !== key(ring[ring.length - 1]) && guard++ < pool.length + 3) {
+      const end = key(ring[ring.length - 1]);
+      let idx = pool.findIndex((w) => key(w[0]) === end);
+      if (idx >= 0) { ring = ring.concat(pool.splice(idx, 1)[0].slice(1)); continue; }
+      idx = pool.findIndex((w) => key(w[w.length - 1]) === end);
+      if (idx >= 0) { ring = ring.concat(pool.splice(idx, 1)[0].reverse().slice(1)); continue; }
+      break; // open — can't close this ring
+    }
+    if (ring.length >= 4) rings.push(ring);
+  }
+  return rings;
+}
 function ringsOf(el) {
   if (el.type === "way" && el.geometry) return [el.geometry.map((p) => [p.lat, p.lon])];
-  if (el.type === "relation" && el.members) return el.members.filter((m) => m.role === "outer" && m.geometry).map((m) => m.geometry.map((p) => [p.lat, p.lon]));
+  if (el.type === "relation" && el.members) {
+    const ways = el.members.filter((m) => (m.role === "outer" || m.role === "") && m.geometry && m.geometry.length).map((m) => m.geometry.map((p) => [p.lat, p.lon]));
+    return assembleRings(ways);
+  }
   return [];
 }
 
@@ -130,7 +160,37 @@ function worldTiles() {
 }
 
 async function main() {
+  // --relations: one global query for aerodrome RELATIONS (big hubs like LHR/HND/
+  // HKG are multipolygons the tiled way-query misses). Small set → single request.
+  if (args.relations) {
+    const q = `[out:json][timeout:900];relation["aeroway"="aerodrome"];out geom;`;
+    let els = [];
+    for (let attempt = 0; attempt < OVERPASS_MIRRORS.length * 3 && !els.length; attempt++) {
+      const url = OVERPASS_MIRRORS[attempt % OVERPASS_MIRRORS.length];
+      process.stderr.write(`relations global query via ${url} … `);
+      try {
+        const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json", "User-Agent": "globeskimmers-aerodrome-build/1.0" }, body: "data=" + encodeURIComponent(q) });
+        if (!r.ok) { console.error("HTTP " + r.status); await sleep(12000); continue; }
+        els = (await r.json()).elements || [];
+      } catch (e) { console.error("FAILED " + e.message); await sleep(12000); }
+    }
+    console.error(`${els.length} relation elements`);
+    const rcells = new Map(); let rairports = 0;
+    for (const el of els) {
+      const rec = toRecord(el);
+      if (!rec) continue;
+      rairports++;
+      const slim = { iata: rec.iata, name: rec.name, city: rec.city, cc: rec.cc, bbox: rec.bbox, rings: rec.rings };
+      for (const c of cellsOf(rec)) { if (!rcells.has(c)) rcells.set(c, []); rcells.get(c).push(slim); }
+    }
+    const kv = [...rcells.entries()].map(([cell, recs]) => ({ key: `aero:${cell}`, value: JSON.stringify(recs) }));
+    writeFileSync(OUT, JSON.stringify(kv));
+    console.error(`\n✅ ${rairports} relation-aerodromes · ${rcells.size} cells → ${OUT}`);
+    return;
+  }
+
   const bboxes = args.world ? worldTiles()
+    : args.list ? readFileSync(args.list, "utf8").split("\n").map((l) => l.trim()).filter(Boolean).map((l) => l.split(",").map(Number))
     : [].concat(args.bbox || []).map((b) => (typeof b === "string" ? b.split(",").map(Number) : b));
   if (!bboxes.length) { console.error("Provide --bbox=S,W,N,E or --world"); process.exit(1); }
 
@@ -151,7 +211,7 @@ async function main() {
       for (const c of cellsOf(rec)) { if (!cells.has(c)) cells.set(c, []); cells.get(c).push(slim); }
     }
     console.error(`${els.length} elements, +${added} airports`);
-    if (args.world) await sleep(2000); // be polite to Overpass
+    if (args.world || args.list) await sleep(3000); // be polite to Overpass
   }
 
   const kv = [...cells.entries()].map(([cell, recs]) => ({ key: `aero:${cell}`, value: JSON.stringify(recs) }));
