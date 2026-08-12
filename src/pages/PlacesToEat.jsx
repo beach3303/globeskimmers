@@ -1417,16 +1417,8 @@ export default function PlacesToEat() {
 
         <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.food.ink} unit={unit} setUnit={setUnit} />
 
-        {/* View toggle (List / Map). The Nearby/Best sort toggle was removed —
-            results now use one unified ranking (distance-band → dish tier →
-            non-chain → quality), so there's nothing to toggle. */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:"8px",marginBottom:"14px"}}>
-          <div style={{display:"flex",background:"#F7F4EC",borderRadius:"10px",padding:"3px"}}>
-            {["list","map"].map(v=>(
-              <button key={v} onClick={()=>setViewMode(v)} className="font-sans" style={{padding:"7px 14px",borderRadius:"8px",border:"none",background:viewMode===v?CAT.food.ink:"transparent",color:viewMode===v?"#fff":'#475569',fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer"}}>{v==="list"?"List View":"Map View"}</button>
-            ))}
-          </div>
-        </div>
+        {/* List/Map view toggle removed — list is the primary view; a card's
+            "📍 Map" button still opens that place on the map. */}
 
         {/* Advanced Filters + result summary (single merged row) */}
         <button onClick={()=>setShowAdvanced(!showAdvanced)} className="font-sans" style={{display:"flex",alignItems:"center",gap:"10px",width:"100%",padding:"12px 14px",borderRadius:"14px",border:`1px solid ${showAdvanced||activeFilterCount>0?CAT.food.ink:"#F0E9DC"}`,background:showAdvanced||activeFilterCount>0?CAT.food.bg:"#fff",color:showAdvanced||activeFilterCount>0?CAT.food.ink:'#0F1419',fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",marginBottom:"10px"}}>
