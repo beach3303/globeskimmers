@@ -639,15 +639,15 @@ function AlsoServesBanner({ banner, onExpandRadius }) {
 // enlarged text grows the card instead of clipping.
 function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, formatDistance, isTablet }) {
   const [expanded,setExpanded]=useState(false);
-  const [hoursExpanded,setHoursExpanded]=useState(false);
   const [enriched,setEnriched]=useState(null);
-  // On first expand of an OWNED restaurant, fetch 3 real Google photos + hours
-  // (resolves to Google once, cached). Keeps the list free; only opened places cost.
+  // Fetch 3 real Google photos + hours for OWNED restaurants (owned records carry
+  // none) — runs once on MOUNT so the list card shows a real, swipeable photo, not
+  // only on expand. Server-cached, so repeat views cost nothing.
   useEffect(()=>{
-    if(!expanded||enriched||restaurant.source!=='owned')return;
+    if(enriched||restaurant.source!=='owned')return;
     callWorker('places/enrich-owned',{id:restaurant.id||restaurant.placeId,name:restaurant.displayName?.text||restaurant.name,lat:restaurant.lat,lng:restaurant.lng,maxPhotos:3})
       .then(({data})=>{ if(data&&data.matched)setEnriched(data); }).catch(()=>{});
-  },[expanded]); // eslint-disable-line react-hooks/exhaustive-deps
+  },[]); // eslint-disable-line react-hooks/exhaustive-deps
   const fs=(n)=>`calc(${n}px*var(--fs))`;
   // Pick tablet vs phone-tuned value.
   const t=(tab,phone)=>isTablet?tab:phone;
@@ -725,6 +725,11 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
           </a>
         )}
 
+        {/* AI details — on the front card, above the actions */}
+        <div style={{marginTop:t(fs(18),fs(13))}}>
+          <AIDetailsSection placeId={restaurant.placeId||restaurant.id} placeName={name} lat={restaurant.lat} lng={restaurant.lng} page="PlacesToEat" kind="restaurant"/>
+        </div>
+
         {/* Actions */}
         <div style={{display:"flex",gap:t(fs(12),fs(8)),marginTop:t(fs(20),fs(14))}}>
           <button onClick={onDirections} style={{flex:1,borderRadius:t("16px","12px"),padding:t(fs(15),fs(11)),fontSize:t(fs(18),fs(14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_EAT,color:"#fff"}}>Directions</button>
@@ -800,29 +805,19 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
 
                 {weekdays.length>0&&(
                   <div style={{padding:fs(16),background:"#FAF7F0",borderRadius:"16px"}}>
-                    <button onClick={()=>setHoursExpanded(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
-                      <span style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
-                      <span style={{fontSize:fs(13),color:ED_INK3}}>{hoursExpanded?'▲':'▼'}</span>
-                    </button>
-                    {hoursExpanded&&(
-                      <div style={{marginTop:fs(8)}}>
-                        {weekdays.map((day,i)=>{
-                          const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                          const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
-                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?TEAL_DEEP:ED_INK2,borderBottom:i<6?`1px solid ${ED_RULE}`:"none"}}>
-                            <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
-                          </div>;
-                        })}
-                      </div>
-                    )}
+                    <div style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px",marginBottom:fs(8)}}>🕐 DAILY HOURS</div>
+                    <div>
+                      {weekdays.map((day,i)=>{
+                        const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                        const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
+                        return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?TEAL_DEEP:ED_INK2,borderBottom:i<6?`1px solid ${ED_RULE}`:"none"}}>
+                          <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
+                        </div>;
+                      })}
+                    </div>
                   </div>
                 )}
 
-                <AIDetailsSection placeId={restaurant.placeId||restaurant.id} placeName={name} lat={restaurant.lat} lng={restaurant.lng} page="PlacesToEat" kind="restaurant"/>
-
-                {restaurant.googleMapsUri&&(
-                  <a href={restaurant.googleMapsUri} target="_blank" rel="noopener noreferrer" style={{fontSize:fs(14),color:ED_INK3,textAlign:"center",textDecoration:"underline",padding:fs(4)}}>view reviews on Google Maps →</a>
-                )}
                 {restaurant.websiteUri&&(
                   <a href={restaurant.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(16),background:"#F3E8FF",borderRadius:"16px",textDecoration:"none",color:"#7C3AED"}}>
                     <span style={{fontSize:fs(22)}}>🌐</span>
