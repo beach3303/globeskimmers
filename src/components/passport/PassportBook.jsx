@@ -28,6 +28,9 @@ const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const INK = "#243447", INK3 = "#66717D", STAMP = "#B0472F";
 // Cool inks for city/place visit stamps — a different one per stamp (deterministic).
 const CITY_INKS = ["#1F6E6A", "#2B4A7E", "#3E5AA8", "#0E7C86", "#2E6B4E", "#5B4B8A", "#6D3A6E", "#2C6E9B", "#3A7D5B", "#4453A6"];
+// Inks for the iconic-place PLACEHOLDER stamp (used until bespoke art is uploaded
+// for #301–1006). Includes the warm STAMP red so variety spans warm + cool.
+const STAMP_INKS = ["#B0472F", "#2B4A7E", "#2E6B4E", "#5B4B8A", "#6D3A6E", "#0E7C86", "#8A3B2F"];
 const hashStr = (s) => { let h = 0; const str = String(s || ""); for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0; return h; };
 const PAPER = "#FBF6EC", PAPER_EDGE = "#EADFC9";
 const NAVY = "#0C2B50", NAVY_DEEP = "#071B33", GOLD = "#D6A64A";
@@ -57,6 +60,8 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
   const isCity = stamp.kind === "city";
   const venue = isCity && stamp.name && stamp.name !== stamp.city ? stamp.name : null;
   const cityInk = CITY_INKS[hashStr(stamp.id || stamp.entity_id || stamp.name) % CITY_INKS.length];
+  const placeInk = STAMP_INKS[hashStr(stamp.id || stamp.entity_id || stamp.name) % STAMP_INKS.length];
+  const iconicInk = showArt ? STAMP : placeInk; // "I was here!"/date matches the placeholder ink
   const bigDate = stamp.visited_on
     ? new Date(stamp.visited_on + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "";
@@ -90,14 +95,25 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
         <div className="flex flex-col items-center">
           {showArt ? (
             <img src={art} alt={stamp.name} loading="lazy" onError={() => setArtFail(true)} style={{ width: artW, height: artW, objectFit: "contain" }} />
-          ) : (
+          ) : flag ? (
+            // Country stamp with no bespoke art → flag badge.
             <div className="flex flex-col items-center justify-center text-center" style={{ width: badgeW, height: badgeW, borderRadius: 20, border: `2.5px solid ${STAMP}`, background: "rgba(255,255,255,.45)", padding: 12 }}>
-              <span style={{ fontSize: Math.round(0.1 * pageW), lineHeight: 1 }}>{flag || KIND[stamp.kind] || KIND.attraction}</span>
+              <span style={{ fontSize: Math.round(0.1 * pageW), lineHeight: 1 }}>{flag}</span>
               <span className="leading-tight" style={{ fontFamily: SERIF, fontSize: fs(22), color: STAMP, marginTop: 4 }}>{stamp.name}</span>
             </div>
+          ) : (
+            // Iconic place, bespoke art not uploaded yet → an inked rubber-stamp
+            // placeholder. Auto-upgrades to the illustration once its art lands on R2.
+            <div style={{ position: "relative", width: badgeW, padding: "14px 18px", borderRadius: 16, border: `2.5px solid ${placeInk}`, boxShadow: `inset 0 0 0 1.5px ${placeInk}`, textAlign: "center", opacity: 0.92 }}>
+              <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", textTransform: "uppercase", color: placeInk, opacity: 0.82 }}>✦ Visited ✦</div>
+              <div className="leading-tight" style={{ fontFamily: SERIF, fontWeight: 600, fontSize: fs(24), color: placeInk, marginTop: 5 }}>{stamp.name}</div>
+              {stamp.city && stamp.city !== stamp.name && (
+                <div style={{ fontFamily: SANS, fontSize: fs(12), color: placeInk, opacity: 0.72, marginTop: 3 }}>{stamp.city}{stamp.country ? `, ${stamp.country}` : ""}</div>
+              )}
+            </div>
           )}
-          <div style={{ fontFamily: SERIF, fontStyle: "italic", color: STAMP, fontSize: fs(19), marginTop: 6, lineHeight: 1 }}>I was here!</div>
-          {bigDate && <div style={{ fontFamily: SERIF, color: STAMP, fontSize: fs(23), letterSpacing: ".01em", marginTop: 2, lineHeight: 1 }}>{bigDate}</div>}
+          <div style={{ fontFamily: SERIF, fontStyle: "italic", color: iconicInk, fontSize: fs(19), marginTop: 6, lineHeight: 1 }}>I was here!</div>
+          {bigDate && <div style={{ fontFamily: SERIF, color: iconicInk, fontSize: fs(23), letterSpacing: ".01em", marginTop: 2, lineHeight: 1 }}>{bigDate}</div>}
         </div>
       )}
 
