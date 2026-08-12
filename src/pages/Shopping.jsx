@@ -26,13 +26,7 @@ const T={teal:"#00BCD4",tealD:"#00838F",dark:"#1A2332",dark2:"#243447",gray:"#64
 const CATEGORIES=[
   {id:"all",                  label:"All",        icon:"🛍️",color:T.accent,   family:"all"},
   // Food Shopping family
-  {id:"food_shopping",        label:"Food",       icon:"🛒",color:"#2E7D32",  family:"food"},
   {id:"supermarkets",         label:"Groceries",  icon:"🥬",color:"#2E7D32",  family:"food"},
-  {id:"warehouse_clubs",      label:"Warehouse",  icon:"📦",color:"#1565C0",  family:"food"},
-  {id:"farmers_markets",      label:"Farmers",    icon:"🥕",color:"#689F38",  family:"food"},
-  {id:"wet_markets",          label:"Fresh Mkt",  icon:"🍎",color:"#D97706",  family:"food"},
-  {id:"bodegas_corner_stores",label:"Bodega",     icon:"🏪",color:"#059669",  family:"food"},
-  {id:"butcher_shops",        label:"Butcher",    icon:"🥩",color:"#B45309",  family:"food"},
   // General Shopping family
   {id:"general_shopping",     label:"Shopping",   icon:"🛍️",color:"#7C3AED",  family:"general"},
   {id:"souvenir_shopping",    label:"Souvenir",   icon:"🎁",color:"#7C3AED",  family:"general"},
