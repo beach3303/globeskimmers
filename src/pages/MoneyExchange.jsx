@@ -1043,25 +1043,7 @@ export default function MoneyExchangePage() {
                   🔄 Refresh
                 </Button>
               </div>
-              <div className="flex gap-2" style={{borderBottom:`1px solid ${ED_RULE}`}}>
-                <button
-                  onClick={() => {
-                    setViewMode("list");
-                    setSelectedStoreIndex(null);
-                  }}
-                  className="pb-2 px-3 font-semibold transition-colors"
-                  style={{fontSize:t(fs(13),fs(13.5)),color:viewMode === "list" ? ED_MONEY : ED_INK3,borderBottom:viewMode === "list" ? `2px solid ${ED_MONEY}` : "2px solid transparent"}}
-                >
-                  List View
-                </button>
-                <button
-                  onClick={() => setViewMode("map")}
-                  className="pb-2 px-3 font-semibold transition-colors"
-                  style={{fontSize:t(fs(13),fs(13.5)),color:viewMode === "map" ? ED_MONEY : ED_INK3,borderBottom:viewMode === "map" ? `2px solid ${ED_MONEY}` : "2px solid transparent"}}
-                >
-                  Map View
-                </button>
-              </div>
+              {/* List/Map view toggle removed — list is primary; per-card map still works */}
             </div>
 
             {/* Sort By Tabs - Only show in list view */}

@@ -180,7 +180,6 @@ function PhotoCarousel({ photos=[], height="180px" }) {
 // RestaurantCardTablet; only the café domain content + phone tuning differ.
 function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDistance, isTablet }) {
   const [expanded,setExpanded]=useState(false);
-  const [hoursExpanded,setHoursExpanded]=useState(false);
   const [showDir,setShowDir]=useState(false);
   const [enriched,setEnriched]=useState(null);
   // On first expand of an OWNED shop, fetch 3 real Google photos + hours (resolves
@@ -275,6 +274,12 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
           </a>
         )}
 
+        {/* Good for working + AI details — on the front card, above the actions */}
+        <div style={{display:"flex",flexDirection:"column",gap:fs(z(12,10)),marginTop:fs(z(18,13))}}>
+          <CafeWorkProfileSection placeId={shop.placeId || shop.id} placeName={name} lat={shop.lat} lng={shop.lng}/>
+          <AIDetailsSection placeId={shop.placeId || shop.id} placeName={name} lat={shop.lat} lng={shop.lng} page="CoffeeFinder" kind="coffee"/>
+        </div>
+
         {/* Actions */}
         <div style={{display:"flex",gap:fs(z(12,8)),marginTop:fs(z(20,14))}}>
           <button onClick={()=>setShowDir(true)} style={{flex:1,borderRadius:z("16px","13px"),padding:fs(z(15,11)),fontSize:fs(z(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ACCENT,color:"#fff"}}>Directions</button>
@@ -337,32 +342,21 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
                   </div>
                 )}
 
-                {/* Daily hours — collapsed by default (from enrich for owned shops) */}
+                {/* Daily hours — open with the card (More), collapse with Less */}
                 {weekdays.length>0&&(
                   <div style={{padding:fs(z(16,13)),background:"#FAF7F0",borderRadius:z("16px","13px")}}>
-                    <button onClick={()=>setHoursExpanded(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
-                      <span style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
-                      <span style={{fontSize:fs(13),color:ED_INK3}}>{hoursExpanded?'▲':'▼'}</span>
-                    </button>
-                    {hoursExpanded&&(
-                      <div style={{marginTop:fs(8)}}>
-                        {weekdays.map((day,i)=>{
-                          const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                          const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
-                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?TEAL_DEEP:ED_INK2,borderBottom:i<6?`1px solid ${ED_RULE}`:"none"}}>
-                            <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
-                          </div>;
-                        })}
-                      </div>
-                    )}
+                    <div style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px",marginBottom:fs(8)}}>🕐 DAILY HOURS</div>
+                    <div>
+                      {weekdays.map((day,i)=>{
+                        const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                        const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
+                        return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?TEAL_DEEP:ED_INK2,borderBottom:i<6?`1px solid ${ED_RULE}`:"none"}}>
+                          <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
+                        </div>;
+                      })}
+                    </div>
                   </div>
                 )}
-
-                {/* Good for working — wifi/outlets/seating/noise signals */}
-                <CafeWorkProfileSection placeId={shop.placeId || shop.id} placeName={name} lat={shop.lat} lng={shop.lng}/>
-
-                {/* AI Details — shared component */}
-                <AIDetailsSection placeId={shop.placeId || shop.id} placeName={name} lat={shop.lat} lng={shop.lng} page="CoffeeFinder" kind="coffee"/>
 
                 {/* Website */}
                 {(shop.websiteUri||shop.website)&&(
@@ -685,13 +679,8 @@ export default function CoffeeFinderPage() {
         </form>
 
         {/* Sort + quick filters */}
+        {/* Nearby/Best sort toggle removed — results default to nearest-first */}
         <div style={{display:"flex",gap:"8px",overflowX:"auto",padding:"4px 0 8px",scrollbarWidth:"none",alignItems:"center"}}>
-          <div style={{display:"flex",background:"#F1F5F9",borderRadius:"10px",padding:"2px",flexShrink:0}}>
-            {[{v:"nearby",l:"📍 Nearby"},{v:"rating",l:"⭐ Best"}].map(({v,l})=>(
-              <button key={v} onClick={()=>setSortBy(v)} style={{padding:"6px 10px",borderRadius:"8px",border:"none",background:sortBy===v?BROWN:"transparent",color:sortBy===v?"#fff":GRAY,fontWeight:"600",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{l}</button>
-            ))}
-          </div>
-          <div style={{width:"1px",height:"20px",background:"#E2E8F0",flexShrink:0}}/>
           {[{value:"all",label:"All",emoji:"☕"},{value:"open",label:"Open Now",emoji:"🟢"},{value:"specialty",label:"Specialty",emoji:"✨"},{value:"wifi",label:"WiFi",emoji:"📶"}].map(f=><FilterPill key={f.value} {...f} active={quickFilter===f.value} onClick={()=>setQuickFilter(f.value)}/>)}
         </div>
 
@@ -761,9 +750,7 @@ export default function CoffeeFinderPage() {
             {stats.open>0&&<span style={{color:GREEN}}>· {stats.open} open</span>}
             {stats.withParking>0&&<span style={{color:GRAY}}>· {stats.withParking} 🅿️</span>}
           </div>
-          <div style={{display:"flex",gap:"4px"}}>
-            {["list","map"].map(v=><button key={v} onClick={()=>setViewMode(v)} style={{padding:"6px 12px",borderRadius:"8px",border:"none",background:viewMode===v?BROWN:"#E2E8F0",color:viewMode===v?"#fff":GRAY,fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{v==="list"?"List View":"Map View"}</button>)}
-          </div>
+          {/* List/Map view toggle removed — list is primary; per-card map still works */}
         </div>
       </div>
 

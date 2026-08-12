@@ -334,6 +334,11 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
           </a>
         )}
 
+        {/* AI details — on the front card, above the actions */}
+        <div style={{ marginTop: fs(S.actTop) }}>
+          <RestroomAIDetails placeId={r.placeId || r.id} placeName={name} venueLabel={r.venueLabel} venueCategory={r.venueCategory} accessType={r.accessType} />
+        </div>
+
         {/* Actions */}
         <div style={{ display: "flex", gap: fs(S.actGap), marginTop: fs(S.actTop) }}>
           <button onClick={() => setShowDirs(true)} style={{ flex: 1, borderRadius: S.sectRadius, padding: fs(S.actPad), fontSize: fs(S.actFs), fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: CAT.restroom.ink, color: "#fff" }}>Directions</button>
@@ -369,14 +374,6 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
                     )}
                   </div>
                 )}
-                {/* Restroom-specific AI Details — dedicated Worker route, restroom voice */}
-                <RestroomAIDetails
-                  placeId={r.placeId || r.id}
-                  placeName={name}
-                  venueLabel={r.venueLabel}
-                  venueCategory={r.venueCategory}
-                  accessType={r.accessType}
-                />
                 {(r.websiteUri || r.website) && (
                   <a href={r.websiteUri || r.website} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: fs(12), padding: fs(S.websitePad), background: "#F3E8FF", borderRadius: S.sectRadius, textDecoration: "none", color: "#7C3AED" }}>
                     <span style={{ fontSize: fs(S.websiteIcon) }}>🌐</span>
@@ -859,13 +856,7 @@ export default function RestroomFinderPage() {
 
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
             <span style={{ background: TEAL, color: "#fff", padding: "2px 8px", borderRadius: "10px", fontWeight: "800", fontSize: "calc(12px*var(--fs))" }}>{stats.total}</span>
-            <div style={{ display: "flex", gap: "3px" }}>
-              {["list", "map"].map(v => (
-                <button key={v} onClick={() => setViewMode(v)} style={{ padding: "6px 10px", borderRadius: "8px", border: "none", background: viewMode === v ? TEAL : "#E2E8F0", color: viewMode === v ? "#fff" : GRAY, fontWeight: "700", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>
-                  {v === "list" ? "List View" : "Map View"}
-                </button>
-              ))}
-            </div>
+            {/* List/Map view toggle removed — list is primary; per-card map still works */}
           </div>
         </div>
       </div>

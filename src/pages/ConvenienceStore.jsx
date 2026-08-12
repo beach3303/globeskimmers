@@ -1154,27 +1154,7 @@ export default function ConvenienceStorePage() {
               </span>
               stores within {searchRadius} mi
             </p>
-            <div style={{ display: 'flex', gap: '4px', background: '#F1F5F9', borderRadius: '10px', padding: '3px' }}>
-              {['list', 'map'].map(v => (
-                <button
-                  key={v}
-                  onClick={() => setViewMode(v)}
-                  style={{
-                    padding: '7px 14px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: viewMode === v ? COLORS.primary : 'transparent',
-                    color: viewMode === v ? '#fff' : COLORS.textLight,
-                    fontWeight: '700',
-                    fontSize: "calc(12px*var(--fs))",
-                    cursor: 'pointer',
-                    fontFamily: 'inherit'
-                  }}
-                >
-                  {v === 'list' ? 'List View' : 'Map View'}
-                </button>
-              ))}
-            </div>
+            {/* List/Map view toggle removed — list is primary; per-card map still works */}
           </div>
         )}
 

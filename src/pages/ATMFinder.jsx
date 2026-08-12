@@ -403,6 +403,11 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
           </a>
         )}
 
+        {/* AI details — on the front card, above the actions */}
+        <div style={{ marginTop:fs(D.actMt) }}>
+          <AtmAIDetails placeId={atm.placeId || atm.id} placeName={name} page="ATMFinder" />
+        </div>
+
         {/* Actions */}
         <div style={{ display:"flex", gap:fs(D.actGap), marginTop:fs(D.actMt) }}>
           <button onClick={() => setShowDirs(true)} style={{ flex:1, borderRadius:`${D.barRadius}px`, padding:fs(D.actPad), fontSize:fs(D.actFs), fontWeight:600, border:"none", cursor:"pointer", fontFamily:"inherit", background:CAT.atm.ink, color:"#fff" }}>Directions</button>
@@ -442,11 +447,6 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
                     )}
                   </div>
                 )}
-                <AtmAIDetails
-                  placeId={atm.placeId || atm.id}
-                  placeName={name}
-                  page="ATMFinder"
-                />
                 {(atm.websiteUri || atm.website) && (
                   <a href={atm.websiteUri || atm.website} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", gap:fs(D.siteGap), padding:fs(D.sitePad), background:"#F3E8FF", borderRadius:`${D.panelRadius}px`, textDecoration:"none", color:"#7C3AED" }}>
                     <span style={{ fontSize:fs(D.siteIcon) }}>🌐</span>
@@ -810,21 +810,12 @@ export default function ATMFinderPage() {
           )}
         </div>
 
-        {/* Stats + View toggle */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:"8px", fontSize:"calc(13px*var(--fs))" }}>
-            <span style={{ background:TEAL, color:"#fff", padding:"2px 9px", borderRadius:"10px", fontWeight:"700", fontSize:"calc(12px*var(--fs))" }}>{stats.total}</span>
-            <span style={{ color:GRAY, fontWeight:"600" }}>ATMs</span>
-            {stats.banks > 0 && <span style={{ color:"#1565C0", fontWeight:"600" }}>· {stats.banks} banks</span>}
-            {stats.open  > 0 && <span style={{ color:"#2E7D32", fontWeight:"600" }}>· {stats.open} open</span>}
-          </div>
-          <div style={{ display:"flex", gap:"4px" }}>
-            {["list","map"].map(v => (
-              <button key={v} onClick={() => setViewMode(v)} style={{ padding:"6px 12px", borderRadius:"8px", border:"none", background: viewMode===v ? TEAL : "#E2E8F0", color: viewMode===v ? "#fff" : GRAY, fontWeight:"700", fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit" }}>
-                {v==="list" ? "List View" : "Map View"}
-              </button>
-            ))}
-          </div>
+        {/* Stats (List/Map view toggle removed — list is primary; per-card map still works) */}
+        <div style={{ display:"flex", alignItems:"center", gap:"8px", fontSize:"calc(13px*var(--fs))" }}>
+          <span style={{ background:TEAL, color:"#fff", padding:"2px 9px", borderRadius:"10px", fontWeight:"700", fontSize:"calc(12px*var(--fs))" }}>{stats.total}</span>
+          <span style={{ color:GRAY, fontWeight:"600" }}>ATMs</span>
+          {stats.banks > 0 && <span style={{ color:"#1565C0", fontWeight:"600" }}>· {stats.banks} banks</span>}
+          {stats.open  > 0 && <span style={{ color:"#2E7D32", fontWeight:"600" }}>· {stats.open} open</span>}
         </div>
       </div>
 
