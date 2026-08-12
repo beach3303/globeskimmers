@@ -279,9 +279,11 @@ export default function ShoppingFinder() {
     if(!lat||!lng) return; setLoading(true); setError(null);
     (async()=>{
       try{
-        // List source: owned planet DB (free, global). Real Google photos + hours
-        // come on-tap via enrich-owned. `category` is passed through (harmless).
-        const {data, error: workerError}=await callWorker(ROUTE.getShoppingOwned,{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,category});
+        // List source: GOOGLE (getShoppingPlaces) — real stores with photos + hours
+        // and sensible filter results. Temporary: the owned planet DB shopping data
+        // is low-quality (junk names, no photos), so we source from Google until it's
+        // cleaned, then flip back to owned-first. `category` filters server-side.
+        const {data, error: workerError}=await callWorker(ROUTE.getShoppingPlaces,{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,category});
         if (workerError) throw new Error(workerError);
         const raw=data?.places||[];
         // Compute distanceMiles client-side so the unit formatter has a raw number.
