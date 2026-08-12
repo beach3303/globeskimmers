@@ -109,13 +109,14 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
   const [hoursExpanded,setHoursExpanded]=useState(false);
   const [enriched,setEnriched]=useState(null);
   useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
-  // On first expand of an OWNED shop, fetch real Google photos + hours (resolves
-  // owned→Google once, cached). Keeps the list free; only opened shops cost.
+  // Fetch real Google photos + hours for OWNED shops (owned records carry none) —
+  // runs once on MOUNT so the list card shows a real photo, not only on expand.
+  // Server-cached, so repeat views cost nothing.
   useEffect(()=>{
-    if(!exp||enriched||p.source!=='owned')return;
+    if(enriched||p.source!=='owned')return;
     callWorker('places/enrich-owned',{id:p.id||p.placeId,name:p.displayName?.text||p.name,lat:p.lat,lng:p.lng,maxPhotos:3})
       .then(({data})=>{ if(data&&data.matched)setEnriched(data); }).catch(()=>{});
-  },[exp]); // eslint-disable-line react-hooks/exhaustive-deps
+  },[]); // eslint-disable-line react-hooks/exhaustive-deps
   const name=p.displayName?.text||p.name||"Shop";
   // Layer enrich (owned) photos + hours over the owned fields before deriving status.
   const photos=enriched?.photos?.length?enriched.photos:p.photos;
