@@ -11457,6 +11457,47 @@ async function resolveOwnedGid(env, id, name, lat, lng) {
 // On-tap enrich for an owned place: resolve to a Google place id (cached), fetch
 // Place Details, return up to N real photos + open/close + daily hours. Called when
 // a card is OPENED, so the free list stays free and only opened places cost.
+// Fetch a restaurant's OWN photo from its website (og:image / twitter:image) so
+// we lead with the restaurant's own image before falling back to Google's photos
+// (founder's photo-source ladder: own website → Google). Free (no Google cost),
+// KV-cached 30d (empty string = "known none", so we don't refetch dead sites).
+// Requires https + a real image/* content-type to avoid mixed-content + broken
+// heroes; on any failure returns null and the caller just uses Google.
+async function fetchSiteOgImage(env, websiteUri) {
+  if (!websiteUri || !/^https:\/\//i.test(websiteUri)) return null;
+  const key = `ogimg:${websiteUri}`;
+  if (env.GLOBESKIMMERS_KV) {
+    const cached = await env.GLOBESKIMMERS_KV.get(key).catch(() => null);
+    if (cached !== null) return cached || null; // '' = known-none
+  }
+  let result = null;
+  try {
+    const res = await fetch(websiteUri, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GlobeskimmersBot/1.0; +https://globeskimmers.io)' },
+      signal: AbortSignal.timeout(4500),
+      cf: { cacheTtl: 86400, cacheEverything: true },
+    });
+    if (res.ok) {
+      const html = (await res.text()).slice(0, 250000);
+      // Match og:image / og:image:secure_url / twitter:image in either attribute order.
+      const m = html.match(/<meta[^>]+(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image)["'][^>]*?content=["']([^"']+)["']/i)
+             || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*?(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image)["']/i);
+      let img = m && m[1] ? m[1].trim() : null;
+      if (img) {
+        try { img = new URL(img, websiteUri).href; } catch { img = null; }
+        if (img && /^https:\/\//i.test(img)) {
+          // Validate it's a real, reachable image before we lead a card with it.
+          const iv = await fetch(img, { signal: AbortSignal.timeout(4500), cf: { cacheTtl: 86400 } }).catch(() => null);
+          const ct = iv && iv.ok ? (iv.headers.get('content-type') || '') : '';
+          if (ct.toLowerCase().startsWith('image/')) result = img;
+        }
+      }
+    }
+  } catch { /* dead site / timeout / parse fail → fall back to Google */ }
+  if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(key, result || '', { expirationTtl: 30 * 24 * 60 * 60 }).catch(() => {});
+  return result;
+}
+
 async function handleEnrichOwned(request, env) {
   try {
     const b = await request.json().catch(() => ({}));
@@ -11499,10 +11540,17 @@ async function handleEnrichOwned(request, env) {
       await setInCache(env, dk, place, CONFIG.CACHE_TTL.DETAILS);
     }
 
-    const photos = (place.photos || []).slice(0, maxPhotos).map((p) => p.full || p.url || p).filter(Boolean);
+    // Photo ladder: the restaurant's OWN website photo first, then Google's real
+    // photos fill the remaining slots (never a fake/stock placeholder). Website
+    // fetch is free + cached; if the site has none, we simply use Google.
+    const googlePhotos = (place.photos || []).map((p) => p.full || p.url || p).filter(Boolean);
+    const siteImg = await fetchSiteOgImage(env, place.websiteUri).catch(() => null);
+    const photos = [...(siteImg ? [siteImg] : []), ...googlePhotos]
+      .filter((v, i, a) => a.indexOf(v) === i) // dedup
+      .slice(0, maxPhotos);
     const oh = place.currentOpeningHours || place.regularOpeningHours || null;
     return jsonResponse({
-      matched: true, placeId: gid, photos,
+      matched: true, placeId: gid, photos, ownPhotoFromSite: !!siteImg,
       hours: oh ? { openNow: oh.openNow ?? null, weekdayDescriptions: oh.weekdayDescriptions || oh.weekday_text || [] } : null,
       isOpen: place.currentOpeningHours?.openNow ?? null,
       rating: place.rating ?? null, priceLevel: place.priceLevel ?? null,
