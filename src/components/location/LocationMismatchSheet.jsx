@@ -60,10 +60,10 @@ export default function LocationMismatchSheet() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[15px] font-bold text-gray-900 leading-snug">
-                  You seem to be in {currentCity} now
+                  You appear to be in {currentCity}.
                 </p>
                 <p className="text-[12.5px] text-gray-500 mt-0.5 leading-snug">
-                  Explore here, or keep viewing {pickedCity}?
+                  Explore here, or continue in {pickedCity}?
                 </p>
               </div>
               <button

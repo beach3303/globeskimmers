@@ -316,7 +316,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
                         <span className="text-2xl flex-shrink-0">🧭</span>
                         <span className="flex flex-col items-start leading-tight min-w-0">
                           <span className="text-[15px] font-bold text-gray-900">Continue in {lastLocation.placeName || lastLocation.address?.city}</span>
-                          <span className="text-[12px] text-gray-500 font-medium">Keep exploring where you left off</span>
+                          <span className="text-[12px] text-gray-500 font-medium">Continue where you left off</span>
                         </span>
                       </span>
                       <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
