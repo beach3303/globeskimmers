@@ -292,7 +292,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
               <>
                 <div className="bg-gradient-to-r from-[#3A6EA5] to-[#1E3150] text-white px-5 py-4 flex items-start justify-between flex-shrink-0">
                   <div className="pr-3">
-                    <h2 className="text-[20px] font-bold">{coldOpen ? 'Where to today?' : 'Select Location Mode'}</h2>
+                    <h2 className="text-[20px] font-bold">{coldOpen ? 'Where would you like to explore?' : 'Select Location Mode'}</h2>
                     <p className="text-[12.5px] text-white/80 mt-0.5 leading-snug">
                       Globeskimmers finds places near you. Where should we start?
                     </p>
@@ -315,7 +315,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
                       <span className="flex items-center gap-3 min-w-0">
                         <span className="text-2xl flex-shrink-0">🧭</span>
                         <span className="flex flex-col items-start leading-tight min-w-0">
-                          <span className="text-[15px] font-bold text-gray-900">Continue in {lastLocation.placeName || lastLocation.address?.city}</span>
+                          <span className="text-[15px] font-bold text-gray-900">Continue exploring {lastLocation.placeName || lastLocation.address?.city}</span>
                           <span className="text-[12px] text-gray-500 font-medium">Continue where you left off</span>
                         </span>
                       </span>
@@ -333,7 +333,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
                     ) : (
                       <Navigation className="w-5 h-5" />
                     )}
-                    {gpsLoading ? 'Getting Location...' : 'Use My Current Location'}
+                    {gpsLoading ? 'Getting Location...' : 'Explore where I am'}
                   </Button>
 
                   <div className="relative my-4">
@@ -382,7 +382,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
                     className="w-full h-16 bg-white border-2 border-[#3A6EA5] text-[#3A6EA5] hover:bg-gray-50 font-semibold flex items-center justify-center gap-3 text-[16px]"
                   >
                     <MapPin className="w-5 h-5" />
-                    {savedLocations.length > 0 ? 'Search Different Location' : 'Navigate to Another Location'}
+                    Choose a destination
                   </Button>
 
                   {/* Coordinate entry. Tertiary visual weight — most
