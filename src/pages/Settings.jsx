@@ -14,7 +14,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
-import { useLocation } from "@/components/location/LocationContext";
+import { useLocation, readOpenBehavior, writeOpenBehavior } from "@/components/location/LocationContext";
 
 // ADMIN_EMAILS now imported from @/lib/admins (single source of truth, 4 admins).
 
@@ -402,6 +402,7 @@ export default function SettingsPage() {
   const isTablet = useIsTablet(); // gates the iPad editorial layout; phone untouched
   const { step: fontStep } = useFontScale(); // larger steps → rows stack value below
   const { autoFollow, setAutoFollow } = useLocation(); // silent auto-follow toggle (localStorage-backed)
+  const [openBehavior, setOpenBehaviorState] = useState(() => readOpenBehavior()); // 'ask' | 'current' | 'continue'
   const [suggestArrivals, setSuggestArrivals] = useState(() => { try { return localStorage.getItem("pp_suggest_arrivals") !== "0"; } catch { return true; } });
   const [cityPrompt, setCityPrompt] = useState(() => { try { return localStorage.getItem("pp_city_prompt") !== "0"; } catch { return true; } });
 
@@ -669,7 +670,19 @@ export default function SettingsPage() {
             <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.weather.ink} title="Show Home Country Flag" desc="Display your flag on the home page card"
               control={{ node: <EdToggle on={showHomeFlag} onClick={() => { const next = !showHomeFlag; setShowHomeFlag(next); persist({ show_home_flag: next }); }} label="Toggle home country flag" /> }}
             />
-            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Update to my location as I travel" desc="Refresh results when you move to a new city"
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="When I open the app" desc="Where Globeskimmers starts each time"
+              control={{ below: true, node: (
+                <Select value={openBehavior} onValueChange={(v) => { setOpenBehaviorState(v); writeOpenBehavior(v); }}>
+                  <SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue /></SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="ask">Ask me each time</SelectItem>
+                    <SelectItem value="current">Use my current location</SelectItem>
+                    <SelectItem value="continue">Continue where I left off</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Update location as I move" desc="Refresh results automatically when you travel to a new city. Off by default — we'll ask before switching."
               control={{ node: <EdToggle on={autoFollow} onClick={() => setAutoFollow(!autoFollow)} label="Toggle auto-follow location" /> }}
               last
             />

@@ -34,12 +34,27 @@ const LAST_LOC_KEY = 'gs_last_location_v1';
 const readLastLocation = () => { try { const r = localStorage.getItem(LAST_LOC_KEY); return r ? JSON.parse(r) : null; } catch { return null; } };
 const writeLastLocation = (loc) => { try { if (loc?.coordinates) localStorage.setItem(LAST_LOC_KEY, JSON.stringify(loc)); } catch { /* ignore */ } };
 
-// Silent auto-follow preference (default ON). When the user is on LIVE location
-// and physically moves to a new city, quietly refresh results to where they now
-// are. Fixes the tester complaint that results kept feeding from the LAST city.
+// Auto-follow preference — OPT-IN (default OFF). When ON and the user is on LIVE
+// location and physically moves to a new city, we quietly refresh results to
+// where they now are. When OFF we NEVER move silently — instead the polite
+// "You appear to be in <city>" sheet offers the switch. Consent-first: nothing
+// changes location silently until the user has said yes once (via the in-moment
+// "Update automatically as you move?" offer, or the Settings toggle).
 const AUTO_FOLLOW_KEY = 'gs_auto_follow_v1';
-const readAutoFollow = () => { try { return localStorage.getItem(AUTO_FOLLOW_KEY) !== '0'; } catch { return true; } };
+const readAutoFollow = () => { try { return localStorage.getItem(AUTO_FOLLOW_KEY) === '1'; } catch { return false; } };
 const writeAutoFollow = (on) => { try { localStorage.setItem(AUTO_FOLLOW_KEY, on ? '1' : '0'); } catch { /* ignore */ } };
+// Whether we've already offered the in-moment "auto-follow?" question, so we ask
+// at most once (they can still flip it anytime in Settings).
+const AUTO_FOLLOW_ASKED_KEY = 'gs_auto_follow_asked_v1';
+const readAutoFollowAsked = () => { try { return localStorage.getItem(AUTO_FOLLOW_ASKED_KEY) === '1'; } catch { return false; } };
+export const markAutoFollowAsked = () => { try { localStorage.setItem(AUTO_FOLLOW_ASKED_KEY, '1'); } catch { /* ignore */ } };
+
+// What happens on app cold open — a user-settable default (Settings → Location).
+// 'ask' (default): show the "Where to?" chooser. 'current': jump straight to live
+// GPS. 'continue': silently keep the last place. Lets decided users skip the ask.
+const OPEN_BEHAVIOR_KEY = 'gs_open_behavior_v1';
+export const readOpenBehavior = () => { try { return localStorage.getItem(OPEN_BEHAVIOR_KEY) || 'ask'; } catch { return 'ask'; } };
+export const writeOpenBehavior = (v) => { try { localStorage.setItem(OPEN_BEHAVIOR_KEY, v); } catch { /* ignore */ } };
 
 // "Where to?" cold-open chooser snooze. The founder wants the app to ask
 // current-vs-somewhere-else on every cold launch, with a "don't ask again today"
@@ -169,6 +184,12 @@ export function LocationProvider({ children }) {
           detail: { mode: 'current', location: gpsLoc },
         }));
 
+        // First time on current location and haven't offered auto-follow yet —
+        // ask the polite one-time "Update automatically as you move?" question.
+        if (!readAutoFollow() && !readAutoFollowAsked()) {
+          window.dispatchEvent(new CustomEvent('location:offer-autofollow'));
+        }
+
         return true;
       }
       return false;
@@ -233,7 +254,10 @@ export function LocationProvider({ children }) {
     if (typeof window !== 'undefined' && window.__gsChooserOpen) return;
     const active = _store.locationMode === 'current' ? _store.currentGpsLocation : _store.selectedLocation;
     const isLive = _store.locationMode === 'current' || active?.placeType === 'current_location';
-    if (isLive || !active?.coordinates) return; // GPS mode is handled by auto-follow
+    if (!active?.coordinates) return;
+    // Silent auto-follow (when the user opted in) handles live GPS. Otherwise —
+    // a manual pick, OR live GPS with auto-follow OFF — we ASK via the nudge.
+    if (isLive && readAutoFollow()) return;
     try {
       const pos = await getCurrentPositionSmart({ enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
       const { latitude, longitude } = pos.coords;

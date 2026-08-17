@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { trackEvent } from "../Layout";
-import { useLocation, isLocationAskSnoozedToday, snoozeLocationAskToday } from "../components/location/LocationContext";
+import { useLocation, isLocationAskSnoozedToday, snoozeLocationAskToday, readOpenBehavior } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import HomeBanner from "../components/ads/HomeBanner";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
@@ -104,7 +104,7 @@ const WELCOME_MAX = 10;
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { locationMode, selectedLocation, currentGpsLocation, getActiveLocation, getCurrentLocation, loading: locationLoading } = useLocation();
+  const { locationMode, selectedLocation, currentGpsLocation, getActiveLocation, getCurrentLocation, switchToCurrentLocation, loading: locationLoading } = useLocation();
   const { profile, user: authUser, signInTick, bumpWelcomeSplashCount } = useAuth();
   // iPad gets a dedicated tablet layout (HomeTablet); phone gets the fuller
   // editorial layout below.
@@ -169,12 +169,19 @@ export default function HomePage() {
         pickerPrompted.current = true;
         setColdOpenChooser(true);
         setShowLocationPicker(true);
-      } else if (!coldOpenAsked && !isLocationAskSnoozedToday()) {
-        // Returning + genuine cold open + not snoozed today → ask "Where to?".
+      } else if (!coldOpenAsked) {
+        // Returning + genuine cold open → honor the user's Settings default.
         coldOpenAsked = true;
         pickerPrompted.current = true;
-        setColdOpenChooser(true);
-        setShowLocationPicker(true);
+        const behavior = readOpenBehavior();
+        if (behavior === 'current') {
+          switchToCurrentLocation().catch(() => {}); // jump straight to live GPS
+        } else if (behavior === 'continue') {
+          /* keep the last place — do nothing */
+        } else if (!isLocationAskSnoozedToday()) {
+          setColdOpenChooser(true); // 'ask' (default), unless snoozed for today
+          setShowLocationPicker(true);
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
