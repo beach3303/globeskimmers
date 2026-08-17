@@ -36,7 +36,7 @@ const PLACE_TYPE_ICONS = {
   location: '📍'
 };
 
-export default function LocationModePicker({ isOpen, onClose }) {
+export default function LocationModePicker({ isOpen, onClose, coldOpen = false, lastLocation = null, onSnoozeToday }) {
   const {
     locationMode,
     selectedLocation,
@@ -292,7 +292,7 @@ export default function LocationModePicker({ isOpen, onClose }) {
               <>
                 <div className="bg-gradient-to-r from-[#3A6EA5] to-[#1E3150] text-white px-5 py-4 flex items-start justify-between flex-shrink-0">
                   <div className="pr-3">
-                    <h2 className="text-[20px] font-bold">Select Location Mode</h2>
+                    <h2 className="text-[20px] font-bold">{coldOpen ? 'Where to today?' : 'Select Location Mode'}</h2>
                     <p className="text-[12.5px] text-white/80 mt-0.5 leading-snug">
                       Globeskimmers finds places near you. Where should we start?
                     </p>
@@ -306,6 +306,23 @@ export default function LocationModePicker({ isOpen, onClose }) {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-5">
+                  {/* Cold-open only: one tap to stay where they already were. */}
+                  {coldOpen && (lastLocation?.placeName || lastLocation?.address?.city) && (
+                    <button
+                      onClick={onClose}
+                      className="w-full mb-4 bg-blue-50 border-2 border-blue-200 hover:bg-blue-100 rounded-xl px-4 py-3 flex items-center justify-between gap-3 transition-colors"
+                    >
+                      <span className="flex items-center gap-3 min-w-0">
+                        <span className="text-2xl flex-shrink-0">🧭</span>
+                        <span className="flex flex-col items-start leading-tight min-w-0">
+                          <span className="text-[15px] font-bold text-gray-900">Continue in {lastLocation.placeName || lastLocation.address?.city}</span>
+                          <span className="text-[12px] text-gray-500 font-medium">Keep exploring where you left off</span>
+                        </span>
+                      </span>
+                      <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                    </button>
+                  )}
+
                   <Button
                     onClick={handleUseCurrentLocation}
                     disabled={gpsLoading}
@@ -383,6 +400,16 @@ export default function LocationModePicker({ isOpen, onClose }) {
                     <Crosshair className="w-4 h-4" />
                     Or enter coordinates manually
                   </button>
+
+                  {/* Cold-open only: let frequent users silence today's chooser. */}
+                  {coldOpen && (
+                    <button
+                      onClick={() => { onSnoozeToday?.(); onClose(); }}
+                      className="w-full mt-4 pt-3 border-t border-gray-100 text-[12.5px] text-gray-400 hover:text-gray-600 font-medium transition-colors py-1"
+                    >
+                      Don’t ask again today
+                    </button>
+                  )}
                 </div>
               </>
             )}

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { trackEvent } from "../Layout";
-import { useLocation } from "../components/location/LocationContext";
+import { useLocation, isLocationAskSnoozedToday, snoozeLocationAskToday } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import HomeBanner from "../components/ads/HomeBanner";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
@@ -94,6 +94,9 @@ const PHONE_EXPLORE = [
 // signInTick of the last sign-in we already showed the welcome splash for. Keeps
 // the splash to ONCE per sign-in (not on every Home re-mount/navigation).
 let lastWelcomeHandledTick = 0;
+// Module-scoped so the cold-open "Where to?" chooser fires at most ONCE per app
+// launch (a true cold open), not on every Home re-mount/tab navigation.
+let coldOpenAsked = false;
 // Per-account cap: the welcome splash shows on at most this many sign-ins, then
 // it's gone for good. The counter lives on the Supabase profile
 // (profile.welcome_splash_count) — see AuthContext.bumpWelcomeSplashCount.
@@ -118,6 +121,7 @@ export default function HomePage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [timezone, setTimezone] = useState(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [coldOpenChooser, setColdOpenChooser] = useState(false); // picker opened as the cold-open "Where to?" chooser
   const [showWelcome, setShowWelcome] = useState(false); // welcome splash (first launches, before the location selector)
   const [tempUnit, setTempUnit] = useState('F');
   const [homeCountryInfo, setHomeCountryInfo] = useState(null);
@@ -158,12 +162,29 @@ export default function HomePage() {
       }
       // cap reached → fall through to the picker
     }
-    if (!pickerPrompted.current && !showWelcome && !getActiveLocation()?.coordinates) {
-      pickerPrompted.current = true;
-      setShowLocationPicker(true);
+    if (!pickerPrompted.current && !showWelcome) {
+      const hasLoc = !!getActiveLocation()?.coordinates;
+      if (!hasLoc) {
+        // First run / no location yet — open the chooser (📍 current vs 🗺️ pick).
+        pickerPrompted.current = true;
+        setColdOpenChooser(true);
+        setShowLocationPicker(true);
+      } else if (!coldOpenAsked && !isLocationAskSnoozedToday()) {
+        // Returning + genuine cold open + not snoozed today → ask "Where to?".
+        coldOpenAsked = true;
+        pickerPrompted.current = true;
+        setColdOpenChooser(true);
+        setShowLocationPicker(true);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationLoading, signInTick, profile, showWelcome, locationMode, selectedLocation, currentGpsLocation]);
+
+  // Tell LocationContext's mismatch detector to defer while the chooser / welcome
+  // splash is open, so the two location prompts never stack on top of each other.
+  useEffect(() => {
+    try { window.__gsChooserOpen = showLocationPicker || showWelcome; } catch { /* ignore */ }
+  }, [showLocationPicker, showWelcome]);
 
   // Drive the local greeting word (e.g. "Hola", "Bonjour") from the active
   // location's country. Theme-system country-code sync was removed when the
@@ -794,7 +815,13 @@ export default function HomePage() {
           re-shows once the user is on the actual home content. */}
       {profile?.onboarding_completed && !showWelcome && !showLocationPicker && <HomeBanner />}
 
-      <LocationModePicker isOpen={showLocationPicker} onClose={() => setShowLocationPicker(false)} />
+      <LocationModePicker
+        isOpen={showLocationPicker}
+        onClose={() => { setShowLocationPicker(false); setColdOpenChooser(false); }}
+        coldOpen={coldOpenChooser}
+        lastLocation={getActiveLocation()}
+        onSnoozeToday={snoozeLocationAskToday}
+      />
 
       {/* Arrival stamps — airport (domestic + international) + land/boat border crossings */}
       {profile?.onboarding_completed && !showWelcome && <AirportArrivalPrompt />}

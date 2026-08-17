@@ -6,6 +6,7 @@ import useSwipeDownDismiss from "@/lib/swipeDismiss";
 import PWASetup from "@/components/PWASetup";
 import { ToastContainer } from "@/components/Toast";
 import { LocationProvider } from "@/components/location/LocationContext";
+import LocationMismatchSheet from "@/components/location/LocationMismatchSheet";
 import BrandBanner from "@/components/redesign/BrandBanner";
 import FloatingNav from "@/components/redesign/FloatingNav";
 import AdBanner from "@/components/ads/AdBanner";
@@ -179,6 +180,10 @@ export default function Layout({ children, currentPageName }) {
               above the AdMob banner on Home AND the finder pages so the ad can
               pin to the bottom edge without the pill overlapping it. */}
           <FloatingNav liftForAd={currentPageName === "Home" || showFinderAd} />
+
+          {/* Global "you seem to be in <city> now" nudge — mounted here (not in
+              Home) so it catches the mismatch event on ANY page after foreground. */}
+          <LocationMismatchSheet />
         </div>
       </LocationProvider>
     </>

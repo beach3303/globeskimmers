@@ -41,6 +41,19 @@ const AUTO_FOLLOW_KEY = 'gs_auto_follow_v1';
 const readAutoFollow = () => { try { return localStorage.getItem(AUTO_FOLLOW_KEY) !== '0'; } catch { return true; } };
 const writeAutoFollow = (on) => { try { localStorage.setItem(AUTO_FOLLOW_KEY, on ? '1' : '0'); } catch { /* ignore */ } };
 
+// "Where to?" cold-open chooser snooze. The founder wants the app to ask
+// current-vs-somewhere-else on every cold launch, with a "don't ask again today"
+// escape. We store today's date; the chooser is skipped only for the rest of
+// that calendar day. (Frontend-only; Date is fine here — the ban is Worker-side.)
+const ASK_SNOOZE_KEY = 'gs_loc_ask_snooze_v1';
+const todayStr = () => { try { return new Date().toISOString().slice(0, 10); } catch { return ''; } };
+export const isLocationAskSnoozedToday = () => { try { return localStorage.getItem(ASK_SNOOZE_KEY) === todayStr(); } catch { return false; } };
+export const snoozeLocationAskToday = () => { try { localStorage.setItem(ASK_SNOOZE_KEY, todayStr()); } catch { /* ignore */ } };
+// Distance (km) a manually-picked place must be from live GPS before we surface
+// the "you seem to be in <city> now" sheet — metro-scale so a normal commute
+// never triggers it, only real travel to another city does.
+const MISMATCH_KM = 40;
+
 export function useLocation() {
   const context = useContext(LocationContext);
   if (!context) {
@@ -207,15 +220,42 @@ export function LocationProvider({ children }) {
     } catch { /* GPS denied/unavailable — silently keep the current location */ }
   }, [getCurrentLocation, setLocationMode, setSelectedLocation]);
 
+  // ── Mismatch nudge (manual pick) ──────────────────────────────────────────
+  // The counterpart to auto-follow: when the user is on a MANUALLY-picked place
+  // (not live GPS) but has physically travelled to a different city, we do NOT
+  // silently override their choice — instead we surface a one-tap sheet ("You
+  // seem to be in <city> now — explore here, or keep <pick>?"). Once per app
+  // session, cost-aware (cheap GPS check; geocode only past MISMATCH_KM).
+  const maybeDetectMismatch = useCallback(async () => {
+    if (!_store.initDone || _store.mismatchPrompted) return;
+    // Defer (don't consume the one-shot) while the cold-open "Where to?" chooser
+    // is up — it already lets the user pick current-vs-elsewhere.
+    if (typeof window !== 'undefined' && window.__gsChooserOpen) return;
+    const active = _store.locationMode === 'current' ? _store.currentGpsLocation : _store.selectedLocation;
+    const isLive = _store.locationMode === 'current' || active?.placeType === 'current_location';
+    if (isLive || !active?.coordinates) return; // GPS mode is handled by auto-follow
+    try {
+      const pos = await getCurrentPositionSmart({ enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
+      const { latitude, longitude } = pos.coords;
+      const km = haversineKm(active.coordinates.latitude, active.coordinates.longitude, latitude, longitude);
+      if (!Number.isFinite(km) || km < MISMATCH_KM) return; // still near the picked city → no nudge
+      _store.mismatchPrompted = true; // at most once per session, even if they dismiss
+      const fresh = await getCurrentLocation(); // resolve the new city (one geocode); does NOT change mode
+      if (fresh?.coordinates) {
+        window.dispatchEvent(new CustomEvent('location:mismatch', { detail: { current: fresh, picked: active } }));
+      }
+    } catch { /* GPS denied/unavailable — say nothing */ }
+  }, [getCurrentLocation]);
+
   // Trigger on app FOREGROUND (the reopen-in-a-new-city case) + a light in-session
   // poll. Foreground-only — NO background/always tracking (battery + App Store).
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') maybeAutoFollow(); };
-    document.addEventListener('visibilitychange', onVisible);
-    const poll = setInterval(() => { if (document.visibilityState === 'visible') maybeAutoFollow(); }, 5 * 60 * 1000);
-    const warm = setTimeout(() => maybeAutoFollow(), 1500); // shortly after cold open
-    return () => { document.removeEventListener('visibilitychange', onVisible); clearInterval(poll); clearTimeout(warm); };
-  }, [maybeAutoFollow]);
+    const tick = () => { if (document.visibilityState === 'visible') { maybeAutoFollow(); maybeDetectMismatch(); } };
+    document.addEventListener('visibilitychange', tick);
+    const poll = setInterval(tick, 5 * 60 * 1000);
+    const warm = setTimeout(tick, 1500); // shortly after cold open
+    return () => { document.removeEventListener('visibilitychange', tick); clearInterval(poll); clearTimeout(warm); };
+  }, [maybeAutoFollow, maybeDetectMismatch]);
 
   // Saved / favorite locations now live ON-DEVICE (localStorage) — see
   // src/lib/savedLocations.js. (The old base44.auth.updateMe({saved_locations})
