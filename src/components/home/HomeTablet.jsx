@@ -3,6 +3,7 @@ import { MapPin, Cloud } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { CAT, TEAL_DEEP } from '@/components/redesign/constants';
 import FontScaleButton from '@/components/a11y/FontScaleButton';
+import HomeRows from '@/components/home/HomeRows';
 
 // iPad / tablet Home layout — implements CLAUDE_CODE_IPAD_BUILD.md §3 "Home".
 // Rendered ONLY at tablet width (HomePage branches on useIsTablet); the phone
@@ -174,6 +175,12 @@ export default function HomeTablet({
           <TabletTile key={f.title} cat={f.cat} emoji={f.emoji} title={f.title} sub={f.sub} onClick={() => onAction(f.action)} />
         ))}
         <TabletTile cat={CAT.weather} emoji="☀️" title="Weather" sub="Today's forecast" onClick={() => onAction('Weather')} />
+      </div>
+
+      {/* ── DISCOVER — living sections below the tiles (renders nothing on
+             cold-start; re-centers as the user moves) ─────────────────── */}
+      <div className="mt-9">
+        <HomeRows wide onAction={onAction} />
       </div>
 
       {/* ── EXPLORE MORE — 3-col gradient cards ───────────────────────── */}

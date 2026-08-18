@@ -41,6 +41,7 @@ export const ROUTE = {
   getMoneyExchangeOwned: 'moneyexchange-owned',
   getActivities: 'activities',
   searchActivities: 'activities/search',
+  getHomeRows: 'home/rows',
   getRestaurants: 'restaurants-full',
   getAnalytics: 'analytics-bundle',
   InvokeLLM: 'invoke-llm',
