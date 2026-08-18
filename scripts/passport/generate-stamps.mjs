@@ -11,9 +11,12 @@
 //
 // Style/spec © the founder's PASSPORT_ICON_LIST.md. Images are original art.
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+
+const execFileP = promisify(execFile);
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dir, "../..");
@@ -26,6 +29,14 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => {
   const eq = a.indexOf("="); if (a.startsWith("--") && eq === -1) return [a.slice(2), true];
   const m = a.match(/^--([^=]+)=(.*)$/); return m ? [m[1], m[2]] : [a, true];
 }));
+
+// Speed knobs: run N generations in parallel (big win — was 1-at-a-time), and
+// pick image quality. Stamps are flat icon art, so `low` looks fine and is
+// ~3-4x cheaper AND faster than `medium`. Concurrency is bounded by your OpenAI
+// rate-limit tier; the 429 backoff below absorbs overshoot.
+const CONCURRENCY = Math.max(1, +(args.concurrency || 4));
+const QUALITY = ["low", "medium", "high"].includes(args.quality) ? args.quality : "medium";
+const IMG_COST = { low: 0.011, medium: 0.04, high: 0.167 }; // rough $/image, 1024²
 
 // --- API key from env or .env.images ----------------------------------------
 let KEY = process.env.OPENAI_API_KEY;
@@ -87,7 +98,7 @@ async function generate(p) {
     const r = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: { "Authorization": `Bearer ${KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "gpt-image-1", prompt: p, size: "1024x1024", quality: "medium", background: "transparent", n: 1 }),
+      body: JSON.stringify({ model: "gpt-image-1", prompt: p, size: "1024x1024", quality: QUALITY, background: "transparent", n: 1 }),
     });
     if (r.status === 429 || r.status >= 500) { await sleep(12000 * (attempt + 1)); continue; }
     const j = await r.json();
@@ -98,9 +109,9 @@ async function generate(p) {
   throw new Error("rate-limited after retries");
 }
 
-function upload(s, buf) {
+async function upload(s, buf) {
   const f = join(TMP, `${s}.png`); writeFileSync(f, buf);
-  execFileSync("wrangler", ["r2", "object", "put", `${BUCKET}/stamp-art/${s}.png`, `--file=${f}`, "--content-type=image/png", "--remote"], { cwd: ROOT, stdio: "ignore" });
+  await execFileP("wrangler", ["r2", "object", "put", `${BUCKET}/stamp-art/${s}.png`, `--file=${f}`, "--content-type=image/png", "--remote"], { cwd: ROOT });
 }
 
 async function main() {
@@ -124,16 +135,25 @@ async function main() {
   }
 
   let made = 0, skipped = 0, failed = 0;
-  for (const it of items) {
-    if (!args.force && await exists(it.slug)) { skipped++; continue; }
-    try {
-      const buf = await generate(prompt(it));
-      upload(it.slug, buf);
-      made++; console.error(`✅ ${it.slug}.png  (${made} made)`);
-      await sleep(1500); // pace under image rate limits
-    } catch (e) { failed++; console.error(`❌ ${it.slug}: ${e.message}`); }
+  const queue = items.slice();
+  const total = queue.length;
+  // N parallel workers pull from a shared queue (order-independent). Much faster
+  // than the old 1-at-a-time loop; generate()'s 429/5xx backoff paces overshoot.
+  async function worker() {
+    for (;;) {
+      const it = queue.shift();
+      if (!it) return;
+      if (!args.force && await exists(it.slug)) { skipped++; continue; }
+      try {
+        const buf = await generate(prompt(it));
+        await upload(it.slug, buf);
+        made++; console.error(`✅ ${it.slug}.png  (${made}/${total} · ${skipped} skipped · ${failed} failed)`);
+      } catch (e) { failed++; console.error(`❌ ${it.slug}: ${e.message}`); }
+    }
   }
+  console.error(`Generating ${total} · concurrency=${CONCURRENCY} · quality=${QUALITY}…`);
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
   console.error(`\nDone. made=${made} skipped(existing)=${skipped} failed=${failed}`);
-  console.error(`≈ cost: $${(made * 0.04).toFixed(2)} (medium quality est.)`);
+  console.error(`≈ cost: $${(made * IMG_COST[QUALITY]).toFixed(2)} (${QUALITY} quality est.)`);
 }
 main();
