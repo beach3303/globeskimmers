@@ -7,6 +7,7 @@ import { trackEvent } from "../Layout";
 import { useLocation, isLocationAskSnoozedToday, snoozeLocationAskToday, readOpenBehavior } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import HomeRows from "../components/home/HomeRows";
+import StampsNearYou from "../components/home/StampsNearYou";
 import HomeBanner from "../components/ads/HomeBanner";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
 import { useAuth } from "@/lib/AuthContext";
@@ -782,6 +783,7 @@ export default function HomePage() {
           renders NOTHING when there's no owned coverage, so the tiles stand
           alone; all re-center as the user moves (auto-follow / active location). */}
       <HomeRows onAction={handleQuickAction} />
+      <StampsNearYou onAction={handleQuickAction} />
 
       {/* EXPLORE MORE — mono kicker + gradient cards. At small text steps this
           is a 3-col row of compact cards; once text is enlarged (step >= 2) it
