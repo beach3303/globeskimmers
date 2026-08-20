@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MapPin, Cloud } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -10,6 +10,7 @@ import HomeRows from "../components/home/HomeRows";
 import StampsNearYou from "../components/home/StampsNearYou";
 import StayAnchor from "../components/home/StayAnchor";
 import EscapesRow from "../components/home/EscapesRow";
+import { getTravelMode } from "@/lib/homeContext";
 import HomeBanner from "../components/ads/HomeBanner";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
 import { useAuth } from "@/lib/AuthContext";
@@ -463,6 +464,28 @@ export default function HomePage() {
     if (routes[actionLabel]) navigate(createPageUrl(routes[actionLabel]));
   };
 
+  // ── Journey-state: adapt which Discover sections LEAD, by context ──────────
+  // home/discovery (you're based here) → escapes/plan first; on a trip
+  // (domestic/international) → stamps + what's-nearby first; planning (browsing a
+  // place you're not at) → where-people-go first. Reuses the dormant travel-mode
+  // brain; data we already have (active location + profile home city).
+  const journeyMode = useMemo(() => {
+    const active = getActiveLocation();
+    const present = locationMode === "current" || active?.placeType === "current_location";
+    return getTravelMode({
+      present,
+      activeCountry: active?.address?.country,
+      activeCity: active?.address?.city || active?.placeName,
+      activeLat: active?.coordinates?.latitude,
+      activeLng: active?.coordinates?.longitude,
+      homeCountry: profile?.home_country,
+      homeCity: profile?.home_city,
+      homeLat: profile?.home_lat,
+      homeLng: profile?.home_lng,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationMode, selectedLocation, currentGpsLocation, profile]);
+
   // Welcome-splash actions:
   //   • Proceed (Start exploring / Skip / ✕) → open the location selector.
   //   • Timeout (30s with no interaction)    → go straight to the home screen.
@@ -578,6 +601,7 @@ export default function HomePage() {
           onLocation={() => setShowLocationPicker(true)}
           onAction={handleQuickAction}
           clockRows={clockRows}
+          journeyMode={journeyMode}
         />
       ) : (
       <>
@@ -785,9 +809,41 @@ export default function HomePage() {
           renders NOTHING when there's no owned coverage, so the tiles stand
           alone; all re-center as the user moves (auto-follow / active location). */}
       <StayAnchor />
-      <HomeRows onAction={handleQuickAction} />
-      <StampsNearYou onAction={handleQuickAction} />
-      <EscapesRow onAction={handleQuickAction} />
+      {(() => {
+        // Lead with what fits the moment (journey-state). StayAnchor stays on top.
+        const active = getActiveLocation();
+        const city = active?.address?.city || active?.placeName || "";
+        const ORDER = {
+          home: ["escapes", "rows", "stamps"],          // based here → get out / plan
+          discovery: ["rows", "escapes", "stamps"],
+          domestic: ["stamps", "rows", "escapes"],       // on a trip → collect + explore nearby
+          international: ["stamps", "rows", "escapes"],
+          planning: ["rows", "escapes", "stamps"],       // browsing → top spots + day trips
+        };
+        const line = {
+          home: city ? `You're home in ${city} — plan an escape?` : "",
+          domestic: city ? `Exploring ${city}` : "",
+          international: city ? `Exploring ${city}` : "",
+          planning: city ? `Planning ${city}` : "",
+          discovery: "",
+        }[journeyMode] || "";
+        const SEC = {
+          rows: <HomeRows key="rows" onAction={handleQuickAction} />,
+          stamps: <StampsNearYou key="stamps" onAction={handleQuickAction} />,
+          escapes: <EscapesRow key="escapes" onAction={handleQuickAction} />,
+        };
+        const order = ORDER[journeyMode] || ["rows", "stamps", "escapes"];
+        return (
+          <>
+            {line && (
+              <div className="px-4 pb-1">
+                <div className="max-w-md mx-auto font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] font-semibold" style={{ color: "#736657" }}>{line}</div>
+              </div>
+            )}
+            {order.map((k) => SEC[k])}
+          </>
+        );
+      })()}
 
       {/* EXPLORE MORE — mono kicker + gradient cards. At small text steps this
           is a 3-col row of compact cards; once text is enlarged (step >= 2) it

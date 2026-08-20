@@ -48,8 +48,19 @@ const EXPLORE = [
 export default function HomeTablet({
   firstName, cityName, placeText, localGreeting,
   weatherInfo, tempUnit, toggleTempUnit, dateText, timeText,
-  flagActive, homeFlagUrl, onLocation, onAction, clockRows = [],
+  flagActive, homeFlagUrl, onLocation, onAction, clockRows = [], journeyMode = "discovery",
 }) {
+  const ORDER = {
+    home: ["escapes", "rows", "stamps"], discovery: ["rows", "escapes", "stamps"],
+    domestic: ["stamps", "rows", "escapes"], international: ["stamps", "rows", "escapes"],
+    planning: ["rows", "escapes", "stamps"],
+  };
+  const SEC = {
+    rows: <HomeRows key="rows" wide onAction={onAction} />,
+    stamps: <StampsNearYou key="stamps" wide onAction={onAction} />,
+    escapes: <EscapesRow key="escapes" wide onAction={onAction} />,
+  };
+  const discoverOrder = ORDER[journeyMode] || ["rows", "stamps", "escapes"];
   return (
     <div className="mx-auto px-8 pt-6" style={{ maxWidth: 1024 }}>
       {/* ── GREETING CARD ─────────────────────────────────────────────── */}
@@ -184,9 +195,7 @@ export default function HomeTablet({
              cold-start; re-centers as the user moves) ─────────────────── */}
       <div className="mt-9">
         <StayAnchor />
-        <HomeRows wide onAction={onAction} />
-        <StampsNearYou wide onAction={onAction} />
-        <EscapesRow wide onAction={onAction} />
+        {discoverOrder.map((k) => SEC[k])}
       </div>
 
       {/* ── EXPLORE MORE — 3-col gradient cards ───────────────────────── */}
