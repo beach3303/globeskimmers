@@ -12407,8 +12407,12 @@ async function handleEventsSearch(request, env) {
     const b = await request.json().catch(() => ({}));
     const city = String(b.city || b.cityName || '').trim();
     const lat = parseFloat(b.latitude ?? b.lat), lng = parseFloat(b.longitude ?? b.lng);
-    const ckId = (city || (Number.isFinite(lat) ? `${lat.toFixed(2)},${lng.toFixed(2)}` : 'x')).toLowerCase();
-    const ck = `events:v1:${ckId}`;
+    const hasGeo = Number.isFinite(lat) && Number.isFinite(lng);
+    // Geo is the PRIMARY cache discriminator so same-named cities never collide
+    // (Rome, Italy vs Rome, Georgia would otherwise share a "rome" key and poison
+    // each other for 6h). ~11km grid (1 decimal) groups a metro without splitting.
+    const ckId = (hasGeo ? `${lat.toFixed(1)},${lng.toFixed(1)}` : (city || 'x')).toLowerCase();
+    const ck = `events:v2:${ckId}`;
     if (env.GLOBESKIMMERS_KV) {
       const cached = await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null);
       if (cached) return jsonResponse({ ...cached, source: 'cache' });
@@ -12416,15 +12420,22 @@ async function handleEventsSearch(request, env) {
     // Ticketmaster Discovery (real events; empty without a key).
     const tmP = (async () => {
       const key = env.TICKETMASTER_API_KEY; if (!key) return [];
-      const p = new URLSearchParams({ apikey: key, size: '20', sort: 'date,asc' });
-      if (city) p.set('city', city);
-      else if (Number.isFinite(lat) && Number.isFinite(lng)) { p.set('latlong', `${lat},${lng}`); p.set('radius', '50'); p.set('unit', 'miles'); }
+      const p = new URLSearchParams({ apikey: key, size: '30', sort: 'date,asc' });
+      // Prefer coordinates: TM's `city` param is an ambiguous NAME match (returns
+      // Rome, Georgia minor-league baseball for a user in Rome, Italy). Geo-anchor
+      // to real events near the user; fall back to city only without coordinates.
+      if (hasGeo) { p.set('latlong', `${lat},${lng}`); p.set('radius', '50'); p.set('unit', 'miles'); }
+      else if (city) p.set('city', city);
       try { p.set('startDateTime', new Date(Date.now()).toISOString().replace(/\.\d{3}Z$/, 'Z')); } catch { /* TM defaults to upcoming */ }
       try {
         const r = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${p.toString()}`);
         if (!r.ok) return [];
         const j = await r.json();
         const raw = (j && j._embedded && j._embedded.events) || [];
+        // TM returns one row per date, so a single show/run appears many times.
+        // Dedup by name (rows are date-asc, so we keep the SOONEST occurrence) —
+        // otherwise 20 slots get eaten by 4 copies of the same event.
+        const seen = new Set();
         return raw.map((e) => {
           const venue = e._embedded && e._embedded.venues && e._embedded.venues[0];
           const img = (e.images || []).slice().sort((a, b) => (b.width || 0) - (a.width || 0)).find((i) => (i.width || 0) >= 500) || (e.images || [])[0];
@@ -12441,7 +12452,13 @@ async function handleEventsSearch(request, env) {
             fromPrice: pr ? pr.min : null,
             currency: pr ? pr.currency : null,
           };
-        }).filter((e) => e.name && e.url);
+        }).filter((e) => {
+          if (!e.name || !e.url) return false;
+          const k = e.name.toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
       } catch { return []; }
     })();
     // Viator experiences (bookable + monetized NOW — no Google spend).
