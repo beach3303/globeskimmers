@@ -14,7 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { useLocation } from "@/components/location/LocationContext";
 import { callWorker } from "@/lib/callWorker";
 import { stampArtUrl } from "@/lib/stampArt";
-import { trackEvent } from "@/Layout";
+import { logDiscover } from "@/lib/logDiscover";
 import { createPageUrl } from "@/utils";
 
 const INK = "#243447", INK3 = "#66717D", STAMP = "#B0472F", PAPER = "#FBF6EC", EDGE = "#E6DFD0";
@@ -96,7 +96,7 @@ export default function StampsNearYou({ onAction, wide = false }) {
       };
       sessionStorage.setItem("current_activity", JSON.stringify(activity));
       if (loc) sessionStorage.setItem("activity_location", JSON.stringify(loc));
-      trackEvent("home_stamp_tap", { place_id: item.id, place_name: item.name });
+      logDiscover("home_stamp_tap", { place_id: item.id, place_name: item.name });
       navigate(createPageUrl("ActivityDetail"));
     } catch { onAction?.("Things to Do"); }
   };

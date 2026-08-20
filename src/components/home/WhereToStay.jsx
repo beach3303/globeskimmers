@@ -14,7 +14,7 @@ import { useLocation } from "@/components/location/LocationContext";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { fetchCulture } from "@/lib/callWorker";
-import { trackEvent } from "@/Layout";
+import { logDiscover } from "@/lib/logDiscover";
 import { createPageUrl } from "@/utils";
 
 const INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
@@ -56,7 +56,7 @@ export default function WhereToStay({ wide = false }) {
         const areas = res && res.data && Array.isArray(res.data.base_areas) ? res.data.base_areas.filter((x) => x && x.name) : [];
         if (!areas.length) { setStatus("empty"); return; }
         setData(res.data); setStatus("ready");
-        trackEvent("where_to_stay_view", { city, country, areas: areas.length });
+        logDiscover("where_to_stay_view", { city, country, areas: areas.length });
       } catch { if (!cancelled) setStatus("empty"); }
     })();
     return () => { cancelled = true; };
@@ -68,7 +68,7 @@ export default function WhereToStay({ wide = false }) {
   const findHotels = async (area) => {
     if (going) return;
     setGoing(area.name);
-    trackEvent("where_to_stay_area_tap", { city, country, area: area.name, price: area.price_level });
+    logDiscover("where_to_stay_area_tap", { city, country, area: area.name, price: area.price_level });
     let presetCity = null;
     try {
       const { data: d } = await callWorker(ROUTE.searchLocation, { query: `${area.name}, ${city}` });

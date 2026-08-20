@@ -12,7 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { useLocation } from "@/components/location/LocationContext";
 import { fetchCulture } from "@/lib/callWorker";
 import { getPrimaryStay } from "@/lib/savedLocations";
-import { trackEvent } from "@/Layout";
+import { logDiscover } from "@/lib/logDiscover";
 import { createPageUrl } from "@/utils";
 
 // Mirror Insight's helpers so the cacheKey + prompt + schema match exactly.
@@ -53,7 +53,7 @@ export default function EscapesRow({ onAction, wide = false }) {
         if (cancelled) return;
         const list = res && res.data && Array.isArray(res.data.day_trips) ? res.data.day_trips.filter((t) => t && t.name) : [];
         setTrips(list);
-        if (list.length) trackEvent("escape_view", { city, country, count: list.length });
+        if (list.length) logDiscover("escape_view", { city, country, count: list.length });
       } catch { if (!cancelled) setTrips([]); }
     })();
     return () => { cancelled = true; };
@@ -62,10 +62,10 @@ export default function EscapesRow({ onAction, wide = false }) {
   if (!trips.length) return null;
 
   const openTrip = (t) => {
-    trackEvent("escape_card_tap", { name: t.name, city, country, needs_car: !!t.needs_car });
+    logDiscover("escape_card_tap", { name: t.name, city, country, needs_car: !!t.needs_car });
     navigate(createPageUrl("Insight")); // planning hub: full list + how-to-get-there + car verdict
   };
-  const seeAll = () => { trackEvent("escape_see_all", { city, country }); navigate(createPageUrl("Insight")); };
+  const seeAll = () => { logDiscover("escape_see_all", { city, country }); navigate(createPageUrl("Insight")); };
 
   const where = city || "here";
   return (

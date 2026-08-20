@@ -13,7 +13,7 @@ import { useLocation } from "@/components/location/LocationContext";
 import { getDayPart } from "@/lib/homeContext";
 import { fetchCulture } from "@/lib/callWorker";
 import { getPrimaryStay } from "@/lib/savedLocations";
-import { trackEvent } from "@/Layout";
+import { logDiscover } from "@/lib/logDiscover";
 
 const INK = "#16302B", SUB = "#71827D";
 const slug = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
@@ -92,7 +92,7 @@ export default function RightNowStrip({ onAction, wide = false }) {
     ? "Classic morning bites here"
     : isViral ? `🔥 Trending in ${city || "town"}` : `What people come to ${city || "here"} for`;
 
-  const go = (action, where, extra) => { trackEvent("right_now_tap", { dayPart: part, action, where, ...extra }); onAction?.(action); };
+  const go = (action, where, extra) => { logDiscover("right_now_tap", { dayPart: part, action, where, city, country, ...extra }); onAction?.(action); };
 
   return (
     <div className={wide ? "pb-3" : "px-4 pb-3"}>

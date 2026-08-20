@@ -1046,6 +1046,47 @@ async function handleAdminUserStats(request, env) {
 // is acceptable for now (the data is aggregate, no PII), but if that
 // changes we'd add a shared-secret header check here.
 const ANALYTICS_QUERIES = {
+  // ── Discover / behavior ("what people pick") — from the events table via the
+  //    canonical logDiscover shape {city,country,intent,payload}. No PII; aggregate. ──
+  discover_top_destinations: `
+    SELECT json_extract(payload,'$.city') AS city, json_extract(payload,'$.country') AS country,
+      COUNT(*) AS views,
+      SUM(CASE WHEN json_extract(payload,'$.intent')='planning' THEN 1 ELSE 0 END) AS planning,
+      SUM(CASE WHEN json_extract(payload,'$.intent')='present' THEN 1 ELSE 0 END) AS present
+    FROM events
+    WHERE event_type='home_rows_view' AND IFNULL(json_extract(payload,'$.city'),'')<>''
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY city, country ORDER BY views DESC LIMIT 40
+  `,
+  discover_destinations_periods: `
+    SELECT
+      (SELECT COUNT(DISTINCT json_extract(payload,'$.city')) FROM events WHERE event_type='home_rows_view' AND IFNULL(json_extract(payload,'$.city'),'')<>'' AND date(ts,'unixepoch')=date('now')) AS today,
+      (SELECT COUNT(DISTINCT json_extract(payload,'$.city')) FROM events WHERE event_type='home_rows_view' AND IFNULL(json_extract(payload,'$.city'),'')<>'' AND ts>=strftime('%s','now','-7 days')) AS week,
+      (SELECT COUNT(DISTINCT json_extract(payload,'$.city')) FROM events WHERE event_type='home_rows_view' AND IFNULL(json_extract(payload,'$.city'),'')<>'' AND ts>=strftime('%s','now','-30 days')) AS month
+  `,
+  discover_trending_foods: `
+    SELECT json_extract(payload,'$.dish') AS dish, json_extract(payload,'$.city') AS city,
+      SUM(CASE WHEN json_extract(payload,'$.viral')=1 OR json_extract(payload,'$.viral')='true' THEN 1 ELSE 0 END) AS viral_taps,
+      COUNT(*) AS taps
+    FROM events
+    WHERE event_type='right_now_tap' AND json_extract(payload,'$.where')='dish' AND IFNULL(json_extract(payload,'$.dish'),'')<>''
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY dish, city ORDER BY taps DESC LIMIT 40
+  `,
+  discover_hotel_areas: `
+    SELECT json_extract(payload,'$.area') AS area, json_extract(payload,'$.city') AS city, COUNT(*) AS taps
+    FROM events
+    WHERE event_type='where_to_stay_area_tap' AND IFNULL(json_extract(payload,'$.area'),'')<>''
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY area, city ORDER BY taps DESC LIMIT 40
+  `,
+  discover_escapes: `
+    SELECT json_extract(payload,'$.name') AS trip, json_extract(payload,'$.city') AS base, COUNT(*) AS taps
+    FROM events
+    WHERE event_type='escape_card_tap' AND IFNULL(json_extract(payload,'$.name'),'')<>''
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY trip, base ORDER BY taps DESC LIMIT 40
+  `,
   // ── Affiliate (from affiliate_clicks; needs scripts/affiliate/01_schema.sql) ──
   affiliate_by_partner_30d: `
     SELECT partner,
