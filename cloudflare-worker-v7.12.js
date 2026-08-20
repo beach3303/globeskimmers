@@ -12396,6 +12396,81 @@ function gaMapSearchPlace(p, userLat, userLng) {
 //   products[] → bookable Viator experiences (monetized; direct product links).
 // The frontend leads with places[], shows products[] as bookable cards, and
 // only falls back to a Viator exit link when BOTH are empty.
+// Events "What's on" — real concerts, sports (incl. playoffs), theatre, comedy from
+// the Ticketmaster Discovery API (free key = env.TICKETMASTER_API_KEY) PLUS Viator
+// experiences (env.VIATOR_API_KEY — bookable + monetized TODAY). NO Google spend
+// (Viator freetext only). TM listings power the Demand Radar; TM revenue is via the
+// Impact affiliate later (deep-link until then). Graceful: each source independently
+// returns [] if its key is missing. KV-cached 6h.
+async function handleEventsSearch(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const city = String(b.city || b.cityName || '').trim();
+    const lat = parseFloat(b.latitude ?? b.lat), lng = parseFloat(b.longitude ?? b.lng);
+    const ckId = (city || (Number.isFinite(lat) ? `${lat.toFixed(2)},${lng.toFixed(2)}` : 'x')).toLowerCase();
+    const ck = `events:v1:${ckId}`;
+    if (env.GLOBESKIMMERS_KV) {
+      const cached = await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null);
+      if (cached) return jsonResponse({ ...cached, source: 'cache' });
+    }
+    // Ticketmaster Discovery (real events; empty without a key).
+    const tmP = (async () => {
+      const key = env.TICKETMASTER_API_KEY; if (!key) return [];
+      const p = new URLSearchParams({ apikey: key, size: '20', sort: 'date,asc' });
+      if (city) p.set('city', city);
+      else if (Number.isFinite(lat) && Number.isFinite(lng)) { p.set('latlong', `${lat},${lng}`); p.set('radius', '50'); p.set('unit', 'miles'); }
+      try { p.set('startDateTime', new Date(Date.now()).toISOString().replace(/\.\d{3}Z$/, 'Z')); } catch { /* TM defaults to upcoming */ }
+      try {
+        const r = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${p.toString()}`);
+        if (!r.ok) return [];
+        const j = await r.json();
+        const raw = (j && j._embedded && j._embedded.events) || [];
+        return raw.map((e) => {
+          const venue = e._embedded && e._embedded.venues && e._embedded.venues[0];
+          const img = (e.images || []).slice().sort((a, b) => (b.width || 0) - (a.width || 0)).find((i) => (i.width || 0) >= 500) || (e.images || [])[0];
+          const pr = (e.priceRanges || [])[0];
+          return {
+            id: e.id, name: e.name,
+            date: (e.dates && e.dates.start && e.dates.start.localDate) || null,
+            venue: (venue && venue.name) || '',
+            city: (venue && venue.city && venue.city.name) || city || '',
+            country: (venue && venue.country && venue.country.countryCode) || '',
+            category: (e.classifications && e.classifications[0] && e.classifications[0].segment && e.classifications[0].segment.name) || '',
+            image: (img && img.url) || null,
+            url: e.url || null,
+            fromPrice: pr ? pr.min : null,
+            currency: pr ? pr.currency : null,
+          };
+        }).filter((e) => e.name && e.url);
+      } catch { return []; }
+    })();
+    // Viator experiences (bookable + monetized NOW — no Google spend).
+    const vP = (async () => {
+      if (!env.VIATOR_API_KEY) return [];
+      const term = city ? `${city} shows and live entertainment` : 'live entertainment shows';
+      try {
+        const res = await fetch('https://api.viator.com/partner/search/freetext', {
+          method: 'POST',
+          headers: { 'exp-api-key': env.VIATOR_API_KEY, Accept: 'application/json;version=2.0', 'Accept-Language': 'en-US', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ searchTerm: term, searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count: 10 } }], currency: 'USD' }),
+        });
+        if (!res.ok) return [];
+        const d = await res.json();
+        const results = Array.isArray(d?.products?.results) ? d.products.results : [];
+        return results.map((p) => {
+          const variants = (p?.images?.[0]?.variants) || [];
+          const img = variants.find((v) => v.width >= 360 && v.width <= 720)?.url || variants[variants.length - 1]?.url || null;
+          return { code: p.productCode || null, title: p.title || null, thumbnail: img, url: p.productUrl || null, fromPrice: (p?.pricing?.summary?.fromPrice ?? null), currency: (p?.pricing?.currency || 'USD') };
+        }).filter((p) => p.title && p.url);
+      } catch { return []; }
+    })();
+    const [events, experiences] = await Promise.all([tmP, vP]);
+    const payload = { events, experiences };
+    if (env.GLOBESKIMMERS_KV && (events.length || experiences.length)) await env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(payload), { expirationTtl: 6 * 3600 }).catch(() => {});
+    return jsonResponse({ ...payload, source: 'live' });
+  } catch (e) { return jsonResponse({ events: [], experiences: [], error: e.message }); }
+}
+
 async function handleActivitySearch(request, env, ctx) {
   try {
     const b = await request.json().catch(() => ({}));
@@ -12766,6 +12841,7 @@ export default {
       if (pathname === '/aff/click' && request.method === 'POST') return await handleAffiliateClick(request, env, ctx);
       if (pathname === '/viator/match' && request.method === 'POST') return await handleViatorMatch(request, env);
       if (pathname === '/activities/search' && request.method === 'POST') return await handleActivitySearch(request, env, ctx);
+      if (pathname === '/events/search' && request.method === 'POST') return await handleEventsSearch(request, env);
       if (pathname === '/hotels/search' && request.method === 'POST') return await handleHotelSearch(request, env, ctx);
       if (pathname === '/guestbook/list' && request.method === 'POST') return await handleGuestbookList(request, env);
       if (pathname === '/guestbook/sign' && request.method === 'POST') return await handleGuestbookSign(request, env, ctx);

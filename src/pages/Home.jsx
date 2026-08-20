@@ -12,6 +12,7 @@ import StayAnchor from "../components/home/StayAnchor";
 import EscapesRow from "../components/home/EscapesRow";
 import RightNowStrip from "../components/home/RightNowStrip";
 import WhereToStay from "../components/home/WhereToStay";
+import EventsRow from "../components/home/EventsRow";
 import { getTravelMode } from "@/lib/homeContext";
 import { getPrimaryStay } from "@/lib/savedLocations";
 import HomeBanner from "../components/ads/HomeBanner";
@@ -849,6 +850,7 @@ export default function HomePage() {
           </>
         );
       })()}
+      <EventsRow onAction={handleQuickAction} />
 
       {/* EXPLORE MORE — mono kicker + gradient cards. At small text steps this
           is a 3-col row of compact cards; once text is enlarged (step >= 2) it
