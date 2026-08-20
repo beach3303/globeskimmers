@@ -18,12 +18,17 @@ import { trackEvent } from "@/Layout";
 const INK = "#16302B", SUB = "#71827D";
 const slug = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
 const HONESTY = (p) => ` Base this on what is genuinely typical for ${p}. If unsure of a field use an empty array — do NOT invent specific business names. No URLs.`;
+const STRARR = { type: "array", items: { type: "string" } };
 const DISHARR = { type: "array", items: { type: "object", properties: { name: { type: "string" }, why: { type: "string" } } } };
-const FOOD_SCHEMA = { type: "object", properties: { best_breakfast: { type: "array", items: { type: "string" } }, viral_foods: DISHARR, signature_dishes: DISHARR } };
-// Split the "hype" foods (TikTok/IG/YouTube-famous, what travelers actually seek —
-// even if touristy/fad) from the traditional signature dishes. AI covers the
-// established viral ones; live virality is learned from our own tap tracking.
-const foodPrompt = (p) => `For a traveler in ${p}: best_breakfast = 2-4 classic morning foods (short names). viral_foods = 4-6 foods travelers HYPE and post on TikTok/Instagram/YouTube (trendy, "you have to try", social-media-famous, even if touristy or a fad), each with a one-line why. signature_dishes = 4-6 traditional dishes the place is genuinely known for, each with a one-line why.${HONESTY(p)}`;
+// STABLE foods (breakfast + traditional signature) — don't change → cached long.
+const STABLE_SCHEMA = { type: "object", properties: { best_breakfast: STRARR, signature_dishes: DISHARR } };
+const stablePrompt = (p) => `For a traveler in ${p}: best_breakfast = 2-4 classic morning foods (short names). signature_dishes = 4-6 traditional dishes the place is genuinely known for, each with a one-line why.${HONESTY(p)}`;
+// VIRAL foods (TikTok/IG/YouTube-hyped) — change over time → SHORT, month-rotating
+// cache so they never freeze; the AI baseline refreshes (and picks up model
+// upgrades), while our own dish-tap tracking becomes the live "trending here now".
+const VIRAL_SCHEMA = { type: "object", properties: { viral_foods: DISHARR } };
+const viralPrompt = (p) => `For a traveler in ${p}: viral_foods = 4-6 foods that are CURRENTLY trending — the ones travelers hype and post on TikTok/Instagram/YouTube ("you have to try", social-media-famous, even if touristy or a fad), each with a one-line why. Prioritize what is popular right now.${HONESTY(p)}`;
+const monthBucket = () => { try { return new Date().toISOString().slice(0, 7); } catch { return "period"; } };
 
 const MEALS = {
   earlyMorning: { emoji: "☕", label: "Coffee & early bites", grad: "linear-gradient(135deg,#FBE9D0,#F3D2A6)", primary: { t: "Find coffee", a: "Coffee" }, chips: [{ e: "🥐", t: "Bakeries", a: "Places to Eat" }, { e: "🍳", t: "Breakfast", a: "Places to Eat" }] },
@@ -59,10 +64,15 @@ export default function RightNowStrip({ onAction, wide = false }) {
     let cancelled = false;
     if (!city && !country) { setFoods(null); return; }
     const placePhrase = city ? `${city}, ${country}` : country;
+    const cs = slug(city), ns = slug(country);
     (async () => {
       try {
-        const res = await fetchCulture({ cacheKey: `iconicfood:v2:${slug(city)}|${slug(country)}`, ttlDays: 365, prompt: foodPrompt(placePhrase), response_json_schema: FOOD_SCHEMA });
-        if (!cancelled) setFoods(res && res.data ? res.data : null);
+        // Stable foods cached 1y; viral cached ~monthly (rotating key) so it stays fresh.
+        const [stable, viral] = await Promise.all([
+          fetchCulture({ cacheKey: `iconicfood:v2:${cs}|${ns}`, ttlDays: 365, prompt: stablePrompt(placePhrase), response_json_schema: STABLE_SCHEMA }),
+          fetchCulture({ cacheKey: `viralfood:${cs}|${ns}:${monthBucket()}`, ttlDays: 35, prompt: viralPrompt(placePhrase), response_json_schema: VIRAL_SCHEMA }),
+        ]);
+        if (!cancelled) setFoods({ ...(stable && stable.data ? stable.data : {}), ...(viral && viral.data ? viral.data : {}) });
       } catch { if (!cancelled) setFoods(null); }
     })();
     return () => { cancelled = true; };
