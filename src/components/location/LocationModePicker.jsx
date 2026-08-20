@@ -36,7 +36,7 @@ const PLACE_TYPE_ICONS = {
   location: '📍'
 };
 
-export default function LocationModePicker({ isOpen, onClose, coldOpen = false, lastLocation = null, onSnoozeToday }) {
+export default function LocationModePicker({ isOpen, onClose, coldOpen = false, lastLocation = null, onSnoozeToday, onPicked = null }) {
   const {
     locationMode,
     selectedLocation,
@@ -155,6 +155,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
   };
 
   const handleSelectNavigateLocation = (location) => {
+    if (onPicked) { onPicked(location); onClose(); return; } // caller handles it (e.g. set-my-stay)
     setMode('info');
     setTimeout(async () => {
       await switchToNavigateMode(location);
@@ -163,6 +164,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
   };
 
   const handleSelectSavedLocation = async (location) => {
+    if (onPicked) { onPicked(location); onClose(); return; }
     await switchToNavigateMode(location);
     onClose();
   };
@@ -231,6 +233,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
         placeType: 'location',
       };
 
+      if (onPicked) { onPicked(location); onClose(); return; }
       await switchToNavigateMode(location);
       onClose();
     } catch (error) {

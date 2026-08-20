@@ -76,3 +76,52 @@ export function deleteSavedLocation(match) {
   write(read().filter((l) => !samePlace(l, match)));
   return true;
 }
+
+// ── Primary "stay" / home-base anchor ───────────────────────────────────────
+// Where the traveler is BASED this trip — a hotel, Airbnb, a room in one, a
+// friend/family's place, their own home, or other. It's the hub that "what's
+// nearby", day-trips/escapes, and "stamps near your stay" all radiate from
+// (see plan). Stored as a normal saved location + an `isPrimaryStay` flag +
+// `stayType`; exactly one entry is primary at a time.
+export const STAY_TYPES = [
+  { id: "hotel", label: "Hotel", emoji: "🏨" },
+  { id: "airbnb", label: "Airbnb / rental", emoji: "🏠" },
+  { id: "airbnb_room", label: "Room in an Airbnb", emoji: "🚪" },
+  { id: "friends_family", label: "Friends & family", emoji: "👪" },
+  { id: "own_place", label: "My place", emoji: "🏡" },
+  { id: "other", label: "Other", emoji: "📍" },
+];
+
+// Set (or move) the primary stay. Clears the flag on any previous primary so
+// there's always at most one. Returns the stored entry.
+export function setPrimaryStay(location, stayType = "other") {
+  if (!location) return null;
+  const list = read();
+  for (const l of list) { if (l.isPrimaryStay) delete l.isPrimaryStay; }
+  const entry = {
+    ...location,
+    nickname: location.nickname || location.placeName || "My stay",
+    stayType: stayType || "other",
+    isPrimaryStay: true,
+    savedAt: location.savedAt || new Date().toISOString(),
+  };
+  const idx = list.findIndex((l) => samePlace(l, location));
+  if (idx >= 0) list[idx] = { ...list[idx], ...entry };
+  else list.push(entry);
+  write(list);
+  return entry;
+}
+
+// The current primary stay, or null.
+export function getPrimaryStay() {
+  return read().find((l) => l.isPrimaryStay) || null;
+}
+
+// Unset the primary stay (the entry stays saved, just no longer the base).
+export function clearPrimaryStay() {
+  const list = read();
+  let changed = false;
+  for (const l of list) { if (l.isPrimaryStay) { delete l.isPrimaryStay; changed = true; } }
+  if (changed) write(list);
+  return true;
+}

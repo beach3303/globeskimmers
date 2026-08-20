@@ -5,6 +5,8 @@ import { CAT, TEAL_DEEP } from '@/components/redesign/constants';
 import FontScaleButton from '@/components/a11y/FontScaleButton';
 import HomeRows from '@/components/home/HomeRows';
 import StampsNearYou from '@/components/home/StampsNearYou';
+import StayAnchor from '@/components/home/StayAnchor';
+import EscapesRow from '@/components/home/EscapesRow';
 
 // iPad / tablet Home layout — implements CLAUDE_CODE_IPAD_BUILD.md §3 "Home".
 // Rendered ONLY at tablet width (HomePage branches on useIsTablet); the phone
@@ -181,8 +183,10 @@ export default function HomeTablet({
       {/* ── DISCOVER — living sections below the tiles (renders nothing on
              cold-start; re-centers as the user moves) ─────────────────── */}
       <div className="mt-9">
+        <StayAnchor />
         <HomeRows wide onAction={onAction} />
         <StampsNearYou wide onAction={onAction} />
+        <EscapesRow wide onAction={onAction} />
       </div>
 
       {/* ── EXPLORE MORE — 3-col gradient cards ───────────────────────── */}
