@@ -17,7 +17,7 @@
 // are chosen on the results page (meta-search) — the UI says so; native amenity
 // pre-filtering is the planned Agoda-API follow-up.
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { ArrowLeft, MapPin, Minus, Plus, Search, X, Calendar as CalendarIcon } from "lucide-react";
 import { DayPicker } from "react-day-picker";
 import { format } from "date-fns";
@@ -103,6 +103,16 @@ export default function FindAHotel() {
     country: activeLocation?.address?.country || activeLocation?.country || "",
     label: getLocationLabel(activeLocation),
   };
+  // Preset handoff (e.g. from "Where should I stay?" → a chosen area): scope the
+  // finder to that area on first mount.
+  const routerState = useRouterLocation().state;
+  useEffect(() => {
+    const p = routerState?.presetCity;
+    if (p && (p.coordinates || p.city || p.placeName)) { setDestMode("other"); setPickedCity(p); setGoal("area"); }
+    else if (routerState?.presetQuery) { setDestMode("other"); setCityQuery(routerState.presetQuery); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const picked = pickedCity ? {
     lat: pickedCity.coordinates?.latitude,
     lng: pickedCity.coordinates?.longitude,

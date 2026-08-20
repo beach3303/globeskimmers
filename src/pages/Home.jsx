@@ -11,7 +11,9 @@ import StampsNearYou from "../components/home/StampsNearYou";
 import StayAnchor from "../components/home/StayAnchor";
 import EscapesRow from "../components/home/EscapesRow";
 import RightNowStrip from "../components/home/RightNowStrip";
+import WhereToStay from "../components/home/WhereToStay";
 import { getTravelMode } from "@/lib/homeContext";
+import { getPrimaryStay } from "@/lib/savedLocations";
 import HomeBanner from "../components/ads/HomeBanner";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
 import { useAuth } from "@/lib/AuthContext";
@@ -811,6 +813,7 @@ export default function HomePage() {
           alone; all re-center as the user moves (auto-follow / active location). */}
       {journeyMode !== "planning" && <RightNowStrip onAction={handleQuickAction} />}
       <StayAnchor />
+      {!getPrimaryStay() && ["planning", "international", "domestic"].includes(journeyMode) && <WhereToStay />}
       {(() => {
         // Lead with what fits the moment (journey-state). StayAnchor stays on top.
         const active = getActiveLocation();

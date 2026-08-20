@@ -8,6 +8,8 @@ import StampsNearYou from '@/components/home/StampsNearYou';
 import StayAnchor from '@/components/home/StayAnchor';
 import EscapesRow from '@/components/home/EscapesRow';
 import RightNowStrip from '@/components/home/RightNowStrip';
+import WhereToStay from '@/components/home/WhereToStay';
+import { getPrimaryStay } from '@/lib/savedLocations';
 
 // iPad / tablet Home layout — implements CLAUDE_CODE_IPAD_BUILD.md §3 "Home".
 // Rendered ONLY at tablet width (HomePage branches on useIsTablet); the phone
@@ -197,6 +199,7 @@ export default function HomeTablet({
       <div className="mt-9">
         {journeyMode !== "planning" && <RightNowStrip wide onAction={onAction} />}
         <StayAnchor />
+        {!getPrimaryStay() && ["planning", "international", "domestic"].includes(journeyMode) && <WhereToStay wide />}
         {discoverOrder.map((k) => SEC[k])}
       </div>
 
