@@ -18,8 +18,12 @@ import { trackEvent } from "@/Layout";
 const INK = "#16302B", SUB = "#71827D";
 const slug = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
 const HONESTY = (p) => ` Base this on what is genuinely typical for ${p}. If unsure of a field use an empty array — do NOT invent specific business names. No URLs.`;
-const FOOD_SCHEMA = { type: "object", properties: { best_breakfast: { type: "array", items: { type: "string" } }, signature_dishes: { type: "array", items: { type: "object", properties: { name: { type: "string" }, why: { type: "string" } } } } } };
-const foodPrompt = (p) => `For a traveler in ${p}, list the iconic foods people come here for. best_breakfast: 2-4 classic morning foods (short names). signature_dishes: the 5-6 most-loved dishes, each with a one-line why.${HONESTY(p)}`;
+const DISHARR = { type: "array", items: { type: "object", properties: { name: { type: "string" }, why: { type: "string" } } } };
+const FOOD_SCHEMA = { type: "object", properties: { best_breakfast: { type: "array", items: { type: "string" } }, viral_foods: DISHARR, signature_dishes: DISHARR } };
+// Split the "hype" foods (TikTok/IG/YouTube-famous, what travelers actually seek —
+// even if touristy/fad) from the traditional signature dishes. AI covers the
+// established viral ones; live virality is learned from our own tap tracking.
+const foodPrompt = (p) => `For a traveler in ${p}: best_breakfast = 2-4 classic morning foods (short names). viral_foods = 4-6 foods travelers HYPE and post on TikTok/Instagram/YouTube (trendy, "you have to try", social-media-famous, even if touristy or a fad), each with a one-line why. signature_dishes = 4-6 traditional dishes the place is genuinely known for, each with a one-line why.${HONESTY(p)}`;
 
 const MEALS = {
   earlyMorning: { emoji: "☕", label: "Coffee & early bites", grad: "linear-gradient(135deg,#FBE9D0,#F3D2A6)", primary: { t: "Find coffee", a: "Coffee" }, chips: [{ e: "🥐", t: "Bakeries", a: "Places to Eat" }, { e: "🍳", t: "Breakfast", a: "Places to Eat" }] },
@@ -57,7 +61,7 @@ export default function RightNowStrip({ onAction, wide = false }) {
     const placePhrase = city ? `${city}, ${country}` : country;
     (async () => {
       try {
-        const res = await fetchCulture({ cacheKey: `iconicfood:${slug(city)}|${slug(country)}`, ttlDays: 365, prompt: foodPrompt(placePhrase), response_json_schema: FOOD_SCHEMA });
+        const res = await fetchCulture({ cacheKey: `iconicfood:v2:${slug(city)}|${slug(country)}`, ttlDays: 365, prompt: foodPrompt(placePhrase), response_json_schema: FOOD_SCHEMA });
         if (!cancelled) setFoods(res && res.data ? res.data : null);
       } catch { if (!cancelled) setFoods(null); }
     })();
@@ -65,10 +69,18 @@ export default function RightNowStrip({ onAction, wide = false }) {
   }, [city, country, tick]);
 
   const showBreakfast = part === "earlyMorning" || part === "morning";
+  const viral = foods?.viral_foods || [];
+  const signature = foods?.signature_dishes || [];
+  // Morning → classic breakfast bites; otherwise lead with the 🔥 viral/hype
+  // foods people travel to post, falling back to traditional signature dishes.
   const dishes = showBreakfast
     ? (foods?.best_breakfast || []).map((n) => ({ name: n }))
-    : (foods?.signature_dishes || []);
+    : (viral.length ? viral : signature);
+  const isViral = !showBreakfast && viral.length > 0;
   const hasDishes = dishes.length > 0;
+  const dishesLabel = showBreakfast
+    ? "Classic morning bites here"
+    : isViral ? `🔥 Trending in ${city || "town"}` : `What people come to ${city || "here"} for`;
 
   const go = (action, where, extra) => { trackEvent("right_now_tap", { dayPart: part, action, where, ...extra }); onAction?.(action); };
 
@@ -86,12 +98,10 @@ export default function RightNowStrip({ onAction, wide = false }) {
 
           {hasDishes && (
             <div className="mb-2.5">
-              <div className="text-[calc(11.5px*var(--fs))] font-semibold mb-1.5" style={{ color: INK }}>
-                {showBreakfast ? "Classic morning bites here" : `What people come to ${city || "here"} for`}
-              </div>
+              <div className="text-[calc(11.5px*var(--fs))] font-semibold mb-1.5" style={{ color: INK }}>{dishesLabel}</div>
               <div className="flex gap-2 flex-wrap">
                 {dishes.slice(0, 5).map((d) => (
-                  <button key={d.name} onClick={() => go("Places to Eat", "dish", { dish: d.name })} className="rounded-full px-3 py-1.5 text-[calc(12.5px*var(--fs))] font-semibold" style={{ background: "rgba(255,255,255,0.82)", color: INK }} title={d.why || ""}>
+                  <button key={d.name} onClick={() => go("Places to Eat", "dish", { dish: d.name, viral: isViral })} className="rounded-full px-3 py-1.5 text-[calc(12.5px*var(--fs))] font-semibold" style={{ background: "rgba(255,255,255,0.82)", color: INK }} title={d.why || ""}>
                     {d.name}
                   </button>
                 ))}
