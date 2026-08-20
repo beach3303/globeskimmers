@@ -7,6 +7,7 @@ import HomeRows from '@/components/home/HomeRows';
 import StampsNearYou from '@/components/home/StampsNearYou';
 import StayAnchor from '@/components/home/StayAnchor';
 import EscapesRow from '@/components/home/EscapesRow';
+import RightNowStrip from '@/components/home/RightNowStrip';
 
 // iPad / tablet Home layout — implements CLAUDE_CODE_IPAD_BUILD.md §3 "Home".
 // Rendered ONLY at tablet width (HomePage branches on useIsTablet); the phone
@@ -194,6 +195,7 @@ export default function HomeTablet({
       {/* ── DISCOVER — living sections below the tiles (renders nothing on
              cold-start; re-centers as the user moves) ─────────────────── */}
       <div className="mt-9">
+        {journeyMode !== "planning" && <RightNowStrip wide onAction={onAction} />}
         <StayAnchor />
         {discoverOrder.map((k) => SEC[k])}
       </div>

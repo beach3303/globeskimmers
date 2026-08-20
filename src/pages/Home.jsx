@@ -10,6 +10,7 @@ import HomeRows from "../components/home/HomeRows";
 import StampsNearYou from "../components/home/StampsNearYou";
 import StayAnchor from "../components/home/StayAnchor";
 import EscapesRow from "../components/home/EscapesRow";
+import RightNowStrip from "../components/home/RightNowStrip";
 import { getTravelMode } from "@/lib/homeContext";
 import HomeBanner from "../components/ads/HomeBanner";
 import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
@@ -808,6 +809,7 @@ export default function HomePage() {
       {/* DISCOVER — living sections below the tiles (tiles stay the lead). Each
           renders NOTHING when there's no owned coverage, so the tiles stand
           alone; all re-center as the user moves (auto-follow / active location). */}
+      {journeyMode !== "planning" && <RightNowStrip onAction={handleQuickAction} />}
       <StayAnchor />
       {(() => {
         // Lead with what fits the moment (journey-state). StayAnchor stays on top.
