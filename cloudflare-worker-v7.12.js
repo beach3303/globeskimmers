@@ -1121,6 +1121,36 @@ const ANALYTICS_QUERIES = {
     ORDER BY clicks DESC
     LIMIT 20
   `,
+  // ── Wishlist DEMAND (from 'wishlist_add' events; payload kind/title/city/country) ──
+  // The Demand Radar's first-party signal: what people WANT (dream destinations,
+  // experiences, shows) — aggregate + anonymizable, no PII. Drives affiliate targeting.
+  wishlist_top_30d: `
+    SELECT json_extract(payload,'$.title') AS title,
+      json_extract(payload,'$.kind') AS kind,
+      json_extract(payload,'$.city') AS city,
+      COUNT(*) AS wishes,
+      COUNT(DISTINCT COALESCE(user_id, session_id)) AS people
+    FROM events
+    WHERE event_type='wishlist_add' AND ts >= strftime('%s','now','-30 days')
+      AND json_extract(payload,'$.title') IS NOT NULL AND json_extract(payload,'$.title') <> ''
+    GROUP BY title, kind, city ORDER BY wishes DESC LIMIT 40
+  `,
+  wishlist_by_city_30d: `
+    SELECT json_extract(payload,'$.city') AS city,
+      json_extract(payload,'$.country') AS country,
+      COUNT(*) AS wishes,
+      COUNT(DISTINCT COALESCE(user_id, session_id)) AS people
+    FROM events
+    WHERE event_type='wishlist_add' AND ts >= strftime('%s','now','-30 days')
+      AND json_extract(payload,'$.city') IS NOT NULL AND json_extract(payload,'$.city') <> ''
+    GROUP BY city, country ORDER BY wishes DESC LIMIT 40
+  `,
+  wishlist_by_kind_30d: `
+    SELECT json_extract(payload,'$.kind') AS kind, COUNT(*) AS wishes
+    FROM events
+    WHERE event_type='wishlist_add' AND ts >= strftime('%s','now','-30 days')
+    GROUP BY kind ORDER BY wishes DESC
+  `,
   // ── Passport stamps (from 'passport_stamp' events; payload has kind/country/city/name) ──
   passport_totals: `
     SELECT COUNT(*) AS total_stamps,

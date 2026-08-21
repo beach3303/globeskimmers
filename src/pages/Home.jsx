@@ -14,6 +14,7 @@ import RightNowStrip from "../components/home/RightNowStrip";
 import WhereToStay from "../components/home/WhereToStay";
 import EventsRow from "../components/home/EventsRow";
 import MyTripCard from "../components/home/MyTripCard";
+import WishlistCard from "../components/home/WishlistCard";
 import { getTravelMode } from "@/lib/homeContext";
 import { getPrimaryStay } from "@/lib/savedLocations";
 import HomeBanner from "../components/ads/HomeBanner";
@@ -816,6 +817,7 @@ export default function HomePage() {
       {journeyMode !== "planning" && <RightNowStrip onAction={handleQuickAction} />}
       <StayAnchor />
       <MyTripCard />
+      <WishlistCard />
       {!getPrimaryStay() && ["planning", "international", "domestic"].includes(journeyMode) && <WhereToStay />}
       {(() => {
         // Lead with what fits the moment (journey-state). StayAnchor stays on top.

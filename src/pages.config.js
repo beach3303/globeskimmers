@@ -75,6 +75,7 @@ import ThingsToDo from './pages/ThingsToDo';
 import Transportation from './pages/Transportation';
 import TravelEssentials from './pages/TravelEssentials';
 import Weather from './pages/Weather';
+import Wishlist from './pages/Wishlist';
 import __Layout from './Layout.jsx';
 
 
@@ -107,6 +108,7 @@ export const PAGES = {
     "Transportation": Transportation,
     "TravelEssentials": TravelEssentials,
     "Weather": Weather,
+    "Wishlist": Wishlist,
 }
 
 export const pagesConfig = {

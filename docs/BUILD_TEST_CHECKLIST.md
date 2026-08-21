@@ -356,6 +356,18 @@ State: Uncommitted · Worker DEPLOYED (9f67e324) · Frontend auto-deploys on pus
 - [ ] Tablet width: banner + page render wide, no horizontal scroll
 - [ ] (Later) When a conversion is backfilled (`status='confirmed'`), that item's chip turns green **Confirmed**
 
+## ❤️ Wishlist — demand capture + book-later (2026-08-21)
+"I want to go / do / see this." A drop-in `<WishlistButton item={...} />` (`src/components/WishlistButton.jsx`) toggles items into an on-device wishlist (`src/lib/wishlist.js`, localStorage `gs_wishlist_v1`) — instant, works signed-out (same choice as Saved Locations). Every add/remove is logged via `logDiscover('wishlist_add'/'wishlist_remove')` → the **DEMAND SIGNAL** for the Radar (aggregate, no PII). `src/pages/Wishlist.jsx` groups saved items by kind (🌆 destinations / 📍 places / 🎟️ tours / 🎫 events / 🍜 food / 🏨 stays) and turns each into a booking (**Find tours** = Viator affiliate; **Find hotels** = FindAHotel presetCity). `src/components/home/WishlistCard.jsx` = a Home banner that appears only with ≥1 item; also a row in Saved Locations. First capture surface = ThingsToDo attraction cards (❤️ overlay on the photo). Worker: added `wishlist_top_30d` / `wishlist_by_city_30d` / `wishlist_by_kind_30d` to ANALYTICS_QUERIES.
+State: Uncommitted · Worker DEPLOYED (6b1d1c0c) · Frontend auto-deploys on push · Tested ⬜
+- [ ] On a ThingsToDo attraction card, a **❤️ appears top-right of the photo**; tapping it fills red (and does NOT open the card); tapping again un-fills
+- [ ] After ❤️-ing ≥1 place: Home shows the **"Your wishlist · N places saved"** banner (below My Trip); Saved Locations shows a **❤️ Wishlist** row
+- [ ] Open Wishlist → the saved place appears under **📍 Places to visit** with photo, name, city
+- [ ] Tap **Find tours** → opens Viator (attributed affiliate click) for that place; tap **Remove** → it disappears and the card's ❤️ un-fills live
+- [ ] **Empty wishlist:** page shows "💫 Start your wishlist" + "Explore things to do"; the Home banner does NOT appear
+- [ ] Signed-out still works (localStorage); ❤️ state persists across app reloads
+- [ ] Demand signal: after a few ❤️s, `GET /analytics-query?type=wishlist_by_city_30d` returns rows (city → wishes/people)
+- [ ] Tablet width: ❤️ overlay + Wishlist page render wide, no horizontal scroll
+
 ## Template for a new build
 ```
 ### N · <feature name>
