@@ -379,6 +379,17 @@ State: Uncommitted · Frontend auto-deploys on push · Tested ⬜
 - [ ] No attractions (coverage-less area): the chip row does NOT show
 - [ ] Tablet + phone: chip row scrolls horizontally, no page horizontal scroll
 
+## ✨ Vibe Bundles — Discover "what's the vibe?" (2026-08-21)
+Mood combos on Home: pick a vibe (💆 Self-care / 🍻 Night out / 👨‍👩‍👧 Family / 🧘 Active & reset / 🛍️ Relaxed & easy / 📸 The classics) → its slots expand as chips, each routing to the right in-app finder (real, already-cached cards there = **no new API spend**) or a **FREE Google-Maps search** for local-life types we have no finder for (spa/gym/salon/cinema). Mood labels only (never demographic). Persona (party composition) gives a light re-order; the set never changes. Selections log `vibe_select` / `discover_select` for the demand loop. `src/lib/vibeBundles.js` (config + orderedBundles + mapsSearchUrl), `src/components/home/VibeBundles.jsx` (the surface). Frontend-only.
+State: Uncommitted · Frontend auto-deploys on push · Tested ⬜
+- [ ] Home shows a **"What's the vibe? ✨"** row of 6 mood cards (below the Wishlist card)
+- [ ] Tap a vibe (e.g. Self-care day) → it highlights + a slot-chip row expands ("Spa/massage · Nail salon · Healthy lunch · Quiet café"); tap again → collapses
+- [ ] Tap an in-app slot (Healthy lunch) → opens the Eat finder; (Café) → Coffee; (Top sights) → Things to Do; (Shopping) → Shopping
+- [ ] Tap a local-life slot (Spa/massage · Cinema · Gym) → opens a Google Maps search for that type near your city
+- [ ] With a persona set (e.g. Family), the **Family** vibe leads the row; the full set is still present
+- [ ] After taps, `events` has `vibe_select` / `discover_select` rows (vibe + slot → demand)
+- [ ] Tablet + phone: mood cards + slot chips scroll/wrap, no page horizontal scroll
+
 ## Template for a new build
 ```
 ### N · <feature name>

@@ -15,6 +15,7 @@ import WhereToStay from "../components/home/WhereToStay";
 import EventsRow from "../components/home/EventsRow";
 import MyTripCard from "../components/home/MyTripCard";
 import WishlistCard from "../components/home/WishlistCard";
+import VibeBundles from "../components/home/VibeBundles";
 import { getTravelMode } from "@/lib/homeContext";
 import { getPrimaryStay } from "@/lib/savedLocations";
 import HomeBanner from "../components/ads/HomeBanner";
@@ -818,6 +819,7 @@ export default function HomePage() {
       <StayAnchor />
       <MyTripCard />
       <WishlistCard />
+      <VibeBundles />
       {!getPrimaryStay() && ["planning", "international", "domestic"].includes(journeyMode) && <WhereToStay />}
       {(() => {
         // Lead with what fits the moment (journey-state). StayAnchor stays on top.

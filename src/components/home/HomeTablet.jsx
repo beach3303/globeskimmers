@@ -12,6 +12,7 @@ import WhereToStay from '@/components/home/WhereToStay';
 import EventsRow from '@/components/home/EventsRow';
 import MyTripCard from '@/components/home/MyTripCard';
 import WishlistCard from '@/components/home/WishlistCard';
+import VibeBundles from '@/components/home/VibeBundles';
 import { getPrimaryStay } from '@/lib/savedLocations';
 
 // iPad / tablet Home layout — implements CLAUDE_CODE_IPAD_BUILD.md §3 "Home".
@@ -206,6 +207,7 @@ export default function HomeTablet({
         {discoverOrder.map((k) => SEC[k])}
         <MyTripCard wide />
         <WishlistCard wide />
+        <VibeBundles wide />
         <EventsRow wide onAction={onAction} />
       </div>
 
