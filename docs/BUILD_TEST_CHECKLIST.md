@@ -342,6 +342,20 @@ State: Uncommitted · Frontend auto-deploys on push · Tested ⬜
 - [ ] **0 stamps (signed in):** still shows the closed cover → open → ownership page + a **"My Travel Collection · Your first destination stamp will appear here" + "Find places to stamp"** page (→ Things to Do)
 - [ ] **0 stamps (signed out):** shows the sign-in prompt (not the book); **read-only friend, empty:** shows "Nothing to show"
 
+## 🧳 My Trip hub — bookings you started (2026-08-21)
+The traveler's bookings hub. New worker `POST /aff/mine` (`handleAffiliateMine`) reads the SIGNED-IN user's own `affiliate_clicks` (JWT→user_id via `gbUser`), collapses repeat taps of the same product into one entry, and reports an HONEST status: **Started** (a tap ≠ a booking) until the partner's offline conversion report marks it **Confirmed** — never "Booked". `src/pages/MyTrip.jsx` groups items by category (🏨 stays / 🎟️ tours / 🎫 events / 🚕 rides / 🚗 car / 📶 data / 🧳 storage); tapping a card reopens the partner (Capacitor Browser on native, window.open on web). `src/components/home/MyTripCard.jsx` = a compact Home banner that renders ONLY when the user has ≥1 saved item; also linked from Saved Locations. Reuses the existing `affiliate_clicks` D1 table (no schema change).
+State: Uncommitted · Worker DEPLOYED (9f67e324) · Frontend auto-deploys on push · Tested ⬜
+- [ ] Signed in, after opening ≥1 Viator tour / hotel / event: Home shows the **"Your trip · N items saved"** banner (below the Stay Anchor); Saved Locations shows a **🧳 My Trip** row
+- [ ] Tap either → **My Trip** page lists items grouped by category with the right emoji headers + counts
+- [ ] Each card shows a grey **Started** chip, the partner name, product name, city + date; **tap a card** → reopens the partner in the in-app browser
+- [ ] The honest note is visible up top ("Started means you opened the partner — it isn't a confirmed reservation")
+- [ ] **Signed out:** page shows "🔒 Sign in to see your trip" + Sign in button (→ Settings); the Home banner does NOT appear
+- [ ] **Signed in, zero taps:** page shows "🧳 Nothing here yet" + "Explore things to do" (→ Things to Do); the Home banner does NOT appear
+- [ ] Repeat taps of the SAME product collapse into ONE card (deduped), not many
+- [ ] Auth safety: only your own rows appear — no token / a bad token returns `{items:[],needsAuth:true}` (verified via curl)
+- [ ] Tablet width: banner + page render wide, no horizontal scroll
+- [ ] (Later) When a conversion is backfilled (`status='confirmed'`), that item's chip turns green **Confirmed**
+
 ## Template for a new build
 ```
 ### N · <feature name>

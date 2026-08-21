@@ -10,6 +10,7 @@ import EscapesRow from '@/components/home/EscapesRow';
 import RightNowStrip from '@/components/home/RightNowStrip';
 import WhereToStay from '@/components/home/WhereToStay';
 import EventsRow from '@/components/home/EventsRow';
+import MyTripCard from '@/components/home/MyTripCard';
 import { getPrimaryStay } from '@/lib/savedLocations';
 
 // iPad / tablet Home layout — implements CLAUDE_CODE_IPAD_BUILD.md §3 "Home".
@@ -202,6 +203,7 @@ export default function HomeTablet({
         <StayAnchor />
         {!getPrimaryStay() && ["planning", "international", "domestic"].includes(journeyMode) && <WhereToStay wide />}
         {discoverOrder.map((k) => SEC[k])}
+        <MyTripCard wide />
         <EventsRow wide onAction={onAction} />
       </div>
 

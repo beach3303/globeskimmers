@@ -42,6 +42,7 @@ export const ROUTE = {
   getActivities: 'activities',
   searchActivities: 'activities/search',
   searchEvents: 'events/search',
+  affiliateMine: 'aff/mine',
   getHomeRows: 'home/rows',
   getRestaurants: 'restaurants-full',
   getAnalytics: 'analytics-bundle',

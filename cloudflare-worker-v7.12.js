@@ -12683,6 +12683,52 @@ async function handleAffiliateClick(request, env, ctx) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// Read-of-record for the signed-in user's OWN affiliate taps -> powers the "My Trip"
+// hub. Resolves user_id from the JWT (gbUser), reads their affiliate_clicks, collapses
+// repeat taps of the same product into one entry, and reports an HONEST status:
+// 'confirmed' only once the offline conversion backfill marks it so, otherwise
+// 'started' (a tap is NOT a booking). Only ever returns the caller's own rows.
+async function handleAffiliateMine(request, env) {
+  try {
+    if (!env.DB) return jsonResponse({ items: [], error: 'analytics DB not configured' }, 500);
+    const user = await gbUser(request, env).catch(() => null);
+    if (!user) return jsonResponse({ items: [], needsAuth: true });
+    const rs = await env.DB.prepare(
+      `select subid, ts, partner, product_id, product_name, category, dest_country, dest_city,
+              target_url, converted, commission, currency, status, converted_ts
+       from affiliate_clicks where user_id = ? order by ts desc limit 300`
+    ).bind(user.id).all().catch(() => ({ results: [] }));
+    const rows = (rs && rs.results) || [];
+    const groups = new Map();
+    for (const r of rows) {
+      const key = `${r.partner}|${String(r.product_id || r.product_name || r.target_url || '').toLowerCase()}`;
+      let g = groups.get(key);
+      if (!g) {
+        g = {
+          key, partner: r.partner, category: r.category || null,
+          product_name: r.product_name || null, product_id: r.product_id || null,
+          dest_city: r.dest_city || null, dest_country: r.dest_country || null,
+          target_url: r.target_url || null, ts: r.ts, taps: 0,
+          status: 'started', commission: null, currency: null,
+        };
+        groups.set(key, g);
+      }
+      g.taps += 1;
+      if (r.ts > g.ts) { g.ts = r.ts; g.target_url = r.target_url || g.target_url; }
+      // Strongest status wins: confirmed > cancelled > started.
+      const s = (r.status || '').toLowerCase();
+      if (r.converted === 1 || s === 'confirmed') {
+        g.status = 'confirmed';
+        if (r.commission != null) { g.commission = r.commission; g.currency = r.currency || g.currency; }
+      } else if (s === 'cancelled' && g.status !== 'confirmed') {
+        g.status = 'cancelled';
+      }
+    }
+    const items = Array.from(groups.values()).sort((a, b) => b.ts - a.ts);
+    return jsonResponse({ items, count: items.length });
+  } catch (e) { return jsonResponse({ items: [], error: e.message }, 500); }
+}
+
 async function handleGuestbookList(request, env) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -12856,6 +12902,7 @@ export default {
       if (pathname.startsWith('/legal/') && request.method === 'GET') return await handleLegalPage(request, env);
       if (pathname === '/guestbook/photo-upload' && request.method === 'POST') return await handleGuestbookPhotoUpload(request, env, ctx);
       if (pathname === '/aff/click' && request.method === 'POST') return await handleAffiliateClick(request, env, ctx);
+      if (pathname === '/aff/mine' && request.method === 'POST') return await handleAffiliateMine(request, env);
       if (pathname === '/viator/match' && request.method === 'POST') return await handleViatorMatch(request, env);
       if (pathname === '/activities/search' && request.method === 'POST') return await handleActivitySearch(request, env, ctx);
       if (pathname === '/events/search' && request.method === 'POST') return await handleEventsSearch(request, env);

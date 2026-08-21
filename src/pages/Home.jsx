@@ -13,6 +13,7 @@ import EscapesRow from "../components/home/EscapesRow";
 import RightNowStrip from "../components/home/RightNowStrip";
 import WhereToStay from "../components/home/WhereToStay";
 import EventsRow from "../components/home/EventsRow";
+import MyTripCard from "../components/home/MyTripCard";
 import { getTravelMode } from "@/lib/homeContext";
 import { getPrimaryStay } from "@/lib/savedLocations";
 import HomeBanner from "../components/ads/HomeBanner";
@@ -814,6 +815,7 @@ export default function HomePage() {
           alone; all re-center as the user moves (auto-follow / active location). */}
       {journeyMode !== "planning" && <RightNowStrip onAction={handleQuickAction} />}
       <StayAnchor />
+      <MyTripCard />
       {!getPrimaryStay() && ["planning", "international", "domestic"].includes(journeyMode) && <WhereToStay />}
       {(() => {
         // Lead with what fits the moment (journey-state). StayAnchor stays on top.
