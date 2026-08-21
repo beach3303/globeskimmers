@@ -21,6 +21,8 @@ import { ChevronLeft, MapPin, Star } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import WishlistButton from "@/components/WishlistButton";
+import PersonaChooser from "@/components/PersonaChooser";
+import { usePersona, personaRank } from "@/lib/persona";
 
 // iPad editorial design tokens (design handoff: matches "Places to Eat · iPad").
 const ED_SERIF = '"Instrument Serif", Georgia, serif';
@@ -786,6 +788,7 @@ function TierCard({a,userLat,userLng,isTablet}){
 }
 
 function TierSection({title,icon,items,userLat,userLng,isTablet,defaultCollapsed=false}){
+  const persona=usePersona();
   const [collapsed,setCollapsed]=useState(defaultCollapsed);
   if(!items?.length) return null;
   // The tier strip is part of the editorial system at BOTH widths: serif header
@@ -815,7 +818,7 @@ function TierSection({title,icon,items,userLat,userLng,isTablet,defaultCollapsed
       </div>
       <AnimatePresence>{!collapsed&&(
         <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-          <div style={itemsLayout}>{items.map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} isTablet={isTablet}/>)}</div>
+          <div style={itemsLayout}>{personaRank(items,persona).map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} isTablet={isTablet}/>)}</div>
         </motion.div>
       )}</AnimatePresence>
     </div>
@@ -1153,6 +1156,7 @@ export default function ThingsToDoFinder() {
           </div>
         )}
         {browseFilterActive&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🔧</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Filtered results</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
+        {!submitted&&!browseFilterActive&&(nationalIcons.length>0||regionalGems.length>0||nearbyAttractions.length>0)&&<PersonaChooser/>}
         {!submitted&&!browseFilterActive&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
         {!submitted&&!browseFilterActive&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
         {!submitted&&!browseFilterActive&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet}/>}

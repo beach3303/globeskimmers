@@ -368,6 +368,17 @@ State: Uncommitted · Worker DEPLOYED (6b1d1c0c) · Frontend auto-deploys on pus
 - [ ] Demand signal: after a few ❤️s, `GET /analytics-query?type=wishlist_by_city_30d` returns rows (city → wishes/people)
 - [ ] Tablet width: ❤️ overlay + Wishlist page render wide, no horizontal scroll
 
+## 👥 Persona — "who's traveling" re-rank (2026-08-21)
+A compact **"Who's traveling?"** chip row (`src/components/PersonaChooser.jsx`) sets a party-composition persona — **solo / couple / family / friends** (party composition ONLY; never age/life-stage labels, per founder rule). `src/lib/persona.js` stores it on-device (`gs_persona_v1`), exposes `usePersona()` + a stable `personaRank()` that re-sorts attractions by the `props` block already computed server-side (isFamilyFriendly / isGoodForCouples / isGoodForGroups / isAdventure / …) — zero new data, and it only nudges matches up (ties keep their order). Every pick logs `persona_set` (the segment signal for the demand loop; no PII). Wired into ThingsToDo: chooser above the tiers + live re-rank inside each TierSection. Frontend-only (no worker change).
+State: Uncommitted · Frontend auto-deploys on push · Tested ⬜
+- [ ] On Things to Do (default browse view with attractions), a **"Who's traveling?"** chip row shows above the tiers
+- [ ] Tap **Family** → cards re-order so family-friendly places rise to the front of each tier; tap again (or **Clear**) → returns to default order
+- [ ] The choice persists across app reloads (localStorage) and applies on next visit
+- [ ] With NO persona set, tiers render in their normal quality order (no-op)
+- [ ] After a few picks, `events` has `persona_set` rows (persona → segment)
+- [ ] No attractions (coverage-less area): the chip row does NOT show
+- [ ] Tablet + phone: chip row scrolls horizontally, no page horizontal scroll
+
 ## Template for a new build
 ```
 ### N · <feature name>
