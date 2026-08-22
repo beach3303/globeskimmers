@@ -309,8 +309,12 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-5">
-                  {/* Cold-open only: one tap to stay where they already were. */}
-                  {coldOpen && (lastLocation?.placeName || lastLocation?.address?.city) && (
+                  {/* Cold-open only: one tap to RESUME a place you deliberately chose
+                      (a typed/searched destination). Hidden when you left off on your
+                      own current location — then "Explore where I am" IS "continue where
+                      you left off," so a separate button is redundant (you're in Arcadia
+                      and left off in Arcadia = same action). Consent-first: no early GPS. */}
+                  {coldOpen && lastLocation?.placeType !== 'current_location' && (lastLocation?.placeName || lastLocation?.address?.city) && (
                     <button
                       onClick={onClose}
                       className="w-full mb-4 bg-blue-50 border-2 border-blue-200 hover:bg-blue-100 rounded-xl px-4 py-3 flex items-center justify-between gap-3 transition-colors"
