@@ -399,6 +399,13 @@ State: Uncommitted · Worker DEPLOYED (9eeb409b) · Frontend auto-deploys on pus
 - [ ] No double-count regression on page views; existing sections still render
 - [ ] Privacy: every new query returns counts + `people` (distinct session), never individual identifiers
 
+## 🔒 /analytics-query locked to admins (2026-08-21)
+The analytics read endpoint was **world-readable** (anyone could pull aggregate demand intel). Added a `requireAdmin(request, env)` gate (verifies the caller's Supabase JWT via `/auth/v1/user`, then checks `ADMIN_EMAILS_WORKER`) at the top of `handleAnalyticsQuery` — mirrors the existing `handleAdminUserStats` pattern. No frontend change: AdminAnalytics already sends the admin JWT via `callWorker`. Verified: no-auth → **HTTP 401**; deployed 140180b4.
+State: Uncommitted (worker) · Worker DEPLOYED (140180b4) · Tested ⬜
+- [ ] Signed in as an ADMIN email → Admin Analytics still loads every section (JWT accepted)
+- [ ] `GET /analytics-query?type=totals_7d` with no auth → 401; with a bogus token → 401
+- [ ] Signed in as a NON-admin → Admin Analytics redirects home AND the endpoint returns 403 if called directly
+
 ## Template for a new build
 ```
 ### N · <feature name>

@@ -2189,8 +2189,32 @@ const ANALYTICS_QUERIES = {
   `,
 };
 
+// Admin gate — verify the caller's Supabase JWT + confirm they're an admin.
+// Returns null when authorized, or a Response to return otherwise. Mirrors
+// handleAdminUserStats so /analytics-query is no longer world-readable (it exposes
+// monetizable aggregate demand intel).
+async function requireAdmin(request, env) {
+  const authHeader = request.headers.get('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token) return jsonResponse({ error: 'Not signed in' }, 401);
+  const SUPABASE_URL = env.SUPABASE_URL || 'https://bkaxadiyehddzkiuheea.supabase.co';
+  const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SERVICE_KEY) return jsonResponse({ error: 'Server not configured' }, 500);
+  const whoRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${token}` },
+  }).catch(() => null);
+  if (!whoRes || whoRes.status !== 200) return jsonResponse({ error: 'Invalid or expired session' }, 401);
+  const who = await whoRes.json().catch(() => ({}));
+  const email = String(who?.email || '').trim().toLowerCase();
+  if (!ADMIN_EMAILS_WORKER.includes(email)) return jsonResponse({ error: 'Forbidden' }, 403);
+  return null; // authorized
+}
+
 async function handleAnalyticsQuery(request, env) {
   try {
+    // Admin-only: the Admin page already sends the caller's JWT via callWorker.
+    const denied = await requireAdmin(request, env);
+    if (denied) return denied;
     if (!env.DB) {
       return jsonResponse({ error: 'D1 not bound', results: [] }, 503);
     }
