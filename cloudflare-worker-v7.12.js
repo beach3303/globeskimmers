@@ -1151,6 +1151,49 @@ const ANALYTICS_QUERIES = {
     WHERE event_type='wishlist_add' AND ts >= strftime('%s','now','-30 days')
     GROUP BY kind ORDER BY wishes DESC
   `,
+  // ── Directions taps — the HIGHEST-INTENT signal ("actually going here"); one
+  // event covers every finder. Feeds ranking + merchant/foot-traffic proof. ──
+  directions_by_place_30d: `
+    SELECT json_extract(payload,'$.place_name') AS place,
+      json_extract(payload,'$.city') AS city,
+      json_extract(payload,'$.country') AS country,
+      COUNT(*) AS taps,
+      COUNT(DISTINCT COALESCE(user_id, session_id)) AS people
+    FROM events
+    WHERE event_type='directions_tap' AND ts >= strftime('%s','now','-30 days')
+      AND json_extract(payload,'$.place_name') IS NOT NULL AND json_extract(payload,'$.place_name') <> ''
+    GROUP BY place, city ORDER BY taps DESC LIMIT 100
+  `,
+  // ── Persona (party-composition) segments — who's using the app, and what each
+  // segment wants. Powers segment-aware curation + affiliate targeting. ──
+  persona_distribution_30d: `
+    SELECT json_extract(payload,'$.persona') AS persona,
+      COUNT(*) AS events,
+      COUNT(DISTINCT COALESCE(user_id, session_id)) AS people
+    FROM events
+    WHERE ts >= strftime('%s','now','-30 days')
+      AND json_extract(payload,'$.persona') IS NOT NULL AND json_extract(payload,'$.persona') <> ''
+    GROUP BY persona ORDER BY people DESC
+  `,
+  wishlist_by_persona_30d: `
+    SELECT json_extract(payload,'$.persona') AS persona,
+      json_extract(payload,'$.title') AS title,
+      COUNT(*) AS wishes
+    FROM events
+    WHERE event_type='wishlist_add' AND ts >= strftime('%s','now','-30 days')
+      AND json_extract(payload,'$.persona') IS NOT NULL AND json_extract(payload,'$.persona') <> ''
+    GROUP BY persona, title ORDER BY wishes DESC LIMIT 60
+  `,
+  // ── Wishlist → booking-CTA funnel (the wishlist→affiliate money step). ──
+  wishlist_cta_30d: `
+    SELECT json_extract(payload,'$.action') AS action,
+      json_extract(payload,'$.kind') AS kind,
+      json_extract(payload,'$.city') AS city,
+      COUNT(*) AS taps
+    FROM events
+    WHERE event_type='wishlist_cta' AND ts >= strftime('%s','now','-30 days')
+    GROUP BY action, kind, city ORDER BY taps DESC LIMIT 60
+  `,
   // ── Passport stamps (from 'passport_stamp' events; payload has kind/country/city/name) ──
   passport_totals: `
     SELECT COUNT(*) AS total_stamps,

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Navigation, LocateFixed, Pencil } from 'lucide-react';
 import { useDismissable } from '@/lib/dismissStack';
+import { logDiscover } from '@/lib/logDiscover';
 
 // Shared "Get Directions" sheet used by every finder. Two key behaviors:
 //   1. Destination is sent as the place's NAME + ADDRESS (human-readable) so the
@@ -55,6 +56,9 @@ export default function MapAppSelector({ isOpen, onClose, destination, userLat, 
       // Waze always routes from the device's current location (URL can't set origin).
       waze:   `https://waze.com/ul?q=${D}&navigate=yes`,
     };
+    // Highest-intent behavior signal — "I'm actually going here." One log here
+    // covers EVERY finder (eat/coffee/ATM/restroom/shopping/things-to-do).
+    try { logDiscover('directions_tap', { app, place_name: destination?.name || null }); } catch { /* never block navigation */ }
     window.open(urls[app], '_blank');
     onClose();
   };

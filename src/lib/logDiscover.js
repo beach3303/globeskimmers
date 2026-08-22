@@ -14,6 +14,14 @@ function readActive() {
   catch { return null; }
 }
 
+// Read the persona directly from storage (NOT via persona.js) — persona.js imports
+// logDiscover, so importing it back here would be a circular dependency. Keep the
+// key in sync with persona.js (gs_persona_v1).
+function readPersona() {
+  try { return localStorage.getItem("gs_persona_v1") || null; }
+  catch { return null; }
+}
+
 export function logDiscover(eventType, payload = {}) {
   const loc = readActive();
   const a = (loc && loc.address) || {};
@@ -21,6 +29,7 @@ export function logDiscover(eventType, payload = {}) {
     city: a.city || loc?.city || loc?.placeName || "",
     country: a.country || loc?.country || "",
     intent: loc?.placeType === "current_location" ? "present" : "planning",
+    persona: readPersona(), // party-composition segment (coarse, not identity) — powers Q6
   };
   // Explicit payload values win over the derived context.
   trackEvent(eventType, { ...ctx, ...payload });

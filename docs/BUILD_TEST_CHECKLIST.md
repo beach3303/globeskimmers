@@ -390,6 +390,15 @@ State: Uncommitted · Frontend auto-deploys on push · Tested ⬜
 - [ ] After taps, `events` has `vibe_select` / `discover_select` rows (vibe + slot → demand)
 - [ ] Tablet + phone: mood cards + slot chips scroll/wrap, no page horizontal scroll
 
+## 📊 Behavior tracking — directions + persona + Demand Radar surfaced (2026-08-21)
+Closes the top gaps from the behavior-pipeline audit. (1) **`directions_tap`** — the highest-intent signal ("actually going here") now logs from `MapAppSelector.launch()`, covering EVERY finder in one place. (2) **Persona stamped into `logDiscover`** ctx (reads `gs_persona_v1` directly to avoid a circular import) → every Discover event now carries the party-composition segment → unlocks segment slicing. (3) **Surfaced the invisible data** in AdminAnalytics: the Wishlist Demand Radar (top destinations / most-wishlisted / by-type / →Book CTA), directions taps, and persona mix. New worker queries: `directions_by_place_30d`, `persona_distribution_30d`, `wishlist_by_persona_30d`, `wishlist_cta_30d` (deployed 9eeb409b). Privacy: aggregate only, `COUNT(DISTINCT session_id) AS people`, no PII.
+State: Uncommitted · Worker DEPLOYED (9eeb409b) · Frontend auto-deploys on push · Tested ⬜
+- [ ] Tap **Directions** on any finder card → maps app opens AND an event fires; `GET /analytics-query?type=directions_by_place_30d` returns the place after a few taps
+- [ ] Pick a persona on Things to Do, then ❤️ a place / tap a vibe → those events now carry `persona`; `persona_distribution_30d` returns the segment
+- [ ] Admin Analytics shows the new sections: ❤️ Wishlist top destinations / most-wishlisted / by type / →Book, 🧭 Directions taps, 👥 persona mix (all "No data yet" until events accrue, never error)
+- [ ] No double-count regression on page views; existing sections still render
+- [ ] Privacy: every new query returns counts + `people` (distinct session), never individual identifiers
+
 ## Template for a new build
 ```
 ### N · <feature name>

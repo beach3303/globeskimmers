@@ -96,7 +96,7 @@ export default function AdminAnalytics() {
       // Fan out over the live Worker /analytics-query route (one D1 query per
       // type), assembling the bundle the renderer expects. Native-safe via
       // callWorker — replaces the Base44 getAnalytics function (403s on device).
-      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes'];
+      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes', 'wishlist_by_city_30d', 'wishlist_top_30d', 'wishlist_by_kind_30d', 'wishlist_cta_30d', 'directions_by_place_30d', 'persona_distribution_30d'];
       const pairs = await Promise.all(TYPES.map(async (type) => {
         const { data: qd, error: qe } = await callWorker(`analytics-query?type=${encodeURIComponent(type)}`, {});
         return [type, { results: qd?.results || [], error: qe || qd?.error || null }];
@@ -150,6 +150,12 @@ export default function AdminAnalytics() {
   const discFoods = data?.discover_trending_foods?.results || [];
   const discAreas = data?.discover_hotel_areas?.results || [];
   const discEscapes = data?.discover_escapes?.results || [];
+  const wishByCity = data?.wishlist_by_city_30d?.results || [];
+  const wishTop = data?.wishlist_top_30d?.results || [];
+  const wishByKind = data?.wishlist_by_kind_30d?.results || [];
+  const wishCta = data?.wishlist_cta_30d?.results || [];
+  const dirByPlace = data?.directions_by_place_30d?.results || [];
+  const personaDist = data?.persona_distribution_30d?.results || [];
   const maxDiscDest = Math.max(...discDestinations.map((d) => d.views || 0), 1);
   const maxDiscFood = Math.max(...discFoods.map((d) => d.taps || 0), 1);
   const maxDiscArea = Math.max(...discAreas.map((d) => d.taps || 0), 1);
@@ -409,6 +415,49 @@ export default function AdminAnalytics() {
               <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Which base neighborhoods convert — your hotel affiliate targets.</div>
               {discAreas.map((d, i) => (
                 <BarRow key={i} label={`${d.area || '(unknown)'}${d.city ? ' · ' + d.city : ''}`} count={d.taps} max={maxDiscArea} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            {/* ── Wishlist Demand Radar — where people DREAM to go (highest-signal, first-party) ── */}
+            <Section title="❤️ Wishlist — top destinations (30d)" icon={Search} empty={wishByCity.length === 0 ? 'Fills as users ❤️ places — the highest-signal demand data (where they want to go).' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Where people want to go — first-party demand for retargeting + affiliate.</div>
+              {wishByCity.map((d, i) => (
+                <BarRow key={i} label={`${d.city || '(unknown)'}${d.country ? ', ' + d.country : ''}`} count={d.wishes} max={wishByCity[0]?.wishes || 1} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="❤️ Most-wishlisted places (30d)" icon={Sparkles} empty={wishTop.length === 0 ? 'Fills as users ❤️ specific places / tours / events.' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Specific saved items — your affiliate + Demand-Radar targets.</div>
+              {wishTop.map((d, i) => (
+                <BarRow key={i} label={`${d.title || '(unknown)'}${d.city ? ' · ' + d.city : ''}`} count={d.wishes} max={wishTop[0]?.wishes || 1} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="❤️ Wishlist by type (30d)" icon={Activity} empty={wishByKind.length === 0 ? 'Fills as users wishlist across types (attraction / event / city / …).' : null}>
+              {wishByKind.map((d, i) => (
+                <BarRow key={i} label={d.kind || '(unknown)'} count={d.wishes} max={wishByKind[0]?.wishes || 1} color={COLORS.green} />
+              ))}
+            </Section>
+
+            <Section title="➡️ Wishlist → Book taps (30d)" icon={Search} empty={wishCta.length === 0 ? 'Fills as users tap Find tours / Find hotels from the wishlist — the money step.' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Which saved items convert to a booking CTA — wishlist→affiliate.</div>
+              {wishCta.map((d, i) => (
+                <BarRow key={i} label={`${d.action || '?'} · ${d.kind || ''}${d.city ? ' · ' + d.city : ''}`} count={d.taps} max={wishCta[0]?.taps || 1} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            {/* ── Highest-intent action + who's traveling ── */}
+            <Section title="🧭 Directions taps — going here now (30d)" icon={Activity} empty={dirByPlace.length === 0 ? 'Fills as users tap Directions — the strongest "actually going there" signal, across every finder.' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Highest-intent action — foot-traffic + merchant proof.</div>
+              {dirByPlace.map((d, i) => (
+                <BarRow key={i} label={`${d.place || '(unknown)'}${d.city ? ' · ' + d.city : ''}`} count={d.taps} max={dirByPlace[0]?.taps || 1} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="👥 Who's traveling — persona mix (30d)" icon={Users} empty={personaDist.length === 0 ? 'Fills as users pick a persona (solo / couple / family / friends).' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Party-composition segments (coarse, not identity) — segment-aware curation + targeting.</div>
+              {personaDist.map((d, i) => (
+                <BarRow key={i} label={d.persona || '(unknown)'} count={d.people} max={personaDist[0]?.people || 1} color={COLORS.green} />
               ))}
             </Section>
 
