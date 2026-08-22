@@ -1170,6 +1170,22 @@ const ANALYTICS_QUERIES = {
     WHERE ts >= strftime('%s','now','-90 days')
     GROUP BY partner, currency ORDER BY commission DESC, clicks DESC
   `,
+  // ── RETENTION COHORTS — the make-or-break metric for an episodic-travel app,
+  // keyed on the DURABLE anon_id (added 2026-08-22), so it survives sessions unlike
+  // the older session-based active_users/retention_7d. For devices first seen in the
+  // last 90 days: did they come back on day+1, in week 1 (day+7), after day 30, or
+  // EVER (the best episodic signal)? NOTE the CAST: in a CTE, MIN(ts) has no column
+  // affinity, so an uncast TEXT strftime bound silently makes numeric<text false.
+  retention_cohorts_90d: `
+    WITH fs AS (SELECT anon_id, MIN(ts) AS f FROM events WHERE anon_id IS NOT NULL GROUP BY anon_id)
+    SELECT
+      COUNT(*) AS new_users,
+      SUM(CASE WHEN EXISTS (SELECT 1 FROM events e WHERE e.anon_id=fs.anon_id AND e.ts>=fs.f+86400 AND e.ts<fs.f+2*86400) THEN 1 ELSE 0 END) AS d1,
+      SUM(CASE WHEN EXISTS (SELECT 1 FROM events e WHERE e.anon_id=fs.anon_id AND e.ts>=fs.f+7*86400 AND e.ts<fs.f+8*86400) THEN 1 ELSE 0 END) AS d7,
+      SUM(CASE WHEN EXISTS (SELECT 1 FROM events e WHERE e.anon_id=fs.anon_id AND e.ts>=fs.f+30*86400) THEN 1 ELSE 0 END) AS d30_plus,
+      SUM(CASE WHEN EXISTS (SELECT 1 FROM events e WHERE e.anon_id=fs.anon_id AND e.ts>fs.f+86400) THEN 1 ELSE 0 END) AS ever_returned
+    FROM fs WHERE fs.f >= CAST(strftime('%s','now','-90 days') AS INTEGER)
+  `,
   // ── Wishlist DEMAND (from 'wishlist_add' events; payload kind/title/city/country) ──
   // The Demand Radar's first-party signal: what people WANT (dream destinations,
   // experiences, shows) — aggregate + anonymizable, no PII. Drives affiliate targeting.

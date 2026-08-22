@@ -96,7 +96,7 @@ export default function AdminAnalytics() {
       // Fan out over the live Worker /analytics-query route (one D1 query per
       // type), assembling the bundle the renderer expects. Native-safe via
       // callWorker — replaces the Base44 getAnalytics function (403s on device).
-      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes', 'wishlist_by_city_30d', 'wishlist_top_30d', 'wishlist_by_kind_30d', 'wishlist_cta_30d', 'directions_by_place_30d', 'persona_distribution_30d', 'affiliate_funnel_30d', 'affiliate_clicks_by_intent_30d'];
+      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'retention_cohorts_90d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes', 'wishlist_by_city_30d', 'wishlist_top_30d', 'wishlist_by_kind_30d', 'wishlist_cta_30d', 'directions_by_place_30d', 'persona_distribution_30d', 'affiliate_funnel_30d', 'affiliate_clicks_by_intent_30d'];
       const pairs = await Promise.all(TYPES.map(async (type) => {
         const { data: qd, error: qe } = await callWorker(`analytics-query?type=${encodeURIComponent(type)}`, {});
         return [type, { results: qd?.results || [], error: qe || qd?.error || null }];
@@ -171,6 +171,10 @@ export default function AdminAnalytics() {
   const stickiness = activeUsers.mau ? Math.round((activeUsers.dau / activeUsers.mau) * 100) : 0;
   const avgRowsTaps = rowsPerSession.avg_taps ? Number(rowsPerSession.avg_taps).toFixed(1) : '0';
   const maxActive = Math.max(...activeByDay.map(d => d.active || 0), 1);
+  // Durable-device retention cohort (anon_id-based): the make-or-break episodic metric.
+  const cohort = data?.retention_cohorts_90d?.results?.[0] || {};
+  const cohortN = cohort.new_users || 0;
+  const cohortPct = (n) => (cohortN ? Math.round(((n || 0) / cohortN) * 100) : 0);
   const eventsByDay = data?.events_by_day_14d?.results || [];
   const aiOpensByDay = data?.ai_details_opens_by_day_14d?.results || [];
   const aiOpensPerSession = data?.ai_details_per_session_7d?.results || [];
@@ -329,6 +333,19 @@ export default function AdminAnalytics() {
               </div>
               <div style={{ fontSize: 11, color: COLORS.gray, marginTop: 8 }}>
                 Return rate = of users active this week, the % who first came &gt;7 days ago (came back). Stickiness = DAU ÷ MAU.
+              </div>
+            </Section>
+
+            <Section title="Retention cohort — do they come back? (90d, per device)" icon={Users} empty={cohortN === 0 ? 'No cohort data yet — needs devices first seen in the last 90 days (after the anon_id fix).' : null}>
+              <div style={{ fontSize: 13, marginBottom: 8 }}>
+                <b>{cohortN}</b> new devices · <b>{cohortPct(cohort.ever_returned)}%</b> ever came back
+              </div>
+              <BarRow label="Came back (ever)" count={cohort.ever_returned || 0} max={cohortN || 1} color={COLORS.green} />
+              <BarRow label="Day 1" count={cohort.d1 || 0} max={cohortN || 1} color={COLORS.accent} />
+              <BarRow label="Week 1 (D7)" count={cohort.d7 || 0} max={cohortN || 1} color={COLORS.accent} />
+              <BarRow label="Day 30+" count={cohort.d30_plus || 0} max={cohortN || 1} color={COLORS.accent} />
+              <div style={{ fontSize: 11, color: COLORS.gray, marginTop: 8 }}>
+                Durable per-device (anon_id) cohort — the honest episodic-retention signal. "Ever came back" is the number to watch first.
               </div>
             </Section>
 
