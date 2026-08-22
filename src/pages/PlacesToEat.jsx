@@ -31,7 +31,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
@@ -904,6 +904,16 @@ export default function PlacesToEat() {
   const [selectedCuisines, setSelectedCuisines] = useState(new Set(["all"]));
   const [searchText, setSearchText]     = useState("");
   const [searchInput, setSearchInput]   = useState("");
+  // Prefill + auto-run a search handed in from another surface (e.g. tapping a
+  // trending dish chip on the home Right-Now strip → "Chinese Bakery Pastries").
+  // Setting searchText triggers the results fetch below, so the finder opens
+  // straight onto that dish instead of the generic nearby list.
+  const routerLocation = useRouterLocation();
+  useEffect(() => {
+    const q = routerLocation.state?.presetQuery;
+    if (q && typeof q === "string" && q.trim()) { setSearchInput(q); setSearchText(q.trim()); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routerLocation.state?.presetQuery]);
   const [radius, setRadius]             = useState(10);
   const [displayCount, setDisplayCount] = useState(20);
   const [showAdvanced, setShowAdvanced] = useState(false);

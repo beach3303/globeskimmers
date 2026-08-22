@@ -14,6 +14,8 @@ import { getDayPart } from "@/lib/homeContext";
 import { fetchCulture } from "@/lib/callWorker";
 import { getPrimaryStay } from "@/lib/savedLocations";
 import { logDiscover } from "@/lib/logDiscover";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 
 const INK = "#16302B", SUB = "#71827D";
 const slug = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
@@ -41,6 +43,7 @@ const MEALS = {
 
 export default function RightNowStrip({ onAction, wide = false }) {
   const { getActiveLocation } = useLocation();
+  const navigate = useNavigate();
   const [foods, setFoods] = useState(null);
   const [tick, setTick] = useState(0);
 
@@ -93,6 +96,12 @@ export default function RightNowStrip({ onAction, wide = false }) {
     : isViral ? `🔥 Trending in ${city || "town"}` : `What people come to ${city || "here"} for`;
 
   const go = (action, where, extra) => { logDiscover("right_now_tap", { dayPart: part, action, where, city, country, ...extra }); onAction?.(action); };
+  // Dish chip → open the Eat finder SEARCHING that exact dish (not the generic
+  // nearby list), so "Chinese Bakery Pastries" brings back that dish's spots.
+  const goDish = (d) => {
+    logDiscover("right_now_tap", { dayPart: part, action: "Places to Eat", where: "dish", dish: d.name, viral: isViral, city, country });
+    navigate(createPageUrl("PlacesToEat"), { state: { presetQuery: d.name } });
+  };
 
   return (
     <div className={wide ? "pb-3" : "px-4 pb-3"}>
@@ -111,7 +120,7 @@ export default function RightNowStrip({ onAction, wide = false }) {
               <div className="text-[calc(11.5px*var(--fs))] font-semibold mb-1.5" style={{ color: INK }}>{dishesLabel}</div>
               <div className="flex gap-2 flex-wrap">
                 {dishes.slice(0, 5).map((d) => (
-                  <button key={d.name} onClick={() => go("Places to Eat", "dish", { dish: d.name, viral: isViral })} className="rounded-full px-3 py-1.5 text-[calc(12.5px*var(--fs))] font-semibold" style={{ background: "rgba(255,255,255,0.82)", color: INK }} title={d.why || ""}>
+                  <button key={d.name} onClick={() => goDish(d)} className="rounded-full px-3 py-1.5 text-[calc(12.5px*var(--fs))] font-semibold" style={{ background: "rgba(255,255,255,0.82)", color: INK }} title={d.why || ""}>
                     {d.name}
                   </button>
                 ))}
