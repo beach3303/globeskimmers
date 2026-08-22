@@ -564,18 +564,19 @@ function TrustTag({ confirmed }) {
 // e.g. "shabu shabu" typed but only generic restaurants in area.
 function FallbackDisclaimer({ fallbackInfo, onExpandRadius }) {
   if (!fallbackInfo?.needed) return null;
-  const label = fallbackInfo.intentLabel || 'that';
   return (
     <motion.div
       initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }}
       style={{ padding:"14px 16px", background:"#FFFBEB", borderRadius:"12px",
                border:"1px solid #FDE68A", marginBottom:"12px" }}
     >
+      {/* Search-focused, cuisine-neutral wording: never single out a cuisine/ethnicity
+          in a negative "none found" headline (reads badly for "Asian"/"Chinese"/etc.). */}
       <div style={{ fontWeight:"800", color:"#92400E", fontSize:"calc(14px*var(--fs))", marginBottom:"6px" }}>
-        🔍 No {label} restaurants found nearby
+        🔍 No exact match nearby
       </div>
       <div style={{ fontSize:"calc(13px*var(--fs))", color:"#B45309", marginBottom:"10px", lineHeight:"1.5" }}>
-        These are the closest available options — they may serve {label} but aren't dedicated {label} restaurants.
+        These are the closest options we found — they may be a good fit, but aren't an exact match for your search.
       </div>
       <div style={{ display:"flex", gap:"8px", flexWrap:"wrap" }}>
         <button onClick={onExpandRadius}
@@ -587,7 +588,7 @@ function FallbackDisclaimer({ fallbackInfo, onExpandRadius }) {
         {fallbackInfo.nearestAuthenticName && (
           <div style={{ padding:"8px 12px", borderRadius:"8px", background:"#FEF3C7",
                         fontSize:"calc(12px*var(--fs))", color:"#92400E", display:"flex", alignItems:"center", gap:"4px" }}>
-            📍 Nearest {label}: <strong>{fallbackInfo.nearestAuthenticName}</strong>
+            📍 Closest match: <strong>{fallbackInfo.nearestAuthenticName}</strong>
             {fallbackInfo.nearestAuthenticDistanceMiles &&
               <span style={{ color:"#B45309" }}>({fallbackInfo.nearestAuthenticDistanceMiles} mi)</span>
             }
