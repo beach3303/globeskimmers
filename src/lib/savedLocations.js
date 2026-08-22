@@ -85,12 +85,23 @@ export function deleteSavedLocation(match) {
 // `stayType`; exactly one entry is primary at a time.
 export const STAY_TYPES = [
   { id: "hotel", label: "Hotel", emoji: "🏨" },
-  { id: "airbnb", label: "Airbnb / rental", emoji: "🏠" },
-  { id: "airbnb_room", label: "Room in an Airbnb", emoji: "🚪" },
-  { id: "friends_family", label: "Friends & family", emoji: "👪" },
-  { id: "own_place", label: "My place", emoji: "🏡" },
-  { id: "other", label: "Other", emoji: "📍" },
+  { id: "rental", label: "Vacation rental", emoji: "🏠" },
+  { id: "friends_family", label: "Friends or family", emoji: "👪" },
+  { id: "own_place", label: "My own place", emoji: "🏡" },
+  { id: "other", label: "Somewhere else", emoji: "📍" },
 ];
+
+// Old stayType ids (pre-2026-08-21) still stored on some devices → map to the
+// current row so emoji/label lookups never break. "airbnb"/"airbnb_room" both
+// collapse to the neutral "rental" — we dropped the "Room in an Airbnb" option
+// (it described the host's home, not the space, which read as creepy).
+export function normalizeStayType(id) {
+  return (id === "airbnb" || id === "airbnb_room") ? "rental" : (id || "other");
+}
+export function stayTypeMeta(id) {
+  const nid = normalizeStayType(id);
+  return STAY_TYPES.find((t) => t.id === nid) || STAY_TYPES[STAY_TYPES.length - 1];
+}
 
 // Set (or move) the primary stay. Clears the flag on any previous primary so
 // there's always at most one. Returns the stored entry.
