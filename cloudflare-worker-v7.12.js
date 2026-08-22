@@ -1121,6 +1121,30 @@ const ANALYTICS_QUERIES = {
     ORDER BY clicks DESC
     LIMIT 20
   `,
+  // ── THE MONEY FUNNEL (joins events↔affiliate_clicks by session_id) ──
+  // 4 stages of distinct sessions: any session → engaged (tapped something) →
+  // clicked an affiliate link → booked. 'booked' stays 0 until the conversion
+  // backfill (offline import) lands. Works for anonymous users via session_id.
+  affiliate_funnel_30d: `
+    SELECT
+      (SELECT COUNT(DISTINCT session_id) FROM events
+        WHERE ts >= strftime('%s','now','-30 days') AND session_id IS NOT NULL) AS sessions,
+      (SELECT COUNT(DISTINCT session_id) FROM events
+        WHERE ts >= strftime('%s','now','-30 days')
+        AND event_type IN ('discover_select','home_row_card_tap','directions_tap','event_tap','right_now_tap','escape_card_tap','where_to_stay_area_tap','wishlist_add')) AS engaged_sessions,
+      (SELECT COUNT(DISTINCT session_id) FROM affiliate_clicks
+        WHERE ts >= strftime('%s','now','-30 days') AND session_id IS NOT NULL) AS click_sessions,
+      (SELECT COUNT(DISTINCT session_id) FROM affiliate_clicks
+        WHERE ts >= strftime('%s','now','-30 days') AND converted = 1) AS booked_sessions
+  `,
+  affiliate_clicks_by_intent_30d: `
+    SELECT COALESCE(intent,'(unknown)') AS intent,
+      COUNT(*) AS clicks,
+      SUM(CASE WHEN converted = 1 THEN 1 ELSE 0 END) AS conversions
+    FROM affiliate_clicks
+    WHERE ts >= strftime('%s','now','-30 days')
+    GROUP BY intent ORDER BY clicks DESC
+  `,
   // ── Wishlist DEMAND (from 'wishlist_add' events; payload kind/title/city/country) ──
   // The Demand Radar's first-party signal: what people WANT (dream destinations,
   // experiences, shows) — aggregate + anonymizable, no PII. Drives affiliate targeting.
@@ -12769,9 +12793,11 @@ async function handleAffiliateClick(request, env, ctx) {
     const ts = Math.floor(Date.now() / 1000);
     if (ctx) ctx.waitUntil(
       env.DB.prepare(
-        'insert into affiliate_clicks (subid,ts,user_id,partner,product_id,product_name,category,dest_country,dest_city,target_url) values (?,?,?,?,?,?,?,?,?,?)'
+        'insert into affiliate_clicks (subid,ts,user_id,session_id,intent,persona,partner,product_id,product_name,category,dest_country,dest_city,target_url) values (?,?,?,?,?,?,?,?,?,?,?,?,?)'
       ).bind(
-        subid, ts, user?.id || null, partner,
+        subid, ts, user?.id || null,
+        clip(b.session_id, 80), clip(b.intent, 16), clip(b.persona, 24),
+        partner,
         clip(b.product_id, 120), clip(b.product_name), clip(b.category, 60),
         clip(b.dest_country, 80), clip(b.dest_city, 120), clip(trackedUrl, 1000)
       ).run().catch(() => {})

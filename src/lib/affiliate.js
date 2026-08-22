@@ -9,6 +9,20 @@
 //   openExternal(url);   // window.open / Capacitor Browser
 import { callWorker } from "@/lib/callWorker";
 
+// Attach the SAME session id trackEvent uses (analytics.js key 'gs_session_id'),
+// plus intent + persona, so a click JOINS to the view/tap events by session — the
+// view→tap→click→book funnel works even for anonymous (not-signed-in) users.
+function readClickCtx() {
+  let session_id = null, intent = null, persona = null;
+  try { session_id = sessionStorage.getItem("gs_session_id") || null; } catch { /* ignore */ }
+  try { persona = localStorage.getItem("gs_persona_v1") || null; } catch { /* ignore */ }
+  try {
+    const loc = JSON.parse(localStorage.getItem("gs_last_location_v1") || "null");
+    intent = loc?.placeType === "current_location" ? "present" : "planning";
+  } catch { /* ignore */ }
+  return { session_id, intent, persona };
+}
+
 export async function trackAffiliateClick({
   partner,
   targetUrl,
@@ -28,6 +42,7 @@ export async function trackAffiliateClick({
       category,
       dest_country: destCountry,
       dest_city: destCity,
+      ...readClickCtx(),
     });
     return data?.url || targetUrl;
   } catch {

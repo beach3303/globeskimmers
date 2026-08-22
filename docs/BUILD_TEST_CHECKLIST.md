@@ -406,6 +406,14 @@ State: Uncommitted (worker) · Worker DEPLOYED (140180b4) · Tested ⬜
 - [ ] `GET /analytics-query?type=totals_7d` with no auth → 401; with a bogus token → 401
 - [ ] Signed in as a NON-admin → Admin Analytics redirects home AND the endpoint returns 403 if called directly
 
+## 💸 Affiliate money funnel — session join (2026-08-21)
+`affiliate_clicks` now carries **`session_id` (+ intent, persona)** so a click JOINS to its view/tap events → a real **view→tap→click→book** funnel, even for anonymous (not-signed-in) users. `affiliate.js` reads `gs_session_id` / `gs_last_location_v1` / `gs_persona_v1` and passes them; `handleAffiliateClick` inserts them; the **live D1 was migrated** (3× ADD COLUMN + session index). New queries: `affiliate_funnel_30d` (4-stage distinct-session totals) + `affiliate_clicks_by_intent_30d`; both surfaced in AdminAnalytics. **"Booked" stays 0 until the offline conversion import** (the next piece — needs each network's report). Verified end-to-end: a real `/aff/click` persisted session_id/intent/persona; test rows cleaned.
+State: Uncommitted (frontend) · Worker DEPLOYED (91b18bf4) · D1 migrated · Frontend auto-deploys on push · Tested ⬜
+- [ ] Tap any affiliate link (Viator "book a tour" / hotel / event) → the click still opens the partner (SubID intact) AND the row now has session_id/intent/persona
+- [ ] Admin Analytics shows "💸 Affiliate funnel" (Sessions → Engaged → Clicked → Booked) + "Booking intent — planning vs present"
+- [ ] Funnel numbers are distinct-session counts; Booked = 0 until the conversion import lands
+- [ ] Behind the scenes: engaged→clicked join works for anonymous users (session_id matches events)
+
 ## Template for a new build
 ```
 ### N · <feature name>

@@ -96,7 +96,7 @@ export default function AdminAnalytics() {
       // Fan out over the live Worker /analytics-query route (one D1 query per
       // type), assembling the bundle the renderer expects. Native-safe via
       // callWorker — replaces the Base44 getAnalytics function (403s on device).
-      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes', 'wishlist_by_city_30d', 'wishlist_top_30d', 'wishlist_by_kind_30d', 'wishlist_cta_30d', 'directions_by_place_30d', 'persona_distribution_30d'];
+      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes', 'wishlist_by_city_30d', 'wishlist_top_30d', 'wishlist_by_kind_30d', 'wishlist_cta_30d', 'directions_by_place_30d', 'persona_distribution_30d', 'affiliate_funnel_30d', 'affiliate_clicks_by_intent_30d'];
       const pairs = await Promise.all(TYPES.map(async (type) => {
         const { data: qd, error: qe } = await callWorker(`analytics-query?type=${encodeURIComponent(type)}`, {});
         return [type, { results: qd?.results || [], error: qe || qd?.error || null }];
@@ -156,6 +156,8 @@ export default function AdminAnalytics() {
   const wishCta = data?.wishlist_cta_30d?.results || [];
   const dirByPlace = data?.directions_by_place_30d?.results || [];
   const personaDist = data?.persona_distribution_30d?.results || [];
+  const funnel = data?.affiliate_funnel_30d?.results?.[0] || {};
+  const affByIntent = data?.affiliate_clicks_by_intent_30d?.results || [];
   const maxDiscDest = Math.max(...discDestinations.map((d) => d.views || 0), 1);
   const maxDiscFood = Math.max(...discFoods.map((d) => d.taps || 0), 1);
   const maxDiscArea = Math.max(...discAreas.map((d) => d.taps || 0), 1);
@@ -458,6 +460,21 @@ export default function AdminAnalytics() {
               <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Party-composition segments (coarse, not identity) — segment-aware curation + targeting.</div>
               {personaDist.map((d, i) => (
                 <BarRow key={i} label={d.persona || '(unknown)'} count={d.people} max={personaDist[0]?.people || 1} color={COLORS.green} />
+              ))}
+            </Section>
+
+            {/* ── THE MONEY FUNNEL — sessions → engaged → clicked → booked ── */}
+            <Section title="💸 Affiliate funnel (30d)" icon={Activity} empty={!funnel.sessions ? 'Fills as sessions engage → click → book. "Booked" lights up once the conversion import lands.' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Distinct sessions at each stage — the money funnel. Booked = 0 until offline conversion import.</div>
+              <BarRow label="Sessions" count={funnel.sessions || 0} max={funnel.sessions || 1} color={COLORS.accent} />
+              <BarRow label="Engaged (tapped something)" count={funnel.engaged_sessions || 0} max={funnel.sessions || 1} color={COLORS.accent} />
+              <BarRow label="Clicked affiliate" count={funnel.click_sessions || 0} max={funnel.sessions || 1} color={COLORS.green} />
+              <BarRow label="Booked" count={funnel.booked_sessions || 0} max={funnel.sessions || 1} color={COLORS.green} />
+            </Section>
+
+            <Section title="💸 Booking intent — planning vs present (30d)" icon={Search} empty={affByIntent.length === 0 ? 'Fills as affiliate clicks accrue (planning = dreaming ahead, present = there now).' : null}>
+              {affByIntent.map((d, i) => (
+                <BarRow key={i} label={`${d.intent}${d.conversions ? ` · ${d.conversions} booked` : ''}`} count={d.clicks} max={affByIntent[0]?.clicks || 1} color={COLORS.accent} />
               ))}
             </Section>
 
