@@ -12533,7 +12533,7 @@ async function handleEventsSearch(request, env) {
     // (Rome, Italy vs Rome, Georgia would otherwise share a "rome" key and poison
     // each other for 6h). ~11km grid (1 decimal) groups a metro without splitting.
     const ckId = (hasGeo ? `${lat.toFixed(1)},${lng.toFixed(1)}` : (city || 'x')).toLowerCase();
-    const ck = `events:v2:${ckId}`;
+    const ck = `events:v3:${ckId}`;
     if (env.GLOBESKIMMERS_KV) {
       const cached = await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null);
       if (cached) return jsonResponse({ ...cached, source: 'cache' });
@@ -12541,13 +12541,14 @@ async function handleEventsSearch(request, env) {
     // Ticketmaster Discovery (real events; empty without a key).
     const tmP = (async () => {
       const key = env.TICKETMASTER_API_KEY; if (!key) return [];
-      const p = new URLSearchParams({ apikey: key, size: '30', sort: 'date,asc' });
+      const p = new URLSearchParams({ apikey: key, size: '50', sort: 'date,asc' });
       // Prefer coordinates: TM's `city` param is an ambiguous NAME match (returns
       // Rome, Georgia minor-league baseball for a user in Rome, Italy). Geo-anchor
       // to real events near the user; fall back to city only without coordinates.
       if (hasGeo) { p.set('latlong', `${lat},${lng}`); p.set('radius', '50'); p.set('unit', 'miles'); }
       else if (city) p.set('city', city);
-      try { p.set('startDateTime', new Date(Date.now()).toISOString().replace(/\.\d{3}Z$/, 'Z')); } catch { /* TM defaults to upcoming */ }
+      // Window: now → ~35 days out, so "This month" is actually populated (not just today's events).
+      try { p.set('startDateTime', new Date(Date.now()).toISOString().replace(/\.\d{3}Z$/, 'Z')); p.set('endDateTime', new Date(Date.now() + 35 * 86400 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')); } catch { /* TM defaults to upcoming */ }
       try {
         const r = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${p.toString()}`);
         if (!r.ok) return [];
@@ -12590,7 +12591,7 @@ async function handleEventsSearch(request, env) {
         const res = await fetch('https://api.viator.com/partner/search/freetext', {
           method: 'POST',
           headers: { 'exp-api-key': env.VIATOR_API_KEY, Accept: 'application/json;version=2.0', 'Accept-Language': 'en-US', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ searchTerm: term, searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count: 10 } }], currency: 'USD' }),
+          body: JSON.stringify({ searchTerm: term, searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count: 12 } }], currency: 'USD' }),
         });
         if (!res.ok) return [];
         const d = await res.json();
