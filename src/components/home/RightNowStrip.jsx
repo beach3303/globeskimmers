@@ -16,9 +16,9 @@ import { getPrimaryStay } from "@/lib/savedLocations";
 import { logDiscover } from "@/lib/logDiscover";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { placePhrase, geoKey } from "@/lib/placeContext";
 
 const INK = "#16302B", SUB = "#71827D";
-const slug = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
 const HONESTY = (p) => ` Base this on what is genuinely typical for ${p}. If unsure of a field use an empty array — do NOT invent specific business names. No URLs.`;
 const STRARR = { type: "array", items: { type: "string" } };
 const DISHARR = { type: "array", items: { type: "object", properties: { name: { type: "string" }, why: { type: "string" } } } };
@@ -66,14 +66,15 @@ export default function RightNowStrip({ onAction, wide = false }) {
   useEffect(() => {
     let cancelled = false;
     if (!city && !country) { setFoods(null); return; }
-    const placePhrase = city ? `${city}, ${country}` : country;
-    const cs = slug(city), ns = slug(country);
+    // State-qualified so "Arcadia" foods come from the RIGHT Arcadia.
+    const phrase = placePhrase(base);
+    const gk = geoKey(base);
     (async () => {
       try {
         // Stable foods cached 1y; viral cached ~monthly (rotating key) so it stays fresh.
         const [stable, viral] = await Promise.all([
-          fetchCulture({ cacheKey: `iconicfood:v2:${cs}|${ns}`, ttlDays: 365, prompt: stablePrompt(placePhrase), response_json_schema: STABLE_SCHEMA }),
-          fetchCulture({ cacheKey: `viralfood:${cs}|${ns}:${monthBucket()}`, ttlDays: 35, prompt: viralPrompt(placePhrase), response_json_schema: VIRAL_SCHEMA }),
+          fetchCulture({ cacheKey: `iconicfood:v3:${gk}`, ttlDays: 365, prompt: stablePrompt(phrase), response_json_schema: STABLE_SCHEMA }),
+          fetchCulture({ cacheKey: `viralfood:v2:${gk}:${monthBucket()}`, ttlDays: 35, prompt: viralPrompt(phrase), response_json_schema: VIRAL_SCHEMA }),
         ]);
         if (!cancelled) setFoods({ ...(stable && stable.data ? stable.data : {}), ...(viral && viral.data ? viral.data : {}) });
       } catch { if (!cancelled) setFoods(null); }

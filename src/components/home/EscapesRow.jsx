@@ -14,9 +14,9 @@ import { fetchCulture } from "@/lib/callWorker";
 import { getPrimaryStay } from "@/lib/savedLocations";
 import { logDiscover } from "@/lib/logDiscover";
 import { createPageUrl } from "@/utils";
+import { placePhrase, geoKey } from "@/lib/placeContext";
 
-// Mirror Insight's helpers so the cacheKey + prompt + schema match exactly.
-const slug = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
+// Mirror Insight's day-trip prompt + schema exactly (shared /culture cache key).
 const HONESTY = (place) => ` Base this on what is genuinely typical for ${place}. If you are unsure of a field, use an empty array or null — do NOT invent specific business names or streets you are not confident about. Do not include any URLs.`;
 const STR = { type: "string" }, BOOL = { type: "boolean" };
 const SCHEMA = { type: "object", properties: { day_trips: { type: "array", items: { type: "object", properties: { name: STR, distance_or_time: STR, why: STR, how_to_get_there: STR, needs_car: BOOL } } } } };
@@ -41,15 +41,14 @@ export default function EscapesRow({ onAction, wide = false }) {
   const a = base?.address || {};
   const city = a.city || base?.city || base?.placeName || "";
   const country = a.country || base?.country || "";
-  const placePhrase = city ? `${city}, ${country}` : country;
-
   useEffect(() => {
     let cancelled = false;
     if (!city && !country) { setTrips([]); return; }
-    const cacheKey = `insight:city:${slug(city)}|${slug(country)}:day_trips`;
+    // State-qualified key + prompt so "Arcadia" resolves to the RIGHT Arcadia.
+    const cacheKey = `insight:city:${geoKey(base)}:day_trips`;
     (async () => {
       try {
-        const res = await fetchCulture({ cacheKey, ttlDays: 365, prompt: dayTripPrompt(placePhrase), response_json_schema: SCHEMA });
+        const res = await fetchCulture({ cacheKey, ttlDays: 365, prompt: dayTripPrompt(placePhrase(base)), response_json_schema: SCHEMA });
         if (cancelled) return;
         const list = res && res.data && Array.isArray(res.data.day_trips) ? res.data.day_trips.filter((t) => t && t.name) : [];
         setTrips(list);
@@ -57,7 +56,7 @@ export default function EscapesRow({ onAction, wide = false }) {
       } catch { if (!cancelled) setTrips([]); }
     })();
     return () => { cancelled = true; };
-  }, [city, country, placePhrase, tick]);
+  }, [city, country, tick]);
 
   if (!trips.length) return null;
 

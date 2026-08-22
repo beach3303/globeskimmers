@@ -16,9 +16,9 @@ import { ROUTE } from "@/lib/workerRoutes";
 import { fetchCulture } from "@/lib/callWorker";
 import { logDiscover } from "@/lib/logDiscover";
 import { createPageUrl } from "@/utils";
+import { placePhrase, geoKey, placeParts } from "@/lib/placeContext";
 
 const INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
-const slug = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
 const HON = " Frame areas as 'popular with visitors', NOT as 'safe' — never make street-level safety claims. Base on what is genuinely typical for the place; if unsure use empty arrays; no invented street names; no URLs.";
 const STR = { type: "string" }, STRARR = { type: "array", items: { type: "string" } };
 const SCHEMA = { type: "object", properties: { base_areas: { type: "array", items: { type: "object", properties: { name: STR, vibe: STR, why_good_base: STR, near_which_sights: STRARR, transit_note: STR, price_level: STR, good_for: STRARR } } }, avoid_airport_note: STR, car_verdict: STR, car_verdict_line: STR, disclaimer: STR } };
@@ -48,10 +48,10 @@ export default function WhereToStay({ wide = false }) {
     let cancelled = false;
     if (!city && !country) { setStatus("empty"); return; }
     setStatus("loading");
-    const placePhrase = city ? `${city}, ${country}` : country;
+    const phrase = placePhrase(active); // "City, State, Country" — disambiguates Arcadia CA vs FL
     (async () => {
       try {
-        const res = await fetchCulture({ cacheKey: `wheretostay:v1:${slug(city)}|${slug(country)}`, ttlDays: 365, prompt: prompt(placePhrase), response_json_schema: SCHEMA });
+        const res = await fetchCulture({ cacheKey: `wheretostay:v2:${geoKey(active)}`, ttlDays: 365, prompt: prompt(phrase), response_json_schema: SCHEMA });
         if (cancelled) return;
         const areas = res && res.data && Array.isArray(res.data.base_areas) ? res.data.base_areas.filter((x) => x && x.name) : [];
         if (!areas.length) { setStatus("empty"); return; }
@@ -69,13 +69,15 @@ export default function WhereToStay({ wide = false }) {
     if (going) return;
     setGoing(area.name);
     logDiscover("where_to_stay_area_tap", { city, country, area: area.name, price: area.price_level });
+    const st = placeParts(active).state;
+    const areaQuery = [area.name, city, st].filter(Boolean).join(", "); // include state so the right city's area is geocoded
     let presetCity = null;
     try {
-      const { data: d } = await callWorker(ROUTE.searchLocation, { query: `${area.name}, ${city}` });
+      const { data: d } = await callWorker(ROUTE.searchLocation, { query: areaQuery });
       presetCity = (d && Array.isArray(d.results) && d.results[0]) || null;
     } catch { /* fall through */ }
     setGoing(null);
-    navigate(createPageUrl("FindAHotel"), { state: presetCity ? { presetCity } : { presetQuery: `${area.name}, ${city}` } });
+    navigate(createPageUrl("FindAHotel"), { state: presetCity ? { presetCity } : { presetQuery: areaQuery } });
   };
 
   const car = CAR[data?.car_verdict];
@@ -83,10 +85,11 @@ export default function WhereToStay({ wide = false }) {
   return (
     <div className={wide ? "pb-3" : "px-4 pb-3"}>
       <div className={wide ? "" : "max-w-md mx-auto"}>
-        <div className="flex items-baseline justify-between mb-2 px-0.5 gap-3">
-          <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1]" style={{ color: INK }}>Where should I stay{city ? ` in ${city}` : ""}?</div>
+        <div className="flex items-baseline justify-between mb-1 px-0.5 gap-3">
+          <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1]" style={{ color: INK }}>Where visitors usually stay{city ? ` in ${city}` : ""}</div>
           {status === "loading" && <Loader2 className="w-4 h-4 animate-spin" style={{ color: SUB }} />}
         </div>
+        <div className="text-[calc(11.5px*var(--fs))] mb-2.5 px-0.5" style={{ color: SUB }}>Popular areas to base yourself if you&rsquo;re booking a place.</div>
 
         {status === "ready" && (
           <>

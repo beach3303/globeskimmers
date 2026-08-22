@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { fetchCulture } from "@/lib/callWorker";
+import { placePhrase as placePhraseOf, geoKey } from "@/lib/placeContext";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Loader2, Navigation, RefreshCw, ChevronLeft, Lightbulb, ChevronRight } from "lucide-react";
@@ -342,7 +343,7 @@ export default function InsightPage() {
   const countrySlug = slug(geo.country);
   const cityName = geo.city || geo.country;
   const cityShort = geo.city || geo.country || "town";
-  const placePhrase = geo.city ? `${geo.city}, ${geo.country}` : geo.country;
+  const placePhrase = placePhraseOf(activeLocation); // "City, State, Country" — disambiguates same-named cities
 
   const go = useCallback((action) => {
     const routes = { "Get A Ride": "GetARide", "Travel Essentials": "TravelEssentials", "Things to Do": "ThingsToDo" };
@@ -350,7 +351,7 @@ export default function InsightPage() {
   }, [navigate]);
 
   const fetchOne = useCallback(async (section, force) => {
-    const cacheKey = `insight:city:${citySlug}|${countrySlug}:${section.id}`;
+    const cacheKey = `insight:city:${geoKey(activeLocation)}:${section.id}`;
     if (!force) {
       const m = _memo.get(cacheKey);
       if (m && Date.now() - m.at < MEMO_MS) return { data: m.data, meta: m.meta, error: null };

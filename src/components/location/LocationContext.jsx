@@ -117,7 +117,10 @@ export function LocationProvider({ children }) {
       address: {
         formatted,
         city: data.city || '',
-        state: '',
+        // Region/state when the geocoder gives a distinct country (e.g. US:
+        // state_or_country='California', country='United States'). Disambiguates
+        // same-named cities (Arcadia CA vs Arcadia FL) for AI-content surfaces.
+        state: (data.country && data.state_or_country && data.state_or_country !== data.country) ? data.state_or_country : '',
         postalCode: '',
         country: data.country || data.state_or_country || '',
       },
