@@ -839,10 +839,7 @@ async function handleLogEvent(request, env) {
       return jsonResponse({ logged: false, reason: 'no_db_binding' });
     }
     const ts = Math.floor(Date.now() / 1000);
-    await env.DB.prepare(
-      `INSERT INTO events (ts, user_id, session_id, event_type, page, payload, ua_summary)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
+    const base = [
       ts,
       body.user_id || null,
       body.session_id || 'anon',
@@ -850,7 +847,21 @@ async function handleLogEvent(request, env) {
       body.page || null,
       body.payload ? JSON.stringify(body.payload) : null,
       body.ua_summary || null,
-    ).run();
+    ];
+    try {
+      // Preferred: store the durable per-device anon_id (retention cohorts).
+      await env.DB.prepare(
+        `INSERT INTO events (ts, user_id, session_id, event_type, page, payload, ua_summary, anon_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(...base, body.anon_id || null).run();
+    } catch {
+      // Fallback if the anon_id column isn't added yet (run scripts/analytics/
+      // alter_anon_id.sql then re-deploy) — analytics never breaks on ordering.
+      await env.DB.prepare(
+        `INSERT INTO events (ts, user_id, session_id, event_type, page, payload, ua_summary)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind(...base).run();
+    }
     return jsonResponse({ logged: true, ts });
   } catch (e) {
     return jsonResponse({ logged: false, error: e.message }, 500);

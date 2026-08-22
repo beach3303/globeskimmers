@@ -17,7 +17,10 @@
  *     (cheaper at scale + reduces Worker invocation count).
  *   - Session id: generated once per page-load, persisted in sessionStorage
  *     so refreshes carry through but new tabs get fresh sessions.
- *   - User id: read from Base44 SDK if available; null for anonymous.
+ *   - Anon id: durable per-device id in localStorage (survives sessions) — the
+ *     stable key for D1/D7/D30 retention cohorts, even for signed-out users.
+ *   - User id: the signed-in Supabase user id (null for anonymous). Was reading
+ *     the dead Base44 SDK (always null since auth moved to Supabase); fixed.
  *   - UA summary: coarse classification only ('ios-safari' / 'android-chrome'
  *     / 'desktop' etc.), no full UA string (privacy).
  *
@@ -28,13 +31,35 @@
  *   logEvent('photo_view', { placeId: 'ChIJxxx', photoIndex: 2 }, 'PlacesToEat');
  */
 
+import { supabase } from '@/lib/supabaseClient';
+
 const WORKER_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
 const ENDPOINT = `${WORKER_URL}/log-event`;
 const BATCH_DELAY_MS = 200;
 const STORAGE_KEY = 'gs_session_id';
+const ANON_KEY = 'gs_anon_id';
 
 let pendingBatch = [];
 let batchTimer = null;
+
+// Real user identity from the Supabase session (replaces the dead Base44 read).
+// Kept in a module var so logEvent stays synchronous/fire-and-forget: seeded once
+// and updated on every auth change (sign-in/out, token refresh).
+let currentUserId = null;
+try {
+  supabase.auth.getSession().then(({ data }) => { currentUserId = data?.session?.user?.id || null; }).catch(() => {});
+  supabase.auth.onAuthStateChange((_e, session) => { currentUserId = session?.user?.id || null; });
+} catch { /* analytics must never break the app */ }
+
+// Durable per-device id — survives across sessions (unlike session_id), so we can
+// measure D1/D7/D30 retention and returning users even for signed-out travelers.
+function getAnonId() {
+  try {
+    let a = localStorage.getItem(ANON_KEY);
+    if (!a) { a = `a_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`; localStorage.setItem(ANON_KEY, a); }
+    return a;
+  } catch { return null; }
+}
 
 function getSessionId() {
   try {
@@ -91,20 +116,13 @@ async function flushBatch() {
 export function logEvent(eventType, payload = {}, page = null) {
   if (!eventType) return;
   try {
-    // User id: try to read from Base44 SDK if loaded. We don't await this
-    // — best-effort. If the SDK isn't ready, user_id is null (anonymous).
-    let userId = null;
-    try {
-      // eslint-disable-next-line no-undef
-      userId = window?._base44User?.id || null;
-    } catch {}
-
     pendingBatch.push({
       event_type: eventType,
       page,
       payload,
       session_id: getSessionId(),
-      user_id: userId,
+      user_id: currentUserId,   // real Supabase user id (null if signed out)
+      anon_id: getAnonId(),     // durable per-device id for retention cohorts
       ua_summary: classifyUserAgent(),
     });
 
