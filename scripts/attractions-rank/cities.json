@@ -1,0 +1,11 @@
+{
+  "_comment": "Phase-1 flagship cities. bbox = [west, south, east, north]. Add rows to seed more; the pipeline is O(city), free data. Country must match the D1 attractions.country convention.",
+  "cities": [
+    { "key": "nyc",    "city": "New York",  "country": "United States", "bbox": [-74.06, 40.64, -73.86, 40.90] },
+    { "key": "paris",  "city": "Paris",     "country": "France",        "bbox": [2.25, 48.82, 2.42, 48.90] },
+    { "key": "london", "city": "London",    "country": "United Kingdom","bbox": [-0.20, 51.46, 0.02, 51.55] },
+    { "key": "tokyo",  "city": "Tokyo",     "country": "Japan",         "bbox": [139.68, 35.63, 139.80, 35.73] },
+    { "key": "rome",   "city": "Rome",      "country": "Italy",         "bbox": [12.42, 41.87, 12.53, 41.94] },
+    { "key": "cebu",   "city": "Cebu City", "country": "Philippines",   "bbox": [123.86, 10.27, 123.94, 10.36] }
+  ]
+}

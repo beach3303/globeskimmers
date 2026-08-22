@@ -1,0 +1,3 @@
+# Regeneratable pipeline artifacts — not source.
+cache/
+out/
