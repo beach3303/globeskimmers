@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { useNavigate } from "react-router-dom";
@@ -242,10 +241,10 @@ export default function WeatherPage() {
     try { await loadWeatherData(activeLocation, true); }
     finally { setRefreshing(false); }
   };
-  const [user, setUser] = useState(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [weatherData, setWeatherData] = useState(null);
   const [displayScale, setDisplayScale] = useState('fahrenheit');
+  const chooseScale = (s) => { setDisplayScale(s); try { localStorage.setItem("gs_temp_scale", s); } catch { /* ignore */ } };
   const [error, setError] = useState(null);
   const [expandedDay, setExpandedDay] = useState(null);
 
@@ -260,25 +259,13 @@ export default function WeatherPage() {
   }, [activeLocation, initialized]);
 
   const loadUser = async () => {
+    // Temp scale is a display-only pref. Read it LOCALLY — the old base44.auth host
+    // is decommissioned and could HANG the whole page behind the `loading` gate.
     try {
-      const isAuthenticated = await base44.auth.isAuthenticated();
-      
-      if (!isAuthenticated) {
-        setLoading(false);
-        return;
-      }
-
-      const userData = await base44.auth.me();
-      setUser(userData);
-      
-      const preferredScale = userData.preferred_temperature_scale || 'fahrenheit';
-      setDisplayScale(preferredScale);
-
-      setLoading(false);
-    } catch (error) {
-      console.error("Error loading data:", error);
-      setLoading(false);
-    }
+      const saved = localStorage.getItem("gs_temp_scale");
+      if (saved === "celsius" || saved === "fahrenheit") setDisplayScale(saved);
+    } catch { /* ignore */ }
+    setLoading(false);
   };
 
   const loadWeatherData = async (location, forceRefresh = false) => {
@@ -370,8 +357,8 @@ export default function WeatherPage() {
         {/* Temperature Scale Toggle */}
         <div className="flex items-center justify-end mb-3">
           <div className="flex items-center gap-1 rounded-full p-1" style={{ background:'#FFFFFF', border:'1px solid rgba(22,17,13,.10)' }}>
-            <button onClick={() => setDisplayScale('fahrenheit')} className="px-4 py-1.5 rounded-full text-xs font-bold transition-colors" style={{ background: displayScale === 'fahrenheit' ? CAT.weather.ink : 'transparent', color: displayScale === 'fahrenheit' ? '#FFFFFF' : '#736657' }}>°F</button>
-            <button onClick={() => setDisplayScale('celsius')} className="px-4 py-1.5 rounded-full text-xs font-bold transition-colors" style={{ background: displayScale === 'celsius' ? CAT.weather.ink : 'transparent', color: displayScale === 'celsius' ? '#FFFFFF' : '#736657' }}>°C</button>
+            <button onClick={() => chooseScale('fahrenheit')} className="px-4 py-1.5 rounded-full text-xs font-bold transition-colors" style={{ background: displayScale === 'fahrenheit' ? CAT.weather.ink : 'transparent', color: displayScale === 'fahrenheit' ? '#FFFFFF' : '#736657' }}>°F</button>
+            <button onClick={() => chooseScale('celsius')} className="px-4 py-1.5 rounded-full text-xs font-bold transition-colors" style={{ background: displayScale === 'celsius' ? CAT.weather.ink : 'transparent', color: displayScale === 'celsius' ? '#FFFFFF' : '#736657' }}>°C</button>
           </div>
         </div>
       </div>
