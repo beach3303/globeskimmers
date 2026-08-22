@@ -16,7 +16,7 @@
 // Stay22's `campaign` param, logged D1). Amenity filters (breakfast/pool/gym…)
 // are chosen on the results page (meta-search) — the UI says so; native amenity
 // pre-filtering is the planned Agoda-API follow-up.
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { ArrowLeft, MapPin, Minus, Plus, Search, X, Calendar as CalendarIcon } from "lucide-react";
 import { DayPicker } from "react-day-picker";
@@ -190,6 +190,21 @@ export default function FindAHotel() {
     } catch { setHotels([]); }
     setHotelsBusy(false);
   };
+
+  // Smart handoff: when we arrive via a preset area/place ("Where visitors usually
+  // stay" → Find hotels), auto-run the search ONCE so the user lands straight on
+  // "hotels near {place}" (flexible dates) instead of the empty goal picker. They
+  // refine dates right on the results. (presetQuery still needs a manual geocode.)
+  const autoRanRef = useRef(false);
+  useEffect(() => {
+    if (autoRanRef.current) return;
+    if (!routerState?.presetCity) return;
+    if (destMode === "other" && hasCoords && hotels === null && !hotelsBusy && !blocked) {
+      autoRanRef.current = true;
+      findHotels();
+    }
+  }, [hasCoords, destMode, hotels, hotelsBusy, blocked]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Open one hotel's booking (attributed via trackAffiliateClick → SubID→D1).
   const openHotel = async (url) => {
     const t = await trackAffiliateClick({ partner: "stay22", targetUrl: url, category: "hotel", destCity: dest.city, destCountry: dest.country });
