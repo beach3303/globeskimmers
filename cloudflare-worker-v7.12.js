@@ -1145,6 +1145,20 @@ const ANALYTICS_QUERIES = {
     WHERE ts >= strftime('%s','now','-30 days')
     GROUP BY intent ORDER BY clicks DESC
   `,
+  // ── Affiliate REVENUE by partner (filled once /aff/import backfills conversions) ──
+  // 90-day window because bookings lag the click. commission is only summed for
+  // converted rows; 'confirmed' is the subset that also shows in My Trip.
+  affiliate_revenue_90d: `
+    SELECT partner,
+      COUNT(*) AS clicks,
+      SUM(CASE WHEN converted = 1 THEN 1 ELSE 0 END) AS conversions,
+      SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed,
+      COALESCE(currency,'USD') AS currency,
+      ROUND(SUM(CASE WHEN converted = 1 THEN COALESCE(commission,0) ELSE 0 END), 2) AS commission
+    FROM affiliate_clicks
+    WHERE ts >= strftime('%s','now','-90 days')
+    GROUP BY partner, currency ORDER BY commission DESC, clicks DESC
+  `,
   // ── Wishlist DEMAND (from 'wishlist_add' events; payload kind/title/city/country) ──
   // The Demand Radar's first-party signal: what people WANT (dream destinations,
   // experiences, shows) — aggregate + anonymizable, no PII. Drives affiliate targeting.
@@ -12853,6 +12867,50 @@ async function handleAffiliateMine(request, env) {
   } catch (e) { return jsonResponse({ items: [], error: e.message }, 500); }
 }
 
+// Conversion IMPORT — closes the affiliate money loop. Admin-only. Ingests a
+// network's conversion report (exported from the partner dashboard, or later an
+// automated per-network pull) and joins on OUR SubID to mark the matching click
+// converted + commission + status. Idempotent: re-importing updates in place.
+// Body: { rows: [{ subid, status?, commission?, currency?, converted_ts? }] }
+//   status ∈ pending|confirmed|cancelled (default 'confirmed'); converted=0 only when cancelled.
+async function handleAffiliateImport(request, env) {
+  try {
+    const denied = await requireAdmin(request, env);
+    if (denied) return denied;
+    if (!env.DB) return jsonResponse({ error: 'analytics DB not configured' }, 503);
+    const body = await request.json().catch(() => ({}));
+    const rows = Array.isArray(body.rows) ? body.rows : [];
+    if (!rows.length) {
+      return jsonResponse({ error: 'rows[] required — each: {subid, status?, commission?, currency?, converted_ts?}' }, 400);
+    }
+    if (rows.length > 5000) return jsonResponse({ error: 'max 5000 rows per import' }, 400);
+    const now = Math.floor(Date.now() / 1000);
+    const stmt = env.DB.prepare(
+      `UPDATE affiliate_clicks
+         SET converted = ?, status = ?, commission = ?, currency = ?, converted_ts = ?
+       WHERE subid = ?`
+    );
+    let matched = 0, updated = 0; const unmatched = [];
+    for (const r of rows) {
+      const subid = String(r && r.subid || '').trim();
+      if (!subid) continue;
+      const st = ['pending', 'confirmed', 'cancelled'].includes(String(r.status || '').toLowerCase())
+        ? String(r.status).toLowerCase() : 'confirmed';
+      const converted = st === 'cancelled' ? 0 : 1;
+      const commission = (r.commission != null && !isNaN(r.commission)) ? Number(r.commission) : null;
+      const currency = r.currency ? String(r.currency).slice(0, 8).toUpperCase() : null;
+      const cts = (r.converted_ts && !isNaN(r.converted_ts)) ? Number(r.converted_ts) : now;
+      const res = await stmt.bind(converted, st, commission, currency, cts, subid).run().catch(() => null);
+      const changes = (res && res.meta && res.meta.changes) || 0;
+      if (changes > 0) { matched++; updated += changes; } else { unmatched.push(subid); }
+    }
+    return jsonResponse({
+      ok: true, received: rows.length, matched, updated,
+      unmatched_count: unmatched.length, unmatched: unmatched.slice(0, 100),
+    });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleGuestbookList(request, env) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -13027,6 +13085,7 @@ export default {
       if (pathname === '/guestbook/photo-upload' && request.method === 'POST') return await handleGuestbookPhotoUpload(request, env, ctx);
       if (pathname === '/aff/click' && request.method === 'POST') return await handleAffiliateClick(request, env, ctx);
       if (pathname === '/aff/mine' && request.method === 'POST') return await handleAffiliateMine(request, env);
+      if (pathname === '/aff/import' && request.method === 'POST') return await handleAffiliateImport(request, env);
       if (pathname === '/viator/match' && request.method === 'POST') return await handleViatorMatch(request, env);
       if (pathname === '/activities/search' && request.method === 'POST') return await handleActivitySearch(request, env, ctx);
       if (pathname === '/events/search' && request.method === 'POST') return await handleEventsSearch(request, env);
