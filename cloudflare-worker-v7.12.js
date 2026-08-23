@@ -7963,7 +7963,13 @@ async function handleCoffeeKeywordSearch(request, env, ctx) {
     const searchRadiusM = Math.min(Math.round(radiusMiles * 1609 * 2), 50000);
     let places = [];
     try {
-      const raw = await gaText(env, ctx, origin, { query, latitude: lat, longitude: lng, radius: searchRadiusM, maxResults: 20, includedType: 'cafe' });
+      // 'cafe' is a HARD Google primary-type filter — for tea/boba/matcha/dessert
+      // drinks it drops the exact venues that match (bubble_tea_shop / tea_house /
+      // dessert_shop). Omit it for those specialty-drink queries and let the text
+      // query do the work; keep it for plain coffee queries to stay on-type (T1.9).
+      const q = query.toLowerCase();
+      const isDrinkSpecialty = /\b(boba|bubble\s*tea|milk\s*tea|matcha|tea|thai\s*tea|taro|smoothie|juice|dessert|gelato|ice\s*cream|frozen\s*yogurt|froyo|shaved\s*ice)\b/.test(q);
+      const raw = await gaText(env, ctx, origin, { query, latitude: lat, longitude: lng, radius: searchRadiusM, maxResults: 20, ...(isDrinkSpecialty ? {} : { includedType: 'cafe' }) });
       places = raw
         .map((p) => {
           const plat = p.location?.latitude ?? p.lat, plng = p.location?.longitude ?? p.lng;
@@ -11299,6 +11305,9 @@ function gsFold(s) {
 // owned list if the engine throws, so search never dead-ends. Both take the same
 // POST body; request.clone() lets us peek at the body and keep a spare for the
 // fallback before the chosen handler consumes the original.
+// Below this owned-result count, a plain browse escalates to Google so uncovered
+// cities aren't blank (shared by restaurants + coffee owned-browse fallbacks).
+const OWNED_MIN_BROWSE = 5;
 async function handleRestaurantsDispatch(request, env, ctx) {
   let b = {};
   try { b = await request.clone().json(); } catch { b = {}; }
@@ -11313,7 +11322,18 @@ async function handleRestaurantsDispatch(request, env, ctx) {
     try { return await handleRestaurantsFull(request, env, ctx); }
     catch { return await handleRestaurantsOwned(fallbackReq, env, ctx); }
   }
-  return await handleRestaurantsOwned(request, env, ctx);
+  // Default browse: owned-first (free), BUT fall through to Google when the owned
+  // DB is thin/empty in this area — otherwise an uncovered city shows a blank
+  // "no restaurants found" even though Google is full of them (audit T1.1, the
+  // most common first action). Google's own KV cache keeps the cost down.
+  const fullReq = request.clone(); // keep a spare before owned consumes the body
+  const ownedResp = await handleRestaurantsOwned(request, env, ctx);
+  try {
+    const parsed = await ownedResp.clone().json();
+    if (Array.isArray(parsed?.places) && parsed.places.length >= OWNED_MIN_BROWSE) return ownedResp;
+  } catch { return ownedResp; }
+  try { return await handleRestaurantsFull(fullReq, env, ctx); }
+  catch { return ownedResp; } // Google also failed — return owned rather than erroring
 }
 
 // ─── Restaurants from the OWNED planet DB (replaces Google for the list) ──────
@@ -11515,6 +11535,18 @@ async function handleCoffeeOwned(request, env, ctx) {
       googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lng}`,
       parking: null, seating: null, reviews: [],
     }));
+
+    // Fall through to Google when owned coffee is thin/empty here — otherwise an
+    // uncovered city shows a blank list (audit T1.1). The body was already read,
+    // so reconstruct a request for handleCoffeeShops from the parsed body.
+    if (places.length < OWNED_MIN_BROWSE) {
+      try {
+        const gReq = new Request(request.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+        const gResp = await handleCoffeeShops(gReq, env, ctx);
+        const gParsed = await gResp.clone().json().catch(() => null);
+        if (gParsed && Array.isArray(gParsed.places) && gParsed.places.length > places.length) return gResp;
+      } catch { /* Google failed — return whatever owned had below */ }
+    }
 
     return jsonResponse({ places, count: places.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
   } catch (e) {
