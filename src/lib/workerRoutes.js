@@ -44,6 +44,8 @@ export const ROUTE = {
   searchEvents: 'events/search',
   affiliateMine: 'aff/mine',
   affiliateImport: 'aff/import',
+  savesPull: 'saves/pull',
+  savesPush: 'saves/push',
   getHomeRows: 'home/rows',
   getRestaurants: 'restaurants-full',
   getAnalytics: 'analytics-bundle',

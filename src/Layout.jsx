@@ -14,6 +14,7 @@ import AdBanner from "@/components/ads/AdBanner";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
 import BackToTop from "@/components/BackToTop";
 import { logEvent } from "@/lib/analytics";
+import "@/lib/cloudSync"; // starts Wishlist/Saved → account sync on sign-in (side-effect)
 import { IVORY } from "@/components/redesign/constants";
 
 // Finder list pages that show a bottom AdMob banner ("per-feature ads").

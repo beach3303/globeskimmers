@@ -12938,6 +12938,43 @@ async function handleAffiliateImport(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// Cloud sync for the user's Wishlist + Saved places (kept as one JSON blob per
+// kind, keyed on the Supabase user). Turns localStorage-only lists into real
+// switching cost (survive reinstall + cross-device) AND fuels the demand lake.
+// Auth via the caller's JWT (gbUser); storage via the service key (gbRest).
+async function handleSavesPull(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ data: [], needsAuth: true });
+    const b = await request.json().catch(() => ({}));
+    const kind = ['wishlist', 'places'].includes(b.kind) ? b.kind : null;
+    if (!kind) return jsonResponse({ error: 'kind must be wishlist|places' }, 400);
+    const res = await gbRest(env, `user_saves?user_id=eq.${user.id}&kind=eq.${kind}&select=data`, {});
+    if (!res.ok) return jsonResponse({ data: [], error: `supabase ${res.status}` }, 502);
+    const rows = await res.json().catch(() => []);
+    const data = (rows[0] && rows[0].data) || [];
+    return jsonResponse({ data: Array.isArray(data) ? data : [] });
+  } catch (e) { return jsonResponse({ data: [], error: e.message }, 500); }
+}
+async function handleSavesPush(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ ok: false, needsAuth: true });
+    const b = await request.json().catch(() => ({}));
+    const kind = ['wishlist', 'places'].includes(b.kind) ? b.kind : null;
+    if (!kind) return jsonResponse({ error: 'kind must be wishlist|places' }, 400);
+    let data = Array.isArray(b.data) ? b.data : [];
+    if (data.length > 500) data = data.slice(0, 500); // sane cap
+    const res = await gbRest(env, 'user_saves?on_conflict=user_id,kind', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ user_id: user.id, kind, data, updated_at: new Date().toISOString() }),
+    });
+    if (!res.ok) return jsonResponse({ ok: false, error: `supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
+    return jsonResponse({ ok: true, count: data.length });
+  } catch (e) { return jsonResponse({ ok: false, error: e.message }, 500); }
+}
+
 async function handleGuestbookList(request, env) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -13113,6 +13150,8 @@ export default {
       if (pathname === '/aff/click' && request.method === 'POST') return await handleAffiliateClick(request, env, ctx);
       if (pathname === '/aff/mine' && request.method === 'POST') return await handleAffiliateMine(request, env);
       if (pathname === '/aff/import' && request.method === 'POST') return await handleAffiliateImport(request, env);
+      if (pathname === '/saves/pull' && request.method === 'POST') return await handleSavesPull(request, env);
+      if (pathname === '/saves/push' && request.method === 'POST') return await handleSavesPush(request, env);
       if (pathname === '/viator/match' && request.method === 'POST') return await handleViatorMatch(request, env);
       if (pathname === '/activities/search' && request.method === 'POST') return await handleActivitySearch(request, env, ctx);
       if (pathname === '/events/search' && request.method === 'POST') return await handleEventsSearch(request, env);

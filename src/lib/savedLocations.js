@@ -9,6 +9,7 @@
 // session behind those calls) — that was why saving "didn't stick".
 
 const KEY = "gs_saved_locations_v1";
+export const SAVED_CHANGE_EVENT = "gs:saved-changed";
 
 function read() {
   try {
@@ -26,6 +27,13 @@ function write(list) {
   } catch {
     /* ignore quota / private-mode errors */
   }
+  // Notify cloud sync + any open lists that saved places changed.
+  try { window.dispatchEvent(new CustomEvent(SAVED_CHANGE_EVENT)); } catch { /* SSR/no-window */ }
+}
+
+// Overwrite the whole list — used by cloud sync after merging cloud + local.
+export function replaceSavedLocations(list) {
+  write(Array.isArray(list) ? list : []);
 }
 
 // Two saved entries are "the same place" when their coordinates match (rounded

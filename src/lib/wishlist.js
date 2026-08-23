@@ -35,6 +35,12 @@ function write(list) {
   try { window.dispatchEvent(new CustomEvent(CHANGE_EVENT)); } catch { /* SSR/no-window */ }
 }
 
+// Overwrite the whole list — used by cloud sync after merging cloud + local.
+// Fires CHANGE_EVENT so any open hearts/lists re-render.
+export function replaceWishlist(list) {
+  write(Array.isArray(list) ? list : []);
+}
+
 // Stable identity for an item so the same place can't be double-added and the
 // button knows its state. Prefer a real id; fall back to a slug of the title.
 export function wishlistKey(kind, idOrTitle) {
