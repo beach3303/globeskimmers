@@ -384,7 +384,7 @@ export default function ShoppingFinder() {
       <div style={{background:"#fff",padding:"10px 14px",borderBottom:"1px solid #E8EDF2",display:"flex",alignItems:"center",gap:"8px",overflowX:"auto",scrollbarWidth:"none"}}>
         {[{label:"🟢 Open Now",state:openOnly,set:setOpenOnly,color:T.green},{label:"🛒 Food Only",state:foodOnly,set:setFoodOnly,color:"#2E7D32"},{label:"💎 Luxury",state:luxOnly,set:setLuxOnly,color:"#BE185D"}].map(f=><button key={f.label} onClick={()=>f.set((x)=>!x)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 13px",borderRadius:"20px",flexShrink:0,border:f.state?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.state?f.color+"18":"#fff",color:f.state?f.color:T.gray,fontWeight:f.state?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{f.label}</button>)}
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
-          <span style={{background:T.accent,color:"#fff",padding:"2px 9px",borderRadius:"10px",fontWeight:"800",fontSize:"calc(12px*var(--fs))"}}>{filtered.length}</span>
+          <span style={{background:T.accent,color:"#fff",padding:"2px 9px",borderRadius:"10px",fontWeight:"800",fontSize:"calc(12px*var(--fs))"}}>{loading?"…":filtered.length}</span>
           <div style={{display:"flex",gap:"3px"}}>{["list","map"].map(v=><button key={v} onClick={()=>setViewMode(v)} style={{padding:"6px 11px",borderRadius:"8px",border:"none",background:viewMode===v?T.accent:"#E2E8F0",color:viewMode===v?"#fff":T.gray,fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{v==="list"?"List View":"Map View"}</button>)}</div>
         </div>
       </div>

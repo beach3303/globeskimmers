@@ -981,6 +981,11 @@ export default function ThingsToDoFinder() {
       return isIconic||isHighlyRated||a.props?.isBucketList;
     });
     if(!submitted&&category!=='all') r=r.filter(a=>a.activityCategory===category); // category chip (client-side, across the pool)
+    // Nearest-first for the main "Near You" list (T1.7). The curated Icons /
+    // Regional tiers render in their own strips, so fame is still surfaced there;
+    // this list follows the app's closest-first standard. Search is already
+    // distance-sorted upstream, so re-sorting is a no-op for it.
+    r.sort((a,b)=>(a.distanceMiles??999)-(b.distanceMiles??999));
     return r;
   },[activities,ownedPool,searchMerged,submitted,browseFilterActive,radius,openOnly,outdoorOnly,popularOnly,category]);
 
