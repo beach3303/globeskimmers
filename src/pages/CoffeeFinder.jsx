@@ -11,6 +11,7 @@ import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
+import { logSearch, logZeroResults } from "@/lib/logSearch";
 import { matchesQuery } from "@/lib/searchText";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
@@ -572,11 +573,13 @@ export default function CoffeeFinderPage() {
   const runSearch=async()=>{
     const query=q.trim(); if(!query) return;
     setSubmitted(query); setSearchBusy(true); setSearchShops([]);
-    logEvent('coffee_search',{query,radius},'CoffeeFinder'); // intent signal
     try{
       const {data}=await callWorker(ROUTE.searchCoffee,{query,latitude:lat,longitude:lng,radiusMiles:radius});
       const raw=Array.isArray(data?.places)?data.places:[];
       setSearchShops(raw.map(p=>processShop(p,lat,lng)));
+      // Geo-tagged demand signal (which coffee/drink, in which city, now vs planning).
+      if(raw.length) logSearch('coffee',query,{radius,resultCount:raw.length});
+      else logZeroResults('coffee',query,{radius});
     }catch{ setSearchShops([]); }
     setSearchBusy(false);
   };

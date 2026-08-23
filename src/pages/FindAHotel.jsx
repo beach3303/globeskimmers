@@ -28,6 +28,7 @@ import LocationModePicker from "@/components/location/LocationModePicker";
 import { trackAffiliateClick } from "@/lib/affiliate";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
+import { logSearch } from "@/lib/logSearch";
 import { buildStay22Url } from "@/lib/stay22";
 import { nearestAirports } from "@/lib/airports";
 
@@ -186,7 +187,11 @@ export default function FindAHotel() {
     setHotelsBusy(true); setHotels(null); setMaxPrice(null);
     try {
       const { data } = await callWorker(ROUTE.searchHotels, { latitude: lp.lat, longitude: lp.lng, address: lp.address, checkin, checkout, adults, children });
-      setHotels(Array.isArray(data?.hotels) ? data.hotels : []);
+      const list = Array.isArray(data?.hotels) ? data.hotels : [];
+      setHotels(list);
+      // Geo-tagged demand signal — where people look for a stay + what they optimize
+      // for (near sights / airport / centre). resultCount surfaces coverage gaps.
+      logSearch('hotel', dest.city || dest.label || null, { goal, adults, children, resultCount: list.length });
     } catch { setHotels([]); }
     setHotelsBusy(false);
   };

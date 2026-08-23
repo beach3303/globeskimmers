@@ -14,6 +14,7 @@ import { motion } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import { CAT } from "../components/redesign/constants";
 import { trackAffiliateClick } from "@/lib/affiliate";
+import { logDiscover } from "@/lib/logDiscover";
 import { getRideProviders, ccFromLocation, openRide } from "@/lib/rideProviders";
 
 const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
@@ -58,6 +59,8 @@ export default function GetARide() {
 
   const startOpen = (opt) => {
     if (!opt.link || opt.soon) return;
+    // Demand signal: rental car vs airport transfer, by city (present vs planning).
+    logDiscover("ride_option_tap", { type: opt.key, partner: opt.partner });
     if (opt.utility) {
       window.open(opt.link, "_blank");
       return;
@@ -172,7 +175,7 @@ export default function GetARide() {
             {rideProviders.map((p) => (
               <button
                 key={p.key}
-                onClick={() => openRide(p)}
+                onClick={() => { logDiscover("ride_option_tap", { type: "rideshare", partner: p.key }); openRide(p); }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-[14px] font-semibold text-[calc(14px*var(--fs))]"
                 style={{ background: "#FFFFFF", border: "1px solid #F0E9DC", color: ED_INK }}
               >

@@ -16,6 +16,7 @@ import AttractionAIDetails from "@/components/AttractionAIDetails";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
+import { logSearch, logZeroResults } from "@/lib/logSearch";
 import { matchesQuery } from "@/lib/searchText";
 import { ChevronLeft, MapPin, Star } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
@@ -1025,12 +1026,16 @@ export default function ThingsToDoFinder() {
   const runActivitySearch=async()=>{
     const query=q.trim(); if(!query) return;
     setSubmitted(query); setTourBusy(true); setTours(null); setSearchPlaces([]);
-    // Log the search term — intent signal: what are people actually looking for.
-    logEvent('activity_search',{query,city,country,radius},'ThingsToDo');
     try{
       const {data}=await callWorker(ROUTE.searchActivities,{query:expandActivityQuery(query),city,country,latitude:lat,longitude:lng,radiusMiles:radius});
-      setSearchPlaces(Array.isArray(data?.places)?data.places:[]);
-      setTours(Array.isArray(data?.products)?data.products:[]);
+      const places=Array.isArray(data?.places)?data.places:[];
+      const products=Array.isArray(data?.products)?data.products:[];
+      setSearchPlaces(places);
+      setTours(products);
+      // Geo-tagged demand signal — what activities/experiences people want, where.
+      const total=places.length+products.length;
+      if(total) logSearch('things_to_do',query,{radius,resultCount:total});
+      else logZeroResults('things_to_do',query,{radius});
     }catch{ setTours([]); setSearchPlaces([]); }
     setTourBusy(false);
   };

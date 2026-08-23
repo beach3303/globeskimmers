@@ -43,6 +43,7 @@ import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
+import { logSearch, logZeroResults } from "@/lib/logSearch";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
@@ -1120,14 +1121,14 @@ export default function PlacesToEat() {
           // result counts, and which queries return zero results. Tag fallback
           // events distinctly so we can monitor how often the cuisine-umbrella
           // recovery kicks in.
-          logEvent(useFallback ? 'search_fallback' : 'search', {
-            query: searchText || null,
+          logSearch('eat', searchText, {
             cuisine: primaryCuisine,
             radius,
             resultCount: processed.length,
             firstTier: processed[0]?.tier ?? null,
-            fallbackCuisine: useFallback ? data.fallbackCuisine : null,
-          }, 'PlacesToEat');
+            fallback: useFallback || undefined,
+            fallbackCuisine: useFallback ? data.fallbackCuisine : undefined,
+          });
 
           // Note: eager top-5 hydratePlaceDetails was removed once the
           // AI Details panel went live. The expanded card now fetches
@@ -1141,11 +1142,10 @@ export default function PlacesToEat() {
           setError(data?.error || "No results found. Try expanding your radius.");
           // Analytics: zero-result searches are the most valuable to track —
           // every empty result is a search-quality bug or a coverage gap.
-          logEvent('search_zero_results', {
-            query: searchText || null,
+          logZeroResults('eat', searchText, {
             cuisine: primaryCuisine,
             radius,
-          }, 'PlacesToEat');
+          });
         }
       } catch(e) {
         if (ignore) return; // ignore stale-fetch errors too

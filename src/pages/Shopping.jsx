@@ -7,6 +7,7 @@ import RadiusRow from "@/components/location/RadiusRow";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
+import { logSearch } from "@/lib/logSearch";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
 import { ChevronLeft, MapPin, ShoppingBag } from "lucide-react";
@@ -374,7 +375,7 @@ export default function ShoppingFinder() {
       {/* Filters band */}
       <div className={`px-4 ${colWrap} mx-auto pb-2`}>
         <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.shopping.ink} unit={unit} setUnit={setUnit} />
-        <div style={{overflowX:"auto",scrollbarWidth:"none"}}><div style={{display:"flex",gap:"7px",paddingBottom:"10px"}}>{CATEGORIES.map(c=><motion.button key={c.id} whileTap={{scale:0.94}} onClick={()=>setCategory(c.id)} className="font-sans" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",padding:"8px 12px",borderRadius:"14px",flexShrink:0,border:category===c.id?`2px solid ${c.color}`:"1px solid #F0E9DC",background:category===c.id?`${c.color}18`:"#fff",color:category===c.id?c.color:'#475569',fontWeight:category===c.id?"700":"500",fontSize:"calc(11px*var(--fs))",cursor:"pointer",minWidth:"64px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>{c.icon}</span><span>{c.label}</span></motion.button>)}</div></div>
+        <div style={{overflowX:"auto",scrollbarWidth:"none"}}><div style={{display:"flex",gap:"7px",paddingBottom:"10px"}}>{CATEGORIES.map(c=><motion.button key={c.id} whileTap={{scale:0.94}} onClick={()=>{setCategory(c.id); if(c.id!=='all') logSearch('shopping',c.label,{category:c.id});}} className="font-sans" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",padding:"8px 12px",borderRadius:"14px",flexShrink:0,border:category===c.id?`2px solid ${c.color}`:"1px solid #F0E9DC",background:category===c.id?`${c.color}18`:"#fff",color:category===c.id?c.color:'#475569',fontWeight:category===c.id?"700":"500",fontSize:"calc(11px*var(--fs))",cursor:"pointer",minWidth:"64px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>{c.icon}</span><span>{c.label}</span></motion.button>)}</div></div>
       </div>
       <div style={{background:"#fff",padding:"10px 14px",borderBottom:"1px solid #E8EDF2",display:"flex",alignItems:"center",gap:"8px",overflowX:"auto",scrollbarWidth:"none"}}>
         {[{label:"🟢 Open Now",state:openOnly,set:setOpenOnly,color:T.green},{label:"🛒 Food Only",state:foodOnly,set:setFoodOnly,color:"#2E7D32"},{label:"💎 Luxury",state:luxOnly,set:setLuxOnly,color:"#BE185D"}].map(f=><button key={f.label} onClick={()=>f.set((x)=>!x)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 13px",borderRadius:"20px",flexShrink:0,border:f.state?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.state?f.color+"18":"#fff",color:f.state?f.color:T.gray,fontWeight:f.state?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{f.label}</button>)}
