@@ -1098,6 +1098,65 @@ const ANALYTICS_QUERIES = {
       AND ts >= strftime('%s','now','-30 days')
     GROUP BY trip, base ORDER BY taps DESC LIMIT 40
   `,
+  // ── Search-intent graph ("what people search, and where") — from the canonical
+  //    logSearch/logDiscover 'search' events. Every query carries city/country +
+  //    intent (present=there now | planning=dreaming about it). NO PII; aggregate. ──
+  // Top queries by (city,country) with the present/planning split — answers
+  // "cheap souvenirs: Tokyo?" and "AC hotel: Paris or Berlin?".
+  searches_by_city: `
+    SELECT json_extract(payload,'$.query') AS query,
+      json_extract(payload,'$.category') AS category,
+      json_extract(payload,'$.city') AS city,
+      json_extract(payload,'$.country') AS country,
+      COUNT(*) AS searches,
+      SUM(CASE WHEN json_extract(payload,'$.intent')='planning' THEN 1 ELSE 0 END) AS planning,
+      SUM(CASE WHEN json_extract(payload,'$.intent')='present' THEN 1 ELSE 0 END) AS present
+    FROM events
+    WHERE event_type='search' AND IFNULL(json_extract(payload,'$.query'),'')<>''
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY query, category, city, country
+    ORDER BY searches DESC LIMIT 60
+  `,
+  // Demand MIX per city — what a place's visitors mostly want (eat vs shop vs
+  // stay vs do). Answers "when people go to Tokyo, what do they search for?".
+  search_categories_by_city: `
+    SELECT json_extract(payload,'$.city') AS city,
+      json_extract(payload,'$.country') AS country,
+      json_extract(payload,'$.category') AS category,
+      COUNT(*) AS searches
+    FROM events
+    WHERE event_type='search' AND IFNULL(json_extract(payload,'$.city'),'')<>''
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY city, country, category
+    ORDER BY searches DESC LIMIT 60
+  `,
+  // Rides: airport transfer vs rental car vs rideshare, by city — answers "are
+  // they looking for more transfers or more rentals, and where?".
+  transfer_vs_rental: `
+    SELECT json_extract(payload,'$.type') AS ride_type,
+      json_extract(payload,'$.city') AS city,
+      json_extract(payload,'$.country') AS country,
+      COUNT(*) AS taps
+    FROM events
+    WHERE event_type='ride_option_tap' AND IFNULL(json_extract(payload,'$.type'),'')<>''
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY ride_type, city, country
+    ORDER BY taps DESC LIMIT 60
+  `,
+  // Zero-result searches by city — the highest-value signal: demand we can't
+  // yet serve = where to expand coverage or inventory.
+  zero_results_by_city: `
+    SELECT json_extract(payload,'$.query') AS query,
+      json_extract(payload,'$.category') AS category,
+      json_extract(payload,'$.city') AS city,
+      json_extract(payload,'$.country') AS country,
+      COUNT(*) AS misses
+    FROM events
+    WHERE event_type='search_zero_results' AND IFNULL(json_extract(payload,'$.query'),'')<>''
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY query, category, city, country
+    ORDER BY misses DESC LIMIT 60
+  `,
   // ── Affiliate (from affiliate_clicks; needs scripts/affiliate/01_schema.sql) ──
   affiliate_by_partner_30d: `
     SELECT partner,
