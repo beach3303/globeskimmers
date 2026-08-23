@@ -96,7 +96,7 @@ export default function AdminAnalytics() {
       // Fan out over the live Worker /analytics-query route (one D1 query per
       // type), assembling the bundle the renderer expects. Native-safe via
       // callWorker — replaces the Base44 getAnalytics function (403s on device).
-      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'retention_cohorts_90d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes', 'wishlist_by_city_30d', 'wishlist_top_30d', 'wishlist_by_kind_30d', 'wishlist_cta_30d', 'directions_by_place_30d', 'persona_distribution_30d', 'affiliate_funnel_30d', 'affiliate_clicks_by_intent_30d'];
+      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'retention_cohorts_90d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes', 'searches_by_city', 'search_categories_by_city', 'transfer_vs_rental', 'zero_results_by_city', 'wishlist_by_city_30d', 'wishlist_top_30d', 'wishlist_by_kind_30d', 'wishlist_cta_30d', 'directions_by_place_30d', 'persona_distribution_30d', 'affiliate_funnel_30d', 'affiliate_clicks_by_intent_30d'];
       const pairs = await Promise.all(TYPES.map(async (type) => {
         const { data: qd, error: qe } = await callWorker(`analytics-query?type=${encodeURIComponent(type)}`, {});
         return [type, { results: qd?.results || [], error: qe || qd?.error || null }];
@@ -150,6 +150,11 @@ export default function AdminAnalytics() {
   const discFoods = data?.discover_trending_foods?.results || [];
   const discAreas = data?.discover_hotel_areas?.results || [];
   const discEscapes = data?.discover_escapes?.results || [];
+  // Search-intent graph ("what people search, and where")
+  const searchesByCity = data?.searches_by_city?.results || [];
+  const searchCatsByCity = data?.search_categories_by_city?.results || [];
+  const rideDemand = data?.transfer_vs_rental?.results || [];
+  const zeroByCity = data?.zero_results_by_city?.results || [];
   const wishByCity = data?.wishlist_by_city_30d?.results || [];
   const wishTop = data?.wishlist_top_30d?.results || [];
   const wishByKind = data?.wishlist_by_kind_30d?.results || [];
@@ -434,6 +439,35 @@ export default function AdminAnalytics() {
               <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Which base neighborhoods convert — your hotel affiliate targets.</div>
               {discAreas.map((d, i) => (
                 <BarRow key={i} label={`${d.area || '(unknown)'}${d.city ? ' · ' + d.city : ''}`} count={d.taps} max={maxDiscArea} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            {/* ── Search-intent graph — "what people search, and WHERE" (the demand moat) ── */}
+            <Section title="🔎 Top searches — and where (30d)" icon={Search} empty={searchesByCity.length === 0 ? 'Fills as users search any finder — the query + the city it was searched in (present = there now · planning = dreaming).' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>What people type + where they typed it — the first-party demand-intent graph.</div>
+              {searchesByCity.map((d, i) => (
+                <BarRow key={i} label={`"${d.query}" · ${d.city || '—'}${d.country ? ', ' + d.country : ''} · ${d.category || ''} (${d.planning || 0} plan / ${d.present || 0} there)`} count={d.searches} max={searchesByCity[0]?.searches || 1} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="🗺️ Demand mix per city (30d)" icon={Search} empty={searchCatsByCity.length === 0 ? 'Fills as searches accrue — what a city\'s visitors mostly want (eat vs shop vs stay vs do).' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Which vertical each destination searches for most — where to push which inventory.</div>
+              {searchCatsByCity.map((d, i) => (
+                <BarRow key={i} label={`${d.city || '—'}${d.country ? ', ' + d.country : ''} · ${d.category || '?'}`} count={d.searches} max={searchCatsByCity[0]?.searches || 1} color={COLORS.amber} />
+              ))}
+            </Section>
+
+            <Section title="🚗 Transfers vs rental cars (30d)" icon={Activity} empty={rideDemand.length === 0 ? 'Fills as users tap ride options — airport transfer vs rental car vs rideshare, by city.' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Which transport people want, where — steers Get-a-Ride partner priority.</div>
+              {rideDemand.map((d, i) => (
+                <BarRow key={i} label={`${d.ride_type || '?'}${d.city ? ' · ' + d.city : ''}`} count={d.taps} max={rideDemand[0]?.taps || 1} color={COLORS.green} />
+              ))}
+            </Section>
+
+            <Section title="🕳️ Searches with NO results (30d)" icon={Search} empty={zeroByCity.length === 0 ? 'Fills as searches come back empty — demand we can\'t serve yet = where to expand.' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>The highest-value gap list — unmet demand, per city.</div>
+              {zeroByCity.map((d, i) => (
+                <BarRow key={i} label={`"${d.query}" · ${d.city || '—'} · ${d.category || ''}`} count={d.misses} max={zeroByCity[0]?.misses || 1} color={COLORS.red} />
               ))}
             </Section>
 
