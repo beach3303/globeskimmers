@@ -7080,16 +7080,24 @@ function shopDetectKind(name, types = [], rev = '') {
   if (/mall|shopping center|shopping centre|department store|nordstrom|macy|saks|selfridge|harrods|galeries/.test(x)) return { shoppingFamily: 'general_shopping', shoppingSubtype: 'mall', venueIcon: '🏬', venueLabel: 'Shopping Mall', venueColor: '#7C3AED' };
   return { shoppingFamily: 'general_shopping', shoppingSubtype: 'shopping', venueIcon: '🛍️', venueLabel: 'Shopping', venueColor: '#7C3AED' };
 }
+// Picking Luxury / Malls / Duty-free should actually re-rank toward those, not
+// just change the Google query (T1.7b). shopDetectKind only distinguishes these
+// subtypes reliably, so we boost matches for them.
+const SHOP_CATEGORY_SUBTYPE = { luxury_shopping: 'luxury', malls: 'mall', duty_free: 'duty_free' };
 function shopTravelerScore(p, category) {
   const kind = p.shoppingKind || {};
   const familyMatch = (category === 'food_shopping' || ['supermarkets','warehouse_clubs','farmers_markets','wet_markets','bodegas_corner_stores','butcher_shops'].includes(category))
     ? (kind.shoppingFamily === 'food_shopping' ? 40 : 0)
     : (kind.shoppingFamily === 'general_shopping' ? 30 : 0);
+  const wantSub = SHOP_CATEGORY_SUBTYPE[category];
+  const subtypeBonus = (wantSub && kind.shoppingSubtype === wantSub) ? 20 : 0;
   const openNow = p.isOpen === true ? 15 : 0;
   const ratingScore = ((p.rating || 0) / 5) * 15;
-  const distanceScore = Math.max(0, 12 - (p.distanceMiles || 0) * 2);
+  // Continuous distance decay across the WHOLE radius (was capped to 0 past 6mi,
+  // so a farther higher-rated store outranked a closer one) — nearer always helps.
+  const distanceScore = Math.max(0, 25 - (p.distanceMiles || 0));
   const photoScore = Math.min((p.photos?.length || 0), 5);
-  return familyMatch + openNow + ratingScore + distanceScore + photoScore;
+  return familyMatch + subtypeBonus + openNow + ratingScore + distanceScore + photoScore;
 }
 async function handleShoppingPlaces(request, env, ctx) {
   try {
