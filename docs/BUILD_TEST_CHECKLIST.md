@@ -422,3 +422,14 @@ State: Committed <hash> · Deployed <where> · Tested ⬜
 - [ ] <test step 2>
 - [ ] <edge case / failure case>
 ```
+
+## 🔎 Search-intent graph — capture EVERY search + WHERE (2026-08-23)
+One canonical `logSearch(category, query, extra)` (over `logDiscover`) so every finder search is stamped with the city/country it was made in + `intent` (present = there now · planning = dreaming about it). Wired into **Eat, Coffee, Things-to-Do, Shopping, Hotel** + ride-type on **Get-a-Ride**. Unified old per-finder event names (`coffee_search`/`activity_search`) → `search` / `search_zero_results`. 4 new admin queries + an Admin section answer "what people search, and where". First-party demand-intent graph; NO PII (aggregate only). See `project_search_intent_graph` memory.
+State: Committed (8a77fdd frontend · bf082ca worker · 80ef467 admin) · Worker deploy ⬜ · Frontend auto-deploys on push · Tested ⬜
+- [ ] Places to Eat: search "ramen" in a set city → in `/log-event`/D1 an `event_type='search'` row has payload `{category:'eat', query:'ramen', city, country, intent}` (city NOW attached — the whole point)
+- [ ] Coffee / Things-to-Do / Shopping (tap a category) / Find-a-Hotel (run a search) each emit a `search` row with the right `category` + city
+- [ ] A search that returns nothing → `event_type='search_zero_results'` with the query + city
+- [ ] Get-a-Ride: tap "Rent a car" vs "Airport transfer" vs a rideshare app → `ride_option_tap` rows with `type` = car / transfer / rideshare
+- [ ] Present vs planning: search while on GPS ("current") → `intent:present`; search after switching to a navigate/selected city → `intent:planning`
+- [ ] Admin Analytics shows the 4 new sections: 🔎 Top searches — and where · 🗺️ Demand mix per city · 🚗 Transfers vs rental cars · 🕳️ Searches with NO results (all honest empty states pre-traffic)
+- [ ] Regression: existing `top_searches_7d` + `top_zero_results` admin rows still populate (event names unified, not dropped)
