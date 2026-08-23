@@ -576,7 +576,8 @@ export default function ATMFinderPage() {
 
   // ── Fetch ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!lat || !lng) return;
+    if (!lat || !lng) { setLoading(false); return; } // no location yet — don't spin forever
+    let cancelled = false;
     setLoading(true);
     setError(null);
     const force = forceNextRef.current; forceNextRef.current = false;
@@ -594,6 +595,7 @@ export default function ATMFinderPage() {
           openOnly,
           forceRefresh: force,
         });
+        if (cancelled) return; // a newer fetch (radius/filter/location change) superseded this one
         if (workerError) throw new Error(workerError);
 
         const rawList = data?.atms || data?.places || [];
@@ -607,12 +609,14 @@ export default function ATMFinderPage() {
           setError(data?.error || "No ATMs found. Try expanding your search radius.");
         }
       } catch (e) {
+        if (cancelled) return;
         console.error("🏧 ATMFinder error:", e);
         setError(`Failed to load: ${e.message}`);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => { cancelled = true; };
   }, [lat, lng, radius, bankFilter, openOnly, refreshTick]);
 
   // Distance-sorted backend already returns results in nearest order.

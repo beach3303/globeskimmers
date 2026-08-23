@@ -277,7 +277,9 @@ export default function ShoppingFinder() {
   useEffect(()=>{ setRadius(activeLocation?.suggestedRadius ?? 10); }, [activeLocation?.placeId]);
 
   useEffect(()=>{
-    if(!lat||!lng) return; setLoading(true); setError(null);
+    if(!lat||!lng){ setLoading(false); return; } // no location yet — don't spin forever
+    let cancelled=false;
+    setLoading(true); setError(null);
     (async()=>{
       try{
         // List source: GOOGLE (getShoppingPlaces) — real stores with photos + hours
@@ -285,6 +287,7 @@ export default function ShoppingFinder() {
         // is low-quality (junk names, no photos), so we source from Google until it's
         // cleaned, then flip back to owned-first. `category` filters server-side.
         const {data, error: workerError}=await callWorker(ROUTE.getShoppingPlaces,{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,category});
+        if(cancelled) return; // a newer fetch (radius/category/location change) superseded this one
         if (workerError) throw new Error(workerError);
         const raw=data?.places||[];
         // Compute distanceMiles client-side so the unit formatter has a raw number.
@@ -295,9 +298,10 @@ export default function ShoppingFinder() {
           return { ...p, distanceMiles: R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)) };
         });
         if(enriched.length) setPlaces(enriched); else setError(data?.error||"No shopping found nearby.");
-      }catch(e){setError(`Failed: ${e.message}`);}
-      finally{setLoading(false);}
+      }catch(e){ if(!cancelled) setError(`Failed: ${e.message}`);}
+      finally{ if(!cancelled) setLoading(false);}
     })();
+    return ()=>{ cancelled=true; };
   },[lat,lng,radius,category]);
 
   const filtered=useMemo(()=>{

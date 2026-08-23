@@ -501,7 +501,8 @@ export default function CoffeeFinderPage() {
   },[workFilterActive,shops]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(()=>{
-    if(!lat||!lng)return;
+    if(!lat||!lng){ setLoading(false); return; } // no location yet — don't spin forever
+    let cancelled=false;
     setLoading(true);setError(null);
     const force = forceNextRef.current; forceNextRef.current = false;
     (async()=>{
@@ -509,6 +510,7 @@ export default function CoffeeFinderPage() {
         // Owned planet DB (free list, no per-search Google cost). Real photos +
         // hours come on-tap via enrich-owned. Same card, same downstream panels.
         const {data, error: workerError} = await callWorker(ROUTE.getCoffeeOwned,{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,forceRefresh:force});
+        if(cancelled) return; // a newer fetch (radius/location change) superseded this one
         if (workerError) throw new Error(workerError);
         const places = data?.places||data?.shops||[];
         if(places.length>0){
@@ -516,9 +518,10 @@ export default function CoffeeFinderPage() {
           processed.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
           setShops(processed);
         } else { setError(data?.error||"No coffee shops found. Try expanding your search."); }
-      } catch(e){setError(`Failed to load: ${e.message}`);}
-      finally{setLoading(false);}
+      } catch(e){ if(!cancelled) setError(`Failed to load: ${e.message}`);}
+      finally{ if(!cancelled) setLoading(false);}
     })();
+    return ()=>{ cancelled=true; };
   },[lat,lng,radius,refreshTick]);
 
   // Search results = owned café/drink matches (free, instant) merged with the

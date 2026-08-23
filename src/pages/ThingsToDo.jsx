@@ -881,7 +881,8 @@ export default function ThingsToDoFinder() {
   const city=activeLocation?.address?.city||activeLocation?.address?.municipality||fallbackParts[0]||'';
 
   useEffect(()=>{
-    if(!lat||!lng) return;
+    if(!lat||!lng){ setLoading(false); return; } // no location yet — don't spin forever
+    let cancelled=false;
     const force=forceNextRef.current; forceNextRef.current=false;
 
     // Instant render from localStorage cache when we have a fresh
@@ -909,6 +910,7 @@ export default function ThingsToDoFinder() {
       try{
         const fetchRadius=Math.max(radius,25)*1609; // always fetch at least 25mi
         const {data}=await callWorker(ROUTE.getActivities,{latitude:lat,longitude:lng,radius:fetchRadius,maxResults:60,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city,forceRefresh:force});
+        if(cancelled) return; // a newer fetch (radius/category/location change) superseded this one
         const raw=data?.activities||[];
         const ni=data?.nationalIcons||[];
         const rg=data?.regionalGems||[];
@@ -928,12 +930,14 @@ export default function ThingsToDoFinder() {
           setError(data?.error||"No activities found nearby.");
         }
       }catch(e){
+        if(cancelled) return;
         if(!cached) setError(`Failed: ${e.message}`);
         // If we had cache, leave it on-screen on network error.
       }
-      finally{setLoading(false);}
+      finally{ if(!cancelled) setLoading(false);}
     })();
-  },[lat,lng,country,region,category,refreshTick]);
+    return ()=>{ cancelled=true; };
+  },[lat,lng,radius,country,region,category,refreshTick]);
 
   // All owned/cached places from the getActivities call, deduped — the FREE,
   // instant first layer of search (main list + national icons + regional +
