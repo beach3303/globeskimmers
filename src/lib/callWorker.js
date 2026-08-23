@@ -21,26 +21,41 @@ async function getToken() {
   return session?.access_token ?? null;
 }
 
-export async function callWorker(path, body = {}) {
+export async function callWorker(path, body = {}, opts = {}) {
   const token = await getToken();
   const url = `${WORKER_BASE}/${String(path).replace(/^\//, '')}`;
   const headers = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
+  // Finite timeout backstop: without this, a cold-start / slow / dead Worker (or a
+  // stalled Google call) leaves the finder spinning FOREVER and the error UI
+  // (Retry / Expand radius) — which lives in the error branch — never renders.
+  // On abort we return { error:'timeout' } so that UI shows. The default is
+  // generous (25s) so legitimately-slow AI endpoints (invoke-llm/culture/parse)
+  // aren't cut off; callers can pass opts.timeoutMs to tighten fast finder calls.
+  const timeoutMs = opts.timeoutMs ?? 25000;
 
   try {
     if (isNative) {
-      // CapacitorHttp parses JSON and bypasses WebView CORS.
-      const res = await CapacitorHttp.post({ url, headers, data: body });
+      // CapacitorHttp parses JSON and bypasses WebView CORS. connect/readTimeout
+      // are in ms; the native layer rejects on timeout so it can't hang.
+      const res = await CapacitorHttp.post({ url, headers, data: body, connectTimeout: timeoutMs, readTimeout: timeoutMs });
       if (res.status >= 400) return { data: null, error: res.data?.error || `HTTP ${res.status}` };
       return { data: res.data, error: null };
     }
-    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) return { data: null, error: json?.error || `HTTP ${res.status}` };
-    return { data: json, error: null };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) return { data: null, error: json?.error || `HTTP ${res.status}` };
+      return { data: json, error: null };
+    } finally {
+      clearTimeout(timer);
+    }
   } catch (e) {
+    if (e?.name === 'AbortError') return { data: null, error: 'timeout' };
     return { data: null, error: e?.message || 'Network error' };
   }
 }
