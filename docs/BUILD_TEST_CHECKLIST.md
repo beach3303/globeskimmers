@@ -466,3 +466,16 @@ State: Committed (0e44c24) · Frontend auto-deploys on push (PUSHED) · Tested �
 - [ ] **Money Exchange**: locations appear; **"Best rate"** sort reorders; **"Open now"** filters; the rate converter (from/to/amount) still works (it was always fine)
 - [ ] All three: a city with no coverage no longer shows blank — Google backfills
 - [ ] Cost sanity: repeated searches in the same area are served from cache (not a new Google call each time)
+
+## 🔎 Smart-Search spine v1 (2026-08-24)
+The blueprint's unifying search: one bar at the top of Home → full-screen overlay (input + scope chips Near me / At my stay / A place… + place autocomplete + recents). Parses free text (FREE client rules first, Haiku `/invoke-llm` fallback only on rule-miss) into {category, scope, place, query}, then re-centers + opens the right finder with the query prefilled, or re-centers Home for a bare place. Logs every search to the demand graph. Frontend-only (reuses `/invoke-llm`, `/search-location`, finder endpoints) — no worker deploy. Files: `src/lib/smartSearch.js`, `src/components/search/SmartSearchBar.jsx` + `SmartSearchOverlay.jsx`, reader wiring in CoffeeFinder/ThingsToDo (PlacesToEat/FindAHotel already read presetQuery).
+State: Committed (7509bee + f13a844) · Frontend auto-deploys on push · Tested ⬜
+- [ ] ⚠️ Before device test: `npm run build && npx cap copy ios`
+- [ ] Home shows the search bar above the finder tiles (phone + iPad); tap → full-screen overlay opens, input auto-focuses
+- [ ] "coffee near me" → opens Coffee, centered on GPS, café search auto-runs
+- [ ] "ramen" with "At my stay" chip (stay set) → PlacesToEat re-centers on the stay + auto-runs "ramen"; chip is DISABLED when no stay is set
+- [ ] "A place…" chip → type a city → autocomplete lists places → pick one → then "things to do" → Home re-centers to that city + opens ThingsToDo with the query
+- [ ] Bare "Positano" (no category) → Home re-centers to Positano; the Discover feed shows Positano content (destination mode)
+- [ ] A recent search chip re-runs it; suggestions show before any recents exist
+- [ ] Confirm a `search` event with `source:'smart_search'` + `scope` fires in `/log-event`
+- [ ] Cost check: simple queries ("coffee", "hotel", "things to do in Tokyo") make ZERO `/invoke-llm` calls (rule-parsed); only messy free-text ("viral desserts my kids would love") hits the AI parser
