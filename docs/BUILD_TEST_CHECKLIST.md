@@ -489,3 +489,13 @@ State: Committed (0e108ad) · **NEEDS WORKER DEPLOY** (`wrangler deploy`) + git 
 - [ ] Before the worker deploy, the spine still works (AI fallback returns null → rule result) — no crash/hang
 - [ ] Admin Analytics shows 3 new "Smart-Search" sections (scope · worlds opened + AI count · top destinations), honest empty states until real searches accrue
 - [ ] `/analytics-bundle` (or the admin fetch) returns `smart_search_by_scope` / `smart_search_by_category` / `smart_search_top_places` without a "type not found" error (confirms the worker deploy landed)
+
+## 🔎 Smart-Search spine Phase 2.5 (2026-08-24)
+Two polish items, frontend-only (no worker deploy): (1) **"Exploring <place>" destination strip** — a bare-place search now lands on Home with a teal strip (`DestinationStrip.jsx`) showing the place + quick-jumps into Eat/Coffee/Things/Stay/Shopping, above the tiles (phone + tablet); (2) **shopping query → category chip mapping** — "souvenirs"/"luxury"/"grocery"/etc. open Shopping on the right chip. Files: `src/components/search/DestinationStrip.jsx`, `src/lib/smartSearch.js`, `src/pages/Home.jsx`, `src/components/home/HomeTablet.jsx`, `src/pages/Shopping.jsx`.
+State: Committed (f6b5460 + 959414c) · Frontend auto-deploys on push · Tested ⬜
+- [ ] ⚠️ Before device test: `npm run build && npx cap copy ios`
+- [ ] Search a bare place ("Positano") → Home re-centers AND shows the "🌍 Exploring Positano" strip above the tiles with 5 quick-jump chips
+- [ ] Tap a chip (e.g. "Things to do") → opens that finder centered on Positano; dismiss (✕) hides the strip; a NEW place search shows it again
+- [ ] Strip renders on iPad (HomeTablet) too
+- [ ] "souvenirs" (or "souvenirs in Kyoto") → opens Shopping with the **Souvenir** chip selected; "luxury shopping" → Luxury chip; "grocery" → Groceries chip
+- [ ] A generic "shopping" with no sub-term → Shopping opens on "All" (no wrong chip forced)
