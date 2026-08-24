@@ -433,3 +433,15 @@ State: Committed (8a77fdd frontend · bf082ca worker · 80ef467 admin) · Worker
 - [ ] Present vs planning: search while on GPS ("current") → `intent:present`; search after switching to a navigate/selected city → `intent:planning`
 - [ ] Admin Analytics shows the 4 new sections: 🔎 Top searches — and where · 🗺️ Demand mix per city · 🚗 Transfers vs rental cars · 🕳️ Searches with NO results (all honest empty states pre-traffic)
 - [ ] Regression: existing `top_searches_7d` + `top_zero_results` admin rows still populate (event names unified, not dropped)
+
+## 🏠 Home living rows — delivery fix (2026-08-23)
+The two headline "Discover" rows (**"Where people go / Near you / Trending"** = `HomeRows`, and **"Stamps near your stay 🛂"** = `StampsNearYou`) had NEVER rendered: they read top-level `loc.latitude/lat`, but the active-location object nests coords under `coordinates.{latitude,longitude}` (the shape every finder uses), so the finite-check tripped every time and both silently returned `null` — only the static tiles showed. Fixed the coord resolution (nested-first, top-level fallback). `StampsNearYou` also passed `radius:15000` which the worker ignores (reads `radiusKm`, default 80km) → now `radiusKm:40` (~25mi) so "near your stay" distances are honest. `WhereToStay` got the same city/country fallback the sibling rows use. Both phone (`Home.jsx`) + tablet (`HomeTablet.jsx`). See `reference_active_location_shape` memory.
+State: Committed (2c198c2) · Frontend auto-deploys on push (⚠️ push blocked until GitHub token has Contents:write) · Tested ⬜
+- [ ] ⚠️ Before device test: `npm run build && npx cap copy ios` (sim shows a stale bundle otherwise)
+- [ ] Set location to a seeded city (e.g. New York / Cebu / Tokyo) → BELOW the finder tiles, "Where people go / Near you now" carousels appear WITH real photos + "★ rating · X.X mi", and "Stamps near your stay 🛂" shows a row of stamp chips with distances
+- [ ] Swipe each row sideways; tap a card → quick-look modal opens with swipeable photos → "Explore more" opens the full attraction page; "🧭 Directions" opens the map-app chooser
+- [ ] "Stamps near your stay" distances are all ≲25mi (no ~50mi stamps under a "near your stay" header)
+- [ ] Move the location (Simulator custom location or switch to a navigate/selected city) → both rows re-center to the new place (auto-follow)
+- [ ] A no-coverage spot (remote/ocean) → both rows hide cleanly, tiles stand alone (no empty carousels)
+- [ ] iPad width (HomeTablet): same two rows render `wide` below the tiles
+- [ ] Confirm `home_rows_view` + `home_row_card_tap` now fire in `/log-event` (they never could before — unlocks the "Trending" row + demand analytics)
