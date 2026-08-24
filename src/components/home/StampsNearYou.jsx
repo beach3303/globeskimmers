@@ -17,7 +17,7 @@ import { stampArtUrl } from "@/lib/stampArt";
 import { logDiscover } from "@/lib/logDiscover";
 import { createPageUrl } from "@/utils";
 
-const INK = "#243447", INK3 = "#66717D", STAMP = "#B0472F", PAPER = "#FBF6EC", EDGE = "#E6DFD0";
+const INK = "#243447", INK3 = "#66717D", STAMP = "#B0472F", PAPER = "#FBF6EC";
 
 // One collectible stamp: the bespoke stamp art in a dashed "not yet earned" ring;
 // falls back to a clean rubber-stamp placeholder when a spot has no art yet.
@@ -64,12 +64,18 @@ export default function StampsNearYou({ onAction, wide = false }) {
   useEffect(() => {
     let cancelled = false;
     const loc = getActiveLocation?.();
-    const lat = loc?.latitude ?? loc?.lat;
-    const lng = loc?.longitude ?? loc?.lng;
+    // Coords are NESTED on the active-location shape (coordinates.latitude), like
+    // every finder; top-level fallbacks cover any flattened picked/search shape.
+    const lat = loc?.coordinates?.latitude ?? loc?.latitude ?? loc?.lat;
+    const lng = loc?.coordinates?.longitude ?? loc?.longitude ?? loc?.lng;
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) { setItems([]); return; }
     (async () => {
       try {
-        const { data, error } = await callWorker("attractions/nearby", { latitude: lat, longitude: lng, radius: 15000, limit: 16 });
+        // The worker reads `radiusKm` (NOT `radius`); ~40 km (25 mi) keeps a
+        // city's iconic stamps in range while the distance labels stay honest
+        // for a "near your stay" header (an 80 km default would surface ~50-mi
+        // stamps as "near").
+        const { data, error } = await callWorker("attractions/nearby", { latitude: lat, longitude: lng, radiusKm: 40, limit: 16 });
         if (cancelled) return;
         const list = (!error && Array.isArray(data?.attractions)) ? data.attractions.slice() : [];
         // Iconic first, then nearest — the marquee spots read as "worth a stamp".

@@ -130,8 +130,11 @@ export default function HomeRows({ onAction, wide = false }) {
   useEffect(() => {
     let cancelled = false;
     const loc = getActiveLocation?.();
-    const latitude = loc?.latitude ?? loc?.lat;
-    const longitude = loc?.longitude ?? loc?.lng;
+    // Active-location shape stores coords NESTED (coordinates.latitude) — same as
+    // every finder (PlacesToEat/Coffee/FindAHotel). Keep top-level fallbacks for
+    // any picked/search shape that flattens them.
+    const latitude = loc?.coordinates?.latitude ?? loc?.latitude ?? loc?.lat;
+    const longitude = loc?.coordinates?.longitude ?? loc?.longitude ?? loc?.lng;
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       setRows([]);
       return;
@@ -171,8 +174,8 @@ export default function HomeRows({ onAction, wide = false }) {
 
   // Active location = the directions origin (user's current/selected spot).
   const activeLoc = getActiveLocation?.();
-  const activeLat = activeLoc?.latitude ?? activeLoc?.lat;
-  const activeLng = activeLoc?.longitude ?? activeLoc?.lng;
+  const activeLat = activeLoc?.coordinates?.latitude ?? activeLoc?.latitude ?? activeLoc?.lat;
+  const activeLng = activeLoc?.coordinates?.longitude ?? activeLoc?.longitude ?? activeLoc?.lng;
 
   return (
     <>

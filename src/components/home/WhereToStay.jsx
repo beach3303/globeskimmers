@@ -41,8 +41,8 @@ export default function WhereToStay({ wide = false }) {
 
   const active = getActiveLocation?.();
   const a = active?.address || {};
-  const city = a.city || active?.placeName || "";
-  const country = a.country || "";
+  const city = a.city || active?.city || active?.placeName || "";
+  const country = a.country || active?.country || "";
 
   useEffect(() => {
     let cancelled = false;
