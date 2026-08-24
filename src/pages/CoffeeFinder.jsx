@@ -404,7 +404,6 @@ function buildMapPopup(shop, index) {
   const name    = shop.displayName?.text || shop.name || "Coffee Shop";
   const address = shop.formattedAddress  || shop.shortFormattedAddress || "";
   const phone   = shop.nationalPhoneNumber || shop.internationalPhoneNumber || null;
-  const photo   = shop.photoUrl || shop.photos?.[0] || null;
   const { isOpen, todayHours, is24Hours } = shop;
   const parkingLine = shop.parking&&!shop.parking.noParking ? `<div style="font-size:11px;color:#64748B;margin-top:4px;">🅿️ ${shop.parking.details?.[0]?.label||'Parking available'} <span style="color:${shop.parking.source==='api'?'#2E7D32':'#E65100'};font-weight:700;">${shop.parking.source==='api'?'✅':'⚠️'}</span></div>` : '';
   const seatingLine = (shop.hasIndoorSeating||shop.hasOutdoorSeating) ? `<div style="font-size:11px;color:#64748B;margin-top:2px;">🪑 ${[shop.hasIndoorSeating&&'Indoor',shop.hasOutdoorSeating&&'Outdoor'].filter(Boolean).join(' & ')} seating <span style="color:${shop.seatingSource==='api'?'#2E7D32':'#E65100'};font-weight:700;">${shop.seatingSource==='api'?'✅':'⚠️'}</span></div>` : '';

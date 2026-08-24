@@ -1194,11 +1194,6 @@ export default function MoneyExchangePage() {
                                 {store.is_open ? '● Open Now' : '● Closed'}
                               </span>
                             )}
-                            {store.hours_today && (
-                              <span
-                                style={{fontSize:t(fs(12),fs(12)),color:ED_INK2}}
-                              >🕐 {store.hours_today.split(':').slice(1).join(':').trim()}</span>
-                            )}
                             {store.phone && (
                               <a
                                 href={`tel:${store.phone}`}
