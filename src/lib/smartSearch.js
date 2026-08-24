@@ -159,8 +159,9 @@ export async function runSmartSearch(parsed, { navigate, location }) {
     navigate(createPageUrl(cat.page), opts);
     return { routed: cat.page, recentered, needsStay };
   }
-  // Bare place → destination mode: land on the now-re-centered Home; its
+  // Bare place → destination mode: land on the now-re-centered Home with the
+  // place in router state so Home shows the "Exploring <place>" strip; its
   // Discover feed IS the "everything <place>" overview.
-  navigate(createPageUrl("Home"));
+  navigate(createPageUrl("Home"), { state: { destinationSearch: place || null } });
   return { routed: "Home", recentered, needsStay, destinationMode: true };
 }

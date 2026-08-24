@@ -15,6 +15,7 @@ import WishlistCard from '@/components/home/WishlistCard';
 import VibeBundles from '@/components/home/VibeBundles';
 import SmartSearchBar from '@/components/search/SmartSearchBar';
 import SmartSearchOverlay from '@/components/search/SmartSearchOverlay';
+import DestinationStrip from '@/components/search/DestinationStrip';
 import { getPrimaryStay } from '@/lib/savedLocations';
 
 // iPad / tablet Home layout — implements CLAUDE_CODE_IPAD_BUILD.md §3 "Home".
@@ -58,6 +59,7 @@ export default function HomeTablet({
   firstName, cityName, placeText, localGreeting,
   weatherInfo, tempUnit, toggleTempUnit, dateText, timeText,
   flagActive, homeFlagUrl, onLocation, onAction, clockRows = [], journeyMode = "discovery",
+  destinationSearch = null, onDismissDestination,
 }) {
   const ORDER = {
     home: ["escapes", "rows", "stamps"], discovery: ["rows", "escapes", "stamps"],
@@ -188,6 +190,9 @@ export default function HomeTablet({
 
       {/* ── SMART-SEARCH SPINE ──────────────────────────────────────────── */}
       <SmartSearchBar wide onOpen={() => setShowSearch(true)} />
+      {destinationSearch && (
+        <DestinationStrip wide place={destinationSearch} onAction={onAction} onDismiss={onDismissDestination} />
+      )}
 
       {/* ── FEATURE TILES — 3-up COMPACT grid (same footprint as Explore More).
           Real-iPad feedback: the old 2-up tiles read far too large. These now

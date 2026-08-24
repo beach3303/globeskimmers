@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MapPin, Cloud } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { trackEvent } from "../Layout";
 import { useLocation, isLocationAskSnoozedToday, snoozeLocationAskToday, readOpenBehavior } from "../components/location/LocationContext";
@@ -35,6 +35,7 @@ import { useIsTablet } from "@/lib/useIsTablet";
 import HomeTablet from "@/components/home/HomeTablet";
 import SmartSearchBar from "@/components/search/SmartSearchBar";
 import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
+import DestinationStrip from "@/components/search/DestinationStrip";
 import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
 
 // Translation mapping for greetings — shown next to "Hello 👋"
@@ -136,6 +137,10 @@ export default function HomePage() {
   const [timezone, setTimezone] = useState(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [showSearch, setShowSearch] = useState(false); // Smart-Search spine overlay
+  const routerLocation = useRouterLocation();
+  const [destDismissed, setDestDismissed] = useState(false);
+  const destSearch = routerLocation.state?.destinationSearch || null; // "everything <place>" mode
+  useEffect(() => { setDestDismissed(false); }, [destSearch]);
   const [coldOpenChooser, setColdOpenChooser] = useState(false); // picker opened as the cold-open "Where to?" chooser
   const [showWelcome, setShowWelcome] = useState(false); // welcome splash (first launches, before the location selector)
   const [tempUnit, setTempUnit] = useState('F');
@@ -612,6 +617,8 @@ export default function HomePage() {
           onAction={handleQuickAction}
           clockRows={clockRows}
           journeyMode={journeyMode}
+          destinationSearch={destSearch && !destDismissed ? destSearch : null}
+          onDismissDestination={() => setDestDismissed(true)}
         />
       ) : (
       <>
@@ -802,6 +809,9 @@ export default function HomePage() {
 
       {/* SMART-SEARCH SPINE — one search that routes into the right world. */}
       <SmartSearchBar onOpen={() => setShowSearch(true)} />
+      {destSearch && !destDismissed && (
+        <DestinationStrip place={destSearch} onAction={handleQuickAction} onDismiss={() => setDestDismissed(true)} />
+      )}
 
       {/* FEATURE TILES — 2-col grid of all six finders. Editorial: emoji chip,
           serif title (2-line clamp), tiny subtitle; min-height so enlarging text
