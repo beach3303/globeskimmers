@@ -285,7 +285,22 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
   const [expanded, setExpanded] = useState(false);
   const [hoursExpanded, setHoursExpanded] = useState(false);
   const [gallery, setGallery] = useState({ open: false, idx: 0 });
+  const [enriched, setEnriched] = useState(null);
   const fs = (n) => `calc(${n}px*var(--fs))`;
+
+  // Fetch a real Google photo + hours for owned ATMs (owned records carry none) —
+  // on MOUNT so the list card shows a real photo (mirrors Eat/Coffee). Resolves
+  // owned→Google once; details+photos cached 90d, so repeat views are free. Skips
+  // records that already have a photo (e.g. Google-sourced venues).
+  useEffect(() => {
+    if (enriched || (atm.photos && atm.photos.length)) return;
+    callWorker('places/enrich-owned', { id: atm.id || atm.placeId, name: atm.displayName?.text || atm.name, lat: atm.lat, lng: atm.lng, maxPhotos: 3 })
+      .then(({ data }) => { if (data && data.matched) setEnriched(data); }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Prefer enriched Google photos; normalize to URL strings (enrich returns objects).
+  const cardPhotos = (enriched?.photos?.length ? enriched.photos : (atm.photos || []))
+    .map(p => (typeof p === "string" ? p : (p?.url || p?.full || p?.thumbnail || null))).filter(Boolean);
 
   // Width-gated design tokens. Tablet values are VERBATIM from the original
   // tablet-only card; phone values are the phone-tuned spec (compact, beautiful,
@@ -350,7 +365,7 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
           over the photo or, when no photo exists, over the placeholder. */}
       <div style={{ position:"relative" }}>
         <ATMPhotoStrip
-          photos={atm.photos}
+          photos={cardPhotos}
           fallbackIcon={atm.venueIcon || "🏧"}
           onPhotoClick={(i) => setGallery({ open: true, idx: i })}
           height={D.photoH}
@@ -466,7 +481,7 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
         userLat={userLat}
         userLng={userLng}
       />
-      <PhotoGalleryModal photos={atm.photos || []} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
+      <PhotoGalleryModal photos={cardPhotos} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
     </motion.div>
   );
 }

@@ -415,10 +415,11 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
   const touchStartX = useRef(0);
   const fs = (n) => `calc(${n}px*var(--fs))`;
 
-  // On first expand of an OWNED store, fetch real Google photos + hours (resolves
-  // owned→Google once, cached). Keeps the list free; only opened cards cost.
+  // Fetch real Google photos + hours for OWNED stores (owned records carry none) —
+  // on MOUNT so the list card shows a real photo, not only on expand (mirrors Eat/
+  // Coffee). Resolves owned→Google once; cached 90d so repeat views are free.
   useEffect(() => {
-    if (!expanded || enriched || rawStore.source !== 'owned') return;
+    if (enriched || rawStore.source !== 'owned') return;
     callWorker('places/enrich-owned', {
       id: rawStore.id || rawStore.placeId,
       name: rawStore.name || rawStore.displayName?.text,
@@ -426,7 +427,7 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
       lng: rawStore.lng ?? rawStore.longitude,
       maxPhotos: 3,
     }).then(({ data }) => { if (data && data.matched) setEnriched(data); }).catch(() => {});
-  }, [expanded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Phone-tuned vs tablet sizing. Tablet values are unchanged from the
   // original editorial card; phone values are the compact set from the spec.
