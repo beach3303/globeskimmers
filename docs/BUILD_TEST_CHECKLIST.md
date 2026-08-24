@@ -456,3 +456,13 @@ State: Committed (0295dd8) · Frontend auto-deploys on push · Tested ⬜
 - [ ] A stamp with memory photos shows the 2×2 photo grid; GPS-verified stamps show the green ✓
 - [ ] "Share" renders the current page to an image + opens the share sheet; "Close" returns to the cover
 - [ ] Fresh/empty passport still shows a flippable 10-page booklet (no crash with zero stamps)
+
+## 🏧 ATM / Convenience / Money-Exchange — filters + coverage restored (2026-08-24)
+These three were routed to the generic owned handler, which ignored every filter param and had no Google fallback → filters did nothing + empty in most cities. Re-pointed each page to its rich Google route (handleAtmLocations / handleConvenienceStores / handleMoneyExchange). Frontend-only (no worker deploy). Cost note: these now hit Google (~3¢/search, KV-cached 3-day) — acceptable for low-traffic utility finders; the payoff is working filters + coverage everywhere. Also fixed ConvenienceStore radius unit (was sending meters to a miles handler). Also caught earlier: Get Directions on ActivityDetail (0e44c24 batch is finders; directions was 44f9a22).
+State: Committed (0e44c24) · Frontend auto-deploys on push (PUSHED) · Tested ⬜
+- [ ] ⚠️ Before device test: `npm run build && npx cap copy ios`
+- [ ] **ATM**: open in a real city → ATMs appear; the **bank-filter dropdown now shows** (was missing) and picking a bank narrows results; **"Open now"** toggle changes the list
+- [ ] **Convenience**: results appear; toggling **Open 24h / Has ATM / Hot food / Pharmacy / etc.** actually filters; the radius feels right (~25 mi, not a giant/degenerate area — the meters→miles bug is fixed)
+- [ ] **Money Exchange**: locations appear; **"Best rate"** sort reorders; **"Open now"** filters; the rate converter (from/to/amount) still works (it was always fine)
+- [ ] All three: a city with no coverage no longer shows blank — Google backfills
+- [ ] Cost sanity: repeated searches in the same area are served from cache (not a new Google call each time)
