@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import html2canvas from "html2canvas";
 import { ChevronLeft, ChevronRight, X, Share2 } from "lucide-react";
