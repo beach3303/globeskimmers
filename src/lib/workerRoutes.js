@@ -50,5 +50,6 @@ export const ROUTE = {
   getRestaurants: 'restaurants-full',
   getAnalytics: 'analytics-bundle',
   InvokeLLM: 'invoke-llm',
+  parseSearch: 'parse-search',
 
 };

@@ -96,7 +96,7 @@ export default function AdminAnalytics() {
       // Fan out over the live Worker /analytics-query route (one D1 query per
       // type), assembling the bundle the renderer expects. Native-safe via
       // callWorker — replaces the Base44 getAnalytics function (403s on device).
-      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'retention_cohorts_90d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes', 'searches_by_city', 'search_categories_by_city', 'transfer_vs_rental', 'zero_results_by_city', 'wishlist_by_city_30d', 'wishlist_top_30d', 'wishlist_by_kind_30d', 'wishlist_cta_30d', 'directions_by_place_30d', 'persona_distribution_30d', 'affiliate_funnel_30d', 'affiliate_clicks_by_intent_30d'];
+      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'retention_cohorts_90d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes', 'searches_by_city', 'search_categories_by_city', 'transfer_vs_rental', 'zero_results_by_city', 'smart_search_by_scope', 'smart_search_by_category', 'smart_search_top_places', 'wishlist_by_city_30d', 'wishlist_top_30d', 'wishlist_by_kind_30d', 'wishlist_cta_30d', 'directions_by_place_30d', 'persona_distribution_30d', 'affiliate_funnel_30d', 'affiliate_clicks_by_intent_30d'];
       const pairs = await Promise.all(TYPES.map(async (type) => {
         const { data: qd, error: qe } = await callWorker(`analytics-query?type=${encodeURIComponent(type)}`, {});
         return [type, { results: qd?.results || [], error: qe || qd?.error || null }];
@@ -155,6 +155,9 @@ export default function AdminAnalytics() {
   const searchCatsByCity = data?.search_categories_by_city?.results || [];
   const rideDemand = data?.transfer_vs_rental?.results || [];
   const zeroByCity = data?.zero_results_by_city?.results || [];
+  const smartByScope = data?.smart_search_by_scope?.results || [];
+  const smartByCat = data?.smart_search_by_category?.results || [];
+  const smartTopPlaces = data?.smart_search_top_places?.results || [];
   const wishByCity = data?.wishlist_by_city_30d?.results || [];
   const wishTop = data?.wishlist_top_30d?.results || [];
   const wishByKind = data?.wishlist_by_kind_30d?.results || [];
@@ -468,6 +471,28 @@ export default function AdminAnalytics() {
               <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>The highest-value gap list — unmet demand, per city.</div>
               {zeroByCity.map((d, i) => (
                 <BarRow key={i} label={`"${d.query}" · ${d.city || '—'} · ${d.category || ''}`} count={d.misses} max={zeroByCity[0]?.misses || 1} color={COLORS.red} />
+              ))}
+            </Section>
+
+            {/* ── Smart-Search spine — the unified Home search's demand signals ── */}
+            <Section title="🔎 Smart-Search — how people scope (30d)" icon={Search} empty={smartByScope.length === 0 ? 'Fills as users search from the Home spine — near me vs at their stay vs a named place.' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>How travelers frame intent on the unified search.</div>
+              {smartByScope.map((d, i) => (
+                <BarRow key={i} label={d.scope || '(unknown)'} count={d.searches} max={smartByScope[0]?.searches || 1} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="🔎 Smart-Search — worlds opened (30d)" icon={Search} empty={smartByCat.length === 0 ? 'Fills as spine searches route into finders — eat / coffee / things / hotel / destination.' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Which world the spine drives into (AI = times the AI fallback was needed).</div>
+              {smartByCat.map((d, i) => (
+                <BarRow key={i} label={`${d.category || 'destination'}${d.ai_parsed ? ' · ' + d.ai_parsed + ' AI' : ''}`} count={d.searches} max={smartByCat[0]?.searches || 1} color={COLORS.green} />
+              ))}
+            </Section>
+
+            <Section title="🌍 Smart-Search — top destinations named (30d)" icon={Search} empty={smartTopPlaces.length === 0 ? 'Fills as users search a specific place from the spine — pure destination demand.' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Places people name in search — destination demand for marketing + inventory.</div>
+              {smartTopPlaces.map((d, i) => (
+                <BarRow key={i} label={d.place || '(unknown)'} count={d.searches} max={smartTopPlaces[0]?.searches || 1} color={COLORS.accent} />
               ))}
             </Section>
 

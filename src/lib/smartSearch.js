@@ -7,12 +7,12 @@
 // feed becomes a destination overview). Every search is logged to the demand
 // graph.
 //
-// Cost-first: a FREE client rule-pass handles the common cases; the Haiku
-// parser (/invoke-llm, KV-cached 30d) is only called for the ambiguous minority.
+// Cost-first: a FREE client rule-pass handles the common cases; the Haiku parser
+// (/parse-search — prompt-cached, KV 24h, ~$0.0009/miss) is only called for the
+// ambiguous minority, and degrades to the rule result if it's unavailable.
 // Reuses existing primitives — searchLocation, switchToNavigateMode,
-// getPrimaryStay, logSearch, invokeLLM — so v1 ships frontend-only (no worker
-// deploy).
-import { callWorker, invokeLLM } from "@/lib/callWorker";
+// getPrimaryStay, logSearch.
+import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { createPageUrl } from "@/utils";
 import { logSearch } from "@/lib/logSearch";
@@ -85,36 +85,24 @@ export function ruleParse(raw, scopeChip) {
   return { category, scope, place, query, parsedBy: "rule", confidence: confident ? 0.85 : 0.2 };
 }
 
-const PARSE_SCHEMA = {
-  type: "object",
-  properties: {
-    category: { type: "string", enum: ["eat", "coffee", "things", "hotel", "shopping", "atm", "money", "ride", "convenience", "restroom", "weather", "none"] },
-    scope: { type: "string", enum: ["near_me", "at_stay", "named_place", "unknown"] },
-    place: { type: "string" },
-    query: { type: "string" },
-  },
-  required: ["category", "scope", "place", "query"],
-};
-
-// Haiku parse (only on rule-miss). Returns the same shape or null on failure.
+// Haiku parse (only on rule-miss) via the cheap prompt-cached /parse-search
+// worker endpoint (~$0.0009/miss, KV-cached 24h). Returns the parsed shape, or
+// null on failure so the caller keeps the free rule result. Degrades gracefully
+// if the endpoint isn't deployed yet (→ null → rule-only).
 export async function aiParse(raw, scopeChip, activePhrase) {
-  const prompt =
-    `Parse this travel search into JSON.\nQuery: "${raw}".` +
-    (scopeChip ? ` The user tapped the scope "${scopeChip}".` : "") +
-    ` The user is currently in ${activePhrase || "an unknown place"}.\n` +
-    `category = which finder fits: eat | coffee | things (things to do / attractions) | hotel | shopping | atm | money (currency exchange) | ride (taxi / car / transfer) | convenience | restroom | weather; or "none" if the query is only a place name.\n` +
-    `scope = near_me | at_stay (near their hotel/accommodation) | named_place (a specific city/place they named) | unknown.\n` +
-    `place = the destination city/place name when scope is named_place, else "".\n` +
-    `query = the core thing to look for, cleaned of scope words (e.g. "viral desserts", "ramen"). If category is none, query = "".`;
-  const data = await invokeLLM({ prompt, response_json_schema: PARSE_SCHEMA });
-  if (!data || typeof data !== "object") return null;
+  const { data, error } = await callWorker(ROUTE.parseSearch, {
+    query: raw,
+    scope: scopeChip || "",
+    activePhrase: activePhrase || "",
+  });
+  if (error || !data || typeof data !== "object" || data.error) return null;
   return {
-    category: data.category && data.category !== "none" ? data.category : null,
+    category: data.category || null,
     scope: data.scope && data.scope !== "unknown" ? data.scope : (scopeChip || null),
     place: (data.place || "").trim() || null,
     query: String(data.query || "").trim(),
     parsedBy: "ai",
-    confidence: 0.9,
+    confidence: typeof data.confidence === "number" ? data.confidence : 0.9,
   };
 }
 

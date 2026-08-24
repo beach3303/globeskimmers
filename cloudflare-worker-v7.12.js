@@ -1160,6 +1160,38 @@ const ANALYTICS_QUERIES = {
     GROUP BY query, category, city, country
     ORDER BY misses DESC LIMIT 60
   `,
+  // ── SMART-SEARCH SPINE (source='smart_search') — the unified Home search's
+  //    demand signals: HOW people scope, WHICH worlds it opens, WHICH places
+  //    they name. First-party moat data; NO PII; aggregate. ──
+  smart_search_by_scope: `
+    SELECT json_extract(payload,'$.scope') AS scope,
+      COUNT(*) AS searches
+    FROM events
+    WHERE event_type='search' AND json_extract(payload,'$.source')='smart_search'
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY scope
+    ORDER BY searches DESC LIMIT 20
+  `,
+  smart_search_by_category: `
+    SELECT json_extract(payload,'$.category') AS category,
+      COUNT(*) AS searches,
+      SUM(CASE WHEN json_extract(payload,'$.parsed_by')='ai' THEN 1 ELSE 0 END) AS ai_parsed
+    FROM events
+    WHERE event_type='search' AND json_extract(payload,'$.source')='smart_search'
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY category
+    ORDER BY searches DESC LIMIT 30
+  `,
+  smart_search_top_places: `
+    SELECT json_extract(payload,'$.place') AS place,
+      COUNT(*) AS searches
+    FROM events
+    WHERE event_type='search' AND json_extract(payload,'$.source')='smart_search'
+      AND IFNULL(json_extract(payload,'$.place'),'')<>''
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY place
+    ORDER BY searches DESC LIMIT 40
+  `,
   // ── Affiliate (from affiliate_clicks; needs scripts/affiliate/01_schema.sql) ──
   affiliate_by_partner_30d: `
     SELECT partner,
@@ -4558,6 +4590,123 @@ async function handleParseIntent(request, env) {
     confidence: normalized.confidence,
     latencyMs: Date.now() - startedAt,
   });
+  return jsonResponse({ ...normalized, _cache: 'miss' });
+}
+
+// ============================================================================
+// /parse-search — cheap free-text → {category, scope, place, query} parser for
+// the Smart-Search spine. Modeled on handleParseIntent: Haiku 4.5, prompt-cached
+// system prompt (~10% input cost on repeats), KV 24h per query+scope. Only
+// called on a CLIENT rule-miss, so volume is the ambiguous minority. ~$0.0009 a
+// miss vs ~$0.045 via the generic /invoke-llm it replaces for the spine.
+// ============================================================================
+const PARSE_SEARCH_TTL_SECONDS = 24 * 60 * 60;
+const PARSE_SEARCH_PROMPT_VERSION = 'v1';
+const PARSE_SEARCH_CATEGORIES = new Set(['eat', 'coffee', 'things', 'hotel', 'shopping', 'atm', 'money', 'ride', 'convenience', 'restroom', 'weather', 'none']);
+const PARSE_SEARCH_SCOPES = new Set(['near_me', 'at_stay', 'named_place', 'unknown']);
+
+const PARSE_SEARCH_SYSTEM_PROMPT = `You parse a traveler's free-text search for Globeskimmers into STRICT JSON so the app can route them to the right finder, scoped to the right place.
+
+OUTPUT SCHEMA (return EXACTLY this shape — no extra keys, no markdown):
+{
+  "category": "eat" | "coffee" | "things" | "hotel" | "shopping" | "atm" | "money" | "ride" | "convenience" | "restroom" | "weather" | "none",
+  "scope": "near_me" | "at_stay" | "named_place" | "unknown",
+  "place": "<city/place name if scope is named_place, else empty string>",
+  "query": "<the core thing to search, cleaned of scope words, e.g. ramen, viral desserts>",
+  "confidence": <0.0-1.0>
+}
+
+CATEGORY = which finder fits:
+- eat = any food / restaurant / dish / bakery / dessert
+- coffee = coffee, café, tea, boba
+- things = things to do, attractions, museums, tours, hikes, sightseeing
+- hotel = where to stay, accommodation
+- shopping = shops, malls, souvenirs
+- atm = cash / ATM ; money = currency exchange ; ride = taxi / car / transfer
+- convenience = convenience store ; restroom = toilet ; weather = forecast
+- none = the query is ONLY a place name (no thing to find), e.g. "Positano".
+
+SCOPE:
+- near_me = near the user now ("near me", "nearby", "around here")
+- at_stay = near their hotel/accommodation ("near my hotel", "by our airbnb")
+- named_place = a specific city/place they named ("in Tokyo", "Positano restaurants")
+- unknown = no location cue.
+
+RULES:
+1. query: strip scope words. "ramen near my hotel" -> query "ramen". "best coffee in Lisbon" -> query "coffee", place "Lisbon".
+2. place: ONLY when scope is named_place; the bare place name, else empty string.
+3. If the whole query is just a place name, category = "none", query = "".
+4. confidence: 0.0-1.0. Below 0.4 = unsure.
+5. Return ONLY JSON — no prose, no markdown fences.
+
+EXAMPLES:
+Input: "ramen near my hotel"
+Output: {"category":"eat","scope":"at_stay","place":"","query":"ramen","confidence":0.95}
+Input: "things to do in Tokyo"
+Output: {"category":"things","scope":"named_place","place":"Tokyo","query":"things to do","confidence":0.96}
+Input: "viral desserts my kids would love"
+Output: {"category":"eat","scope":"unknown","place":"","query":"viral desserts","confidence":0.8}
+Input: "Positano"
+Output: {"category":"none","scope":"named_place","place":"Positano","query":"","confidence":0.9}
+Input: "where can I exchange money"
+Output: {"category":"money","scope":"unknown","place":"","query":"currency exchange","confidence":0.9}`;
+
+async function handleParseSearch(request, env) {
+  if (!env.ANTHROPIC_API_KEY) return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
+  let body;
+  try { body = await request.json(); } catch (_e) { return jsonResponse({ error: 'Invalid JSON body' }, 400); }
+  const query = (body?.query || '').toString().trim();
+  const scopeChip = (body?.scope || '').toString().trim();
+  const activePhrase = (body?.activePhrase || '').toString().trim();
+  if (!query) return jsonResponse({ error: 'query required' }, 400);
+
+  // Cache key = query + scope only (place-extraction is query-driven); active
+  // city is a prompt hint but not keyed, to keep the cache small.
+  const normalizedQuery = query.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+  const cacheKey = `parse_search:${PARSE_SEARCH_PROMPT_VERSION}:${scopeChip || 'auto'}:${normalizedQuery}`;
+
+  if (env.GLOBESKIMMERS_KV) {
+    const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+    if (cached) return jsonResponse({ ...cached, _cache: 'hit' });
+  }
+
+  let parsed;
+  try {
+    const userMsg = `Query: ${query}` +
+      (scopeChip ? `\nThe user tapped scope: ${scopeChip}` : '') +
+      (activePhrase ? `\nThe user is currently in: ${activePhrase}` : '');
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 256,
+        system: [{ type: 'text', text: PARSE_SEARCH_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: userMsg }],
+      }),
+    });
+    if (!apiRes.ok) return jsonResponse({ error: 'Claude API error', status: apiRes.status }, 502);
+    const data = await apiRes.json();
+    const raw = data?.content?.[0]?.text?.trim() || '';
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    parsed = JSON.parse(cleaned);
+  } catch (e) {
+    return jsonResponse({ error: 'Claude parse error: ' + (e.message || 'unknown') }, 500);
+  }
+
+  const category = (typeof parsed.category === 'string' && PARSE_SEARCH_CATEGORIES.has(parsed.category)) ? parsed.category : 'none';
+  const scope = (typeof parsed.scope === 'string' && PARSE_SEARCH_SCOPES.has(parsed.scope)) ? parsed.scope : 'unknown';
+  const normalized = {
+    category: category === 'none' ? null : category,
+    scope,
+    place: (typeof parsed.place === 'string' && parsed.place.trim()) ? parsed.place.trim() : null,
+    query: typeof parsed.query === 'string' ? parsed.query.trim() : '',
+    confidence: typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : 0.5,
+  };
+
+  if (env.GLOBESKIMMERS_KV) {
+    await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(normalized), { expirationTtl: PARSE_SEARCH_TTL_SECONDS }).catch(() => {});
+  }
   return jsonResponse({ ...normalized, _cache: 'miss' });
 }
 
@@ -13341,6 +13490,7 @@ export default {
       if (pathname === '/search-location' && request.method === 'POST') return await handleSearchLocation(request, env);
       if (pathname === '/name-info' && request.method === 'POST') return await handleNameInfo(request, env);
       if (pathname === '/parse-intent' && request.method === 'POST') return await handleParseIntent(request, env);
+      if (pathname === '/parse-search' && request.method === 'POST') return await handleParseSearch(request, env);
       // ThingsToDo D1 attractions lookup. Fast path for the launch-city +
       // launch-country marquee + regional layer; replaces the prior
       // ~70-Places-call discovery sequence that dominated mobile cold-load
