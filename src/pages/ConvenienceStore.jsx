@@ -419,7 +419,10 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
   // on MOUNT so the list card shows a real photo, not only on expand (mirrors Eat/
   // Coffee). Resolves owned→Google once; cached 90d so repeat views are free.
   useEffect(() => {
-    if (enriched || rawStore.source !== 'owned') return;
+    // Enrich when the record has no photo yet (owned records carry none). Source-
+    // agnostic: convenience owned rows tag `_source`, not `source`, so a source
+    // check silently skipped them and no photo ever loaded.
+    if (enriched || (rawStore.photos && rawStore.photos.length)) return;
     callWorker('places/enrich-owned', {
       id: rawStore.id || rawStore.placeId,
       name: rawStore.name || rawStore.displayName?.text,
