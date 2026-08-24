@@ -187,13 +187,16 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
   const [expanded,setExpanded]=useState(false);
   const [showDir,setShowDir]=useState(false);
   const [enriched,setEnriched]=useState(null);
-  // On first expand of an OWNED shop, fetch 3 real Google photos + hours (resolves
-  // owned→Google once, cached). Keeps the list free; only opened shops cost.
+  // Fetch 3 real Google photos + hours for OWNED shops (owned records carry none) —
+  // runs on MOUNT so the list card shows a real photo, not only on expand (mirrors
+  // Places-to-Eat). Resolves owned→Google once; details+photos are server-cached 90d,
+  // so repeat views cost nothing. (Website og:image was tried as a free rung and
+  // pulled for quality, so Google's real photos are the source.)
   useEffect(()=>{
-    if(!expanded||enriched||shop.source!=='owned')return;
+    if(enriched||shop.source!=='owned')return;
     callWorker('places/enrich-owned',{id:shop.id||shop.placeId,name:shop.displayName?.text||shop.name,lat:shop.lat,lng:shop.lng,maxPhotos:3})
       .then(({data})=>{ if(data&&data.matched)setEnriched(data); }).catch(()=>{});
-  },[expanded]); // eslint-disable-line react-hooks/exhaustive-deps
+  },[]); // eslint-disable-line react-hooks/exhaustive-deps
   const fs=(n)=>`calc(${n}px*var(--fs))`;
   // Responsive size picker — `t` (tablet) keeps the current editorial sizes,
   // `p` (phone) is the compact phone-tuned value. Every size below routes
