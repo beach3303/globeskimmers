@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
+import { useLocation as useRouterLocation } from "react-router-dom";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
@@ -271,6 +272,16 @@ export default function ShoppingFinder() {
   const cardRefs=useRef({});
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
   const {activeLocation}=useLocation();
+  // Smart-Search handoff: a category passed via router state (from the spine's
+  // shopping-query mapping) selects that chip once.
+  const routerLocation=useRouterLocation();
+  const presetCatRanRef=useRef(false);
+  useEffect(()=>{
+    const pc=routerLocation.state?.presetCategory;
+    if(presetCatRanRef.current||!pc) return;
+    if(CATEGORIES.some((c)=>c.id===pc)){ presetCatRanRef.current=true; setCategory(pc); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[routerLocation.state?.presetCategory]);
   const lat=activeLocation?.coordinates?.latitude; const lng=activeLocation?.coordinates?.longitude;
   const locLabel=getLocationLabel(activeLocation);
   const isCity=isCityLocation(activeLocation);

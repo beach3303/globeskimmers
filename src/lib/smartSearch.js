@@ -120,6 +120,29 @@ export async function parseSmartSearch(raw, { scopeChip, explicitPlace, activePh
   return ruled;
 }
 
+// Map a shopping query to one of Shopping's category chips (Shopping takes a
+// category, not free text). Returns a chip id or null. Order matters — more
+// specific phrases ("night market", "supermarket") win over "market".
+const SHOP_CATEGORY_KEYWORDS = [
+  { id: "souvenir_shopping", words: ["souvenir", "gift", "keepsake"] },
+  { id: "supermarkets", words: ["grocery", "groceries", "supermarket"] },
+  { id: "luxury_shopping", words: ["luxury", "designer", "high end", "high-end"] },
+  { id: "duty_free", words: ["duty free", "duty-free"] },
+  { id: "night_markets", words: ["night market"] },
+  { id: "malls", words: ["mall", "shopping center", "shopping centre"] },
+  { id: "outlets", words: ["outlet", "discount"] },
+  { id: "markets_bazaars", words: ["bazaar", "flea market", "market"] },
+  { id: "local_crafts", words: ["craft", "handmade", "artisan"] },
+];
+export function shoppingCategoryFor(query) {
+  const q = String(query || "").toLowerCase();
+  if (!q) return null;
+  for (const { id, words } of SHOP_CATEGORY_KEYWORDS) {
+    if (words.some((w) => q.includes(w))) return id;
+  }
+  return null;
+}
+
 // Dispatch parsed intent: re-center + navigate + log. `location` is the
 // LocationContext value (needs switchToNavigateMode). `navigate` is
 // react-router's. Returns {routed, recentered, needsStay?, destinationMode?}.
@@ -155,7 +178,14 @@ export async function runSmartSearch(parsed, { navigate, location }) {
 
   // 3. Route.
   if (cat) {
-    const opts = cat.acceptsQuery && query ? { state: { presetQuery: query } } : undefined;
+    let opts;
+    if (category === "shopping") {
+      // Shopping takes a category chip, not free text — map the query to one.
+      const shopCat = shoppingCategoryFor(query);
+      if (shopCat) opts = { state: { presetCategory: shopCat } };
+    } else if (cat.acceptsQuery && query) {
+      opts = { state: { presetQuery: query } };
+    }
     navigate(createPageUrl(cat.page), opts);
     return { routed: cat.page, recentered, needsStay };
   }
