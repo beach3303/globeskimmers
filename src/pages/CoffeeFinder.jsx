@@ -70,12 +70,19 @@ function computeOpenStatus(place) {
   const hours = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
   if (!hours.length) return { isOpen:null, todayHours:null, is24Hours:false };
   const DAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const entry = hours.find(h => h?.startsWith(DAY[new Date().getDay()]));
+  // Use the PLACE's timezone (Google utcOffsetMinutes) so open/closed is right when
+  // browsing another city; device-time fallback (correct for your current location).
+  const _off = place.utcOffsetMinutes;
+  const _tz = Number.isFinite(_off);
+  const _now = _tz ? new Date(Date.now() + _off * 60000) : new Date();
+  const _day = _tz ? _now.getUTCDay() : _now.getDay();
+  const _mins = _tz ? (_now.getUTCHours() * 60 + _now.getUTCMinutes()) : (_now.getHours() * 60 + _now.getMinutes());
+  const entry = hours.find(h => h?.startsWith(DAY[_day]));
   if (!entry) return { isOpen:null, todayHours:null, is24Hours:false };
   const hoursText = entry.substring(entry.indexOf(':')+1).trim();
   if (hoursText.toLowerCase()==='closed') return { isOpen:false, todayHours:'Closed today', is24Hours:false };
   if (hoursText.toLowerCase().includes('24 hours')) return { isOpen:true, todayHours:'Open 24 hours', is24Hours:true };
-  const cur = new Date().getHours()*60 + new Date().getMinutes();
+  const cur = _mins;
   for (const seg of hoursText.split(',')) {
     const m = seg.trim().match(/(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)\s*[–-]\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)/i);
     if (m) { const o=parseTime(m[1]); let c=parseTime(m[2]); if(c<=o)c+=1440; if(cur>=o&&cur<c) return { isOpen:true, todayHours:hoursText, is24Hours:false }; }

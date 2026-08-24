@@ -62,12 +62,18 @@ function openStatus(p){
   const h=p.currentOpeningHours?.weekdayDescriptions||p.hours||[];
   if(!h.length) return {isOpen:p.isOpen??null,label:p.isOpen===true?"Open Now":p.isOpen===false?"Closed":"Hours Unknown",is24H:false,today:""};
   const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-  const tod=days[new Date().getDay()];
+  // Place-timezone aware (Google utcOffsetMinutes) — right hours when browsing
+  // another city; device-time fallback for your current location.
+  const _off=p.utcOffsetMinutes;
+  const _tz=Number.isFinite(_off);
+  const _now=_tz?new Date(Date.now()+_off*60000):new Date();
+  const _mins=_tz?(_now.getUTCHours()*60+_now.getUTCMinutes()):(_now.getHours()*60+_now.getMinutes());
+  const tod=days[_tz?_now.getUTCDay():_now.getDay()];
   const ent=h.find((x)=>x?.toLowerCase().startsWith(tod.toLowerCase()));
   if(!ent) return {isOpen:null,label:"Hours Unknown",is24H:false,today:""};
   const txt=ent.split(":").slice(1).join(":").trim();
   if(txt.toLowerCase()==="closed") return {isOpen:false,label:"Closed Today",is24H:false,today:"Closed"};
-  const cur=new Date().getHours()*60+new Date().getMinutes();
+  const cur=_mins;
   const open=txt.split(",").some((seg)=>{
     const m=seg.match(/(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)\s*[–\-]\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)/i);
     if(!m) return false;

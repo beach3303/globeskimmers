@@ -185,9 +185,17 @@ function computeOpenStatus(place) {
   const hours = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
   if (!hours.length) return { isOpen: place.isOpen ?? null, todayHours: null, is24Hours: false };
 
-  const now = new Date();
+  // Compute "now" in the PLACE's timezone when Google gave us its UTC offset — the
+  // device clock makes open/closed + today's-hours WRONG when browsing a city in
+  // another timezone (e.g. Tokyo from the US). Falls back to device time (correct
+  // for your current location) when the offset isn't available.
+  const _off = place.utcOffsetMinutes;
+  const _tz = Number.isFinite(_off);
+  const now = _tz ? new Date(Date.now() + _off * 60000) : new Date();
+  const _day = _tz ? now.getUTCDay() : now.getDay();
+  const _mins = _tz ? (now.getUTCHours() * 60 + now.getUTCMinutes()) : (now.getHours() * 60 + now.getMinutes());
   const DAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const entry = hours.find(h => h?.startsWith(DAY[now.getDay()]));
+  const entry = hours.find(h => h?.startsWith(DAY[_day]));
 
   if (!entry) return { isOpen: place.isOpen ?? null, todayHours: null, is24Hours: false };
 
@@ -197,7 +205,7 @@ function computeOpenStatus(place) {
 
   let isLiveOpen = place.isOpen ?? null;
   try {
-    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const currentMins = _mins;
     const shifts = hoursText.split(',');
     let foundMatch = false;
 
