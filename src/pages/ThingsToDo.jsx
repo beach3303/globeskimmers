@@ -684,7 +684,7 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
 
 const TRAVEL_COLORS={'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'},'📍 Nearby':{bg:'#D1FAE5',color:'#059669'}};
 
-function TierCard({a,userLat,userLng,isTablet}){
+function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,cardRef=null}){
   const [dirs,setDirs]=useState(false);
   const [gallery,setGallery]=useState({open:false,idx:0});
   // fs()-style scaler for the editorial body (used at both widths now).
@@ -714,6 +714,9 @@ function TierCard({a,userLat,userLng,isTablet}){
     callWorker('places/enrich-owned',{id:a.id||a.placeId,name:a.displayName?.text||a.name,lat:a.lat??a.location?.latitude,lng:a.lng??a.location?.longitude,maxPhotos:3})
       .then(({data})=>{if(data&&data.matched)setEnriched(data);}).catch(()=>{});
   },[]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Open the fullscreen modal when the parent forces it (tapped from the map, or
+  // the Near-You list which uses this card full-width so all cards behave alike).
+  useEffect(()=>{if(forceOpen)setExpanded(true);},[forceOpen]);
   const name=a.displayName?.text||a.name||"Activity";
   const tc=TRAVEL_COLORS[a.travelType]||{bg:'#F1F5F9',color:'#64748B'};
   // Prefer enriched Google photos; normalize objects→URL strings.
@@ -741,7 +744,7 @@ function TierCard({a,userLat,userLng,isTablet}){
   const wlCity=a.city||(_wlAddr.length>=2?_wlAddr[_wlAddr.length-2]:"");
   const wlCountry=a.country||(_wlAddr.length>=1?_wlAddr[_wlAddr.length-1]:"");
   const editorialBody=(
-    <div onClick={()=>setExpanded(true)} style={{flexShrink:0,width:t("340px","240px"),background:"#fff",borderRadius:t("24px","20px"),boxShadow:t("0 18px 40px -26px rgba(22,17,13,.4)","0 10px 26px -18px rgba(22,17,13,.4)"),overflow:"hidden",border:`1px solid ${ED_RULE}`,cursor:"pointer"}}>
+    <div ref={cardRef} onClick={()=>setExpanded(true)} style={{flexShrink:0,width:fullWidth?"100%":t("340px","240px"),background:"#fff",borderRadius:t("24px","20px"),boxShadow:t("0 18px 40px -26px rgba(22,17,13,.4)","0 10px 26px -18px rgba(22,17,13,.4)"),overflow:"hidden",border:`1px solid ${ED_RULE}`,cursor:"pointer"}}>
       <div style={{position:"relative",height:fs(photoH),background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
         <div style={{position:"absolute",top:8,right:8,zIndex:15}} onClick={(e)=>e.stopPropagation()}>
           <WishlistButton item={{kind:"attraction",id:a.placeId||a.id,title:name,city:wlCity,country:wlCountry,image:photo1}} size={17}/>
@@ -1208,7 +1211,7 @@ export default function ThingsToDoFinder() {
           const showBeyondHeader=submitted&&searchBeyond.length>0&&i===filtered.length;
           return (<React.Fragment key={a.id||i}>
             {showBeyondHeader&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:isTablet?"14px 4px 4px":"6px 4px 2px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🧭</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>A bit farther — worth the trip</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({searchBeyond.length})</span></div>}
-            <ActivityCardTablet a={a} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet}/>
+            <TierCard a={a} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={expandedIdx===i} cardRef={(el)=>cardRefs.current[i]=el}/>
           </React.Fragment>);
         })}</div>
 
