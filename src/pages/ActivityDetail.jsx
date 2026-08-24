@@ -632,11 +632,7 @@ export default function ActivityDetailPage() {
           {/* Action Buttons */}
           <div className="flex gap-2">
             <button
-              onClick={() => {
-                if (activityLocation) {
-                  setShowMapSelector(true);
-                }
-              }}
+              onClick={() => setShowMapSelector(true)}
               className="flex-1 bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white py-3 rounded-xl font-bold text-[calc(15px*var(--fs))] flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-md"
             >
               <Navigation className="w-5 h-5" />
@@ -840,16 +836,21 @@ export default function ActivityDetailPage() {
         )}
       </AnimatePresence>
 
-      {activityLocation && (
+      {activity && (
         <MapAppSelector
           isOpen={showMapSelector}
           onClose={() => setShowMapSelector(false)}
+          /* Directions target = the ATTRACTION (not the user). `activityLocation`
+             is the user's active location → pass it as the ORIGIN (userLat/Lng),
+             resolving its NESTED coordinates shape. */
           destination={{
-            latitude: activityLocation.latitude,
-            longitude: activityLocation.longitude,
+            latitude: activity.latitude,
+            longitude: activity.longitude,
             name: activity.name,
             address: activity.address
           }}
+          userLat={activityLocation?.coordinates?.latitude ?? activityLocation?.latitude ?? activityLocation?.lat}
+          userLng={activityLocation?.coordinates?.longitude ?? activityLocation?.longitude ?? activityLocation?.lng}
         />
       )}
 
