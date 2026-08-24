@@ -479,3 +479,13 @@ State: Committed (7509bee + f13a844) · Frontend auto-deploys on push · Tested 
 - [ ] A recent search chip re-runs it; suggestions show before any recents exist
 - [ ] Confirm a `search` event with `source:'smart_search'` + `scope` fires in `/log-event`
 - [ ] Cost check: simple queries ("coffee", "hotel", "things to do in Tokyo") make ZERO `/invoke-llm` calls (rule-parsed); only messy free-text ("viral desserts my kids would love") hits the AI parser
+
+## 🔎 Smart-Search spine Phase 2 (2026-08-24)
+Two upgrades: (1) a dedicated cheap `/parse-search` worker endpoint (Haiku 4.5, prompt-cached, KV 24h, ~$0.0009/miss vs ~$0.045 via `/invoke-llm`) — `smartSearch.aiParse` now calls it on a rule-miss; (2) Smart-Search demand analytics — 3 `ANALYTICS_QUERIES` (by scope, by world + AI-parse count, top named destinations) + 3 Admin Analytics sections. Files: `cloudflare-worker-v7.12.js` (handleParseSearch + route + queries), `src/lib/workerRoutes.js`, `src/lib/smartSearch.js`, `src/pages/AdminAnalytics.jsx`.
+State: Committed (0e108ad) · **NEEDS WORKER DEPLOY** (`wrangler deploy`) + git push (frontend) · Tested ⬜
+- [ ] Deploy: `cd "…/globeskimmers-cacf36e4-10" && npx wrangler deploy`; then git push (frontend auto-deploys)
+- [ ] Ambiguous query ("viral desserts my kids would love") → still routes correctly; in the network log it calls `/parse-search` (not `/invoke-llm`), and a repeat of the same query returns `_cache:'hit'`
+- [ ] Simple queries ("coffee near me", "things to do in Tokyo") make ZERO `/parse-search` calls (rule-parsed for free)
+- [ ] Before the worker deploy, the spine still works (AI fallback returns null → rule result) — no crash/hang
+- [ ] Admin Analytics shows 3 new "Smart-Search" sections (scope · worlds opened + AI count · top destinations), honest empty states until real searches accrue
+- [ ] `/analytics-bundle` (or the admin fetch) returns `smart_search_by_scope` / `smart_search_by_category` / `smart_search_top_places` without a "type not found" error (confirms the worker deploy landed)
