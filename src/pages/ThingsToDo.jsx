@@ -705,11 +705,23 @@ function TierCard({a,userLat,userLng,isTablet}){
   // where Map closed the modal AND swapped the page to viewMode='map', and
   // double-X buttons appeared (one inside the popup, one outside).
   const [mapOpen,setMapOpen]=useState(false);
+  const [enriched,setEnriched]=useState(null);
+  // Owned "Nearby Attractions" carry no photos (National Icons/Regional come from
+  // Google w/ photos) — enrich on mount so this tier is just as beautiful. Skips
+  // items that already have a photo; resolves owned→Google once, cached 90d.
+  useEffect(()=>{
+    if(enriched||(a.photos&&a.photos.length))return;
+    callWorker('places/enrich-owned',{id:a.id||a.placeId,name:a.displayName?.text||a.name,lat:a.lat??a.location?.latitude,lng:a.lng??a.location?.longitude,maxPhotos:3})
+      .then(({data})=>{if(data&&data.matched)setEnriched(data);}).catch(()=>{});
+  },[]); // eslint-disable-line react-hooks/exhaustive-deps
   const name=a.displayName?.text||a.name||"Activity";
   const tc=TRAVEL_COLORS[a.travelType]||{bg:'#F1F5F9',color:'#64748B'};
-  const photo1=a.photos?.[0]||null;
-  const photo2=a.photos?.[1]||null;
-  const photo3=a.photos?.[2]||null;
+  // Prefer enriched Google photos; normalize objects→URL strings.
+  const _photos=(enriched?.photos?.length?enriched.photos:(a.photos||[]))
+    .map(p=>typeof p==="string"?p:(p?.url||p?.full||p?.thumbnail||null)).filter(Boolean);
+  const photo1=_photos[0]||null;
+  const photo2=_photos[1]||null;
+  const photo3=_photos[2]||null;
   // Inline distance formatter for the expanded modal — TierSection isn't
   // wired to the parent's useDistanceUnit hook, so use a simple miles
   // formatter (matches the compact card's "X.X mi" rendering).
@@ -768,7 +780,7 @@ function TierCard({a,userLat,userLng,isTablet}){
     <>
       {editorialBody}
       <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",latitude:a.lat,longitude:a.lng}} userLat={userLat} userLng={userLng}/>
-      <PhotoGalleryModal photos={a.photos||[]} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
+      <PhotoGalleryModal photos={_photos} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
       <AnimatePresence>
         {expanded&&(
           <motion.div
@@ -782,7 +794,7 @@ function TierCard({a,userLat,userLng,isTablet}){
                 aria-label="Close"
                 style={{position:"absolute",top:"12px",right:"12px",zIndex:10000,width:"36px",height:"36px",borderRadius:"50%",border:"none",background:"rgba(255,255,255,0.95)",color:T.dark,fontSize:"calc(18px*var(--fs))",fontWeight:"800",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}
               >✕</button>
-              <ActivityCardTablet a={a} index={0} onMap={()=>setMapOpen(true)} isHighlighted={false} cardRef={null} forceExpanded={true} userLat={userLat} userLng={userLng} formatDistance={fmtDist} isTablet={isTablet}/>
+              <ActivityCardTablet a={_photos.length?{...a,photos:_photos}:a} index={0} onMap={()=>setMapOpen(true)} isHighlighted={false} cardRef={null} forceExpanded={true} userLat={userLat} userLng={userLng} formatDistance={fmtDist} isTablet={isTablet}/>
             </div>
           </motion.div>
         )}
