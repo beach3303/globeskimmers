@@ -8078,8 +8078,8 @@ async function handleActivities(request, env, ctx) {
     // reviews). Obscure person-monuments/statues too; keep genuinely-visited ones
     // (national pride / popular figures also draw crowds). Review count is the proxy
     // for "national hero / national pride / popular figure" (founder rule 2026-08-23).
-    const GRAVE_RE_H = /\b(grave|gravesite|graveyard|tomb|tombstone|headstone|burial|mausoleum|crypt|columbarium|resting place)\b/i;
-    const MONUMENT_RE_H = /\b(monument|memorial|statue|bust|obelisk|cenotaph)\b/i;
+    const GRAVE_RE_H = /\b(grave|gravesite|graveyard|tomb|tombstone|headstone|burial|mausoleum|crypt|columbarium|resting place)s?\b/i;
+    const MONUMENT_RE_H = /\b(monument|memorial|statue|bust|obelisk|cenotaph)s?\b/i;
     const GRAVE_MIN_REVIEWS_H = 2000;    // only truly famous tombs survive
     const MONUMENT_MIN_REVIEWS_H = 500;  // keep visited monuments (e.g. Astronomer's Monument)
     const filterJunkH = (arr) => arr.filter(p => {
