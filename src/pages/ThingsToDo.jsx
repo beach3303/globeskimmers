@@ -530,7 +530,13 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
       {/* Photo — editorial block (tablet 360 / phone ~200); reuse photos + gallery, rank + category tag overlays */}
       <div style={{position:"relative",height:fs(photoH),background:`linear-gradient(135deg,${aColor}ee,${aColor}99)`}}>
         {photos.length>0?(
-          <img src={photos[0]} alt="" onClick={()=>setGallery({open:true,idx:0})} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"zoom-in"}}/>
+          // Swipeable inline carousel (scroll-snap) — swipe photos left/right without
+          // expanding; tap opens the fullscreen gallery. Mirrors Eat/Coffee.
+          <div style={{display:"flex",height:"100%",overflowX:"auto",scrollSnapType:"x mandatory",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>
+            {photos.map((p,i)=>(
+              <img key={i} src={p} alt="" onClick={()=>setGallery({open:true,idx:i})} style={{minWidth:"100%",height:"100%",objectFit:"cover",scrollSnapAlign:"start",flexShrink:0,cursor:"zoom-in"}}/>
+            ))}
+          </div>
         ):(
           <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:fs(t(96,56))}}>{a.activityIcon||"⭐"}</div>
         )}
