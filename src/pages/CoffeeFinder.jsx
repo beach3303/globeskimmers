@@ -146,7 +146,11 @@ function processShop(shop, userLat, userLng) {
   // No WiFi badge — WiFi now lives only inside the "Good for working" panel.
   // hasWifi is still computed above for the "Has WiFi" quick filter.
 
-  const photos = shop.photos||(shop.photoUrl?[shop.photoUrl]:[]);
+  // Normalize photo entries to URL strings. Google search (normalizePlace) returns
+  // photo OBJECTS {url,thumbnail,full}; owned/enrich returns strings. The <img> needs
+  // a string src, so objects silently failed → blank ☕ placeholder on real results.
+  const photos = (shop.photos||(shop.photoUrl?[shop.photoUrl]:[]))
+    .map(p=>typeof p==="string"?p:(p?.url||p?.full||p?.thumbnail||null)).filter(Boolean);
   return { ...shop, lat, lng, name, distanceMiles, distance:distanceMiles?`${distanceMiles.toFixed(1)} mi`:null, isOpen:openStatus.isOpen, todayHours:openStatus.todayHours, is24Hours:openStatus.is24Hours, detectedDrinks, amenities, parking, seating, hasIndoorSeating, hasOutdoorSeating, seatingSource, hasWifi, isChain:chainFlag, isSpecialty:specialtyFlag, tier, badges:badges.slice(0,5), photos, photoUrl:photos[0]||null };
 }
 
@@ -205,7 +209,8 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
 
   const name    = shop.displayName?.text || shop.name || "Coffee Shop";
   const address = shop.shortFormattedAddress || shop.formattedAddress || "";
-  const photos  = enriched?.photos?.length ? enriched.photos : (shop.photos||(shop.photoUrl?[shop.photoUrl]:[]));
+  const photos  = (enriched?.photos?.length ? enriched.photos : (shop.photos||(shop.photoUrl?[shop.photoUrl]:[])))
+    .map(p=>typeof p==="string"?p:(p?.url||p?.full||p?.thumbnail||null)).filter(Boolean);
   const openNow = enriched?.hours?.openNow ?? shop.isOpen;
   const weekdays = enriched?.hours?.weekdayDescriptions?.length ? enriched.hours.weekdayDescriptions : (shop.currentOpeningHours?.weekdayDescriptions||[]);
   const todayHrs = shop.todayHours || (weekdays.length ? ((weekdays[(new Date().getDay()+6)%7]||'').split(': ').slice(1).join(': ')||null) : null);
