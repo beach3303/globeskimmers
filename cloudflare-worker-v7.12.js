@@ -8073,10 +8073,23 @@ async function handleActivities(request, env, ctx) {
     // ── HELPERS (hoisted) ──
     const EXCLUDE_TYPES_SET_H = new Set(['cemetery','funeral_home']);
     const EXCLUDE_NAME_RE_H = /\bshrine\b|\bmemorial wall\b|\bplaque\b/i;
+    // Graves / tombs / headstones are morbid clutter in a "things to do" list — drop
+    // them UNLESS world-famous (a national hero's tomb draws big crowds → lots of
+    // reviews). Obscure person-monuments/statues too; keep genuinely-visited ones
+    // (national pride / popular figures also draw crowds). Review count is the proxy
+    // for "national hero / national pride / popular figure" (founder rule 2026-08-23).
+    const GRAVE_RE_H = /\b(grave|gravesite|graveyard|tomb|tombstone|headstone|burial|mausoleum|crypt|columbarium|resting place)\b/i;
+    const MONUMENT_RE_H = /\b(monument|memorial|statue|bust|obelisk|cenotaph)\b/i;
+    const GRAVE_MIN_REVIEWS_H = 2000;    // only truly famous tombs survive
+    const MONUMENT_MIN_REVIEWS_H = 500;  // keep visited monuments (e.g. Astronomer's Monument)
     const filterJunkH = (arr) => arr.filter(p => {
       const types = p.types || [];
       if (types.some(t => EXCLUDE_TYPES_SET_H.has(t))) return false;
-      if (EXCLUDE_NAME_RE_H.test(p.displayName?.text || p.name || '')) return false;
+      const nm = p.displayName?.text || p.name || '';
+      if (EXCLUDE_NAME_RE_H.test(nm)) return false;
+      const revs = p.userRatingCount || 0;
+      if (GRAVE_RE_H.test(nm) && revs < GRAVE_MIN_REVIEWS_H) return false;
+      if (MONUMENT_RE_H.test(nm) && revs < MONUMENT_MIN_REVIEWS_H) return false;
       return true;
     });
     const processPlaceH = (p) => {
