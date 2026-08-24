@@ -1,0 +1,299 @@
+<!-- Globeskimmers Unicorn Blueprint -->
+<title>Globeskimmers Blueprint</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap">
+
+<style>
+  :root{
+    --bg:#F7F3EA; --surface:#FFFFFF; --surface-2:#FCFAF3;
+    --ink:#16302B; --ink-soft:#42544E; --muted:#7C8B86;
+    --accent:#17A38F; --accent-deep:#0C7A6B; --accent-wash:#17A38F14;
+    --gold:#BE8322; --gold-wash:#BE83221A;
+    --coral:#BC5138; --coral-wash:#BC51381A;
+    --line:rgba(22,48,43,.13); --line-soft:rgba(22,48,43,.07);
+    --shadow:0 22px 50px -34px rgba(22,48,43,.45);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#0E1B19; --surface:#152A26; --surface-2:#122421;
+      --ink:#F1ECDE; --ink-soft:#C3CFC9; --muted:#8DA39C;
+      --accent:#34C6AF; --accent-deep:#6FE2CE; --accent-wash:#34C6AF1F;
+      --gold:#E4B366; --gold-wash:#E4B36622;
+      --coral:#E4886C; --coral-wash:#E4886C22;
+      --line:rgba(241,236,222,.15); --line-soft:rgba(241,236,222,.08);
+      --shadow:0 22px 50px -30px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0E1B19; --surface:#152A26; --surface-2:#122421;
+    --ink:#F1ECDE; --ink-soft:#C3CFC9; --muted:#8DA39C;
+    --accent:#34C6AF; --accent-deep:#6FE2CE; --accent-wash:#34C6AF1F;
+    --gold:#E4B366; --gold-wash:#E4B36622;
+    --coral:#E4886C; --coral-wash:#E4886C22;
+    --line:rgba(241,236,222,.15); --line-soft:rgba(241,236,222,.08);
+    --shadow:0 22px 50px -30px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Instrument Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-size:17px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:820px; margin:0 auto; padding:0 22px}
+  section{padding:44px 0; border-top:1px solid var(--line-soft)}
+  section:first-of-type{border-top:none}
+
+  h1,h2,h3{font-family:"Fraunces",Georgia,serif; text-wrap:balance; margin:0; letter-spacing:-.01em}
+  h1{font-size:clamp(34px,6.6vw,58px); line-height:1.03; font-weight:600}
+  h2{font-size:clamp(25px,4.3vw,36px); line-height:1.08; font-weight:600; margin-bottom:8px}
+  h3{font-size:19px; font-weight:600; line-height:1.25}
+  p{margin:0 0 15px} p:last-child{margin-bottom:0}
+  strong{font-weight:600; color:var(--ink)}
+  em{font-style:italic}
+  a{color:var(--accent-deep); text-decoration:none}
+
+  .eyebrow{
+    font-family:"JetBrains Mono",monospace; font-size:12px; font-weight:600;
+    letter-spacing:.16em; text-transform:uppercase; color:var(--accent-deep);
+    display:inline-flex; gap:9px; align-items:center;
+  }
+  .eyebrow::before{content:""; width:22px; height:2px; background:var(--accent); display:inline-block}
+  .lede{font-size:clamp(18px,2.3vw,21px); line-height:1.5; color:var(--ink-soft)}
+
+  /* HERO */
+  .hero{padding:clamp(52px,9vw,88px) 0 40px}
+  .hero h1{margin:20px 0 22px}
+  .hero .accent{color:var(--accent-deep); font-style:italic}
+  .stat-row{display:flex; flex-wrap:wrap; gap:12px; margin-top:30px}
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:15px; padding:15px 18px; flex:1 1 180px; box-shadow:var(--shadow)}
+  .stat b{font-family:"Fraunces",serif; font-size:30px; font-weight:600; color:var(--accent-deep); display:block; line-height:1; font-variant-numeric:tabular-nums}
+  .stat span{font-size:13.5px; color:var(--muted); display:block; margin-top:7px}
+
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:17px; padding:22px 24px; box-shadow:var(--shadow)}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  @media(max-width:640px){.grid2{grid-template-columns:1fr}}
+
+  /* journey states table */
+  .states{display:flex; flex-direction:column; gap:2px; border-radius:14px; overflow:hidden; border:1px solid var(--line)}
+  .st{display:grid; grid-template-columns:1fr auto; gap:10px 16px; padding:15px 18px; background:var(--surface)}
+  .st .pct{font-family:"JetBrains Mono",monospace; font-size:13px; color:var(--muted); align-self:center; white-space:nowrap}
+  .st .fit{font-size:13px; font-weight:600; margin-top:3px}
+  .st.win{background:var(--gold-wash)} .st.win .fit{color:var(--gold)}
+  .st.now{background:var(--accent-wash)} .st.now .fit{color:var(--accent-deep)}
+  .st.dead .fit{color:var(--coral)}
+  .st h3{margin-bottom:2px}
+
+  /* architecture diagram */
+  .diagram{background:var(--surface-2); border:1px solid var(--line); border-radius:18px; padding:24px 20px; margin-top:8px}
+  .spine{background:linear-gradient(100deg,var(--accent-deep),var(--accent)); color:#fff; border-radius:14px; padding:16px 18px; text-align:center; box-shadow:0 12px 26px -14px var(--accent)}
+  .spine .k{font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.14em; opacity:.85; text-transform:uppercase}
+  .spine .v{font-family:"Fraunces",serif; font-size:21px; font-weight:600; margin-top:3px}
+  .spine .n{font-size:12.5px; opacity:.9; margin-top:4px}
+  .flow{display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:20px; padding:7px 0}
+  .worlds{display:grid; grid-template-columns:repeat(4,1fr); gap:10px}
+  @media(max-width:640px){.worlds{grid-template-columns:1fr 1fr}}
+  .world{background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:14px 12px; text-align:center}
+  .world .em{font-size:24px} .world .nm{font-weight:600; font-size:14.5px; margin-top:5px}
+  .world .ds{font-size:11.5px; color:var(--muted); margin-top:3px; line-height:1.35}
+  .hub{margin-top:12px; text-align:center; border:1px dashed var(--accent); color:var(--accent-deep); border-radius:12px; padding:11px; font-weight:600; font-size:14px; background:var(--accent-wash)}
+  .base{margin-top:10px; text-align:center; border:1px solid var(--gold); color:var(--gold); border-radius:12px; padding:11px; font-weight:600; font-size:13.5px; background:var(--gold-wash)}
+
+  /* loop */
+  .loop{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:6px}
+  .node{background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:8px 15px; font-size:13.5px; font-weight:600; white-space:nowrap}
+  .node.hot{background:var(--accent-wash); border-color:var(--accent); color:var(--accent-deep)}
+  .arw{color:var(--muted); font-size:15px}
+
+  /* search example */
+  .q{font-family:"Fraunces",serif; font-style:italic; font-size:19px; color:var(--ink); margin-bottom:10px}
+  .q::before{content:"\201C"} .q::after{content:"\201D"}
+  .parse{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:11px}
+  .tag{font-family:"JetBrains Mono",monospace; font-size:11.5px; padding:4px 9px; border-radius:7px; background:var(--accent-wash); color:var(--accent-deep); border:1px solid var(--line)}
+  .tag.c{background:var(--gold-wash); color:var(--gold)}
+
+  ul.clean{margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:11px}
+  ul.clean li{position:relative; padding-left:26px; font-size:15.5px; color:var(--ink-soft)}
+  ul.clean li::before{content:""; position:absolute; left:4px; top:9px; width:8px; height:8px; border-radius:50%; background:var(--accent)}
+  ul.clean li strong{color:var(--ink)}
+  ul.miss li::before{background:var(--coral)}
+
+  /* phases */
+  .phase{display:grid; grid-template-columns:auto 1fr; gap:0 20px; padding:20px 0; border-top:1px solid var(--line-soft)}
+  .phase:first-child{border-top:none}
+  .pnum{font-family:"Fraunces",serif; font-size:15px; font-weight:600; color:#fff; background:var(--accent-deep); width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center}
+  .phase .body h3{margin-bottom:3px}
+  .ptag{font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--gold); margin-top:6px; display:inline-block}
+  .phase .body p{font-size:15px; color:var(--ink-soft); margin-top:5px}
+
+  .pull{font-family:"Fraunces",serif; font-size:clamp(21px,3.4vw,27px); line-height:1.25; font-weight:500; color:var(--ink); border-left:3px solid var(--accent); padding:4px 0 4px 20px; margin:6px 0}
+  .foot{padding:36px 0 60px; color:var(--muted); font-size:13px; text-align:center}
+  .mini{font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:14px}
+</style>
+
+<div class="wrap">
+
+  <!-- HERO -->
+  <header class="hero">
+    <span class="eyebrow">Product North Star · Aug 2026</span>
+    <h1>Stop being the app they open when they're <span style="color:var(--coral)">lost abroad</span>. Become the one they open while they're <span class="accent">dreaming</span>.</h1>
+    <p class="lede">Three research passes — traveler behavior, an honest diagnosis of our own home screen, and best-in-class product patterns — all point to the same move. This is how the finders, Discover, Search, My Trip and the Passport stop being separate tools and become one cohesive, AI-smart travel companion.</p>
+    <div class="stat-row">
+      <div class="stat"><b>~3%</b><span>Travel apps still used at Day 30 — the worst-retaining category. The cause is structural, not cosmetic.</span></div>
+      <div class="stat"><b>~5%</b><span>Days a year a finder is actually useful (on the ground). The other 350 have no reason to open it.</span></div>
+      <div class="stat"><b>#1</b><span>Emotion in travel is <em>anticipation</em> — it's strongest at home, and nobody owns it yet.</span></div>
+    </div>
+  </header>
+
+  <!-- THE REFRAME -->
+  <section>
+    <span class="eyebrow">The Reframe</span>
+    <h2>Travel is episodic. We've been building for the 5%.</h2>
+    <p class="lede" style="margin-bottom:22px">A directory is only valuable while you're standing in an unfamiliar city. But the happiest, most frequent travel emotion — daydreaming about the next trip — happens on the couch, 350 days a year. Studies show planning a trip boosts happiness <em>more than the trip itself</em>. We invest in the phase with the least emotional charge and under-invest in the one with the most. Reversing that is the whole game.</p>
+    <div class="states">
+      <div class="st win"><div><h3>Dreaming &amp; Planning</h3><div class="fit">Weakest fit today — our biggest open lane</div></div><div class="pct">most of the year</div></div>
+      <div class="st now"><div><h3>In-trip · on the ground</h3><div class="fit">Strongest today (the finders)</div></div><div class="pct">~5% of days</div></div>
+      <div class="st dead"><div><h3>Between trips · dormant</h3><div class="fit">Near-zero today — where 96% of churn happens</div></div><div class="pct">everything else</div></div>
+    </div>
+  </section>
+
+  <!-- ARCHITECTURE -->
+  <section>
+    <span class="eyebrow">The Reconciliation</span>
+    <h2>One app: a Search spine, a Stay hub, four worlds that talk.</h2>
+    <p>This is the answer to “are we building different things?” No. Everything hangs off two unifiers — a <strong>smart-search spine</strong> on top, and your <strong>accommodation as the hub</strong> — feeding <strong>one demand graph</strong> underneath.</p>
+    <div class="diagram" role="img" aria-label="Architecture: smart search on top routes into four worlds, all anchored on Your Stay and feeding the demand graph">
+      <div class="spine">
+        <div class="k">🔍 The Front Door</div>
+        <div class="v">Smart Search — the "Google of travel"</div>
+        <div class="n">understands WHAT · WHERE · INTENT → routes you to the right world</div>
+      </div>
+      <div class="flow" aria-hidden="true">▾</div>
+      <div class="worlds">
+        <div class="world"><div class="em">📍</div><div class="nm">Nearby</div><div class="ds">services around you / your stay</div></div>
+        <div class="world"><div class="em">✨</div><div class="nm">Discover</div><div class="ds">what to do here, for someone like you</div></div>
+        <div class="world"><div class="em">🛂</div><div class="nm">Passport</div><div class="ds">collect stamps &amp; memories</div></div>
+        <div class="world"><div class="em">🧳</div><div class="nm">My Trip</div><div class="ds">your stay, bookings, wishlist</div></div>
+      </div>
+      <div class="hub">🏨 everything re-centers on YOUR STAY (the hub)</div>
+      <div class="base">📊 every tap feeds the DEMAND GRAPH — the moat + the revenue engine</div>
+    </div>
+    <p style="margin-top:16px; font-size:15px; color:var(--muted)">The two jobs you named are both here, not competing: <strong style="color:var(--ink)">“find things near my hotel”</strong> = Hub + Nearby · <strong style="color:var(--ink)">“explore / search anything”</strong> = Spine + Discover.</p>
+  </section>
+
+  <!-- THE LOOP -->
+  <section>
+    <span class="eyebrow">What Makes It Stick</span>
+    <h2>The loop — not any single feature — is the unicorn.</h2>
+    <p>Each piece deposits something that pulls the user back later. A one-off task becomes a habit that beats on the 350 non-travel days.</p>
+    <div class="loop" role="img" aria-label="Engagement loop from find to save to dream to book to on-the-ground to memories and back to dreaming">
+      <span class="node">🔎 Find</span><span class="arw">→</span>
+      <span class="node">❤️ Save</span><span class="arw">→</span>
+      <span class="node hot">💭 Dream feed resurfaces it</span><span class="arw">→</span>
+      <span class="node">🛎️ Book</span><span class="arw">→</span>
+      <span class="node">⏳ Countdown</span><span class="arw">→</span>
+      <span class="node">📍 On the ground</span><span class="arw">→</span>
+      <span class="node">🛂 Memories</span><span class="arw">→</span>
+      <span class="node hot">🕰️ "1 year ago today"</span><span class="arw">↻</span>
+    </div>
+    <p style="margin-top:16px; font-size:15px; color:var(--ink-soft)">Three engines drive the loop between trips: a <strong>Living Homepage</strong> that sells the next trip daily, a <strong>Passport that shows progress toward what you haven't done yet</strong> (not just a log), and <strong>memory resurfacing</strong> that re-triggers the dream.</p>
+  </section>
+
+  <!-- AI SEARCH -->
+  <section>
+    <span class="eyebrow">The Signature Magic</span>
+    <h2>A search that understands needs, not keywords.</h2>
+    <p>It parses every query into structure, routes to exactly one surface, then <strong>answers → lets you act → anticipates the next need</strong>. Two fields are the moat: <strong>where-scope</strong> (the “near my hotel” trick, powered by Your Stay) and <strong>intent-mode</strong> (present vs planning — the demand-graph gold).</p>
+    <div class="grid2" style="margin-top:8px">
+      <div class="card">
+        <div class="q">matcha with outlets near my hotel</div>
+        <div class="parse">
+          <span class="tag">service</span><span class="tag">near_my_stay</span><span class="tag c">outlets</span><span class="tag">present</span>
+        </div>
+        <p style="font-size:14.5px;color:var(--ink-soft);margin:0">→ Coffee finder, scoped to your hotel, matcha filter, each card an <em>honest</em> “outlets: likely” badge. Next chip: “wi-fi &amp; noise?”</p>
+      </div>
+      <div class="card">
+        <div class="q">hotel with an elevator in Positano</div>
+        <div class="parse">
+          <span class="tag">place_to_stay</span><span class="tag">Positano</span><span class="tag c">step-free</span><span class="tag">planning</span>
+        </div>
+        <p style="font-size:14.5px;color:var(--ink-soft);margin:0">→ Leads with empathy: “Positano is built on stairs — here are stays with elevators.” The app <em>gets</em> the real pain. Warm handoff with dates.</p>
+      </div>
+    </div>
+    <p style="margin-top:16px;font-size:15px;color:var(--muted)">Kept cheap + honest: a deterministic parser handles ~80% instantly and free; a cached Haiku call covers the messy tail; unverifiable constraints get an “estimated” label instead of a fake number — and it never dead-ends.</p>
+  </section>
+
+  <!-- WHY V1 FAILED -->
+  <section>
+    <span class="eyebrow">The Honest Diagnosis</span>
+    <h2>Why v1 felt like a pile of tools — and why that's fixable fast.</h2>
+    <ul class="clean miss">
+      <li><strong>A 29-tile launcher.</strong> Every tile has equal weight — nothing says “this is for you, here, now.” It's a directory, not an assistant.</li>
+      <li><strong>Search was removed from the nav</strong> and re-built separately inside ~24 finders — so to search anything, you first have to know which tool owns it. That is <em>literally</em> why it feels like separate tools.</li>
+      <li><strong>“Your Stay” is buried</strong> as a mid-feed strip instead of the hub everything radiates from.</li>
+      <li><strong>The retention hooks are hidden</strong> — Passport, My Trip and Wishlist only appear after you've already engaged.</li>
+    </ul>
+    <p class="pull" style="margin-top:22px">The good news: the “AI-smart brain” already exists in the code — a full context-ranking engine sitting <em>90% unwired</em>. This is a wiring job, not a research project.</p>
+  </section>
+
+  <!-- BUILD PLAN -->
+  <section>
+    <span class="eyebrow">The Path There</span>
+    <h2>Phased build — biggest felt leap first, near-zero new cost.</h2>
+    <div style="margin-top:10px">
+      <div class="phase">
+        <div class="pnum">1</div>
+        <div class="body">
+          <h3>The Spine + the Living Homepage</h3>
+          <p>Ship the one search box that routes into the finders we already have, and wire the dormant brain so the home leads with a ranked, <em>explained</em> feed (“Rainy evening, just landed in Lisbon → dinner · money · ATM”). Finders retreat to a tab.</p>
+          <span class="ptag">Highest leverage · ~0 new Places spend · fills the moat day one</span>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pnum">2</div>
+        <div class="body">
+          <h3>The “Your Stay” hub + present/planning</h3>
+          <p>A guided “Where are you staying?” flow (find your hotel by name, not the generic picker), made the authoritative center everything re-centers on. Present vs planning changes the verbs (“Go now” vs “Save to trip”).</p>
+          <span class="ptag">Turns on the signature “near my hotel” magic</span>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pnum">3</div>
+        <div class="body">
+          <h3>The Loop — retention between trips</h3>
+          <p>Passport as forward-looking progress (“12 of 195 countries”, near-completion nudges, an honest non-punishing streak). Memory resurfacing (“1 year ago today in Bangkok”). A My-Trip countdown dashboard for booked trips — the daily-open magnet.</p>
+          <span class="ptag">Attacks the dormancy problem — the real churn</span>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pnum">4</div>
+        <div class="body">
+          <h3>Full AI reasoning + earned notifications</h3>
+          <p>Haiku parsing for messy queries, AI answer cards with honest sourcing + next-step chips, anticipatory nudges, and notifications that are only ever about <em>your</em> stuff or genuinely time-sensitive.</p>
+          <span class="ptag">The “reads my mind” layer</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- NORTH STAR -->
+  <section>
+    <span class="eyebrow">Why It Serves The Goal</span>
+    <h2>The flywheel is the business.</h2>
+    <div class="grid2">
+      <div class="card"><h3 style="color:var(--accent-deep)">The moat</h3><p style="font-size:15px;color:var(--ink-soft);margin-top:6px">Every structured search logs <em>what people want, where, and how ready-to-book</em> — first-party demand no competitor has. It gets smarter with every tap.</p></div>
+      <div class="card"><h3 style="color:var(--gold)">The revenue</h3><p style="font-size:15px;color:var(--ink-soft);margin-top:6px">The Stay hub + bookings (hotels, cars, tours, own-margin) convert the intent — with honest, warm handoffs that build trust and repeat use.</p></div>
+      <div class="card"><h3 style="color:var(--accent-deep)">The retention</h3><p style="font-size:15px;color:var(--ink-soft);margin-top:6px">Dreaming + Passport progress + memory resurfacing give a reason to open on the 350 non-travel days — the thing every rival lacks.</p></div>
+      <div class="card"><h3 style="color:var(--gold)">The delight</h3><p style="font-size:15px;color:var(--ink-soft);margin-top:6px">“Near my hotel” scoping, reasoning shown out loud, and honesty where others fake confidence — the moments that make users say <em>this app is smart</em>.</p></div>
+    </div>
+    <p class="pull" style="margin-top:24px">We win the day the app stops being a thing you open when you're lost — and becomes the thing you open when you're daydreaming about where to go next.</p>
+  </section>
+
+  <div class="foot">
+    <div class="mini">Globeskimmers · synthesized from 3 research passes</div>
+    Behavior · diagnosis · best-in-class — one cohesive plan. Built to be approved, then built.
+  </div>
+
+</div>
