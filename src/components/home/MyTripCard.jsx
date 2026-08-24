@@ -30,7 +30,10 @@ export default function MyTripCard({ wide = false }) {
     (async () => {
       try {
         const { data } = await callWorker(ROUTE.affiliateMine, {});
-        if (!cancelled) setItems(Array.isArray(data?.items) ? data.items : []);
+        // Count started + confirmed (drop cancelled) so this card's count matches
+        // what the MyTrip page shows when tapped — no "3 items → empty page".
+        const rows = Array.isArray(data?.items) ? data.items.filter((it) => (it.status || "").toLowerCase() !== "cancelled") : [];
+        if (!cancelled) setItems(rows);
       } catch { if (!cancelled) setItems([]); }
     })();
     return () => { cancelled = true; };

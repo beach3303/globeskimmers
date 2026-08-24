@@ -133,10 +133,12 @@ export default function MyTripPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Only ACTUAL bookings the partner has confirmed — a tap is not a booking, and
-  // we can't know a reservation happened until the partner's conversion report
-  // marks it "confirmed". (Founder decision 2026-08-22: confirmed-only.)
-  const bookings = items.filter((it) => (it.status || "").toLowerCase() === "confirmed");
+  // Show what you've STARTED (tapped a partner — resume where you left off) AND
+  // what the partner has CONFIRMED. StatusChip labels each honestly; a tap is
+  // never called a booking. Only cancelled items are dropped (not actionable).
+  // Updated 2026-08-24 so this page matches the home "pick up where you left
+  // off" card (which counts the same started+confirmed set).
+  const bookings = items.filter((it) => (it.status || "").toLowerCase() !== "cancelled");
 
   // Group into ordered sections.
   const grouped = SECTION_ORDER
@@ -172,7 +174,7 @@ export default function MyTripPage() {
           My Trip
         </h1>
         <p className="uppercase mt-2 font-semibold" style={{ fontFamily: ED_MONO, fontSize: t(fs(10.5), fs(10)), letterSpacing: "0.16em", color: ED_INK3 }}>
-          Your confirmed bookings
+          Your bookings so far
         </p>
       </div>
 
@@ -194,22 +196,22 @@ export default function MyTripPage() {
           <EmptyState
             fs={fs} t={t}
             emoji="🧳"
-            title="No confirmed bookings yet"
-            body="When you book a stay, tour, eSIM, or ticket through a Globeskimmers partner, it appears here once they confirm it — usually within a day or two of your purchase."
+            title="Nothing here yet"
+            body="When you start booking a stay, tour, eSIM, or ticket through a Globeskimmers partner, it shows up here so you can pick up right where you left off."
             cta="Explore things to do"
             onCta={() => navigate(createPageUrl("ThingsToDo"))}
           />
         ) : (
           <>
-            {/* Honest note — only partner-confirmed bookings are shown here. */}
+            {/* Honest note — Started (resume) vs Confirmed (partner-verified). */}
             <div
               className="mb-5 p-3 rounded-[14px] flex items-start gap-2.5"
               style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}` }}
             >
-              <span className="text-[15px] leading-none mt-0.5">✅</span>
+              <span className="text-[15px] leading-none mt-0.5">🧭</span>
               <p style={{ color: ED_INK3, fontSize: t(fs(12.5), fs(12)), lineHeight: 1.5 }}>
-                These are bookings your travel partners have <b style={{ color: "#0F7A50" }}>confirmed</b>.
-                Just booked something? It appears here once the partner reports it — usually within a day or two.
+                <b style={{ color: "#736657" }}>Started</b> means you began booking with a partner — tap to pick up where you left off.
+                <b style={{ color: "#0F7A50" }}> Confirmed</b> means the partner verified it (usually a day or two after you pay). A tap isn&rsquo;t a booking until it&rsquo;s confirmed.
               </p>
             </div>
 
