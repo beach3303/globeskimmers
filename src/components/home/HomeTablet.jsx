@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MapPin, Cloud } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { CAT, TEAL_DEEP } from '@/components/redesign/constants';
@@ -13,6 +13,8 @@ import EventsRow from '@/components/home/EventsRow';
 import MyTripCard from '@/components/home/MyTripCard';
 import WishlistCard from '@/components/home/WishlistCard';
 import VibeBundles from '@/components/home/VibeBundles';
+import SmartSearchBar from '@/components/search/SmartSearchBar';
+import SmartSearchOverlay from '@/components/search/SmartSearchOverlay';
 import { getPrimaryStay } from '@/lib/savedLocations';
 
 // iPad / tablet Home layout — implements CLAUDE_CODE_IPAD_BUILD.md §3 "Home".
@@ -68,6 +70,7 @@ export default function HomeTablet({
     escapes: <EscapesRow key="escapes" wide onAction={onAction} />,
   };
   const discoverOrder = ORDER[journeyMode] || ["rows", "stamps", "escapes"];
+  const [showSearch, setShowSearch] = useState(false);
   return (
     <div className="mx-auto px-8 pt-6" style={{ maxWidth: 1024 }}>
       {/* ── GREETING CARD ─────────────────────────────────────────────── */}
@@ -183,6 +186,9 @@ export default function HomeTablet({
         </div>
       )}
 
+      {/* ── SMART-SEARCH SPINE ──────────────────────────────────────────── */}
+      <SmartSearchBar wide onOpen={() => setShowSearch(true)} />
+
       {/* ── FEATURE TILES — 3-up COMPACT grid (same footprint as Explore More).
           Real-iPad feedback: the old 2-up tiles read far too large. These now
           match the Explore-More tile size — the default (and largest) size on
@@ -225,6 +231,8 @@ export default function HomeTablet({
 
       {/* Bottom clearance so the floating nav + ad banner never cover the last row. */}
       <div aria-hidden style={{ height: 170 }} />
+
+      <SmartSearchOverlay isOpen={showSearch} onClose={() => setShowSearch(false)} />
     </div>
   );
 }

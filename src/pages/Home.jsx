@@ -33,6 +33,8 @@ import { countryCode } from "@/lib/countries";
 import { homeTimezoneForCountry } from "@/lib/homePlace";
 import { useIsTablet } from "@/lib/useIsTablet";
 import HomeTablet from "@/components/home/HomeTablet";
+import SmartSearchBar from "@/components/search/SmartSearchBar";
+import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
 import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
 
 // Translation mapping for greetings — shown next to "Hello 👋"
@@ -133,6 +135,7 @@ export default function HomePage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [timezone, setTimezone] = useState(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [showSearch, setShowSearch] = useState(false); // Smart-Search spine overlay
   const [coldOpenChooser, setColdOpenChooser] = useState(false); // picker opened as the cold-open "Where to?" chooser
   const [showWelcome, setShowWelcome] = useState(false); // welcome splash (first launches, before the location selector)
   const [tempUnit, setTempUnit] = useState('F');
@@ -797,6 +800,9 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* SMART-SEARCH SPINE — one search that routes into the right world. */}
+      <SmartSearchBar onOpen={() => setShowSearch(true)} />
+
       {/* FEATURE TILES — 2-col grid of all six finders. Editorial: emoji chip,
           serif title (2-line clamp), tiny subtitle; min-height so enlarging text
           grows the tile instead of clipping. */}
@@ -902,6 +908,8 @@ export default function HomePage() {
           unmounting HomeBanner calls AdMob.hideBanner/removeBanner, and it
           re-shows once the user is on the actual home content. */}
       {profile?.onboarding_completed && !showWelcome && !showLocationPicker && <HomeBanner />}
+
+      <SmartSearchOverlay isOpen={showSearch} onClose={() => setShowSearch(false)} />
 
       <LocationModePicker
         isOpen={showLocationPicker}
