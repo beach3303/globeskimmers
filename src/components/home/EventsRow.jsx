@@ -109,6 +109,10 @@ export default function EventsRow({ wide = false }) {
   let windowEvents = events.filter((e) => inWindow(e.dateObj, sel));
   const emptyWindow = windowEvents.length === 0;
   if (emptyWindow && sel !== "all") windowEvents = events.slice(); // fall-forward to all upcoming
+  // Soonest first, so each window LEADS with its relevant near-term events — without
+  // this the first 12 shown overlapped across windows and the row looked static when
+  // switching Tonight/Weekend/Week/Month.
+  windowEvents.sort((a, b) => (a.dateObj?.getTime() || 8.64e15) - (b.dateObj?.getTime() || 8.64e15));
   const shown = [...windowEvents, ...exps].slice(0, 12);
 
   const cityIn = city ? ` in ${city}` : "";
