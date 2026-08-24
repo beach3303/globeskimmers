@@ -445,3 +445,14 @@ State: Committed (2c198c2) · Frontend auto-deploys on push (⚠️ push blocked
 - [ ] A no-coverage spot (remote/ocean) → both rows hide cleanly, tiles stand alone (no empty carousels)
 - [ ] iPad width (HomeTablet): same two rows render `wide` below the tiles
 - [ ] Confirm `home_rows_view` + `home_row_card_tap` now fire in `/log-event` (they never could before — unlocks the "Trending" row + demand analytics)
+
+## 🛂 Passport crash fix (2026-08-24)
+The Virtual Passport showed **"Your passport didn't open"** (error boundary) on every open — `PassportBook.jsx` used `useMemo` (L239, first-fit pagination) but never imported it → `ReferenceError: useMemo is not defined`. Root cause behind 0586c7a; the error boundary (83fe02b/c6b4f03) only masked it. Fixed by adding the import. The globe-cover, 3D page-flip booklet is unchanged — it just renders again now.
+State: Committed (0295dd8) · Frontend auto-deploys on push · Tested ⬜
+- [ ] ⚠️ Before device test: `npm run build && npx cap copy ios` (else the sim keeps the crashing bundle)
+- [ ] Open Passport tab → the **navy globe cover** shows (NOT "Your passport didn't open")
+- [ ] Tap the cover → it swings open (3D hinge) → **ownership page** (name / countries / stamps)
+- [ ] Swipe / arrow through pages → stamps render on ivory paper; **page number** shows in the corner; "X / total" counter updates
+- [ ] A stamp with memory photos shows the 2×2 photo grid; GPS-verified stamps show the green ✓
+- [ ] "Share" renders the current page to an image + opens the share sheet; "Close" returns to the cover
+- [ ] Fresh/empty passport still shows a flippable 10-page booklet (no crash with zero stamps)
