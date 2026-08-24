@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
@@ -889,6 +889,7 @@ export default function ThingsToDoFinder() {
   const cardRefs=useRef({});
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
   const {activeLocation}=useLocation();
+  const routerLocation=useRouterLocation();
   const lat=activeLocation?.coordinates?.latitude; const lng=activeLocation?.coordinates?.longitude;
   const locLabel=getLocationLabel(activeLocation);
   const isCity=isCityLocation(activeLocation);
@@ -1053,8 +1054,8 @@ export default function ThingsToDoFinder() {
 
   // Activity search handlers — state (q/submitted/tours/tourBusy) is declared
   // higher up with the rest of the component state (see note there).
-  const runActivitySearch=async()=>{
-    const query=q.trim(); if(!query) return;
+  const runActivitySearch=async(explicitQuery)=>{
+    const query=(typeof explicitQuery==='string'?explicitQuery:q).trim(); if(!query) return;
     setSubmitted(query); setTourBusy(true); setTours(null); setSearchPlaces([]);
     try{
       const {data}=await callWorker(ROUTE.searchActivities,{query:expandActivityQuery(query),city,country,latitude:lat,longitude:lng,radiusMiles:radius});
@@ -1070,6 +1071,19 @@ export default function ThingsToDoFinder() {
     setTourBusy(false);
   };
   const clearSearch=()=>{setQ("");setSubmitted("");setTours(null);setSearchPlaces([]);};
+
+  // Smart-Search spine / cross-finder handoff: a query passed via router state
+  // prefills the box and auto-runs the activity search once coords are ready.
+  const presetRanRef=useRef(false);
+  useEffect(()=>{
+    const pq=routerLocation.state?.presetQuery;
+    if(presetRanRef.current||!pq||!String(pq).trim()) return;
+    if(!Number.isFinite(lat)||!Number.isFinite(lng)) return;
+    presetRanRef.current=true;
+    setQ(String(pq).trim());
+    runActivitySearch(String(pq).trim());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[routerLocation.state?.presetQuery,lat,lng]);
   const openTour=async(p)=>{
     const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorProductLink(p.url)||viatorSearchLink(p.title),category:"tour",productName:p.title,destCity:city,destCountry:country});
     if(url) window.open(url,"_blank");

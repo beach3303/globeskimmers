@@ -587,8 +587,8 @@ export default function CoffeeFinderPage() {
 
   const clearFilters=()=>{setFilterOpenNow(false);setFilterShopType("all");setFilterWifi(false);setFilterWork(false);setFilterOutlets(false);setFilterQuiet(false);setFilterAC(false);};
 
-  const runSearch=async()=>{
-    const query=q.trim(); if(!query) return;
+  const runSearch=async(explicitQuery)=>{
+    const query=(typeof explicitQuery==='string'?explicitQuery:q).trim(); if(!query) return;
     setSubmitted(query); setSearchBusy(true); setSearchShops([]);
     try{
       const {data}=await callWorker(ROUTE.searchCoffee,{query,latitude:lat,longitude:lng,radiusMiles:radius});
@@ -601,6 +601,20 @@ export default function CoffeeFinderPage() {
     setSearchBusy(false);
   };
   const clearSearch=()=>{setQ("");setSubmitted("");setSearchShops([]);};
+
+  // Smart-Search spine / cross-finder handoff: a query passed via router state
+  // (navigate("CoffeeFinder",{state:{presetQuery}})) prefills the box and
+  // auto-runs the café search once coords are ready. Mirrors PlacesToEat.
+  const presetRanRef=useRef(false);
+  useEffect(()=>{
+    const pq=routerLocation.state?.presetQuery;
+    if(presetRanRef.current||!pq||!String(pq).trim()) return;
+    if(!Number.isFinite(lat)||!Number.isFinite(lng)) return;
+    presetRanRef.current=true;
+    setQ(String(pq).trim());
+    runSearch(String(pq).trim());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[routerLocation.state?.presetQuery,lat,lng]);
 
   const handleShowOnMap=(index)=>{setSelectedMapIndex(index);setViewMode("map");setTimeout(()=>{const s=filtered[index];if(mapInstanceRef.current&&s?.lat&&s?.lng)mapInstanceRef.current.setView([s.lat,s.lng],16);},300);};
 
