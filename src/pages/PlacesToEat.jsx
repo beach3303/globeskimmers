@@ -37,7 +37,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
-import RadiusRow from "@/components/location/RadiusRow";
+import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
@@ -916,7 +916,7 @@ export default function PlacesToEat() {
     if (q && typeof q === "string" && q.trim()) { setSearchInput(q); setSearchText(q.trim()); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routerLocation.state?.presetQuery]);
-  const [radius, setRadius]             = useState(10);
+  const [radius, setRadius]             = useState(25); // wide net; no radius UI — results show nearest-first
   const [displayCount, setDisplayCount] = useState(20);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedMapIndex, setSelectedMapIndex] = useState(null);
@@ -964,7 +964,7 @@ export default function PlacesToEat() {
   const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
 
   useEffect(() => {
-    setRadius(activeLocation?.suggestedRadius ?? 10);
+    setRadius(25); // fixed wide net (radius filter removed app-wide)
   }, [activeLocation?.placeId]);
 
   // Multi-select cuisine helpers
@@ -1426,7 +1426,7 @@ export default function PlacesToEat() {
           )}
         </div>
 
-        <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.food.ink} unit={unit} setUnit={setUnit} />
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
 
         {/* List/Map view toggle removed — list is the primary view; a card's
             "📍 Map" button still opens that place on the map. */}

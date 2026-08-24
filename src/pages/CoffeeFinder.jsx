@@ -6,7 +6,7 @@ import { useLocation } from "@/components/location/LocationContext";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
-import RadiusRow from "@/components/location/RadiusRow";
+import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import RefreshButton from "@/components/RefreshButton";
@@ -433,7 +433,7 @@ export default function CoffeeFinderPage() {
   const handleRefresh            = () => { forceNextRef.current = true; setRefreshTick(t=>t+1); };
   const [error,setError]         = useState(null);
   const [viewMode,setViewMode]   = useState("list");
-  const [radius,setRadius]       = useState(10);
+  const [radius,setRadius]       = useState(25); // wide net; no radius UI — nearest-first
   const [showLocPicker,setShowLocPicker] = useState(false);
   const [userPinExpanded, setUserPinExpanded] = useState(true);
   useEffect(() => {
@@ -478,7 +478,7 @@ export default function CoffeeFinderPage() {
   // City-level locations get a wider default radius derived from Google's
   // viewport. Reset on every location change so non-city picks revert to 10mi.
   useEffect(() => {
-    setRadius(activeLocation?.suggestedRadius ?? 10);
+    setRadius(25); // fixed wide net (radius filter removed app-wide)
   }, [activeLocation?.placeId]);
 
   const activeFilterCount = [filterOpenNow,filterShopType!=="all",filterWifi,filterWork,filterOutlets,filterQuiet,filterAC].filter(Boolean).length;
@@ -543,7 +543,7 @@ export default function CoffeeFinderPage() {
     // nothing is within radius (better than an empty screen). Else: browse.
     let base;
     if(submitted){
-      const within=searchMerged.filter(s=>(s.distanceMiles||999)<=radius);
+      const within=searchMerged; // no radius cap — show all, nearest-first
       base=within.length?within:searchMerged.slice(0,8);
     } else base=shops;
     let r=[...base];
@@ -675,7 +675,7 @@ export default function CoffeeFinderPage() {
           </div>
         )}
 
-        <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={BROWN} unit={unit} setUnit={setUnit} />
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
 
         {/* Café / drink search */}
         <form onSubmit={(e)=>{e.preventDefault();runSearch();}} style={{display:"flex",gap:"8px",margin:"8px 0 2px"}}>

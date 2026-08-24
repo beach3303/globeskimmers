@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
-import RadiusRow from "@/components/location/RadiusRow";
+import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
@@ -253,7 +253,7 @@ export default function ShoppingFinder() {
   const [error,setError]=useState(null);
   const [viewMode,setViewMode]=useState("list");
   const [category,setCategory]=useState("all");
-  const [radius,setRadius]=useState(10);
+  const [radius]=useState(25); // wide net; no radius UI — nearest-first
   const [openOnly,setOpenOnly]=useState(false);
   const [luxOnly,setLuxOnly]=useState(false);
   const [foodOnly,setFoodOnly]=useState(false);
@@ -274,7 +274,7 @@ export default function ShoppingFinder() {
   const isTablet = useIsTablet();
   const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
 
-  useEffect(()=>{ setRadius(activeLocation?.suggestedRadius ?? 10); }, [activeLocation?.placeId]);
+  // radius filter removed app-wide — fixed wide net, results shown nearest-first
 
   useEffect(()=>{
     if(!lat||!lng){ setLoading(false); return; } // no location yet — don't spin forever
@@ -378,7 +378,7 @@ export default function ShoppingFinder() {
 
       {/* Filters band */}
       <div className={`px-4 ${colWrap} mx-auto pb-2`}>
-        <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.shopping.ink} unit={unit} setUnit={setUnit} />
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
         <div style={{overflowX:"auto",scrollbarWidth:"none"}}><div style={{display:"flex",gap:"7px",paddingBottom:"10px"}}>{CATEGORIES.map(c=><motion.button key={c.id} whileTap={{scale:0.94}} onClick={()=>{setCategory(c.id); if(c.id!=='all') logSearch('shopping',c.label,{category:c.id});}} className="font-sans" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",padding:"8px 12px",borderRadius:"14px",flexShrink:0,border:category===c.id?`2px solid ${c.color}`:"1px solid #F0E9DC",background:category===c.id?`${c.color}18`:"#fff",color:category===c.id?c.color:'#475569',fontWeight:category===c.id?"700":"500",fontSize:"calc(11px*var(--fs))",cursor:"pointer",minWidth:"64px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>{c.icon}</span><span>{c.label}</span></motion.button>)}</div></div>
       </div>
       <div style={{background:"#fff",padding:"10px 14px",borderBottom:"1px solid #E8EDF2",display:"flex",alignItems:"center",gap:"8px",overflowX:"auto",scrollbarWidth:"none"}}>

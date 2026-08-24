@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
-import RadiusRow from "@/components/location/RadiusRow";
+import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
@@ -845,7 +845,7 @@ export default function ThingsToDoFinder() {
   const [error,setError]=useState(null);
   const [viewMode,setViewMode]=useState("list");
   const [category,setCategory]=useState("all");
-  const [radius,setRadius]=useState(15);
+  const [radius,setRadius]=useState(25); // wide net; no radius UI — nearest-first
   const [openOnly,setOpenOnly]=useState(false);
   const [outdoorOnly,setOutdoorOnly]=useState(false);
   const [popularOnly,setPopularOnly]=useState(false);
@@ -873,7 +873,7 @@ export default function ThingsToDoFinder() {
   const isCity=isCityLocation(activeLocation);
   const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
 
-  useEffect(()=>{ setRadius(activeLocation?.suggestedRadius ?? 15); }, [activeLocation?.placeId]);
+  useEffect(()=>{ setRadius(25); }, [activeLocation?.placeId]); // fixed wide net (radius filter removed app-wide)
 
   const fallbackParts=(activeLocation?.label||activeLocation?.address?.formatted||'').split(',').map(s=>s.trim()).filter(Boolean);
   const country=activeLocation?.address?.country||fallbackParts[fallbackParts.length-1]||'the area';
@@ -972,7 +972,7 @@ export default function ThingsToDoFinder() {
   const browseFilterActive=!submitted&&(openOnly||outdoorOnly||popularOnly||category!=='all');
   const filtered=useMemo(()=>{
     let r=submitted?[...searchMerged]:(browseFilterActive?[...ownedPool]:[...activities]);
-    r=r.filter(a=>(a.distanceMiles||999)<=radius); // within-radius
+    // no radius cap — show all fetched, nearest-first (radius filter removed app-wide)
     if(openOnly)    r=r.filter(a=>a.isOpen===true);
     if(outdoorOnly) r=r.filter(a=>a.props?.isOutdoor);
     if(popularOnly) r=r.filter(a=>{
@@ -994,7 +994,7 @@ export default function ThingsToDoFinder() {
   // (activities are destination-y — people drive to a zipline).
   const searchBeyond=useMemo(()=>{
     if(!submitted) return [];
-    return searchMerged.filter(a=>(a.distanceMiles??999)>radius).slice(0,6);
+    return []; // "worth the trip" split retired — all results now show nearest-first in one list
   },[submitted,searchMerged,radius]);
 
   // Cards rendered in the main list + plotted on the map + counted in stats.
@@ -1098,7 +1098,7 @@ export default function ThingsToDoFinder() {
 
       {/* Filters band */}
       <div className={`px-4 ${colWrap} mx-auto pb-2`}>
-        <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.todo.ink} unit={unit} setUnit={setUnit} />
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
       </div>
 
       {/* Activity search — bookable experiences (Viator) + nearby matches */}

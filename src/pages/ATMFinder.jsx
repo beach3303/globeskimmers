@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
-import RadiusRow from "@/components/location/RadiusRow";
+import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
@@ -545,7 +545,7 @@ export default function ATMFinderPage() {
   const [bankFilter,     setBankFilter]     = useState("all");
   const [availableBanks, setAvailableBanks] = useState([]);
   const [openOnly,       setOpenOnly]       = useState(false);
-  const [radius,         setRadius]         = useState(10);
+  const [radius,         setRadius]         = useState(25); // wide net; no radius UI — nearest-first
   const [showLocPicker,  setShowLocPicker]  = useState(false);
   const [userPinExpanded, setUserPinExpanded] = useState(true);
   useEffect(() => {
@@ -571,7 +571,7 @@ export default function ATMFinderPage() {
   const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
 
   useEffect(() => {
-    setRadius(activeLocation?.suggestedRadius ?? 10);
+    setRadius(25); // fixed wide net (radius filter removed app-wide)
   }, [activeLocation?.placeId]);
 
   // ── Fetch ──────────────────────────────────────────────────────────────
@@ -783,7 +783,7 @@ export default function ATMFinderPage() {
       <div className={`px-4 ${colWrap} mx-auto`}>
 
         {/* Radius buttons */}
-        <RadiusRow options={[5,10,15,25]} value={radius} onChange={setRadius} ink={CAT.atm.ink} unit={unit} setUnit={setUnit} />
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
 
         {/* Quick filters row */}
         <div style={{ display:"flex", gap:"8px", alignItems:"center", overflowX:"auto", scrollbarWidth:"none", marginBottom:"8px" }}>

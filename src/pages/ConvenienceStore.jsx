@@ -20,7 +20,7 @@ import { useLocation } from '@/components/location/LocationContext';
 import LocationModePicker from '@/components/location/LocationModePicker';
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from '@/components/location/locationLabel';
 import { useDistanceUnit } from '@/components/location/distanceUnit';
-import RadiusRow from '@/components/location/RadiusRow';
+import DistanceUnitToggle from '@/components/location/DistanceUnitToggle';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import RefreshButton from '@/components/RefreshButton';
@@ -803,14 +803,10 @@ export default function ConvenienceStorePage() {
 
   // Filters
   const [activeFilters, setActiveFilters] = useState({});
-  const [searchRadius, setSearchRadius] = useState(10);
+  const [searchRadius, setSearchRadius] = useState(25); // wide net; no radius UI — nearest-first
 
-  // Auto-size radius when user picks a city — wider default to cover the metro.
-  useEffect(() => {
-    if (activeLocation?.suggestedRadius) {
-      setSearchRadius(activeLocation.suggestedRadius);
-    }
-  }, [activeLocation?.placeId]);
+  // Radius filter removed app-wide — fixed wide net, results shown nearest-first.
+  useEffect(() => { setSearchRadius(25); }, [activeLocation?.placeId]);
   
   // ============================================================================
   // FETCH STORES
@@ -1016,7 +1012,7 @@ export default function ConvenienceStorePage() {
 
       {/* RADIUS */}
       <div className={`px-4 ${colWrap} mx-auto pb-2`}>
-        <RadiusRow options={[5, 10, 15, 25]} value={searchRadius} onChange={setSearchRadius} ink={CAT.convenience.ink} unit={unit} setUnit={setUnit} />
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
       </div>
 
       {/* Quick Filters */}
