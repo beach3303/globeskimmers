@@ -7498,13 +7498,13 @@ const GA_QUERIES = [
   "scenic viewpoint","hiking trail","beach","waterfall",
   "lighthouse","ancient ruins",
   // Water (universal: inland + coastal)
-  "kayaking","canoeing","snorkeling","swimming hole","river swimming",
+  "kayaking","canoeing","snorkeling","paddleboarding","surfing","jet ski rental","swimming hole","river swimming",
   // Mountain & Adventure (universal: Google returns 0 in flat regions)
   "rock climbing","zip line","cave","canyon",
   // Wellness (universal per founder direction — every culture has these)
   "spa","massage","hot spring",
   // Tours & Experiences (tour_mode derived from the query name)
-  "guided tour","walking tour","bike tour","boat tour","food tour",
+  "guided tour","walking tour","bike rental","bike tour","boat tour","food tour",
   // Entertainment
   "theme park","amusement park","water park","theater",
   // Nightlife
@@ -8064,7 +8064,7 @@ async function handleActivities(request, env, ctx) {
       nightlife:['bar','club','music','brewery','winery','arcade bar','casino','pool hall','billiards','karaoke'],
       family:['zoo','aquarium','childrens museum','family fun center','mini golf','indoor miniature golf','kid friendly activities','interactive exhibits','theme park','cable car','indoor playground','water park','trampoline park','go kart','roller skating','skate park','dave and busters','entertainment center','camping','campground','bike rental','chocolate factory','chocolate making','fruit picking','billiards','ping pong','bonfire'],
       wellness:['spa','hot springs','massage therapy','wellness retreat','onsen','bathhouse'],
-      adventure:['rock climbing','zip lining','zipline','ATV trails','atv rental','white water rafting','rafting','scuba diving','bungee jumping','extreme sports','kayaking','indoor skydiving','skydiving','parasailing','paragliding','cliff jumping','island hopping','snowboarding','skiing'],
+      adventure:['rock climbing','zip lining','zipline','ATV trails','atv rental','white water rafting','rafting','scuba diving','snorkeling','surfing','stand up paddleboarding','kayaking','canoeing','jet ski','whale watching','bungee jumping','extreme sports','indoor skydiving','skydiving','parasailing','paragliding','cliff jumping','island hopping','snowboarding','skiing'],
       tours:['tour','experience','cooking class','chocolate making','island hopping','boat tour'],
     };
     const regional = GA_REGIONAL_QUERIES[countryName] || [];
@@ -8276,6 +8276,11 @@ async function handleActivities(request, env, ctx) {
     // ── TIER 3: Nearby (uses hoisted helpers) ──
     const nearbyFiltered = filterJunkH(places);
     const nearby = nearbyFiltered.slice(0, 60).map(processPlaceH);
+    // When a specific category chip is active, these were FETCHED by that category's
+    // own queries (e.g. Adventure → rafting, ziplines, kayaking) — so tag them with
+    // the chip's category. Without this, gaActivityType's per-name guess relabels ~70%
+    // (rafting→"tour", zipline→"attraction") and the client filter HIDES them.
+    if (category && category !== 'all') for (const a of nearby) a.activityCategory = category;
     nearby.sort((a, b) => b.qualityScore - a.qualityScore || (b.rating || 0) - (a.rating || 0));
 
     // ── Merge D1 layer with the existing icons/regional stage ──
