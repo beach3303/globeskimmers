@@ -824,13 +824,15 @@ export default function ConvenienceStorePage() {
     const force = forceNextRef.current; forceNextRef.current = false;
 
     try {
-      // List source: owned planet DB (free, global). The owned handler takes radius
-      // in METERS (searchRadius is miles here), so convert. Real Google photos +
-      // hours come on-tap via enrich-owned. Filters are passed through harmlessly.
-      const { data: result, error: workerError } = await callWorker(ROUTE.getConvenienceOwned, {
+      // List source: Google (handleConvenienceStores) — it reads every feature
+      // filter (open-24h / has-ATM / hot-food / …) + sortBy and returns hours,
+      // so the filters actually work (the owned handler dropped them and owned
+      // rows had no feature data). NOTE: this handler expects `radius` in MILES,
+      // not meters — send searchRadius directly (it's already miles).
+      const { data: result, error: workerError } = await callWorker(ROUTE.getConvenienceStores, {
         latitude: location.latitude,
         longitude: location.longitude,
-        radius: searchRadius * 1609,
+        radius: searchRadius,
         maxResults: 50,
         limit: 50,
         sortBy: 'traveler_best',

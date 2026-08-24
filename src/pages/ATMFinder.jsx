@@ -599,9 +599,11 @@ export default function ATMFinderPage() {
 
     (async () => {
       try {
-        // List source: owned planet DB (free, global). Bank-network / fee / DCC /
-        // skimmer AI details are unchanged — they resolve owned→Google on tap.
-        const { data, error: workerError } = await callWorker(ROUTE.getATMOwned, {
+        // List source: Google (handleAtmLocations) — it returns the bank list +
+        // per-ATM open status, so the bank filter and "Open now" actually work.
+        // (The owned handler dropped those params AND owned ATM data lacked the
+        // fields, so both filters were dead.) AI details still resolve on tap.
+        const { data, error: workerError } = await callWorker(ROUTE.getATMLocations, {
           latitude:  lat,
           longitude: lng,
           radius:    radius * 1609,

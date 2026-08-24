@@ -422,9 +422,13 @@ export default function MoneyExchangePage() {
       const radiusInMiles = usesMiles ? searchRadius : kmToMiles(searchRadius);
 
       // LOCATIONS only — the exchange-RATE fetch (getExchangeRate, above) is
-      // separate and untouched. List source: owned planet DB (free, global). The
-      // owned handler takes radius in METERS; real hours come on-tap via enrich.
-      const { data } = await callWorker(ROUTE.getMoneyExchangeOwned, {
+      // separate and untouched.
+      // List source: Google (handleMoneyExchange) — it reads sortBy ("best rate")
+      // + "Open now" + radiusMiles and returns live locations, so those controls
+      // actually work (the owned handler dropped them and owned rows had no rate/
+      // hours). radiusMiles is the param it reads; `radius` is left as a harmless
+      // extra for any other reader.
+      const { data } = await callWorker(ROUTE.getMoneyExchangeLocations, {
         latitude: activeLocation.coordinates.latitude,
         longitude: activeLocation.coordinates.longitude,
         fromCurrency: fromCurrency,
