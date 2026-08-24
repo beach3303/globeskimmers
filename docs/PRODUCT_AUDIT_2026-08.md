@@ -11,9 +11,9 @@ plumbing (timeouts/races/tz), (c) a few **unlabeled AI surfaces**, (d) a dormant
 ---
 
 ## ✅ Progress (2026-08-23)
-**Shipped + LIVE:** T1.1 (Google fallback on browse — worker deployed v adb15c4b, smoke-tested) · T1.9 (coffee boba/tea search — deployed) · T1.2 (callWorker timeout — pushed) · T1.3 (cancel guards — pushed) · T1.12 (Things-to-Do radius refetch — pushed) · T1.4 partial (no-location stops spinner; still need the "Choose a location" CTA).
-**Committed, awaiting push:** T1.7 (Things-to-Do nearest-first) · T1.13 (Shopping stale count) — commit 496a749.
-**Next batch (worker, one deploy):** T1.6 category chips · T1.7b Shopping ranking · T1.10 shop-dish fallback · T1.14 non-blocking LLM · T1.5 timezone (frontend) · T1.11 double-fetch · T1.8 coffee open-now · T1.15 enrich batching.
+**Shipped + LIVE (worker deployed + frontend pushed, smoke-tested):** T1.1 (Google fallback on browse) · T1.9 (coffee boba/tea) · T1.7b (Shopping ranking — continuous distance + subtype re-rank, verified luxury-on-top) · T1.2 (callWorker timeout) · T1.3 (cancel guards) · T1.7 (Things-to-Do nearest-first) · T1.12 (Things-to-Do radius refetch) · T1.13 (Shopping stale count) · T1.11 (double-fetch — fixed by radius removal) · **RADIUS FILTER REMOVED app-wide** (all 7 finders: wide 25mi net, nearest-first, no cap; mi/km toggle kept) · T1.4 partial (no-location stops spinner; still want a "Choose a location" CTA).
+**Remaining Tier 1 (next batch):** T1.5 timezone-correct Open/Closed (frontend) · T1.6 category chips hiding results · T1.10 shop-dish fallback (bagels/froyo) · T1.14 non-blocking LLM · T1.8 coffee Open-Now gray-out · T1.15 enrich batching.
+Then Tier 2 (trust) — incl. T2.1 via the [[feedback_business_reviews_policy]] (praise/silent/safe-warn).
 
 ## TIER 1 — DELIVERS (the app must reliably return the right thing). DO FIRST.
 
