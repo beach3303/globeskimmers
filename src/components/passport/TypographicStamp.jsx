@@ -219,13 +219,13 @@ export default function TypographicStamp({
         </filter>
       </defs>
       <g filter={`url(#${worn})`}>{body[D] || body.col}</g>
-      {/* The diagonal second strike. Off in a dense grid, on where one stamp is
-          the whole screen — earning it, the full-screen view, the share card. */}
+      {/* The diagonal second strike — small and tucked into the upper-right
+          corner so it NEVER covers the destination name (founder call). Off in a
+          dense grid, on where one stamp is the whole screen. */}
       {overprint && (
-        <g filter={`url(#${worn})`} opacity="0.86" transform="rotate(-17 150 158)">
-          <path d="M12,132 L288,132" stroke="currentColor" strokeWidth="1.8" />
-          <text x="150" y="172" textAnchor="middle" fontFamily={SERIF} fontStyle="italic" fontSize="37" fontWeight="700" letterSpacing="1" fill="currentColor">I was here!</text>
-          <path d="M12,186 L288,186" stroke="currentColor" strokeWidth="1.8" />
+        <g filter={`url(#${worn})`} opacity="0.85" transform="rotate(-14 216 84)">
+          <text x="216" y="86" textAnchor="middle" fontFamily={SERIF} fontStyle="italic" fontSize="17" fontWeight="700" letterSpacing="0.5" fill="currentColor">I was here!</text>
+          <path d="M180,94 L252,94" stroke="currentColor" strokeWidth="1.2" />
         </g>
       )}
     </svg>
