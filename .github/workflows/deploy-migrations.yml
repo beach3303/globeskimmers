@@ -1,22 +1,21 @@
 name: Apply Supabase Migrations
 
 # Database migrations are NOT like the worker deploy: a bad one can be
-# irreversible. So this workflow is deliberately gated —
-#   * it only fires on changes under supabase/migrations/
-#   * it prints the plan (--dry-run) before applying anything
-#   * it runs in the `production` GitHub Environment, so you can require a
-#     manual approval in Settings → Environments → production → required reviewers
+# irreversible, and there is no staging database to catch it.
+#
+# GitHub's "required reviewers" gate is unavailable here — it needs Pro/Team on a
+# private repo (the API returns 422: "Please ensure the billing plan supports the
+# required reviewers protection rule"). So the gate is automated instead: the
+# job refuses to apply any pending migration containing destructive SQL unless
+# that migration explicitly opts in with a `gs:allow-destructive` marker.
+#
+# That is arguably stronger than a human click — it reads the SQL every time.
 #
 # Secret needed (Settings → Secrets and variables → Actions):
-#   SUPABASE_ACCESS_TOKEN  — a personal access token, from
-#                            https://supabase.com/dashboard/account/tokens
+#   SUPABASE_ACCESS_TOKEN — https://supabase.com/dashboard/account/tokens
 #
-# SUPABASE_DB_PASSWORD is deliberately NOT required. CLI 2.x provisions a
-# temporary login role through the Management API using the access token, which
-# is how these migrations apply locally with no password stored anywhere. If a
-# future CLI version needs one, add the secret and it will be picked up below.
-#
-# The project ref is not a secret (it is already public in the client bundle).
+# No SUPABASE_DB_PASSWORD: CLI 2.x provisions a temporary login role through the
+# Management API using the access token.
 
 on:
   push:
@@ -28,12 +27,12 @@ on:
 
 env:
   SUPABASE_PROJECT_REF: bkaxadiyehddzkiuheea
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
 jobs:
   migrate:
     name: supabase db push
     runs-on: ubuntu-latest
-    environment: production
     steps:
       - uses: actions/checkout@v4
 
@@ -42,16 +41,43 @@ jobs:
           version: latest
 
       - name: Link to the project
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
-      - name: Show what would be applied
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase db push --dry-run
+      - name: Plan, and refuse unguarded destructive SQL
+        shell: bash          # explicit: the loop below relies on word-splitting
+        run: |
+          set -uo pipefail
+          supabase db push --dry-run 2>&1 | tee /tmp/plan.txt
+
+          PENDING=$(grep -o '"migrations":\[[^]]*\]' /tmp/plan.txt \
+            | sed 's/.*\[//; s/\]//; s/"//g; s/,/ /g')
+
+          if [ -z "${PENDING// }" ]; then
+            echo "Nothing pending — remote is up to date."
+            exit 0
+          fi
+
+          echo "Pending: $PENDING"
+          FAIL=0
+          for m in $PENDING; do
+            f="supabase/migrations/$m"
+            [ -f "$f" ] || { echo "::warning::$m not found in the checkout"; continue; }
+            if grep -qiE 'drop[[:space:]]+(table|column|schema|database|view|function)|truncate[[:space:]]|delete[[:space:]]+from' "$f"; then
+              if grep -qi 'gs:allow-destructive' "$f"; then
+                echo "::warning::$m contains destructive SQL and carries gs:allow-destructive — allowing."
+              else
+                echo "::error::$m contains destructive SQL (DROP / TRUNCATE / DELETE FROM) with no opt-in marker."
+                FAIL=1
+              fi
+            fi
+          done
+
+          if [ "$FAIL" != "0" ]; then
+            echo "Refusing to apply. If the drop is intended, add this line to the migration:"
+            echo "  -- gs:allow-destructive  (reason: ...)"
+            exit 1
+          fi
+          echo "No unguarded destructive SQL. Safe to apply."
 
       - name: Apply
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase db push
