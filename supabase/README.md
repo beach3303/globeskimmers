@@ -37,13 +37,19 @@ added an empty local placeholder with the matching version
 (`20251013122453_baseline_pre_cli.sql`), which reconciles the histories without
 writing to the remote and without losing the record that something was applied then.
 
-Then add two repo secrets so CI can apply migrations
-(Settings → Secrets and variables → Actions):
+Then add ONE repo secret so CI can apply migrations
+(GitHub → repo → Settings → Secrets and variables → Actions):
 
 | Secret | Where it comes from |
 |---|---|
 | `SUPABASE_ACCESS_TOKEN` | https://supabase.com/dashboard/account/tokens |
-| `SUPABASE_DB_PASSWORD` | Project Settings → Database → password |
+
+**No database password is needed.** CLI 2.x provisions a temporary Postgres login
+role through the Management API using the access token — which is why the first
+migration applied here with no password stored anywhere on disk or in the keychain.
+Supabase never re-reveals a database password anyway; it can only be reset, and
+resetting would break the direct-connection scripts in `scripts/places-pilot/`
+that authenticate with `PGPASS`.
 
 And optionally require approval before a migration lands:
 Settings → Environments → `production` → required reviewers.
