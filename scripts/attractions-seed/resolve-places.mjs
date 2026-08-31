@@ -104,10 +104,10 @@ for (const c of cities) {
     const batch = withCoords.slice(i, i + 40);
     const values = batch.map((r, k) => `(${i + k},${r.lat},${r.lng})`).join(",");
     const sql = `with cand(i,lat,lng) as (values ${values})
-      select c.i, p.id, p.name, p.category,
+      select c.i, p.id, p.name, p.category, p.city as place_city, p.country as place_country,
         round(st_distance(p.geom::geography, st_setsrid(st_makepoint(c.lng,c.lat),4326)::geography)::numeric) as d
       from cand c cross join lateral (
-        select id, name, category, geom from places
+        select id, name, category, city, country, geom from places
         where name is not null
           and st_dwithin(geom::geography, st_setsrid(st_makepoint(c.lng,c.lat),4326)::geography, 400)
         order by geom <-> st_setsrid(st_makepoint(c.lng,c.lat),4326) limit 8) p`;
@@ -138,6 +138,7 @@ for (const c of cities) {
       ...r, match: best.grade,
       place_id: best.id, place_name: best.name,
       place_category: best.category, place_dist_m: Number(best.d),
+      place_city: best.place_city || undefined, place_country: best.place_country || undefined,
     };
   });
 
