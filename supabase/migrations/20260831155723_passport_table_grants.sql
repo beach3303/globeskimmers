@@ -1,5 +1,5 @@
 -- Passport — MISSING TABLE GRANTS (fixes 42501 "permission denied for table
--- passport_stamps" on every stamp attempt). Run once in the Supabase SQL editor.
+-- passport_stamps" on every stamp attempt). Applied by `npm run db:push`.
 --
 -- WHY THIS IS NEEDED
 -- 01_schema.sql creates the passport tables in the `api` schema, enables RLS on

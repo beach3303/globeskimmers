@@ -36,7 +36,7 @@ Repo conventions: **one logical change per commit; show the diff before committi
 |---|---|---|
 | **Cloudflare Workers** | **Automatic** — push to `main` touching `wrangler.toml`, `wrangler-tts.toml`, `cloudflare-worker-*.js`, or `globeskimmers-tts-worker.js` | `.github/workflows/deploy-workers.yml`, jobs `deploy-api` + `deploy-tts`. `workflow_dispatch` also available. Only credential is the repo secret `CLOUDFLARE_API_TOKEN` — **no local Cloudflare login needed to ship a worker.** |
 | **Native app** | Manual | `npm run cap:ios` / `npm run cap:android`, then Xcode/Android Studio. Capgo OTA for live updates. No frontend CI exists in this repo. |
-| **Supabase SQL** | Manual, dashboard only | No Supabase CLI project, no migrations dir. Paste `scripts/**/*.sql` into the Supabase SQL editor. |
+| **Supabase migrations** | **Automatic** — push to `main` touching `supabase/migrations/**` | `.github/workflows/deploy-migrations.yml`, gated on the `production` environment so it can require approval. Locally: `npm run db:new` → `db:plan` → `db:push`. See `supabase/README.md`. The ~30 older `scripts/**/*.sql` were applied by hand and are historical — do not replay them. |
 | **D1 SQL** | Manual | `npx wrangler d1 execute <db> --file=… --remote`. |
 
 `wrangler` is **not** a project dependency — every local wrangler command goes through `npx wrangler`.
