@@ -8,7 +8,10 @@ actually been run.
 From now on, schema changes are **migrations in `supabase/migrations/`**, applied by
 CI on merge to `main`.
 
-## One-time setup (needs credentials — do this once)
+## One-time setup — DONE 2026-08-31
+
+The project is linked and the first migration is applied. Kept here as a record,
+and for setting this up on another machine.
 
 ```bash
 # 1. Authenticate. Opens a browser; or create a token at
@@ -21,6 +24,18 @@ npx supabase link --project-ref bkaxadiyehddzkiuheea
 # 3. Baseline. See "the existing SQL" below before running this.
 npm run db:status
 ```
+
+### The baseline mismatch (already resolved — read if it recurs)
+
+The remote already had a migration version recorded, `20251013122453`, from before
+this repo used the CLI. That made `db push` and `db pull` refuse with
+`Remote migration versions not found in local migrations directory`.
+
+The CLI suggests repairing by marking the *pending* migration as `applied` — **do
+not do that**, it records a migration as done without ever running it. Instead we
+added an empty local placeholder with the matching version
+(`20251013122453_baseline_pre_cli.sql`), which reconciles the histories without
+writing to the remote and without losing the record that something was applied then.
 
 Then add two repo secrets so CI can apply migrations
 (Settings → Secrets and variables → Actions):

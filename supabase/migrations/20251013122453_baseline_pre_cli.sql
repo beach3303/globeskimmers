@@ -1,0 +1,13 @@
+-- BASELINE PLACEHOLDER — intentionally empty.
+--
+-- The remote database recorded this migration version on 2025-10-13, before this
+-- repo adopted the Supabase CLI. Everything applied up to that point came from
+-- hand-run SQL under scripts/** and supabase/crm-schema.sql.
+--
+-- This file exists only so local and remote migration histories agree on the
+-- version list. It is already marked applied remotely, so `db push` skips it —
+-- it will never execute. Do NOT put schema here.
+--
+-- To capture what is actually live as a real baseline, run:
+--   npm run db:pull
+-- and review the (large) file it generates before committing.
