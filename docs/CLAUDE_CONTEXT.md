@@ -1,8 +1,26 @@
-# GlobeSkimmers — Claude Code Context (Authoritative Reference)
+# GlobeSkimmers — Claude Code Context (HISTORICAL SNAPSHOT — March 2026)
 
-> **Last updated:** March 22, 2026
-> **How to use:** At the start of a new session, say: "Read docs/CLAUDE_CONTEXT.md first"
-> **Update this file** after every major change session.
+> ## ⚠️ DO NOT USE THIS AS A REFERENCE
+>
+> **This file is a point-in-time snapshot from March 22, 2026 and is no longer maintained.**
+> It was the authoritative context doc; it is not any more. Read `CLAUDE.md` instead — it is
+> current and verified against the code.
+>
+> Known-wrong in the text below, as of August 2026:
+> - Names `cloudflare-worker-v7.6.js` as the deployed worker. The live worker is
+>   `cloudflare-worker-v7.12.js` (see `wrangler.toml`).
+> - Describes the data path as Frontend → Base44 Deno Functions → Worker. The frontend now
+>   calls the Worker **directly** (`src/lib/callWorker.js`); `base44/functions/` is legacy.
+> - Lists D1 and R2 as `[PENDING]`. Both are live — two D1 databases and an R2 bucket are
+>   bound in `wrangler.toml`.
+> - Says the Worker is a manual dashboard deploy. It auto-deploys from
+>   `.github/workflows/deploy-workers.yml` on push to `main`.
+> - Gives restaurant tier labels (Authentic / Specialist / Has It / Not Specialist) that do not
+>   match the live `TIER_LABELS` (Dish Specialist / Authentic Match / Related / Serves It).
+> - Its "Known Remaining Bugs" and "Implementation Priority Order" predate
+>   `docs/PRODUCT_AUDIT_2026-08.md`, which supersedes them.
+>
+> Kept for history: it records why several design decisions were made.
 
 ---
 
