@@ -37,6 +37,7 @@ Legend: ⬜ to do · ✅ done · ⏳ external/time-gated
 ## Tier 4 — Other captured / post-launch
 23. ⬜ **Culture Info upgrade** — two-layer country/city/region rebuild.
 24. ⬜ **Basic Phrases audio** — for the remaining ~45 languages.
+24b. ⬜ **Stadium game-day stamps** (founder, 2026-08-31) — stamp attending a GAME, not just the venue: GPS at a stadium + date, cross-referenced against that venue's events (Ticketmaster key already in the worker) → stamp carries matchup + date ("Admitted at Crypto.com Arena · Lakers vs Celtics · 24 AUG 2026"). Ledger stamp layout already fits. Needs: venue↔Ticketmaster id mapping, event lookup at stamp time, meaning-model note (an event mark, not a new kind).
 25. ⬜ **Product-search real shopping API** — live listings + find-cheaper (DataForSEO / SearchApi).
 26. ⬜ **Transportation affiliate / car service** — bookable rides/transfers.
 27. ⬜ **Google OAuth publish** (Testing→Production) + **web OAuth redirect URLs** in Supabase.

@@ -46,6 +46,46 @@ const LANDMARKS = [
       { key: "us", name: "Niagara Falls, New York", slug: "niagara-falls-new-york", cc: ["us", "usa", "united states", "america"], lat: 43.0847, lng: -79.0714 }, // Prospect Point / American Falls
     ],
   },
+  {
+    // Same brand, different continents — and different "kingdoms" inside one
+    // resort. Coordinates resolve BOTH: which resort you are at, and which park
+    // within it, exactly like the Grand Canyon rims. maxKm keeps a Tokyo tap
+    // from ever resolving against Anaheim.
+    id: "disney-parks",
+    match: /disneyland|disney\s*california\s*adventure|walt\s*disney\s*world|magic\s*kingdom|epcot|disney'?s?\s*(hollywood\s*studios|animal\s*kingdom)|disneysea/i,
+    exclude: /hotel|concert|store|shop|downtown|springs|cruise|office/i,
+    mode: "nearest",
+    maxKm: 60,
+    variants: [
+      { key: "anaheim",   name: "Disneyland Park",             slug: "disneyland-anaheim",           lat: 33.8121, lng: -117.9190 },
+      { key: "anaheim-ca",name: "Disney California Adventure", slug: "disney-california-adventure",  lat: 33.8061, lng: -117.9215 },
+      { key: "wdw-mk",    name: "Magic Kingdom",               slug: "magic-kingdom",                lat: 28.4177, lng: -81.5812 },
+      { key: "wdw-epcot", name: "EPCOT",                       slug: "epcot",                        lat: 28.3747, lng: -81.5494 },
+      { key: "wdw-hs",    name: "Disney's Hollywood Studios",   slug: "disneys-hollywood-studios",    lat: 28.3575, lng: -81.5583 },
+      { key: "wdw-ak",    name: "Disney's Animal Kingdom",      slug: "disneys-animal-kingdom",       lat: 28.3553, lng: -81.5901 },
+      { key: "paris",     name: "Disneyland Paris",            slug: "disneyland-paris",             lat: 48.8722, lng: 2.7758 },
+      { key: "tokyo",     name: "Tokyo Disneyland",            slug: "tokyo-disneyland",             lat: 35.6329, lng: 139.8804 },
+      { key: "tokyo-sea", name: "Tokyo DisneySea",             slug: "tokyo-disneysea",              lat: 35.6267, lng: 139.8850 },
+      { key: "hongkong",  name: "Hong Kong Disneyland",        slug: "hong-kong-disneyland",         lat: 22.3130, lng: 114.0414 },
+      { key: "shanghai",  name: "Shanghai Disneyland",         slug: "shanghai-disneyland",          lat: 31.1434, lng: 121.6573 },
+    ],
+  },
+  {
+    id: "universal-parks",
+    match: /universal\s*studios|islands\s*of\s*adventure|epic\s*universe|universal\s*orlando/i,
+    exclude: /citywalk|hotel|store/i,
+    mode: "nearest",
+    maxKm: 60,
+    variants: [
+      { key: "hollywood", name: "Universal Studios Hollywood", slug: "universal-studios-hollywood",  lat: 34.1381, lng: -118.3534 },
+      { key: "usf",       name: "Universal Studios Florida",   slug: "universal-studios-florida",    lat: 28.4749, lng: -81.4664 },
+      { key: "ioa",       name: "Islands of Adventure",        slug: "universal-islands-of-adventure", lat: 28.4711, lng: -81.4728 },
+      { key: "epic",      name: "Universal Epic Universe",     slug: "universal-epic-universe",      lat: 28.4370, lng: -81.4520 },
+      { key: "japan",     name: "Universal Studios Japan",     slug: "universal-studios-japan",      lat: 34.6654, lng: 135.4323 },
+      { key: "singapore", name: "Universal Studios Singapore", slug: "universal-studios-singapore",  lat: 1.2540,  lng: 103.8238 },
+      { key: "beijing",   name: "Universal Studios Beijing",   slug: "universal-studios-beijing",    lat: 39.8570, lng: 116.6764 },
+    ],
+  },
 ];
 
 const asVariant = (v) => ({ key: v.key, name: v.name, slug: v.slug, entity_id: v.slug });
@@ -56,6 +96,9 @@ export function resolveStampVariant({ name, lat, lng, country }) {
   if (!name) return null;
   const L = LANDMARKS.find((l) => l.match.test(name));
   if (!L) return null;
+  // Same-brand near-misses: hotels, stores, the concert hall. A match on the
+  // family regex is not enough — the exclude list vetoes lookalikes.
+  if (L.exclude && L.exclude.test(name)) return null;
 
   // 1) Country-first for border landmarks (Niagara: which side of the river).
   if (L.mode === "country-then-nearest" && country) {
