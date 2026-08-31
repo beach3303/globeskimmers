@@ -219,15 +219,19 @@ export default function TypographicStamp({
         </filter>
       </defs>
       <g filter={`url(#${worn})`}>{body[D] || body.col}</g>
-      {/* The diagonal second strike — small and tucked into the upper-right
-          corner so it NEVER covers the destination name (founder call). Off in a
-          dense grid, on where one stamp is the whole screen. */}
-      {overprint && (
-        <g filter={`url(#${worn})`} opacity="0.85" transform="rotate(-14 216 84)">
-          <text x="216" y="86" textAnchor="middle" fontFamily={SERIF} fontStyle="italic" fontSize="17" fontWeight="700" letterSpacing="0.5" fill="currentColor">I was here!</text>
-          <path d="M180,94 L252,94" stroke="currentColor" strokeWidth="1.2" />
-        </g>
-      )}
+      {/* The red second strike (founder call: always crimson, never touching any
+          text). Default berth is the empty top-right corner; Ring and Oval carry
+          arc text up there, so theirs lands bottom-right instead. Off in a dense
+          grid, on where one stamp is the whole screen. */}
+      {overprint && (() => {
+        const pos = D === "rng" || D === "ovl" ? { x: 236, y: 258 } : { x: 234, y: 52 };
+        return (
+          <g filter={`url(#${worn})`} opacity="0.85" style={{ color: "#B0472F" }} transform={`rotate(-14 ${pos.x} ${pos.y})`}>
+            <text x={pos.x} y={pos.y + 2} textAnchor="middle" fontFamily={SERIF} fontStyle="italic" fontSize="17" fontWeight="700" letterSpacing="0.5" fill="currentColor">I was here!</text>
+            <path d={`M${pos.x - 36},${pos.y + 10} L${pos.x + 36},${pos.y + 10}`} stroke="currentColor" strokeWidth="1.2" />
+          </g>
+        );
+      })()}
     </svg>
   );
 }
