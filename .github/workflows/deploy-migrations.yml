@@ -49,8 +49,11 @@ jobs:
           set -uo pipefail
           supabase db push --dry-run 2>&1 | tee /tmp/plan.txt
 
+          # GitHub runs this shell with -e. When nothing is pending the CLI prints
+          # "Remote database is up to date." and NO json line, so grep exits 1 and
+          # would kill the step. The || true is load-bearing.
           PENDING=$(grep -o '"migrations":\[[^]]*\]' /tmp/plan.txt \
-            | sed 's/.*\[//; s/\]//; s/"//g; s/,/ /g')
+            | sed 's/.*\[//; s/\]//; s/"//g; s/,/ /g' || true)
 
           if [ -z "${PENDING// }" ]; then
             echo "Nothing pending — remote is up to date."
