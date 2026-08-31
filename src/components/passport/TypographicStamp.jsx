@@ -148,7 +148,7 @@ export default function TypographicStamp({
       const step = size * 1.2;
       const endY = top + (lines.length - 1) * step;
       return (<>
-        <text x="46" y="88" fontFamily={SERIF} fontSize="11" fontWeight="700" letterSpacing="3.4" fill="currentColor">ADMITTED AT</text>
+        <text x="46" y="88" fontFamily={SERIF} fontSize="11" fontWeight="700" letterSpacing="3.4" fill="currentColor">VISITED</text>
         <path d="M46,100 L254,100" stroke="currentColor" strokeWidth="1.2" />
         <Lines lines={lines} size={size} mid={top + ((lines.length - 1) * step) / 2} x={46} anchor="start" />
         <path d={`M46,${endY + 16} L254,${endY + 16}`} stroke="currentColor" strokeWidth="1.2" />
