@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { useLocation } from "@/components/location/LocationContext";
 import { callWorker } from "@/lib/callWorker";
 import { stampArtUrl } from "@/lib/stampArt";
+import TypographicStamp from "@/components/passport/TypographicStamp";
 import { logDiscover } from "@/lib/logDiscover";
 import { createPageUrl } from "@/utils";
 
@@ -42,10 +43,12 @@ function StampChip({ item, wide, onOpen }) {
             style={{ width: size * 0.78, height: size * 0.78, objectFit: "contain", opacity: 0.92 }}
           />
         ) : (
-          <div className="flex flex-col items-center justify-center px-1 text-center">
-            <span style={{ fontSize: size * 0.26, lineHeight: 1 }}>🛂</span>
-            <span style={{ fontFamily: '"Instrument Serif", Georgia, serif', color: STAMP, fontSize: `calc(11px*var(--fs))`, marginTop: 2, lineHeight: 1.05, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{item.name}</span>
-          </div>
+          // No bespoke art for this spot yet -> a real typographic stamp rather
+          // than a generic emoji, so an uncollected stamp still looks worth having.
+          <TypographicStamp
+            name={item.name} city={item.city} country={item.country}
+            entityId={item.id || item.name} width={size * 0.84}
+          />
         )}
       </div>
       <div className="mt-1.5 leading-tight" style={{ fontFamily: '"Instrument Serif", Georgia, serif', color: INK, fontSize: `calc(13px*var(--fs))`, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>

@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, X, Share2 } from "lucide-react";
 import { countryCode } from "@/lib/countries";
 import { stampArtUrl } from "@/lib/stampArt";
 import AirportStamp from "@/components/passport/AirportStamp";
+import TypographicStamp from "@/components/passport/TypographicStamp";
 
 // ============================================================================
 // PassportBook — the Virtual Passport rendered as a real booklet you open and
@@ -56,6 +57,9 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
   const art = stamp.kind === "country" ? null : stampArtUrl(stamp.name);
   const showArt = !!art && !artFail;
   const flag = stamp.kind === "country" ? flagFor(stamp.country || stamp.name) : null;
+  // No bespoke art and not a country -> the typographic stamp carries its own
+  // date and "I was here!" strike, so the duplicate lines below are suppressed.
+  const showTypo = !showArt && !flag;
   const isAirport = stamp.kind === "airport";
   const isCity = stamp.kind === "city";
   const venue = isCity && stamp.name && stamp.name !== stamp.city ? stamp.name : null;
@@ -104,16 +108,16 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
           ) : (
             // Iconic place, bespoke art not uploaded yet → an inked rubber-stamp
             // placeholder. Auto-upgrades to the illustration once its art lands on R2.
-            <div style={{ position: "relative", width: badgeW, padding: "14px 18px", borderRadius: 16, border: `2.5px solid ${placeInk}`, boxShadow: `inset 0 0 0 1.5px ${placeInk}`, textAlign: "center", opacity: 0.92 }}>
-              <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", textTransform: "uppercase", color: placeInk, opacity: 0.82 }}>✦ Visited ✦</div>
-              <div className="leading-tight" style={{ fontFamily: SERIF, fontWeight: 600, fontSize: fs(24), color: placeInk, marginTop: 5 }}>{stamp.name}</div>
-              {stamp.city && stamp.city !== stamp.name && (
-                <div style={{ fontFamily: SANS, fontSize: fs(12), color: placeInk, opacity: 0.72, marginTop: 3 }}>{stamp.city}{stamp.country ? `, ${stamp.country}` : ""}</div>
-              )}
-            </div>
+            <TypographicStamp
+              name={stamp.name} city={stamp.city} region={stamp.region}
+              country={stamp.country} date={stamp.visited_on}
+              entityId={stamp.entity_id || stamp.id} width={artW} overprint
+            />
           )}
-          <div style={{ fontFamily: SERIF, fontStyle: "italic", color: iconicInk, fontSize: fs(19), marginTop: 6, lineHeight: 1 }}>I was here!</div>
-          {bigDate && <div style={{ fontFamily: SERIF, color: iconicInk, fontSize: fs(23), letterSpacing: ".01em", marginTop: 2, lineHeight: 1 }}>{bigDate}</div>}
+          {!showTypo && (<>
+            <div style={{ fontFamily: SERIF, fontStyle: "italic", color: iconicInk, fontSize: fs(19), marginTop: 6, lineHeight: 1 }}>I was here!</div>
+            {bigDate && <div style={{ fontFamily: SERIF, color: iconicInk, fontSize: fs(23), letterSpacing: ".01em", marginTop: 2, lineHeight: 1 }}>{bigDate}</div>}
+          </>)}
         </div>
       )}
 

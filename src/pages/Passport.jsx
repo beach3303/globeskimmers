@@ -9,6 +9,7 @@ import { showToast } from "@/components/Toast";
 import { addStamp, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
+import TypographicStamp from "@/components/passport/TypographicStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
 import PassportBook from "@/components/passport/PassportBook";
 import { isAdminEmail } from "@/lib/admins";
@@ -91,6 +92,9 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
   const artUrl = stamp.kind === "country" ? null : stampArtUrl(stamp.name);
   const [artFailed, setArtFailed] = useState(false);
   const showArt = !!artUrl && !artFailed;
+  // Country stamps keep the flag; every other kind falls back to a typographic
+  // stamp instead of the category emoji, so no stamp ever looks unfinished.
+  const showTypo = stamp.kind !== "country" && !showArt;
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [showDate, setShowDate] = useState(false);
@@ -193,6 +197,15 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
 
   return (
     <div className="bg-white rounded-[20px] p-4" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
+      {showTypo && (
+        <div className="flex justify-center mb-3">
+          <TypographicStamp
+            name={stamp.name} city={stamp.city} region={stamp.region}
+            country={stamp.country} date={stamp.visited_on}
+            entityId={stamp.entity_id || stamp.id} width={138} overprint
+          />
+        </div>
+      )}
       {showArt && (
         <div className="flex justify-center mb-3">
           <img src={artUrl} alt={stamp.name} onError={() => setArtFailed(true)} onClick={() => onEnlarge(artUrl, stamp)}
@@ -202,7 +215,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
       )}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2.5 min-w-0">
-          {!showArt && <div className="shrink-0 rounded-xl flex items-center justify-center" style={{ width: 42, height: 42, background: IVORY_2, fontSize: 22 }}>{k.icon}</div>}
+          {!showArt && !showTypo && <div className="shrink-0 rounded-xl flex items-center justify-center" style={{ width: 42, height: 42, background: IVORY_2, fontSize: 22 }}>{k.icon}</div>}
           <div className="min-w-0">
             <p className="truncate" style={{ fontFamily: SERIF, fontSize: fs(19), color: INK, lineHeight: 1.15 }}>{stamp.name}</p>
             {place && <p className="truncate" style={{ color: INK3, fontSize: fs(12), fontFamily: MONO }}>{place}</p>}

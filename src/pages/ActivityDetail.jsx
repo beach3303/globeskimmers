@@ -12,7 +12,8 @@ import MapAppSelector from '../components/MapAppSelector';
 import PhotoGalleryModal from '@/components/coffee/PhotoGalleryModal';
 import Guestbook from '@/components/Guestbook';
 import { invokeLLM, callWorker } from "@/lib/callWorker";
-import { addStamp, metersBetween, GPS_VERIFY_RADIUS_M } from "@/lib/passport";
+import { addStamp, metersBetween } from "@/lib/passport";
+import { stampRadiusFor } from "@/lib/stampRadius";
 import { resolveStampVariant } from "@/lib/stampVariants";
 import { countryCode } from "@/lib/countries";
 import { showToast } from "../components/Toast";
@@ -229,7 +230,9 @@ export default function ActivityDetailPage() {
         navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 });
       });
       gpsLat = pos.coords.latitude; gpsLng = pos.coords.longitude;
-      if (metersBetween(gpsLat, gpsLng, placeLat, placeLng) <= GPS_VERIFY_RADIUS_M) verified = 'gps';
+      // Radius comes from the KIND of place: a 250m circle round a theme park's
+      // centroid excludes visitors who are demonstrably inside the gate.
+      if (metersBetween(gpsLat, gpsLng, placeLat, placeLng) <= stampRadiusFor(activity)) verified = 'gps';
     } catch { /* no fix → self-declared */ }
     // Multi-viewpoint landmarks (Grand Canyon rims, Niagara sides) → resolve the
     // specific variant. Use the live GPS fix only when it corroborates presence
