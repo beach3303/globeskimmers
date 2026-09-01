@@ -6127,6 +6127,10 @@ async function handleAttractionsNearby(request, env, ctx) {
     categories = null,
     limit = 60,
     marqueeOnly = false,
+    // Passport proximity path only: include tier='secret' rows (inside their
+    // rotation window). General browse never sees secrets — they're found by
+    // being there.
+    includeSecrets = false,
     // Phase B: client passes these so the Worker can trigger a
     // background seed when D1 returns sparse coverage. Empty strings
     // are tolerated (and skip seeding) for fresh-GPS lookups before
@@ -6164,16 +6168,28 @@ async function handleAttractionsNearby(request, env, ctx) {
   if (marqueeOnly === true) {
     wheres.push('is_marquee = 1');
   }
+  // Secret stamps (tier='secret') are hidden from general browse. Only the
+  // passport proximity path asks for them (includeSecrets), and even then only
+  // inside their rotation window (secret_from/secret_until are 'YYYY-MM-DD').
+  if (includeSecrets === true) {
+    wheres.push(`(tier != 'secret' OR ((secret_from IS NULL OR secret_from <= date('now')) AND (secret_until IS NULL OR secret_until >= date('now'))))`);
+  } else {
+    wheres.push(`(tier IS NULL OR tier != 'secret')`);
+  }
 
   const safeLimit = Math.max(1, Math.min(Number(limit) || 60, 200));
 
+  // popularity = median monthly Wikipedia pageviews from the seed pipeline —
+  // the ranking signal the seed was built for. NULL (unranked) rows sort after
+  // ranked ones; rating breaks ties.
   const sql = `
     SELECT id, name, category, lat, lng, city, country, description,
            why_visit, typical_minutes, photo_url, rating,
-           is_marquee, free_to_visit
+           is_marquee, free_to_visit,
+           popularity, footprint_radius_m, parent_id, tier
       FROM attractions
      WHERE ${wheres.join(' AND ')}
-  ORDER BY is_marquee DESC, rating DESC
+  ORDER BY is_marquee DESC, (popularity IS NULL) ASC, popularity DESC, rating DESC
      LIMIT ${safeLimit};
   `;
 
@@ -6221,6 +6237,12 @@ async function handleAttractionsNearby(request, env, ctx) {
       rating: r.rating ?? null,
       isMarquee: r.is_marquee === 1,
       freeToVisit: r.free_to_visit === 1,
+      popularity: r.popularity ?? null,
+      // Per-row stamp footprint (metres) — read by src/lib/stampRadius.js; the
+      // client heuristic stays as fallback for rows without one.
+      footprint_radius_m: r.footprint_radius_m ?? null,
+      parentId: r.parent_id || null,
+      tier: r.tier || 'page',
       distanceKm: distKm,
       distanceMiles: distKm * 0.621371,
     };
@@ -6233,6 +6255,8 @@ async function handleAttractionsNearby(request, env, ctx) {
   const within = enriched.filter((r) => r.distanceKm <= radiusKm);
   within.sort((a, b) => {
     if (a.isMarquee !== b.isMarquee) return a.isMarquee ? -1 : 1;
+    const pa = a.popularity ?? -1, pb = b.popularity ?? -1;   // seed ranking first, unranked last
+    if (pa !== pb) return pb - pa;
     const ra = a.rating ?? 0, rb = b.rating ?? 0;
     if (ra !== rb) return rb - ra;
     return a.distanceKm - b.distanceKm;
@@ -6498,6 +6522,7 @@ async function handleHomeRows(request, env, ctx) {
     id: a.id, name: a.name, category: a.category, city: a.city, country: a.country,
     photoUrl: a.photoUrl, rating: a.rating, whyVisit: a.whyVisit,
     distanceMiles: a.distanceMiles, freeToVisit: a.freeToVisit, lat: a.lat, lng: a.lng,
+    footprint_radius_m: a.footprint_radius_m ?? null, popularity: a.popularity ?? null, tier: a.tier || 'page',
   });
   const withPhoto = attractions.filter((a) => a.photoUrl);
   const pool = withPhoto.length >= 6 ? withPhoto : attractions;
