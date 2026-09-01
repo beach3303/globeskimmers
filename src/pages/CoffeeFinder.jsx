@@ -37,6 +37,9 @@ const CORAL      = "#FF6B6B";
 const GRAY       = "#64748B";
 const DARK       = "#1A2332";
 const GREEN      = "#4CAF50";
+// T1.8: Open Now is disabled until at least one shop in view has a known open
+// state (owned rows ship no hours; cards lift Google hours in as they load).
+const OPEN_NOW_HINT = "needs café hours — none loaded yet";
 
 // ─── DRINK PATTERNS ────────────────────────────────────────────────────────
 const DRINK_PATTERNS = {
@@ -66,14 +69,31 @@ const SPECIALTY_BRANDS = ['blue bottle','intelligentsia','stumptown','counter cu
 const isSpecialtyByName = name => { const n = name.toLowerCase(); return SPECIALTY_INDICATORS.some(s => n.includes(s)) || SPECIALTY_BRANDS.some(b => n.includes(b)); };
 
 // ─── OPEN STATUS ───────────────────────────────────────────────────────────
-function computeOpenStatus(place) {
+// Which weekday it is AT THE PLACE (0=Sun…6=Sat), or -1 when we can't know.
+// With Google's utcOffsetMinutes we shift "now" into the place's zone; without
+// it the device clock is only right when the user is browsing the city they are
+// physically in (`isLocal` — locationMode "current").
+function placeDayIndex(utcOffsetMinutes, isLocal) {
+  if (Number.isFinite(utcOffsetMinutes)) return new Date(Date.now() + utcOffsetMinutes * 60000).getUTCDay();
+  return isLocal ? new Date().getDay() : -1;
+}
+// `isLocal`: browsing the current-location city, i.e. device clock == place clock.
+function computeOpenStatus(place, isLocal = false) {
   const hours = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
-  if (!hours.length) return { isOpen:null, todayHours:null, is24Hours:false };
+  const _off = place.utcOffsetMinutes;
+  const _tz = Number.isFinite(_off);
+  if (!hours.length) {
+    // No hours text. Google's live `openNow` is trusted for the local city only —
+    // for a navigated city it may be a place-details boolean cached up to 90 days.
+    const live = place.currentOpeningHours?.openNow;
+    return { isOpen:(isLocal && typeof live === 'boolean') ? live : null, todayHours:null, is24Hours:false };
+  }
+  // Hours exist but we can't place "now" in the shop's day (navigated city, no
+  // utcOffsetMinutes): a wrong-clock Open/Closed is worse than no status.
+  if (!_tz && !isLocal) return { isOpen:null, todayHours:null, is24Hours:false };
   const DAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   // Use the PLACE's timezone (Google utcOffsetMinutes) so open/closed is right when
   // browsing another city; device-time fallback (correct for your current location).
-  const _off = place.utcOffsetMinutes;
-  const _tz = Number.isFinite(_off);
   const _now = _tz ? new Date(Date.now() + _off * 60000) : new Date();
   const _day = _tz ? _now.getUTCDay() : _now.getDay();
   const _mins = _tz ? (_now.getUTCHours() * 60 + _now.getUTCMinutes()) : (_now.getHours() * 60 + _now.getMinutes());
@@ -98,11 +118,11 @@ function parseTime(s) {
 }
 
 // ─── PROCESS SHOP ──────────────────────────────────────────────────────────
-function processShop(shop, userLat, userLng) {
+function processShop(shop, userLat, userLng, isLocal) {
   const lat = shop.location?.latitude || shop.latitude || shop.lat || 0;
   const lng = shop.location?.longitude || shop.longitude || shop.lng || 0;
   const name = shop.displayName?.text || shop.name || '';
-  const openStatus = computeOpenStatus(shop);
+  const openStatus = computeOpenStatus(shop, isLocal);
 
   let distanceMiles = shop.distanceMiles || null;
   if (!distanceMiles && userLat && userLng && lat && lng) {
@@ -190,7 +210,7 @@ function PhotoCarousel({ photos=[], height="180px" }) {
 // `isTablet` prop gates sizing only: tablet keeps the large editorial scale,
 // phone gets a compact, phone-tuned variant. Tokens/structure mirror
 // RestaurantCardTablet; only the café domain content + phone tuning differ.
-function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDistance, isTablet }) {
+function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDistance, isTablet, isLocal, onHours }) {
   const [expanded,setExpanded]=useState(false);
   const [showDir,setShowDir]=useState(false);
   const [enriched,setEnriched]=useState(null);
@@ -202,7 +222,12 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
   useEffect(()=>{
     if(enriched||shop.source!=='owned')return;
     callWorker('places/enrich-owned',{id:shop.id||shop.placeId,name:shop.displayName?.text||shop.name,lat:shop.lat,lng:shop.lng,maxPhotos:3})
-      .then(({data})=>{ if(data&&data.matched)setEnriched(data); }).catch(()=>{});
+      .then(({data})=>{
+        if(!data||!data.matched) return;
+        setEnriched(data);
+        // T1.8: lift the Google hours to the list so Open Now / "· N open" can see them.
+        if(data.hours?.weekdayDescriptions?.length) onHours?.(shop.id||shop.placeId, data);
+      }).catch(()=>{});
   },[]); // eslint-disable-line react-hooks/exhaustive-deps
   const fs=(n)=>`calc(${n}px*var(--fs))`;
   // Responsive size picker — `t` (tablet) keeps the current editorial sizes,
@@ -221,9 +246,20 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
   const address = shop.shortFormattedAddress || shop.formattedAddress || "";
   const photos  = (enriched?.photos?.length ? enriched.photos : (shop.photos||(shop.photoUrl?[shop.photoUrl]:[])))
     .map(p=>typeof p==="string"?p:(p?.url||p?.full||p?.thumbnail||null)).filter(Boolean);
-  const openNow = enriched?.hours?.openNow ?? shop.isOpen;
   const weekdays = enriched?.hours?.weekdayDescriptions?.length ? enriched.hours.weekdayDescriptions : (shop.currentOpeningHours?.weekdayDescriptions||[]);
-  const todayHrs = shop.todayHours || (weekdays.length ? ((weekdays[(new Date().getDay()+6)%7]||'').split(': ').slice(1).join(': ')||null) : null);
+  // T1.5: Open/Closed is re-derived at render time with the same zone-aware policy
+  // as the list — never from `enriched.hours.openNow`, which for an owned shop is a
+  // Google boolean cached up to 90 days and wrong for any city but the user's own.
+  // The zone comes from the row (Google path) or, once the worker sends it, from
+  // enrich-owned; a navigated city with no zone yields no status (honest blank).
+  const tzOff = shop.utcOffsetMinutes ?? enriched?.utcOffsetMinutes ?? null;
+  const st = computeOpenStatus(
+    enriched?.hours?.weekdayDescriptions?.length
+      ? { ...shop, currentOpeningHours:{ weekdayDescriptions:weekdays, openNow:enriched.hours.openNow }, utcOffsetMinutes:tzOff }
+      : shop,
+    isLocal);
+  const openNow = st.isOpen, todayHrs = st.todayHours, is24 = st.is24Hours;
+  const todayIdx = placeDayIndex(tzOff, isLocal); // "today" row in the weekly hours, in the place's zone
   const phone   = shop.nationalPhoneNumber || shop.internationalPhoneNumber || "";
   const parking = shop.parking;
   const parkingConfirmed = parking?.source==='api';
@@ -235,7 +271,7 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
     : (shop.primaryType
         ? shop.primaryType.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())
         : 'Café');
-  const openText = shop.is24Hours ? 'Open 24/7' : (openNow===true ? 'Open' : openNow===false ? 'Closed' : '');
+  const openText = is24 ? 'Open 24/7' : (openNow===true ? 'Open' : openNow===false ? 'Closed' : '');
 
   const Tag=({bg,color,children})=>(
     <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(z(9,6))} ${fs(z(16,11))}`,fontSize:fs(z(15.5,12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
@@ -260,7 +296,8 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
         {/* Say it / Translate / rating / distance / price */}
         <div style={{display:"flex",gap:fs(z(16,10)),alignItems:"center",flexWrap:"wrap",marginTop:fs(z(12,9)),fontSize:fs(z(17,13)),color:ED_INK3}}>
           <NameLanguageHelp placeId={shop.placeId||shop.id} name={name}/>
-          {shop.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{shop.rating}</span>{shop.userRatingCount>0&&<span> ({shop.userRatingCount.toLocaleString()})</span>}</span>}
+          {/* T2.2: the stars are Google's — say so, quietly (muted word, no logo) */}
+          {shop.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{shop.rating}</span>{shop.userRatingCount>0&&<span> ({shop.userRatingCount.toLocaleString()})</span>}<span style={{fontSize:fs(z(11,10)),color:ED_INK3,marginLeft:fs(5),opacity:.8}}>Google</span></span>}
           {shop.distanceMiles!=null&&<span>· {formatDistance(shop.distanceMiles)}</span>}
           {shop.priceLevel&&<span>· {'$'.repeat(shop.priceLevel)}</span>}
         </div>
@@ -276,9 +313,9 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
         {/* Open bar — hidden until enrich resolves hours for owned shops */}
         {openNow!==null&&openNow!==undefined&&(
           <div style={{marginTop:fs(z(18,12)),background:openNow?"#E7F3EA":"#FBE0DC",borderRadius:z("16px","13px"),padding:`${fs(z(16,11))} ${fs(z(20,14))}`,fontSize:fs(z(18,13.5)),fontWeight:600,color:openNow?"#2E7D46":"#C2392F",display:"flex",alignItems:"center",gap:fs(z(11,9))}}>
-            <span style={{width:fs(z(10,9)),height:fs(z(10,9)),borderRadius:"50%",background:shop.is24Hours?"#00BCD4":(openNow?"#2E7D46":"#C2392F"),flexShrink:0}}/>
+            <span style={{width:fs(z(10,9)),height:fs(z(10,9)),borderRadius:"50%",background:is24?"#00BCD4":(openNow?"#2E7D46":"#C2392F"),flexShrink:0}}/>
             <span>{openText}</span>
-            {todayHrs&&!shop.is24Hours&&<span style={{color:ED_INK3,fontWeight:500}}>· {todayHrs}</span>}
+            {todayHrs&&!is24&&<span style={{color:ED_INK3,fontWeight:500}}>· {todayHrs}</span>}
           </div>
         )}
 
@@ -365,7 +402,7 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
                     <div>
                       {weekdays.map((day,i)=>{
                         const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                        const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
+                        const isToday=todayIdx>=0&&DAY.findIndex(d=>day.startsWith(d))===todayIdx;
                         return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?TEAL_DEEP:ED_INK2,borderBottom:i<6?`1px solid ${ED_RULE}`:"none"}}>
                           <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
                         </div>;
@@ -392,11 +429,11 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
 }
 
 // ─── FILTER PILL ───────────────────────────────────────────────────────────
-function FilterPill({ label, active, onClick, emoji }) {
-  return <button onClick={onClick} style={{padding:"7px 14px",borderRadius:"20px",border:active?`2px solid ${BROWN}`:"1.5px solid #E2E8F0",background:active?`${BROWN}15`:"#fff",color:active?BROWN:GRAY,fontWeight:active?"700":"500",fontSize:"calc(13px*var(--fs))",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",flexShrink:0}}>{emoji&&<span style={{marginRight:"4px"}}>{emoji}</span>}{label}</button>;
+function FilterPill({ label, active, onClick, emoji, disabled, title }) {
+  return <button onClick={onClick} disabled={disabled} title={title} style={{padding:"7px 14px",borderRadius:"20px",border:active?`2px solid ${BROWN}`:"1.5px solid #E2E8F0",background:active?`${BROWN}15`:"#fff",color:active?BROWN:GRAY,fontWeight:active?"700":"500",fontSize:"calc(13px*var(--fs))",cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.45:1,whiteSpace:"nowrap",fontFamily:"inherit",flexShrink:0}}>{emoji&&<span style={{marginRight:"4px"}}>{emoji}</span>}{label}</button>;
 }
-function ToggleChip({ label, active, onClick, icon }) {
-  return <button onClick={onClick} style={{display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"8px",border:active?`1.5px solid ${BROWN}`:"1.5px solid #E2E8F0",background:active?`${BROWN}12`:"#fff",color:active?BROWN_DARK:GRAY,fontWeight:active?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>{icon&&<span>{icon}</span>}{label}</button>;
+function ToggleChip({ label, active, onClick, icon, disabled, title }) {
+  return <button onClick={onClick} disabled={disabled} title={title} style={{display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"8px",border:active?`1.5px solid ${BROWN}`:"1.5px solid #E2E8F0",background:active?`${BROWN}12`:"#fff",color:active?BROWN_DARK:GRAY,fontWeight:active?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.45:1,fontFamily:"inherit",whiteSpace:"nowrap"}}>{icon&&<span>{icon}</span>}{label}</button>;
 }
 
 // ─── MAP POPUP ─────────────────────────────────────────────────────────────
@@ -441,6 +478,11 @@ export default function CoffeeFinderPage() {
   const routerLocation = useRouterLocation();
   const fromPlacesToEat = routerLocation?.state?.from === 'PlacesToEat';
   const [shops,setShops]         = useState([]);
+  // T1.8/T1.5: Google hours the cards fetch for OWNED shops (enrich-on-mount),
+  // keyed by shop id. Kept beside `shops` rather than patched into it so a
+  // Refresh that returns the same rows keeps the hours and cards never re-fetch.
+  const [hoursById,setHoursById] = useState({});
+  const handleCardHours = (id,data)=>{ if(!id) return; setHoursById(m=>m[id]?m:({...m,[id]:{weekdayDescriptions:data.hours.weekdayDescriptions,openNow:data.hours.openNow??null,utcOffsetMinutes:data.utcOffsetMinutes??null}})); };
   const [loading,setLoading]     = useState(true);
   const [refreshTick,setRefreshTick] = useState(0);
   const forceNextRef             = useRef(false);
@@ -482,7 +524,10 @@ export default function CoffeeFinderPage() {
   const [selectedMapIndex, setSelectedMapIndex] = useState(null);
   const cardRefs = useRef({}); const mapRef = useRef(null); const mapInstanceRef = useRef(null);
 
-  const { activeLocation } = useLocation();
+  const { activeLocation, locationMode } = useLocation();
+  // "Local" = browsing the city the device is physically in, so the device clock
+  // is the place clock. Gates every Open/Closed derivation on this page (T1.5).
+  const isLocal = locationMode === 'current';
   const lat = activeLocation?.coordinates?.latitude;
   const lng = activeLocation?.coordinates?.longitude;
   const locationText = getLocationLabel(activeLocation);
@@ -528,7 +573,7 @@ export default function CoffeeFinderPage() {
         if (workerError) throw new Error(workerError);
         const places = data?.places||data?.shops||[];
         if(places.length>0){
-          const processed=places.map(p=>processShop(p,lat,lng));
+          const processed=places.map(p=>processShop(p,lat,lng,isLocal));
           processed.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
           setShops(processed);
         } else { setError(data?.error||"No coffee shops found. Try expanding your search."); }
@@ -540,17 +585,33 @@ export default function CoffeeFinderPage() {
 
   // Search results = owned café/drink matches (free, instant) merged with the
   // live Google café search, deduped, distance-sorted. No radius filter here.
+  // Owned rows ship no hours; merge what the cards lifted and (re)evaluate Open/
+  // Closed with the zone-aware policy — the only way the list-level Open Now
+  // filter and the "· N open" count can ever see an owned shop's status.
+  const shopsWithHours = useMemo(()=>shops.map(s=>{
+    const h=hoursById[s.id||s.placeId]; if(!h) return s;
+    const next={...s,currentOpeningHours:{weekdayDescriptions:h.weekdayDescriptions,openNow:h.openNow},utcOffsetMinutes:s.utcOffsetMinutes??h.utcOffsetMinutes??null};
+    return {...next,...computeOpenStatus(next,isLocal)};
+  }),[shops,hoursById,isLocal]);
+
   const searchMerged = useMemo(()=>{
     if(!submitted) return [];
     // Accent/Unicode-insensitive owned match (see @/lib/searchText).
-    const owned=shops.filter(s=>matchesQuery(`${s.name||''} ${Object.keys(s.detectedDrinks||{}).join(' ')} ${(s.types||[]).join(' ')}`, submitted));
+    const owned=shopsWithHours.filter(s=>matchesQuery(`${s.name||''} ${Object.keys(s.detectedDrinks||{}).join(' ')} ${(s.types||[]).join(' ')}`, submitted));
     const seen=new Set(),out=[];
     const push=(s)=>{const k=s.id||s.placeId||`${s.lat},${s.lng}`;if(k&&!seen.has(k)){seen.add(k);out.push(s);}};
     owned.forEach(push);            // owned first — free + trusted
     (searchShops||[]).forEach(push); // then live Google cafés
     out.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
     return out;
-  },[submitted,shops,searchShops]);
+  },[submitted,shopsWithHours,searchShops]);
+
+  // T1.8: Open Now is only meaningful once some shop in view has a known state.
+  const listBase = submitted ? searchMerged : shopsWithHours;
+  const hoursKnown = listBase.some(s=>typeof s.isOpen==='boolean');
+  // A stale Open Now toggle would filter everything away while hours are unknown —
+  // drop it (the pill is disabled meanwhile) rather than show an empty list.
+  useEffect(()=>{ if(!hoursKnown){ if(quickFilter==='open') setQuickFilter('all'); if(filterOpenNow) setFilterOpenNow(false); } },[hoursKnown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(()=>{
     // Searching: within-radius merged results, or the closest few beyond if
@@ -559,12 +620,12 @@ export default function CoffeeFinderPage() {
     if(submitted){
       const within=searchMerged; // no radius cap — show all, nearest-first
       base=within.length?within:searchMerged.slice(0,8);
-    } else base=shops;
+    } else base=shopsWithHours;
     let r=[...base];
-    if(quickFilter==="open")         r=r.filter(s=>s.isOpen===true);
+    if(quickFilter==="open"&&hoursKnown) r=r.filter(s=>s.isOpen===true);
     if(quickFilter==="specialty")    r=r.filter(s=>s.isSpecialty);
     if(quickFilter==="wifi")         r=r.filter(s=>s.hasWifi);
-    if(filterOpenNow)       r=r.filter(s=>s.isOpen===true);
+    if(filterOpenNow&&hoursKnown) r=r.filter(s=>s.isOpen===true);
     if(filterWifi)          r=r.filter(s=>s.hasWifi);
     if(filterShopType==="chain")      r=r.filter(s=>s.isChain);
     if(filterShopType==="specialty")  r=r.filter(s=>s.isSpecialty);
@@ -583,7 +644,7 @@ export default function CoffeeFinderPage() {
       return sb-sa;
     });
     return r;
-  },[shops,searchMerged,submitted,radius,quickFilter,sortBy,filterOpenNow,filterWifi,filterShopType,filterWork,filterOutlets,filterQuiet,filterAC,workProfiles]);
+  },[shopsWithHours,searchMerged,submitted,radius,quickFilter,sortBy,filterOpenNow,hoursKnown,filterWifi,filterShopType,filterWork,filterOutlets,filterQuiet,filterAC,workProfiles]);
 
   const clearFilters=()=>{setFilterOpenNow(false);setFilterShopType("all");setFilterWifi(false);setFilterWork(false);setFilterOutlets(false);setFilterQuiet(false);setFilterAC(false);};
 
@@ -593,7 +654,7 @@ export default function CoffeeFinderPage() {
     try{
       const {data}=await callWorker(ROUTE.searchCoffee,{query,latitude:lat,longitude:lng,radiusMiles:radius});
       const raw=Array.isArray(data?.places)?data.places:[];
-      setSearchShops(raw.map(p=>processShop(p,lat,lng)));
+      setSearchShops(raw.map(p=>processShop(p,lat,lng,isLocal)));
       // Geo-tagged demand signal (which coffee/drink, in which city, now vs planning).
       if(raw.length) logSearch('coffee',query,{radius,resultCount:raw.length});
       else logZeroResults('coffee',query,{radius});
@@ -715,8 +776,9 @@ export default function CoffeeFinderPage() {
         {/* Sort + quick filters */}
         {/* Nearby/Best sort toggle removed — results default to nearest-first */}
         <div style={{display:"flex",gap:"8px",overflowX:"auto",padding:"4px 0 8px",scrollbarWidth:"none",alignItems:"center"}}>
-          {[{value:"all",label:"All",emoji:"☕"},{value:"open",label:"Open Now",emoji:"🟢"},{value:"specialty",label:"Specialty",emoji:"✨"},{value:"wifi",label:"WiFi",emoji:"📶"}].map(f=><FilterPill key={f.value} {...f} active={quickFilter===f.value} onClick={()=>setQuickFilter(f.value)}/>)}
+          {[{value:"all",label:"All",emoji:"☕"},{value:"open",label:"Open Now",emoji:"🟢"},{value:"specialty",label:"Specialty",emoji:"✨"},{value:"wifi",label:"WiFi",emoji:"📶"}].map(f=><FilterPill key={f.value} {...f} active={quickFilter===f.value} onClick={()=>setQuickFilter(f.value)} disabled={f.value==="open"&&!hoursKnown} title={f.value==="open"&&!hoursKnown?`Open Now ${OPEN_NOW_HINT}`:undefined}/>)}
         </div>
+        {!hoursKnown&&listBase.length>0&&!loading&&<div style={{fontSize:"calc(11px*var(--fs))",color:GRAY,margin:"-4px 0 8px"}}>Open Now {OPEN_NOW_HINT}</div>}
 
         {/* Advanced filters toggle */}
         <button onClick={()=>setShowAdvanced(!showAdvanced)} style={{display:"flex",alignItems:"center",gap:"8px",width:"100%",padding:"10px 14px",borderRadius:"10px",border:`1.5px solid ${showAdvanced||activeFilterCount>0?BROWN:"#E2E8F0"}`,background:showAdvanced||activeFilterCount>0?`${BROWN}10`:"#fff",color:showAdvanced||activeFilterCount>0?BROWN_DARK:GRAY,fontWeight:"600",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit",marginBottom:"6px"}}>
@@ -732,7 +794,10 @@ export default function CoffeeFinderPage() {
 
                 <div>
                   <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>⏰ Status</div>
-                  <ToggleChip label="Open Now" active={filterOpenNow} onClick={()=>setFilterOpenNow(!filterOpenNow)} icon="🟢"/>
+                  <div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
+                    <ToggleChip label="Open Now" active={filterOpenNow} onClick={()=>setFilterOpenNow(!filterOpenNow)} icon="🟢" disabled={!hoursKnown} title={!hoursKnown?`Open Now ${OPEN_NOW_HINT}`:undefined}/>
+                    {/* hint rendered once, under the quick pills — the chip is already disabled + titled */}
+                  </div>
                 </div>
 
                 <div>
@@ -778,7 +843,7 @@ export default function CoffeeFinderPage() {
         {/* Stats + view toggle */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px",fontSize:"calc(13px*var(--fs))"}}>
           <div style={{color:GRAY,fontWeight:"600",display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap"}}>
-            <span style={{background:BROWN,color:"#fff",padding:"2px 8px",borderRadius:"10px",fontWeight:"700",fontSize:"calc(12px*var(--fs))"}}>{stats.total}</span>
+            <span style={{background:BROWN,color:"#fff",padding:"2px 8px",borderRadius:"10px",fontWeight:"700",fontSize:"calc(12px*var(--fs))"}}>{(!lat||!lng)?"–":stats.total}</span>
             <span>coffee shops</span>
             {stats.specialty>0&&<span style={{color:"#E65100"}}>· {stats.specialty} specialty</span>}
             {stats.open>0&&<span style={{color:GREEN}}>· {stats.open} open</span>}
@@ -788,7 +853,17 @@ export default function CoffeeFinderPage() {
         </div>
       </div>
 
-      {loading?(
+      {(!lat||!lng)?(
+        /* T1.4: no location yet (first run, nothing restored) — a clear ask plus
+           the same picker the header "Change" opens, instead of a spinner or a
+           misleading "No matches found". */
+        <div style={{textAlign:"center",padding:"60px 20px"}}>
+          <div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px"}}>📍</div>
+          <div style={{fontWeight:"600",color:DARK,marginBottom:"8px"}}>Choose a location to search</div>
+          <div style={{fontSize:"calc(13px*var(--fs))",color:GRAY,marginBottom:"14px"}}>Use where you are now, or pick a city to plan ahead.</div>
+          <button onClick={()=>setShowLocPicker(true)} style={{padding:"11px 20px",borderRadius:"12px",border:"none",background:BROWN,color:"#fff",fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Choose location</button>
+        </div>
+      ):loading?(
         <div style={{textAlign:"center",padding:"60px 20px"}}><div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px",animation:"pulse 1.5s infinite"}}>☕</div><div style={{color:GRAY,fontWeight:"600"}}>Finding coffee shops...</div></div>
       ):error?(
         <div style={{textAlign:"center",padding:"60px 20px"}}><div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px"}}>😕</div><div style={{color:CORAL,fontWeight:"600"}}>{error}</div></div>
@@ -811,7 +886,7 @@ export default function CoffeeFinderPage() {
           ):filtered.map((shop,i)=>{
             const Card = CoffeeCardTablet;
             return (
-            <div key={shop.id||i} ref={el=>cardRefs.current[i]=el}><Card shop={shop} index={i} onShowOnMap={handleShowOnMap} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet}/></div>
+            <div key={shop.id||i} ref={el=>cardRefs.current[i]=el}><Card shop={shop} index={i} onShowOnMap={handleShowOnMap} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet} isLocal={isLocal} onHours={handleCardHours}/></div>
           );})}
         </div>
       ):(

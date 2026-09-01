@@ -177,33 +177,44 @@ function isBarDominant(place) {
 }
 
 // ─── OPEN STATUS (With Live Clock Override) ──────────────────────────────────
-// Cloudflare caches Google's openNow boolean for 12 hours. A place tagged
-// "Open" at noon is still "Open" at 11 PM if the cache hasn't expired.
-// This function parses the actual hours string (e.g. "11:00 AM – 9:30 PM")
-// against the user's live local clock to give a mathematically correct answer.
-function computeOpenStatus(place) {
+// Cloudflare caches Google's openNow boolean for 12 hours (90 days on the
+// details/enrich path). A place tagged "Open" at noon is still "Open" at 11 PM
+// if the cache hasn't expired. This function parses the actual hours string
+// (e.g. "11:00 AM – 9:30 PM") against a clock we can trust instead.
+//
+// `isLocal` = the user is physically at the active location (current-GPS mode),
+// so the device clock IS the place's clock. It decides what we may fall back on
+// when Google didn't give us the place's UTC offset.
+function computeOpenStatus(place, { isLocal = true } = {}) {
   const hours = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
-  if (!hours.length) return { isOpen: place.isOpen ?? null, todayHours: null, is24Hours: false };
 
   // Compute "now" in the PLACE's timezone when Google gave us its UTC offset — the
   // device clock makes open/closed + today's-hours WRONG when browsing a city in
-  // another timezone (e.g. Tokyo from the US). Falls back to device time (correct
-  // for your current location) when the offset isn't available.
+  // another timezone (e.g. Tokyo from the US). Falls back to device time only when
+  // the user is actually there; browsing a far city with no offset means neither
+  // the device clock nor a cached openNow can be reconciled, so we say nothing —
+  // a blank beats a confidently wrong Open/Closed.
   const _off = place.utcOffsetMinutes;
   const _tz = Number.isFinite(_off);
+  const UNKNOWN = { isOpen: null, todayHours: null, is24Hours: false };
+  if (!_tz && !isLocal) return UNKNOWN;
+  // Google's cached boolean is a last resort, and only for the city you're standing in.
+  const cachedOpen = isLocal ? (place.isOpen ?? null) : null;
+  if (!hours.length) return { ...UNKNOWN, isOpen: cachedOpen };
+
   const now = _tz ? new Date(Date.now() + _off * 60000) : new Date();
   const _day = _tz ? now.getUTCDay() : now.getDay();
   const _mins = _tz ? (now.getUTCHours() * 60 + now.getUTCMinutes()) : (now.getHours() * 60 + now.getMinutes());
   const DAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const entry = hours.find(h => h?.startsWith(DAY[_day]));
 
-  if (!entry) return { isOpen: place.isOpen ?? null, todayHours: null, is24Hours: false };
+  if (!entry) return { ...UNKNOWN, isOpen: cachedOpen };
 
   const hoursText = entry.substring(entry.indexOf(':')+1).trim();
   if (hoursText.toLowerCase() === 'closed') return { isOpen: false, todayHours: 'Closed today', is24Hours: false };
   if (hoursText.toLowerCase().includes('24 hours')) return { isOpen: true, todayHours: 'Open 24 hours', is24Hours: true };
 
-  let isLiveOpen = place.isOpen ?? null;
+  let isLiveOpen = cachedOpen;
   try {
     const currentMins = _mins;
     const shifts = hoursText.split(',');
@@ -238,6 +249,15 @@ function computeOpenStatus(place) {
   }
 
   return { isOpen: isLiveOpen, todayHours: hoursText, is24Hours: false };
+}
+
+// Day-of-week (0 = Sunday) AT THE PLACE, not on the device: shifted by Google's
+// UTC offset when we have it, the device day when the user is physically there,
+// null when neither holds — we genuinely don't know what day it is over there,
+// so callers show no "today" rather than the wrong one.
+function placeDay(utcOffsetMinutes, isLocal) {
+  if (Number.isFinite(utcOffsetMinutes)) return new Date(Date.now() + utcOffsetMinutes * 60000).getUTCDay();
+  return isLocal ? new Date().getDay() : null;
 }
 
 // ─── PRICE DISPLAY ────────────────────────────────────────────────────────────
@@ -353,11 +373,11 @@ function detectDietary(place) {
 }
 
 // ─── PROCESS RESTAURANT ──────────────────────────────────────────────────────
-function processRest(place, userLat, userLng) {
+function processRest(place, userLat, userLng, isLocal = true) {
   const lat = place.location?.latitude || place.latitude || 0;
   const lng = place.location?.longitude || place.longitude || 0;
   const name  = place.displayName?.text || place.name || '';
-  const open  = computeOpenStatus(place);
+  const open  = computeOpenStatus(place, { isLocal });
   const price = priceDisplay(place.priceLevel);
 
   let distMiles = place.distanceMiles || null;
@@ -647,7 +667,7 @@ function AlsoServesBanner({ banner, onExpandRadius }) {
 // Every text size stays on fs() so the 4-step glasses control scales it; the
 // serif name is 2-line clamped and the card uses a min-height (not fixed) so
 // enlarged text grows the card instead of clipping.
-function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, formatDistance, isTablet }) {
+function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, formatDistance, isTablet, isLocal }) {
   const [expanded,setExpanded]=useState(false);
   const [enriched,setEnriched]=useState(null);
   // Fetch 3 real Google photos + hours for OWNED restaurants (owned records carry
@@ -671,12 +691,24 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
   const cuisineLabel = restaurant.primaryType
     ? restaurant.primaryType.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())
     : restaurant.types?.[0]?.replace(/_/g,' ')?.replace(/\b\w/g,l=>l.toUpperCase()) || null;
-  const openNow = enriched?.hours?.openNow ?? restaurant.isOpen;
   const weekdays = (enriched?.hours?.weekdayDescriptions?.length ? enriched.hours.weekdayDescriptions
     : (restaurant.currentOpeningHours?.weekdayDescriptions || restaurant.regularOpeningHours?.weekdayDescriptions || restaurant.hours || []));
   const photosToShow = (enriched?.photos?.length ? enriched.photos : (restaurant.photos || (restaurant.photoUrl ? [restaurant.photoUrl] : [])));
-  const todayHrs = restaurant.todayHours || (weekdays.length ? ((weekdays[(new Date().getDay()+6)%7]||'').split(': ').slice(1).join(': ')||null) : null);
-  const openText = restaurant.is24Hours ? 'Open 24/7' : (openNow===true ? 'Open' : openNow===false ? 'Closed' : '');
+  // Open/Closed. Owned places get hours on-tap from enrich-owned, whose `openNow`
+  // is a Place-Details boolean cached for 90 days — never a live answer. Re-run
+  // the same zone-aware parser the list uses over the enriched hours (offset from
+  // the enriched payload when the worker sends it, else the place's own); the
+  // cached boolean only survives as a last resort when the user is standing here.
+  const offset = enriched?.utcOffsetMinutes ?? restaurant.utcOffsetMinutes;
+  const openInfo = enriched?.hours
+    ? computeOpenStatus({ currentOpeningHours:{ weekdayDescriptions: weekdays }, utcOffsetMinutes: offset, isOpen: enriched.hours.openNow ?? null }, { isLocal })
+    : { isOpen: restaurant.isOpen, todayHours: restaurant.todayHours, is24Hours: restaurant.is24Hours };
+  const openNow = openInfo.isOpen;
+  const is24    = openInfo.is24Hours;
+  const today   = placeDay(offset, isLocal); // null = unknown day over there → no "today"
+  // Google's weekdayDescriptions start on Monday; getDay() is Sunday-based.
+  const todayHrs = openInfo.todayHours || (weekdays.length && today!=null ? ((weekdays[(today+6)%7]||'').split(': ').slice(1).join(': ')||null) : null);
+  const openText = is24 ? 'Open 24/7' : (openNow===true ? 'Open' : openNow===false ? 'Closed' : '');
 
   const Tag=({bg,color,children})=>(
     <span style={{background:bg,color,borderRadius:"999px",padding:`${t(fs(9),fs(5))} ${t(fs(16),fs(11))}`,fontSize:t(fs(15.5),fs(12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
@@ -696,7 +728,8 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
         {/* Say it / Translate / rating / distance */}
         <div style={{display:"flex",gap:t(fs(16),fs(10)),alignItems:"center",flexWrap:"wrap",marginTop:t(fs(12),fs(8)),fontSize:t(fs(17),fs(13.5)),color:ED_INK3}}>
           <NameLanguageHelp placeId={restaurant.placeId||restaurant.id} name={name}/>
-          {restaurant.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{restaurant.rating.toFixed(1)}</span></span>}
+          {/* Source word: every star here is Google's (owned rows carry no rating) — quiet, no logo */}
+          {restaurant.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{restaurant.rating.toFixed(1)}</span><span style={{fontSize:"0.8em",color:ED_INK3,marginLeft:"0.35em"}}>Google</span></span>}
           {restaurant.distanceMiles!=null&&<span>· {formatDistance(restaurant.distanceMiles)}</span>}
           {restaurant.priceStr&&<span>· {restaurant.priceStr}</span>}
         </div>
@@ -719,11 +752,11 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
         </div>
 
         {/* Open bar */}
-        {(openNow!==null||restaurant.is24Hours)&&(
+        {(openNow!==null||is24)&&(
           <div style={{marginTop:t(fs(18),fs(12)),background:openNow===false?"#FBE0DC":"#E7F3EA",borderRadius:t("16px","12px"),padding:t(`${fs(16)} ${fs(20)}`,`${fs(10)} ${fs(13)}`),fontSize:t(fs(18),fs(13.5)),fontWeight:600,color:openNow===false?"#C2392F":"#2E7D46",display:"flex",alignItems:"center",gap:t(fs(11),fs(8))}}>
-            <span style={{width:t(fs(10),fs(8)),height:t(fs(10),fs(8)),borderRadius:"50%",background:restaurant.is24Hours?"#00BCD4":(openNow===false?"#C2392F":"#2E7D46"),flexShrink:0}}/>
+            <span style={{width:t(fs(10),fs(8)),height:t(fs(10),fs(8)),borderRadius:"50%",background:is24?"#00BCD4":(openNow===false?"#C2392F":"#2E7D46"),flexShrink:0}}/>
             <span>{openText}</span>
-            {todayHrs&&!restaurant.is24Hours&&<span style={{color:ED_INK3,fontWeight:500}}>· {todayHrs}</span>}
+            {todayHrs&&!is24&&<span style={{color:ED_INK3,fontWeight:500}}>· {todayHrs}</span>}
           </div>
         )}
 
@@ -819,7 +852,7 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
                     <div>
                       {weekdays.map((day,i)=>{
                         const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                        const isToday=DAY.findIndex(d=>day.startsWith(d))===new Date().getDay();
+                        const isToday=DAY.findIndex(d=>day.startsWith(d))===today; // place's day, not the device's
                         return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?TEAL_DEEP:ED_INK2,borderBottom:i<6?`1px solid ${ED_RULE}`:"none"}}>
                           <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
                         </div>;
@@ -864,7 +897,7 @@ function buildPopup(r, idx) {
           <span style="font-weight:700;color:${is24Hours?'#1565C0':isOpen===true?'#15803D':isOpen===false?'#DC2626':'#9E9E9E'};">${is24Hours?'🔄 Open 24/7':isOpen===true?'● Open':isOpen===false?'● Closed':'● Hours N/A'}</span>
           ${todayHours&&!is24Hours?`<span style="color:#64748B;"> · ${todayHours}</span>`:''}
         </div>
-        ${r.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:8px;">★ <strong style="color:#1A2332;">${r.rating.toFixed(1)}</strong> <span style="color:#64748B;">(${(r.userRatingCount||0).toLocaleString()})</span>${r.distance?` · <span style="color:#3B82F6;">${r.distance}</span>`:''}</div>`:''}
+        ${r.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:8px;">★ <strong style="color:#1A2332;">${r.rating.toFixed(1)}</strong> <span style="color:#64748B;">(${(r.userRatingCount||0).toLocaleString()})</span><span style="color:#9E9E9E;font-size:calc(10px*var(--fs));"> Google</span>${r.distance?` · <span style="color:#3B82F6;">${r.distance}</span>`:''}</div>`:''}
         ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#3B82F6;font-size:calc(11px*var(--fs));font-weight:600;">📞 ${phone}</a>`:''}
         <div style="display:flex;gap:8px;">
           <button onclick="window.openDirFromMap&&window.openDirFromMap(${idx})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#3B82F6;color:#fff;font-weight:600;font-size:11px;cursor:pointer;">🧭 Directions</button>
@@ -964,7 +997,10 @@ export default function PlacesToEat() {
   const mapInstanceRef = useRef(null);
   const cuisineScrollRef = useRef(null);
 
-  const { activeLocation } = useLocation();
+  const { activeLocation, locationMode } = useLocation();
+  // Device clock == place clock only when the user is physically at the active
+  // location. Drives which clock Open/Closed may trust (see computeOpenStatus).
+  const isLocal = locationMode === 'current' || activeLocation?.placeType === 'current_location';
   const lat = activeLocation?.coordinates?.latitude;
   const lng = activeLocation?.coordinates?.longitude;
   const locationText = getLocationLabel(activeLocation);
@@ -1014,7 +1050,7 @@ export default function PlacesToEat() {
   // Also fetches dedicated dietary results when dietary filters are active,
   // then MERGES them with the main results so filtering actually finds something.
   useEffect(() => {
-    if (!lat || !lng) return;
+    if (!lat || !lng) { setLoading(false); return; } // no location yet — don't spin forever
     // Race-condition cleanup flag. The useEffect re-fires on every filter /
     // radius / search change. If an older slow fetch resolves AFTER a newer
     // fast fetch, the older empty/wrong result could overwrite the newer
@@ -1110,7 +1146,7 @@ export default function PlacesToEat() {
 
         if (places.length > 0 || useFallback) {
           const sourcePlaces = useFallback ? fallbackPlaces : places;
-          const processed = sourcePlaces.map((/** @type {any} */ p) => processRest(p, lat, lng));
+          const processed = sourcePlaces.map((/** @type {any} */ p) => processRest(p, lat, lng, isLocal));
           setRestaurants(processed);
           setDisplayCount(20);
           setError(null); // Clear any old errors on success
@@ -1168,7 +1204,7 @@ export default function PlacesToEat() {
   // Every filter is now part of the backend's Semantic Text Compiler payload,
   // so every change must trigger a re-fetch. Using JSON.stringify for the
   // object states (filterVibes, filterDietary) so React sees deep changes.
-  }, [lat, lng, radius, primaryCuisine, searchText, filterBakery, filterBars, filterOpenNow, filterMinRating, filterMaxPrice, filterParking, filterOutdoor, filterIndoor, filterDriveThru, JSON.stringify(filterVibes), JSON.stringify(filterDietary), refreshTick]);
+  }, [lat, lng, isLocal, radius, primaryCuisine, searchText, filterBakery, filterBars, filterOpenNow, filterMinRating, filterMaxPrice, filterParking, filterOutdoor, filterIndoor, filterDriveThru, JSON.stringify(filterVibes), JSON.stringify(filterDietary), refreshTick]);
 
   // ── FILTER + SORT ──────────────────────────────────────────────────────────
   // v5.3: Backend Semantic Text Compiler now sends a single natural-language
@@ -1444,7 +1480,7 @@ export default function PlacesToEat() {
           <span>⚙️ Advanced Filters</span>
           {activeFilterCount>0&&<span style={{background:CAT.food.ink,color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"calc(11px*var(--fs))",fontWeight:"800"}}>{activeFilterCount}</span>}
           <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"10px",color:'#6B7280',fontSize:"calc(12px*var(--fs))",fontWeight:"600"}}>
-            {loading?"Loading…":<><span>{stats.total} results</span>{stats.open>0&&<span style={{color:CAT.convenience.ink}}>· {stats.open} open</span>}</>}
+            {(!lat||!lng)?null:loading?"Loading…":<><span>{stats.total} results</span>{stats.open>0&&<span style={{color:CAT.convenience.ink}}>· {stats.open} open</span>}</>}
             <span style={{color:'#94A3B8'}}>{showAdvanced?"▲":"▼"}</span>
           </span>
         </button>
@@ -1528,7 +1564,17 @@ export default function PlacesToEat() {
       </div>
 
       {/* ── CONTENT ── */}
-      {loading?(
+      {(!lat||!lng)?(
+        /* No location yet (first run, GPS denied, cleared storage). Sits AHEAD of
+           the loading branch so a no-location cold start can never show a spinner —
+           `loading` starts true and the fetch effect bails before clearing it. */
+        <div style={{textAlign:"center",padding:"60px 20px"}}>
+          <div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px"}}>📍</div>
+          <div style={{fontWeight:"700",color:DARK,marginBottom:"6px"}}>Choose a location to search</div>
+          <div style={{fontSize:"calc(13px*var(--fs))",color:GRAY,marginBottom:"14px"}}>Use your current location or pick a city to find restaurants nearby.</div>
+          <button onClick={()=>setShowLocPicker(true)} style={{padding:"10px 20px",borderRadius:"10px",border:`2px solid ${BLUE}`,background:BLUE_LT,color:BLUE,fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Choose Location</button>
+        </div>
+      ):loading?(
         <div style={{textAlign:"center",padding:"60px 20px"}}>
           <div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px",animation:"spin 2s linear infinite"}}>🍽️</div>
           <div style={{color:GRAY,fontWeight:"600"}}>
@@ -1583,6 +1629,7 @@ export default function PlacesToEat() {
                   onDirections={()=>setDirModal({open:true,lat:r.lat,lng:r.lng,name:r.name,address:r.formattedAddress||r.shortFormattedAddress||r.vicinity||r.address||''})}
                   onShowOnMap={()=>handleShowOnMap(i)}
                   formatDistance={formatDistance}
+                  isLocal={isLocal}
                 />
               </div>
             );})}

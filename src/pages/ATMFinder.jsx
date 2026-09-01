@@ -388,9 +388,10 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
         {/* Address */}
         {address && <div style={{ marginTop:fs(D.addressMt), fontSize:fs(D.address), color:ED_INK3, lineHeight:1.4 }}>🗺️ {address}</div>}
 
-        {/* Rating / distance sub-row */}
+        {/* Rating / distance sub-row. The "Google" word names the review source —
+            the ATM list is Google-served, so every rating here is Google's. */}
         <div style={{ display:"flex", gap:fs(D.subGap), alignItems:"center", flexWrap:"wrap", marginTop:fs(D.subMt), fontSize:fs(D.sub), color:ED_INK3 }}>
-          {atm.rating && <span><span style={{ color:"#E0922F" }}>★</span> <span style={{ fontWeight:700, color:ED_INK2 }}>{atm.rating}</span>{atm.userRatingCount > 0 && <span> ({atm.userRatingCount})</span>}</span>}
+          {atm.rating && <span><span style={{ color:"#E0922F" }}>★</span> <span style={{ fontWeight:700, color:ED_INK2 }}>{atm.rating}</span>{atm.userRatingCount > 0 && <span> ({atm.userRatingCount})</span>}<span style={{ fontSize:"0.8em", color:ED_INK3, marginLeft:"4px" }}>Google</span></span>}
           {atm.distanceMiles!=null && <span>{atm.rating ? "· " : ""}📍 {formatDistance(atm.distanceMiles)}</span>}
         </div>
 
@@ -516,7 +517,7 @@ function buildMapPopup(atm, index, fmt) {
       <span style="font-weight:700;color:${hoursColor};">${hoursLabel}</span>
       ${todayHours && !is24H ? `<span style="color:#64748B;"> · ${todayHours}</span>` : ""}
     </div>
-    ${rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:6px;">★ <strong style="color:#1A2332;">${rating}</strong> <span style="color:#64748B;">(${ratingCount})</span>${distance?` · <span style="color:#00838F;">${distance}</span>`:''}</div>`:distance?`<div style="font-size:11px;color:#9E9E9E;margin-bottom:6px;">📍 ${distance}</div>`:''}
+    ${rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:6px;">★ <strong style="color:#1A2332;">${rating}</strong> <span style="color:#64748B;">(${ratingCount})</span><span style="color:#9E9E9E;font-size:10px;"> Google</span>${distance?` · <span style="color:#00838F;">${distance}</span>`:''}</div>`:distance?`<div style="font-size:11px;color:#9E9E9E;margin-bottom:6px;">📍 ${distance}</div>`:''}
     ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#1565C0;font-size:calc(11px*var(--fs));font-weight:600;">📞 ${phone}</a>`:''}
     <div style="display:flex;gap:8px;">
       <button onclick="window._gsATMDirs&&window._gsATMDirs(${index})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#00BCD4;color:#fff;font-weight:600;font-size:11px;cursor:pointer;">🧭 Directions</button>
@@ -623,11 +624,13 @@ export default function ATMFinderPage() {
           setATMs(processed);
           if (data?.banks?.length > 0) setAvailableBanks(data.banks);
         } else {
+          setATMs([]); // drop the previous result so the stats badge can't show a stale count next to the error
           setError(data?.error || "No ATMs found. Try expanding your search radius.");
         }
       } catch (e) {
         if (cancelled) return;
         console.error("🏧 ATMFinder error:", e);
+        setATMs([]); // same — a failed fetch must not leave the old list's count on screen
         setError(`Failed to load: ${e.message}`);
       } finally {
         if (!cancelled) setLoading(false);
@@ -831,17 +834,29 @@ export default function ATMFinderPage() {
           )}
         </div>
 
-        {/* Stats (List/Map view toggle removed — list is primary; per-card map still works) */}
+        {/* Stats (List/Map view toggle removed — list is primary; per-card map still works).
+            Gated on loading: `atms` still holds the previous result mid-fetch, so
+            showing its count here would be the old filter's number. */}
         <div style={{ display:"flex", alignItems:"center", gap:"8px", fontSize:"calc(13px*var(--fs))" }}>
-          <span style={{ background:TEAL, color:"#fff", padding:"2px 9px", borderRadius:"10px", fontWeight:"700", fontSize:"calc(12px*var(--fs))" }}>{stats.total}</span>
+          <span style={{ background:TEAL, color:"#fff", padding:"2px 9px", borderRadius:"10px", fontWeight:"700", fontSize:"calc(12px*var(--fs))" }}>{loading ? "…" : stats.total}</span>
           <span style={{ color:GRAY, fontWeight:"600" }}>ATMs</span>
-          {stats.banks > 0 && <span style={{ color:"#1565C0", fontWeight:"600" }}>· {stats.banks} banks</span>}
-          {stats.open  > 0 && <span style={{ color:"#2E7D32", fontWeight:"600" }}>· {stats.open} open</span>}
+          {!loading && stats.banks > 0 && <span style={{ color:"#1565C0", fontWeight:"600" }}>· {stats.banks} banks</span>}
+          {!loading && stats.open  > 0 && <span style={{ color:"#2E7D32", fontWeight:"600" }}>· {stats.open} open</span>}
         </div>
       </div>
 
       {/* ── Content ── */}
-      {loading ? (
+      {(!lat || !lng) ? (
+        // No location yet: the fetch effect bails out with loading=false, so
+        // without this branch a cold start falls through to the misleading
+        // "No matches for this filter" state. Offer the picker directly.
+        <div style={{ textAlign:"center", padding:"60px 20px" }}>
+          <div style={{ fontSize:"calc(48px*var(--fs))", marginBottom:"14px" }}>📍</div>
+          <div style={{ color:DARK, fontWeight:"600", fontSize:"calc(15px*var(--fs))" }}>Choose a location to search</div>
+          <div style={{ color:GRAY, fontSize:"calc(12px*var(--fs))", marginTop:"6px" }}>Use your current position or pick a city to find ATMs nearby.</div>
+          <button onClick={() => setShowLocPicker(true)} style={{ marginTop:"14px", ...btn(TEAL,"#fff"), display:"inline-flex" }}>📍 Choose a location</button>
+        </div>
+      ) : loading ? (
         <div style={{ textAlign:"center", padding:"60px 20px" }}>
           <div style={{ fontSize:"calc(48px*var(--fs))", marginBottom:"14px", animation:"pulse 1.5s infinite" }}>🏧</div>
           <div style={{ color:GRAY, fontWeight:"600", fontSize:"calc(15px*var(--fs))" }}>Finding ATMs worldwide…</div>

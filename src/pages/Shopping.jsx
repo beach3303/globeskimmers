@@ -59,22 +59,36 @@ const PROP_TAGS=[
   {key:"isTouristFav",    icon:"📸",label:"Tourist Favorite", color:"#7C3AED",bg:"#EDE9FE"},
 ];
 
-function openStatus(p){
+// Which clock to read a place's hours against. Google's utcOffsetMinutes puts
+// "now" in the PLACE's zone (right when browsing another city); without it the
+// device clock is only right when the user is physically there (isLocal =
+// current-location browse). Returns null when neither holds so callers show
+// nothing rather than a wrong Open/Closed. (T1.5)
+function placeClock(p,isLocal){
+  const off=p?.utcOffsetMinutes;
+  if(Number.isFinite(off)){ const n=new Date(Date.now()+off*60000); return {day:n.getUTCDay(),mins:n.getUTCHours()*60+n.getUTCMinutes()}; }
+  if(isLocal){ const n=new Date(); return {day:n.getDay(),mins:n.getHours()*60+n.getMinutes()}; }
+  return null;
+}
+
+function openStatus(p,isLocal=true){
   const h=p.currentOpeningHours?.weekdayDescriptions||p.hours||[];
-  if(!h.length) return {isOpen:p.isOpen??null,label:p.isOpen===true?"Open Now":p.isOpen===false?"Closed":"Hours Unknown",is24H:false,today:""};
+  if(!h.length){
+    // No hours to compute from. Google's openNow boolean is only trusted for the
+    // city we're standing in (the snapshot is at least on the right clock); for
+    // another city it may be days old AND on the wrong clock, so show nothing.
+    const io=isLocal?(p.isOpen??null):null;
+    return {isOpen:io,label:io===true?"Open Now":io===false?"Closed":"Hours Unknown",is24H:false,today:""};
+  }
+  const clock=placeClock(p,isLocal);
+  if(!clock) return {isOpen:null,label:"Hours Unknown",is24H:false,today:""}; // zone unknown for a non-local city
   const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-  // Place-timezone aware (Google utcOffsetMinutes) — right hours when browsing
-  // another city; device-time fallback for your current location.
-  const _off=p.utcOffsetMinutes;
-  const _tz=Number.isFinite(_off);
-  const _now=_tz?new Date(Date.now()+_off*60000):new Date();
-  const _mins=_tz?(_now.getUTCHours()*60+_now.getUTCMinutes()):(_now.getHours()*60+_now.getMinutes());
-  const tod=days[_tz?_now.getUTCDay():_now.getDay()];
+  const tod=days[clock.day];
   const ent=h.find((x)=>x?.toLowerCase().startsWith(tod.toLowerCase()));
   if(!ent) return {isOpen:null,label:"Hours Unknown",is24H:false,today:""};
   const txt=ent.split(":").slice(1).join(":").trim();
   if(txt.toLowerCase()==="closed") return {isOpen:false,label:"Closed Today",is24H:false,today:"Closed"};
-  const cur=_mins;
+  const cur=clock.mins;
   const open=txt.split(",").some((seg)=>{
     const m=seg.match(/(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)\s*[–\-]\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)/i);
     if(!m) return false;
@@ -112,7 +126,7 @@ function PhotoStrip({photos,fallback="🛍️",bg,height}){
 // RestaurantCardTablet (PlacesToEat); only the domain content differs. Domain:
 // shop category kicker (venueLabel), mall-vs-market hours, rating. No best-time /
 // seating / parking / customer-favorites panels — this finder doesn't have them.
-function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet}){
+function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet,isLocal}){
   const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false);
   const [hoursExpanded,setHoursExpanded]=useState(false);
   const [enriched,setEnriched]=useState(null);
@@ -129,8 +143,12 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
   // Layer enrich (owned) photos + hours over the owned fields before deriving status.
   const photos=enriched?.photos?.length?enriched.photos:p.photos;
   const dailyHours=enriched?.hours?.weekdayDescriptions?.length?enriched.hours.weekdayDescriptions:(p.hours||[]);
-  const pStatus=enriched?.hours?{...p,currentOpeningHours:{weekdayDescriptions:enriched.hours.weekdayDescriptions},isOpen:enriched.hours.openNow??p.isOpen}:p;
-  const st=openStatus(pStatus);
+  // enrich-owned's hours come from a 90-day-cached Place Details entry, so its
+  // openNow is a stale snapshot — never use it. Recompute from the weekday
+  // hours in the place's zone (utcOffsetMinutes, when the worker sends it).
+  const pStatus=enriched?.hours?{...p,currentOpeningHours:{weekdayDescriptions:enriched.hours.weekdayDescriptions},utcOffsetMinutes:enriched.utcOffsetMinutes??p.utcOffsetMinutes??null}:p;
+  const st=openStatus(pStatus,isLocal);
+  const todayIdx=placeClock(pStatus,isLocal)?.day??-1; // -1 = no trustworthy clock → no "today" highlight
   const openText=st.label;
   const activeTags=PROP_TAGS.filter(t=>p.props?.[t.key]);
   const vColor=p.venueColor||T.accent;
@@ -163,7 +181,7 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
         {/* Say it / Translate / rating / distance */}
         <div style={{display:"flex",gap:v(fs(16),fs(10)),alignItems:"center",flexWrap:"wrap",marginTop:fs(12),fontSize:v(fs(17),fs(13.5)),color:ED_INK3}}>
           <NameLanguageHelp placeId={p.placeId||p.id} name={name}/>
-          {p.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{p.rating.toFixed?p.rating.toFixed(1):p.rating}</span>{p.userRatingCount>0&&<> ({p.userRatingCount.toLocaleString()})</>}</span>}
+          {p.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{p.rating.toFixed?p.rating.toFixed(1):p.rating}</span>{p.userRatingCount>0&&<> ({p.userRatingCount.toLocaleString()})</>} <span style={{fontSize:"0.8em",color:ED_INK3}}>Google</span></span>}
           {p.distanceMiles!=null&&<span>· {formatDistance(p.distanceMiles)}</span>}
         </div>
 
@@ -227,7 +245,7 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
                       <div style={{marginTop:fs(8)}}>
                         {dailyHours.map((day,i)=>{
                           const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                          const isToday=DAY.findIndex(d=>day.toLowerCase().startsWith(d.toLowerCase()))===new Date().getDay();
+                          const isToday=DAY.findIndex(d=>day.toLowerCase().startsWith(d.toLowerCase()))===todayIdx;
                           const hrs=day.split(':').slice(1).join(':').trim();
                           return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:v(fs(15),fs(13)),fontWeight:isToday?700:400,color:isToday?T.accentD:ED_INK2,borderBottom:i<dailyHours.length-1?`1px solid ${ED_RULE}`:"none"}}>
                             <span>{day.split(':')[0]}</span><span style={{color:hrs.toLowerCase()==="closed"?"#C2392F":isToday?T.accentD:ED_INK3}}>{hrs}</span>
@@ -271,7 +289,9 @@ export default function ShoppingFinder() {
   const [activePin,setActivePin]=useState(null);
   const cardRefs=useRef({});
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
-  const {activeLocation}=useLocation();
+  const {activeLocation,locationMode}=useLocation();
+  // Physically here → the device clock is the place clock (mirrors LocationContext's isLive).
+  const isLocal=locationMode==='current'||activeLocation?.placeType==='current_location';
   // Smart-Search handoff: a category passed via router state (from the spine's
   // shopping-query mapping) selects that chip once.
   const routerLocation=useRouterLocation();
@@ -323,11 +343,11 @@ export default function ShoppingFinder() {
 
   const filtered=useMemo(()=>{
     let r=[...places];
-    if(openOnly)  r=r.filter(p=>p.isOpen===true);
+    if(openOnly)  r=r.filter(p=>openStatus(p,isLocal).isOpen===true); // same clock rule as the cards, not raw openNow
     if(luxOnly)   r=r.filter(p=>p.props?.isLuxury);
     if(foodOnly)  r=r.filter(p=>p.shoppingFamily==="food_shopping");
     return r;
-  },[places,openOnly,luxOnly,foodOnly]);
+  },[places,openOnly,luxOnly,foodOnly,isLocal]);
 
   const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const p=filtered[i];if(mapInst.current&&p?.lat&&p?.lng){mapInst.current.setView([p.lat,p.lng],17);markers.current[i]?.openPopup();}},350);};
 
@@ -345,7 +365,7 @@ export default function ShoppingFinder() {
         if(!p.lat||!p.lng) return;
         const active=activePin===i; const color=active?"#FF6B35":p.venueColor||T.accent; const sz=active?36:30;
         const mk=window.L.marker([p.lat,p.lng],{icon:window.L.divIcon({html:`<div style="width:${sz}px;height:${sz}px;background:${color};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:${active?14:12}px;box-shadow:0 3px 12px ${color}70;border:${active?3:2}px solid #fff;">${p.venueIcon||"🛍️"}</div>`,iconSize:[sz,sz],className:""})}).addTo(map);
-        const st=openStatus(p);
+        const st=openStatus(p,isLocal);
         mk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:260px;position:relative;"><button onclick="window._gsSHMapInst?.closePopup()" style="position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#64748B;font-size:13px;z-index:10;">✕</button><div style="padding:12px 14px;"><div onclick="window._gsSHView&&window._gsSHView(${i})" style="font-weight:700;font-size:calc(15px*var(--fs));color:#1A2332;margin-bottom:5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding-right:26px;line-height:1.3;">${p.displayName?.text||p.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${p.formattedAddress||''}</div><div style="font-size:calc(12px*var(--fs));padding:6px 9px;border-radius:7px;background:${st.isOpen===true?"#F0FDF4":st.isOpen===false?"#FEF2F2":"#F5F5F5"};margin-bottom:10px;"><span style="font-weight:700;color:${st.isOpen===true?"#15803D":st.isOpen===false?"#DC2626":"#9E9E9E"};">${st.label}</span></div><div style="display:flex;gap:8px;"><button onclick="window._gsSHDirs&&window._gsSHDirs(${i})" style="flex:1;padding:9px;border:none;border-radius:8px;background:#3B82F6;color:#fff;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit;">🧭 Directions</button><button onclick="window._gsSHView&&window._gsSHView(${i})" style="flex:1;padding:9px;border:none;border-radius:8px;background:#F1F5F9;color:#1A2332;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit;">📋 Details</button></div></div></div>`,{maxWidth:280,className:"gs-popup",autoPanPaddingTopLeft:[0,160],autoPanPaddingBottomRight:[20,20],keepInView:true});
         mk.on("popupopen",()=>setActivePin(i)); markers.current[i]=mk;
       });
@@ -353,7 +373,7 @@ export default function ShoppingFinder() {
     };
     if(!window.L){const lk=document.createElement("link");lk.rel="stylesheet";lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(lk);const sc=document.createElement("script");sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";sc.onload=init;document.head.appendChild(sc);}else init();
     return()=>{delete window._gsSHMapInst;delete window._gsSHView;delete window._gsSHDirs;if(mapInst.current){mapInst.current.remove();mapInst.current=null;}};
-  },[viewMode,filtered,lat,lng,activePin]);
+  },[viewMode,filtered,lat,lng,activePin,isLocal]);
 
   return(
     <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
@@ -401,15 +421,17 @@ export default function ShoppingFinder() {
       <div style={{background:"#fff",padding:"10px 14px",borderBottom:"1px solid #E8EDF2",display:"flex",alignItems:"center",gap:"8px",overflowX:"auto",scrollbarWidth:"none"}}>
         {[{label:"🟢 Open Now",state:openOnly,set:setOpenOnly,color:T.green},{label:"🛒 Food Only",state:foodOnly,set:setFoodOnly,color:"#2E7D32"},{label:"💎 Luxury",state:luxOnly,set:setLuxOnly,color:"#BE185D"}].map(f=><button key={f.label} onClick={()=>f.set((x)=>!x)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 13px",borderRadius:"20px",flexShrink:0,border:f.state?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.state?f.color+"18":"#fff",color:f.state?f.color:T.gray,fontWeight:f.state?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{f.label}</button>)}
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
-          <span style={{background:T.accent,color:"#fff",padding:"2px 9px",borderRadius:"10px",fontWeight:"800",fontSize:"calc(12px*var(--fs))"}}>{loading?"…":filtered.length}</span>
+          <span style={{background:T.accent,color:"#fff",padding:"2px 9px",borderRadius:"10px",fontWeight:"800",fontSize:"calc(12px*var(--fs))"}}>{(!lat||!lng)?"–":loading?"…":filtered.length}</span>
           <div style={{display:"flex",gap:"3px"}}>{["list","map"].map(v=><button key={v} onClick={()=>setViewMode(v)} style={{padding:"6px 11px",borderRadius:"8px",border:"none",background:viewMode===v?T.accent:"#E2E8F0",color:viewMode===v?"#fff":T.gray,fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{v==="list"?"List View":"Map View"}</button>)}</div>
         </div>
       </div>
-      {loading?(<div style={{textAlign:"center",padding:"70px 24px"}}><motion.div animate={{scale:[1,1.1,1],rotate:[0,5,-5,0]}} transition={{repeat:Infinity,duration:1.8}} style={{fontSize:"calc(52px*var(--fs))",marginBottom:"16px",display:"inline-block"}}>🛍️</motion.div><div style={{color:T.dark,fontWeight:"700",fontSize:"calc(16px*var(--fs))",marginBottom:"6px"}}>Finding shopping nearby…</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))"}}>Malls · Markets · Boutiques · Souks · Night Markets</div><div style={{display:"flex",justifyContent:"center",gap:"6px",marginTop:"18px"}}>{[0,1,2].map(i=><motion.div key={i} animate={{opacity:[0.3,1,0.3]}} transition={{repeat:Infinity,duration:1.2,delay:i*0.2}} style={{width:"8px",height:"8px",borderRadius:"50%",background:T.accent}}/>)}</div></div>)
-      :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"calc(16px*var(--fs))"}}>{error}</div><button onClick={()=>setRadius(r=>Math.min(r+5,25))} style={{marginTop:"14px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Expand Radius</button></div>)
+      {/* No location yet (first-run / permission denied): say so and open the picker — never a spinner or a misleading "No matches" (T1.4) */}
+      {(!lat||!lng)?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>📍</div><div style={{color:T.dark,fontWeight:"700",fontSize:"calc(16px*var(--fs))",marginBottom:"6px"}}>Choose a location to search</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))"}}>Malls · Markets · Boutiques · Souks · Night Markets</div><button onClick={()=>setLocPicker(true)} style={{marginTop:"18px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Choose Location</button></div>)
+      :loading?(<div style={{textAlign:"center",padding:"70px 24px"}}><motion.div animate={{scale:[1,1.1,1],rotate:[0,5,-5,0]}} transition={{repeat:Infinity,duration:1.8}} style={{fontSize:"calc(52px*var(--fs))",marginBottom:"16px",display:"inline-block"}}>🛍️</motion.div><div style={{color:T.dark,fontWeight:"700",fontSize:"calc(16px*var(--fs))",marginBottom:"6px"}}>Finding shopping nearby…</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))"}}>Malls · Markets · Boutiques · Souks · Night Markets</div><div style={{display:"flex",justifyContent:"center",gap:"6px",marginTop:"18px"}}>{[0,1,2].map(i=><motion.div key={i} animate={{opacity:[0.3,1,0.3]}} transition={{repeat:Infinity,duration:1.2,delay:i*0.2}} style={{width:"8px",height:"8px",borderRadius:"50%",background:T.accent}}/>)}</div></div>)
+      :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"calc(16px*var(--fs))"}}>{error}</div><div style={{marginTop:"10px",color:T.gray,fontSize:"calc(13px*var(--fs))"}}>Check your connection and try again.</div></div>)
       :viewMode==="list"?(<div style={isTablet
         ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
-        : {width:"100%",padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>{filtered.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div></div>:filtered.map((p,i)=>{const Card=ShopCardTablet;return <Card key={p.id||i} p={p} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet}/>;})}</div>)
+        : {width:"100%",padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>{filtered.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div></div>:filtered.map((p,i)=>{const Card=ShopCardTablet;return <Card key={p.id||i} p={p} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet} isLocal={isLocal}/>;})}</div>)
       :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:T.dark}}>✕</button></div>)}
       <style>{`::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:16px;padding:0;overflow:hidden;}.gs-popup .leaflet-popup-content{margin:0;}.gs-popup .leaflet-popup-tip-container{display:none;}`}</style>
       <MapAppSelector isOpen={!!dirsP} onClose={()=>setDirsP(null)} destination={dirsP?{name:dirsP.displayName?.text||dirsP.name,address:dirsP.formattedAddress||dirsP.shortFormattedAddress||dirsP.vicinity||dirsP.address||"",latitude:dirsP.lat,longitude:dirsP.lng}:null} userLat={lat} userLng={lng}/>
