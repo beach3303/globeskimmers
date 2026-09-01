@@ -524,3 +524,9 @@ State: **Deployed in SANDBOX** (worker f0b110d → 995cd6d; frontend 09ffb23 + 7
 - [ ] **Deploy 2 (production):** set `NUITEE_ENV = "production"` in wrangler.toml → push → real rates appear (no SANDBOX label). ⚠️ From here a completed payment is a REAL reservation.
 - [ ] Nuitée dashboard: Commission section — confirm the default markup is set (this is what we earn); Payouts — payout method attached before the first real booking
 - [ ] Privacy policy §5 already discloses booking partners; add "Nuitée Travel Ltd (hotel payments, merchant of record)" by name before public launch
+
+## ⬜ White screen after splash — fixed (2026-09-01)
+Device/simulator showed the splash then a blank white screen. Cause: `src/pages/MyTrip.jsx` and `src/components/home/VibeBundles.jsx` used `openPartner` at module top level without importing it (in-app-browser wiring, 2026-08-31) → ReferenceError at module evaluation → React never mounted. Neither `npm run lint` (no `no-undef`) nor `npm run build` (Rollup ignores free identifiers) can catch this; booting the bundle does. New gate: **`npm run boot-check`** (`scripts/boot-check.sh` — vite preview + headless Chrome, fails on uncaught errors / empty #root), added to CLAUDE.md's pre-push block. Files: `src/pages/MyTrip.jsx`, `src/components/home/VibeBundles.jsx`, `scripts/boot-check.sh`, `package.json`, `CLAUDE.md`.
+State: Committed + pushed (frontend-only, no worker deploy) · iOS bundle synced · boot-check ✅ on the fixed bundle, ❌ on the broken one (verified both ways) · Device ⬜
+- [ ] ⌘R → app reaches the sign-in gate / Home (no white screen)
+- [ ] Then run the Nuitée sandbox device checklist above (it was blocked by this)
