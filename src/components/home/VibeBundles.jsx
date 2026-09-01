@@ -10,6 +10,7 @@ import { useLocation } from "@/components/location/LocationContext";
 import { usePersona } from "@/lib/persona";
 import { orderedBundles, mapsSearchUrl } from "@/lib/vibeBundles";
 import { logDiscover } from "@/lib/logDiscover";
+import { openPartner } from "@/lib/openPartner";
 
 const INK = "#16302B", SUB = "#71827D", EDGE = "#E6DFD0", TEAL = "#0E7C73";
 

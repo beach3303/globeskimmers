@@ -12,6 +12,7 @@ import { ChevronLeft, Loader2, ExternalLink, Luggage } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { useIsTablet } from "@/lib/useIsTablet";
+import { openPartner } from "@/lib/openPartner";
 
 // Editorial design tokens (shared with SavedLocations / PlacesToEat).
 const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
