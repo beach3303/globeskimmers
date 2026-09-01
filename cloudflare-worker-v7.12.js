@@ -12870,6 +12870,24 @@ function viatorNearestDestination(list, lat, lng, maxMiles = 40) {
   return best;
 }
 
+// Re-rank within the destination by name relevance. Viator's freetext + destination
+// filter returns the destination's catalog with the search term weakly weighted
+// (measured: "Disneyland Park" in Anaheim → an LA sights tour first, Disneyland
+// tickets third). Products whose title carries a DISTINCTIVE token of the
+// attraction name lead; if any do, only those are kept — "Tours here" means this
+// sight. If none match, the destination's products stand (local at least).
+const VIATOR_GENERIC = new Set(['park', 'parks', 'museum', 'museo', 'musee', 'tower', 'palace', 'temple', 'national', 'garden', 'gardens', 'center', 'centre', 'square', 'bridge', 'castle', 'church', 'cathedral', 'basilica', 'island', 'beach', 'lake', 'mountain', 'city', 'tour', 'tours', 'resort', 'world', 'land', 'hall', 'house', 'gallery', 'monument', 'memorial', 'station', 'market', 'street', 'plaza', 'place', 'saint', 'santa', 'grand', 'great', 'royal', 'historic', 'district', 'point', 'falls', 'river', 'valley', 'state']);
+const viatorFold = (s) => String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
+function viatorNameTokens(name) {
+  return viatorFold(name).split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !VIATOR_GENERIC.has(w));
+}
+function viatorRankByName(products, name) {
+  const toks = viatorNameTokens(name);
+  if (!toks.length) return products;
+  const matched = products.filter((p) => { const t = viatorFold(p.title); return toks.some((w) => t.includes(w)); });
+  return matched.length ? matched : products;
+}
+
 // Tours AT this attraction — the listing the card renders (price · duration ·
 // rating · free cancellation) instead of a bare "Book a tour" link to a Viator
 // search page. Superset of /viator/match ({match} is still returned); the old
@@ -12897,7 +12915,7 @@ async function handleViatorProducts(request, env) {
     const kv = env.GLOBESKIMMERS_KV;
     // Cache by name + ~1km geo cell (the destination derives from geo), else by city.
     const geoKey = hasGeo ? `${lat.toFixed(2)},${lng.toFixed(2)}` : city.toLowerCase();
-    const ck = `viatorprod:v2:${count}:${name.toLowerCase()}|${geoKey}`;
+    const ck = `viatorprod:v3:${count}:${name.toLowerCase()}|${geoKey}`;
     const cached = kv ? await kv.get(ck, { type: 'json' }).catch(() => null) : null;
     if (cached && Array.isArray(cached.products)) return jsonResponse({ ...cached, source: 'cache' });
 
@@ -12915,14 +12933,16 @@ async function handleViatorProducts(request, env) {
     for (const at of attempts) {
       let res;
       try {
-        const body = { searchTerm: at.term, searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count } }], currency: 'USD' };
+        // Ask for a wider page than we show so the name re-rank has something to
+        // choose from (still ONE call); the response is sliced back to `count`.
+        const body = { searchTerm: at.term, searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count: Math.min(Math.max(count * 4, 12), 20) } }], currency: 'USD' };
         if (at.destination) body.productFiltering = { destination: at.destination };
         res = await fetch(`${VIATOR_API}/search/freetext`, { method: 'POST', headers: viatorHeaders(env), body: JSON.stringify(body) });
       } catch { return jsonResponse({ match: null, products: [], reason: 'network' }); }
       if (!res.ok) { lastStatus = res.status; if (res.status === 429) break; continue; }
       const d = await res.json().catch(() => ({}));
       const results = Array.isArray(d?.products?.results) ? d.products.results : [];
-      const products = results.map(viatorMapProduct).filter((p) => p.title && p.url);
+      const products = viatorRankByName(results.map(viatorMapProduct).filter((p) => p.title && p.url), name).slice(0, count);
       const total = typeof d?.products?.totalCount === 'number' ? d.products.totalCount : products.length;
       if (products.length || at === attempts[attempts.length - 1]) {
         payload = { match: total > 0, total, products, scope: at.scope, destination: at.destName || null };
