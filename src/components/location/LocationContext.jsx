@@ -149,13 +149,29 @@ export function LocationProvider({ children }) {
       // location-picker flow to choose one.
       const last = readLastLocation();
       if (last?.coordinates) {
-        setLocationMode('navigate');
-        setSelectedLocation(last);
+        if (last.placeType === 'current_location') {
+          // Last session ended on LIVE GPS (switchToCurrentLocation / auto-follow
+          // wrote this fix). Restore it as 'current', NOT 'navigate' — otherwise
+          // every mode-keyed consumer treats the user's own city as a deliberate
+          // pick until the one-shot, GPS-dependent mismatch nudge happens to fire:
+          // Map/Money/Culture say "Selected location" + 🧭, HomeRows sends
+          // intent:planning, and the arrival/border stamp prompts never run.
+          // This is exactly the state switchToCurrentLocation leaves behind, so
+          // consumers are on a known path. The fix may be hours old — the 'ask'
+          // and 'current' cold-open behaviors re-read GPS on Home, and auto-
+          // follow / the nudge still correct a real city change.
+          setLocationMode('current');
+          setCurrentGpsLocation(last);
+        } else {
+          // A typed/searched destination — a planning choice. Restore as-is.
+          setLocationMode('navigate');
+          setSelectedLocation(last);
+        }
       }
     } catch (e) { /* ignore — picker flow handles a fresh start */ }
     setInitialized(true);
     setLoading(false);
-  }, [setLocationMode, setSelectedLocation]);
+  }, [setLocationMode, setSelectedLocation, setCurrentGpsLocation]);
 
   const getActiveLocation = useCallback(() => {
     return locationMode === 'current' ? currentGpsLocation : selectedLocation;

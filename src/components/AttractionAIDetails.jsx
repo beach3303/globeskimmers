@@ -60,10 +60,12 @@ function markVerdictHelperSeen() {
 // Source-stamp palette. Phase 1 stamps are visual stand-ins; Phase 2 will
 // drive these from a per-field source tier the Worker returns.
 const STAMP_STYLES = {
-  verified: { label: 'Verified',        bg: '#DCFCE7', color: '#166534' },
-  reviews:  { label: 'from reviews',    bg: '#FEF3C7', color: '#92400E' },
-  forecast: { label: 'from forecast',   bg: '#FEF3C7', color: '#92400E' },
-  call:     { label: 'call to confirm', bg: '#DBEAFE', color: '#1E40AF' },
+  verified:  { label: 'Verified',        bg: '#DCFCE7', color: '#166534' },
+  reviews:   { label: 'from reviews',    bg: '#FEF3C7', color: '#92400E' },
+  forecast:  { label: 'from forecast',   bg: '#FEF3C7', color: '#92400E' },
+  // Frontend-only tier for model-written copy the Worker didn't tag.
+  estimated: { label: 'AI estimate',     bg: '#FEF3C7', color: '#92400E' },
+  call:      { label: 'call to confirm', bg: '#DBEAFE', color: '#1E40AF' },
 };
 
 function SourceStamp({ tier, onClick }) {
@@ -183,11 +185,12 @@ function Body({ loading, error, details, showVerdictHelper }) {
   // When no website is known, the stamp is non-interactive (informational).
   const callConfirm = websiteUri ? () => window.open(websiteUri, '_blank', 'noopener,noreferrer') : null;
 
-  // Phase 2: read source-tier from the Worker's _sources map. Falls back
-  // to 'reviews' for any field the Worker didn't tag (so old cached
-  // entries before Phase 2 still render with a sensible default).
+  // Phase 2: read source-tier from the Worker's _sources map. Any field the
+  // Worker didn't tag (old cached entries, unmarked fields) is still
+  // model-written copy, so it falls back to 'estimated' ("AI estimate") —
+  // only the Worker may claim a field came "from reviews".
   const sourcesMap = (details && typeof details._sources === 'object' && details._sources) || {};
-  const sourceFor = (key, fallback = 'reviews') => sourcesMap[key] || fallback;
+  const sourceFor = (key, fallback = 'estimated') => sourcesMap[key] || fallback;
 
   return (
     <div>
@@ -817,7 +820,8 @@ function buildLimitedMobilityChip(details, acc, rawTexts, sourceFor) {
     lines.push({ text: 'Reviewers mention stairs or steps inside.', stamp: sourceFor('whatYouSee') });
   }
   if (accessibleMention && !accReported) {
-    lines.push({ text: 'Reviewers mention some accessibility features. Confirm specifics with the venue.', stamp: 'reviews' });
+    // accessibleMention is regex-scanned from the model's own copy (collectScannableText), not review text — label it like its siblings.
+    lines.push({ text: 'Accessibility features are mentioned. Confirm specifics with the venue.', stamp: sourceFor('whatYouSee') });
   }
   if (lines.length === 0) {
     lines.push({ text: 'Some accessibility info reported. Confirm specifics with the venue.', stamp: 'call' });

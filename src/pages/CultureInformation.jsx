@@ -261,6 +261,7 @@ const COUNTRY_BUNDLES = [
   },
   {
     id: "country_safety", layer: "country", ttlDays: 30, volatile: true,
+    aiLabel: true, // safety-critical + purely model-written → say so in the card header
     prompt: (p) => `Provide a traveler safety overview for ${p}: a short overview, 3-6 common_scams travelers face, and 3-6 general safety_tips.${HONESTY(p)}`,
     schema: objOf({ overview: STR, common_scams: STRARR, safety_tips: STRARR }),
     cards: [{ id: "safety", title: "Safety", icon: "🛟", blocks: [
@@ -459,6 +460,7 @@ const CITY_BUNDLES = [
   },
   {
     id: "city_safety", layer: "city", ttlDays: 30, volatile: true,
+    aiLabel: true, // safety-critical + purely model-written → say so in the card header
     prompt: (p) => `Provide neighborhood safety and scams for ${p}: a short overview, common_scams (name, description, how_to_avoid), neighborhoods_to_be_careful, general_safety_tips, and the local emergency_number.${HONESTY(p)}`,
     schema: objOf({
       overview: STR, common_scams: arrOf({ name: STR, description: STR, how_to_avoid: STR }),
@@ -1258,6 +1260,9 @@ function SectionCard({ card, bundle, state, layer, onRefresh, wikidataCountry })
               {card.noteField && hasData(bundle.note) && <p className="mt-0.5 italic" style={{ color: INK3, fontSize: fs(12) }}>{bundle.note}</p>}
               {hasData(bundle.cadenceNote) && <p className="mt-1" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10) }}>🔄 {bundle.cadenceNote}</p>}
               <FreshnessLine meta={state?.meta} volatile={bundle.volatile} />
+              {/* Honest UX: bundles flagged aiLabel carry AI-written advice a
+                  traveler might act on — label it and ask them to verify. */}
+              {bundle.aiLabel === true && <p className="mt-1" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10) }}>AI estimate — verify locally</p>}
             </div>
           </button>
           <div className="flex items-center gap-2 shrink-0">

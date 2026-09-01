@@ -87,6 +87,8 @@ export default function RightNowStrip({ onAction, wide = false }) {
   const signature = foods?.signature_dishes || [];
   // Morning → classic breakfast bites; otherwise lead with the 🔥 viral/hype
   // foods people travel to post, falling back to traditional signature dishes.
+  // The hype list is an ungrounded model answer (no live social/tap signal yet),
+  // so it is framed as "most-hyped (AI picks)", never as live "trending" data.
   const dishes = showBreakfast
     ? (foods?.best_breakfast || []).map((n) => ({ name: n }))
     : (viral.length ? viral : signature);
@@ -94,7 +96,7 @@ export default function RightNowStrip({ onAction, wide = false }) {
   const hasDishes = dishes.length > 0;
   const dishesLabel = showBreakfast
     ? "Classic morning bites here"
-    : isViral ? `🔥 Trending in ${city || "town"}` : `What people come to ${city || "here"} for`;
+    : isViral ? `🔥 Most-hyped in ${city || "town"}` : `What people come to ${city || "here"} for`;
 
   const go = (action, where, extra) => { logDiscover("right_now_tap", { dayPart: part, action, where, city, country, ...extra }); onAction?.(action); };
   // Dish chip → open the Eat finder SEARCHING that exact dish (not the generic
@@ -126,6 +128,9 @@ export default function RightNowStrip({ onAction, wide = false }) {
                   </button>
                 ))}
               </div>
+              {/* Honest UX: every dish list here is model-written, so say so —
+                  same muted "(AI estimate)" line WhereToStay uses. */}
+              <div className="text-[calc(10.5px*var(--fs))] mt-1.5" style={{ color: SUB, opacity: 0.85 }}>{isViral ? "Dish picks are an AI estimate, not live trend data." : "Dish picks are an AI estimate."}</div>
             </div>
           )}
 

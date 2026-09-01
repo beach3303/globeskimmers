@@ -283,7 +283,8 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
         {/* Say it / Translate / rating / distance */}
         <div style={{ display: "flex", gap: fs(S.metaGap), alignItems: "center", flexWrap: "wrap", marginTop: fs(S.metaTop), fontSize: fs(S.meta), color: ED_INK3 }}>
           <NameLanguageHelp placeId={r.placeId || r.id} name={name} />
-          {r.rating && <span><span style={{ color: "#E0922F" }}>★</span> <span style={{ fontWeight: 700, color: ED_INK2 }}>{r.rating}</span>{r.userRatingCount > 0 ? ` (${r.userRatingCount.toLocaleString()})` : ''}</span>}
+          {/* Muted "Google" after the stars — restroom ratings are Google Places data, and review sources are always labeled */}
+          {r.rating && <span><span style={{ color: "#E0922F" }}>★</span> <span style={{ fontWeight: 700, color: ED_INK2 }}>{r.rating}</span>{r.userRatingCount > 0 ? ` (${r.userRatingCount.toLocaleString()})` : ''}<span style={{ fontSize: "0.8em", color: ED_INK3 }}> Google</span></span>}
           {r.distanceMiles != null && <span>· {formatDistance(r.distanceMiles)}</span>}
         </div>
 
@@ -475,6 +476,8 @@ function MapBottomSheet({ restroom, expanded, onExpand, onClose, onDirections, f
                 <span style={{ color: GOLD }}>★</span>
                 <span style={{ fontWeight: "700", color: DARK }}>{r.rating}</span>
                 {r.userRatingCount > 0 && <span style={{ color: GRAY }}>({r.userRatingCount})</span>}
+                {/* Source label — Google Places rating */}
+                <span style={{ fontSize: "0.8em", color: GRAY }}>Google</span>
               </div>
             )}
 
@@ -724,7 +727,7 @@ export default function RestroomFinderPage() {
               <div style="font-size:calc(11px*var(--fs));padding:5px 8px;border-radius:6px;background:${openSt.is24H?'#E3F2FD':openSt.isOpen===true?'#F0FDF4':openSt.isOpen===false?'#FEF2F2':'#F5F5F5'};margin-bottom:6px;">
                 <span style="font-weight:700;color:${openSt.is24H?'#1565C0':openSt.isOpen===true?'#15803D':openSt.isOpen===false?'#DC2626':'#9E9E9E'};">${openSt.label}</span>
               </div>
-              ${r.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:6px;">★ <strong style="color:#1A2332;">${r.rating}</strong> <span style="color:#64748B;">(${r.userRatingCount||0})</span> · <span style="color:#0D9488;">📍 ${formatDistance(r.distanceMiles)||'?'}</span></div>`:''}
+              ${r.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:6px;">★ <strong style="color:#1A2332;">${r.rating}</strong> <span style="color:#64748B;">(${r.userRatingCount||0})</span><span style="color:#9E9E9E;font-size:10px;"> Google</span> · <span style="color:#0D9488;">📍 ${formatDistance(r.distanceMiles)||'?'}</span></div>`:''}
               ${chips?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${chips}</div>`:''}
               ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#3B82F6;font-size:calc(11px*var(--fs));font-weight:600;">📞 ${phone}</a>`:''}
               <div style="display:flex;gap:8px;">

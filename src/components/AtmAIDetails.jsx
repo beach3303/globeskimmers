@@ -56,15 +56,16 @@ function markVerdictHelperSeen() {
   try { localStorage.setItem(GS_VERDICT_HELPER_KEY, '1'); } catch { /* ignore */ }
 }
 
-// Source-tier stamp palette. Phase A2 mostly uses stubs ('reviews' for
-// generated copy / 'call' for fields without data yet). Phase A3 plumbs
-// real per-field provenance through a Worker _sources map.
+// Source-tier stamp palette — one entry per tier the Worker's /atm-ai-details
+// `_sources` map can return. 'estimated' is pattern-based model output, so it
+// is labelled as an AI estimate — never as review-derived (honest UX).
 const STAMP_STYLES = {
-  verified:  { label: 'Verified',          bg: '#DCFCE7', color: '#166534' },
-  reported:  { label: 'reported',          bg: '#E0E7FF', color: '#3730A3' },
-  reviews:   { label: 'from reviews',      bg: '#FEF3C7', color: '#92400E' },
-  estimated: { label: 'estimated',         bg: '#FEF3C7', color: '#92400E' },
-  call:      { label: 'call to confirm',   bg: '#DBEAFE', color: '#1E40AF' },
+  verified:  { label: 'Verified',           bg: '#DCFCE7', color: '#166534' },
+  confirmed: { label: 'operator-confirmed', bg: '#DCFCE7', color: '#166534' },
+  reported:  { label: 'reported',           bg: '#E0E7FF', color: '#3730A3' },
+  reviews:   { label: 'from reviews',       bg: '#FEF3C7', color: '#92400E' },
+  estimated: { label: 'AI estimate',        bg: '#FEF3C7', color: '#92400E' },
+  call:      { label: 'call to confirm',    bg: '#DBEAFE', color: '#1E40AF' },
 };
 
 function SourceStamp({ tier, onClick }) {
@@ -235,11 +236,12 @@ function Body({ loading, error, details, showVerdictHelper }) {
   const websiteUri = details.websiteUri || null;
   const callConfirm = websiteUri ? () => window.open(websiteUri, '_blank', 'noopener,noreferrer') : null;
 
-  // Phase A2 has no _sources map yet (the shared endpoint doesn't return
-  // one). Default everything to 'reviews' so the stamps look right; the
-  // Worker fork in A3 will populate _sources for real provenance.
+  // The Worker tags each field's provenance in _sources. Anything it did NOT
+  // tag (older cache entries, fields the model left unmarked) is still
+  // model-written copy, so default to 'estimated' ("AI estimate") — only the
+  // Worker may claim a field came "from reviews".
   const sourcesMap = (details && typeof details._sources === 'object' && details._sources) || {};
-  const sourceFor = (key, fallback = 'reviews') => sourcesMap[key] || fallback;
+  const sourceFor = (key, fallback = 'estimated') => sourcesMap[key] || fallback;
 
   return (
     <div>
@@ -672,11 +674,11 @@ function ZoneFees({ details, callConfirm, sourceFor }) {
           stamp="call"
           onCallConfirm={callConfirm}
         />
-        {/* D. DCC warning */}
+        {/* D. DCC warning — static general guidance we wrote, not review-derived
+            and not AI, so it carries no provenance stamp. */}
         <FeeRow
           icon="⚠️" label="Dynamic Currency Conversion"
           value="If the ATM asks 'convert to your home currency?' — decline. Choose local currency for a better rate."
-          stamp="reviews"
           isLast
         />
       </div>

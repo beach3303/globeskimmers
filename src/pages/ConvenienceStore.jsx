@@ -577,7 +577,8 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
           {/* Say it / Translate / rating / distance */}
           <div style={{ display: "flex", gap: fs(t ? 16 : 10), alignItems: "center", flexWrap: "wrap", marginTop: fs(t ? 12 : 9), fontSize: fs(SZ.metaRow), color: ED_INK3 }}>
             <NameLanguageHelp placeId={store.placeId || store.id} name={store.name} />
-            {store.rating > 0 && <span><span style={{ color: "#E0922F" }}>★</span> <span style={{ fontWeight: 700, color: ED_INK2 }}>{store.rating.toFixed(1)}</span>{store.reviewCount > 0 ? ` (${store.reviewCount.toLocaleString()})` : ''}</span>}
+            {/* Muted "Google" after the stars — these ratings are Google Places data, and review sources are always labeled */}
+            {store.rating > 0 && <span><span style={{ color: "#E0922F" }}>★</span> <span style={{ fontWeight: 700, color: ED_INK2 }}>{store.rating.toFixed(1)}</span>{store.reviewCount > 0 ? ` (${store.reviewCount.toLocaleString()})` : ''}<span style={{ fontSize: "0.8em", color: ED_INK3 }}> Google</span></span>}
             {store.distance != null && <span>· {formatDistance(store.distance)}</span>}
           </div>
 
