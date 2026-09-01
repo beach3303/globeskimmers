@@ -18,7 +18,8 @@
     "db:push": "supabase db push",
     "db:plan": "supabase db push --dry-run",
     "db:status": "supabase migration list",
-    "db:pull": "supabase db pull --schema public,api"
+    "db:pull": "supabase db pull --schema public,api",
+    "boot-check": "scripts/boot-check.sh"
   },
   "dependencies": {
     "@base44/sdk": "^0.8.32",

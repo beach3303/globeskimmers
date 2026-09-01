@@ -26,6 +26,10 @@ The de-facto pre-commit gate is manual (from `docs/MOBILE_HANDOFF.md`):
 node --check cloudflare-worker-v7.12.js   # syntax-check the worker before every commit
 npx eslint --quiet <changed page>          # lint passes clean today — keep it that way
 npm run build                              # must succeed
+npm run boot-check                         # boots dist/ in headless Chrome; fails on any uncaught error or empty #root.
+                                           #   The ONLY gate that catches a free identifier (e.g. `const x = openPartner`
+                                           #   with no import) — lint has no no-undef rule and Rollup doesn't check.
+                                           #   That exact bug shipped a white screen on 2026-09-01.
 ```
 
 Repo conventions: **one logical change per commit; show the diff before committing; ask before pushing.** Commit subjects are `Area: what changed`.
