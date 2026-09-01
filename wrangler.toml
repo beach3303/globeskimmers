@@ -51,3 +51,10 @@ bucket_name = "globeskimmers-media"
 
 # Your GOOGLE_API_KEY is already set as a secret in Cloudflare
 # If you need to update it: wrangler secret put GOOGLE_API_KEY
+
+# ── NUITEE CONNECT (LiteAPI) hotel lane ─────────────────────────────────────
+# Which key the hotel lane uses: "sandbox" → NUITEE_SANDBOX_KEY (test inventory,
+# simulated payments) · anything else → NUITEE_API_KEY (real bookings).
+# Flip to "production" when the in-app hotel lane goes live to travelers.
+[vars]
+NUITEE_ENV = "sandbox"

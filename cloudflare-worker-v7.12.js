@@ -13352,6 +13352,284 @@ async function handleHotelSearch(request, env, ctx) {
   } catch (e) { return jsonResponse({ hotels: [], error: e.message }); }
 }
 
+// ═════════════════ NUITEE CONNECT (LiteAPI) — in-app hotel booking ═════════════════
+// The hotel lane the traveler can finish INSIDE the app: search → prebook →
+// Nuitée's own card form (they are Merchant of Record; PCI is theirs) → book.
+// Closed-User-Group pricing is permitted because the whole app sits behind
+// sign-in (src/App.jsx AuthGate) — so rates must only ever render inside it.
+//
+// Environment = which secret. NUITEE_ENV (wrangler var) 'sandbox' → NUITEE_SANDBOX_KEY
+// (test inventory, simulated payments); anything else → NUITEE_API_KEY (real).
+// Same hostnames either way. Secrets never leave the worker: the phone gets a
+// session id + a checkout URL; the checkout page is served BY this worker and the
+// return page books server-side from the KV session.
+const NUITEE_API = 'https://api.liteapi.travel/v3.0';
+const NUITEE_BOOK = 'https://book.liteapi.travel/v3.0';
+const nuiteeEnv = (env) => (String(env.NUITEE_ENV || '').toLowerCase() === 'sandbox' ? 'sandbox' : 'production');
+const nuiteeKey = (env) => (nuiteeEnv(env) === 'sandbox' ? env.NUITEE_SANDBOX_KEY : env.NUITEE_API_KEY) || null;
+const nuiteeHeaders = (env) => ({ 'X-API-Key': nuiteeKey(env), Accept: 'application/json', 'Content-Type': 'application/json' });
+const nuiteeIsoDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+const nuiteeNights = (ci, co) => Math.max(1, Math.round((Date.parse(co) - Date.parse(ci)) / 86400000));
+const nuiteeEsc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nuiteeMoney = (amt, cur) => { try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur || 'USD' }).format(amt); } catch { return `${amt} ${cur || ''}`; } };
+function nuiteeHtml(title, body) {
+  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${nuiteeEsc(title)}</title>
+<style>body{margin:0;font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;background:#FBF8F1;color:#16110D}main{max-width:520px;margin:0 auto;padding:20px 18px 40px}h1{font-size:20px;margin:6px 0 4px}.sub{color:#736657;font-size:14px;margin:0 0 14px;line-height:1.4}.card{background:#fff;border:1px solid rgba(22,17,13,.10);border-radius:16px;padding:14px 16px;margin:12px 0}.row{display:flex;justify-content:space-between;gap:12px;font-size:14px;margin:4px 0}.tot{font-weight:800;font-size:18px;margin-top:8px}.ok{color:#2E7D46}.bad{color:#C2392F}.note{font-size:12px;color:#736657;margin-top:14px;line-height:1.45}#pay{min-height:280px}.btn{display:inline-block;margin-top:14px;padding:12px 18px;border-radius:12px;background:#2563EB;color:#fff;font-weight:700;text-decoration:none}</style></head><body><main>${body}</main></body></html>`,
+    { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY' } });
+}
+
+// POST /hotels/nuitee/search — priced, bookable hotels around a point for exact
+// dates. ONE call (rates + hotel data), cheapest rate per hotel, sorted by total.
+// Rates are volatile → 20-minute KV. Requires coordinates and dates (Stay22 keeps
+// covering flexible-date and address-only searches).
+async function handleNuiteeSearch(request, env, ctx) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    if (!nuiteeKey(env)) return jsonResponse({ hotels: [], reason: 'no_key' });
+    const lat = parseFloat(b.latitude ?? b.lat), lng = parseFloat(b.longitude ?? b.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return jsonResponse({ hotels: [], reason: 'coords_required' });
+    const checkin = String(b.checkin || ''), checkout = String(b.checkout || '');
+    if (!nuiteeIsoDate(checkin) || !nuiteeIsoDate(checkout) || checkout <= checkin) return jsonResponse({ hotels: [], reason: 'dates_required' });
+    const adults = Math.min(Math.max(parseInt(b.adults, 10) || 2, 1), 8);
+    const kids = Math.min(Math.max(parseInt(b.children, 10) || 0, 0), 6);
+    const radiusM = Math.min(Math.max(Math.round((parseFloat(b.radiusKm) || 8) * 1000), 1000), 30000);
+    const currency = /^[A-Z]{3}$/.test(String(b.currency || '')) ? b.currency : 'USD';
+    const nationality = /^[A-Z]{2}$/.test(String(b.nationality || '')) ? b.nationality : 'US';
+    const ck = `nuitee:search:v1:${nuiteeEnv(env)}:${lat.toFixed(3)},${lng.toFixed(3)}:${radiusM}:${checkin}:${checkout}:${adults}_${kids}:${currency}:${nationality}`;
+    const cached = await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null);
+    if (cached) return jsonResponse({ ...cached, source: 'cache' });
+    const body = {
+      latitude: lat, longitude: lng, radius: radiusM,
+      checkin, checkout, currency, guestNationality: nationality,
+      // Children's ages aren't collected on the search form yet; a mid-childhood
+      // default keeps the quote honest for most families and exact ages are
+      // confirmed at checkout.
+      occupancies: [{ adults, ...(kids ? { children: Array.from({ length: kids }, () => 8) } : {}) }],
+      includeHotelData: true, maxRatesPerHotel: 1, limit: 40,
+    };
+    let res;
+    try { res = await fetch(`${NUITEE_API}/hotels/rates`, { method: 'POST', headers: nuiteeHeaders(env), body: JSON.stringify(body) }); }
+    catch { return jsonResponse({ hotels: [], reason: 'network' }); }
+    if (!res.ok) { const t = await res.text().catch(() => ''); return jsonResponse({ hotels: [], reason: `http_${res.status}`, detail: t.slice(0, 300) }); }
+    const d = await res.json().catch(() => ({}));
+    const info = new Map((d?.hotels || []).map((h) => [String(h.id ?? h.hotelId), h]));
+    const nights = nuiteeNights(checkin, checkout);
+    const hotels = (d?.data || []).map((h) => {
+      const meta = info.get(String(h.hotelId)) || {};
+      let best = null;
+      for (const rt of h.roomTypes || []) for (const r of rt.rates || []) {
+        const amt = r?.retailRate?.total?.[0]?.amount;
+        if (amt == null) continue;
+        if (!best || amt < best.amt) best = { amt, cur: r.retailRate.total[0].currency || currency, offerId: rt.offerId, r };
+      }
+      if (!best) return null;
+      const cp = best.r.cancellationPolicies || {};
+      const cancelBy = (cp.cancelPolicyInfos || []).map((c) => c && c.cancelTime).filter(Boolean).sort()[0] || null;
+      const dist = (meta.latitude != null && meta.longitude != null) ? haversineMilesLoc(lat, lng, meta.latitude, meta.longitude) : NaN;
+      return {
+        id: `nuitee:${h.hotelId}`, hotelId: String(h.hotelId), offerId: best.offerId,
+        name: meta.name || 'Hotel',
+        thumbnail: meta.thumbnail || meta.main_photo || null,
+        stars: meta.stars ?? null,
+        reviewScore: meta.rating ?? null, reviewCount: meta.reviewCount ?? null,
+        address: meta.address || '', city: meta.city || '', country: meta.country || '',
+        lat: meta.latitude ?? null, lng: meta.longitude ?? null,
+        distanceMiles: Number.isFinite(dist) ? Math.round(dist * 10) / 10 : null,
+        price: best.amt, currency: best.cur, nights, nightly: Math.round((best.amt / nights) * 100) / 100,
+        roomName: best.r.name || null, board: best.r.boardName || null,
+        freeCancellation: cp.refundableTag === 'RFN', cancelBy,
+        maxOccupancy: best.r.maxOccupancy ?? null,
+        supplier: 'nuitee', bookUrl: null, inApp: true,
+      };
+    }).filter(Boolean);
+    hotels.sort((a, c) => a.price - c.price);
+    const payload = { hotels, nights, checkin, checkout, currency, env: nuiteeEnv(env) };
+    if (hotels.length && ctx) ctx.waitUntil(env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(payload), { expirationTtl: 20 * 60 }).catch(() => {}));
+    return jsonResponse({ ...payload, source: 'live' });
+  } catch (e) { return jsonResponse({ hotels: [], error: e.message }); }
+}
+
+// POST /hotels/nuitee/prebook — re-confirms the offer (price may move →
+// priceChanged), opens a Payment-SDK transaction, and stores everything the
+// return page needs in KV for 30 minutes under a random session id. The phone
+// receives the session id, the confirmed price and the checkout URL — never the
+// secretKey or transactionId. Signed-in users only (sandbox is curl-testable).
+async function handleNuiteePrebook(request, env) {
+  try {
+    if (!nuiteeKey(env)) return jsonResponse({ error: 'not_configured' }, 503);
+    const sandbox = nuiteeEnv(env) === 'sandbox';
+    const user = await gbUser(request, env).catch(() => null);
+    if (!user && !sandbox) return jsonResponse({ needsAuth: true }, 401);
+    const b = await request.json().catch(() => ({}));
+    const offerId = String(b.offerId || '').trim();
+    if (!offerId || offerId.length > 600) return jsonResponse({ error: 'offerId required' }, 400);
+    const holder = {
+      firstName: String(b.holder?.firstName || '').trim().slice(0, 60),
+      lastName: String(b.holder?.lastName || '').trim().slice(0, 60),
+      email: String(b.holder?.email || user?.email || '').trim().slice(0, 120),
+      phone: String(b.holder?.phone || '').trim().slice(0, 30),
+    };
+    if (!holder.firstName || !holder.lastName || !/^\S+@\S+\.\S+$/.test(holder.email)) return jsonResponse({ error: 'holder name and email required' }, 400);
+    let res;
+    try { res = await fetch(`${NUITEE_BOOK}/rates/prebook`, { method: 'POST', headers: nuiteeHeaders(env), body: JSON.stringify({ offerId, usePaymentSdk: true }) }); }
+    catch { return jsonResponse({ error: 'network' }, 502); }
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || !d?.data?.prebookId) return jsonResponse({ error: 'prebook_failed', status: res.status, detail: d?.error?.description || d?.error?.message || null }, 502);
+    const p = d.data;
+    const rate = p.roomTypes?.[0]?.rates?.[0] || {};
+    const cp = rate.cancellationPolicies || {};
+    const sid = crypto.randomUUID().replace(/-/g, '');
+    const session = {
+      sid, env: nuiteeEnv(env), user_id: user?.id || null, created: Date.now(),
+      prebookId: p.prebookId, offerId, transactionId: p.transactionId || null, secretKey: p.secretKey || null,
+      price: p.price, currency: p.currency, hotelId: p.hotelId, hotelName: String(b.hotelName || '').slice(0, 160),
+      checkin: p.checkin, checkout: p.checkout, roomName: rate.name || null, board: rate.boardName || null,
+      refundable: cp.refundableTag === 'RFN', cancelBy: (cp.cancelPolicyInfos || []).map((c) => c && c.cancelTime).filter(Boolean).sort()[0] || null,
+      holder, adults: Math.min(Math.max(parseInt(b.adults, 10) || 2, 1), 8), children: Math.min(Math.max(parseInt(b.children, 10) || 0, 0), 6),
+      dest_city: String(b.dest_city || '').slice(0, 120), dest_country: String(b.dest_country || '').slice(0, 80),
+      status: 'pending', booking: null, error: null,
+    };
+    await env.GLOBESKIMMERS_KV.put(`nuitee:sess:${sid}`, JSON.stringify(session), { expirationTtl: 30 * 60 });
+    const origin = new URL(request.url).origin;
+    return jsonResponse({
+      sid, checkoutUrl: `${origin}/hotels/nuitee/checkout?sid=${sid}`,
+      price: p.price, currency: p.currency,
+      priceChanged: Number(p.priceDifferencePercent || 0) !== 0, priceDifferencePercent: p.priceDifferencePercent ?? 0,
+      cancellationChanged: !!p.cancellationChanged, hotelId: p.hotelId, checkin: p.checkin, checkout: p.checkout,
+      room: { name: session.roomName, board: session.board, refundable: session.refundable, cancelBy: session.cancelBy },
+      env: session.env, paymentSdk: !!(p.transactionId && p.secretKey),
+    });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// GET /hotels/nuitee/checkout?sid= — the card page, served by us, opened in the
+// in-app sheet. Mounts Nuitée's Payment SDK against the session's transaction;
+// on success the SDK redirects to /hotels/nuitee/return. Secrets are injected
+// server-side into the page, never carried in the URL.
+async function handleNuiteeCheckout(request, env) {
+  const url = new URL(request.url);
+  const sid = (url.searchParams.get('sid') || '').replace(/[^a-f0-9]/g, '');
+  const s = sid ? await env.GLOBESKIMMERS_KV.get(`nuitee:sess:${sid}`, { type: 'json' }).catch(() => null) : null;
+  if (!s) return nuiteeHtml('Checkout expired', '<h1>This checkout has expired</h1><p class="sub">Go back to the app and tap Book again — prices are re-checked each time.</p>');
+  if (s.status !== 'pending') return Response.redirect(`${url.origin}/hotels/nuitee/return?sid=${sid}`, 302);
+  const summary = `<div class="card"><div class="row"><b>${nuiteeEsc(s.hotelName || 'Your stay')}</b></div><div class="row"><span>${nuiteeEsc(s.checkin)} → ${nuiteeEsc(s.checkout)}</span><span>${nuiteeEsc(s.roomName || '')}</span></div>${s.board ? `<div class="row"><span>${nuiteeEsc(s.board)}</span></div>` : ''}<div class="row">${s.refundable ? `<span class="ok">Free cancellation${s.cancelBy ? ` until ${nuiteeEsc(String(s.cancelBy).slice(0, 10))}` : ''}</span>` : '<span class="bad">Non-refundable</span>'}</div><div class="row tot"><span>Total</span><span>${nuiteeEsc(nuiteeMoney(s.price, s.currency))}</span></div></div>`;
+  if (!s.transactionId || !s.secretKey) {
+    if (s.env === 'sandbox') return nuiteeHtml('Sandbox checkout', `<h1>Sandbox checkout</h1><p class="sub">No card in sandbox — this simulates a booking.</p>${summary}<a class="btn" href="${url.origin}/hotels/nuitee/return?sid=${sid}">Simulate payment</a>`);
+    return nuiteeHtml('Checkout unavailable', '<h1>Checkout unavailable</h1><p class="sub">Payment could not be started for this rate. Go back and choose another room.</p>');
+  }
+  const cfg = JSON.stringify({
+    publicKey: s.env === 'sandbox' ? 'sandbox' : 'live', secretKey: s.secretKey, transactionId: s.transactionId,
+    returnUrl: `${url.origin}/hotels/nuitee/return?sid=${sid}`, targetElement: '#pay',
+    appearance: { theme: 'flat' }, options: { business: { name: 'GlobeSkimmers' } },
+  }).replace(/</g, '\\u003c');
+  return nuiteeHtml('Secure checkout', `<h1>Secure checkout</h1><p class="sub">Card details go directly to Nuitée, our booking partner — GlobeSkimmers never sees them.</p>${summary}<div class="card"><div id="pay"></div></div><p class="note">By paying you accept the cancellation policy shown above. Booked via Nuitée Travel Ltd (Merchant of Record) for GlobeSkimmers.${s.env === 'sandbox' ? ' <b>Sandbox:</b> card 4242 4242 4242 4242, any future date, any CVC.' : ''}</p>
+<script src="https://payment-wrapper.liteapi.travel/dist/liteAPIPayment.js?v=a1"></script>
+<script>try{new LiteAPIPayment(${cfg}).handlePayment();}catch(e){document.getElementById('pay').innerHTML='<p class="bad">The payment form failed to load. Please go back and try again.</p>';}</script>`);
+}
+
+// GET /hotels/nuitee/return?sid= — where the payment form lands after a charge.
+// Books server-side from the KV session (idempotent: the session flips to
+// 'booked'/'failed' and a second visit only re-renders), writes the CONFIRMED
+// row My Trips reads, and shows the confirmation. Sandbox sessions without an
+// SDK transaction use Nuitée's simulated ACC_CREDIT_CARD path.
+async function handleNuiteeReturn(request, env) {
+  const url = new URL(request.url);
+  const sid = (url.searchParams.get('sid') || '').replace(/[^a-f0-9]/g, '');
+  const key = `nuitee:sess:${sid}`;
+  const s = sid ? await env.GLOBESKIMMERS_KV.get(key, { type: 'json' }).catch(() => null) : null;
+  if (!s) return nuiteeHtml('Session expired', '<h1>We lost this checkout</h1><p class="sub">If you were charged, the booking still completes on Nuitée\'s side — check My Trips in a few minutes, or contact support with your card statement.</p>');
+  if (s.status === 'pending') {
+    const result = await nuiteeBookSession(env, s);
+    s.status = result.ok ? 'booked' : 'failed';
+    s.booking = result.ok ? result.booking : null;
+    s.error = result.ok ? null : result.error;
+    await env.GLOBESKIMMERS_KV.put(key, JSON.stringify(s), { expirationTtl: 7 * 86400 }).catch(() => {});
+    if (result.ok) await nuiteeRecordBooking(env, s).catch(() => {});
+  }
+  if (s.status === 'booked') {
+    const bk = s.booking;
+    return nuiteeHtml('Booked!', `<h1>✅ You're booked</h1><p class="sub">${nuiteeEsc(bk.hotelName || s.hotelName)} · ${nuiteeEsc(s.checkin)} → ${nuiteeEsc(s.checkout)}</p><div class="card"><div class="row"><span>Booking ID</span><b>${nuiteeEsc(bk.bookingId)}</b></div>${bk.hotelConfirmationCode ? `<div class="row"><span>Hotel confirmation</span><b>${nuiteeEsc(bk.hotelConfirmationCode)}</b></div>` : ''}<div class="row tot"><span>Paid</span><span>${nuiteeEsc(nuiteeMoney(bk.price ?? s.price, bk.currency || s.currency))}</span></div></div><p class="note">A confirmation email goes to ${nuiteeEsc(s.holder.email)}. Tap <b>Done</b> to return to the app — this stay is now in My Trips.${s.env === 'sandbox' ? ' <b>Sandbox booking — not a real reservation.</b>' : ''}</p>`);
+  }
+  return nuiteeHtml('Booking not completed', `<h1>Booking not completed</h1><p class="sub">${nuiteeEsc(s.error || 'The hotel could not confirm this rate.')}</p><p class="note">If your card was charged, Nuitée refunds automatically when a booking fails to confirm. Go back to the app and try another room or hotel.</p>`);
+}
+async function nuiteeBookSession(env, s) {
+  const useTx = !!s.transactionId;
+  if (!useTx && s.env !== 'sandbox') return { ok: false, error: 'No payment transaction on this session.' };
+  const body = {
+    prebookId: s.prebookId,
+    holder: s.holder,
+    guests: [{ occupancyNumber: 1, firstName: s.holder.firstName, lastName: s.holder.lastName, email: s.holder.email }],
+    payment: useTx ? { method: 'TRANSACTION_ID', transactionId: s.transactionId } : { method: 'ACC_CREDIT_CARD' },
+    clientReference: `gs:${s.user_id || 'anon'}:${s.sid}`,
+  };
+  try {
+    const res = await fetch(`${NUITEE_BOOK}/rates/book`, { method: 'POST', headers: nuiteeHeaders(env), body: JSON.stringify(body) });
+    const d = await res.json().catch(() => ({}));
+    const bk = d?.data;
+    if (!res.ok || !bk?.bookingId) return { ok: false, error: d?.error?.description || d?.error?.message || `Booking failed (${res.status})` };
+    return { ok: true, booking: {
+      bookingId: bk.bookingId, status: bk.status || 'CONFIRMED', hotelConfirmationCode: bk.hotelConfirmationCode || null,
+      hotelName: bk.hotel?.name || null, hotelId: bk.hotel?.hotelId || s.hotelId,
+      price: bk.price ?? s.price, currency: bk.currency || s.currency,
+      checkin: bk.checkin || s.checkin, checkout: bk.checkout || s.checkout,
+      supplierBookingId: bk.supplierBookingId || null, createdAt: bk.createdAt || new Date().toISOString(),
+    } };
+  } catch { return { ok: false, error: 'Network error while booking.' }; }
+}
+// One CONFIRMED row in affiliate_clicks so My Trips lists the stay immediately —
+// this partner confirms in-line, no conversion import needed. Plus a per-booking
+// KV record for the ownership check on /hotels/nuitee/booking.
+async function nuiteeRecordBooking(env, s) {
+  const bk = s.booking;
+  await env.GLOBESKIMMERS_KV.put(`nuitee:bk:${bk.bookingId}`, JSON.stringify({ user_id: s.user_id, sid: s.sid, env: s.env, created: Date.now() }), { expirationTtl: 400 * 86400 }).catch(() => {});
+  if (!env.DB || !s.user_id) return;
+  const ts = Math.floor(Date.now() / 1000);
+  await env.DB.prepare(
+    'insert or ignore into affiliate_clicks (subid,ts,user_id,session_id,intent,persona,partner,product_id,product_name,category,dest_country,dest_city,target_url,converted,commission,currency,status,converted_ts) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(
+    `nuitee_${bk.bookingId}`, ts, s.user_id, null, null, null,
+    'nuitee', String(bk.bookingId), `${bk.hotelName || s.hotelName || 'Hotel'} · ${s.checkin} → ${s.checkout}`, 'hotel',
+    s.dest_country || null, s.dest_city || null, null,
+    1, null, bk.currency || s.currency, 'confirmed', ts
+  ).run();
+}
+
+// POST /hotels/nuitee/status {sid} — the app asks this when the checkout sheet
+// closes: 'pending' (never paid) · 'booked' (+booking) · 'failed' (+error).
+async function handleNuiteeStatus(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const sid = String(b.sid || '').replace(/[^a-f0-9]/g, '');
+    const s = sid ? await env.GLOBESKIMMERS_KV.get(`nuitee:sess:${sid}`, { type: 'json' }).catch(() => null) : null;
+    if (!s) return jsonResponse({ status: 'expired' });
+    if (s.user_id) { const user = await gbUser(request, env).catch(() => null); if (!user || user.id !== s.user_id) return jsonResponse({ status: 'forbidden' }, 403); }
+    return jsonResponse({ status: s.status, booking: s.status === 'booked' ? s.booking : null, error: s.error || null, env: s.env });
+  } catch (e) { return jsonResponse({ status: 'error', error: e.message }, 500); }
+}
+
+// POST /hotels/nuitee/booking {bookingId} — full details for My Trips; only the
+// user who booked it (KV ownership record) can read it.
+async function handleNuiteeBooking(request, env) {
+  try {
+    const user = await gbUser(request, env).catch(() => null);
+    if (!user) return jsonResponse({ needsAuth: true }, 401);
+    const b = await request.json().catch(() => ({}));
+    const bookingId = String(b.bookingId || '').trim().slice(0, 80);
+    if (!bookingId) return jsonResponse({ error: 'bookingId required' }, 400);
+    const own = await env.GLOBESKIMMERS_KV.get(`nuitee:bk:${bookingId}`, { type: 'json' }).catch(() => null);
+    if (!own || own.user_id !== user.id) return jsonResponse({ error: 'not_found' }, 404);
+    const res = await fetch(`${NUITEE_BOOK}/bookings/${encodeURIComponent(bookingId)}`, { headers: nuiteeHeaders(env) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || !d?.data) return jsonResponse({ error: 'lookup_failed', status: res.status }, 502);
+    const k = d.data;
+    return jsonResponse({ booking: {
+      bookingId: k.bookingId, status: k.status, hotelConfirmationCode: k.hotelConfirmationCode || null,
+      hotel: k.hotel || null, checkin: k.checkin, checkout: k.checkout, price: k.price, currency: k.currency,
+      holder: k.holder || null, rooms: k.bookedRooms || k.rooms || [], cancellationPolicies: k.cancellationPolicies || null, createdAt: k.createdAt,
+    } });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleAffiliateClick(request, env, ctx) {
   try {
     if (!env.DB) return jsonResponse({ error: 'analytics DB not configured' }, 500);
@@ -13695,6 +13973,12 @@ export default {
       if (pathname === '/activities/search' && request.method === 'POST') return await handleActivitySearch(request, env, ctx);
       if (pathname === '/events/search' && request.method === 'POST') return await handleEventsSearch(request, env);
       if (pathname === '/hotels/search' && request.method === 'POST') return await handleHotelSearch(request, env, ctx);
+      if (pathname === '/hotels/nuitee/search' && request.method === 'POST') return await handleNuiteeSearch(request, env, ctx);
+      if (pathname === '/hotels/nuitee/prebook' && request.method === 'POST') return await handleNuiteePrebook(request, env);
+      if (pathname === '/hotels/nuitee/status' && request.method === 'POST') return await handleNuiteeStatus(request, env);
+      if (pathname === '/hotels/nuitee/booking' && request.method === 'POST') return await handleNuiteeBooking(request, env);
+      if (pathname === '/hotels/nuitee/checkout' && request.method === 'GET') return await handleNuiteeCheckout(request, env);
+      if (pathname === '/hotels/nuitee/return' && request.method === 'GET') return await handleNuiteeReturn(request, env);
       if (pathname === '/guestbook/list' && request.method === 'POST') return await handleGuestbookList(request, env);
       if (pathname === '/guestbook/sign' && request.method === 'POST') return await handleGuestbookSign(request, env, ctx);
       if (pathname === '/guestbook/edit' && request.method === 'POST') return await handleGuestbookEdit(request, env);
