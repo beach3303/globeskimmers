@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useDismissable } from '@/lib/dismissStack';
@@ -6,6 +6,13 @@ import useHorizontalSwipe from '@/lib/useHorizontalSwipe';
 
 export default function PhotoGalleryModal({ photos, initialIndex = 0, isOpen, onClose }) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+
+  // Re-seed from the tapped photo on EVERY open. Some callers (ActivityDetail)
+  // keep the modal mounted while closed, so useState's seed is read only once
+  // and a later tap on photo 3 would reopen on whatever index was left behind.
+  useEffect(() => {
+    if (isOpen) setCurrentIndex(initialIndex);
+  }, [isOpen, initialIndex]);
 
   useDismissable(isOpen, onClose);
 

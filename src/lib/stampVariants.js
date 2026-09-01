@@ -8,6 +8,9 @@
 // (a live GPS fix when the user is there, otherwise the selected place's
 // coordinates) — plus country for border cases — to the right variant.
 //
+// Resort-level UMBRELLA names ("Walt Disney World Resort") are the exception:
+// they never resolve to one park unless a live GPS fix says which (see UMBRELLA).
+//
 // The `slug` fields MUST match the PNG filenames uploaded to R2 (stamp-art/).
 // If a variant's art isn't uploaded yet, the stamp simply falls back to the
 // category emoji until it is (no release needed).
@@ -90,15 +93,38 @@ const LANDMARKS = [
 
 const asVariant = (v) => ({ key: v.key, name: v.name, slug: v.slug, entity_id: v.slug });
 
+// Resort-level umbrella names. "Walt Disney World Resort", "Disneyland Resort"
+// and "Universal Orlando Resort" name the whole property, not any one park in
+// it. On a self-declared tap the only coordinates we hold are the listing's own
+// pin, and the nearest-anchor rule would then hand out a stamp for whichever
+// gate happens to sit closest to that pin (WDW's pin → EPCOT) — a park the
+// traveler never claimed, whose entity_id a later genuine visit then upserts
+// into. So an umbrella name resolves to a park ONLY when a live GPS fix says
+// which one (verified === "gps"); otherwise the caller keeps the umbrella stamp.
+const UMBRELLA = /\bresort\b|walt\s*disney\s*world|universal\s*orlando/i;
+
 // Given a stamp candidate, return the resolved variant or null (not a
-// multi-viewpoint landmark, or too far from any known viewpoint).
-export function resolveStampVariant({ name, lat, lng, country }) {
+// multi-viewpoint landmark, too far from any known viewpoint, or an umbrella
+// name with no GPS corroboration). `verified` is the caller's stamp
+// verification ("gps" when a live fix put the user inside the place); anything
+// else — including omitting it — is treated as NOT GPS-verified.
+export function resolveStampVariant({ name, lat, lng, country, verified }) {
   if (!name) return null;
   const L = LANDMARKS.find((l) => l.match.test(name));
   if (!L) return null;
   // Same-brand near-misses: hotels, stores, the concert hall. A match on the
   // family regex is not enough — the exclude list vetoes lookalikes.
   if (L.exclude && L.exclude.test(name)) return null;
+
+  // Umbrella name without GPS: never pick a park by proximity to the resort's
+  // pin (see UMBRELLA). The rule only bites when the pin is actually ambiguous
+  // — several parks of this family within the gate. A one-park resort ("Hong
+  // Kong Disneyland Resort", "Disneyland Resort Paris") IS its park and still
+  // resolves, so those stamps keep their art.
+  if (verified !== "gps" && UMBRELLA.test(name) && Number.isFinite(lat) && Number.isFinite(lng)) {
+    const inGate = L.variants.filter((v) => havKm(lat, lng, v.lat, v.lng) <= L.maxKm).length;
+    if (inGate > 1) return null;
+  }
 
   // 1) Country-first for border landmarks (Niagara: which side of the river).
   if (L.mode === "country-then-nearest" && country) {

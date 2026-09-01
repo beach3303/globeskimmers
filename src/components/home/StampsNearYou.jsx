@@ -78,9 +78,14 @@ export default function StampsNearYou({ onAction, wide = false }) {
         // city's iconic stamps in range while the distance labels stay honest
         // for a "near your stay" header (an 80 km default would surface ~50-mi
         // stamps as "near").
-        const { data, error } = await callWorker("attractions/nearby", { latitude: lat, longitude: lng, radiusKm: 40, limit: 16 });
+        // includeSecrets: the worker hides tier=secret rows from general browse; this
+        // proximity path may see them (inside their rotation window) — and we show a
+        // secret ONLY when the traveler is physically inside its footprint. That is
+        // the whole game: you stumble onto it by being there.
+        const { data, error } = await callWorker("attractions/nearby", { latitude: lat, longitude: lng, radiusKm: 40, limit: 24, includeSecrets: true });
         if (cancelled) return;
-        const list = (!error && Array.isArray(data?.attractions)) ? data.attractions.slice() : [];
+        const raw = (!error && Array.isArray(data?.attractions)) ? data.attractions : [];
+        const list = raw.filter((a) => a.tier !== "secret" || (Number.isFinite(a.distanceKm) && a.distanceKm * 1000 <= (a.footprint_radius_m || 150)));
         // Iconic first, then nearest — the marquee spots read as "worth a stamp".
         list.sort((a, b) => (Number(!!b.isMarquee) - Number(!!a.isMarquee)) || ((a.distanceMiles ?? 999) - (b.distanceMiles ?? 999)));
         setItems(list.slice(0, 12));
@@ -102,6 +107,14 @@ export default function StampsNearYou({ onAction, wide = false }) {
         latitude: item.lat, longitude: item.lng, rating: item.rating,
         free_to_visit: item.freeToVisit,
         distance_km: Number.isFinite(item.distanceKm) ? item.distanceKm : undefined,
+        // Stamps earned from this page carry their country (passport "countries"
+        // count, GPS-vs-IP check) and the per-row stamp radius override — pass
+        // them through whenever the worker card has them.
+        city: item.city || undefined,
+        region: item.region || item.state || undefined,
+        country: item.country || undefined,
+        countryCode: item.countryCode || item.cc || undefined,
+        footprint_radius_m: item.footprint_radius_m ?? item.footprintRadiusM ?? undefined,
       };
       sessionStorage.setItem("current_activity", JSON.stringify(activity));
       if (loc) sessionStorage.setItem("activity_location", JSON.stringify(loc));

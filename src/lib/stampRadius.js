@@ -12,7 +12,7 @@
 import { GPS_VERIFY_RADIUS_M } from "@/lib/passport";
 
 // Ordered most- to least-specific: the first pattern that matches wins, so
-// "national_park" is decided before the generic "park".
+// "national_park" / "theme_park" are decided before the generic "park".
 const FOOTPRINTS = [
   [/national_park|national_forest|nature_reserve|wildlife_refuge/, 6000],
   [/ski_resort|state_park|regional_park|botanical_garden|arboretum/, 2500],
@@ -21,6 +21,10 @@ const FOOTPRINTS = [
   [/airport|international_airport/, 2500],
   [/university|college|campus|fairground|convention_center/, 800],
   [/zoo|aquarium|safari|golf_course|cemetery|historical_park|archaeolog/, 600],
+  // The worker's own vocabulary: "park" (city park), "garden", "viewpoint"
+  // (its name for Google's natural_feature). Whole-token match so "parking"
+  // does not become a 600 m footprint; "_" counts as a separator ("dog_park").
+  [/(?:^|[^a-z])(?:park|garden|viewpoint)(?![a-z])/, 600],
   [/stadium|arena|race_track|marina|pier|market|bazaar|souk/, 400],
   [/shopping_mall|department_store|casino|monastery|temple_complex/, 350],
 ];

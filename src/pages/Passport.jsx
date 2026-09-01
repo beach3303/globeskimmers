@@ -13,6 +13,7 @@ import TypographicStamp from "@/components/passport/TypographicStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
 import PassportBook from "@/components/passport/PassportBook";
 import { isAdminEmail } from "@/lib/admins";
+import { localISODate } from "@/lib/localDate";
 
 
 // ============================================================================
@@ -152,7 +153,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
   if (stamp.kind === "airport") {
     return (
       <div className="bg-white rounded-[20px] p-3 flex flex-col items-center" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
-        <AirportStamp iata={stamp.entity_id} city={stamp.city} countryCode={stamp.country} date={stamp.visited_on} width={264} />
+        <AirportStamp iata={stamp.entity_id} city={stamp.city} country={stamp.country} countryCode={stamp.country} date={stamp.visited_on} width={264} />
         <div className="flex items-center gap-2 mt-1.5">
           <VerifiedBadge verified={stamp.verified} />
           {!readOnly && (confirmDel ? (
@@ -253,7 +254,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
 
       {!readOnly && showDate && (
         <div className="flex items-center gap-2 mt-2">
-          <input type="date" value={dateVal} onChange={(e) => setDateVal(e.target.value)} max={new Date().toISOString().slice(0, 10)}
+          <input type="date" value={dateVal} onChange={(e) => setDateVal(e.target.value)} max={localISODate()}
             className="rounded-lg px-2 py-1" style={{ border: `1px solid ${RULE}`, fontSize: fs(13), color: INK }} />
           <button onClick={saveDate} disabled={busy} className="rounded-lg px-3 py-1 font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: fs(12.5) }}>Save</button>
         </div>
@@ -358,7 +359,7 @@ function StampPlaceModal({ onClose, onDone }) {
   const [cc, setCc] = useState("");
   const [coords, setCoords] = useState(null);
   const [venue, setVenue] = useState("");
-  const [dateVal, setDateVal] = useState(new Date().toISOString().slice(0, 10));
+  const [dateVal, setDateVal] = useState(localISODate());
   const [results, setResults] = useState(null);
   const [searchFor, setSearchFor] = useState(null);
   const [searching, setSearching] = useState(false);
@@ -432,7 +433,7 @@ function StampPlaceModal({ onClose, onDone }) {
         )}
 
         <label style={labelStyle}>Date</label>
-        <input type="date" value={dateVal} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setDateVal(e.target.value)} style={{ ...inputStyle, marginTop: 4 }} />
+        <input type="date" value={dateVal} max={localISODate()} onChange={(e) => setDateVal(e.target.value)} style={{ ...inputStyle, marginTop: 4 }} />
 
         <label style={labelStyle}>Memory photos (up to 4)</label>
         <div className="flex gap-2 mt-1 flex-wrap items-center">

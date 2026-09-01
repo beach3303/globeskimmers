@@ -16,9 +16,17 @@ import { addStamp, metersBetween } from "@/lib/passport";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { resolveStampVariant } from "@/lib/stampVariants";
 import { countryCode } from "@/lib/countries";
+import { localISODate } from "@/lib/localDate";
 import { showToast } from "../components/Toast";
 import { useDismissable } from '@/lib/dismissStack';
 import useHorizontalSwipe from '@/lib/useHorizontalSwipe';
+
+// ISO-2 for the stamp: an explicit code from the card, else the country NAME
+// looked up, else the country field itself when the seed already stores a code
+// (the six-city seed uses 'FR' / 'JP' / 'US', where countryCode() finds nothing).
+const stampCC = (a) =>
+  a?.countryCode || a?.cc || countryCode(a?.country)
+  || (/^[A-Za-z]{2}$/.test(a?.country || '') ? a.country.toUpperCase() : undefined);
 
 export default function ActivityDetailPage() {
   const navigate = useNavigate();
@@ -239,7 +247,7 @@ export default function ActivityDetailPage() {
     // (verified), otherwise the selected place's own coordinates.
     const vLat = verified === 'gps' ? gpsLat : placeLat;
     const vLng = verified === 'gps' ? gpsLng : placeLng;
-    const variant = resolveStampVariant({ name: activity.name, lat: vLat, lng: vLng, country: activity.country });
+    const variant = resolveStampVariant({ name: activity.name, lat: vLat, lng: vLng, country: activity.country, verified });
     const { data, error } = await addStamp({
       kind: 'attraction',
       entity_type: variant ? 'landmark' : 'place',
@@ -248,10 +256,10 @@ export default function ActivityDetailPage() {
       city: activity.city || activity.address?.city || null,
       region: activity.region || activity.state || null,
       country: activity.country || null,
-      cc: countryCode(activity.country) || undefined,
+      cc: stampCC(activity),
       lat: Number.isFinite(placeLat) ? placeLat : null,
       lng: Number.isFinite(placeLng) ? placeLng : null,
-      visited_on: new Date().toISOString().slice(0, 10),
+      visited_on: localISODate(), // LOCAL date — UTC says "tomorrow" for an evening tap in the Americas
       local_hour: new Date().getHours(),
       verified,
     });
@@ -353,6 +361,14 @@ export default function ActivityDetailPage() {
   }
 
   const photos = activity.photos || [];
+
+  // The tips come straight from the LLM (the worker JSON.parse's the model's
+  // text with no schema check and KV-caches it for 30 days). A non-array
+  // `tips` must never reach .map — that would white-screen this attraction for
+  // every user until the cache entry expires.
+  const llmTips = Array.isArray(enhancedDetails?.tips)
+    ? enhancedDetails.tips.filter((t) => typeof t === 'string' && t.trim())
+    : [];
 
   return (
     <div className="min-h-screen pb-20 font-sans" style={{ background: '#FFFCF7' }}>
@@ -752,7 +768,7 @@ export default function ActivityDetailPage() {
               </div>
             </div>
 
-            {(enhancedDetails?.tips || activity.tip) && (
+            {(llmTips.length > 0 || activity.tip) && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
                 <h3 className="text-[calc(16px*var(--fs))] font-bold text-blue-900 mb-2 flex items-center gap-2">
                   <Info className="w-5 h-5" />
@@ -765,7 +781,7 @@ export default function ActivityDetailPage() {
                       <span>{activity.tip}</span>
                     </li>
                   )}
-                  {enhancedDetails?.tips && enhancedDetails.tips.map((tip, index) => (
+                  {llmTips.map((tip, index) => (
                     <li key={index} className="text-[calc(14px*var(--fs))] text-blue-800 flex gap-2">
                       <span className="text-blue-500">•</span>
                       <span>{tip}</span>

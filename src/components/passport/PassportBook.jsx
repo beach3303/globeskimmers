@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import html2canvas from "html2canvas";
 import { ChevronLeft, ChevronRight, X, Share2 } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
+import { showToast } from "@/components/Toast";
 import { countryCode } from "@/lib/countries";
 import { stampArtUrl } from "@/lib/stampArt";
 import AirportStamp from "@/components/passport/AirportStamp";
@@ -83,7 +85,7 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
     >
       {isAirport ? (
         <div className="flex flex-col items-center">
-          <AirportStamp iata={stamp.entity_id} city={stamp.city} countryCode={stamp.country} date={stamp.visited_on} width={airportW} />
+          <AirportStamp iata={stamp.entity_id} city={stamp.city} country={stamp.country} countryCode={stamp.country} date={stamp.visited_on} width={airportW} />
         </div>
       ) : isCity ? (
         // A city / place visit — a fat, borderless ink line (differs from the
@@ -268,6 +270,12 @@ export default function PassportBook({
   const MIN_TOTAL = 10; // a fresh passport ships as a 10-page booklet to flip through
   // ownership + every stamp page + always ≥1 trailing blank (auto-grows as stamps fill up)
   const total = Math.max(MIN_TOTAL, 1 + stampCount + 1);
+  // Deleting a stamp (or rotating the phone, which repacks the pages) can shrink
+  // `total` while the book is open — pull `page` back onto the last page so the
+  // indicator never reads "11 / 10" and Next never re-enables past the end.
+  useEffect(() => {
+    if (page > total - 1) setPage([Math.max(0, total - 1), 0]);
+  }, [page, total]);
   const openBook = useCallback(() => {
     setOpen(true);
     try { localStorage.setItem("pp_book_opened", "1"); } catch { /* ignore */ }
@@ -358,12 +366,20 @@ export default function PassportBook({
       const data = { files: [file], title: "My Virtual Passport", text: "My Virtual Passport on Globeskimmers 🛂" };
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share(data);
-      } else {
-        // Fallback (share sheet or file-share unsupported): save the image.
+      } else if (typeof window !== "undefined" && !Capacitor.isNativePlatform()) {
+        // Web fallback (file-share unsupported): save the image.
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a"); a.href = url; a.download = "globeskimmers-passport.png";
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
+      } else if (navigator.clipboard) {
+        // Native WebView with no share sheet (Android has no navigator.share, and
+        // a blob: download is inert there — the tap used to do nothing). Hand the
+        // share text to the clipboard and SAY so; @capacitor/share isn't a dep.
+        try { await navigator.clipboard.writeText(data.text); showToast("Copied — paste it anywhere", "success"); }
+        catch { showToast("Sharing isn't available on this device", "error"); }
+      } else {
+        showToast("Sharing isn't available on this device", "error");
       }
     } catch { /* user cancelled or render failed — no-op */ }
     finally { setSharing(false); }

@@ -68,10 +68,15 @@ export function stampDesign(entityId, name) {
   return pool[hash(entityId || name) % pool.length].id;
 }
 
+// Territories the seed data names that COUNTRIES has no row for. Without these,
+// "Taiwan" fell through to the raw-name shortcut ("TA"), missed REGION_BY_CC and
+// hashed into MEA amber beside crimson China/Japan stamps.
+const CC_ALIASES = { taiwan: "TW", "hong kong": "HK", macau: "MO", macao: "MO" };
+
 // Region ink for a country name OR an ISO-3166 alpha-2 code (stamps carry both).
 export function stampInk(country) {
   const raw = String(country || "").trim();
-  const cc = String(countryCode(raw) || raw).toUpperCase().slice(0, 2);
+  const cc = String(countryCode(raw) || CC_ALIASES[raw.toLowerCase()] || raw).toUpperCase().slice(0, 2);
   const region = REGION_BY_CC[cc];
   return region ? INK_BY_REGION[region] : FALLBACK_INKS[hash(cc || raw) % FALLBACK_INKS.length];
 }

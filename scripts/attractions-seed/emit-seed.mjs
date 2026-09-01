@@ -67,7 +67,7 @@ const category = (r) => {
 // Mirrors src/lib/stampRadius.js — the ✓ circle sized by kind of place.
 const FOOT = [
   [/national_park|nature_reserve/, 6000], [/beach|lake|waterfall/, 1800],
-  [/theme_park/, 900], [/zoo|aquarium|garden|park$/, 600],
+  [/theme_park/, 900], [/zoo|aquarium|garden|viewpoint|park$/, 600],
   [/market|square|fortress|palace/, 400],
 ];
 const footprint = (cat) => { for (const [re, m] of FOOT) if (re.test(cat)) return m; return null; };

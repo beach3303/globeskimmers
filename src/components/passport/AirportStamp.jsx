@@ -14,7 +14,7 @@ export default function AirportStamp({ iata, city, country, countryCode, date, w
   const { template, ink } = airportStampConfig(countryCode);
 
   const CITY = String(city || "").toUpperCase();
-  const CTRY = String(country || "").toUpperCase();
+  const CTRY = String(country || countryCode || "").toUpperCase();   // callers may pass only countryCode
   const CODE = String(iata || "").toUpperCase();
   const dateStr = fmtStampDate(date);
   const [dd = "", mon = "", yyyy = ""] = dateStr.split(" ");

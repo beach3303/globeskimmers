@@ -115,6 +115,14 @@ export default function HomeRows({ onAction, wide = false }) {
         rating: card.rating,
         free_to_visit: card.freeToVisit,
         distance_km: Number.isFinite(card.distanceMiles) ? +(card.distanceMiles * 1.60934).toFixed(1) : undefined,
+        // Stamps earned from this page carry their country (passport "countries"
+        // count, GPS-vs-IP check) and the per-row stamp radius override — pass
+        // them through whenever the worker card has them.
+        city: card.city || undefined,
+        region: card.region || card.state || undefined,
+        country: card.country || undefined,
+        countryCode: card.countryCode || card.cc || undefined,
+        footprint_radius_m: card.footprint_radius_m ?? card.footprintRadiusM ?? undefined,
       };
       sessionStorage.setItem("current_activity", JSON.stringify(activity));
       if (loc) sessionStorage.setItem("activity_location", JSON.stringify(loc));
