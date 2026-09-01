@@ -13566,18 +13566,34 @@ async function nuiteeBookSession(env, s, { simulate = false } = {}) {
   // requires the paid transaction.
   const useTx = !!s.transactionId && !(simulate && s.env === 'sandbox');
   if (!useTx && s.env !== 'sandbox') return { ok: false, error: 'No payment transaction on this session.' };
+  // One clientReference per ATTEMPT — Nuitée rejects a reused reference even
+  // after a failed attempt (measured: an unpaid landing burned the session's
+  // reference and the real booking was then refused as a "duplicate"). The
+  // counter is persisted BEFORE the call so a retry never reuses a number.
+  s.attempts = (s.attempts || 0) + 1;
+  const clientReference = `gs:${s.user_id || 'anon'}:${s.sid}:${s.attempts}`;
+  await env.GLOBESKIMMERS_KV.put(`nuitee:sess:${s.sid}`, JSON.stringify(s), { expirationTtl: 30 * 60 }).catch(() => {});
   const body = {
     prebookId: s.prebookId,
     holder: s.holder,
     guests: [{ occupancyNumber: 1, firstName: s.holder.firstName, lastName: s.holder.lastName, email: s.holder.email }],
     payment: useTx ? { method: 'TRANSACTION_ID', transactionId: s.transactionId } : { method: 'ACC_CREDIT_CARD' },
-    clientReference: `gs:${s.user_id || 'anon'}:${s.sid}`,
+    clientReference,
   };
   try {
     const res = await fetch(`${NUITEE_BOOK}/rates/book`, { method: 'POST', headers: nuiteeHeaders(env), body: JSON.stringify(body) });
     const d = await res.json().catch(() => ({}));
-    const bk = d?.data;
-    if (!res.ok || !bk?.bookingId) return { ok: false, error: d?.error?.description || d?.error?.message || `Booking failed (${res.status})` };
+    let bk = d?.data;
+    const errText = d?.error?.description || d?.error?.message || '';
+    if ((!res.ok || !bk?.bookingId) && /duplicate booking/i.test(errText)) {
+      // Safety net for the race where a book succeeded but our KV write didn't:
+      // adopt the confirmed booking that already exists under this reference.
+      const r2 = await fetch(`${NUITEE_BOOK}/bookings?clientReference=${encodeURIComponent(clientReference)}`, { headers: nuiteeHeaders(env) }).catch(() => null);
+      const d2 = r2 && r2.ok ? await r2.json().catch(() => ({})) : {};
+      const found = (Array.isArray(d2?.data) ? d2.data : []).find((x) => x && x.bookingId && /CONFIRMED/i.test(x.status || ''));
+      if (found) bk = { ...found, hotel: found.hotel || { name: found.hotelName } };
+    }
+    if (!bk?.bookingId) return { ok: false, error: errText || `Booking failed (${res.status})` };
     return { ok: true, booking: {
       bookingId: bk.bookingId, status: bk.status || 'CONFIRMED', hotelConfirmationCode: bk.hotelConfirmationCode || null,
       hotelName: bk.hotel?.name || null, hotelId: bk.hotel?.hotelId || s.hotelId,
