@@ -27,6 +27,7 @@ import { getLocationLabel } from "@/components/location/locationLabel";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { trackAffiliateClick } from "@/lib/affiliate";
 import { openPartner } from "@/lib/openPartner";
+import HotelBookSheet from "@/components/hotels/HotelBookSheet";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { logSearch } from "@/lib/logSearch";
@@ -96,6 +97,11 @@ export default function FindAHotel() {
   const [children, setChildren] = useState(0);
   const [hotels, setHotels] = useState(null);   // null=not searched · []=none · [...]=results
   const [hotelsBusy, setHotelsBusy] = useState(false);
+  // In-app lane (Nuitée Connect): bookable here, exact dates + coordinates only.
+  const [inApp, setInApp] = useState(null);        // null=not searched · []=none · [...]=results
+  const [inAppBusy, setInAppBusy] = useState(false);
+  const [inAppMeta, setInAppMeta] = useState(null); // {nights, env}
+  const [bookSheet, setBookSheet] = useState(null); // hotel being booked (opens HotelBookSheet)
 
   // Effective destination.
   const here = {
@@ -133,7 +139,7 @@ export default function FindAHotel() {
   // Resolve airport list / top sight when the goal or destination changes.
   useEffect(() => {
     let cancelled = false;
-    setHotels(null); // clear stale results when goal/destination changes
+    setHotels(null); setInApp(null); setBookSheet(null); // clear stale results when goal/destination changes
     if (goal === "airport" && hasCoords) {
       setAirportsBusy(true); setAirport(null); setApOpen(true);
       nearestAirports(dest.lat, dest.lng, 6, 130)
@@ -186,6 +192,16 @@ export default function FindAHotel() {
     if (blocked) return;
     const lp = locParams();
     setHotelsBusy(true); setHotels(null); setMaxPrice(null);
+    // In-app (Nuitée) lane runs in parallel — exact dates + coordinates only;
+    // flexible dates and address-only searches stay Stay22-only.
+    const wantInApp = !!(checkin && checkout && Number.isFinite(lp.lat) && Number.isFinite(lp.lng));
+    setInApp(null); setInAppMeta(null); setInAppBusy(wantInApp);
+    if (wantInApp) {
+      callWorker("hotels/nuitee/search", { latitude: lp.lat, longitude: lp.lng, checkin, checkout, adults, children })
+        .then(({ data }) => { setInApp(Array.isArray(data?.hotels) ? data.hotels : []); setInAppMeta({ nights: data?.nights, env: data?.env }); })
+        .catch(() => setInApp([]))
+        .finally(() => setInAppBusy(false));
+    }
     try {
       const { data } = await callWorker(ROUTE.searchHotels, { latitude: lp.lat, longitude: lp.lng, address: lp.address, checkin, checkout, adults, children });
       const list = Array.isArray(data?.hotels) ? data.hotels : [];
@@ -440,12 +456,54 @@ export default function FindAHotel() {
           </div>
         )}
 
+        {/* Book in the app — Nuitée Connect member rates (exact dates only), ABOVE
+            the Stay22 referral list: this is the lane the traveler can finish
+            here, with Nuitée as Merchant of Record. Rates are Closed-User-Group
+            (behind sign-in) — never surface them outside the app. */}
+        {inAppBusy && (
+          <div className="mt-4 text-[calc(12.5px*var(--fs))] px-1" style={{ color: INK2 }}>Checking member rates…</div>
+        )}
+        {inApp && inApp.length > 0 && !inAppBusy && (
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-2 px-1">
+              <span className="font-bold text-[calc(14px*var(--fs))]" style={{ color: ED_INK }}>🔐 Book in the app · {inApp.length} stays</span>
+              <span className="text-[calc(11.5px*var(--fs))]" style={{ color: INK2 }}>{inAppMeta?.nights} night{inAppMeta?.nights === 1 ? "" : "s"}{inAppMeta?.env === "sandbox" ? " · SANDBOX" : ""}</span>
+            </div>
+            <div className="flex flex-col gap-2.5">
+              {inApp.filter((h) => maxPrice == null || h.price <= maxPrice).slice(0, 12).map((h) => (
+                <button key={h.id} onClick={() => setBookSheet(h)} className="w-full flex gap-3 p-2.5 rounded-[16px] text-left" style={{ background: "#FFFFFF", border: `1.5px solid ${ACCENT}55` }}>
+                  {h.thumbnail
+                    ? <img src={h.thumbnail} alt="" className="flex-none rounded-[12px] object-cover" style={{ width: 92, height: 92 }} />
+                    : <div className="flex-none rounded-[12px] flex items-center justify-center" style={{ width: 92, height: 92, background: ACCENT_BG, fontSize: fs(30) }}>🏨</div>}
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <div className="font-bold text-[calc(14px*var(--fs))] leading-snug" style={{ color: ED_INK, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{h.name}</div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {h.stars ? <span className="text-[calc(11.5px*var(--fs))]" style={{ color: "#E0922F" }}>{"★".repeat(Math.min(Math.round(h.stars), 5))}</span> : null}
+                      {h.reviewScore != null && <span className="text-[calc(11px*var(--fs))] font-bold px-1.5 py-0.5 rounded-[6px]" style={{ background: "#E7F3EA", color: "#2E7D46" }}>{Number(h.reviewScore).toFixed(1)}{h.reviewCount ? ` · ${h.reviewCount}` : ""}</span>}
+                      {h.distanceMiles != null && <span className="text-[calc(11px*var(--fs))]" style={{ color: INK2 }}>{h.distanceMiles} mi</span>}
+                    </div>
+                    <div className="text-[calc(11.5px*var(--fs))] mt-1" style={{ color: h.freeCancellation ? "#2E7D46" : INK2 }}>
+                      {[h.roomName, h.board, h.freeCancellation ? `free cancellation${h.cancelBy ? ` until ${String(h.cancelBy).slice(0, 10)}` : ""}` : "non-refundable"].filter(Boolean).join(" · ")}
+                    </div>
+                    <div className="mt-auto flex items-center justify-between pt-1">
+                      <span><span className="font-bold text-[calc(15px*var(--fs))]" style={{ color: ED_INK }}>{money(h.price)}</span><span className="text-[calc(10.5px*var(--fs))]" style={{ color: INK2 }}> total · {money(h.nightly)}/night</span></span>
+                      <span className="px-3 py-1.5 rounded-[10px] font-bold text-[calc(12px*var(--fs))] text-white flex-none" style={{ background: ACCENT }}>Book here</span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="text-[calc(10.5px*var(--fs))] mt-1.5 px-1 leading-snug" style={{ color: "#9AA0A6" }}>Member rates via Nuitée Connect · you pay securely in the app · GlobeSkimmers earns a share of each booking</div>
+          </div>
+        )}
+        {bookSheet && <HotelBookSheet hotel={bookSheet} checkin={checkin} checkout={checkout} adults={adults} children={children} dest={dest} onClose={() => setBookSheet(null)} />}
+
         {/* Native results — real hotels with live prices + attributed Book links */}
         {hotels && !hotelsBusy && (
           hotels.length === 0 ? (
             <div className="mt-4 text-center rounded-[16px] px-4 py-6" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
               <div className="text-[calc(28px*var(--fs))] mb-1">🔍</div>
-              <div className="font-bold text-[calc(15px*var(--fs))]" style={{ color: ED_INK }}>No stays found</div>
+              <div className="font-bold text-[calc(15px*var(--fs))]" style={{ color: ED_INK }}>{inApp && inApp.length > 0 ? "No extra stays on Stay22" : "No stays found"}</div>
               <div className="text-[calc(12.5px*var(--fs))] mt-1" style={{ color: INK2 }}>Try flexible dates, a wider area, or a different goal.</div>
             </div>
           ) : (

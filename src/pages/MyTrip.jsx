@@ -37,7 +37,7 @@ const SECTIONS = {
 const SECTION_ORDER = ["stays", "tours", "events", "rides", "car", "data", "storage", "shopping", "flights", "other"];
 
 const PARTNER_LABEL = {
-  viator: "Viator", stay22: "Stay22", discovercars: "Discover Cars",
+  viator: "Viator", stay22: "Stay22", discovercars: "Discover Cars", nuitee: "Booked in app",
   welcomepickups: "Welcome Pickups", kiwitaxi: "Kiwitaxi", airalo: "Airalo",
   radicalstorage: "Radical Storage", ticketmaster: "Ticketmaster",
   vividseats: "Vivid Seats", fever: "Fever", booking: "Booking.com",
