@@ -13654,7 +13654,9 @@ async function nuiteeRecordBooking(env, s) {
   await env.DB.prepare(
     'insert or ignore into affiliate_clicks (subid,ts,user_id,session_id,intent,persona,partner,product_id,product_name,category,dest_country,dest_city,target_url,converted,commission,currency,status,converted_ts) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
   ).bind(
-    `nuitee_${bk.bookingId}`, ts, s.user_id, s.sid, null, null,
+    // intent='sandbox' tags test bookings so analytics can exclude them
+    // (`where intent is not 'sandbox'`) and cleanup is one delete.
+    `nuitee_${bk.bookingId}`, ts, s.user_id, s.sid, s.env === 'sandbox' ? 'sandbox' : null, null,
     'nuitee', String(bk.bookingId), `${bk.hotelName || s.hotelName || 'Hotel'} · ${s.checkin} → ${s.checkout}`, 'hotel',
     s.dest_country || null, s.dest_city || null, null,
     1, null, bk.currency || s.currency, 'confirmed', ts
