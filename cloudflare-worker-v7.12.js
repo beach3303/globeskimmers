@@ -6127,6 +6127,12 @@ async function handleAttractionsNearby(request, env, ctx) {
     categories = null,
     limit = 60,
     marqueeOnly = false,
+    // Stamps rail only: return rows that cleared the stamp-worthiness bar
+    // (scope world/national/regional; founder_scope always wins). Unscored
+    // rows (scope NULL — fresh auto-seeds) are NOT stamps until scored, which
+    // is the gate that keeps neighborhood parks out of the passport. Secrets
+    // (tier='secret') are founder-designated and pass regardless.
+    stampsOnly = false,
     // Passport proximity path only: include tier='secret' rows (inside their
     // rotation window). General browse never sees secrets — they're found by
     // being there.
@@ -6175,6 +6181,10 @@ async function handleAttractionsNearby(request, env, ctx) {
     wheres.push(`(tier != 'secret' OR ((secret_from IS NULL OR secret_from <= date('now')) AND (secret_until IS NULL OR secret_until >= date('now'))))`);
   } else {
     wheres.push(`(tier IS NULL OR tier != 'secret')`);
+  }
+
+  if (stampsOnly === true) {
+    wheres.push(`(tier = 'secret' OR coalesce(founder_scope, scope) IN ('world','national','regional'))`);
   }
 
   const safeLimit = Math.max(1, Math.min(Number(limit) || 60, 200));
