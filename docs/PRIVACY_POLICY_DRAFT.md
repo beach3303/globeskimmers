@@ -30,7 +30,7 @@ We only collect what we need to make the app work for you.
 
 - We do not access your contacts, photos library (beyond what you explicitly select), microphone, calendar, or messages.
 - We do not collect your real-time location in the background.
-- We do not track you across other apps or websites.
+- We do not track you across other apps or websites. (When you tap a booking partner's link, we record that tap in the App — see "Affiliate links" — but we do not follow what you do on the partner's site.)
 
 ## How we use what we collect
 
@@ -48,13 +48,21 @@ We do not sell or share your personal information — meaning information that i
 
 Globeskimmers uses a small number of well-known third-party services to deliver the app. Each only receives what they need to do their job.
 
-- **Base44** (our backend platform) — stores your account, preferences, saved locations, and contact messages. [base44.com](https://base44.com)
+- **Supabase** (our database and authentication provider) — stores your account, preferences, saved locations, passport stamps, and contact messages. [supabase.com/privacy](https://supabase.com/privacy)
 - **Google Places API** — receives your location (when you grant permission) so it can return nearby places. Subject to [Google's Privacy Policy](https://policies.google.com/privacy).
 - **Google AdMob** — serves the banner ads on the Home screen. May use a device advertising identifier to limit how often you see the same ad. You can reset this identifier in iOS or Android settings, or opt out of personalized ads entirely. Subject to [Google's AdMob Privacy Policy](https://support.google.com/admob/answer/6128543).
 - **Cloudflare Workers + KV** — caches frequently-requested data (currency rates, translation phrases, nearby place results) at the edge so the app is fast. Cached data is keyed by query, not by user. [cloudflare.com/privacypolicy](https://www.cloudflare.com/privacypolicy/)
 - **Google sign-in / Facebook sign-in / Apple sign-in** — handles authentication. Globeskimmers never sees your password.
 
+- **Booking partners** (Viator, GetYourGuide, Stay22, and partners reached through the Travelpayouts network such as Booking.com and Agoda) — receive a random click ID and ordinary web request information when you tap an affiliate link, so a booking can be credited to the App. They never receive your name, email, or account details from us.
+
 We never share your personal information with advertisers, data brokers, or any other party not listed above.
+
+## Affiliate links
+
+Some places and activities include links to book with third-party travel companies. **These are affiliate links: if you book after tapping one, Globeskimmers may earn a commission. You pay the same price as going to the partner directly.** Commissions help keep the app free.
+
+When you tap one, we record the tap — a random click ID, your account and session, the partner, the product name and category, the destination, and your travel mode and persona if set — so we can learn which offers travelers find useful and so partners can match a booking back to the app. On the partner's site their own privacy policy and cookies apply. Affiliate links are always optional; nothing in the app changes based on whether you use them.
 
 ## Where your data is stored
 
