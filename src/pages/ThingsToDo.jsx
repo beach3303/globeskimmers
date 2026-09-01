@@ -1087,11 +1087,11 @@ export default function ThingsToDoFinder() {
   },[routerLocation.state?.presetQuery,lat,lng]);
   const openTour=async(p)=>{
     const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorProductLink(p.url)||viatorSearchLink(p.title),category:"tour",productName:p.title,destCity:city,destCountry:country});
-    if(url) window.open(url,"_blank");
+    if(url) openPartner(url);
   };
   const openViatorFallback=async()=>{
     const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorSearchLink(`${submitted} ${city}`.trim()),category:"tour",productName:submitted,destCity:city,destCountry:country});
-    if(url) window.open(url,"_blank");
+    if(url) openPartner(url);
   };
 
   return(
