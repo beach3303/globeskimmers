@@ -211,7 +211,7 @@ First live affiliate revenue surface. Each attraction card (ActivityCardTablet) 
 - [x] `src/lib/viator.js` (viatorSearchLink; pid P00311514 + mcid 42383 + medium=link)
 - [x] Worker AFF_SUBID_PARAM.viator: 'pid' → 'campaign' (was clobbering the payout id)
 - [x] ThingsToDo card button + handler; lint + build clean
-- [ ] ⚠️ **VERIFY pid + mcid** — generate one link in Viator dashboard (Tools → Create links) and confirm mcid=42383 matches this account; fix `src/lib/viator.js` if different (payout depends on it)
+- [x] **pid VERIFIED 2026-08-31** — Viator partner dashboard shows account `Globeskimmers - USD - P00311514 - Affiliate`, matching `VIATOR_PID` exactly; dashboard already reports 5 visitors/30d, so attributed clicks are flowing from the app. [ ] mcid=42383 still to confirm via Tools → Link creation (one generated link; compare the `mcid=` param).
 - [ ] Device: Things-to-Do → attraction card → "Book a tour here" opens Viator search for that place with `pid=P00311514` in the URL
 - [ ] Activate full tracking: run `scripts/affiliate/01_schema.sql` (D1) + `wrangler deploy` — until then the link still earns via pid (helper falls back to the raw URL)
 
