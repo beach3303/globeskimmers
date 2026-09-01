@@ -499,3 +499,16 @@ State: Committed (f6b5460 + 959414c) · Frontend auto-deploys on push · Tested 
 - [ ] Strip renders on iPad (HomeTablet) too
 - [ ] "souvenirs" (or "souvenirs in Kyoto") → opens Shopping with the **Souvenir** chip selected; "luxury shopping" → Luxury chip; "grocery" → Groceries chip
 - [ ] A generic "shopping" with no sub-term → Shopping opens on "All" (no wrong chip forced)
+
+## 🎟️ Viator tour rows on the attraction card (2026-08-31)
+Rung 2 of the booking lane. The "Book a tour here" button deep-linked to a Viator SEARCH page; now the card lists the top 3 tours AT the attraction (thumb · title · ★ rating (n) · duration · Free cancellation / Skip the line · "from $89" · Book) and a tap lands on the PRODUCT in the in-app sheet with the product code on the click record. Expanding the card adds "Runs daily · next Sat, Sep 5" from Viator's operating schedule (labeled "schedule per Viator" — not live inventory). Worker: `viatorMapProduct()` shared mapper, `POST /viator/products` (KV 24h / 7d-empty), `POST /viator/schedule` (raw calendar KV 12h; weekday pattern read from the 14 days at the next open date, capped at season end — unit-tested), `/activities/search` products gain duration + flags. Old `/viator/match` route kept for installed app versions. Files: `cloudflare-worker-v7.12.js`, `src/pages/ThingsToDo.jsx`.
+State: Committed (b19b9aa) · **NOT PUSHED — pushing auto-deploys the worker to production; awaiting founder go** · Tested ⬜
+- [ ] Push → `.github/workflows/deploy-workers.yml` green; then `npm run build && npx cap sync ios` + ⌘R on the iPhone
+- [ ] Things To Do → a marquee attraction (Disneyland, Louvre, Eiffel Tower) shows "🎟️ Tours here" with up to 3 rows: price, duration, ★ rating; "Free cancellation" only where Viator flags it
+- [ ] Tap a row → in-app sheet opens on THAT product (not a search page); `affiliate_clicks` row in D1 has `product_id` = the Viator product code
+- [ ] "See all · Viator ↗" → in-app sheet on the Viator search results for the attraction name
+- [ ] Tap "More ▾" → each row gains a schedule line ("Runs daily · next Tue, Sep 1" or "Runs Tue, Thu, Sat"); footer gains "· schedule per Viator". Collapsing and re-expanding does NOT refetch
+- [ ] A plain park/beach/plaza (not tourable) shows NO tours block and NO button (unchanged)
+- [ ] Cost/rate check: a 20-card list makes ≤20 `/viator/products` calls and ZERO `/viator/schedule` calls until a card is expanded; a second visit to the same attraction returns `source:'cache'`
+- [ ] Activity search ("zipline") product rows now show duration + "Free cancellation" where flagged; footer reads "Tours & prices by Viator"
+- [ ] Airplane mode / worker down → the card falls back to the plain "Book a tour here" button ('na' path); nothing crashes
