@@ -13544,9 +13544,17 @@ async function handleNuiteeReturn(request, env) {
     const result = await nuiteeBookSession(env, s, { simulate });
     if (!result.ok && /payment not completed|not paid|unpaid|transaction/i.test(result.error || '')) {
       // Landed here before the card was charged (or without paying at all): NOT a
-      // failure — the session stays pending so a real payment can still complete
-      // it, and the app's status check reads 'pending' → "Reopen payment".
-      return nuiteeHtml('Payment not completed', `<h1>Payment not completed yet</h1><p class="sub">Nothing was charged and no booking was made.</p><a class="btn" href="${url.origin}/hotels/nuitee/checkout?sid=${sid}">Back to payment</a><p class="note">Or tap <b>Done</b> to return to the app and choose another stay.</p>`);
+      // failure. But Nuitée consumes a prebook on its first /rates/book attempt
+      // (measured: the retry answers "duplicate booking attempt"), so refresh the
+      // session with a NEW prebook + payment transaction for the same offer and
+      // stay pending — "Back to payment" here and "Reopen payment" in the app
+      // then work. If the rate can't be re-confirmed, the session fails honestly.
+      const refreshed = await nuiteeRefreshPrebook(env, s).catch(() => false);
+      if (!refreshed) {
+        s.status = 'failed'; s.error = 'This rate could not be re-confirmed.';
+        await env.GLOBESKIMMERS_KV.put(key, JSON.stringify(s), { expirationTtl: 7 * 86400 }).catch(() => {});
+      }
+      return nuiteeHtml('Payment not completed', `<h1>Payment not completed yet</h1><p class="sub">Nothing was charged and no booking was made.</p>${refreshed ? `<a class="btn" href="${url.origin}/hotels/nuitee/checkout?sid=${sid}">Back to payment</a>` : '<p class="sub">This rate could not be re-confirmed — go back to the app and choose a stay again.</p>'}<p class="note">Or tap <b>Done</b> to return to the app.</p>`);
     }
     s.status = result.ok ? 'booked' : 'failed';
     s.booking = result.ok ? result.booking : null;
@@ -13559,6 +13567,20 @@ async function handleNuiteeReturn(request, env) {
     return nuiteeHtml('Booked!', `<h1>✅ You're booked</h1><p class="sub">${nuiteeEsc(bk.hotelName || s.hotelName)} · ${nuiteeEsc(s.checkin)} → ${nuiteeEsc(s.checkout)}</p><div class="card"><div class="row"><span>Booking ID</span><b>${nuiteeEsc(bk.bookingId)}</b></div>${bk.hotelConfirmationCode ? `<div class="row"><span>Hotel confirmation</span><b>${nuiteeEsc(bk.hotelConfirmationCode)}</b></div>` : ''}<div class="row tot"><span>Paid</span><span>${nuiteeEsc(nuiteeMoney(bk.price ?? s.price, bk.currency || s.currency))}</span></div></div><p class="note">A confirmation email goes to ${nuiteeEsc(s.holder.email)}. Tap <b>Done</b> to return to the app — this stay is now in My Trips.${s.env === 'sandbox' ? ' <b>Sandbox booking — not a real reservation.</b>' : ''}</p>`);
   }
   return nuiteeHtml('Booking not completed', `<h1>Booking not completed</h1><p class="sub">${nuiteeEsc(s.error || 'The hotel could not confirm this rate.')}</p><p class="note">If your card was charged, Nuitée refunds automatically when a booking fails to confirm. Go back to the app and try another room or hotel.</p>`);
+}
+// Re-prebook the session's offer → new prebookId + payment transaction (the
+// old prebook was consumed by a failed /rates/book). Price/currency refresh too.
+async function nuiteeRefreshPrebook(env, s) {
+  const res = await fetch(`${NUITEE_BOOK}/rates/prebook`, { method: 'POST', headers: nuiteeHeaders(env), body: JSON.stringify({ offerId: s.offerId, usePaymentSdk: true }) });
+  const d = await res.json().catch(() => ({}));
+  const p = d?.data;
+  if (!res.ok || !p?.prebookId) return false;
+  s.prebookId = p.prebookId; s.transactionId = p.transactionId || null; s.secretKey = p.secretKey || null;
+  if (p.price != null) s.price = p.price;
+  if (p.currency) s.currency = p.currency;
+  s.refreshed = (s.refreshed || 0) + 1;
+  await env.GLOBESKIMMERS_KV.put(`nuitee:sess:${s.sid}`, JSON.stringify(s), { expirationTtl: 30 * 60 }).catch(() => {});
+  return true;
 }
 async function nuiteeBookSession(env, s, { simulate = false } = {}) {
   // Sandbox simulation (Nuitée's documented ACC_CREDIT_CARD test path) when asked
@@ -13609,7 +13631,7 @@ async function nuiteeBookSession(env, s, { simulate = false } = {}) {
 async function nuiteeRecordBooking(env, s) {
   const bk = s.booking;
   await env.GLOBESKIMMERS_KV.put(`nuitee:bk:${bk.bookingId}`, JSON.stringify({ user_id: s.user_id, sid: s.sid, env: s.env, created: Date.now() }), { expirationTtl: 400 * 86400 }).catch(() => {});
-  if (!env.DB || !s.user_id) return;
+  if (!env.DB) return;   // user_id may be null (sandbox/curl) — bookings analytics still count it; My Trips reads by user_id
   const ts = Math.floor(Date.now() / 1000);
   await env.DB.prepare(
     'insert or ignore into affiliate_clicks (subid,ts,user_id,session_id,intent,persona,partner,product_id,product_name,category,dest_country,dest_city,target_url,converted,commission,currency,status,converted_ts) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
