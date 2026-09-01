@@ -13378,6 +13378,26 @@ function nuiteeHtml(title, body) {
     { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY' } });
 }
 
+// Sessions live in D1 (strongly consistent), NOT KV: KV caches reads at the edge
+// for up to 60s, so a status check that ran before the booking kept answering
+// "pending" after it (measured, sandbox session C). Pending sessions expire
+// after 30 minutes; booked/failed rows are kept for support lookups.
+// Table: cloudflare-worker/sql/05_nuitee_sessions.sql (globeskimmers-events).
+const NUITEE_SESS_TTL_MS = 30 * 60 * 1000;
+async function nuiteeSessGet(env, sid) {
+  if (!sid || !env.DB) return null;
+  const row = await env.DB.prepare('select data, status, updated from nuitee_sessions where sid = ?').bind(sid).first().catch(() => null);
+  if (!row) return null;
+  if (row.status === 'pending' && Date.now() - Number(row.updated) > NUITEE_SESS_TTL_MS) return null;
+  try { return JSON.parse(row.data); } catch { return null; }
+}
+async function nuiteeSessPut(env, s) {
+  if (!env.DB) return;
+  const now = Date.now();
+  await env.DB.prepare('insert or replace into nuitee_sessions (sid, user_id, status, env, created, updated, data) values (?,?,?,?,?,?,?)')
+    .bind(s.sid, s.user_id || null, s.status || 'pending', s.env || null, s.created || now, now, JSON.stringify(s)).run().catch(() => {});
+}
+
 // POST /hotels/nuitee/search — priced, bookable hotels around a point for exact
 // dates. ONE call (rates + hotel data), cheapest rate per hotel, sorted by total.
 // Rates are volatile → 20-minute KV. Requires coordinates and dates (Stay22 keeps
@@ -13456,7 +13476,7 @@ async function handleNuiteeSearch(request, env, ctx) {
 // secretKey or transactionId. Signed-in users only (sandbox is curl-testable).
 async function handleNuiteePrebook(request, env) {
   try {
-    if (!nuiteeKey(env)) return jsonResponse({ error: 'not_configured' }, 503);
+    if (!nuiteeKey(env) || !env.DB) return jsonResponse({ error: 'not_configured' }, 503);
     const sandbox = nuiteeEnv(env) === 'sandbox';
     const user = await gbUser(request, env).catch(() => null);
     if (!user && !sandbox) return jsonResponse({ needsAuth: true }, 401);
@@ -13490,7 +13510,7 @@ async function handleNuiteePrebook(request, env) {
       dest_city: String(b.dest_city || '').slice(0, 120), dest_country: String(b.dest_country || '').slice(0, 80),
       status: 'pending', booking: null, error: null,
     };
-    await env.GLOBESKIMMERS_KV.put(`nuitee:sess:${sid}`, JSON.stringify(session), { expirationTtl: 30 * 60 });
+    await nuiteeSessPut(env, session);
     const origin = new URL(request.url).origin;
     return jsonResponse({
       sid, checkoutUrl: `${origin}/hotels/nuitee/checkout?sid=${sid}`,
@@ -13510,7 +13530,7 @@ async function handleNuiteePrebook(request, env) {
 async function handleNuiteeCheckout(request, env) {
   const url = new URL(request.url);
   const sid = (url.searchParams.get('sid') || '').replace(/[^a-f0-9]/g, '');
-  const s = sid ? await env.GLOBESKIMMERS_KV.get(`nuitee:sess:${sid}`, { type: 'json' }).catch(() => null) : null;
+  const s = await nuiteeSessGet(env, sid);
   if (!s) return nuiteeHtml('Checkout expired', '<h1>This checkout has expired</h1><p class="sub">Go back to the app and tap Book again — prices are re-checked each time.</p>');
   if (s.status !== 'pending') return Response.redirect(`${url.origin}/hotels/nuitee/return?sid=${sid}`, 302);
   const summary = `<div class="card"><div class="row"><b>${nuiteeEsc(s.hotelName || 'Your stay')}</b></div><div class="row"><span>${nuiteeEsc(s.checkin)} → ${nuiteeEsc(s.checkout)}</span><span>${nuiteeEsc(s.roomName || '')}</span></div>${s.board ? `<div class="row"><span>${nuiteeEsc(s.board)}</span></div>` : ''}<div class="row">${s.refundable ? `<span class="ok">Free cancellation${s.cancelBy ? ` until ${nuiteeEsc(String(s.cancelBy).slice(0, 10))}` : ''}</span>` : '<span class="bad">Non-refundable</span>'}</div><div class="row tot"><span>Total</span><span>${nuiteeEsc(nuiteeMoney(s.price, s.currency))}</span></div></div>`;
@@ -13536,8 +13556,7 @@ async function handleNuiteeCheckout(request, env) {
 async function handleNuiteeReturn(request, env) {
   const url = new URL(request.url);
   const sid = (url.searchParams.get('sid') || '').replace(/[^a-f0-9]/g, '');
-  const key = `nuitee:sess:${sid}`;
-  const s = sid ? await env.GLOBESKIMMERS_KV.get(key, { type: 'json' }).catch(() => null) : null;
+  const s = await nuiteeSessGet(env, sid);
   if (!s) return nuiteeHtml('Session expired', '<h1>We lost this checkout</h1><p class="sub">If you were charged, the booking still completes on Nuitée\'s side — check My Trips in a few minutes, or contact support with your card statement.</p>');
   if (s.status === 'pending') {
     const simulate = url.searchParams.get('simulate') === '1' && s.env === 'sandbox';
@@ -13552,14 +13571,14 @@ async function handleNuiteeReturn(request, env) {
       const refreshed = await nuiteeRefreshPrebook(env, s).catch(() => false);
       if (!refreshed) {
         s.status = 'failed'; s.error = 'This rate could not be re-confirmed.';
-        await env.GLOBESKIMMERS_KV.put(key, JSON.stringify(s), { expirationTtl: 7 * 86400 }).catch(() => {});
+        await nuiteeSessPut(env, s);
       }
       return nuiteeHtml('Payment not completed', `<h1>Payment not completed yet</h1><p class="sub">Nothing was charged and no booking was made.</p>${refreshed ? `<a class="btn" href="${url.origin}/hotels/nuitee/checkout?sid=${sid}">Back to payment</a>` : '<p class="sub">This rate could not be re-confirmed — go back to the app and choose a stay again.</p>'}<p class="note">Or tap <b>Done</b> to return to the app.</p>`);
     }
     s.status = result.ok ? 'booked' : 'failed';
     s.booking = result.ok ? result.booking : null;
     s.error = result.ok ? null : result.error;
-    await env.GLOBESKIMMERS_KV.put(key, JSON.stringify(s), { expirationTtl: 7 * 86400 }).catch(() => {});
+    await nuiteeSessPut(env, s);
     if (result.ok) await nuiteeRecordBooking(env, s).catch(() => {});
   }
   if (s.status === 'booked') {
@@ -13579,7 +13598,7 @@ async function nuiteeRefreshPrebook(env, s) {
   if (p.price != null) s.price = p.price;
   if (p.currency) s.currency = p.currency;
   s.refreshed = (s.refreshed || 0) + 1;
-  await env.GLOBESKIMMERS_KV.put(`nuitee:sess:${s.sid}`, JSON.stringify(s), { expirationTtl: 30 * 60 }).catch(() => {});
+  await nuiteeSessPut(env, s);
   return true;
 }
 async function nuiteeBookSession(env, s, { simulate = false } = {}) {
@@ -13594,7 +13613,7 @@ async function nuiteeBookSession(env, s, { simulate = false } = {}) {
   // counter is persisted BEFORE the call so a retry never reuses a number.
   s.attempts = (s.attempts || 0) + 1;
   const clientReference = `gs:${s.user_id || 'anon'}:${s.sid}:${s.attempts}`;
-  await env.GLOBESKIMMERS_KV.put(`nuitee:sess:${s.sid}`, JSON.stringify(s), { expirationTtl: 30 * 60 }).catch(() => {});
+  await nuiteeSessPut(env, s);
   const body = {
     prebookId: s.prebookId,
     holder: s.holder,
@@ -13626,17 +13645,16 @@ async function nuiteeBookSession(env, s, { simulate = false } = {}) {
   } catch { return { ok: false, error: 'Network error while booking.' }; }
 }
 // One CONFIRMED row in affiliate_clicks so My Trips lists the stay immediately —
-// this partner confirms in-line, no conversion import needed. Plus a per-booking
-// KV record for the ownership check on /hotels/nuitee/booking.
+// this partner confirms in-line, no conversion import needed. The row (with the
+// session id) is also the ownership record for /hotels/nuitee/booking.
 async function nuiteeRecordBooking(env, s) {
   const bk = s.booking;
-  await env.GLOBESKIMMERS_KV.put(`nuitee:bk:${bk.bookingId}`, JSON.stringify({ user_id: s.user_id, sid: s.sid, env: s.env, created: Date.now() }), { expirationTtl: 400 * 86400 }).catch(() => {});
   if (!env.DB) return;   // user_id may be null (sandbox/curl) — bookings analytics still count it; My Trips reads by user_id
   const ts = Math.floor(Date.now() / 1000);
   await env.DB.prepare(
     'insert or ignore into affiliate_clicks (subid,ts,user_id,session_id,intent,persona,partner,product_id,product_name,category,dest_country,dest_city,target_url,converted,commission,currency,status,converted_ts) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
   ).bind(
-    `nuitee_${bk.bookingId}`, ts, s.user_id, null, null, null,
+    `nuitee_${bk.bookingId}`, ts, s.user_id, s.sid, null, null,
     'nuitee', String(bk.bookingId), `${bk.hotelName || s.hotelName || 'Hotel'} · ${s.checkin} → ${s.checkout}`, 'hotel',
     s.dest_country || null, s.dest_city || null, null,
     1, null, bk.currency || s.currency, 'confirmed', ts
@@ -13649,7 +13667,7 @@ async function handleNuiteeStatus(request, env) {
   try {
     const b = await request.json().catch(() => ({}));
     const sid = String(b.sid || '').replace(/[^a-f0-9]/g, '');
-    const s = sid ? await env.GLOBESKIMMERS_KV.get(`nuitee:sess:${sid}`, { type: 'json' }).catch(() => null) : null;
+    const s = await nuiteeSessGet(env, sid);
     if (!s) return jsonResponse({ status: 'expired' });
     if (s.user_id) { const user = await gbUser(request, env).catch(() => null); if (!user || user.id !== s.user_id) return jsonResponse({ status: 'forbidden' }, 403); }
     return jsonResponse({ status: s.status, booking: s.status === 'booked' ? s.booking : null, error: s.error || null, env: s.env });
@@ -13665,8 +13683,9 @@ async function handleNuiteeBooking(request, env) {
     const b = await request.json().catch(() => ({}));
     const bookingId = String(b.bookingId || '').trim().slice(0, 80);
     if (!bookingId) return jsonResponse({ error: 'bookingId required' }, 400);
-    const own = await env.GLOBESKIMMERS_KV.get(`nuitee:bk:${bookingId}`, { type: 'json' }).catch(() => null);
-    if (!own || own.user_id !== user.id) return jsonResponse({ error: 'not_found' }, 404);
+    // Ownership = the confirmed row this booking wrote for this user (D1, strongly consistent).
+    const own = env.DB ? await env.DB.prepare("select 1 as ok from affiliate_clicks where partner='nuitee' and product_id = ? and user_id = ? limit 1").bind(bookingId, user.id).first().catch(() => null) : null;
+    if (!own) return jsonResponse({ error: 'not_found' }, 404);
     const res = await fetch(`${NUITEE_BOOK}/bookings/${encodeURIComponent(bookingId)}`, { headers: nuiteeHeaders(env) });
     const d = await res.json().catch(() => ({}));
     if (!res.ok || !d?.data) return jsonResponse({ error: 'lookup_failed', status: res.status }, 502);
