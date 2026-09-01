@@ -12836,45 +12836,101 @@ function viatorMapProduct(p) {
   };
 }
 
+// Viator destination taxonomy (GET /destinations — every city/area Viator sells,
+// with center coordinates). Fetched once, KV-cached 30d as a compact array so an
+// attraction's lat/lng resolves to its Viator destination id in memory:
+// [id, type, lat, lng, parentId, name]. Broad types (COUNTRY/STATE/PROVINCE/
+// REGION) stay in the list for parent walks but are never chosen as "nearest".
+const VIATOR_BROAD_TYPES = new Set(['COUNTRY', 'STATE', 'PROVINCE', 'REGION']);
+async function viatorDestinations(env) {
+  const kv = env.GLOBESKIMMERS_KV;
+  const ck = 'viatordest:v1';
+  const cached = kv ? await kv.get(ck, { type: 'json' }).catch(() => null) : null;
+  if (Array.isArray(cached) && cached.length) return cached;
+  try {
+    const res = await fetch(`${VIATOR_API}/destinations`, { headers: viatorHeaders(env) });
+    if (!res.ok) return null;
+    const d = await res.json();
+    const list = (d?.destinations || [])
+      .filter((x) => x && Number.isFinite(x.destinationId))
+      .map((x) => [x.destinationId, x.type || '', x.center?.latitude ?? null, x.center?.longitude ?? null, x.parentDestinationId ?? null, x.name || '']);
+    if (list.length && kv) await kv.put(ck, JSON.stringify(list), { expirationTtl: 30 * 86400 }).catch(() => {});
+    return list.length ? list : null;
+  } catch { return null; }
+}
+// Nearest LOCAL destination (city/area/district/… — not country/state) to a
+// point, within maxMiles. → {id, name, parentId, mi} or null.
+function viatorNearestDestination(list, lat, lng, maxMiles = 40) {
+  let best = null;
+  for (const [id, type, dlat, dlng, parentId, name] of list) {
+    if (dlat == null || dlng == null || VIATOR_BROAD_TYPES.has(type)) continue;
+    const mi = haversineMilesLoc(lat, lng, dlat, dlng);
+    if (mi <= maxMiles && (!best || mi < best.mi)) best = { id, name, parentId, mi };
+  }
+  return best;
+}
+
 // Tours AT this attraction — the listing the card renders (price · duration ·
 // rating · free cancellation) instead of a bare "Book a tour" link to a Viator
 // search page. Superset of /viator/match ({match} is still returned); the old
-// route stays for installed app versions. ONE freetext call per attraction,
-// cached 24h (prices move) / 7d when Viator has nothing. A non-OK upstream
-// (rate limit, outage) is returned un-cached with match:null so the client keeps
-// its heuristic and the next visitor retries.
+// route stays for installed app versions.
+//
+// Geo-scoped: the attraction's lat/lng → nearest Viator destination → freetext
+// filtered to it. Without the filter, "Disneyland Park Anaheim" ranked Disneyland
+// PARIS tickets first (measured on the live key). Ladder: destination → its
+// parent (a neighborhood/hamlet may be too small) → and if a destination
+// resolved but both are empty, the honest answer is "no tours here", NOT a
+// global search that brings Paris back. Global name+city only when no
+// destination could be resolved (remote spots, or no coordinates given).
+// ONE freetext call in the common case; KV 24h (7d when empty). A non-OK
+// upstream is returned uncached with match:null so the card keeps its heuristic.
 async function handleViatorProducts(request, env) {
   try {
     const b = await request.json().catch(() => ({}));
     const name = String(b.name || '').trim().slice(0, 120);
     const city = String(b.city || '').trim().slice(0, 60);
     const count = Math.min(Math.max(parseInt(b.count, 10) || 3, 1), 5);
+    const lat = parseFloat(b.lat ?? b.latitude), lng = parseFloat(b.lng ?? b.longitude);
+    const hasGeo = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
     if (!name) return jsonResponse({ match: null, products: [] });
     if (!env.VIATOR_API_KEY) return jsonResponse({ match: null, products: [], reason: 'no_key' });
     const kv = env.GLOBESKIMMERS_KV;
-    const ck = `viatorprod:v1:${count}:${`${name}|${city}`.toLowerCase()}`;
+    // Cache by name + ~1km geo cell (the destination derives from geo), else by city.
+    const geoKey = hasGeo ? `${lat.toFixed(2)},${lng.toFixed(2)}` : city.toLowerCase();
+    const ck = `viatorprod:v2:${count}:${name.toLowerCase()}|${geoKey}`;
     const cached = kv ? await kv.get(ck, { type: 'json' }).catch(() => null) : null;
     if (cached && Array.isArray(cached.products)) return jsonResponse({ ...cached, source: 'cache' });
-    let res;
-    try {
-      res = await fetch(`${VIATOR_API}/search/freetext`, {
-        method: 'POST', headers: viatorHeaders(env),
-        body: JSON.stringify({
-          // The attraction name leads (Viator's relevance keys on the sight); the
-          // city disambiguates — "Cathedral" alone is anyone's.
-          searchTerm: city ? `${name} ${city}` : name,
-          searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count } }],
-          currency: 'USD',
-        }),
-      });
-    } catch { return jsonResponse({ match: null, products: [], reason: 'network' }); }
-    if (!res.ok) return jsonResponse({ match: null, products: [], reason: `http_${res.status}` });
-    const d = await res.json().catch(() => ({}));
-    const results = Array.isArray(d?.products?.results) ? d.products.results : [];
-    const products = results.map(viatorMapProduct).filter((p) => p.title && p.url);
-    const total = typeof d?.products?.totalCount === 'number' ? d.products.totalCount : products.length;
-    const payload = { match: total > 0, total, products };
-    if (kv) await kv.put(ck, JSON.stringify(payload), { expirationTtl: (products.length ? 24 : 7 * 24) * 3600 }).catch(() => {});
+
+    let dest = null;
+    if (hasGeo) {
+      const list = await viatorDestinations(env);
+      if (list) dest = viatorNearestDestination(list, lat, lng);
+    }
+    const attempts = dest
+      ? [{ scope: 'destination', destination: String(dest.id), destName: dest.name, term: name },
+         ...(dest.parentId ? [{ scope: 'parent', destination: String(dest.parentId), destName: dest.name, term: name }] : [])]
+      : [{ scope: 'global', destination: null, destName: null, term: city ? `${name} ${city}` : name }];
+
+    let payload = null, lastStatus = null;
+    for (const at of attempts) {
+      let res;
+      try {
+        const body = { searchTerm: at.term, searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count } }], currency: 'USD' };
+        if (at.destination) body.productFiltering = { destination: at.destination };
+        res = await fetch(`${VIATOR_API}/search/freetext`, { method: 'POST', headers: viatorHeaders(env), body: JSON.stringify(body) });
+      } catch { return jsonResponse({ match: null, products: [], reason: 'network' }); }
+      if (!res.ok) { lastStatus = res.status; if (res.status === 429) break; continue; }
+      const d = await res.json().catch(() => ({}));
+      const results = Array.isArray(d?.products?.results) ? d.products.results : [];
+      const products = results.map(viatorMapProduct).filter((p) => p.title && p.url);
+      const total = typeof d?.products?.totalCount === 'number' ? d.products.totalCount : products.length;
+      if (products.length || at === attempts[attempts.length - 1]) {
+        payload = { match: total > 0, total, products, scope: at.scope, destination: at.destName || null };
+        break;
+      }
+    }
+    if (!payload) return jsonResponse({ match: null, products: [], reason: lastStatus ? `http_${lastStatus}` : 'empty' });
+    if (kv) await kv.put(ck, JSON.stringify(payload), { expirationTtl: (payload.products.length ? 24 : 7 * 24) * 3600 }).catch(() => {});
     return jsonResponse({ ...payload, source: 'live' });
   } catch { return jsonResponse({ match: null, products: [] }); }
 }

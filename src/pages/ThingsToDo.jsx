@@ -518,7 +518,9 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
     // /viator/products is a superset of the old /viator/match: the same single
     // freetext call now keeps the top 3 products (price · duration · rating ·
     // free cancellation) instead of collapsing them to a boolean.
-    callWorker('viator/products',{name,city:a.city||'',count:3})
+    // lat/lng let the worker scope the search to THIS Viator destination —
+    // without it "Disneyland Park, Anaheim" led with Disneyland Paris tickets.
+    callWorker('viator/products',{name,city:a.city||'',lat:a.lat??a.location?.latitude,lng:a.lng??a.location?.longitude,count:3})
       .then(({data})=>{
         if(cancelled)return;
         const list=Array.isArray(data?.products)?data.products:[];
