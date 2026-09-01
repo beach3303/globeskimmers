@@ -530,3 +530,13 @@ Device/simulator showed the splash then a blank white screen. Cause: `src/pages/
 State: Committed + pushed (frontend-only, no worker deploy) · iOS bundle synced · boot-check ✅ on the fixed bundle, ❌ on the broken one (verified both ways) · Device ⬜
 - [ ] ⌘R → app reaches the sign-in gate / Home (no white screen)
 - [ ] Then run the Nuitée sandbox device checklist above (it was blocked by this)
+
+## 🔍 Runtime-hazard audit + fixes (2026-09-01)
+After the white-screen bug, a 113-agent audit read every frontend file changed this session for runtime-only defects (lint/build-invisible), with 3 adversarial refuters per finding: 32 candidates → **30 confirmed** (1 screen-crash · 24 wrong-behavior · 5 cosmetic). A second fleet fixed them (one implementer + one reviewer per file group); reviewer follow-ups applied by hand. **26 fixed** across three commits (hotel checkout ×5 · passport/stamps ×12 · reliability ×9). Gates: eslint ✓ · build ✓ · **boot-check ✓**.
+State: Committed + pushed (frontend-only) · iOS bundle synced · Device ⬜
+**Deferred (Phase B backlog):** ActivityDetail:139 whole page blocks on the LLM tips call (design: fire-and-forget + tips skeleton) · ActivityDetail:286 Share/Copy link is a capacitor:// URL nobody can open (needs deep links) · stampVariants GPS bypass uses the family's 60 km gate, not the park footprint (latent until a fix lands inside a park) · MyTrip asserts "Confirmation emailed" for sandbox rows too.
+- [ ] ⌘R → Find a Hotel → change dates after a search → in-app results clear; open a sheet then move >10 km (or wait for auto-follow) → sheet stays
+- [ ] Stamp a place at 8pm+ local → passport shows TODAY's date
+- [ ] Open a Home-row attraction → stamp → country appears in the passport country count
+- [ ] Things To Do in airplane mode with a warm cache → tiers stay, red connectivity note (not "No activities found")
+- [ ] Vibe bundle → Souvenirs → Shopping opens on the Souvenir chip
