@@ -32,7 +32,7 @@ Have these ready before you start (most forms want them):
 | 7 | **Agoda** | hotels | via TP | ~6% (ex-tax) | Complements Booking; strong in APAC. |
 | 8 | **Airalo** | eSIM | [partners.airalo.com](https://partners.airalo.com/) (via **Impact**) | 10%, 30-day | Join Impact network too. High conversion in travel apps. |
 | 9 | **Wise** | money transfer | [wise.com/affiliate-program](https://wise.com/affiliate-program) (via **Partnerize**) | flat bounty (~£10), **365-day cookie** | Pairs with the ATM/exchange screens ("skip the bad booth rate"). Manual review. |
-| 10 | **GetYourGuide** | tours/activities | Direct in-house or via TP | 8%, 30-day | A/B against Viator. (Widgets/deep-links easy; API is traffic-gated — skip API for now.) |
+| 10 | **GetYourGuide** | tours/activities | Direct in-house or via TP | 8%, 30-day | **✅ APPROVED 2026-08-31 — Affiliate partner ID `LLZRLJO`** (account: founder@globeskimmers.io, site globeskimmers.io). Tracked link = any GYG URL + `?partner_id=LLZRLJO`; add `&cmp=<subid>` for per-click attribution into D1. A/B against Viator. (Widgets/deep-links easy; API is traffic-gated — skip API for now.) Still to do on the portal: payment details, 2-step verification. |
 
 **Phase-1 goal:** get all 10 applications *submitted*. Nos. 1–3 + 8–9 are the highest-value / easiest wins.
 
