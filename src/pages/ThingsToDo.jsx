@@ -483,9 +483,20 @@ function isTourable(a) {
   return TOURABLE_RE.test(hay);
 }
 
+// Tour-row formatters. Prices are requested in USD; anything else keeps its code.
+const tourPrice=(tp)=>tp?.fromPrice==null?null:`${tp.currency==="USD"?"$":""}${Math.round(tp.fromPrice)}${tp.currency&&tp.currency!=="USD"?` ${tp.currency}`:""}`;
+// "today" / "Sat, Sep 5" from a YYYY-MM-DD schedule date (UTC day granularity).
+const tourNextDate=(iso)=>{
+  if(!iso)return null;
+  if(iso===new Date().toISOString().slice(0,10))return "today";
+  const d=new Date(`${iso}T12:00:00Z`);
+  return Number.isNaN(d.getTime())?null:d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",timeZone:"UTC"});
+};
 function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet}){
   const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false); const [hoursExp,setHoursExp]=useState(false); const [gallery,setGallery]=useState({open:false,idx:0});
   const [viatorMatch,setViatorMatch]=useState(null); // null=checking · true=Viator has products · false=no · 'na'=can't verify (no key/rate-limited)
+  const [tours,setTours]=useState([]);               // top tours AT this attraction (price · duration · rating) — /viator/products
+  const [sched,setSched]=useState(null);             // {code:{daysLabel,nextDate}} — /viator/schedule, fetched lazily on expand
   const fs=(n)=>`calc(${n}px*var(--fs))`;
   // t(tabletValue, phoneValue) — pick the size for the active platform. Used for
   // BOTH fs()-wrapped type sizes and raw px (photo height, radius, paddings).
@@ -504,11 +515,35 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
   useEffect(()=>{
     if(!isTourable(a)){setViatorMatch(false);return;}
     let cancelled=false;
-    callWorker('viator/match',{name})
-      .then(({data})=>{if(!cancelled)setViatorMatch(data?.match===true?true:data?.match===false?false:'na');})
+    // /viator/products is a superset of the old /viator/match: the same single
+    // freetext call now keeps the top 3 products (price · duration · rating ·
+    // free cancellation) instead of collapsing them to a boolean.
+    callWorker('viator/products',{name,city:a.city||'',count:3})
+      .then(({data})=>{
+        if(cancelled)return;
+        const list=Array.isArray(data?.products)?data.products:[];
+        setTours(list);
+        setViatorMatch(data?.match===true||list.length>0?true:data?.match===false?false:'na');
+      })
       .catch(()=>{if(!cancelled)setViatorMatch('na');});
     return()=>{cancelled=true;};
   },[]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Operating schedule ("Runs daily · next Sat, Sep 5") — only once the card is
+  // expanded, so a 20-card list never fans out 60 schedule calls on load.
+  useEffect(()=>{
+    if(!exp||sched||!tours.length)return;
+    let cancelled=false;
+    callWorker('viator/schedule',{codes:tours.map(tp=>tp.code).filter(Boolean)})
+      .then(({data})=>{if(!cancelled)setSched(data?.schedules||{});})
+      .catch(()=>{if(!cancelled)setSched({});});
+    return()=>{cancelled=true;};
+  },[exp,tours,sched]);
+  // Tap a tour row → the PRODUCT page (not a search page), in the in-app sheet,
+  // with the product code on the click record for attribution.
+  const openTourProduct=async(tp)=>{
+    const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorProductLink(tp.url)||viatorSearchLink(tp.title),productId:tp.code,category:"tour",productName:tp.title,destCity:a.city,destCountry:a.country});
+    if(url) openPartner(url);
+  };
   const activeTags=PROP_TAGS.filter(t=>a.props?.[t.key]);
   const aColor=a.activityColor||T.accent;
   const photos=(a.photos||[]).filter(Boolean);
@@ -607,7 +642,45 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
         {/* Book a tour — Viator affiliate. Shows ONLY when Viator actually has
             products for this attraction (verified via /viator/match). 'na' = can't
             verify (no API key / rate-limited) → falls back to the isTourable gate. */}
-        {(viatorMatch === true || viatorMatch === 'na') && (
+        {/* Tours here — Viator products AT this attraction: price · duration ·
+            rating · free cancellation. A real listing, not a search-page link;
+            a tap lands on the product in the in-app sheet. Sources labeled. */}
+        {viatorMatch===true&&tours.length>0&&(
+          <div style={{marginTop:fs(t(14,10))}}>
+            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:fs(8),margin:`0 ${fs(2)} ${fs(8)}`}}>
+              <span style={{fontWeight:700,fontSize:fs(t(16,13)),color:ED_INK2}}>🎟️ Tours here</span>
+              <button onClick={openViatorTour} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit",fontSize:fs(t(13.5,11.5)),fontWeight:600,color:"#127a5e"}}>See all · Viator ↗</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:fs(8)}}>
+              {tours.map((tp)=>{
+                const s=sched?.[tp.code]; const price=tourPrice(tp); const next=tourNextDate(s?.nextDate);
+                return(
+                <button key={tp.code||tp.url} onClick={()=>openTourProduct(tp)} style={{display:"flex",gap:fs(t(12,10)),alignItems:"center",textAlign:"left",background:"#fff",border:`1px solid ${ED_RULE}`,borderRadius:t("14px","12px"),padding:fs(t(10,8)),cursor:"pointer",fontFamily:"inherit",width:"100%"}}>
+                  {tp.thumbnail&&<img src={tp.thumbnail} alt="" style={{width:fs(t(84,68)),height:fs(t(64,52)),objectFit:"cover",borderRadius:t("10px","8px"),flexShrink:0}}/>}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:700,fontSize:fs(t(14.5,12.5)),color:ED_INK,lineHeight:1.3,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{tp.title}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:fs(6),marginTop:fs(3),flexWrap:"wrap",fontSize:fs(t(12.5,11)),color:ED_INK3}}>
+                      {tp.rating!=null&&<span><span style={{color:"#E0922F"}}>★</span> {Number(tp.rating).toFixed(1)}{tp.reviews?` (${Number(tp.reviews).toLocaleString()})`:""}</span>}
+                      {tp.duration&&<span>· {tp.duration}</span>}
+                      {tp.freeCancellation&&<span style={{color:"#2E7D46",fontWeight:600}}>· Free cancellation</span>}
+                      {tp.skipTheLine&&<span style={{fontWeight:600}}>· Skip the line</span>}
+                    </div>
+                    {(s?.daysLabel||next)&&<div style={{marginTop:fs(3),fontSize:fs(t(12,10.5)),color:ED_INK3}}>{s?.daysLabel}{s?.daysLabel&&next?" · ":""}{next?(next==="today"?"runs today":`next ${next}`):""}</div>}
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0}}>
+                    {price&&<div style={{fontWeight:800,fontSize:fs(t(15,13)),color:ED_INK}}><span style={{fontWeight:500,fontSize:fs(t(11.5,10)),color:ED_INK3}}>from </span>{price}</div>}
+                    <div style={{marginTop:fs(4),background:"#127a5e",color:"#fff",padding:`${fs(5)} ${fs(10)}`,borderRadius:"999px",fontWeight:700,fontSize:fs(t(12,10.5))}}>Book</div>
+                  </div>
+                </button>
+                );
+              })}
+            </div>
+            <div style={{fontSize:fs(t(11,10)),color:ED_INK3,margin:`${fs(6)} ${fs(2)} 0`}}>Tours &amp; prices by Viator{sched?" · schedule per Viator":""} · we may earn a commission</div>
+          </div>
+        )}
+        {/* Plain button only when we KNOW tours exist but got no rows, or can't
+            verify ('na': worker/API unreachable) — the money path never vanishes. */}
+        {((viatorMatch===true&&tours.length===0)||viatorMatch==='na')&&(
           <button onClick={openViatorTour} style={{width:"100%",marginTop:fs(t(12,8)),borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(17,13.5)),fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:fs(7),background:"#127a5e",color:"#fff"}}>
             🎟️ Book a tour here <span style={{fontSize:fs(t(13,11)),opacity:0.85,fontWeight:600}}>· Viator ↗</span>
           </button>
@@ -1086,7 +1159,7 @@ export default function ThingsToDoFinder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[routerLocation.state?.presetQuery,lat,lng]);
   const openTour=async(p)=>{
-    const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorProductLink(p.url)||viatorSearchLink(p.title),category:"tour",productName:p.title,destCity:city,destCountry:country});
+    const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorProductLink(p.url)||viatorSearchLink(p.title),productId:p.code,category:"tour",productName:p.title,destCity:city,destCountry:country});
     if(url) openPartner(url);
   };
   const openViatorFallback=async()=>{
@@ -1243,13 +1316,15 @@ export default function ThingsToDoFinder() {
                     <div style={{fontWeight:"700",fontSize:"calc(13.5px*var(--fs))",color:T.dark,lineHeight:1.3,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{tp.title}</div>
                     <div style={{display:"flex",alignItems:"center",gap:"8px",marginTop:"3px",flexWrap:"wrap"}}>
                       {tp.rating!=null&&<span style={{fontSize:"calc(11.5px*var(--fs))",color:T.gray}}>⭐ {Number(tp.rating).toFixed(1)}{tp.reviews?` (${tp.reviews})`:""}</span>}
+                      {tp.duration&&<span style={{fontSize:"calc(11.5px*var(--fs))",color:T.gray}}>· {tp.duration}</span>}
+                      {tp.freeCancellation&&<span style={{fontSize:"calc(11.5px*var(--fs))",color:"#2E7D46",fontWeight:"600"}}>· Free cancellation</span>}
                       {tp.fromPrice!=null&&<span style={{fontSize:"calc(12px*var(--fs))",fontWeight:"700",color:T.accentD}}>from {tp.currency==="USD"?"$":""}{Math.round(tp.fromPrice)}{tp.currency&&tp.currency!=="USD"?` ${tp.currency}`:""}</span>}
                     </div>
                   </div>
                   <span style={{background:T.accent,color:"#fff",padding:"7px 12px",borderRadius:"10px",fontWeight:"700",fontSize:"calc(12px*var(--fs))",flexShrink:0}}>Book</span>
                 </button>
               ))}</div>
-              <div style={{fontSize:"calc(10.5px*var(--fs))",color:T.gray,margin:"6px 4px 0"}}>Tours by Viator · we may earn a commission</div>
+              <div style={{fontSize:"calc(10.5px*var(--fs))",color:T.gray,margin:"6px 4px 0"}}>Tours &amp; prices by Viator · we may earn a commission</div>
             </>)}
           </div>
         )}

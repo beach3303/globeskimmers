@@ -12779,6 +12779,198 @@ async function handleViatorMatch(request, env) {
   } catch { return jsonResponse({ match: null }); }
 }
 
+// ── Viator product helpers — shared by /viator/products, /viator/schedule and
+// /activities/search. The key is Full-Access (Aug 2026) but both endpoints used
+// here are Basic-tier; the Full-Access unlock (/availability/check: live seats
+// for a chosen date + pax) needs a travel date and lands with the date picker.
+const VIATOR_API = 'https://api.viator.com/partner';
+function viatorHeaders(env) {
+  return { 'exp-api-key': env.VIATOR_API_KEY, Accept: 'application/json;version=2.0', 'Accept-Language': 'en-US', 'Content-Type': 'application/json' };
+}
+// Human duration from Viator's duration object: fixed → "3h" / "45 min" / "2h 30m";
+// variable → "2h–3h"; unstructured → passthrough (clipped). null when absent.
+function viatorDurationLabel(d) {
+  if (!d) return null;
+  const fmt = (m) => {
+    m = Math.round(Number(m));
+    if (!Number.isFinite(m) || m <= 0) return null;
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60), r = m % 60;
+    if (h >= 24) { const days = Math.round((h / 24) * 10) / 10; return `${days} day${days === 1 ? '' : 's'}`; }
+    return r ? `${h}h ${r}m` : `${h}h`;
+  };
+  if (d.fixedDurationInMinutes) return fmt(d.fixedDurationInMinutes);
+  if (d.variableDurationFromMinutes && d.variableDurationToMinutes) {
+    const a = fmt(d.variableDurationFromMinutes), b = fmt(d.variableDurationToMinutes);
+    return a && b ? (a === b ? a : `${a}–${b}`) : (a || b);
+  }
+  if (d.variableDurationFromMinutes) return fmt(d.variableDurationFromMinutes);
+  if (typeof d.unstructuredDuration === 'string' && d.unstructuredDuration.trim()) return d.unstructuredDuration.trim().slice(0, 40);
+  return null;
+}
+// One freetext product summary → the tour-card shape. Every field is optional-
+// chained: the card renders what is present and hides the rest. Flags are
+// Viator's own (FREE_CANCELLATION etc.) — the card labels the source.
+function viatorMapProduct(p) {
+  const variants = (p?.images?.find((i) => i && i.isCover) || p?.images?.[0])?.variants || [];
+  const img = variants.find((v) => v.width >= 360 && v.width <= 720)?.url || variants[variants.length - 1]?.url || null;
+  const flags = Array.isArray(p?.flags) ? p.flags : [];
+  return {
+    code: p?.productCode || null,
+    title: p?.title || null,
+    thumbnail: img,
+    url: p?.productUrl || null,
+    fromPrice: (p?.pricing?.summary?.fromPrice ?? null),
+    fromPriceBeforeDiscount: (p?.pricing?.summary?.fromPriceBeforeDiscount ?? null),
+    currency: (p?.pricing?.currency || 'USD'),
+    rating: (p?.reviews?.combinedAverageRating ?? null),
+    reviews: (p?.reviews?.totalReviews ?? null),
+    duration: viatorDurationLabel(p?.duration),
+    durationMin: (p?.duration?.fixedDurationInMinutes ?? p?.duration?.variableDurationFromMinutes ?? null),
+    freeCancellation: flags.includes('FREE_CANCELLATION'),
+    skipTheLine: flags.includes('SKIP_THE_LINE'),
+    privateTour: flags.includes('PRIVATE_TOUR'),
+    likelyToSellOut: flags.includes('LIKELY_TO_SELL_OUT'),
+    specialOffer: flags.includes('SPECIAL_OFFER'),
+    instantConfirmation: p?.confirmationType === 'INSTANT',
+  };
+}
+
+// Tours AT this attraction — the listing the card renders (price · duration ·
+// rating · free cancellation) instead of a bare "Book a tour" link to a Viator
+// search page. Superset of /viator/match ({match} is still returned); the old
+// route stays for installed app versions. ONE freetext call per attraction,
+// cached 24h (prices move) / 7d when Viator has nothing. A non-OK upstream
+// (rate limit, outage) is returned un-cached with match:null so the client keeps
+// its heuristic and the next visitor retries.
+async function handleViatorProducts(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const name = String(b.name || '').trim().slice(0, 120);
+    const city = String(b.city || '').trim().slice(0, 60);
+    const count = Math.min(Math.max(parseInt(b.count, 10) || 3, 1), 5);
+    if (!name) return jsonResponse({ match: null, products: [] });
+    if (!env.VIATOR_API_KEY) return jsonResponse({ match: null, products: [], reason: 'no_key' });
+    const kv = env.GLOBESKIMMERS_KV;
+    const ck = `viatorprod:v1:${count}:${`${name}|${city}`.toLowerCase()}`;
+    const cached = kv ? await kv.get(ck, { type: 'json' }).catch(() => null) : null;
+    if (cached && Array.isArray(cached.products)) return jsonResponse({ ...cached, source: 'cache' });
+    let res;
+    try {
+      res = await fetch(`${VIATOR_API}/search/freetext`, {
+        method: 'POST', headers: viatorHeaders(env),
+        body: JSON.stringify({
+          // The attraction name leads (Viator's relevance keys on the sight); the
+          // city disambiguates — "Cathedral" alone is anyone's.
+          searchTerm: city ? `${name} ${city}` : name,
+          searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count } }],
+          currency: 'USD',
+        }),
+      });
+    } catch { return jsonResponse({ match: null, products: [], reason: 'network' }); }
+    if (!res.ok) return jsonResponse({ match: null, products: [], reason: `http_${res.status}` });
+    const d = await res.json().catch(() => ({}));
+    const results = Array.isArray(d?.products?.results) ? d.products.results : [];
+    const products = results.map(viatorMapProduct).filter((p) => p.title && p.url);
+    const total = typeof d?.products?.totalCount === 'number' ? d.products.totalCount : products.length;
+    const payload = { match: total > 0, total, products };
+    if (kv) await kv.put(ck, JSON.stringify(payload), { expirationTtl: (products.length ? 24 : 7 * 24) * 3600 }).catch(() => {});
+    return jsonResponse({ ...payload, source: 'live' });
+  } catch { return jsonResponse({ match: null, products: [] }); }
+}
+
+// Operating schedule for up to 3 products → "Runs daily · next Sat, Sep 5".
+// Derived from /availability/schedules (seasons × days-of-week × unavailable
+// dates): a real operating calendar, NOT live seat inventory — the card says
+// "schedule per Viator". Fetched lazily (card expanded), one GET per product
+// code, raw calendar KV-cached 12h so "next date" stays right as days pass.
+const VIATOR_DOW = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+const VIATOR_DOW_SHORT = { MONDAY: 'Mon', TUESDAY: 'Tue', WEDNESDAY: 'Wed', THURSDAY: 'Thu', FRIDAY: 'Fri', SATURDAY: 'Sat', SUNDAY: 'Sun' };
+function viatorScheduleSummary(sch, todayIso) {
+  const seasons = [];
+  for (const bi of sch?.bookableItems || []) for (const s of bi?.seasons || []) if (s) seasons.push(s);
+  if (!seasons.length) return null;
+  const openOn = (iso, dow) => {
+    for (const s of seasons) {
+      if (s.startDate && iso < s.startDate) continue;
+      if (s.endDate && iso > s.endDate) continue;
+      for (const pr of s.pricingRecords || []) {
+        const dows = Array.isArray(pr.daysOfWeek) && pr.daysOfWeek.length ? pr.daysOfWeek : VIATOR_DOW;
+        if (!dows.includes(dow)) continue;
+        if ((pr.unavailableDates || []).some((u) => u && u.date === iso)) continue;
+        const te = pr.timedEntries;
+        if (Array.isArray(te) && te.length && te.every((t) => (t?.unavailableDates || []).some((u) => u && u.date === iso))) continue;
+        return true;
+      }
+    }
+    return false;
+  };
+  // First open date from today (looks 120 days out). The weekday pattern is read
+  // from the TWO WEEKS starting at that date — the pattern actually in effect —
+  // not a union across a season boundary (a Tue/Thu/Sat season followed by a
+  // daily one must read "Runs Tue, Thu, Sat" today, not "Runs daily").
+  let nextDate = null, nextIdx = -1, patternEnd = null;
+  const days = new Set();
+  const start = new Date(`${todayIso}T00:00:00Z`);
+  for (let i = 0; i < 120; i++) {
+    const dt = new Date(start.getTime() + i * 86400000);
+    const iso = dt.toISOString().slice(0, 10);
+    const dow = VIATOR_DOW[dt.getUTCDay()];
+    if (!openOn(iso, dow)) continue;
+    if (!nextDate) {
+      nextDate = iso; nextIdx = i;
+      // The pattern window also stops where the season covering nextDate ends —
+      // otherwise a season change inside the 14 days leaks its weekdays in.
+      patternEnd = seasons.filter((s) => (!s.startDate || s.startDate <= iso) && (!s.endDate || s.endDate >= iso))
+        .map((s) => s.endDate).filter(Boolean).sort()[0] || null;
+    }
+    if (i < nextIdx + 14 && (!patternEnd || iso <= patternEnd)) days.add(dow);
+  }
+  if (!nextDate) return null;   // nothing operating in the next 120 days → no line on the card
+  const week = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+  const order = week.filter((d) => days.has(d));
+  let daysLabel = null;
+  if (order.length === 7) daysLabel = 'Runs daily';
+  else if (order.length) {
+    const idx = order.map((d) => week.indexOf(d));
+    const contiguous = idx.every((v, k) => k === 0 || v === idx[k - 1] + 1);
+    daysLabel = contiguous && order.length >= 3
+      ? `Runs ${VIATOR_DOW_SHORT[order[0]]}–${VIATOR_DOW_SHORT[order[order.length - 1]]}`
+      : `Runs ${order.map((d) => VIATOR_DOW_SHORT[d]).join(', ')}`;
+  }
+  return {
+    nextDate, daysLabel, operatingDays: order.map((d) => VIATOR_DOW_SHORT[d]),
+    fromPrice: sch?.summary?.fromPrice ?? null,
+    fromPriceBeforeDiscount: sch?.summary?.fromPriceBeforeDiscount ?? null,
+    currency: sch?.currency || null,
+  };
+}
+async function handleViatorSchedule(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const codes = [...new Set((Array.isArray(b.codes) ? b.codes : []).map((c) => String(c || '').trim()).filter((c) => /^[A-Za-z0-9_-]{3,40}$/.test(c)))].slice(0, 3);
+    if (!codes.length || !env.VIATOR_API_KEY) return jsonResponse({ schedules: {} });
+    const today = new Date().toISOString().slice(0, 10);
+    const kv = env.GLOBESKIMMERS_KV;
+    const one = async (code) => {
+      const ck = `viatorsched:v1:${code}`;
+      const cached = kv ? await kv.get(ck, { type: 'json' }).catch(() => null) : null;
+      if (cached && cached.raw) return viatorScheduleSummary(cached.raw, today);
+      try {
+        const res = await fetch(`${VIATOR_API}/availability/schedules/${encodeURIComponent(code)}`, { headers: viatorHeaders(env) });
+        if (!res.ok) return null;                       // 429/5xx → no line on the card; not cached
+        const raw = await res.json();
+        if (kv) await kv.put(ck, JSON.stringify({ raw }), { expirationTtl: 12 * 3600 }).catch(() => {});
+        return viatorScheduleSummary(raw, today);
+      } catch { return null; }
+    };
+    const results = await Promise.all(codes.map(one));
+    const schedules = {};
+    codes.forEach((c, i) => { if (results[i]) schedules[c] = results[i]; });
+    return jsonResponse({ schedules });
+  } catch { return jsonResponse({ schedules: {} }); }
+}
+
 // Free-text Tours & Activities search (Viator) → surfaces bookable EXPERIENCES the
 // owned attractions DB can't cover (zip lining, whale watching, ATV, snorkeling,
 // hot air balloon, etc). Returns products; the client tracks the affiliate click
@@ -12978,20 +13170,9 @@ async function handleActivitySearch(request, env, ctx) {
         if (!res.ok) return [];
         const d = await res.json();
         const results = Array.isArray(d?.products?.results) ? d.products.results : [];
-        return results.map((p) => {
-          const variants = (p?.images?.[0]?.variants) || [];
-          const img = variants.find((v) => v.width >= 360 && v.width <= 720)?.url || variants[variants.length - 1]?.url || null;
-          return {
-            code: p.productCode || null,
-            title: p.title || null,
-            thumbnail: img,
-            url: p.productUrl || null,
-            fromPrice: (p?.pricing?.summary?.fromPrice ?? null),
-            currency: (p?.pricing?.currency || 'USD'),
-            rating: (p?.reviews?.combinedAverageRating ?? null),
-            reviews: (p?.reviews?.totalReviews ?? null),
-          };
-        }).filter((p) => p.title && p.url);
+        // Shared mapper: same fields as before PLUS duration + Viator flags
+        // (free cancellation, skip the line…) for the tour rows.
+        return results.map(viatorMapProduct).filter((p) => p.title && p.url);
       } catch { return []; }
     })();
 
@@ -13422,6 +13603,8 @@ export default {
       if (pathname === '/saves/pull' && request.method === 'POST') return await handleSavesPull(request, env);
       if (pathname === '/saves/push' && request.method === 'POST') return await handleSavesPush(request, env);
       if (pathname === '/viator/match' && request.method === 'POST') return await handleViatorMatch(request, env);
+      if (pathname === '/viator/products' && request.method === 'POST') return await handleViatorProducts(request, env);
+      if (pathname === '/viator/schedule' && request.method === 'POST') return await handleViatorSchedule(request, env);
       if (pathname === '/activities/search' && request.method === 'POST') return await handleActivitySearch(request, env, ctx);
       if (pathname === '/events/search' && request.method === 'POST') return await handleEventsSearch(request, env);
       if (pathname === '/hotels/search' && request.method === 'POST') return await handleHotelSearch(request, env, ctx);
