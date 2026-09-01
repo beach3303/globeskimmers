@@ -36,6 +36,12 @@ Have these ready before you start (most forms want them):
 
 **Phase-1 goal:** get all 10 applications *submitted*. Nos. 1–3 + 8–9 are the highest-value / easiest wins.
 
+### Travelpayouts — actual state on 2026-08-31 (from the portal)
+**Already joined (26):** Klook, Yesim, Kiwitaxi, Localrent, Welcome Pickups, Tiqets, Kiwi.com, GigSky, Airalo (12% via TP — beats the Impact plan; keep TP as its one channel), GetTransfer, Drimsim, GetRentacar, AirHelp, Go City, EKTA, Economybookings, BikesBooking, QEEQ, WeGoTrip, AutoEurope, Radical Storage, Aviasales, intui.travel, Compensair, Saily, KKday.
+**MISSING — apply under "Unlock more":** **Booking.com** and **Agoda** (the hotel pair; #6/#7 above). These need a separate application with site review.
+**Channel corrections:** Klook is joined via TP (not Involve Asia) — leave it there. Viator + GetYourGuide stay DIRECT (not in TP) ✓.
+**Integration note:** many programs are "Mobile web only" tracking — the app must open affiliate links in the in-app browser (Capacitor Browser / SFSafariViewController), never hand off to the partner's native app, or attribution is lost. Seven test links exist under Tools → Links (tpx.lt short links); programmatic links use the tp.media/r deep-link format with marker 755378 + sub_id.
+
 ---
 
 ## 2. PHASE 2 — after the first approvals land
