@@ -13462,7 +13462,8 @@ async function handleNuiteePrebook(request, env) {
     if (!user && !sandbox) return jsonResponse({ needsAuth: true }, 401);
     const b = await request.json().catch(() => ({}));
     const offerId = String(b.offerId || '').trim();
-    if (!offerId || offerId.length > 600) return jsonResponse({ error: 'offerId required' }, 400);
+    // LiteAPI offer ids are long opaque tokens (976 chars on the first sandbox offer) — cap generously.
+    if (!offerId || offerId.length > 8000) return jsonResponse({ error: 'offerId required' }, 400);
     const holder = {
       firstName: String(b.holder?.firstName || '').trim().slice(0, 60),
       lastName: String(b.holder?.lastName || '').trim().slice(0, 60),
