@@ -540,3 +540,14 @@ State: Committed + pushed (frontend-only) · iOS bundle synced · Device ⬜
 - [ ] Open a Home-row attraction → stamp → country appears in the passport country count
 - [ ] Things To Do in airplane mode with a warm cache → tiers stay, red connectivity note (not "No activities found")
 - [ ] Vibe bundle → Souvenirs → Shopping opens on the Souvenir chip
+
+## 🧱 Phase B — Tier-1 close-out + Tier-2 labels (2026-09-01)
+Seven frontend file groups (one implementer + one reviewer each) + a worker batch (adversarially reviewed, 3 findings folded in). Frontend pushed; worker HELD. Files: PlacesToEat, CoffeeFinder, ATMFinder, Shopping, ConvenienceStore, RestroomFinder, RightNowStrip, CultureInformation, AtmAIDetails, AttractionAIDetails, LocationContext, ThingsToDo (labels); worker: attractions handler, restaurants dispatch (T1.10/T1.14), activity mappers (T2.4), enrich-owned (T1.5), AI stubs (T2.3).
+State: Frontend committed + pushed · iOS bundle synced · **Worker commits HELD (4) — next worker push deploys them; ask founder** · Device ⬜
+- [ ] Cold start with location denied → every finder shows "Choose a location to search", no spinner, badges read "–"
+- [ ] Navigate to Tokyo from the US → Eat/Coffee/Shopping Open/Closed match Tokyo time (or show nothing), never the phone's clock
+- [ ] Coffee browse in an owned-DB city → "Open Now" chip disabled with the one-line hint until a café's hours load
+- [ ] Every star rating shows a quiet "Google" beside it (Eat, Coffee, Shopping, ATM, Convenience, Restroom — cards + map popups)
+- [ ] Home "Most-hyped" dishes and Cultural Info safety cards carry "(AI estimate)"
+- [ ] Cold open after a GPS session → header reads "Your current location", not yesterday's city as a pick
+- [ ] After the worker push: "bagels" in a city with no bagel shop → "other bakeries nearby" fallback (not "No exact match"); "spicy ramen" returns without a multi-second stall; Things To Do distance chips read "≈15–50 mi" etc. (no "Drive"/"Flights")
