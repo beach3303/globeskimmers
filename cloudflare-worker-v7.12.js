@@ -12883,9 +12883,20 @@ function viatorNameTokens(name) {
 }
 function viatorRankByName(products, name) {
   const toks = viatorNameTokens(name);
-  if (!toks.length) return products;
-  const matched = products.filter((p) => { const t = viatorFold(p.title); return toks.some((w) => t.includes(w)); });
-  return matched.length ? matched : products;
+  if (!toks.length || products.length < 2) return products;
+  const folded = products.map((p) => viatorFold(p.title));
+  const hits = (w) => products.filter((_, i) => folded[i].includes(w));
+  // A token that matches more than half the page tells us nothing ("california"
+  // in Anaheim, "paris" in Paris) — not distinctive. Among the rest, the FIRST
+  // token in the attraction's name decides ("Disney" in "Disney California
+  // Adventure Park"): names lead with their distinctive word, and a later broad
+  // word ("adventure") must not pull in unrelated "Adventure Tour" titles.
+  const cap = Math.max(1, Math.floor(products.length / 2));
+  for (const w of toks) {
+    const m = hits(w);
+    if (m.length >= 1 && m.length <= cap) return m;
+  }
+  return products;
 }
 
 // Tours AT this attraction — the listing the card renders (price · duration ·
@@ -12915,7 +12926,7 @@ async function handleViatorProducts(request, env) {
     const kv = env.GLOBESKIMMERS_KV;
     // Cache by name + ~1km geo cell (the destination derives from geo), else by city.
     const geoKey = hasGeo ? `${lat.toFixed(2)},${lng.toFixed(2)}` : city.toLowerCase();
-    const ck = `viatorprod:v3:${count}:${name.toLowerCase()}|${geoKey}`;
+    const ck = `viatorprod:v4:${count}:${name.toLowerCase()}|${geoKey}`;
     const cached = kv ? await kv.get(ck, { type: 'json' }).catch(() => null) : null;
     if (cached && Array.isArray(cached.products)) return jsonResponse({ ...cached, source: 'cache' });
 
