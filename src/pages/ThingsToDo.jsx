@@ -373,7 +373,7 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       const destMk=window.L.marker([a.lat,a.lng],{icon:window.L.divIcon({html:`<div style="width:${sz}px;height:${sz}px;background:${color};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 4px 16px ${color}90;border:3px solid #fff;">${a.activityIcon||"⭐"}</div>`,iconSize:[sz,sz],className:""})}).addTo(map);
       destMkRef.current=destMk;
       const distMi=a.distanceMiles||0;
-      const travelTxt=a.travelType||(distMi>100?'✈️ Flights Required':distMi>50?'🚗 Drive':distMi>15?'🚗 Short Drive':'📍 Nearby');
+      const travelTxt=a.travelType||(distMi>100?'100+ mi away':distMi>50?'≈50–100 mi':distMi>15?'≈15–50 mi':'📍 Nearby');
       const distStr=`${distMi.toFixed(1)} mi`;
       const st=openStatus(a);
       const stColor=st.isOpen===true?"#15803D":st.isOpen===false?"#DC2626":"#9E9E9E";
@@ -760,7 +760,10 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
   );
 }
 
-const TRAVEL_COLORS={'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'},'📍 Nearby':{bg:'#D1FAE5',color:'#059669'}};
+// Distance bands are straight-line (haversine) — the worker no longer emits a
+// transport verb ("Drive"/"Flights") for a distance nobody has routed (T2.4).
+// Old verb keys stay so payloads cached before the change still color.
+const TRAVEL_COLORS={'100+ mi away':{bg:'#FEE2E2',color:'#DC2626'},'≈50–100 mi':{bg:'#FED7AA',color:'#C2410C'},'≈15–50 mi':{bg:'#FEF3C7',color:'#D97706'},'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'✈️ Flights Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'},'📍 Nearby':{bg:'#D1FAE5',color:'#059669'}};
 
 function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,cardRef=null}){
   const [dirs,setDirs]=useState(false);
