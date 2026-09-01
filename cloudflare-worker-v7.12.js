@@ -13525,7 +13525,7 @@ async function handleNuiteeCheckout(request, env) {
   }).replace(/</g, '\\u003c');
   return nuiteeHtml('Secure checkout', `<h1>Secure checkout</h1><p class="sub">Card details go directly to Nuitée, our booking partner — GlobeSkimmers never sees them.</p>${summary}<div class="card"><div id="pay"></div></div><p class="note">By paying you accept the cancellation policy shown above. Booked via Nuitée Travel Ltd (Merchant of Record) for GlobeSkimmers.${s.env === 'sandbox' ? ' <b>Sandbox:</b> card 4242 4242 4242 4242, any future date, any CVC.' : ''}</p>
 <script src="https://payment-wrapper.liteapi.travel/dist/liteAPIPayment.js?v=a1"></script>
-<script>try{new LiteAPIPayment(${cfg}).handlePayment();}catch(e){document.getElementById('pay').innerHTML='<p class="bad">The payment form failed to load. Please go back and try again.</p>';}</script>`);
+<script>try{new LiteAPIPayment(${cfg}).handlePayment();}catch(e){document.getElementById('pay').innerHTML='<p class="bad">The payment form failed to load. Please go back and try again.</p>';}</script>${s.env === 'sandbox' ? `<p class="note"><b>Sandbox only:</b> <a href="${url.origin}/hotels/nuitee/return?sid=${sid}&amp;simulate=1">simulate a paid booking without a card</a>.</p>` : ''}`);
 }
 
 // GET /hotels/nuitee/return?sid= — where the payment form lands after a charge.
@@ -13540,7 +13540,14 @@ async function handleNuiteeReturn(request, env) {
   const s = sid ? await env.GLOBESKIMMERS_KV.get(key, { type: 'json' }).catch(() => null) : null;
   if (!s) return nuiteeHtml('Session expired', '<h1>We lost this checkout</h1><p class="sub">If you were charged, the booking still completes on Nuitée\'s side — check My Trips in a few minutes, or contact support with your card statement.</p>');
   if (s.status === 'pending') {
-    const result = await nuiteeBookSession(env, s);
+    const simulate = url.searchParams.get('simulate') === '1' && s.env === 'sandbox';
+    const result = await nuiteeBookSession(env, s, { simulate });
+    if (!result.ok && /payment not completed|not paid|unpaid|transaction/i.test(result.error || '')) {
+      // Landed here before the card was charged (or without paying at all): NOT a
+      // failure — the session stays pending so a real payment can still complete
+      // it, and the app's status check reads 'pending' → "Reopen payment".
+      return nuiteeHtml('Payment not completed', `<h1>Payment not completed yet</h1><p class="sub">Nothing was charged and no booking was made.</p><a class="btn" href="${url.origin}/hotels/nuitee/checkout?sid=${sid}">Back to payment</a><p class="note">Or tap <b>Done</b> to return to the app and choose another stay.</p>`);
+    }
     s.status = result.ok ? 'booked' : 'failed';
     s.booking = result.ok ? result.booking : null;
     s.error = result.ok ? null : result.error;
@@ -13553,8 +13560,11 @@ async function handleNuiteeReturn(request, env) {
   }
   return nuiteeHtml('Booking not completed', `<h1>Booking not completed</h1><p class="sub">${nuiteeEsc(s.error || 'The hotel could not confirm this rate.')}</p><p class="note">If your card was charged, Nuitée refunds automatically when a booking fails to confirm. Go back to the app and try another room or hotel.</p>`);
 }
-async function nuiteeBookSession(env, s) {
-  const useTx = !!s.transactionId;
+async function nuiteeBookSession(env, s, { simulate = false } = {}) {
+  // Sandbox simulation (Nuitée's documented ACC_CREDIT_CARD test path) when asked
+  // for explicitly, or when sandbox issued no SDK transaction. Production ALWAYS
+  // requires the paid transaction.
+  const useTx = !!s.transactionId && !(simulate && s.env === 'sandbox');
   if (!useTx && s.env !== 'sandbox') return { ok: false, error: 'No payment transaction on this session.' };
   const body = {
     prebookId: s.prebookId,
