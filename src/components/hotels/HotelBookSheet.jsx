@@ -57,12 +57,17 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
     } catch { setErr("Couldn't reach the booking service. Check your connection and try again."); setStage("form"); }
   };
   const checkStatus = async () => {
-    try {
-      const { data } = await callWorker("hotels/nuitee/status", { sid: pre.sid });
-      if (data?.status === "booked") { setBooking(data.booking); setStage("booked"); }
-      else if (data?.status === "failed") { setErr(data.error || "The hotel could not confirm this rate."); setStage("failed"); }
-      else setStage("pending");
-    } catch { setStage("pending"); }
+    // The booking is written server-side on the return page; give it a moment
+    // (up to 3 × 2s) before concluding the traveler never paid.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const { data } = await callWorker("hotels/nuitee/status", { sid: pre.sid });
+        if (data?.status === "booked") { setBooking(data.booking); setStage("booked"); return; }
+        if (data?.status === "failed") { setErr(data.error || "The hotel could not confirm this rate."); setStage("failed"); return; }
+      } catch { /* retry */ }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    setStage("pending");
   };
   const pay = async () => {
     setStage("paying");
