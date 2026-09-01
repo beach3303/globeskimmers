@@ -8048,7 +8048,7 @@ function gaMapD1ToActivity(d) {
     location: { latitude: d.lat, longitude: d.lng }, lat: d.lat, lng: d.lng,
     formattedAddress: [d.city, d.country].filter(Boolean).join(', '),
     shortFormattedAddress: d.city || d.country || '',
-    distanceKm: d.distanceKm, distanceMiles: distMi, distance: `${distMi.toFixed(1)} mi`,
+    distanceKm: d.distanceKm, distanceMiles: distMi, distance: `≈${distMi.toFixed(1)} mi`,
     rating: d.rating ?? null, userRatingCount: 0,
     isOpen: null, hours: [],
     currentOpeningHours: { openNow: null, weekdayDescriptions: [] },
@@ -8070,7 +8070,7 @@ function gaMapD1ToActivity(d) {
       isGoodForSingles: false, isGoodForTeens: isTeenCat,
     },
     tourMode: undefined,
-    travelType: distMi > 100 ? '✈️ Flights Required' : distMi > 50 ? '🚗 Drive' : distMi > 15 ? '🚗 Short Drive' : '📍 Nearby',
+    travelType: distMi > 100 ? '100+ mi away' : distMi > 50 ? '≈50–100 mi' : distMi > 15 ? '≈15–50 mi' : '📍 Nearby',   // straight-line bands, no transport verb (T2.4)
     whyVisit: d.whyVisit || '', typicalMinutes: d.typicalMinutes || null,
     _source: 'd1',
   };
@@ -8095,7 +8095,7 @@ function gaMapOvertureToActivity(r) {
     location: { latitude: r.lat, longitude: r.lng }, lat: r.lat, lng: r.lng,
     formattedAddress: r.address || [r.city, r.country].filter(Boolean).join(', '),
     shortFormattedAddress: r.city || r.country || '',
-    distanceKm: (r.meters || 0) / 1000, distanceMiles: distMi, distance: `${distMi.toFixed(1)} mi`,
+    distanceKm: (r.meters || 0) / 1000, distanceMiles: distMi, distance: `≈${distMi.toFixed(1)} mi`,
     rating: null, userRatingCount: 0,
     isOpen: null, hours: [], currentOpeningHours: { openNow: null, weekdayDescriptions: [] },
     photos: [], photoUrl: null, photoUrl2: null, photoCredit: null,
@@ -8106,7 +8106,7 @@ function gaMapOvertureToActivity(r) {
     badges: [], qualityScore: 70, highlights: [], warnings: [], bestTime: '',
     props: { isPhotoWorthy: true, isCultural: cultural, isOutdoor: outdoor, isIndoor: !outdoor && cultural },
     tourMode: undefined,
-    travelType: distMi > 100 ? '✈️ Flights Required' : distMi > 50 ? '🚗 Drive' : distMi > 15 ? '🚗 Short Drive' : '📍 Nearby',
+    travelType: distMi > 100 ? '100+ mi away' : distMi > 50 ? '≈50–100 mi' : distMi > 15 ? '≈15–50 mi' : '📍 Nearby',   // straight-line bands, no transport verb (T2.4)
     whyVisit: '', typicalMinutes: null, _source: 'owned',
   };
 }
@@ -8354,7 +8354,7 @@ async function handleActivities(request, env, ctx) {
         .slice(0, 40);
       t1Processed.forEach(a => {
         const mi = a.distanceMiles;
-        a.travelType = mi > 100 ? '✈️ Flights Required' : mi > 50 ? '🚗 Drive' : '🚗 Short Drive';
+        a.travelType = mi > 100 ? '100+ mi away' : mi > 50 ? '≈50–100 mi' : mi > 15 ? '≈15–50 mi' : '📍 Nearby';
       });
       const nationalIcons = t1Processed;
 
@@ -8381,7 +8381,7 @@ async function handleActivities(request, env, ctx) {
         .sort((a, b) => (a.distanceMiles || 0) - (b.distanceMiles || 0));
       t2Processed.forEach(a => {
         const mi = a.distanceMiles;
-        a.travelType = mi > 100 ? '✈️ Flights Required' : mi > 50 ? '🚗 Drive' : mi > 15 ? '🚗 Short Drive' : '📍 Nearby';
+        a.travelType = mi > 100 ? '100+ mi away' : mi > 50 ? '≈50–100 mi' : mi > 15 ? '≈15–50 mi' : '📍 Nearby';
       });
       return { nationalIcons, regionalGems: t2Processed };
     })();
@@ -8845,7 +8845,12 @@ const CUISINE_CHIP_TO_UMBRELLA = {
   seafood: { label: "Seafood", types: /* @__PURE__ */ new Set(["seafood_restaurant"]), keywords: ["fish", "shrimp", "lobster", "crab", "clam", "oyster"] },
   mediterranean: { label: "Mediterranean", types: /* @__PURE__ */ new Set(["mediterranean_restaurant", "greek_restaurant"]), keywords: ["gyro", "hummus", "falafel", "shawarma", "tzatziki"] },
   american: { label: "American", types: /* @__PURE__ */ new Set(["american_restaurant", "hamburger_restaurant"]), keywords: ["burger", "fries", "sandwich", "wing", "bbq"] },
-  breakfast: { label: "Breakfast", types: /* @__PURE__ */ new Set(["breakfast_restaurant", "brunch_restaurant"]), keywords: ["pancake", "waffle", "egg", "french toast", "omelet"] }
+  breakfast: { label: "Breakfast", types: /* @__PURE__ */ new Set(["breakfast_restaurant", "brunch_restaurant"]), keywords: ["pancake", "waffle", "egg", "french toast", "omelet"] },
+  // T1.10: shop-type umbrellas so a strict miss on bagels / donuts / froyo /
+  // cheesecake can fall back to "other bakeries / dessert spots nearby" instead
+  // of a bare "No exact match".
+  bakery: { label: "Bakery", types: /* @__PURE__ */ new Set(["bakery", "bakery_cafe", "bagel_shop", "donut_shop", "pastry_shop"]), keywords: ["bagel", "donut", "croissant", "pastry", "bread"] },
+  dessert: { label: "Dessert", types: /* @__PURE__ */ new Set(["dessert_shop", "ice_cream_shop", "gelato_shop", "frozen_yogurt_shop", "cake_shop", "candy_store", "chocolatier", "chocolate_shop"]), keywords: ["ice cream", "gelato", "frozen yogurt", "cheesecake", "chocolate"] }
 };
 const CULTURAL_INTENTS = {
   asian: {
@@ -10317,13 +10322,28 @@ async function handleRestaurantsFull(request, env, ctx) {
       }
     }
     if (!!searchQuery?.trim() && (intent.kind === "GENERAL" || hasUnrecognizedDishWords(searchQuery, intent))) {
+      // T1.14: only a GENERAL query (no usable keyword intent) may BLOCK on the LLM.
+      // A DISH intent with extra words ("spicy ramen", "vegan burger") is refined
+      // from the KV cache only (~ms, same key/normalization as /parse-intent); on a
+      // miss the parse is fired in the background to warm the cache for the next
+      // identical query and the keyword intent proceeds immediately.
+      const piNorm = String(searchQuery).trim().toLowerCase().replace(/[^\w\s]/g, "").replace(/\s+/g, " ").trim();
+      const piKey = `parse_intent:${PARSE_INTENT_PROMPT_VERSION}:${piNorm}`;
+      const refineOnly = intent.kind !== "GENERAL";
       try {
-        const llmRes = await rxDispatch(env, ctx, origin, `/parse-intent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: searchQuery })
-        });
-        if (llmRes.ok) {
+        let llmRes = null;
+        if (refineOnly) {
+          const cachedIntent = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(piKey, { type: "json" }).catch(() => null) : null;
+          if (cachedIntent) llmRes = { ok: true, json: async () => ({ ...cachedIntent, _cache: "hit" }) };
+          else if (ctx) ctx.waitUntil(rxDispatch(env, ctx, origin, `/parse-intent`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: searchQuery }) }).catch(() => {}));
+        } else {
+          llmRes = await rxDispatch(env, ctx, origin, `/parse-intent`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: searchQuery })
+          });
+        }
+        if (llmRes && llmRes.ok) {
           const llmIntent = await llmRes.json();
           if (llmIntent.confidence >= 0.5 && Array.isArray(llmIntent.tier1Types) && llmIntent.tier1Types.length > 0 && llmIntent.dishLabel) {
             console.log(`\u{1F916} LLM fallback hit: "${searchQuery}" -> dish=${llmIntent.dishLabel} cuisine=${llmIntent.cuisine} strict=${llmIntent.strict} conf=${llmIntent.confidence} cache=${llmIntent._cache}`);
@@ -10838,7 +10858,10 @@ async function handleRestaurantsFull(request, env, ctx) {
     if (finalPlaces.length === 0 && intent.kind === "DISH" && intent.strict) {
       const tier1 = (intent.tier1Types || [])[0] || "";
       const cuisineKey = tier1.replace(/_restaurant$/, "");
-      const umbrella = CUISINE_CHIP_TO_UMBRELLA[cuisineKey];
+      // Shop-type tier-1s carry no "_restaurant" suffix and never matched a cuisine
+      // chip, so bagels/donuts/froyo/cheesecake misses fell straight through (T1.10).
+      const SHOP_TYPE_UMBRELLA = { bakery: "bakery", bakery_cafe: "bakery", bagel_shop: "bakery", donut_shop: "bakery", pastry_shop: "bakery", dessert_shop: "dessert", ice_cream_shop: "dessert", gelato_shop: "dessert", frozen_yogurt_shop: "dessert", cake_shop: "dessert", candy_store: "dessert", chocolatier: "dessert", chocolate_shop: "dessert" };
+      const umbrella = CUISINE_CHIP_TO_UMBRELLA[cuisineKey] || CUISINE_CHIP_TO_UMBRELLA[SHOP_TYPE_UMBRELLA[tier1]];
       if (umbrella) {
         fallbackCuisine = umbrella.label;
         fallbackQueryLabel = intent.label || searchQuery;
@@ -12006,7 +12029,10 @@ async function handleEnrichOwned(request, env) {
     const photos = (place.photos || []).slice(0, maxPhotos).map((p) => p.full || p.url || p).filter(Boolean);
     const oh = place.currentOpeningHours || place.regularOpeningHours || null;
     return jsonResponse({
-      matched: true, placeId: gid, photos,
+      matched: true,
+      // T1.5: the place's UTC offset so the client computes Open/Closed in the place's
+      // timezone instead of trusting a 90-day-cached openNow.
+      utcOffsetMinutes: place.utcOffsetMinutes ?? null, placeId: gid, photos,
       hours: oh ? { openNow: oh.openNow ?? null, weekdayDescriptions: oh.weekdayDescriptions || oh.weekday_text || [] } : null,
       isOpen: place.currentOpeningHours?.openNow ?? null,
       rating: place.rating ?? null, priceLevel: place.priceLevel ?? null,
@@ -13107,7 +13133,7 @@ function gaMapSearchPlace(p, userLat, userLng) {
     id: p.id, placeId: p.id, displayName: p.displayName || { text: name }, name,
     location: { latitude: lat, longitude: lng }, lat, lng,
     formattedAddress: p.formattedAddress || '', shortFormattedAddress: p.shortFormattedAddress || '',
-    distanceKm: distMi / 0.621371, distanceMiles: distMi, distance: `${distMi.toFixed(1)} mi`,
+    distanceKm: distMi / 0.621371, distanceMiles: distMi, distance: `≈${distMi.toFixed(1)} mi`,
     rating: p.rating || null, userRatingCount: p.userRatingCount || 0,
     isOpen: p.isOpen ?? null, hours,
     currentOpeningHours: { openNow: p.isOpen ?? null, weekdayDescriptions: hours }, utcOffsetMinutes: p.utcOffsetMinutes ?? null,
@@ -13119,7 +13145,7 @@ function gaMapSearchPlace(p, userLat, userLng) {
     outdoorContext: null, types,
     badges: [], qualityScore: 60, highlights: [], warnings: [], bestTime: '',
     props: { isOutdoor: at.category === 'outdoor', isIndoor: at.category === 'culture', isPhotoWorthy: true },
-    travelType: distMi > 100 ? '✈️ Flights Required' : distMi > 50 ? '🚗 Drive' : distMi > 15 ? '🚗 Short Drive' : '📍 Nearby',
+    travelType: distMi > 100 ? '100+ mi away' : distMi > 50 ? '≈50–100 mi' : distMi > 15 ? '≈15–50 mi' : '📍 Nearby',   // straight-line bands, no transport verb (T2.4)
     _source: 'search',
   };
 }
