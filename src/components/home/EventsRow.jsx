@@ -18,11 +18,16 @@ import { trackAffiliateClick } from "@/lib/affiliate";
 import { viatorProductLink, viatorSearchLink } from "@/lib/viator";
 import { openPartner } from "@/lib/openPartner";
 import { logDiscover } from "@/lib/logDiscover";
+import { localISODate } from "@/lib/localDate";
 
 const INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
 const CAT_EMOJI = { Music: "🎵", Sports: "🏟️", "Arts & Theatre": "🎭", "Arts & Theater": "🎭", Film: "🎬", Comedy: "🎤", Miscellaneous: "🎪" };
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const ymd = localISODate; // local YYYY-MM-DD
+// The worker sends ISO currency codes (TM priceRanges, Viator pricing), never symbols,
+// and TM minimums can be fractional — so "from $35", "from €35", "from CHF 35"; never "USD39.5".
+const CUR_SYM = { USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
+const fmtPrice = (n, cur) => { const c = String(cur || "").toUpperCase(); return `${c ? (CUR_SYM[c] || `${c} `) : "$"}${Math.round(n)}`; };
 const parseDate = (s) => { try { return s ? new Date(s + "T00:00:00") : null; } catch { return null; } };
 const fmtDate = (d) => { try { return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }); } catch { return ""; } };
 
@@ -36,6 +41,18 @@ export default function EventsRow({ wide = false }) {
     const on = () => setTick((t) => t + 1);
     window.addEventListener("gs:stay-changed", on);
     return () => window.removeEventListener("gs:stay-changed", on);
+  }, []);
+
+  // Local calendar day, re-checked every minute and on resume. The row stays mounted
+  // overnight (Capacitor keeps the tree alive in the background), so without this the
+  // window bounds below froze on yesterday and labelled stale cards "Tonight".
+  // setState with the same string is a no-op, so this only re-renders at midnight.
+  const [dayKey, setDayKey] = useState(() => localISODate());
+  useEffect(() => {
+    const check = () => setDayKey(localISODate());
+    const id = setInterval(check, 60_000);
+    document.addEventListener("visibilitychange", check);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", check); };
   }, []);
 
   const base = getPrimaryStay() || getActiveLocation?.() || null;
@@ -64,7 +81,7 @@ export default function EventsRow({ wide = false }) {
     return () => { cancelled = true; };
   }, [city, country, lat, lng, tick]);
 
-  // Time-window bounds (local time), computed once per render.
+  // Time-window bounds (local time); recomputed on a stay change and at local midnight.
   const W = useMemo(() => {
     const now = new Date();
     const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
@@ -78,7 +95,7 @@ export default function EventsRow({ wide = false }) {
     const weekEnd = new Date(startToday); weekEnd.setDate(startToday.getDate() + 7); weekEnd.setHours(23, 59, 59, 999);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
     return { startToday, todayKey, tomorrowKey: ymd(tomorrow), wkStart, wkEnd, weekEnd, monthEnd };
-  }, [tick]);
+  }, [tick, dayKey]);
 
   const inWindow = (d, w) => {
     if (!d) return true; // experiences are date-flexible → in every window
@@ -188,7 +205,7 @@ export default function EventsRow({ wide = false }) {
                   {dateLine && <div className="text-[calc(11px*var(--fs))] font-bold" style={{ color: rel && it.type !== "exp" ? TEAL : INK }}>{dateLine}</div>}
                   <div className="font-serif leading-[1.12] text-[calc(15px*var(--fs))] mt-0.5" style={{ color: INK, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{it.name}</div>
                   {it.venue && <div className="text-[calc(11px*var(--fs))] mt-0.5" style={{ color: SUB }}>{it.venue}</div>}
-                  {Number.isFinite(it.fromPrice) && <div className="text-[calc(11px*var(--fs))] mt-0.5 font-semibold" style={{ color: TEAL }}>from {it.currency || "$"}{it.fromPrice}</div>}
+                  {Number.isFinite(it.fromPrice) && <div className="text-[calc(11px*var(--fs))] mt-0.5 font-semibold" style={{ color: TEAL }}>from {fmtPrice(it.fromPrice, it.currency)}</div>}
                   <div className="text-[calc(10px*var(--fs))] mt-1.5 font-semibold" style={{ color: SUB }}>{it.type === "exp" ? "View & book · Viator" : "See tickets · Ticketmaster"}</div>
                 </div>
               </button>

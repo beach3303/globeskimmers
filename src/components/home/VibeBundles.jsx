@@ -38,7 +38,12 @@ export default function VibeBundles({ wide = false }) {
   const go = (b, slot) => {
     logDiscover("discover_select", { vibe: b.id, slot: slot.label, dest: slot.dest.page || `maps:${slot.dest.maps}` });
     if (slot.dest.page) {
-      navigate(createPageUrl(slot.dest.page), slot.dest.query ? { state: { presetQuery: slot.dest.query } } : undefined);
+      // Shopping only reads state.presetCategory (a chip id); the text finders read
+      // state.presetQuery — so a slot carries `category` for one, `query` for the other.
+      const state = slot.dest.category ? { presetCategory: slot.dest.category }
+        : slot.dest.query ? { presetQuery: slot.dest.query }
+        : null;
+      navigate(createPageUrl(slot.dest.page), state ? { state } : undefined);
     } else if (slot.dest.maps) {
       openExternal(mapsSearchUrl(slot.dest.maps, city));
     }

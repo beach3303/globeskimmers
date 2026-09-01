@@ -677,7 +677,9 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
                 );
               })}
             </div>
-            <div style={{fontSize:fs(t(11,10)),color:ED_INK3,margin:`${fs(6)} ${fs(2)} 0`}}>Tours &amp; prices by Viator{sched?" · schedule per Viator":""} · we may earn a commission</div>
+            {/* Credit the schedule source only when a schedule was actually rendered —
+                sched is {} (truthy) after an empty or failed /viator/schedule fetch. */}
+            <div style={{fontSize:fs(t(11,10)),color:ED_INK3,margin:`${fs(6)} ${fs(2)} 0`}}>Tours &amp; prices by Viator{sched&&Object.keys(sched).length?" · schedule per Viator":""} · we may earn a commission</div>
           </div>
         )}
         {/* Plain button only when we KNOW tours exist but got no rows, or can't
@@ -962,6 +964,7 @@ export default function ThingsToDoFinder() {
   const [tours,setTours]=useState(null); // null=not searched · []=none · [...]=results
   const [tourBusy,setTourBusy]=useState(false);
   const [searchPlaces,setSearchPlaces]=useState([]); // live Google Places keyword results
+  const [searchError,setSearchError]=useState(null); // callWorker envelope error for the last search — distinct from "no results"
   const cardRefs=useRef({});
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
   const {activeLocation}=useLocation();
@@ -1007,8 +1010,19 @@ export default function ThingsToDoFinder() {
     (async()=>{
       try{
         const fetchRadius=Math.max(radius,25)*1609; // always fetch at least 25mi
-        const {data}=await callWorker(ROUTE.getActivities,{latitude:lat,longitude:lng,radius:fetchRadius,maxResults:60,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city,forceRefresh:force});
+        const {data,error:fetchErr}=await callWorker(ROUTE.getActivities,{latitude:lat,longitude:lng,radius:fetchRadius,maxResults:60,category,smartRadius:radius>25,countryName:country,regionName:region,cityName:city,forceRefresh:force});
         if(cancelled) return; // a newer fetch (radius/category/location change) superseded this one
+        // callWorker never throws — a timeout / HTTP 5xx resolves as { data:null, error }.
+        // Bail out BEFORE touching the tiers so a failed background refresh can't
+        // wipe the cached strips (TierSection hides itself for empty items), and so
+        // the no-cache case reports a connectivity problem, not "no activities".
+        // callWorker never throws ({data:null,error}); the worker ALSO answers its own
+        // internal exceptions with 200 {error, activities:[]} — treat both as failure.
+        const envelopeErr = data&&typeof data==="object"&&data.error&&!Object.keys(data).some(k=>Array.isArray(data[k])&&data[k].length);
+        if(!data||typeof data!=="object"||envelopeErr){
+          if(!cached) setError(fetchErr==="timeout"?"The server took too long to respond — try again.":"Couldn't reach the server — check your connection and try again.");
+          return; // finally{} below still clears the loading chip
+        }
         const raw=data?.activities||[];
         const ni=data?.nationalIcons||[];
         const rg=data?.regionalGems||[];
@@ -1099,6 +1113,13 @@ export default function ThingsToDoFinder() {
   const cardsList=useMemo(()=>submitted?[...filtered,...searchBeyond]:filtered,[submitted,filtered,searchBeyond]);
 
   const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const a=cardsList[i];if(mapInst.current&&a?.lat&&a?.lng){mapInst.current.setView([a.lat,a.lng],17);markers.current[i]?.openPopup();}},350);};
+  // Leaving the list drops the map's "open this card" request (set by _gsTDView
+  // below), so coming back to the list doesn't re-open a modal the user closed.
+  // One-shot: expandedIdx opens the tapped card's modal on the render where the
+  // TierCard mounts (its mount effect reads forceOpen), then clears a tick later
+  // so a later remount of the list — or a different item landing at that index —
+  // never re-opens a modal uninvited.
+  useEffect(()=>{if(expandedIdx==null)return;const t=setTimeout(()=>setExpandedIdx(null),0);return()=>clearTimeout(t);},[expandedIdx]);
 
   useEffect(()=>{
     if(viewMode!=="map"||!mapRef.current||!lat||!lng) return;
@@ -1132,9 +1153,13 @@ export default function ThingsToDoFinder() {
   // higher up with the rest of the component state (see note there).
   const runActivitySearch=async(explicitQuery)=>{
     const query=(typeof explicitQuery==='string'?explicitQuery:q).trim(); if(!query) return;
-    setSubmitted(query); setTourBusy(true); setTours(null); setSearchPlaces([]);
+    setSubmitted(query); setTourBusy(true); setTours(null); setSearchPlaces([]); setSearchError(null);
     try{
-      const {data}=await callWorker(ROUTE.searchActivities,{query:expandActivityQuery(query),city,country,latitude:lat,longitude:lng,radiusMiles:radius});
+      const {data,error:fetchErr}=await callWorker(ROUTE.searchActivities,{query:expandActivityQuery(query),city,country,latitude:lat,longitude:lng,radiusMiles:radius});
+      // callWorker never throws — a timeout / HTTP error resolves as { data:null, error }.
+      // Route it to the catch below so a failed call is never logged as zero demand
+      // (logZeroResults) or rendered as "Nothing for X nearby".
+      if(!data||typeof data!=="object"||(data.error&&!(data.places?.length||data.products?.length))) throw new Error(data?.error||fetchErr||"Network error");
       const places=Array.isArray(data?.places)?data.places:[];
       const products=Array.isArray(data?.products)?data.products:[];
       setSearchPlaces(places);
@@ -1143,10 +1168,10 @@ export default function ThingsToDoFinder() {
       const total=places.length+products.length;
       if(total) logSearch('things_to_do',query,{radius,resultCount:total});
       else logZeroResults('things_to_do',query,{radius});
-    }catch{ setTours([]); setSearchPlaces([]); }
+    }catch(e){ setTours([]); setSearchPlaces([]); setSearchError(e?.message||"Network error"); }
     setTourBusy(false);
   };
-  const clearSearch=()=>{setQ("");setSubmitted("");setTours(null);setSearchPlaces([]);};
+  const clearSearch=()=>{setQ("");setSubmitted("");setTours(null);setSearchPlaces([]);setSearchError(null);};
 
   // Smart-Search spine / cross-finder handoff: a query passed via router state
   // prefills the box and auto-runs the activity search once coords are ready.
@@ -1270,7 +1295,7 @@ export default function ThingsToDoFinder() {
           existing "Fetching new spots" chip at the top covering
           ongoing background refresh state. */}
       {loading&&activities.length===0&&nationalIcons.length===0?(<TtdSkeleton/>)
-      :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"calc(16px*var(--fs))"}}>{error}</div><button onClick={()=>setRadius(r=>Math.min(r+5,25))} style={{marginTop:"14px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Expand Radius</button></div>)
+      :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"calc(16px*var(--fs))"}}>{error}</div>{/* radius starts AT the 25mi ceiling here, so "Expand" would be a no-op — offer a plain retry instead (no forceRefresh: a retry mustn't bust caches). */}<button onClick={radius<25?()=>setRadius(r=>Math.min(r+5,25)):()=>setRefreshTick(t=>t+1)} style={{marginTop:"14px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{radius<25?"Expand Radius":"Try Again"}</button></div>)
       :viewMode==="list"?(<div style={isTablet
         ? {maxWidth:1024,margin:"0 auto",padding:"14px 24px 170px",display:"flex",flexDirection:"column",gap:"4px"}
         : {padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"4px"}}>
@@ -1289,7 +1314,10 @@ export default function ThingsToDoFinder() {
         {/* Empty state */}
         {submitted
           ? (!tourBusy&&cardsList.length===0&&(!tours||tours.length===0)
-              ? <div style={{textAlign:"center",padding:"40px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"12px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(17px*var(--fs))",color:T.dark}}>Nothing for &ldquo;{submitted}&rdquo; nearby</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Try a broader term or a wider radius.</div></div>
+              ? (searchError
+                  /* The worker call failed — that is not "nothing nearby". Honest retry state. */
+                  ? <div style={{textAlign:"center",padding:"40px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"12px"}}>📡</div><div style={{fontWeight:"800",fontSize:"calc(17px*var(--fs))",color:T.dark}}>Couldn&rsquo;t reach the server</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Check your connection and try again.</div><button onClick={()=>runActivitySearch(submitted)} style={{marginTop:"14px",padding:"10px 22px",borderRadius:"12px",border:"none",background:T.accent,color:"#fff",fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Try Again</button></div>
+                  : <div style={{textAlign:"center",padding:"40px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"12px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(17px*var(--fs))",color:T.dark}}>Nothing for &ldquo;{submitted}&rdquo; nearby</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Try a broader term or a wider radius.</div></div>)
               : null)
           : (filtered.length===0&&(browseFilterActive||(nationalIcons.length===0&&regionalGems.length===0))
               ? <div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>{browseFilterActive?"No spots match these filters — try clearing one or widening your radius":"Try a different category or expand your radius"}</div></div>
@@ -1328,6 +1356,15 @@ export default function ThingsToDoFinder() {
               ))}</div>
               <div style={{fontSize:"calc(10.5px*var(--fs))",color:T.gray,margin:"6px 4px 0"}}>Tours &amp; prices by Viator · we may earn a commission</div>
             </>)}
+          </div>
+        )}
+
+        {/* Local matches rendered but the worker call for bookable experiences
+            failed — say so instead of silently showing no tours. */}
+        {submitted&&!tourBusy&&searchError&&cardsList.length>0&&(
+          <div style={{marginTop:"14px",padding:"10px 14px",borderRadius:"12px",background:"#FFF5F5",border:`1px solid ${T.coral}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px"}}>
+            <span style={{color:T.coral,fontWeight:"600",fontSize:"calc(12.5px*var(--fs))"}}>Couldn&rsquo;t reach the server for bookable experiences.</span>
+            <button onClick={()=>runActivitySearch(submitted)} style={{flexShrink:0,padding:"7px 12px",borderRadius:"8px",border:"none",background:T.coral,color:"#fff",fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Try again</button>
           </div>
         )}
 

@@ -9,6 +9,9 @@
 // leads; the set never changes. Selections are logged for the demand loop.
 
 // dest: { page: 'PlacesToEat' } routes in-app; { maps: 'spa' } opens Maps search.
+// dest.query  → presetQuery for finders that accept free text (PlacesToEat, ThingsToDo…).
+// dest.category → presetCategory for Shopping, whose only router-state read is a
+//                 CATEGORIES chip id (it never reads presetQuery — a query is dropped).
 export const VIBE_BUNDLES = [
   {
     id: "selfcare", emoji: "💆", title: "Self-care day", sub: "Slow down & recharge",
@@ -61,7 +64,7 @@ export const VIBE_BUNDLES = [
       { emoji: "⭐", label: "Top sights", dest: { page: "ThingsToDo" } },
       { emoji: "📷", label: "Photo spots", dest: { page: "ThingsToDo", query: "photo viewpoint" } },
       { emoji: "🍽️", label: "Iconic eats", dest: { page: "PlacesToEat", query: "famous local" } },
-      { emoji: "🛍️", label: "Souvenirs", dest: { page: "Shopping", query: "souvenirs" } },
+      { emoji: "🛍️", label: "Souvenirs", dest: { page: "Shopping", category: "souvenir_shopping" } },
     ],
   },
 ];
