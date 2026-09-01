@@ -3296,7 +3296,7 @@ async function handleAttractionAIDetails(request, env) {
       gsRedFlag: false,
       gsVerdict: 'Not enough review data yet — check back as more visitors share their experience.',
       verifiedFacts,
-      _sources: { worthIt: 'reviews', gsVerdict: 'reviews' },
+      _sources: { worthIt: 'forecast', gsVerdict: 'forecast' },   // canned fallback verdict is an estimate, not review-derived (T2.3)
       websiteUri: placeMeta.websiteUri || null,
       placeName: placeMeta.name || null,
     };
@@ -4052,7 +4052,7 @@ async function handleAtmAIDetails(request, env) {
       gsRedFlag: false,
       gsVerdict: 'Not enough review data yet — check the ATM screen before confirming any withdrawal.',
       verifiedFacts,
-      _sources: { worthIt: 'reviews', gsVerdict: 'reviews' },
+      _sources: { worthIt: 'estimated', gsVerdict: 'estimated' },   // canned fallback verdict is an estimate, not review-derived (T2.3)
       websiteUri: placeMeta.websiteUri || null,
       placeName: placeMeta.name || null,
     };
