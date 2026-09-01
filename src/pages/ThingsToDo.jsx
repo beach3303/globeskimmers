@@ -10,6 +10,7 @@ import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { trackAffiliateClick } from "@/lib/affiliate";
 import { viatorSearchLink, viatorProductLink } from "@/lib/viator";
+import { openPartner } from "@/lib/openPartner";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import MapAppSelector from "@/components/MapAppSelector";
 import AttractionAIDetails from "@/components/AttractionAIDetails";
@@ -495,7 +496,7 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
   // intent; earns via pid. Logged through /aff/click (SubID→D1).
   const openViatorTour=async()=>{
     const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorSearchLink(name),category:"tour",productName:name,destCity:a.city,destCountry:a.country});
-    window.open(url,"_blank");
+    openPartner(url);   // in-app sheet — stays logged in, keeps attribution
   };
   // Only show "Book a tour" when Viator actually has products for THIS attraction.
   // Pre-filter with isTourable (cheap, no API) to skip non-attractions; the API

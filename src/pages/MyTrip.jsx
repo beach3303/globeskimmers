@@ -9,8 +9,6 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { ChevronLeft, Loader2, ExternalLink, Luggage } from "lucide-react";
-import { Capacitor } from "@capacitor/core";
-import { Browser } from "@capacitor/browser";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { useIsTablet } from "@/lib/useIsTablet";
@@ -79,13 +77,8 @@ function fmtDate(ts) {
   } catch { return ""; }
 }
 
-async function openExternal(url) {
-  if (!url) return;
-  try {
-    if (Capacitor.isNativePlatform()) await Browser.open({ url });
-    else window.open(url, "_blank", "noopener");
-  } catch { try { window.open(url, "_blank"); } catch { /* ignore */ } }
-}
+// Shared partner opener (in-app sheet on native) — see src/lib/openPartner.js
+const openExternal = openPartner;
 
 function StatusChip({ status, fs }) {
   const map = {

@@ -26,6 +26,7 @@ import { useLocation } from "../components/location/LocationContext";
 import { getLocationLabel } from "@/components/location/locationLabel";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { trackAffiliateClick } from "@/lib/affiliate";
+import { openPartner } from "@/lib/openPartner";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { logSearch } from "@/lib/logSearch";
@@ -213,14 +214,14 @@ export default function FindAHotel() {
   // Open one hotel's booking (attributed via trackAffiliateClick → SubID→D1).
   const openHotel = async (url) => {
     const t = await trackAffiliateClick({ partner: "stay22", targetUrl: url, category: "hotel", destCity: dest.city, destCountry: dest.country });
-    if (t) window.open(t, "_blank");
+    if (t) openPartner(t);
   };
   // "See all on Stay22" — the full comparison page for this search.
   const compareAll = async () => {
     const lp = locParams();
     const url = buildStay22Url({ lat: lp.lat, lng: lp.lng, address: lp.address, checkin: checkin || undefined, checkout: checkout || undefined, adults, children });
     const t = await trackAffiliateClick({ partner: "stay22", targetUrl: url, category: "hotel", destCity: dest.city, destCountry: dest.country });
-    if (t) window.open(t, "_blank");
+    if (t) openPartner(t);
   };
 
   const mi = (km) => `${Math.round(km * 0.621371)} mi`;

@@ -16,6 +16,7 @@ import { ROUTE } from "@/lib/workerRoutes";
 import { getPrimaryStay } from "@/lib/savedLocations";
 import { trackAffiliateClick } from "@/lib/affiliate";
 import { viatorProductLink, viatorSearchLink } from "@/lib/viator";
+import { openPartner } from "@/lib/openPartner";
 import { logDiscover } from "@/lib/logDiscover";
 
 const INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
@@ -141,7 +142,7 @@ export default function EventsRow({ wide = false }) {
       if (it.type === "event") url = await trackAffiliateClick({ partner: "ticketmaster", targetUrl: it.url, category: "event", productName: it.name, destCity: city, destCountry: country });
       else url = await trackAffiliateClick({ partner: "viator", targetUrl: viatorProductLink(it.url) || viatorSearchLink(it.name), category: "event", productName: it.name, destCity: city, destCountry: country });
     } catch { /* fall back to raw url */ }
-    try { window.open(url || it.url, "_blank"); } catch { /* ignore */ }
+    openPartner(url || it.url);
   };
 
   const pickChip = (id) => { setSel(id); logDiscover("event_window", { window: id, city, country }); };

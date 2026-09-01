@@ -6,8 +6,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Capacitor } from "@capacitor/core";
-import { Browser } from "@capacitor/browser";
 import { useLocation } from "@/components/location/LocationContext";
 import { usePersona } from "@/lib/persona";
 import { orderedBundles, mapsSearchUrl } from "@/lib/vibeBundles";
@@ -15,13 +13,8 @@ import { logDiscover } from "@/lib/logDiscover";
 
 const INK = "#16302B", SUB = "#71827D", EDGE = "#E6DFD0", TEAL = "#0E7C73";
 
-async function openExternal(url) {
-  if (!url) return;
-  try {
-    if (Capacitor.isNativePlatform()) await Browser.open({ url });
-    else window.open(url, "_blank", "noopener");
-  } catch { try { window.open(url, "_blank"); } catch { /* ignore */ } }
-}
+// Shared partner opener (in-app sheet on native) — see src/lib/openPartner.js
+const openExternal = openPartner;
 
 export default function VibeBundles({ wide = false }) {
   const navigate = useNavigate();
