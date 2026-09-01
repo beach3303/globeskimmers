@@ -8048,7 +8048,7 @@ function gaMapD1ToActivity(d) {
     location: { latitude: d.lat, longitude: d.lng }, lat: d.lat, lng: d.lng,
     formattedAddress: [d.city, d.country].filter(Boolean).join(', '),
     shortFormattedAddress: d.city || d.country || '',
-    distanceKm: d.distanceKm, distanceMiles: distMi, distance: `≈${distMi.toFixed(1)} mi`,
+    distanceKm: d.distanceKm, distanceMiles: distMi, distance: `${distMi.toFixed(1)} mi`,
     rating: d.rating ?? null, userRatingCount: 0,
     isOpen: null, hours: [],
     currentOpeningHours: { openNow: null, weekdayDescriptions: [] },
@@ -8095,7 +8095,7 @@ function gaMapOvertureToActivity(r) {
     location: { latitude: r.lat, longitude: r.lng }, lat: r.lat, lng: r.lng,
     formattedAddress: r.address || [r.city, r.country].filter(Boolean).join(', '),
     shortFormattedAddress: r.city || r.country || '',
-    distanceKm: (r.meters || 0) / 1000, distanceMiles: distMi, distance: `≈${distMi.toFixed(1)} mi`,
+    distanceKm: (r.meters || 0) / 1000, distanceMiles: distMi, distance: `${distMi.toFixed(1)} mi`,
     rating: null, userRatingCount: 0,
     isOpen: null, hours: [], currentOpeningHours: { openNow: null, weekdayDescriptions: [] },
     photos: [], photoUrl: null, photoUrl2: null, photoCredit: null,
@@ -8845,10 +8845,13 @@ const CUISINE_CHIP_TO_UMBRELLA = {
   seafood: { label: "Seafood", types: /* @__PURE__ */ new Set(["seafood_restaurant"]), keywords: ["fish", "shrimp", "lobster", "crab", "clam", "oyster"] },
   mediterranean: { label: "Mediterranean", types: /* @__PURE__ */ new Set(["mediterranean_restaurant", "greek_restaurant"]), keywords: ["gyro", "hummus", "falafel", "shawarma", "tzatziki"] },
   american: { label: "American", types: /* @__PURE__ */ new Set(["american_restaurant", "hamburger_restaurant"]), keywords: ["burger", "fries", "sandwich", "wing", "bbq"] },
-  breakfast: { label: "Breakfast", types: /* @__PURE__ */ new Set(["breakfast_restaurant", "brunch_restaurant"]), keywords: ["pancake", "waffle", "egg", "french toast", "omelet"] },
-  // T1.10: shop-type umbrellas so a strict miss on bagels / donuts / froyo /
-  // cheesecake can fall back to "other bakeries / dessert spots nearby" instead
-  // of a bare "No exact match".
+  breakfast: { label: "Breakfast", types: /* @__PURE__ */ new Set(["breakfast_restaurant", "brunch_restaurant"]), keywords: ["pancake", "waffle", "egg", "french toast", "omelet"] }
+};
+// T1.10: shop-type umbrellas used ONLY by the strict-miss fallback ("other bakeries /
+// dessert spots nearby" instead of a bare "No exact match"). Kept OUT of
+// CUISINE_CHIP_TO_UMBRELLA on purpose: the live "dessert" cuisine chip would
+// otherwise be synthesized into an UMBRELLA intent and re-badge every card.
+const SHOP_UMBRELLAS = {
   bakery: { label: "Bakery", types: /* @__PURE__ */ new Set(["bakery", "bakery_cafe", "bagel_shop", "donut_shop", "pastry_shop"]), keywords: ["bagel", "donut", "croissant", "pastry", "bread"] },
   dessert: { label: "Dessert", types: /* @__PURE__ */ new Set(["dessert_shop", "ice_cream_shop", "gelato_shop", "frozen_yogurt_shop", "cake_shop", "candy_store", "chocolatier", "chocolate_shop"]), keywords: ["ice cream", "gelato", "frozen yogurt", "cheesecake", "chocolate"] }
 };
@@ -10334,7 +10337,12 @@ async function handleRestaurantsFull(request, env, ctx) {
         let llmRes = null;
         if (refineOnly) {
           const cachedIntent = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(piKey, { type: "json" }).catch(() => null) : null;
-          if (cachedIntent) llmRes = { ok: true, json: async () => ({ ...cachedIntent, _cache: "hit" }) };
+          if (cachedIntent) {
+            llmRes = { ok: true, json: async () => ({ ...cachedIntent, _cache: "hit" }) };
+            // handleParseIntent is bypassed on this path — write the same hit event it
+            // would have, so the cache-rate analytics stay honest.
+            writeIntentFallbackEvent(env, { query: piNorm, cache: "hit", success: true, dishLabel: cachedIntent.dishLabel, cuisine: cachedIntent.cuisine, strict: cachedIntent.strict, confidence: cachedIntent.confidence, latencyMs: 0, refineOnly: true });
+          }
           else if (ctx) ctx.waitUntil(rxDispatch(env, ctx, origin, `/parse-intent`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: searchQuery }) }).catch(() => {}));
         } else {
           llmRes = await rxDispatch(env, ctx, origin, `/parse-intent`, {
@@ -10861,7 +10869,7 @@ async function handleRestaurantsFull(request, env, ctx) {
       // Shop-type tier-1s carry no "_restaurant" suffix and never matched a cuisine
       // chip, so bagels/donuts/froyo/cheesecake misses fell straight through (T1.10).
       const SHOP_TYPE_UMBRELLA = { bakery: "bakery", bakery_cafe: "bakery", bagel_shop: "bakery", donut_shop: "bakery", pastry_shop: "bakery", dessert_shop: "dessert", ice_cream_shop: "dessert", gelato_shop: "dessert", frozen_yogurt_shop: "dessert", cake_shop: "dessert", candy_store: "dessert", chocolatier: "dessert", chocolate_shop: "dessert" };
-      const umbrella = CUISINE_CHIP_TO_UMBRELLA[cuisineKey] || CUISINE_CHIP_TO_UMBRELLA[SHOP_TYPE_UMBRELLA[tier1]];
+      const umbrella = CUISINE_CHIP_TO_UMBRELLA[cuisineKey] || SHOP_UMBRELLAS[SHOP_TYPE_UMBRELLA[tier1]];
       if (umbrella) {
         fallbackCuisine = umbrella.label;
         fallbackQueryLabel = intent.label || searchQuery;
@@ -13133,7 +13141,7 @@ function gaMapSearchPlace(p, userLat, userLng) {
     id: p.id, placeId: p.id, displayName: p.displayName || { text: name }, name,
     location: { latitude: lat, longitude: lng }, lat, lng,
     formattedAddress: p.formattedAddress || '', shortFormattedAddress: p.shortFormattedAddress || '',
-    distanceKm: distMi / 0.621371, distanceMiles: distMi, distance: `≈${distMi.toFixed(1)} mi`,
+    distanceKm: distMi / 0.621371, distanceMiles: distMi, distance: `${distMi.toFixed(1)} mi`,
     rating: p.rating || null, userRatingCount: p.userRatingCount || 0,
     isOpen: p.isOpen ?? null, hours,
     currentOpeningHours: { openNow: p.isOpen ?? null, weekdayDescriptions: hours }, utcOffsetMinutes: p.utcOffsetMinutes ?? null,
