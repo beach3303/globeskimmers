@@ -1,10 +1,12 @@
 // HotelBookSheet — the in-app hotel checkout (Nuitée Connect lane).
 //
-// Stages: form → prebooking → ready → paying → booked | failed | pending.
+// Stages: form → prebooking → ready → paying → booked | failed | pending | unknown.
 // The card form itself is Nuitée's Payment SDK on a page served by OUR worker,
 // opened in the same in-app sheet Viator uses; when that sheet closes we ask
 // the worker whether the session booked. Card data never touches the app, and
 // the app never sees the payment secrets — only a session id.
+// "pending" is only ever shown on a REAL "pending" answer from the worker;
+// no answer at all lands on "unknown", which never claims nothing was charged.
 // Prices here are Closed-User-Group rates: rendered only behind the sign-in
 // gate (App.jsx), never on share cards or web pages.
 import React, { useState } from "react";
@@ -37,10 +39,16 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
     firstName: meta.first_name || guess.first, lastName: meta.last_name || guess.last,
     email: user?.email || "", phone: meta.phone || "",
   });
-  const [stage, setStage] = useState("form");   // form · prebooking · ready · paying · booked · failed · pending
+  const [stage, setStage] = useState("form");   // form · prebooking · ready · paying · booked · failed · pending · unknown
   const [pre, setPre] = useState(null);         // /hotels/nuitee/prebook response
   const [err, setErr] = useState(null);
   const [booking, setBooking] = useState(null);
+  const [checking, setChecking] = useState(false); // a status probe is running (disables Check again)
+  const [webTab, setWebTab] = useState(false);     // web: payment opened in a tab we get no close signal from
+  // Lock the sheet (no Close / backdrop dismiss) only while the NATIVE payment
+  // sheet is up. On web the tab gives us no close signal, so the traveler must
+  // keep an exit — otherwise deciding not to pay leaves them stuck.
+  const locked = stage === "paying" && !webTab;
   const set = (k) => (e) => setHolder((h) => ({ ...h, [k]: e.target.value }));
   const valid = holder.firstName.trim() && holder.lastName.trim() && /^\S+@\S+\.\S+$/.test(holder.email);
 
@@ -58,24 +66,46 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
   };
   const checkStatus = async () => {
     // The booking is written server-side on the return page; give it a moment
-    // (up to 3 × 2s) before concluding the traveler never paid.
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const { data } = await callWorker("hotels/nuitee/status", { sid: pre.sid });
-        if (data?.status === "booked") { setBooking(data.booking); setStage("booked"); return; }
-        if (data?.status === "failed") { setErr(data.error || "The hotel could not confirm this rate."); setStage("failed"); return; }
-      } catch { /* retry */ }
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-    setStage("pending");
+    // (up to 3 × 2s). Only a REAL "pending" answer means "never paid". No answer
+    // at all — network drop, timeout, worker 4xx/5xx (callWorker returns
+    // data:null, it never throws), or an "expired"/"forbidden" session — proves
+    // nothing: the card may have been charged and the booking completes on
+    // Nuitée's side. That lands on "unknown", which never says "nothing was
+    // charged" and never offers to pay again.
+    setChecking(true);
+    let last = null; // status of the most recent probe that actually answered
+    try {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const { data } = await callWorker("hotels/nuitee/status", { sid: pre.sid });
+          if (data?.status === "booked") { setBooking(data.booking); setStage("booked"); return; }
+          if (data?.status === "failed") { setErr(data.error || "The hotel could not confirm this rate."); setStage("failed"); return; }
+          last = data?.status === "pending" ? "pending" : null;
+        } catch { last = null; }
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 2000));
+      }
+      // Decided by the LAST probe: an early "pending" followed by a dropped probe
+      // could have flipped to booked in between.
+      setStage(last === "pending" ? "pending" : "unknown");
+    } finally { setChecking(false); }
   };
   const pay = async () => {
     setStage("paying");
-    await openPartnerAndWait(pre.checkoutUrl);   // resolves when the payment sheet closes (native)
-    await checkStatus();
+    const waited = await openPartnerAndWait(pre.checkoutUrl);   // true = native sheet closed
+    setWebTab(!waited);
+    // Native: the sheet closed, ask the worker. Web has no close signal, so we
+    // stay in "paying" and the traveler taps "I've paid — check my booking" —
+    // polling now would read the still-pending session and wrongly announce
+    // "not completed" while the card form is still open in the other tab.
+    if (waited) await checkStatus();
   };
 
-  const nights = hotel.nights || Math.max(1, Math.round((Date.parse(checkout) - Date.parse(checkin)) / 86400000));
+  // Dates are the OFFER's: FindAHotel hands us the search's checkin/checkout,
+  // and once prebook has run the worker's confirmed dates win — never the live
+  // date picker, which may have moved since the search.
+  const ci = pre?.checkin || checkin, co = pre?.checkout || checkout;
+  const span = Math.round((Date.parse(co) - Date.parse(ci)) / 86400000);
+  const nights = span > 0 ? span : (hotel.nights || 1);
   const price = pre?.price ?? hotel.price;
   const cur = pre?.currency || hotel.currency || "USD";
   const room = pre?.room || { name: hotel.roomName, board: hotel.board, refundable: hotel.freeCancellation, cancelBy: hotel.cancelBy };
@@ -88,14 +118,14 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
   );
 
   return (
-    <div className="fixed inset-0 z-[1300] flex items-end justify-center" style={{ background: "rgba(22,17,13,.45)" }} onClick={stage === "paying" ? undefined : onClose}>
+    <div className="fixed inset-0 z-[1300] flex items-end justify-center" style={{ background: "rgba(22,17,13,.45)" }} onClick={locked ? undefined : onClose}>
       <div className="w-full max-w-[560px] rounded-t-[22px] px-4 pt-3 pb-6 max-h-[92vh] overflow-y-auto" style={{ background: "#FBF8F1", paddingBottom: "calc(24px + env(safe-area-inset-bottom))" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="font-bold text-[calc(17px*var(--fs))] leading-snug" style={{ color: INK }}>{hotel.name}</div>
-            <div className="text-[calc(12.5px*var(--fs))] mt-0.5" style={{ color: INK2 }}>{fmtDate(checkin)} → {fmtDate(checkout)} · {nights} night{nights === 1 ? "" : "s"} · {adults} adult{adults === 1 ? "" : "s"}{children ? ` · ${children} child${children === 1 ? "" : "ren"}` : ""}</div>
+            <div className="text-[calc(12.5px*var(--fs))] mt-0.5" style={{ color: INK2 }}>{fmtDate(ci)} → {fmtDate(co)} · {nights} night{nights === 1 ? "" : "s"} · {adults} adult{adults === 1 ? "" : "s"}{children ? ` · ${children} child${children === 1 ? "" : "ren"}` : ""}</div>
           </div>
-          {stage !== "paying" && <button onClick={onClose} aria-label="Close" className="flex-none rounded-full p-1.5" style={{ background: "#fff", border: `1px solid ${RULE}` }}><X size={18} color={INK} /></button>}
+          {!locked && <button onClick={onClose} aria-label="Close" className="flex-none rounded-full p-1.5" style={{ background: "#fff", border: `1px solid ${RULE}` }}><X size={18} color={INK} /></button>}
         </div>
 
         {/* Rate summary — what is being bought, in plain words */}
@@ -143,8 +173,12 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
               style={{ background: ACCENT, opacity: stage === "paying" ? 0.6 : 1, fontFamily: "inherit" }}>
               {stage === "paying" ? "Payment window open…" : `Pay ${money(price, cur)} securely`}
             </button>
-            {stage === "paying" && <button onClick={checkStatus} className="w-full py-2.5 mt-2 text-[calc(13px*var(--fs))] font-semibold" style={{ color: ACCENT, background: "none", border: "none", fontFamily: "inherit" }}>I've paid — check my booking</button>}
-            <p className="text-[calc(10.5px*var(--fs))] leading-snug mt-3 px-0.5" style={{ color: "#9AA0A6" }}>The payment page opens in a secure sheet. When you're done, tap Done to come back — we'll confirm the booking here.</p>
+            {stage === "paying" && <button onClick={checkStatus} disabled={checking} className="w-full py-2.5 mt-2 text-[calc(13px*var(--fs))] font-semibold" style={{ color: ACCENT, background: "none", border: "none", fontFamily: "inherit", opacity: checking ? 0.6 : 1 }}>{checking ? "Checking…" : "I've paid — check my booking"}</button>}
+            <p className="text-[calc(10.5px*var(--fs))] leading-snug mt-3 px-0.5" style={{ color: "#9AA0A6" }}>
+              {webTab
+                ? "The payment page opened in a new tab. When you've paid, come back here and tap “I've paid — check my booking”."
+                : "The payment page opens in a secure sheet. When you're done, tap Done to come back — we'll confirm the booking here."}
+            </p>
           </>
         )}
 
@@ -153,8 +187,21 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
             <div className="text-[calc(13.5px*var(--fs))] font-bold mt-4" style={{ color: INK }}>Payment not completed yet</div>
             <div className="text-[calc(12.5px*var(--fs))] mt-1" style={{ color: INK2 }}>No booking was made and nothing was charged. You can reopen the payment page or check again.</div>
             <div className="flex gap-2 mt-3">
-              <button onClick={pay} className="flex-1 py-3 rounded-[14px] font-bold text-white text-[calc(14px*var(--fs))]" style={{ background: ACCENT, fontFamily: "inherit" }}>Reopen payment</button>
-              <button onClick={checkStatus} className="flex-1 py-3 rounded-[14px] font-bold text-[calc(14px*var(--fs))]" style={{ background: "#fff", color: INK, border: `1.5px solid ${RULE}`, fontFamily: "inherit" }}>Check again</button>
+              <button onClick={pay} disabled={checking} className="flex-1 py-3 rounded-[14px] font-bold text-white text-[calc(14px*var(--fs))]" style={{ background: ACCENT, fontFamily: "inherit", opacity: checking ? 0.6 : 1 }}>Reopen payment</button>
+              <button onClick={checkStatus} disabled={checking} className="flex-1 py-3 rounded-[14px] font-bold text-[calc(14px*var(--fs))]" style={{ background: "#fff", color: INK, border: `1.5px solid ${RULE}`, fontFamily: "inherit", opacity: checking ? 0.6 : 1 }}>{checking ? "Checking…" : "Check again"}</button>
+            </div>
+          </>
+        )}
+
+        {/* No answer from the worker — the opposite of "nothing was charged":
+            the booking completes on Nuitée's side, so never offer to pay again. */}
+        {stage === "unknown" && (
+          <>
+            <div className="text-[calc(13.5px*var(--fs))] font-bold mt-4" style={{ color: INK }}>We couldn't confirm your booking status yet</div>
+            <div className="text-[calc(12.5px*var(--fs))] mt-1" style={{ color: INK2 }}>If you paid, do <b style={{ color: INK }}>not</b> pay again — the booking completes on Nuitée's side. Check again in a moment.</div>
+            <div className="flex gap-2 mt-3">
+              <button onClick={checkStatus} disabled={checking} className="flex-1 py-3 rounded-[14px] font-bold text-white text-[calc(14px*var(--fs))]" style={{ background: ACCENT, fontFamily: "inherit", opacity: checking ? 0.6 : 1 }}>{checking ? "Checking…" : "Check again"}</button>
+              <button onClick={() => navigate(createPageUrl("MyTrip"))} className="flex-1 py-3 rounded-[14px] font-bold text-[calc(14px*var(--fs))]" style={{ background: "#fff", color: INK, border: `1.5px solid ${RULE}`, fontFamily: "inherit" }}>View My Trips</button>
             </div>
           </>
         )}

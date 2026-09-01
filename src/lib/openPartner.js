@@ -30,13 +30,18 @@ export async function openPartner(url) {
 
 // openPartnerAndWait — the same sheet, but resolves when the traveler closes it
 // (native `browserFinished`). Used by in-app checkout: when the payment sheet
-// closes we ask the worker whether the session booked. Web has no close signal:
-// it opens a tab and resolves at once (the caller then offers "I've paid — check").
+// closes we ask the worker whether the session booked.
+//
+// Returns true only when it actually WAITED for the sheet to close. Web has no
+// close signal: it opens a tab and resolves at once with false — the caller must
+// not poll on its own there (the session is legitimately still "pending" while
+// the traveler types a card number in the other tab) and instead offers
+// "I've paid — check my booking".
 export async function openPartnerAndWait(url) {
-  if (!url) return;
+  if (!url) return false;
   if (!Capacitor.isNativePlatform()) {
     try { window.open(url, "_blank", "noopener"); } catch { /* ignore */ }
-    return;
+    return false;
   }
   await new Promise((resolve) => {
     let done = false, handle = null;
@@ -44,4 +49,5 @@ export async function openPartnerAndWait(url) {
     Browser.addListener("browserFinished", finish).then((h) => { handle = h; }).catch(() => {});
     Browser.open({ url, presentationStyle: "popover" }).catch(() => finish());
   });
+  return true;
 }

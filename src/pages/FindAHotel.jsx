@@ -100,8 +100,8 @@ export default function FindAHotel() {
   // In-app lane (Nuitée Connect): bookable here, exact dates + coordinates only.
   const [inApp, setInApp] = useState(null);        // null=not searched · []=none · [...]=results
   const [inAppBusy, setInAppBusy] = useState(false);
-  const [inAppMeta, setInAppMeta] = useState(null); // {nights, env}
-  const [bookSheet, setBookSheet] = useState(null); // hotel being booked (opens HotelBookSheet)
+  const [inAppMeta, setInAppMeta] = useState(null); // {nights, env, checkin, checkout} — the OFFER's dates, from the search payload
+  const [bookSheet, setBookSheet] = useState(null); // {...hotel, checkin, checkout} being booked (opens HotelBookSheet)
 
   // Effective destination.
   const here = {
@@ -136,10 +136,20 @@ export default function FindAHotel() {
   const checkin = range?.from ? format(range.from, "yyyy-MM-dd") : "";
   const checkout = range?.to ? format(range.to, "yyyy-MM-dd") : "";
 
+  // Request-sequence guard: every findHotels takes a ticket, and a goal /
+  // destination / date change bumps the counter, so a late Stay22 or Nuitée
+  // response cannot repopulate lists that were just cleared. Abandoning in-flight
+  // work also has to release the busy flags those responses would have released.
+  const reqSeq = useRef(0);
+  const abandonInFlight = () => { reqSeq.current += 1; setHotelsBusy(false); setInAppBusy(false); };
+
   // Resolve airport list / top sight when the goal or destination changes.
   useEffect(() => {
     let cancelled = false;
-    setHotels(null); setInApp(null); setBookSheet(null); // clear stale results when goal/destination changes
+    // Clear stale results — but NOT bookSheet: a checkout in progress must survive
+    // background location drift ("here" is re-centred by auto-follow every 5 min
+    // and on every visibilitychange, which the Android payment sheet itself fires).
+    abandonInFlight(); setHotels(null); setInApp(null); setInAppMeta(null);
     if (goal === "airport" && hasCoords) {
       setAirportsBusy(true); setAirport(null); setApOpen(true);
       nearestAirports(dest.lat, dest.lng, 6, 130)
@@ -154,6 +164,12 @@ export default function FindAHotel() {
     }
     return () => { cancelled = true; };
   }, [goal, dest.lat, dest.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A date change invalidates the in-app offers (exact-date rates): drop them and
+  // any sheet opened from them, so a stale offer cannot be booked under new dates.
+  useEffect(() => {
+    abandonInFlight(); setInApp(null); setInAppMeta(null); setBookSheet(null);
+  }, [checkin, checkout]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const searchCities = async () => {
     const q = cityQuery.trim(); if (!q) return;
@@ -191,6 +207,8 @@ export default function FindAHotel() {
   const findHotels = async () => {
     if (blocked) return;
     const lp = locParams();
+    const seq = ++reqSeq.current;                // this search's ticket
+    const live = () => seq === reqSeq.current;   // false once a newer search or a goal/dest/date change superseded it
     setHotelsBusy(true); setHotels(null); setMaxPrice(null);
     // In-app (Nuitée) lane runs in parallel — exact dates + coordinates only;
     // flexible dates and address-only searches stay Stay22-only.
@@ -198,19 +216,26 @@ export default function FindAHotel() {
     setInApp(null); setInAppMeta(null); setInAppBusy(wantInApp);
     if (wantInApp) {
       callWorker("hotels/nuitee/search", { latitude: lp.lat, longitude: lp.lng, checkin, checkout, adults, children })
-        .then(({ data }) => { setInApp(Array.isArray(data?.hotels) ? data.hotels : []); setInAppMeta({ nights: data?.nights, env: data?.env }); })
-        .catch(() => setInApp([]))
-        .finally(() => setInAppBusy(false));
+        .then(({ data }) => {
+          if (!live()) return;
+          setInApp(Array.isArray(data?.hotels) ? data.hotels : []);
+          // The OFFER's dates travel with the results — the sheet shows these, never
+          // the live picker, which may move after the search.
+          setInAppMeta({ nights: data?.nights, env: data?.env, checkin: data?.checkin || checkin, checkout: data?.checkout || checkout });
+        })
+        .catch(() => { if (live()) setInApp([]); })
+        .finally(() => { if (live()) setInAppBusy(false); });
     }
     try {
       const { data } = await callWorker(ROUTE.searchHotels, { latitude: lp.lat, longitude: lp.lng, address: lp.address, checkin, checkout, adults, children });
+      if (!live()) return;
       const list = Array.isArray(data?.hotels) ? data.hotels : [];
       setHotels(list);
       // Geo-tagged demand signal — where people look for a stay + what they optimize
       // for (near sights / airport / centre). resultCount surfaces coverage gaps.
       logSearch('hotel', dest.city || dest.label || null, { goal, adults, children, resultCount: list.length });
-    } catch { setHotels([]); }
-    setHotelsBusy(false);
+    } catch { if (live()) setHotels([]); }
+    if (live()) setHotelsBusy(false);
   };
 
   // Smart handoff: when we arrive via a preset area/place ("Where visitors usually
@@ -471,7 +496,7 @@ export default function FindAHotel() {
             </div>
             <div className="flex flex-col gap-2.5">
               {inApp.filter((h) => maxPrice == null || h.price <= maxPrice).slice(0, 12).map((h) => (
-                <button key={h.id} onClick={() => setBookSheet(h)} className="w-full flex gap-3 p-2.5 rounded-[16px] text-left" style={{ background: "#FFFFFF", border: `1.5px solid ${ACCENT}55` }}>
+                <button key={h.id} onClick={() => setBookSheet({ ...h, checkin: inAppMeta?.checkin || checkin, checkout: inAppMeta?.checkout || checkout })} className="w-full flex gap-3 p-2.5 rounded-[16px] text-left" style={{ background: "#FFFFFF", border: `1.5px solid ${ACCENT}55` }}>
                   {h.thumbnail
                     ? <img src={h.thumbnail} alt="" className="flex-none rounded-[12px] object-cover" style={{ width: 92, height: 92 }} />
                     : <div className="flex-none rounded-[12px] flex items-center justify-center" style={{ width: 92, height: 92, background: ACCENT_BG, fontSize: fs(30) }}>🏨</div>}
@@ -496,7 +521,9 @@ export default function FindAHotel() {
             <div className="text-[calc(10.5px*var(--fs))] mt-1.5 px-1 leading-snug" style={{ color: "#9AA0A6" }}>Member rates via Nuitée Connect · you pay securely in the app · GlobeSkimmers earns a share of each booking</div>
           </div>
         )}
-        {bookSheet && <HotelBookSheet hotel={bookSheet} checkin={checkin} checkout={checkout} adults={adults} children={children} dest={dest} onClose={() => setBookSheet(null)} />}
+        {/* The sheet gets the OFFER's dates, snapshotted onto bookSheet when it was
+            opened — so it stays correct even after the lists/meta are cleared. */}
+        {bookSheet && <HotelBookSheet hotel={bookSheet} checkin={bookSheet.checkin} checkout={bookSheet.checkout} adults={adults} children={children} dest={dest} onClose={() => setBookSheet(null)} />}
 
         {/* Native results — real hotels with live prices + attributed Book links */}
         {hotels && !hotelsBusy && (
