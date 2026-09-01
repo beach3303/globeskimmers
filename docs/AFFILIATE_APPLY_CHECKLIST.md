@@ -38,7 +38,7 @@ Have these ready before you start (most forms want them):
 
 ### Travelpayouts — actual state on 2026-08-31 (from the portal)
 **Already joined (26):** Klook, Yesim, Kiwitaxi, Localrent, Welcome Pickups, Tiqets, Kiwi.com, GigSky, Airalo (12% via TP — beats the Impact plan; keep TP as its one channel), GetTransfer, Drimsim, GetRentacar, AirHelp, Go City, EKTA, Economybookings, BikesBooking, QEEQ, WeGoTrip, AutoEurope, Radical Storage, Aviasales, intui.travel, Compensair, Saily, KKday.
-**MISSING — apply under "Unlock more":** **Booking.com** and **Agoda** (the hotel pair; #6/#7 above). These need a separate application with site review.
+**Booking.com and Agoda: NOT AVAILABLE to this account on TP (checked 2026-08-31).** Decision: don't chase them. **Stay22 is the hotel lane and is already live** — FindAHotel.jsx runs a multi-OTA meta-search over Booking / Expedia / Agoda / Hotels.com with affiliate handoff + D1 click logging, so those inventories are monetized through it already. Rows #6/#7 above are superseded. Optional second hotel lane later, only for A/B: Expedia Group via Impact or Trip.com via Partnerize. The real upgrade remains §3 LiteAPI (own the booking, ~3–5× the affiliate rate).
 **Channel corrections:** Klook is joined via TP (not Involve Asia) — leave it there. Viator + GetYourGuide stay DIRECT (not in TP) ✓.
 **Integration note:** many programs are "Mobile web only" tracking — the app must open affiliate links in the in-app browser (Capacitor Browser / SFSafariViewController), never hand off to the partner's native app, or attribution is lost. Seven test links exist under Tools → Links (tpx.lt short links); programmatic links use the tp.media/r deep-link format with marker 755378 + sub_id.
 
