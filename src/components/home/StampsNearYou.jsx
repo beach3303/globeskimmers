@@ -82,7 +82,7 @@ export default function StampsNearYou({ onAction, wide = false }) {
         // proximity path may see them (inside their rotation window) — and we show a
         // secret ONLY when the traveler is physically inside its footprint. That is
         // the whole game: you stumble onto it by being there.
-        const { data, error } = await callWorker("attractions/nearby", { latitude: lat, longitude: lng, radiusKm: 40, limit: 24, includeSecrets: true });
+        const { data, error } = await callWorker("attractions/nearby", { latitude: lat, longitude: lng, radiusKm: 40, limit: 24, includeSecrets: true, stampsOnly: true });
         if (cancelled) return;
         const raw = (!error && Array.isArray(data?.attractions)) ? data.attractions : [];
         const list = raw.filter((a) => a.tier !== "secret" || (Number.isFinite(a.distanceKm) && a.distanceKm * 1000 <= (a.footprint_radius_m || 150)));
