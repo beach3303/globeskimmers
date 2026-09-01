@@ -133,12 +133,13 @@ export default function MyTripPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Show what you've STARTED (tapped a partner — resume where you left off) AND
-  // what the partner has CONFIRMED. StatusChip labels each honestly; a tap is
-  // never called a booking. Only cancelled items are dropped (not actionable).
-  // Updated 2026-08-24 so this page matches the home "pick up where you left
-  // off" card (which counts the same started+confirmed set).
-  const bookings = items.filter((it) => (it.status || "").toLowerCase() !== "cancelled");
+  // CONFIRMED ONLY (founder call, 2026-08-31 — reverses the 2026-08-24 change).
+  // My Trip is for things you actually booked: stays, tours, tickets, concerts.
+  // A tap on a partner link is not a booking and no longer appears here.
+  // "confirmed" is set by /aff/import from the partner's conversion report, so
+  // this list is only as current as the last import. The home card counts the
+  // same set and renders nothing at zero, so there is no "N items → empty page".
+  const bookings = items.filter((it) => (it.status || "").toLowerCase() === "confirmed");
 
   // Group into ordered sections.
   const grouped = SECTION_ORDER
@@ -196,8 +197,8 @@ export default function MyTripPage() {
           <EmptyState
             fs={fs} t={t}
             emoji="🧳"
-            title="Nothing here yet"
-            body="When you start booking a stay, tour, eSIM, or ticket through a Globeskimmers partner, it shows up here so you can pick up right where you left off."
+            title="No bookings yet"
+            body="Stays, tours, tickets, and anything else you book through a Globeskimmers partner appear here once the partner confirms it — usually a day or two after you pay."
             cta="Explore things to do"
             onCta={() => navigate(createPageUrl("ThingsToDo"))}
           />
@@ -210,8 +211,7 @@ export default function MyTripPage() {
             >
               <span className="text-[15px] leading-none mt-0.5">🧭</span>
               <p style={{ color: ED_INK3, fontSize: t(fs(12.5), fs(12)), lineHeight: 1.5 }}>
-                <b style={{ color: "#736657" }}>Started</b> means you began booking with a partner — tap to pick up where you left off.
-                <b style={{ color: "#0F7A50" }}> Confirmed</b> means the partner verified it (usually a day or two after you pay). A tap isn&rsquo;t a booking until it&rsquo;s confirmed.
+                Everything here is <b style={{ color: "#0F7A50" }}>confirmed</b> by the partner you booked with. New bookings usually appear a day or two after you pay.
               </p>
             </div>
 

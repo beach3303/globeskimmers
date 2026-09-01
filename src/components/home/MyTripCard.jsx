@@ -30,9 +30,9 @@ export default function MyTripCard({ wide = false }) {
     (async () => {
       try {
         const { data } = await callWorker(ROUTE.affiliateMine, {});
-        // Count started + confirmed (drop cancelled) so this card's count matches
-        // what the MyTrip page shows when tapped — no "3 items → empty page".
-        const rows = Array.isArray(data?.items) ? data.items.filter((it) => (it.status || "").toLowerCase() !== "cancelled") : [];
+        // Count CONFIRMED bookings only — the same set the MyTrip page shows, so a
+        // tap never lands on an empty page. At zero this card renders nothing.
+        const rows = Array.isArray(data?.items) ? data.items.filter((it) => (it.status || "").toLowerCase() === "confirmed") : [];
         if (!cancelled) setItems(rows);
       } catch { if (!cancelled) setItems([]); }
     })();
@@ -56,7 +56,7 @@ export default function MyTripCard({ wide = false }) {
           <div className="min-w-0 flex-1">
             <div className="font-serif text-[calc(17px*var(--fs))] leading-tight" style={{ color: INK }}>Your trip</div>
             <div className="text-[calc(12px*var(--fs))] mt-0.5" style={{ color: SUB }}>
-              {n} {n === 1 ? "item" : "items"} saved · pick up where you left off
+              {n} confirmed {n === 1 ? "booking" : "bookings"}
             </div>
           </div>
           <div className="flex-none flex items-center gap-1 text-[16px]" aria-hidden="true">
