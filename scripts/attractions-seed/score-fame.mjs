@@ -31,12 +31,22 @@ const UA = "GlobeSkimmersStampBar/1.0 (fame scoring; contact in repo)";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const MAX_KM = 30;
 
-const BAN = {   // root qid -> reason
-  Q1248784: "airport", Q34442: "road", Q46622: "controlled-access highway",
+const BAN = {   // closure-banned roots (P279*)
+  Q1248784: "airport", Q46622: "controlled-access highway",
   Q40357: "prison", Q7540126: "corporate headquarters", Q16917: "hospital",
   Q245016: "military base", Q159719: "power station",
 };
+const BAN_DIRECT = { Q34442: "road" };            // direct P31 only — closure swallowed bridges/stations/avenues
+const BAN_HERITAGE_ESCAPE = new Set(["Q40357"]);  // a heritage-designated 'prison' is a monument (Conciergerie), not a jail
 const REVIEW = { Q39614: "cemetery", Q3918: "university", Q3914: "school", Q123705: "neighborhood" };
+// Review classes where FAME overrides (≥ national bar): famous districts and
+// resting places are destinations (Times Square, Waikīkī, Père Lachaise).
+// Campuses are NOT (the Harvard rule): universities/schools stay founder-lane.
+const REVIEW_FAME_OVERRIDE = new Set(["Q39614", "Q123705"]);
+// Direct P31 only — the human-settlement CLOSURE also covers neighborhoods
+// (Times Square), which are legitimate stamp candidates. A row is a wrong
+// city-match only when its entity IS a municipality.
+const CITY_DIRECT = new Set(["Q515", "Q1549591", "Q5119", "Q3957", "Q532", "Q15284", "Q1637706", "Q200250"]); // city, big city, capital, town, village, municipality, million city, metropolis
 const KEEP = new Set(["Q570116", "Q4989906", "Q839954", "Q33506", "Q22698", "Q46169", "Q2416723", "Q43501"]); // attraction, monument, archaeological, museum, park, national park, theme park, zoo
 
 const km = (a, b, c, d) => { const R = 6371, dLa = (c - a) * Math.PI / 180, dLo = (d - b) * Math.PI / 180; const x = Math.sin(dLa / 2) ** 2 + Math.cos(a * Math.PI / 180) * Math.cos(c * Math.PI / 180) * Math.sin(dLo / 2) ** 2; return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x)); };
@@ -199,16 +209,24 @@ for (const r of pvCandidates) {
 // ── 5. score + emit ──
 const scope = (r) => {
   const q = ent.get(r.id); const s = q ? sig.get(q) : null;
-  const links = s?.sitelinks ?? 0, heritage = !!s?.heritage, pv = pvOf.get(r.id) ?? (r.popularity ?? 0);
   const verdicts = new Set((s?.p31 || []).flatMap((c) => [...(verdictByClass.get(c) || [])]));
-  const ban = [...verdicts].find((v) => v.startsWith("banned:"));
-  if (ban) return { scope: "local", ban };                              // hard ban — fame is irrelevant
+  // A row whose QID resolved to a CITY/settlement is a WRONG identity match
+  // (an attraction is IN a city, never IS one) — score as unresolved.
+  if ((s?.p31 || []).some((c) => CITY_DIRECT.has(c)) && !verdicts.has("KEEP")) return { scope: "local", ban: "wrong-match:city", noQid: true };
+  const links = s?.sitelinks ?? 0, heritage = !!s?.heritage, pv = pvOf.get(r.id) ?? (r.popularity ?? 0);
+  const fame = () => links >= 70 ? "world" : (links >= 32 || (heritage && links >= 7)) ? "national" : (links >= 7 || pv >= 2000) ? "regional" : "local";
+  let ban = [...verdicts].find((v) => v.startsWith("banned:"));
+  if (!ban) { const d = (s?.p31 || []).find((c) => BAN_DIRECT[c]); if (d) ban = `banned:${d}`; }
+  if (ban) {
+    const root = ban.split(":")[1];
+    if (!(BAN_HERITAGE_ESCAPE.has(root) && heritage)) return { scope: "local", ban };  // heritage redeems former prisons only
+  }
   const review = [...verdicts].find((v) => v.startsWith("review:"));
-  if (review && !verdicts.has("KEEP")) return { scope: "local", ban: review };  // review class → local until promoted
-  if (links >= 70) return { scope: "world", ban: null };
-  if (links >= 32 || (heritage && links >= 7)) return { scope: "national", ban: null };
-  if (links >= 7 || pv >= 2000) return { scope: "regional", ban: null };
-  return { scope: "local", ban: null };
+  if (review && !verdicts.has("KEEP")) {
+    const root = review.split(":")[1];
+    if (!(REVIEW_FAME_OVERRIDE.has(root) && links >= 32)) return { scope: "local", ban: review };  // Skid Row 19 stays out; Times Square 70 passes
+  }
+  return { scope: fame(), ban: null };
 };
 const esc = (v) => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
 const out = [`-- score-fame.mjs ${new Date().toISOString().slice(0, 10)} — scope per row (founder_scope always wins; untouched here)`];
@@ -216,7 +234,7 @@ const tally = {};
 for (const r of rows) {
   const q = ent.get(r.id); const s = q ? sig.get(q) : null; const v = scope(r);
   tally[v.scope] = (tally[v.scope] || 0) + 1;
-  out.push(`UPDATE attractions SET scope=${esc(v.scope)}, class_ban=${esc(v.ban)}, qid=${esc(q ?? null)}, sitelinks=${s ? s.sitelinks : 0}, is_marquee=${v.scope === "world" || v.scope === "national" ? 1 : (v.scope === "local" ? 0 : "is_marquee")} WHERE id=${esc(r.id)};`);
+  out.push(`UPDATE attractions SET scope=${esc(v.scope)}, class_ban=${esc(v.ban)}, qid=${esc(v.noQid ? null : (q ?? null))}, sitelinks=${v.noQid ? 0 : (s ? s.sitelinks : 0)}, is_marquee=${v.scope === "world" || v.scope === "national" ? 1 : (v.scope === "local" ? 0 : "is_marquee")} WHERE id=${esc(r.id)};`);
 }
 fs.writeFileSync(OUT_SQL, out.join("\n") + "\n");
 console.error(`DONE → ${OUT_SQL}`);
