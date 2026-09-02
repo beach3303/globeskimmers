@@ -96,7 +96,7 @@ export default function AdminAnalytics() {
       // Fan out over the live Worker /analytics-query route (one D1 query per
       // type), assembling the bundle the renderer expects. Native-safe via
       // callWorker — replaces the Base44 getAnalytics function (403s on device).
-      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'retention_cohorts_90d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes', 'searches_by_city', 'search_categories_by_city', 'transfer_vs_rental', 'zero_results_by_city', 'smart_search_by_scope', 'smart_search_by_category', 'smart_search_top_places', 'wishlist_by_city_30d', 'wishlist_top_30d', 'wishlist_by_kind_30d', 'wishlist_cta_30d', 'directions_by_place_30d', 'persona_distribution_30d', 'affiliate_funnel_30d', 'affiliate_clicks_by_intent_30d'];
+      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'retention_cohorts_90d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'passport_by_day_kind_30d', 'passport_by_week_kind_12w', 'passport_by_month_kind_12m', 'passport_top_airports', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes', 'searches_by_city', 'search_categories_by_city', 'transfer_vs_rental', 'zero_results_by_city', 'smart_search_by_scope', 'smart_search_by_category', 'smart_search_top_places', 'wishlist_by_city_30d', 'wishlist_top_30d', 'wishlist_by_kind_30d', 'wishlist_cta_30d', 'directions_by_place_30d', 'persona_distribution_30d', 'affiliate_funnel_30d', 'affiliate_clicks_by_intent_30d'];
       const pairs = await Promise.all(TYPES.map(async (type) => {
         const { data: qd, error: qe } = await callWorker(`analytics-query?type=${encodeURIComponent(type)}`, {});
         return [type, { results: qd?.results || [], error: qe || qd?.error || null }];
@@ -143,6 +143,11 @@ export default function AdminAnalytics() {
   const ppCountriesPeriods = data?.passport_countries_periods?.results?.[0] || {};
   const ppCountriesByMonth = data?.passport_countries_by_month?.results || [];
   const ppByHour = data?.passport_by_hour?.results || [];
+  // Airport-vs-destination splits (founder ask: "airports vs destinations, per day/week/month")
+  const ppByDayKind = data?.passport_by_day_kind_30d?.results || [];
+  const ppByWeekKind = data?.passport_by_week_kind_12w?.results || [];
+  const ppByMonthKind = data?.passport_by_month_kind_12m?.results || [];
+  const ppTopAirports = data?.passport_top_airports?.results || [];
 
   // ── Discover / behavior ("what people pick") — monetization signals, no PII ──
   const discDestinations = data?.discover_top_destinations?.results || [];
@@ -589,6 +594,8 @@ export default function AdminAnalytics() {
                 <div><b style={{ fontSize: 20 }}>{ppTotals.countries || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Countries</div></div>
                 <div><b style={{ fontSize: 20 }}>{ppTotals.attraction_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Attractions</div></div>
                 <div><b style={{ fontSize: 20 }}>{ppTotals.city_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Cities</div></div>
+                <div><b style={{ fontSize: 20 }}>{ppTotals.airport_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>✈️ Airports</div></div>
+                <div><b style={{ fontSize: 20 }}>{ppTotals.country_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Country stamps</div></div>
               </div>
             </Section>
 
@@ -607,6 +614,30 @@ export default function AdminAnalytics() {
             <Section title="📍 Stamps by attraction (all-time)" icon={Sparkles} empty={ppByAttraction.length === 0 ? 'No attraction stamps yet.' : null}>
               {ppByAttraction.map((a, i) => (
                 <BarRow key={i} label={`${a.name}${a.city ? ' · ' + a.city : ''}`} count={a.stamps} max={Math.max(...ppByAttraction.map(x => x.stamps || 0), 1)} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="✈️ vs 📍 — stamps per day (30d)" icon={Activity} empty={ppByDayKind.length === 0 ? 'No stamps in the last 30 days.' : null}>
+              {ppByDayKind.map((d, i) => (
+                <BarRow key={i} label={`${d.day} · ✈️${d.airport || 0} 📍${d.attraction || 0}`} count={d.total} max={Math.max(...ppByDayKind.map(x => x.total || 0), 1)} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="✈️ vs 📍 — stamps per week (12w)" icon={Activity} empty={ppByWeekKind.length === 0 ? 'No stamps in the last 12 weeks.' : null}>
+              {ppByWeekKind.map((d, i) => (
+                <BarRow key={i} label={`${d.week} · ✈️${d.airport || 0} 📍${d.attraction || 0}`} count={d.total} max={Math.max(...ppByWeekKind.map(x => x.total || 0), 1)} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="✈️ vs 📍 — stamps per month (12m)" icon={Activity} empty={ppByMonthKind.length === 0 ? 'No stamps in the last year.' : null}>
+              {ppByMonthKind.map((d, i) => (
+                <BarRow key={i} label={`${d.month} · ✈️${d.airport || 0} 📍${d.attraction || 0}`} count={d.total} max={Math.max(...ppByMonthKind.map(x => x.total || 0), 1)} color={COLORS.accent} />
+              ))}
+            </Section>
+
+            <Section title="✈️ Top airports stamped (all-time)" icon={Search} empty={ppTopAirports.length === 0 ? 'No airport stamps yet.' : null}>
+              {ppTopAirports.map((a, i) => (
+                <BarRow key={i} label={`${a.name}${a.iata ? ' · ' + a.iata : ''}${a.country ? ' · ' + a.country : ''}`} count={a.stamps} max={Math.max(...ppTopAirports.map(x => x.stamps || 0), 1)} color={COLORS.green} />
               ))}
             </Section>
 

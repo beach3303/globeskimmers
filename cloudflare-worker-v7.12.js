@@ -1358,7 +1358,9 @@ const ANALYTICS_QUERIES = {
     SELECT COUNT(*) AS total_stamps,
       COUNT(DISTINCT json_extract(payload,'$.country')) AS countries,
       SUM(CASE WHEN json_extract(payload,'$.kind')='attraction' THEN 1 ELSE 0 END) AS attraction_stamps,
-      SUM(CASE WHEN json_extract(payload,'$.kind')='city' THEN 1 ELSE 0 END) AS city_stamps
+      SUM(CASE WHEN json_extract(payload,'$.kind')='city' THEN 1 ELSE 0 END) AS city_stamps,
+      SUM(CASE WHEN json_extract(payload,'$.kind')='airport' THEN 1 ELSE 0 END) AS airport_stamps,
+      SUM(CASE WHEN json_extract(payload,'$.kind')='country' THEN 1 ELSE 0 END) AS country_stamps
     FROM events WHERE event_type='passport_stamp'
   `,
   passport_by_country: `
@@ -1426,6 +1428,34 @@ const ANALYTICS_QUERIES = {
       COUNT(*) AS total
     FROM events WHERE event_type='passport_stamp' AND ts>=strftime('%s','now','-30 days')
     GROUP BY day ORDER BY day
+  `,
+  // Stamps per ISO-ish week (12 weeks), split airport vs destination — the
+  // founder's cut: "airports vs destinations, per day/week/month".
+  passport_by_week_kind_12w: `
+    SELECT strftime('%Y-W%W', ts,'unixepoch') AS week,
+      SUM(CASE WHEN json_extract(payload,'$.kind')='airport' THEN 1 ELSE 0 END) AS airport,
+      SUM(CASE WHEN IFNULL(json_extract(payload,'$.kind'),'')<>'airport' THEN 1 ELSE 0 END) AS attraction,
+      COUNT(*) AS total
+    FROM events WHERE event_type='passport_stamp' AND ts>=strftime('%s','now','-84 days')
+    GROUP BY week ORDER BY week
+  `,
+  // Stamps per calendar month (12m), split airport vs destination.
+  passport_by_month_kind_12m: `
+    SELECT strftime('%Y-%m', ts,'unixepoch') AS month,
+      SUM(CASE WHEN json_extract(payload,'$.kind')='airport' THEN 1 ELSE 0 END) AS airport,
+      SUM(CASE WHEN IFNULL(json_extract(payload,'$.kind'),'')<>'airport' THEN 1 ELSE 0 END) AS attraction,
+      COUNT(*) AS total
+    FROM events WHERE event_type='passport_stamp' AND ts>=strftime('%s','now','-365 days')
+    GROUP BY month ORDER BY month
+  `,
+  // WHICH airports get stamped (IATA in entity_id when present).
+  passport_top_airports: `
+    SELECT json_extract(payload,'$.name') AS name,
+      json_extract(payload,'$.entity_id') AS iata,
+      json_extract(payload,'$.country') AS country, COUNT(*) AS stamps
+    FROM events
+    WHERE event_type='passport_stamp' AND json_extract(payload,'$.kind')='airport' AND json_extract(payload,'$.name') IS NOT NULL
+    GROUP BY name, country ORDER BY stamps DESC LIMIT 50
   `,
   // Total events + unique sessions in the last 7 days
   totals_7d: `
