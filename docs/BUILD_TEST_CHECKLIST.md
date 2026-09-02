@@ -543,7 +543,7 @@ State: Committed + pushed (frontend-only) · iOS bundle synced · Device ⬜
 
 ## 🧱 Phase B — Tier-1 close-out + Tier-2 labels (2026-09-01)
 Seven frontend file groups (one implementer + one reviewer each) + a worker batch (adversarially reviewed, 3 findings folded in). Frontend pushed; worker HELD. Files: PlacesToEat, CoffeeFinder, ATMFinder, Shopping, ConvenienceStore, RestroomFinder, RightNowStrip, CultureInformation, AtmAIDetails, AttractionAIDetails, LocationContext, ThingsToDo (labels); worker: attractions handler, restaurants dispatch (T1.10/T1.14), activity mappers (T2.4), enrich-owned (T1.5), AI stubs (T2.3).
-State: Frontend committed + pushed · iOS bundle synced · **Worker commits HELD (4) — next worker push deploys them; ask founder** · Device ⬜
+State: Frontend + worker DEPLOYED (push-all 2026-09-02, run 33649204321) · iOS bundle synced · Device ⬜
 - [ ] Cold start with location denied → every finder shows "Choose a location to search", no spinner, badges read "–"
 - [ ] Navigate to Tokyo from the US → Eat/Coffee/Shopping Open/Closed match Tokyo time (or show nothing), never the phone's clock
 - [ ] Coffee browse in an owned-DB city → "Open Now" chip disabled with the one-line hint until a café's hours load
@@ -554,7 +554,7 @@ State: Frontend committed + pushed · iOS bundle synced · **Worker commits HELD
 
 ## 🏅 Stamp-worthiness bar — LIVE in D1 (2026-09-02)
 Founder philosophy (see memory `stamp-worthiness-philosophy`): a place earns a stamp by clearing an ABSOLUTE fame bar, never by being a city's best. Calibrated on 58 founder-labeled places (binary 58/58; zero locals through) + 2 adversarial passes; scorer `scripts/attractions-seed/score-fame.mjs` (QID-keyed w/ 30 km coordinate check · class gate before fame · WDQS-free P279 closure · resumable · coverage guard). All 1,706 D1 rows graded + deduped by QID: **65 world · 424 national · 299 regional · 918 local (browse-only) · 95 duplicates retired.** Valencia's rail: 20 auto-seeded parks → **Six Flags Magic Mountain**. Paris rail now leads Eiffel → Louvre → Orsay → Notre-Dame → Versailles.
-State: **Scores + dedup APPLIED to remote D1** · worker `stampsOnly` filter + StampsNearYou flag committed but **HELD** (worker push = deploy) — the phone rail changes only after that push · founder-review queue open
+State: **DEPLOYED 2026-09-02** (push-all: 10 commits, run 33649204321 green) · live-verified: stamps rail near Valencia = Six Flags only; browse unchanged (18 rows); distance bands verb-free · iOS bundle synced (⌘R pending) · founder-review queue open
 - [ ] Founder review (set `founder_scope` to promote): Sorbonne (86, campus) · La Bastille (84, 'prison' — demolished landmark, promote?) · Gothic Quarter (29) · Nanjing Road (28, shopping street)
 - [ ] After worker push + ⌘R: Home in Valencia shows Six Flags + nearest LA icons, zero neighborhood parks
 - [ ] Event venues (Dodger Stadium etc.) scored regional+ but game-day gating is ROADMAP #24b — stamps allowed meanwhile
