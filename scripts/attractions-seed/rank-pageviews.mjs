@@ -85,7 +85,15 @@ for (let i = 0; i < raws.length; i += 50) {
   const url = "https://en.wikipedia.org/w/api.php?action=query&redirects=1&format=json&titles=" +
     encodeURIComponent(batch.join("|"));
   try {
-    const r = await fetch(url, { headers: { "User-Agent": UA } });
+    // Planet scale = thousands of these calls; honor 429s like everything else.
+    let r = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      r = await fetch(url, { headers: { "User-Agent": UA } }).catch(() => null);
+      if (r && r.ok) break;
+      if (r && r.status !== 429 && r.status < 500) break;
+      await sleep(Math.max((r ? parseInt(r.headers.get("retry-after") || "0", 10) : 0) * 1000, 1500 * 2 ** attempt));
+    }
+    if (!r || !r.ok) throw new Error(String(r ? r.status : "network"));
     const j = await r.json();
     const q = j.query || {};
     const map = new Map();
@@ -102,6 +110,17 @@ for (let i = 0; i < raws.length; i += 50) {
     }
   } catch { /* leave batch as-is; pageview fetch will 404 them individually */ }
   await sleep(120);
+}
+
+// ---- --titles-only: the GLOBAL run resolves titles here, then feeds them to
+// aggregate-pageviews.mjs (the dump path) instead of the rate-limited API.
+// The full run then re-invokes this script normally with pv-cache pre-warmed.
+if (process.argv.includes("--titles-only")) {
+  const outT = path.join(OUT, "titles.txt");
+  const canon = [...new Set([...wanted.values()].filter(Boolean))];
+  fs.writeFileSync(outT, canon.join("\n") + "\n");
+  console.error(`--titles-only: ${canon.length} canonical titles → ${outT}`);
+  process.exit(0);
 }
 
 // ---- fetch pageviews per canonical title ------------------------------------
