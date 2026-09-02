@@ -6528,7 +6528,7 @@ async function handleHomeRows(request, env, ctx) {
   // key make the homepage reshuffle across the day.
   const rLat = Math.round(latitude * 10) / 10;
   const rLng = Math.round(longitude * 10) / 10;
-  const cacheKey = `homerows_${rLat}_${rLng}_${dayPart}_${weatherBucket}`;
+  const cacheKey = `homerows_v2_${rLat}_${rLng}_${dayPart}_${weatherBucket}`;
 
   const cachedBundle = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
   if (cachedBundle && Array.isArray(cachedBundle.rows)) {
