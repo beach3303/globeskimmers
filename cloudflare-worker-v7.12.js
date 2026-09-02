@@ -6386,15 +6386,25 @@ function homeRowsDayPart(hour) {
 async function fetchOpenversePhoto(env, query, _ctx) {
   const q = String(query || '').trim();
   if (!q) return null;
-  const cacheKey = `openverse:v1:${q.toLowerCase()}`;
+  const cacheKey = `openverse:v2:${q.toLowerCase()}`;   // v2: content-safe picker (v1 cached a Hitler/Mussolini photo for "Munich")
   const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
   if (cached && cached.url) return cached;
   try {
-    const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&license_type=commercial&mature=false&aspect_ratio=wide&page_size=3`;
+    // Bias the search toward scenery and REJECT people/war-history results by
+    // title+tags. Measured failure: bare "Munich" returned a WWII photo of
+    // Hitler and Mussolini into the "Dreaming of your next trip" row. A
+    // destination card shows places, never people or atrocities; when nothing
+    // safe matches, show no photo (the card falls back gracefully).
+    const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(q + ' travel landmark')}&license_type=commercial&mature=false&aspect_ratio=wide&category=photograph&page_size=8`;
     const res = await fetch(url, { headers: { 'User-Agent': 'Globeskimmers/1.0 (+https://globeskimmers.io)' } });
     if (!res.ok) return null; // rate-limited/none → caller falls back gracefully
     const data = await res.json();
-    const p = (data?.results || []).find((x) => x && x.url) || null;
+    const UNSAFE = /hitler|mussolini|stalin|nazi|führer|fuhrer|reich|wehrmacht|gestapo|\bss\b|swastika|holocaust|propaganda|dictator|war\b|battle|soldier|troops|military|massacre|execution|funeral|corpse|protest|riot|portrait of|bust of/i;
+    const p = (data?.results || []).find((x) => {
+      if (!x || !x.url) return false;
+      const hay = `${x.title || ''} ${(x.tags || []).map((t) => t && t.name).join(' ')}`;
+      return !UNSAFE.test(hay);
+    }) || null;
     if (!p?.url) return null;
     const lic = (p.license || '').toUpperCase();
     const photo = {
