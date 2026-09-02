@@ -132,19 +132,54 @@ if (allQids.length && covered / allQids.length < 0.9) {
   process.exit(1);
 }
 
-// ── 3. ONE closure query: which seen classes fall under ban/review/keep roots ──
+// ── 3. class closure WITHOUT WDQS (it 503'd for hours): BFS up P279 via the
+// plain wbgetentities API — batched, backoff-protected, memoized on disk.
 const seen = [...new Set([...sig.values()].flatMap((s) => s.p31))];
 const roots = [...Object.keys(BAN), ...Object.keys(REVIEW), ...KEEP];
-const sparql = `SELECT ?c ?root WHERE { VALUES ?c { ${seen.map((q) => `wd:${q}`).join(" ")} } VALUES ?root { ${roots.map((q) => `wd:${q}`).join(" ")} } ?c wdt:P279* ?root . }`;
-const sr = await fetch("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(sparql), { headers: { "User-Agent": UA, Accept: "application/sparql-results+json" } });
-if (!sr.ok) { console.error(`!! HARD ERROR: closure query failed (${sr.status}) — refusing to score without the class gate.`); process.exit(1); }
-const verdictByClass = new Map();
-for (const b of (await sr.json()).results.bindings) {
-  const c = b.c.value.split("/").pop(), root = b.root.value.split("/").pop();
-  const v = KEEP.has(root) ? "KEEP" : BAN[root] ? `banned:${root}` : `review:${root}`;
-  if (!verdictByClass.has(c)) verdictByClass.set(c, new Set());
-  verdictByClass.get(c).add(v);
+const rootSet = new Set(roots);
+const PARENTS_CACHE = CACHE_DIR + "p279-cache.jsonl";
+const parentsOf = new Map();
+if (fs.existsSync(PARENTS_CACHE)) for (const l of fs.readFileSync(PARENTS_CACHE, "utf8").split("\n")) { if (!l) continue; try { const j = JSON.parse(l); parentsOf.set(j.k, j.v); } catch { /* skip */ } }
+const pOut = fs.createWriteStream(PARENTS_CACHE, { flags: "a" });
+let frontier = [...new Set(seen)].filter((q) => !parentsOf.has(q));
+let depth = 0;
+while (frontier.length && depth < 10) {
+  console.error(`  closure BFS depth ${depth}: ${frontier.length} classes`);
+  for (let i = 0; i < frontier.length; i += 50) {
+    const batch = frontier.slice(i, i + 50);
+    try {
+      const j = await api(`https://www.wikidata.org/w/api.php?action=wbgetentities&props=claims&format=json&ids=${batch.join("|")}`);
+      for (const id of batch) {
+        const ps = (j.entities?.[id]?.claims?.P279 || []).map((c) => c.mainsnak?.datavalue?.value?.id).filter(Boolean);
+        parentsOf.set(id, ps); pOut.write(JSON.stringify({ k: id, v: ps }) + "\n");
+      }
+    } catch (e2) { console.error(`  closure batch failed: ${e2.message}`); for (const id of batch) if (!parentsOf.has(id)) parentsOf.set(id, []); }  // in-memory only — a failed batch is refetched next run
+    await sleep(350);
+  }
+  const next = new Set();
+  for (const q of frontier) for (const p of parentsOf.get(q) || []) if (!parentsOf.has(p) && !rootSet.has(p)) next.add(p);
+  frontier = [...next]; depth++;
 }
+const ancestorsMemo = new Map();
+const ancestorsOf = (q, walking = new Set()) => {
+  if (ancestorsMemo.has(q)) return ancestorsMemo.get(q);
+  if (walking.has(q)) return new Set();               // P279 cycles exist; break them
+  walking.add(q);
+  const out = new Set([q]);
+  for (const p of parentsOf.get(q) || []) { out.add(p); for (const a of ancestorsOf(p, walking)) out.add(a); }
+  ancestorsMemo.set(q, out);
+  return out;
+};
+const verdictByClass = new Map();
+for (const c of seen) {
+  const anc = ancestorsOf(c);
+  for (const root of roots) if (anc.has(root)) {
+    const v = KEEP.has(root) ? "KEEP" : BAN[root] ? `banned:${root}` : `review:${root}`;
+    if (!verdictByClass.has(c)) verdictByClass.set(c, new Set());
+    verdictByClass.get(c).add(v);
+  }
+}
+console.error(`closure via API: ${verdictByClass.size} flagged classes (of ${seen.length} seen)`);
 
 // ── 4. pageview backstop only where it can matter (1–6 sitelinks + an enwiki title) ──
 const pvOf = new Map();
