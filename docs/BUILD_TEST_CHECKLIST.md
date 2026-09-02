@@ -559,3 +559,10 @@ State: **DEPLOYED 2026-09-02** (push-all: 10 commits, run 33649204321 green) · 
 - [ ] After worker push + ⌘R: Home in Valencia shows Six Flags + nearest LA icons, zero neighborhood parks
 - [ ] Event venues (Dodger Stadium etc.) scored regional+ but game-day gating is ROADMAP #24b — stamps allowed meanwhile
 - [ ] Global seed MUST run through this same bar (rule saved in memory)
+
+## 🧭 "The Google of Travel" — north-star brief delivered (2026-09-02)
+Product + design brief synthesized from a code-verified surface inventory (31 pages, dead routes found), a coherence audit of 9 founder screenshots, and 3 research tracks (anticipation psychology, arrive-rested flight timing, package-pricing UX). Artifact: https://claude.ai/code/artifact/7b3b4221-403e-457b-9d65-838879a0d4a9 · One search box, two modes (DREAM/NEARBY); 19 tiles → 5 doors + toolkit; Trips = MyTrip+Wishlist+Saved; Smart Packages S1–S7 (one corridor first; flights only inside packages); anticipation loop without dark patterns.
+State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (59dfc82) · Phase 0 rest awaits founder go
+- [ ] Founder reads the brief → go/no-go on Phase 0 (photo roulette → P18-by-QID, one-pool dedup, chrome un-stack, hero collapse, dead-surface deletes) and Phase 1 (the spine)
+- [ ] Apply to Flex Pay (Uplift) — longest lead item; needed for Smart Packages installments
+- [ ] Nuitée sandbox device test → production flip (Phase 0's money item)
