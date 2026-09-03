@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
-import { getCurrentPositionSmart } from '@/lib/geolocation';
+import { getCurrentPositionSmart, isLocationPermissionGranted } from '@/lib/geolocation';
 import { haversineKm } from '@/lib/homeContext';
 import {
   getSavedLocations as readSavedLocations,
@@ -149,6 +149,9 @@ export function LocationProvider({ children }) {
       // location-picker flow to choose one.
       const last = readLastLocation();
       if (last?.coordinates) {
+        // Seed the restore SYNCHRONOUSLY (before any await): the provider can
+        // remount during startup churn, and a remount mid-await would seed its
+        // state from a still-blank store — no location → spurious picker.
         if (last.placeType === 'current_location') {
           // Last session ended on LIVE GPS (switchToCurrentLocation / auto-follow
           // wrote this fix). Restore it as 'current', NOT 'navigate' — otherwise
@@ -157,9 +160,9 @@ export function LocationProvider({ children }) {
           // Map/Money/Culture say "Selected location" + 🧭, HomeRows sends
           // intent:planning, and the arrival/border stamp prompts never run.
           // This is exactly the state switchToCurrentLocation leaves behind, so
-          // consumers are on a known path. The fix may be hours old — the 'ask'
-          // and 'current' cold-open behaviors re-read GPS on Home, and auto-
-          // follow / the nudge still correct a real city change.
+          // consumers are on a known path. The fix may be hours old — 'current'
+          // verifies GPS below, 'ask' re-reads on Home, and auto-follow / the
+          // nudge still correct a real city change.
           setLocationMode('current');
           setCurrentGpsLocation(last);
         } else {
@@ -167,11 +170,39 @@ export function LocationProvider({ children }) {
           setLocationMode('navigate');
           setSelectedLocation(last);
         }
+        // VERIFY GPS FIRST (T2.5 part 2). The user's cold-open default says
+        // jump straight to live GPS — so before init completes (Home's entry
+        // flow waits on `loading`), try a quick SILENT fix and open on where
+        // they ARE, never on the restore above (last week's picked city, or a
+        // stale fix) as if it were today's pick. Silent = permission must
+        // already be granted (never prompts at cold start), and a hard ~5s
+        // race caps it because the native GPS chain can run far past its
+        // `timeout` option. On failure/denial the restore above simply stands,
+        // and Home's 'current' behavior still retries via
+        // switchToCurrentLocation (which may prompt) exactly as before.
+        // 'ask' and 'continue' users are untouched — they asked for the
+        // chooser / the previous place.
+        if (readOpenBehavior() === 'current' && (await isLocationPermissionGranted())) {
+          const fresh = await Promise.race([
+            (async () => {
+              // Cheap coarse fix (auto-follow's pattern), then one geocode —
+              // getCurrentLocation reuses the just-cached fix, no second read.
+              await getCurrentPositionSmart({ enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 });
+              return getCurrentLocation();
+            })(),
+            new Promise((resolve) => { setTimeout(() => resolve(null), 5000); }),
+          ]).catch(() => null);
+          if (fresh?.coordinates) {
+            setLocationMode('current');
+            setSelectedLocation(null);
+            writeLastLocation(fresh); // the verified fix is the new last location
+          }
+        }
       }
     } catch (e) { /* ignore — picker flow handles a fresh start */ }
     setInitialized(true);
     setLoading(false);
-  }, [setLocationMode, setSelectedLocation, setCurrentGpsLocation]);
+  }, [setLocationMode, setSelectedLocation, setCurrentGpsLocation, getCurrentLocation]);
 
   const getActiveLocation = useCallback(() => {
     return locationMode === 'current' ? currentGpsLocation : selectedLocation;
