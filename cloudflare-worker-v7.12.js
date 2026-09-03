@@ -6192,7 +6192,13 @@ async function handleAttractionsNearby(request, env, ctx) {
   const minLng = longitude - lngDelta;
   const maxLng = longitude + lngDelta;
 
-  const wheres = ['lat BETWEEN ? AND ?', 'lng BETWEEN ? AND ?'];
+  // Rows the fame scorer banned (wrong class: airports, prisons, …), rows a
+  // dedup pass demoted (class_ban='duplicate' — an icon/founder row with the
+  // same qid survives), and wrong city matches never browse. review:* rows are
+  // legit places awaiting a founder verdict — they stay browsable (the stamp
+  // bar already excludes them until scored).
+  const wheres = ['lat BETWEEN ? AND ?', 'lng BETWEEN ? AND ?',
+    "(class_ban IS NULL OR class_ban = '' OR class_ban LIKE 'review:%')"];
   const params = [minLat, maxLat, minLng, maxLng];
 
   if (Array.isArray(categories) && categories.length > 0) {
