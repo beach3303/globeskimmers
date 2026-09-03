@@ -83,9 +83,13 @@ console.error(`resolving ${raws.length} titles through redirects...`);
 // Disk-memoized: the --titles-only run and the full run resolve the SAME raws;
 // without this the full run re-buys ~3k batches and gets 429-walled for it.
 const RDCACHE = path.join(OUT, "redirects-cache.jsonl");
-if (fs.existsSync(RDCACHE)) for (const l of fs.readFileSync(RDCACHE, "utf8").split("\n")) { if (!l) continue; try { const j = JSON.parse(l); wanted.set(j.k, j.v); } catch { /* skip */ } }
+// wanted is identity-pre-seeded (raw -> raw), so "resolved" must be tracked by
+// the cache file itself, never by get() === undefined — that check made a fresh
+// run claim everything was cached and skip resolution entirely (measured).
+const rdDone = new Set();
+if (fs.existsSync(RDCACHE)) for (const l of fs.readFileSync(RDCACHE, "utf8").split("\n")) { if (!l) continue; try { const j = JSON.parse(l); wanted.set(j.k, j.v); rdDone.add(j.k); } catch { /* skip */ } }
 const rdOut = fs.createWriteStream(RDCACHE, { flags: "a" });
-const unresolvedRaws = raws.filter((r) => wanted.get(r) === undefined);
+const unresolvedRaws = raws.filter((r) => !rdDone.has(r));
 console.error(`  ${raws.length - unresolvedRaws.length} cached · ${unresolvedRaws.length} to resolve`);
 let rdBatches = 0, rdFailed = 0;
 for (let i = 0; i < unresolvedRaws.length; i += 50) {
@@ -171,11 +175,19 @@ async function medianViews(title) {
 }
 
 const canonSet = new Set([...wanted.values()].filter(Boolean));
-console.error(`fetching pageviews for ${canonSet.size} articles (${cache.size} cached)...`);
-let done = 0;
-for (const t of canonSet) {
-  await medianViews(t);
-  if (++done % 100 === 0) console.error(`  ...${done}/${canonSet.size}`);
+if (process.argv.includes("--no-api")) {
+  // Dump mode: pv-cache.jsonl came from aggregate-pageviews over the monthly
+  // dumps and IS the complete answer — a canonical title absent from it had no
+  // qualifying pageview rows, which means pv null, NOT an API question. The
+  // API loop at planet scale is 100k+ calls into a hard rate wall.
+  console.error(`--no-api: ${cache.size} cached medians serve ${canonSet.size} canonical titles; misses rank as null`);
+} else {
+  console.error(`fetching pageviews for ${canonSet.size} articles (${cache.size} cached)...`);
+  let done = 0;
+  for (const t of canonSet) {
+    await medianViews(t);
+    if (++done % 100 === 0) console.error(`  ...${done}/${canonSet.size}`);
+  }
 }
 
 // ---- rank per city ----------------------------------------------------------
