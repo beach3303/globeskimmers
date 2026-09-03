@@ -627,158 +627,65 @@ export default function HomePage() {
           Explore-more gradient row) and matches the approved phone preview.
           Single max-w-md column. Presentation only — every handler / data field
           below is reused exactly as the tablet layout consumes it. */}
-      {/* HERO GREETING CARD ----------------------------------------------- */}
+      {/* COMPACT HERO HEADER ----------------------------------------------
+          Replaces the 330px flag greeting card: one serif greeting line with
+          the glasses kept on the right, then a date · temp · location row.
+          No fixed height, no flag layers — the search bar now sits well
+          within the first viewport. Every handler/data field below is the
+          card's, just reflowed. */}
       <div className="px-4 pt-2 pb-3">
-        <div
-          className="max-w-md mx-auto rounded-[20px] relative overflow-hidden flex flex-col justify-end"
-          style={{
-            background: '#FFFFFF',
-            border: '1px solid #F0E9DC',
-            boxShadow: '0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)',
-            // CONSTANT fixed height — the box stays exactly this size and never
-            // grows/shrinks with the glasses text-size control; only the text
-            // inside scales (per user request). A definite height also lets the
-            // inner `min-h-full` distribute content top→base and the flag fill
-            // the whole card. Mirrors how HomeTablet pins its flag card.
-            height: 330,
-          }}
-        >
-          {/* Home-country flag as the greeting-card background. The ENTIRE flag
-              is shown undistorted — `contain` = no crop, no stretch — centered
-              over a blurred copy of itself so the card is fully filled (no empty
-              bars) without cutting off any part of the flag. A scrim keeps text
-              legible. Active when the Show Home Country Flag toggle is on. */}
-          {flagActive && (
-            <>
-              {/* Blurred fill: covers the card so there are no empty bars behind
-                  the contained flag. A slightly oversized backgroundSize hides any
-                  blur edge-seam — WITHOUT a transform (a scaled child escapes the
-                  page's overflow clip on iOS WKWebView and makes the whole app
-                  pannable sideways). */}
-              <div
-                className="absolute inset-0 z-0"
-                style={{
-                  backgroundImage: `url(${homeFlagUrl})`,
-                  backgroundSize: '170%',
-                  backgroundPosition: 'center',
-                  filter: 'blur(22px) saturate(1.2)',
-                }}
-              />
-              {/* The whole flag — uncropped and undistorted. */}
-              <div
-                className="absolute inset-0 z-0"
-                style={{
-                  backgroundImage: `url(${homeFlagUrl})`,
-                  backgroundSize: 'contain',
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'center',
-                  filter: 'saturate(1.05)',
-                }}
-              />
-              <div
-                className="absolute inset-0 z-[1]"
-                // Scrim shaped so the flag stays vibrant/filled through the
-                // middle: light wash at top (behind the Hello kicker), nearly
-                // clear in the center (the flag shows; the serif headline keeps
-                // its own text-shadow), darkening only toward the base where the
-                // white date·weather·location row needs contrast.
-                style={{ background: 'linear-gradient(180deg, rgba(8,10,14,0.42) 0%, rgba(8,10,14,0.12) 28%, rgba(8,10,14,0.08) 52%, rgba(8,10,14,0.55) 82%, rgba(8,10,14,0.82) 100%)' }}
-              />
-            </>
-          )}
-
-          {/* FIXED-big card: content laid out top→base (flex column +
-              justify-between) so the greeting/name pin to the top and the
-              date·weather·location row sits at the base, letting the flag fill
-              the whole card at every font size (mirrors HomeTablet). */}
-          <div className="relative z-10 p-4 flex flex-col justify-between h-full">
-          {/* TOP LINE — "Hello 👋" (left) · first name (right, just before the
-              glasses) · glasses (far right). The city headline sits below,
-              right-aligned over the plain fly side of the flag. */}
-          <div>
-            <div className="flex items-center justify-between gap-2">
-              <p className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] flex items-center gap-1.5 leading-none flex-shrink-0" style={{ color: flagActive ? 'rgba(255,255,255,.92)' : '#736657' }}>
-                <span>Hello 👋</span>
-                {localGreeting && (
-                  <span className="font-serif italic normal-case tracking-normal" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP }}>
-                    {localGreeting.charAt(0).toUpperCase() + localGreeting.slice(1)}
-                  </span>
-                )}
-              </p>
-              {/* First name CENTERED in the gap between "Hello 👋" and the glasses
-                  (flex-1 + text-center); whitespace-nowrap so it never splits its
-                  letters. */}
-              {getFirstName() && (
-                <span className="flex-1 min-w-0 text-center font-serif italic text-[calc(22px*var(--fs))] whitespace-nowrap" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP, textShadow: flagActive ? '0 1px 10px rgba(0,0,0,0.55)' : 'none', overflowWrap: 'normal', wordBreak: 'keep-all' }}>
-                  {getFirstName()}
+        <div className="max-w-md mx-auto">
+          {/* LINE 1 — mono "Hello 👋" kicker (+ local greeting) flowing into
+              the serif name (italic) and "in {city}" (regular serif) as one
+              wrappable line; FontScaleButton keeps its spot far right. */}
+          <div className="flex items-start justify-between gap-2">
+            <p className="flex-1 min-w-0 leading-snug">
+              <span className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))]" style={{ color: '#736657' }}>Hello 👋</span>
+              {localGreeting && (
+                <span className="font-serif italic text-[calc(14px*var(--fs))]" style={{ color: TEAL_DEEP }}>
+                  {' '}{localGreeting.charAt(0).toUpperCase() + localGreeting.slice(1)}
                 </span>
               )}
-              <div className="flex-none"><FontScaleButton /></div>
-            </div>
-
-            {/* City headline — right-aligned, 2-line clamp. */}
-            {cityName && (
-              <h1 className="text-right mt-2 font-serif leading-[1.06] text-[calc(28px*var(--fs))]" style={{ color: flagActive ? '#fff' : '#16110D', textShadow: flagActive ? '0 2px 18px rgba(0,0,0,0.55)' : 'none', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                <span style={{ color: flagActive ? 'rgba(255,255,255,.85)' : '#3A3128' }}>in </span>
-                <span className="italic" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP }}>{cityName}</span>
-              </h1>
-            )}
+              {getFirstName() && (
+                <span className="font-serif italic text-[calc(22px*var(--fs))]" style={{ color: TEAL_DEEP }}>
+                  {' '}{getFirstName()}
+                </span>
+              )}
+              {cityName && (
+                <span className="font-serif text-[calc(22px*var(--fs))]">
+                  <span style={{ color: '#3A3128' }}> in </span>
+                  <span style={{ color: '#16110D' }}>{cityName}</span>
+                </span>
+              )}
+            </p>
+            <div className="flex-none"><FontScaleButton /></div>
           </div>
 
-          {/* BOTTOM — normally "date · temp" (left) with the location pill
-              bottom-right. At the larger text sizes (step ≥ 2) it reflows: the
-              temperature + pill move to an upper row and the day·date drops to its
-              OWN last line at the bottom-left, so nothing crowds. */}
-          {fontStep >= 2 ? (
-            <div className="pt-2.5 flex flex-col gap-2" style={{ borderTop: `1px solid ${flagActive ? 'rgba(255,255,255,.25)' : '#F0E9DC'}` }}>
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                {weatherInfo && Number.isFinite(weatherInfo.celsius) && Number.isFinite(weatherInfo.fahrenheit) ? (
-                  <button onClick={toggleTempUnit} className="inline-flex items-center gap-1 whitespace-nowrap text-[calc(12px*var(--fs))] font-medium" style={{ color: flagActive ? '#fff' : '#3A3128', textShadow: flagActive ? '0 1px 8px rgba(0,0,0,0.5)' : 'none' }}>
-                    <Cloud size={13} color={flagActive ? '#FFD9A0' : TEAL_DEEP} strokeWidth={2} />
+          {/* LINE 2 — date · temp toggle (°C/°F, same handler) · location pill
+              ("Change" opens LocationModePicker). flex-wrap so the larger text
+              steps (fontStep ≥ 2) reflow onto extra lines instead of crowding. */}
+          <div className="mt-2 flex items-center justify-between gap-x-2 gap-y-2 flex-wrap">
+            <div className="flex items-center gap-1.5 text-[calc(12px*var(--fs))] font-medium" style={{ color: '#3A3128' }}>
+              <span className="whitespace-nowrap">{formatLocalDate(currentTime, timezone)}</span>
+              {weatherInfo && Number.isFinite(weatherInfo.celsius) && Number.isFinite(weatherInfo.fahrenheit) && (
+                <>
+                  <span style={{ opacity: 0.4 }}>·</span>
+                  <button onClick={toggleTempUnit} className="inline-flex items-center gap-1 whitespace-nowrap">
+                    <Cloud size={13} color={TEAL_DEEP} strokeWidth={2} />
                     {tempUnit === 'C' ? `${weatherInfo.celsius}°C` : `${weatherInfo.fahrenheit}°F`}
                   </button>
-                ) : <span />}
-                <button
-                  onClick={() => setShowLocationPicker(true)}
-                  className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 max-w-full min-w-0"
-                  style={{ background: flagActive ? 'rgba(0,0,0,0.4)' : '#F7F4EC', backdropFilter: flagActive ? 'blur(10px)' : 'none', WebkitBackdropFilter: flagActive ? 'blur(10px)' : 'none' }}
-                >
-                  <MapPin size={14} color={flagActive ? '#FFD9A0' : TEAL_DEEP} strokeWidth={2} className="flex-none" />
-                  <span className="text-[calc(11.5px*var(--fs))] font-semibold truncate" style={{ color: flagActive ? '#fff' : '#16110D' }}>{placeText}</span>
-                  <span className="text-[calc(10.5px*var(--fs))] underline underline-offset-2 flex-none" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP }}>Change</span>
-                </button>
-              </div>
-              {/* day · date — its own last line, bottom-left */}
-              <span className="text-[calc(12px*var(--fs))] font-medium" style={{ color: flagActive ? '#fff' : '#3A3128', textShadow: flagActive ? '0 1px 8px rgba(0,0,0,0.5)' : 'none' }}>{formatLocalDate(currentTime, timezone)}</span>
+                </>
+              )}
             </div>
-          ) : (
-            <div
-              className="flex items-end justify-between gap-x-2 gap-y-2 flex-wrap pt-2.5"
-              style={{ borderTop: `1px solid ${flagActive ? 'rgba(255,255,255,.25)' : '#F0E9DC'}` }}
+            <button
+              onClick={() => setShowLocationPicker(true)}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 max-w-full min-w-0"
+              style={{ background: '#F7F4EC' }}
             >
-              <div className="flex items-center gap-1.5 text-[calc(12px*var(--fs))] font-medium" style={{ color: flagActive ? '#fff' : '#3A3128', textShadow: flagActive ? '0 1px 8px rgba(0,0,0,0.5)' : 'none' }}>
-                <span className="whitespace-nowrap">{formatLocalDate(currentTime, timezone)}</span>
-                {weatherInfo && Number.isFinite(weatherInfo.celsius) && Number.isFinite(weatherInfo.fahrenheit) && (
-                  <>
-                    <span style={{ opacity: 0.4 }}>·</span>
-                    <button onClick={toggleTempUnit} className="inline-flex items-center gap-1 whitespace-nowrap">
-                      <Cloud size={13} color={flagActive ? '#FFD9A0' : TEAL_DEEP} strokeWidth={2} />
-                      {tempUnit === 'C' ? `${weatherInfo.celsius}°C` : `${weatherInfo.fahrenheit}°F`}
-                    </button>
-                  </>
-                )}
-              </div>
-              <button
-                onClick={() => setShowLocationPicker(true)}
-                className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 max-w-full min-w-0"
-                style={{ background: flagActive ? 'rgba(0,0,0,0.4)' : '#F7F4EC', backdropFilter: flagActive ? 'blur(10px)' : 'none', WebkitBackdropFilter: flagActive ? 'blur(10px)' : 'none' }}
-              >
-                <MapPin size={14} color={flagActive ? '#FFD9A0' : TEAL_DEEP} strokeWidth={2} className="flex-none" />
-                <span className="text-[calc(11.5px*var(--fs))] font-semibold truncate" style={{ color: flagActive ? '#fff' : '#16110D' }}>{placeText}</span>
-                <span className="text-[calc(10.5px*var(--fs))] underline underline-offset-2 flex-none" style={{ color: flagActive ? '#FFD9A0' : TEAL_DEEP }}>Change</span>
-              </button>
-            </div>
-          )}
+              <MapPin size={14} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
+              <span className="text-[calc(11.5px*var(--fs))] font-semibold truncate" style={{ color: '#16110D' }}>{placeText}</span>
+              <span className="text-[calc(10.5px*var(--fs))] underline underline-offset-2 flex-none" style={{ color: TEAL_DEEP }}>Change</span>
+            </button>
           </div>
         </div>
       </div>
