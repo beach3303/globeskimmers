@@ -128,7 +128,8 @@ export default function HomeRows({ onAction, wide = false }) {
       if (loc) sessionStorage.setItem("activity_location", JSON.stringify(loc));
       trackEvent("home_row_open_detail", { place_id: card.id, place_name: card.name });
       setDetail(null);
-      navigate(createPageUrl("ActivityDetail"));
+      // ?id= makes the page deep-linkable/shareable; sessionStorage stays the fast path.
+      navigate(createPageUrl("ActivityDetail") + "?id=" + encodeURIComponent(activity.id));
     } catch {
       setDetail(null);
       onAction?.("Things to Do"); // safe fallback to the finder list

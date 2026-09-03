@@ -133,8 +133,40 @@ export default function ActivityDetailPage() {
       const storedActivity = sessionStorage.getItem('current_activity');
       const storedLocation = sessionStorage.getItem('activity_location');
 
+      let activityData = null;
       if (storedActivity) {
-        const activityData = JSON.parse(storedActivity);
+        // Fast path: the in-app handoff (HomeRows / StampsNearYou / finders).
+        activityData = JSON.parse(storedActivity);
+      } else {
+        // Deep link / share: no handoff → fetch the D1 row by ?id= and map it
+        // into the activity shape this page renders.
+        const id = new URLSearchParams(location.search).get('id');
+        if (id) {
+          const { data } = await callWorker('attractions/get', { id });
+          const row = data?.attraction ?? (data?.id != null ? data : null);
+          if (row) {
+            activityData = {
+              id: row.id,
+              name: row.name,
+              category: row.category,
+              latitude: row.lat,
+              longitude: row.lng,
+              city: row.city || undefined,
+              country: row.country || undefined,
+              description: row.description || (row.whyVisit ?? row.why_visit) || '',
+              why_visit: (row.whyVisit ?? row.why_visit) || undefined,
+              photos: (row.photoUrl ?? row.photo_url) ? [(row.photoUrl ?? row.photo_url)] : [],
+              mainPhoto: (row.photoUrl ?? row.photo_url) || undefined,
+              rating: row.rating,
+              free_to_visit: (row.freeToVisit ?? row.free_to_visit),
+              footprint_radius_m: row.footprint_radius_m ?? undefined,
+              typical_minutes: (row.typicalMinutes ?? row.typical_minutes) ?? undefined,
+            };
+          }
+        }
+      }
+
+      if (activityData) {
         setActivity(activityData);
 
         if (storedLocation) {
@@ -144,7 +176,9 @@ export default function ActivityDetailPage() {
         const saved = localStorage.getItem('saved_activities') || '[]';
         setIsSaved(JSON.parse(saved).includes(activityData.id));
 
-        await loadEnhancedDetails(activityData);
+        // Fire-and-forget: the LLM tips render a small skeleton (loadingDetails)
+        // instead of gating first paint on a multi-second model call.
+        loadEnhancedDetails(activityData);
         loadOwnedPhotos(activityData);
         loadOwnedAddress(activityData);
       }
@@ -285,13 +319,16 @@ export default function ActivityDetailPage() {
   };
 
   const handleShare = async () => {
+    // Id-addressed deep link — window.location.href can be a bare /ActivityDetail
+    // when we arrived via the sessionStorage handoff, which shares nothing useful.
+    const shareUrl = window.location.origin + '/ActivityDetail?id=' + encodeURIComponent(activity.id);
     // Try to use native share if available
     if (navigator.share) {
       try {
         await navigator.share({
           title: activity.name,
           text: `Check out ${activity.name} on Globeskimmers!`,
-          url: window.location.href
+          url: shareUrl
         });
         return;
       } catch {
@@ -355,6 +392,12 @@ export default function ActivityDetailPage() {
           className="px-6 py-3 bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white rounded-xl font-semibold"
         >
           Go Back
+        </button>
+        <button
+          onClick={() => navigate('/ThingsToDo')}
+          className="mt-3 px-6 py-3 bg-white border border-gray-300 text-gray-900 rounded-xl font-semibold"
+        >
+          Find it in Things to Do
         </button>
       </div>
     );
@@ -768,7 +811,7 @@ export default function ActivityDetailPage() {
               </div>
             </div>
 
-            {(llmTips.length > 0 || activity.tip) && (
+            {(loadingDetails || llmTips.length > 0 || activity.tip) && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
                 <h3 className="text-[calc(16px*var(--fs))] font-bold text-blue-900 mb-2 flex items-center gap-2">
                   <Info className="w-5 h-5" />
@@ -787,6 +830,14 @@ export default function ActivityDetailPage() {
                       <span>{tip}</span>
                     </li>
                   ))}
+                  {/* LLM tips load in the background (non-blocking) — skeleton until they land */}
+                  {loadingDetails && llmTips.length === 0 && (
+                    <>
+                      <li className="h-3.5 rounded bg-blue-200/60 animate-pulse w-11/12" aria-hidden="true"></li>
+                      <li className="h-3.5 rounded bg-blue-200/60 animate-pulse w-4/5" aria-hidden="true"></li>
+                      <li className="h-3.5 rounded bg-blue-200/60 animate-pulse w-2/3" aria-hidden="true"></li>
+                    </>
+                  )}
                 </ul>
               </div>
             )}
@@ -835,7 +886,7 @@ export default function ActivityDetailPage() {
               </div>
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(window.location.href);
+                  navigator.clipboard.writeText(window.location.origin + '/ActivityDetail?id=' + encodeURIComponent(activity.id));
                   // Replaced alert('Link copied!') with the global toast
                   // helper — alerts look like a browser dialog in a
                   // native app, which is jarring on the polished detail

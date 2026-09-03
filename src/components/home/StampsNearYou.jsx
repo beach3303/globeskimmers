@@ -119,7 +119,8 @@ export default function StampsNearYou({ onAction, wide = false }) {
       sessionStorage.setItem("current_activity", JSON.stringify(activity));
       if (loc) sessionStorage.setItem("activity_location", JSON.stringify(loc));
       logDiscover("home_stamp_tap", { place_id: item.id, place_name: item.name });
-      navigate(createPageUrl("ActivityDetail"));
+      // ?id= makes the page deep-linkable/shareable; sessionStorage stays the fast path.
+      navigate(createPageUrl("ActivityDetail") + "?id=" + encodeURIComponent(activity.id));
     } catch { onAction?.("Things to Do"); }
   };
 
