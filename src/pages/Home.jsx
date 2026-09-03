@@ -11,15 +11,12 @@ import StampsNearYou from "../components/home/StampsNearYou";
 import StayAnchor from "../components/home/StayAnchor";
 import EscapesRow from "../components/home/EscapesRow";
 import RightNowStrip from "../components/home/RightNowStrip";
-import WhereToStay from "../components/home/WhereToStay";
 import EventsRow from "../components/home/EventsRow";
 import MyTripCard from "../components/home/MyTripCard";
 import WishlistCard from "../components/home/WishlistCard";
-import VibeBundles from "../components/home/VibeBundles";
+import AllServicesSheet from "../components/home/AllServicesSheet";
 import { getTravelMode } from "@/lib/homeContext";
-import { getPrimaryStay } from "@/lib/savedLocations";
-import HomeBanner from "../components/ads/HomeBanner";
-import { CAT, TEAL_DEEP, IVORY } from "../components/redesign/constants";
+import { TEAL_DEEP, IVORY, IVORY_2 } from "../components/redesign/constants";
 import { useAuth } from "@/lib/AuthContext";
 import { extractFirstName } from "@/lib/extractFirstName";
 import { isLocationPermissionGranted } from "@/lib/geolocation";
@@ -28,7 +25,6 @@ import AirportArrivalPrompt from "@/components/AirportArrivalPrompt";
 import BorderCrossingPrompt from "@/components/BorderCrossingPrompt";
 import { ROUTE } from "@/lib/workerRoutes";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
-import { useFontScale } from "@/components/a11y/FontScaleContext";
 import { countryCode } from "@/lib/countries";
 import { homeTimezoneForCountry } from "@/lib/homePlace";
 import { useIsTablet } from "@/lib/useIsTablet";
@@ -77,32 +73,16 @@ const HOME_CAPITAL_COORDS = {
 // (countryCode), so EVERY country a user picks in Settings resolves to a flag —
 // not just the ~20 that used to be hardcoded here.
 
-// Phone finder tiles — the six core finders (mirrors HomeTablet's FEATURES list).
-// `action` is the label fed to handleQuickAction, which owns ALL navigation; no
-// routes are invented here.
-const PHONE_FEATURES = [
-  { cat: CAT.transit,     emoji: '🚌', title: 'Transit Info',       sub: 'Routes & times',   action: 'Transportation' },
-  { cat: CAT.food,        emoji: '🍽️', title: 'Nearby Restaurants', sub: 'Where locals eat', action: 'Places to Eat' },
-  { cat: CAT.coffee,      emoji: '☕', title: 'Coffee Finder',      sub: 'Cafés near you',   action: 'Coffee' },
-  { cat: CAT.atm,         emoji: '🏧', title: 'ATM Finder',         sub: 'Skip the fees',    action: 'ATM' },
-  { cat: CAT.restroom,    emoji: '🚻', title: 'Restroom Finder',    sub: 'Clean & rated',    action: 'Restroom' },
-  { cat: CAT.convenience, emoji: '🏪', title: 'Convenience',        sub: '24/7 essentials',  action: 'Convenience Store' },
-];
-
-// Phone Explore-more cards — smaller gradient tiles (same gradients/glyphs as
-// the tablet GradCards). Weather lives here on phone (it is a finder tile on
-// tablet); Price + Text scanners are separate cards so BOTH stay reachable.
-const PHONE_EXPLORE = [
-  { grad: `linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 100%)`,     emoji: '🎟️', title: 'Things to do',  action: 'Things to Do' },
-  { grad: 'linear-gradient(135deg, #8B3A1E 0%, #B0472F 100%)',             emoji: '🛂', title: 'Virtual Passport', action: 'Passport' },
-  { grad: 'linear-gradient(135deg, #4338CA 0%, #6366F1 100%)',             emoji: '💡', title: 'Insight',       action: 'Insight' },
-  { grad: 'linear-gradient(135deg, #0E7C66 0%, #14B8A6 100%)',             emoji: '🧳', title: 'Essentials',    action: 'Travel Essentials' },
-  { grad: `linear-gradient(135deg, ${CAT.shopping.ink} 0%, #A855F7 100%)`, emoji: '🛍️', title: 'Shopping',      action: 'Shopping' },
-  { grad: `linear-gradient(135deg, ${CAT.culture.ink} 0%, #D97706 100%)`,  emoji: '🏛️', title: 'Cultural Info', action: 'Culture Information' },
-  { grad: `linear-gradient(135deg, ${CAT.weather.ink} 0%, #F4B740 100%)`,  emoji: '☀️', title: 'Weather',       action: 'Weather' },
-  { grad: `linear-gradient(135deg, ${CAT.phrases.ink} 0%, #EAB308 100%)`,  emoji: '💬', title: 'Phrases',       action: 'Basic Phrases' },
-  { grad: 'linear-gradient(135deg, #0F766E 0%, #14B8A6 100%)',             emoji: '💲', title: 'Price scanner', action: 'Smart Price Scanner' },
-  { grad: 'linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%)',             emoji: '🔤', title: 'Text scanner',  action: 'Smart Text Scanner' },
+// Finder chip row — ONE stable set of five (never shuffled by journey mode, per
+// the never-shuffle rule). The four lead finders navigate directly through
+// handleQuickAction (which owns ALL navigation — no routes invented here);
+// "All services" opens AllServicesSheet, which carries every destination the
+// two retired tile grids offered.
+const FINDER_CHIPS = [
+  { label: 'Eat', action: 'Places to Eat' },
+  { label: 'Coffee', action: 'Coffee' },
+  { label: 'Things to do', action: 'Things to Do' },
+  { label: 'Hotels', action: 'Find a Hotel' },
 ];
 
 // Module-scoped so it survives Home re-mounts within one app session: the
@@ -124,10 +104,6 @@ export default function HomePage() {
   // iPad gets a dedicated tablet layout (HomeTablet); phone gets the fuller
   // editorial layout below.
   const isTablet = useIsTablet();
-  // Text-size step (0-3) from the glasses control. Phone Explore tiles grow with
-  // it and the Explore grid drops to 2-col at the larger steps so the enlarged
-  // tiles + titles fit (presentation only — see PHONE_EXPLORE render below).
-  const { step: fontStep } = useFontScale();
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -137,6 +113,7 @@ export default function HomePage() {
   const [timezone, setTimezone] = useState(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [showSearch, setShowSearch] = useState(false); // Smart-Search spine overlay
+  const [showAllServices, setShowAllServices] = useState(false); // "All services" sheet behind the finder chip row
   const routerLocation = useRouterLocation();
   const [destDismissed, setDestDismissed] = useState(false);
   const destSearch = routerLocation.state?.destinationSearch || null; // "everything <place>" mode
@@ -622,11 +599,11 @@ export default function HomePage() {
         />
       ) : (
       <>
-      {/* PHONE — fuller editorial Home. Mirrors HomeTablet's structure at phone
-          scale (greeting card → Money Exchange hero → 2-col finder tiles →
-          Explore-more gradient row) and matches the approved phone preview.
-          Single max-w-md column. Presentation only — every handler / data field
-          below is reused exactly as the tablet layout consumes it. */}
+      {/* PHONE — editorial Home (Phase-1a-lite): greeting header → clock stack →
+          Smart-Search spine → finder chip row (+ All-services sheet) → the
+          journey-ordered Discover stack. Single max-w-md column. Presentation
+          only — every handler / data field below is reused exactly as the
+          tablet layout consumes it (tablet converges later). */}
       {/* COMPACT HERO HEADER ----------------------------------------------
           Replaces the 330px flag greeting card: one serif greeting line with
           the glasses kept on the right, then a date · temp · location row.
@@ -663,7 +640,7 @@ export default function HomePage() {
 
           {/* LINE 2 — date · temp toggle (°C/°F, same handler) · location pill
               ("Change" opens LocationModePicker). flex-wrap so the larger text
-              steps (fontStep ≥ 2) reflow onto extra lines instead of crowding. */}
+              steps (text-size glasses) reflow onto extra lines instead of crowding. */}
           <div className="mt-2 flex items-center justify-between gap-x-2 gap-y-2 flex-wrap">
             <div className="flex items-center gap-1.5 text-[calc(12px*var(--fs))] font-medium" style={{ color: '#3A3128' }}>
               <span className="whitespace-nowrap">{formatLocalDate(currentTime, timezone)}</span>
@@ -716,117 +693,75 @@ export default function HomePage() {
 
       {/* SMART-SEARCH SPINE — one search that routes into the right world. */}
       <SmartSearchBar onOpen={() => setShowSearch(true)} />
+
+      {/* FINDER CHIPS — one stable horizontal row of five quiet pills directly
+          under the search bar (replaces BOTH old tile grids). Same set in every
+          journey mode (never shuffled); "All services" opens the sheet with
+          every destination the old grids offered. */}
+      <div className="px-4 pb-3">
+        <div className="max-w-md mx-auto flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+          {FINDER_CHIPS.map((c) => (
+            <FinderChip key={c.label} label={c.label} onClick={() => handleQuickAction(c.action)} />
+          ))}
+          <FinderChip
+            label="All services"
+            accent
+            onClick={() => {
+              trackEvent('feature_used', { feature_name: 'all_services_sheet' });
+              setShowAllServices(true);
+            }}
+          />
+        </div>
+      </div>
       {destSearch && !destDismissed && (
         <DestinationStrip place={destSearch} onAction={handleQuickAction} onDismiss={() => setDestDismissed(true)} />
       )}
 
-      {/* FEATURE TILES — 2-col grid of all six finders. Editorial: emoji chip,
-          serif title (2-line clamp), tiny subtitle; min-height so enlarging text
-          grows the tile instead of clipping. */}
-      <div className="px-4 pb-3">
-        <div className="max-w-md mx-auto grid grid-cols-2 gap-2.5">
-          {/* Row 1: Book a Ride + Find a Hotel (both travel-booking) */}
-          <PhoneTile cat={{ ink: '#2563EB' }} emoji="🚗" title="Book a Ride" sub="Cars · transfers · rides" onClick={() => handleQuickAction('Get A Ride')} />
-          <PhoneTile cat={{ ink: '#2563EB' }} emoji="🏨" title="Find a Hotel" sub="Best price · all sites" onClick={() => handleQuickAction('Find a Hotel')} />
-          <PhoneTile cat={CAT.money} emoji="💱" title="Money Exchange" sub="Compare rates near you" onClick={() => handleQuickAction('Money Exchange')} />
-          {PHONE_FEATURES.map((f) => (
-            <PhoneTile key={f.title} cat={f.cat} emoji={f.emoji} title={f.title} sub={f.sub} onClick={() => handleQuickAction(f.action)} />
-          ))}
-        </div>
-      </div>
+      {/* DISCOVER — living sections below the chips (each renders NOTHING when
+          there's no coverage, and all re-center as the user moves). Two stable
+          stacks, capped and mode-correct — getTravelMode decides which:
+            nearby (domestic/international/discovery): what's on right now →
+              stamps → events → top spots, then the trip anchors (self-hiding);
+            home/planning: the dream shelf (HomeRows until the dedicated one
+              exists) → escapes → events, then the trip anchors.
+          VibeBundles + WhereToStay moved OFF Home — the planner and the
+          FindAHotel flow own them next. */}
+      {["domestic", "international", "discovery"].includes(journeyMode) ? (
+        <>
+          <RightNowStrip onAction={handleQuickAction} />
+          <StampsNearYou onAction={handleQuickAction} />
+          <EventsRow />
+          <HomeRows onAction={handleQuickAction} />
+          <StayAnchor />
+          <MyTripCard />
+          <WishlistCard />
+        </>
+      ) : (
+        <>
+          <HomeRows onAction={handleQuickAction} />
+          <EscapesRow onAction={handleQuickAction} />
+          <EventsRow />
+          <WishlistCard />
+          <MyTripCard />
+          <StayAnchor />
+        </>
+      )}
 
-      {/* DISCOVER — living sections below the tiles (tiles stay the lead). Each
-          renders NOTHING when there's no owned coverage, so the tiles stand
-          alone; all re-center as the user moves (auto-follow / active location). */}
-      {journeyMode !== "planning" && <RightNowStrip onAction={handleQuickAction} />}
-      <StayAnchor />
-      <MyTripCard />
-      <WishlistCard />
-      <VibeBundles />
-      {!getPrimaryStay() && ["planning", "international", "domestic"].includes(journeyMode) && <WhereToStay />}
-      {(() => {
-        // Lead with what fits the moment (journey-state). StayAnchor stays on top.
-        const active = getActiveLocation();
-        const city = active?.address?.city || active?.placeName || "";
-        const ORDER = {
-          home: ["escapes", "rows", "stamps"],          // based here → get out / plan
-          discovery: ["rows", "escapes", "stamps"],
-          domestic: ["stamps", "rows", "escapes"],       // on a trip → collect + explore nearby
-          international: ["stamps", "rows", "escapes"],
-          planning: ["rows", "escapes", "stamps"],       // browsing → top spots + day trips
-        };
-        const line = {
-          home: city ? `You're home in ${city} — plan an escape?` : "",
-          domestic: city ? `Exploring ${city}` : "",
-          international: city ? `Exploring ${city}` : "",
-          planning: city ? `Planning ${city}` : "",
-          discovery: "",
-        }[journeyMode] || "";
-        const SEC = {
-          rows: <HomeRows key="rows" onAction={handleQuickAction} />,
-          stamps: <StampsNearYou key="stamps" onAction={handleQuickAction} />,
-          escapes: <EscapesRow key="escapes" onAction={handleQuickAction} />,
-        };
-        const order = ORDER[journeyMode] || ["rows", "stamps", "escapes"];
-        return (
-          <>
-            {line && (
-              <div className="px-4 pb-1">
-                <div className="max-w-md mx-auto font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] font-semibold" style={{ color: "#736657" }}>{line}</div>
-              </div>
-            )}
-            {order.map((k) => SEC[k])}
-          </>
-        );
-      })()}
-      <EventsRow onAction={handleQuickAction} />
-
-      {/* EXPLORE MORE — mono kicker + gradient cards. At small text steps this
-          is a 3-col row of compact cards; once text is enlarged (step >= 2) it
-          drops to a 2-col grid so the larger tiles + 2-line serif titles fit and
-          read as large as the six finder tiles above. */}
-      <div className="px-4 pb-28">
-        <div className="max-w-md mx-auto">
-          <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] font-semibold mt-1 mb-2" style={{ color: '#736657' }}>
-            Explore more
-          </div>
-          <div
-            className="grid gap-2.5"
-            style={{ gridTemplateColumns: fontStep >= 2 ? '1fr 1fr' : '1fr 1fr 1fr' }}
-          >
-            {PHONE_EXPLORE.map((e) => (
-              <PhoneGrad key={e.title} grad={e.grad} emoji={e.emoji} title={e.title} step={fontStep} onClick={() => handleQuickAction(e.action)} />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom clearance for the AdMob banner overlay + lifted nav.
-          The native banner is a system overlay at BOTTOM_CENTER with
-          margin: 0 (pinned to the very bottom edge), and on Home the
-          FloatingNav pill is lifted to bottom: 64 to sit just above it.
-          Neither participates in React layout, so without this spacer
-          the last row of cards ("Things to do" / "Shopping" / scanners)
-          sits behind them. ~180px = ad height (~60px) + lifted-nav
-          extent (~64px) + a small visual gutter. */}
-      <div aria-hidden style={{ height: 180 }} />
+      {/* Bottom clearance for the FloatingNav pill. Home no longer mounts an
+          ad banner and the pill is no longer lifted here (Layout passes
+          liftForAd only on the finder pages), so this only needs to clear the
+          resting pill: 22px bottom offset + ~60px pill + a small gutter, plus
+          the home-indicator safe area. */}
+      <div aria-hidden style={{ height: 'calc(96px + env(safe-area-inset-bottom))' }} />
       </>
       )}
 
-      {/* AdMob banner — iOS/Android only (no-op on web). Mount last
-          so showBanner runs after the rest of Home has rendered and
-          the user has a complete first paint before any ad UI
-          appears in the chrome. Gated on onboarding_completed so the
-          native banner overlay never shows during the brief Home mount
-          that precedes the onboarding redirect (it would otherwise
-          linger over the onboarding screens). ALSO suppressed while the
-          Welcome splash or the location picker is open — the native ad
-          overlay would otherwise sit at the bottom over those screens;
-          unmounting HomeBanner calls AdMob.hideBanner/removeBanner, and it
-          re-shows once the user is on the actual home content. */}
-      {profile?.onboarding_completed && !showWelcome && !showLocationPicker && <HomeBanner />}
-
       <SmartSearchOverlay isOpen={showSearch} onClose={() => setShowSearch(false)} />
+
+      {/* "All services" bottom sheet — every destination the two retired tile
+          grids offered, grouped. Phone-only in practice (only the chip row sets
+          showAllServices). */}
+      <AllServicesSheet isOpen={showAllServices} onClose={() => setShowAllServices(false)} onAction={handleQuickAction} />
 
       <LocationModePicker
         isOpen={showLocationPicker}
@@ -843,62 +778,19 @@ export default function HomePage() {
   );
 }
 
-// ── PhoneTile — compact editorial finder tile (2-col grid) ─────────────────
-// Saturated category-ink bg, white emoji chip, serif title (2-line clamp), tiny
-// subtitle. min-height (never fixed) so enlarging text grows the tile instead of
-// clipping. Mirrors HomeTablet's TabletTile at phone scale.
-function PhoneTile({ cat, emoji, title, sub, onClick }) {
+// ── FinderChip — quiet pill in the finder row ──────────────────────────────
+// Ivory ground, 1px border, small sans label — no emoji, no tile color (per the
+// design doctrine's chip spec). `accent` tints the label teal for the one chip
+// that opens a sheet instead of navigating ("All services").
+function FinderChip({ label, accent = false, onClick }) {
   return (
     <motion.button
-      whileTap={{ scale: 0.97 }}
+      whileTap={{ scale: 0.96 }}
       onClick={onClick}
-      className="relative overflow-hidden rounded-[18px] text-white text-left min-w-0 p-[13px]"
-      style={{ background: cat.ink, minHeight: 100, boxShadow: `0 10px 22px -12px ${cat.ink}80` }}
+      className="flex-none rounded-full px-3.5 py-2 text-[calc(12.5px*var(--fs))] font-semibold whitespace-nowrap"
+      style={{ background: IVORY_2, border: '1px solid #E6DFD0', color: accent ? TEAL_DEEP : '#16110D' }}
     >
-      <div
-        className="absolute -top-3.5 -right-3.5 rounded-full pointer-events-none"
-        style={{ width: 84, height: 84, background: 'rgba(255,255,255,0.12)' }}
-      />
-      <div
-        className="relative flex items-center justify-center flex-none"
-        style={{ width: 36, height: 36, borderRadius: 11, background: 'rgba(255,255,255,0.2)' }}
-      >
-        <span style={{ fontSize: 20, lineHeight: 1 }}>{emoji}</span>
-      </div>
-      <div
-        className="font-serif leading-[1.05] tracking-tight relative text-[calc(18px*var(--fs))] mt-2"
-        style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-      >
-        {title}
-      </div>
-      {sub && <div className="text-[calc(11px*var(--fs))] opacity-85 relative mt-0.5">{sub}</div>}
-    </motion.button>
-  );
-}
-
-// ── PhoneGrad — gradient Explore-more card ─────────────────────────────────
-// Gradient bg, emoji glyph, serif title (2-line clamp). min-height so the card
-// grows with enlarged text. `step` is the glasses text-size step (0-3): once
-// enlarged (>= 2) the card matches the six finder tiles — serif title fs(18) and
-// min-height ~100px — to read AS LARGE as them in the 2-col Explore grid; at the
-// smaller steps it stays compact (fs(14), min-height 82) for the 3-col row.
-// Mirrors HomeTablet's TabletGrad at phone scale.
-function PhoneGrad({ grad, emoji, title, step = 0, onClick }) {
-  const big = step >= 2;
-  return (
-    <motion.button
-      whileTap={{ scale: 0.97 }}
-      onClick={onClick}
-      className="relative overflow-hidden rounded-[15px] text-white text-left p-[11px]"
-      style={{ background: grad, minHeight: big ? 100 : 82, boxShadow: '0 12px 26px -14px rgba(15,20,25,0.4)' }}
-    >
-      <div style={{ fontSize: 20, lineHeight: 1 }}>{emoji}</div>
-      <div
-        className={`font-serif leading-[1.05] tracking-tight mt-[7px] ${big ? 'text-[calc(18px*var(--fs))]' : 'text-[calc(14px*var(--fs))]'}`}
-        style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-      >
-        {title}
-      </div>
+      {label}
     </motion.button>
   );
 }

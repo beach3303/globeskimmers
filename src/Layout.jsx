@@ -18,9 +18,9 @@ import "@/lib/cloudSync"; // starts Wishlist/Saved → account sync on sign-in (
 import { IVORY } from "@/components/redesign/constants";
 
 // Finder list pages that show a bottom AdMob banner ("per-feature ads").
-// Home is handled separately (it mounts its own banner via Home.jsx), so it's
-// intentionally NOT in this set — keeping Home's proven flow untouched. These
-// keys must match the page keys in pages.config.js (= currentPageName).
+// Home shows NO banner (Phase-1a-lite moved the ad off Home), so it's
+// intentionally NOT in this set. These keys must match the page keys in
+// pages.config.js (= currentPageName).
 const AD_FINDER_PAGES = new Set([
   "PlacesToEat", "CoffeeFinder", "ATMFinder", "RestroomFinder",
   "ConvenienceStore", "ThingsToDo", "Shopping",
@@ -179,9 +179,10 @@ export default function Layout({ children, currentPageName }) {
           {BACK_TO_TOP_PAGES.has(currentPageName) && <BackToTop bottom={showFinderAd ? 150 : 96} />}
 
           {/* Floating pill nav — 3 anchors (Home / Saved / Settings). Lifted
-              above the AdMob banner on Home AND the finder pages so the ad can
-              pin to the bottom edge without the pill overlapping it. */}
-          <FloatingNav liftForAd={currentPageName === "Home" || showFinderAd} />
+              above the AdMob banner on the finder pages so the ad can pin to
+              the bottom edge without the pill overlapping it. Home no longer
+              mounts a banner, so it keeps the resting 22px height. */}
+          <FloatingNav liftForAd={showFinderAd} />
 
           {/* Global location nudges — mounted here (not in Home) so they catch
               their events on ANY page after foreground: the "you appear to be in
