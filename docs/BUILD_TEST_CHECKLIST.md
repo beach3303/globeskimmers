@@ -597,3 +597,6 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - **T2.5 part 2 (LocationContext):** cold start with pref `'current'` + permission already granted → 5s-capped coarse GPS verify BEFORE the restored city stands; failure/denial falls back to the restore. `'ask'`/`'continue'` byte-identical. Covers deep-link cold opens too (init-level).
 - **My Trips:** rows open a BookingDetailSheet (sheet pattern, mono dates·ref·status, copy booking ref, honest status chips; nuitee = stored fields only, partner rows = View on {partner}). No new worker calls.
 - **Gates:** node --check ✓ eslint ✓ build ✓ boot-check ✓ · adversarial review CLEAN. AUDIT: T1.15 done → Tier 1 fully closed; T2.5 fully done.
+
+## 2026-09-03 — enrich-owned gid guard (attraction ids no longer masquerade as Google ids)
+- Probe found `matched:false` for `icon:Q243` — the uuid-only test let every attractions-D1 prefixed id (`icon:`/`wikidata:`/`curated:`/`wv:`) pass straight into the details call AS a Google place id → 404 → no hours/utcOffsetMinutes for any attraction row (silently undermining T1.5). Only Google-shaped ids skip resolution now; deployed + live-verified: Eiffel `matched:true`, utcOffsetMinutes 120, photos 3, openNow true.
