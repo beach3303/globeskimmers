@@ -591,3 +591,9 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - **Doctrine:** The Passport Standard artifact (memory: google-of-travel-brief). Home now ≤7 self-hiding sections per mode, search + chips above the fold.
 - **Gates:** eslint ✓ build ✓ boot-check ✓ · adversarial review CLEAN (19/19 nav targets verified against PAGES).
 - **Deployed/activated:** frontend-only — ships to web/native on next app build; `npm run cap:sync` run tonight so the iOS project carries it.
+
+## 2026-09-03 — Backlog trio: T1.15 batch enrich · T2.5p2 GPS-first cold start · My Trips detail
+- **T1.15 (worker + 3 finders):** `/places/enrich-owned` accepts `{places:[…]}` (cap 20, 5 lanes, per-item isolation → `{results:{id:payload}}`); per-place logic extracted to `enrichOwnedOne` so KV keys/TTLs identical between single+batch (shared cache). Single-place contract byte-compatible — ATM/Convenience/Money/Restroom/ThingsToDo callers untouched. PlacesToEat/Coffee/Shopping batch the rendered page: ~20 calls → 1 per page.
+- **T2.5 part 2 (LocationContext):** cold start with pref `'current'` + permission already granted → 5s-capped coarse GPS verify BEFORE the restored city stands; failure/denial falls back to the restore. `'ask'`/`'continue'` byte-identical. Covers deep-link cold opens too (init-level).
+- **My Trips:** rows open a BookingDetailSheet (sheet pattern, mono dates·ref·status, copy booking ref, honest status chips; nuitee = stored fields only, partner rows = View on {partner}). No new worker calls.
+- **Gates:** node --check ✓ eslint ✓ build ✓ boot-check ✓ · adversarial review CLEAN. AUDIT: T1.15 done → Tier 1 fully closed; T2.5 fully done.

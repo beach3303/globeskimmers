@@ -667,17 +667,22 @@ function AlsoServesBanner({ banner, onExpandRadius }) {
 // Every text size stays on fs() so the 4-step glasses control scales it; the
 // serif name is 2-line clamped and the card uses a min-height (not fixed) so
 // enlarged text grows the card instead of clipping.
-function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, formatDistance, isTablet, isLocal }) {
+function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, formatDistance, isTablet, isLocal, batchEnrich }) {
   const [expanded,setExpanded]=useState(false);
   const [enriched,setEnriched]=useState(null);
-  // Fetch 3 real Google photos + hours for OWNED restaurants (owned records carry
-  // none) — runs once on MOUNT so the list card shows a real, swipeable photo, not
-  // only on expand. Server-cached, so repeat views cost nothing.
+  // 3 real Google photos + hours for OWNED restaurants (owned records carry none).
+  // T1.15: the parent batch-enriches the whole visible page in ONE worker call and
+  // hands this card its slice via `batchEnrich` (undefined = batch still in flight,
+  // so wait — don't double-call). A card the batch missed (null) falls back to its
+  // own single call; both paths share the worker's per-item KV cache.
   useEffect(()=>{
     if(enriched||restaurant.source!=='owned')return;
-    callWorker('places/enrich-owned',{id:restaurant.id||restaurant.placeId,name:restaurant.displayName?.text||restaurant.name,lat:restaurant.lat,lng:restaurant.lng,maxPhotos:3})
+    const key=restaurant.id||restaurant.placeId;
+    if(key&&batchEnrich===undefined)return; // parent batch pending — its result arrives via prop
+    if(batchEnrich){ if(batchEnrich.matched)setEnriched(batchEnrich); return; }
+    callWorker('places/enrich-owned',{id:key,name:restaurant.displayName?.text||restaurant.name,lat:restaurant.lat,lng:restaurant.lng,maxPhotos:3})
       .then(({data})=>{ if(data&&data.matched)setEnriched(data); }).catch(()=>{});
-  },[]); // eslint-disable-line react-hooks/exhaustive-deps
+  },[batchEnrich]); // eslint-disable-line react-hooks/exhaustive-deps
   const fs=(n)=>`calc(${n}px*var(--fs))`;
   // Pick tablet vs phone-tuned value.
   const t=(tab,phone)=>isTablet?tab:phone;
@@ -1271,6 +1276,31 @@ export default function PlacesToEat() {
     return r;
   }, [restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, searchText]);
 
+  // ── T1.15: BATCH ENRICH THE VISIBLE PAGE OF OWNED CARDS ──────────────────
+  // Was: every owned card fired its own /places/enrich-owned on mount (up to 20
+  // calls per page). Now the page's owned cards go up in ONE batched call (the
+  // worker caps a batch at 20 = exactly one page). ownedEnrich[key] semantics:
+  // undefined = batch pending, payload = result, null = batch missed/errored →
+  // that card's own single-call fallback runs (same KV cache server-side).
+  const [ownedEnrich, setOwnedEnrich] = useState({});
+  const ownedEnrichAsked = useRef(new Set());
+  useEffect(() => {
+    const owned = filtered.slice(0, displayCount)
+      .filter(r => r.source === 'owned')
+      .map(r => ({ id: r.id || r.placeId, name: r.displayName?.text || r.name, lat: r.lat, lng: r.lng }))
+      .filter(r => r.id && !ownedEnrichAsked.current.has(r.id));
+    if (!owned.length) return;
+    owned.forEach(r => ownedEnrichAsked.current.add(r.id));
+    (async () => {
+      for (let i = 0; i < owned.length; i += 20) {
+        const chunk = owned.slice(i, i + 20);
+        const { data } = await callWorker('places/enrich-owned', { places: chunk, maxPhotos: 3 });
+        const res = data?.results || {};
+        setOwnedEnrich(prev => { const nx = { ...prev }; chunk.forEach(r => { nx[r.id] = res[r.id] ?? null; }); return nx; });
+      }
+    })();
+  }, [filtered, displayCount]);
+
   const clearFilters = () => {
     setFilterOpenNow(false); setFilterVibes({}); setFilterDietary({});
     setFilterBakery(false); setFilterBars(false);
@@ -1625,6 +1655,7 @@ export default function PlacesToEat() {
               <div key={r.id||i} ref={el=>cardRefs.current[i]=el}>
                 <Card
                   restaurant={r} rank={i+1}
+                  batchEnrich={ownedEnrich[r.id||r.placeId]}
                   isTablet={isTablet}
                   onDirections={()=>setDirModal({open:true,lat:r.lat,lng:r.lng,name:r.name,address:r.formattedAddress||r.shortFormattedAddress||r.vicinity||r.address||''})}
                   onShowOnMap={()=>handleShowOnMap(i)}

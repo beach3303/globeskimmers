@@ -210,25 +210,36 @@ function PhotoCarousel({ photos=[], height="180px" }) {
 // `isTablet` prop gates sizing only: tablet keeps the large editorial scale,
 // phone gets a compact, phone-tuned variant. Tokens/structure mirror
 // RestaurantCardTablet; only the café domain content + phone tuning differ.
-function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDistance, isTablet, isLocal, onHours }) {
+function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDistance, isTablet, isLocal, onHours, batchEnrich }) {
   const [expanded,setExpanded]=useState(false);
   const [showDir,setShowDir]=useState(false);
   const [enriched,setEnriched]=useState(null);
-  // Fetch 3 real Google photos + hours for OWNED shops (owned records carry none) —
-  // runs on MOUNT so the list card shows a real photo, not only on expand (mirrors
-  // Places-to-Eat). Resolves owned→Google once; details+photos are server-cached 90d,
-  // so repeat views cost nothing. (Website og:image was tried as a free rung and
-  // pulled for quality, so Google's real photos are the source.)
+  // 3 real Google photos + hours for OWNED shops (owned records carry none) —
+  // (Website og:image was tried as a free rung and pulled for quality, so Google's
+  // real photos are the source.) T1.15: the parent batch-enriches all visible owned
+  // cafés in ONE worker call and hands this card its slice via `batchEnrich`
+  // (undefined = batch in flight — wait, don't double-call). A card the batch
+  // missed (null) falls back to its own single call; same per-item KV cache.
   useEffect(()=>{
     if(enriched||shop.source!=='owned')return;
-    callWorker('places/enrich-owned',{id:shop.id||shop.placeId,name:shop.displayName?.text||shop.name,lat:shop.lat,lng:shop.lng,maxPhotos:3})
+    const key=shop.id||shop.placeId;
+    if(key&&batchEnrich===undefined)return; // parent batch pending — its result arrives via prop
+    if(batchEnrich){
+      if(batchEnrich.matched){
+        setEnriched(batchEnrich);
+        // T1.8: lift the Google hours to the list so Open Now / "· N open" can see them.
+        if(batchEnrich.hours?.weekdayDescriptions?.length) onHours?.(key, batchEnrich);
+      }
+      return;
+    }
+    callWorker('places/enrich-owned',{id:key,name:shop.displayName?.text||shop.name,lat:shop.lat,lng:shop.lng,maxPhotos:3})
       .then(({data})=>{
         if(!data||!data.matched) return;
         setEnriched(data);
         // T1.8: lift the Google hours to the list so Open Now / "· N open" can see them.
-        if(data.hours?.weekdayDescriptions?.length) onHours?.(shop.id||shop.placeId, data);
+        if(data.hours?.weekdayDescriptions?.length) onHours?.(key, data);
       }).catch(()=>{});
-  },[]); // eslint-disable-line react-hooks/exhaustive-deps
+  },[batchEnrich]); // eslint-disable-line react-hooks/exhaustive-deps
   const fs=(n)=>`calc(${n}px*var(--fs))`;
   // Responsive size picker — `t` (tablet) keeps the current editorial sizes,
   // `p` (phone) is the compact phone-tuned value. Every size below routes
@@ -646,6 +657,30 @@ export default function CoffeeFinderPage() {
     return r;
   },[shopsWithHours,searchMerged,submitted,radius,quickFilter,sortBy,filterOpenNow,hoursKnown,filterWifi,filterShopType,filterWork,filterOutlets,filterQuiet,filterAC,workProfiles]);
 
+  // ── T1.15: BATCH ENRICH VISIBLE OWNED CAFÉS ──────────────────────────────
+  // Was: every owned card fired its own /places/enrich-owned on mount (one call
+  // per rendered card). Now all visible owned cafés go up in batched calls of 20
+  // (the worker's batch cap). ownedEnrich[key]: undefined = batch pending,
+  // payload = result, null = batch missed/errored → that card's own single-call
+  // fallback runs (same KV cache server-side).
+  const [ownedEnrich,setOwnedEnrich]=useState({});
+  const ownedEnrichAsked=useRef(new Set());
+  useEffect(()=>{
+    const owned=filtered.filter(s=>s.source==='owned')
+      .map(s=>({id:s.id||s.placeId,name:s.displayName?.text||s.name,lat:s.lat,lng:s.lng}))
+      .filter(s=>s.id&&!ownedEnrichAsked.current.has(s.id));
+    if(!owned.length)return;
+    owned.forEach(s=>ownedEnrichAsked.current.add(s.id));
+    (async()=>{
+      for(let i=0;i<owned.length;i+=20){
+        const chunk=owned.slice(i,i+20);
+        const {data}=await callWorker('places/enrich-owned',{places:chunk,maxPhotos:3});
+        const res=data?.results||{};
+        setOwnedEnrich(prev=>{const nx={...prev};chunk.forEach(s=>{nx[s.id]=res[s.id]??null;});return nx;});
+      }
+    })();
+  },[filtered]);
+
   const clearFilters=()=>{setFilterOpenNow(false);setFilterShopType("all");setFilterWifi(false);setFilterWork(false);setFilterOutlets(false);setFilterQuiet(false);setFilterAC(false);};
 
   const runSearch=async(explicitQuery)=>{
@@ -886,7 +921,7 @@ export default function CoffeeFinderPage() {
           ):filtered.map((shop,i)=>{
             const Card = CoffeeCardTablet;
             return (
-            <div key={shop.id||i} ref={el=>cardRefs.current[i]=el}><Card shop={shop} index={i} onShowOnMap={handleShowOnMap} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet} isLocal={isLocal} onHours={handleCardHours}/></div>
+            <div key={shop.id||i} ref={el=>cardRefs.current[i]=el}><Card shop={shop} index={i} onShowOnMap={handleShowOnMap} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet} isLocal={isLocal} onHours={handleCardHours} batchEnrich={ownedEnrich[shop.id||shop.placeId]}/></div>
           );})}
         </div>
       ):(

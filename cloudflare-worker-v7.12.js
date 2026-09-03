@@ -12184,67 +12184,98 @@ async function resolveOwnedGid(env, id, name, lat, lng) {
 // On-tap enrich for an owned place: resolve to a Google place id (cached), fetch
 // Place Details, return up to N real photos + open/close + daily hours. Called when
 // a card is OPENED, so the free list stays free and only opened places cost.
+// T1.15: the same route also accepts a BATCH — { places: [{id,name,lat,lng},…] },
+// cap 20 — so a finder enriches its whole visible page in ONE request instead of
+// one per card. Each item runs the same per-place logic below with the same KV
+// keys (owned2gid:<id>, details_<gid>), so single and batch calls share the cache.
+async function enrichOwnedOne(env, origin, b) {
+  const id = String(b.id || b.placeId || '');
+  const name = String(b.name || '');
+  const lat = parseFloat(b.lat ?? b.latitude), lng = parseFloat(b.lng ?? b.longitude);
+  const maxPhotos = Math.min(Math.max(parseInt(b.maxPhotos, 10) || 3, 0), 6);
+
+  // Resolve owned uuid → Google place id (cached), else use a passed Google id.
+  let gid = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id) ? null : (id || null);
+  if (!gid && id) {
+    const mapKey = `owned2gid:${id}`;
+    gid = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(mapKey).catch(() => null) : null;
+    if (!gid && name && env.GOOGLE_API_KEY) {
+      try {
+        const payload = { textQuery: name };
+        if (Number.isFinite(lat) && Number.isFinite(lng)) payload.locationBias = { circle: { center: { latitude: lat, longitude: lng }, radius: 800 } };
+        const sr = await fetch('https://places.googleapis.com/v1/places:searchText', {
+          method: 'POST', headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': 'places.id', 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (sr.ok) { gid = (await sr.json())?.places?.[0]?.id || null; if (gid && env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(mapKey, gid, { expirationTtl: 180 * 24 * 60 * 60 }).catch(() => {}); }
+      } catch { /* no match */ }
+    }
+  }
+  if (!gid) return { matched: false, photos: [], hours: null };
+
+  // Place details (90d KV cache — shared with AI-details / place-details).
+  const dk = `details_${gid}`;
+  let place; const cd = await getFromCache(env, dk);
+  if (cd && cd.data) place = cd.data;
+  else {
+    if (!env.GOOGLE_API_KEY) return { matched: false, photos: [], hours: null };
+    const dr = await fetch(`https://places.googleapis.com/v1/places/${gid}?languageCode=en`, {
+      headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': CONFIG.DETAILS_FIELD_MASK },
+    });
+    if (!dr.ok) return { matched: false, photos: [], hours: null };
+    place = normalizePlace(await dr.json(), origin, true);
+    await setInCache(env, dk, place, CONFIG.CACHE_TTL.DETAILS);
+  }
+
+  // Photos: Google's real photos of this exact place (owner + customer), cached
+  // 90d as bytes in KV by handlePhotoProxy — first fetch $0.007, then $0.
+  // (Website og:image was trialed as a "restaurant's own photo" lead but pulled:
+  //  small-restaurant sites overwhelmingly expose builder templates / parked-
+  //  domain placeholders / logos, i.e. exactly the junk we refuse to show. The
+  //  durable "own photo" source is user/merchant uploads, which replace Google
+  //  per-restaurant — see project_photo_source_ladder.)
+  const photos = (place.photos || []).slice(0, maxPhotos).map((p) => p.full || p.url || p).filter(Boolean);
+  const oh = place.currentOpeningHours || place.regularOpeningHours || null;
+  return {
+    matched: true,
+    // T1.5: the place's UTC offset so the client computes Open/Closed in the place's
+    // timezone instead of trusting a 90-day-cached openNow.
+    utcOffsetMinutes: place.utcOffsetMinutes ?? null, placeId: gid, photos,
+    hours: oh ? { openNow: oh.openNow ?? null, weekdayDescriptions: oh.weekdayDescriptions || oh.weekday_text || [] } : null,
+    isOpen: place.currentOpeningHours?.openNow ?? null,
+    rating: place.rating ?? null, priceLevel: place.priceLevel ?? null,
+    nationalPhoneNumber: place.nationalPhoneNumber ?? null, websiteUri: place.websiteUri ?? null,
+  };
+}
+
 async function handleEnrichOwned(request, env) {
   try {
     const b = await request.json().catch(() => ({}));
-    const id = String(b.id || b.placeId || '');
-    const name = String(b.name || '');
-    const lat = parseFloat(b.lat ?? b.latitude), lng = parseFloat(b.lng ?? b.longitude);
-    const maxPhotos = Math.min(Math.max(parseInt(b.maxPhotos, 10) || 3, 0), 6);
-    if (!name && !id) return jsonResponse({ error: 'name or id required' }, 400);
+    const origin = new URL(request.url).origin;
 
-    // Resolve owned uuid → Google place id (cached), else use a passed Google id.
-    let gid = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id) ? null : (id || null);
-    if (!gid && id) {
-      const mapKey = `owned2gid:${id}`;
-      gid = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(mapKey).catch(() => null) : null;
-      if (!gid && name && env.GOOGLE_API_KEY) {
-        try {
-          const payload = { textQuery: name };
-          if (Number.isFinite(lat) && Number.isFinite(lng)) payload.locationBias = { circle: { center: { latitude: lat, longitude: lng }, radius: 800 } };
-          const sr = await fetch('https://places.googleapis.com/v1/places:searchText', {
-            method: 'POST', headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': 'places.id', 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-          if (sr.ok) { gid = (await sr.json())?.places?.[0]?.id || null; if (gid && env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(mapKey, gid, { expirationTtl: 180 * 24 * 60 * 60 }).catch(() => {}); }
-        } catch { /* no match */ }
-      }
-    }
-    if (!gid) return jsonResponse({ matched: false, photos: [], hours: null });
-
-    // Place details (90d KV cache — shared with AI-details / place-details).
-    const dk = `details_${gid}`;
-    let place; const cd = await getFromCache(env, dk);
-    if (cd && cd.data) place = cd.data;
-    else {
-      if (!env.GOOGLE_API_KEY) return jsonResponse({ matched: false, photos: [], hours: null });
-      const dr = await fetch(`https://places.googleapis.com/v1/places/${gid}?languageCode=en`, {
-        headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': CONFIG.DETAILS_FIELD_MASK },
-      });
-      if (!dr.ok) return jsonResponse({ matched: false, photos: [], hours: null });
-      place = normalizePlace(await dr.json(), new URL(request.url).origin, true);
-      await setInCache(env, dk, place, CONFIG.CACHE_TTL.DETAILS);
+    // T1.15 batch shape: { places: [{id,name,lat,lng},…], maxPhotos? } →
+    // { results: { <id-as-sent>: <single-place payload> }, count }. Cap 20 items,
+    // ~5 concurrent lanes; one item failing degrades to matched:false for that
+    // item only — never the batch. Old single-place clients are unaffected.
+    if (Array.isArray(b.places)) {
+      const items = b.places.slice(0, 20).filter((p) => p && (p.id || p.placeId || p.name));
+      const results = {};
+      let next = 0;
+      const lane = async () => {
+        while (next < items.length) {
+          const item = items[next++];
+          const key = String(item.id || item.placeId || item.name);
+          try { results[key] = await enrichOwnedOne(env, origin, { maxPhotos: b.maxPhotos, ...item }); }
+          catch { results[key] = { matched: false, photos: [], hours: null }; }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(5, items.length) }, lane));
+      return jsonResponse({ results, count: Object.keys(results).length });
     }
 
-    // Photos: Google's real photos of this exact place (owner + customer), cached
-    // 90d as bytes in KV by handlePhotoProxy — first fetch $0.007, then $0.
-    // (Website og:image was trialed as a "restaurant's own photo" lead but pulled:
-    //  small-restaurant sites overwhelmingly expose builder templates / parked-
-    //  domain placeholders / logos, i.e. exactly the junk we refuse to show. The
-    //  durable "own photo" source is user/merchant uploads, which replace Google
-    //  per-restaurant — see project_photo_source_ladder.)
-    const photos = (place.photos || []).slice(0, maxPhotos).map((p) => p.full || p.url || p).filter(Boolean);
-    const oh = place.currentOpeningHours || place.regularOpeningHours || null;
-    return jsonResponse({
-      matched: true,
-      // T1.5: the place's UTC offset so the client computes Open/Closed in the place's
-      // timezone instead of trusting a 90-day-cached openNow.
-      utcOffsetMinutes: place.utcOffsetMinutes ?? null, placeId: gid, photos,
-      hours: oh ? { openNow: oh.openNow ?? null, weekdayDescriptions: oh.weekdayDescriptions || oh.weekday_text || [] } : null,
-      isOpen: place.currentOpeningHours?.openNow ?? null,
-      rating: place.rating ?? null, priceLevel: place.priceLevel ?? null,
-      nationalPhoneNumber: place.nationalPhoneNumber ?? null, websiteUri: place.websiteUri ?? null,
-    });
+    // Single-place shape — contract unchanged for existing clients.
+    if (!String(b.name || '') && !String(b.id || b.placeId || '')) return jsonResponse({ error: 'name or id required' }, 400);
+    return jsonResponse(await enrichOwnedOne(env, origin, b));
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 

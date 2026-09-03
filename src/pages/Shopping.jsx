@@ -126,19 +126,24 @@ function PhotoStrip({photos,fallback="🛍️",bg,height}){
 // RestaurantCardTablet (PlacesToEat); only the domain content differs. Domain:
 // shop category kicker (venueLabel), mall-vs-market hours, rating. No best-time /
 // seating / parking / customer-favorites panels — this finder doesn't have them.
-function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet,isLocal}){
+function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet,isLocal,batchEnrich}){
   const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false);
   const [hoursExpanded,setHoursExpanded]=useState(false);
   const [enriched,setEnriched]=useState(null);
   useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
-  // Fetch real Google photos + hours for OWNED shops (owned records carry none) —
-  // runs once on MOUNT so the list card shows a real photo, not only on expand.
-  // Server-cached, so repeat views cost nothing.
+  // Real Google photos + hours for OWNED shops (owned records carry none).
+  // T1.15: the parent batch-enriches all visible owned shops in ONE worker call
+  // and hands this card its slice via `batchEnrich` (undefined = batch in flight —
+  // wait, don't double-call). A card the batch missed (null) falls back to its
+  // own single call; both paths share the worker's per-item KV cache.
   useEffect(()=>{
     if(enriched||p.source!=='owned')return;
-    callWorker('places/enrich-owned',{id:p.id||p.placeId,name:p.displayName?.text||p.name,lat:p.lat,lng:p.lng,maxPhotos:3})
+    const key=p.id||p.placeId;
+    if(key&&batchEnrich===undefined)return; // parent batch pending — its result arrives via prop
+    if(batchEnrich){ if(batchEnrich.matched)setEnriched(batchEnrich); return; }
+    callWorker('places/enrich-owned',{id:key,name:p.displayName?.text||p.name,lat:p.lat,lng:p.lng,maxPhotos:3})
       .then(({data})=>{ if(data&&data.matched)setEnriched(data); }).catch(()=>{});
-  },[]); // eslint-disable-line react-hooks/exhaustive-deps
+  },[batchEnrich]); // eslint-disable-line react-hooks/exhaustive-deps
   const name=p.displayName?.text||p.name||"Shop";
   // Layer enrich (owned) photos + hours over the owned fields before deriving status.
   const photos=enriched?.photos?.length?enriched.photos:p.photos;
@@ -349,6 +354,30 @@ export default function ShoppingFinder() {
     return r;
   },[places,openOnly,luxOnly,foodOnly,isLocal]);
 
+  // ── T1.15: BATCH ENRICH VISIBLE OWNED SHOPS ──────────────────────────────
+  // Was: every owned card fired its own /places/enrich-owned on mount (one call
+  // per rendered card). Now all visible owned shops go up in batched calls of 20
+  // (the worker's batch cap). ownedEnrich[key]: undefined = batch pending,
+  // payload = result, null = batch missed/errored → that card's own single-call
+  // fallback runs (same KV cache server-side).
+  const [ownedEnrich,setOwnedEnrich]=useState({});
+  const ownedEnrichAsked=useRef(new Set());
+  useEffect(()=>{
+    const owned=filtered.filter(p=>p.source==='owned')
+      .map(p=>({id:p.id||p.placeId,name:p.displayName?.text||p.name,lat:p.lat,lng:p.lng}))
+      .filter(p=>p.id&&!ownedEnrichAsked.current.has(p.id));
+    if(!owned.length)return;
+    owned.forEach(p=>ownedEnrichAsked.current.add(p.id));
+    (async()=>{
+      for(let i=0;i<owned.length;i+=20){
+        const chunk=owned.slice(i,i+20);
+        const {data}=await callWorker('places/enrich-owned',{places:chunk,maxPhotos:3});
+        const res=data?.results||{};
+        setOwnedEnrich(prev=>{const nx={...prev};chunk.forEach(p=>{nx[p.id]=res[p.id]??null;});return nx;});
+      }
+    })();
+  },[filtered]);
+
   const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const p=filtered[i];if(mapInst.current&&p?.lat&&p?.lng){mapInst.current.setView([p.lat,p.lng],17);markers.current[i]?.openPopup();}},350);};
 
   useEffect(()=>{
@@ -431,7 +460,7 @@ export default function ShoppingFinder() {
       :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"calc(16px*var(--fs))"}}>{error}</div><div style={{marginTop:"10px",color:T.gray,fontSize:"calc(13px*var(--fs))"}}>Check your connection and try again.</div></div>)
       :viewMode==="list"?(<div style={isTablet
         ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
-        : {width:"100%",padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>{filtered.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div></div>:filtered.map((p,i)=>{const Card=ShopCardTablet;return <Card key={p.id||i} p={p} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet} isLocal={isLocal}/>;})}</div>)
+        : {width:"100%",padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>{filtered.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div></div>:filtered.map((p,i)=>{const Card=ShopCardTablet;return <Card key={p.id||i} p={p} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet} isLocal={isLocal} batchEnrich={ownedEnrich[p.id||p.placeId]}/>;})}</div>)
       :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:T.dark}}>✕</button></div>)}
       <style>{`::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:16px;padding:0;overflow:hidden;}.gs-popup .leaflet-popup-content{margin:0;}.gs-popup .leaflet-popup-tip-container{display:none;}`}</style>
       <MapAppSelector isOpen={!!dirsP} onClose={()=>setDirsP(null)} destination={dirsP?{name:dirsP.displayName?.text||dirsP.name,address:dirsP.formattedAddress||dirsP.shortFormattedAddress||dirsP.vicinity||dirsP.address||"",latitude:dirsP.lat,longitude:dirsP.lng}:null} userLat={lat} userLng={lng}/>
