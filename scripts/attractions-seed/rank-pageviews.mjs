@@ -80,8 +80,17 @@ for (const ls of byCity.values()) for (const l of ls) {
 }
 const raws = [...wanted.keys()];
 console.error(`resolving ${raws.length} titles through redirects...`);
-for (let i = 0; i < raws.length; i += 50) {
-  const batch = raws.slice(i, i + 50);
+// Disk-memoized: the --titles-only run and the full run resolve the SAME raws;
+// without this the full run re-buys ~3k batches and gets 429-walled for it.
+const RDCACHE = path.join(OUT, "redirects-cache.jsonl");
+if (fs.existsSync(RDCACHE)) for (const l of fs.readFileSync(RDCACHE, "utf8").split("\n")) { if (!l) continue; try { const j = JSON.parse(l); wanted.set(j.k, j.v); } catch { /* skip */ } }
+const rdOut = fs.createWriteStream(RDCACHE, { flags: "a" });
+const unresolvedRaws = raws.filter((r) => wanted.get(r) === undefined);
+console.error(`  ${raws.length - unresolvedRaws.length} cached · ${unresolvedRaws.length} to resolve`);
+let rdBatches = 0, rdFailed = 0;
+for (let i = 0; i < unresolvedRaws.length; i += 50) {
+  const batch = unresolvedRaws.slice(i, i + 50);
+  if (++rdBatches % 100 === 0) console.error(`  redirect batch ${rdBatches}/${Math.ceil(unresolvedRaws.length / 50)} (${rdFailed} failed)`);
   const url = "https://en.wikipedia.org/w/api.php?action=query&redirects=1&format=json&titles=" +
     encodeURIComponent(batch.join("|"));
   try {
@@ -91,7 +100,7 @@ for (let i = 0; i < raws.length; i += 50) {
       r = await fetch(url, { headers: { "User-Agent": UA } }).catch(() => null);
       if (r && r.ok) break;
       if (r && r.status !== 429 && r.status < 500) break;
-      await sleep(Math.max((r ? parseInt(r.headers.get("retry-after") || "0", 10) : 0) * 1000, 1500 * 2 ** attempt));
+      await sleep(Math.max((r ? parseInt(r.headers.get("retry-after") || "0", 10) : 0) * 1000, 3000 * 2 ** attempt));
     }
     if (!r || !r.ok) throw new Error(String(r ? r.status : "network"));
     const j = await r.json();
@@ -106,11 +115,14 @@ for (let i = 0; i < raws.length; i += 50) {
     const missing = new Set(Object.values(q.pages || {}).filter((p) => p.missing !== undefined).map((p) => p.title));
     for (const raw of batch) {
       const canon = map.get(raw) || raw;
-      wanted.set(raw, missing.has(canon) ? null : canon);   // null = no article
+      const v = missing.has(canon) ? null : canon;
+      wanted.set(raw, v);   // null = no article
+      rdOut.write(JSON.stringify({ k: raw, v }) + "\n");
     }
-  } catch { /* leave batch as-is; pageview fetch will 404 them individually */ }
+  } catch { rdFailed++; /* NOT cached — refetched next run; pageview fetch 404s them individually this run */ }
   await sleep(120);
 }
+if (rdFailed > 0) console.error(`  !! ${rdFailed} redirect batches failed (throttling?) — uncached; re-run resumes them`);
 
 // ---- --titles-only: the GLOBAL run resolves titles here, then feeds them to
 // aggregate-pageviews.mjs (the dump path) instead of the rate-limited API.
