@@ -42,7 +42,7 @@ Then Tier 2 (trust) — incl. T2.1 via the [[feedback_business_reviews_policy]] 
 - [x] **T1.12 — ThingsToDo radius change may not refetch.** `radius` missing from the fetch effect deps → stale results after a radius change. Add `radius` to deps. `ThingsToDo:936`. **[frontend] S**
 - [x] **T1.13 — Stale result count while loading/error (Shopping, ATM).** Count badge shows previous category's number during a new fetch. Gate on `loading` / clear on fetch start. `Shopping:383`. **[frontend] S**
 - [x] **T1.14 — LLM parse-intent blocks even when a DISH matched.** "spicy ramen"/"vegan burger" pay a blocking Claude round-trip before any Google fetch. Only call LLM when `intent.kind==='GENERAL'`, or fire non-blocking. Worker `10110-10139`. **[worker] S**
-- [ ] **T1.15 — Unbatched enrich-owned: ~20 calls/screen on mount (Eat, Shopping).** Batch to one call for the visible set, or enrich on expand (like Coffee). `PlacesToEat:648`, `Shopping:116`. **[frontend/worker] M**
+- [x] **T1.15 — Unbatched enrich-owned: ~20 calls/screen on mount (Eat, Shopping).** Batch to one call for the visible set, or enrich on expand (like Coffee). `PlacesToEat:648`, `Shopping:116`. **[frontend/worker] M**
 
 ## TIER 2 — TRUST (honesty = the foundation of daily-use + the long game).
 
@@ -50,7 +50,7 @@ Then Tier 2 (trust) — incl. T2.1 via the [[feedback_business_reviews_policy]] 
 - [x] **T2.2 — Star ratings shown with NO "Google" source label.** Violates "always label review sources". Add a small "Google" label by the star cluster in the shared card/popup renderers. ~7 finders. **[frontend] S**
 - [x] **T2.3 — AI-estimate label sweep.** RightNowStrip "🔥 Trending" (ungrounded Haiku as live trends, no label), Cultural Info Safety/scams card (no AI label), ATM AI Details tags AI copy as "from reviews". Add the "(AI estimate)" line these siblings already use; reframe "Trending" → "most-hyped (AI picks)". `RightNowStrip:31,97`; `CultureInformation:263`; `AtmAIDetails:60`. **[frontend] S**
 - [x] **T2.4 — "🚗 Drive / ✈️ Flights" from straight-line distance.** Island/ferry spots 20mi crow-flies labeled "Short Drive". Drop the mode verb or gate behind routing; caveat "≈X mi (straight-line)". Worker `7888,7924…`; `ThingsToDo:375`. **[worker/frontend] M (S for caveat only)**
-- [ ] **T2.5 — Cold start restores "navigate" mode for live-GPS users.** Opens showing the *previous* city as a deliberate pick until the (one-shot, GPS-dependent) nudge fires. Persist + restore the last *mode*, or verify GPS first. `LocationContext:150-154`. **[frontend] M**
+- [x] **T2.5 — Cold start restores "navigate" mode for live-GPS users.** Opens showing the *previous* city as a deliberate pick until the (one-shot, GPS-dependent) nudge fires. Persist + restore the last *mode*, or verify GPS first. `LocationContext:150-154`. **[frontend] M**
 
 ## TIER 3 — PHENOMENAL (engagement/delight). After the base is solid.
 
