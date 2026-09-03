@@ -80,9 +80,15 @@ const ROOTS = {
 };
 
 async function api(url) {
-  const r = await fetch(url, { headers: { "User-Agent": UA } });
-  if (!r.ok) throw new Error(`${r.status} ${url.slice(0, 80)}`);
-  return r.json();
+  // backoff-protected: at planet scale the batched loops WILL see 429s; the
+  // simple throw-on-!ok version killed nothing at 6 cities and everything at 21k.
+  for (let a = 0; a < 7; a++) {
+    const r = await fetch(url, { headers: { "User-Agent": UA } }).catch(() => null);
+    if (r && r.ok) return r.json();
+    if (r && r.status !== 429 && r.status < 500) throw new Error(`${r.status} ${url.slice(0, 80)}`);
+    await sleep(Math.max((r ? parseInt(r.headers.get("retry-after") || "0", 10) : 0) * 1000, 2000 * 2 ** a));
+  }
+  throw new Error(`gave up ${url.slice(0, 80)}`);
 }
 
 // ---- load every city's ranked rows ------------------------------------------
@@ -124,22 +130,58 @@ for (let i = 0; i < qids.length; i += 50) {
 const seenClasses = [...new Set([...entity.values()].flatMap((e) => e.p31))];
 console.error(`closure query over ${seenClasses.length} classes...`);
 const allRoots = [...ROOTS.HARD, ...ROOTS.SOFT, ...ROOTS.KEEP, ...ROOTS.TEAM];
-const sparql = `SELECT ?c ?root WHERE {
-  VALUES ?c { ${seenClasses.map((q) => `wd:${q}`).join(" ")} }
-  VALUES ?root { ${allRoots.map((q) => `wd:${q}`).join(" ")} }
-  ?c wdt:P279* ?root . }`;
-const sj = await (async () => {
-  const r = await fetch("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(sparql),
-    { headers: { "User-Agent": UA, Accept: "application/sparql-results+json" } });
-  if (!r.ok) { console.error(`!! HARD ERROR: blacklist closure query failed (${r.status}). Refusing to emit unfiltered output.`); process.exit(1); }
-  return r.json();
-})();
+// WDQS-free closure (query.wikidata.org 503'd for hours during fame scoring):
+// BFS up P279 via plain wbgetentities — batched, backoff-protected, memoized
+// on disk so a re-run is free. Same approach as score-fame.mjs.
+const rootSet = new Set(allRoots);
+const PARENTS_CACHE = path.join(OUT, "p279-cache.jsonl");
+const parentsOf = new Map();
+if (fs.existsSync(PARENTS_CACHE)) for (const l of fs.readFileSync(PARENTS_CACHE, "utf8").split("\n")) { if (!l) continue; try { const j = JSON.parse(l); parentsOf.set(j.k, j.v); } catch { /* skip */ } }
+const pOut = fs.createWriteStream(PARENTS_CACHE, { flags: "a" });
+let frontier = seenClasses.filter((q) => !parentsOf.has(q));
+let depth = 0, failedBatches = 0;
+while (frontier.length && depth < 10) {
+  console.error(`  closure BFS depth ${depth}: ${frontier.length} classes`);
+  for (let i = 0; i < frontier.length; i += 50) {
+    const batch = frontier.slice(i, i + 50);
+    try {
+      const j = await api("https://www.wikidata.org/w/api.php?action=wbgetentities&props=claims&format=json&ids=" + batch.join("|"));
+      for (const id of batch) {
+        const ps = (j.entities?.[id]?.claims?.P279 || []).map((c) => c.mainsnak?.datavalue?.value?.id).filter(Boolean);
+        parentsOf.set(id, ps); pOut.write(JSON.stringify({ k: id, v: ps }) + "\n");
+      }
+    } catch (e2) { failedBatches++; console.error(`  closure batch failed: ${e2.message}`); for (const id of batch) if (!parentsOf.has(id)) parentsOf.set(id, []); } // in-memory only — refetched next run
+    await sleep(350);
+  }
+  const next = new Set();
+  for (const q of frontier) for (const p of parentsOf.get(q) || []) if (!parentsOf.has(p) && !rootSet.has(p)) next.add(p);
+  frontier = [...next]; depth++;
+}
+// Blacklist load failure stays a HARD ERROR: shipping unfiltered ranks a plane
+// crash as a top attraction (measured, Cebu). BFS failure mode is partial
+// coverage, so guard on it explicitly.
+if (failedBatches > 0 && seenClasses.length > 200) {
+  console.error(`!! HARD ERROR: ${failedBatches} closure batches failed — refusing to emit with a partial blacklist. Re-run (cache resumes).`);
+  process.exit(1);
+}
+const ancestorsMemo = new Map();
+const ancestorsOf = (q, walking = new Set()) => {
+  if (ancestorsMemo.has(q)) return ancestorsMemo.get(q);
+  if (walking.has(q)) return new Set();               // P279 cycles exist; break them
+  walking.add(q);
+  const out = new Set([q]);
+  for (const p of parentsOf.get(q) || []) { out.add(p); for (const a of ancestorsOf(p, walking)) out.add(a); }
+  ancestorsMemo.set(q, out);
+  return out;
+};
 const classVerdict = new Map();   // class qid -> Set of {HARD|SOFT|KEEP|TEAM}
-for (const b of sj.results.bindings) {
-  const c = b.c.value.split("/").pop(), root = b.root.value.split("/").pop();
-  const v = ROOTS.TEAM.includes(root) ? "TEAM" : ROOTS.KEEP.includes(root) ? "KEEP" : ROOTS.HARD.includes(root) ? "HARD" : "SOFT";
-  if (!classVerdict.has(c)) classVerdict.set(c, new Set());
-  classVerdict.get(c).add(v);
+for (const c of seenClasses) {
+  const anc = ancestorsOf(c);
+  for (const root of allRoots) if (anc.has(root)) {
+    const v = ROOTS.TEAM.includes(root) ? "TEAM" : ROOTS.KEEP.includes(root) ? "KEEP" : ROOTS.HARD.includes(root) ? "HARD" : "SOFT";
+    if (!classVerdict.has(c)) classVerdict.set(c, new Set());
+    classVerdict.get(c).add(v);
+  }
 }
 console.error(`blacklisted classes found: ${classVerdict.size}`);
 
