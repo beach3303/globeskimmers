@@ -1,0 +1,586 @@
+[
+ {
+  "name": "Walt Disney Studios Park",
+  "country": "France",
+  "article": "Disney Adventure World",
+  "qid": "Q764906",
+  "links": 22,
+  "via": "Walt Disney Studios Park Marne-la-Vallée, near Paris"
+ },
+ {
+  "name": "Pantheon",
+  "country": "Italy",
+  "article": "Pantheon, Rome",
+  "qid": "Q99309",
+  "links": 79,
+  "via": "Pantheon Rome"
+ },
+ {
+  "name": "Toledo Old City",
+  "country": "Spain",
+  "article": "Toledo Cathedral",
+  "qid": "Q1123180",
+  "links": 43,
+  "via": "Toledo Old City Toledo"
+ },
+ {
+  "name": "Big Ben & Houses of Parliament",
+  "country": "United Kingdom",
+  "article": "Big Ben",
+  "qid": "Q41225",
+  "links": 87,
+  "via": "Big Ben & Houses of Parliament London"
+ },
+ {
+  "name": "Westminster Abbey",
+  "country": "United Kingdom",
+  "article": "Westminster Abbey",
+  "qid": "Q5933",
+  "links": 86,
+  "via": "Westminster Abbey London"
+ },
+ {
+  "name": "Lake District National Park",
+  "country": "United Kingdom",
+  "article": "Windermere",
+  "qid": "Q390370",
+  "links": 36,
+  "via": "Lake District National Park Windermere"
+ },
+ {
+  "name": "LEGOLAND Windsor",
+  "country": "United Kingdom",
+  "article": "Legoland Windsor Resort",
+  "qid": "Q3047891",
+  "links": 12,
+  "via": "LEGOLAND Windsor Windsor"
+ },
+ {
+  "name": "Loch Ness",
+  "country": "United Kingdom",
+  "article": "Loch Ness",
+  "qid": "Q49650",
+  "links": 74,
+  "via": "Loch Ness Inverness (Scotland)"
+ },
+ {
+  "name": "Warner Bros. Studio Tour London (Harry Potter)",
+  "country": "United Kingdom",
+  "article": "Warner Bros. Studio Tour London – The Making of Harry Potter",
+  "qid": "Q27924395",
+  "links": 11,
+  "via": "Warner Bros. Studio Tour London Leavesden, near London"
+ },
+ {
+  "name": "Swarovski Crystal Worlds",
+  "country": "Austria",
+  "article": "Swarovski Kristallwelten",
+  "qid": "Q672751",
+  "links": 10,
+  "via": "Swarovski Crystal Worlds Austria"
+ },
+ {
+  "name": "Seljalandsfoss & Skógafoss Waterfalls",
+  "country": "Iceland",
+  "article": "Seljalandsfoss",
+  "qid": "Q777882",
+  "links": 39,
+  "via": "Seljalandsfoss Iceland"
+ },
+ {
+  "name": "Temple of Saint Sava",
+  "country": "Serbia",
+  "article": "Church of Saint Sava",
+  "qid": "Q330385",
+  "links": 46,
+  "via": "Temple of Saint Sava Belgrade"
+ },
+ {
+  "name": "Mullerthal Trail (Little Switzerland)",
+  "country": "Luxembourg",
+  "article": "Munsbach Castle",
+  "qid": "Q6936856",
+  "links": 4,
+  "via": "Mullerthal Trail Luxembourg"
+ },
+ {
+  "name": "Blue Lagoon",
+  "country": "Malta",
+  "article": "Comino",
+  "qid": "Q191098",
+  "links": 56,
+  "via": "Blue Lagoon Comino"
+ },
+ {
+  "name": "Prince's Palace of Monaco",
+  "country": "Monaco",
+  "article": "Monaco-Ville",
+  "qid": "Q55115",
+  "links": 60,
+  "via": "Prince's Palace of Monaco Monaco-Ville"
+ },
+ {
+  "name": "Múlafossur Waterfall",
+  "country": "Faroe Islands (Denmark, territory)",
+  "article": "Vágar",
+  "qid": "Q207675",
+  "links": 50,
+  "via": "Múlafossur Waterfall Gásadalur"
+ },
+ {
+  "name": "Everest Base Camp — North (Tibet)",
+  "country": "China",
+  "article": "Mount Everest",
+  "qid": "Q513",
+  "links": 217,
+  "via": "Everest Base Camp — North Tingri"
+ },
+ {
+  "name": "Macau Tower",
+  "country": "Macau (territory)",
+  "article": "Hong Kong–Zhuhai–Macau Bridge",
+  "qid": "Q1191515",
+  "links": 45,
+  "via": "Macau Tower Macau"
+ },
+ {
+  "name": "Cloud 9",
+  "country": "Philippines",
+  "article": "Siargao",
+  "qid": "Q2280814",
+  "links": 29,
+  "via": "Cloud 9 General Luna, Siargao"
+ },
+ {
+  "name": "George Town Old Quarter",
+  "country": "Malaysia",
+  "article": "Penang",
+  "qid": "Q188096",
+  "links": 77,
+  "via": "George Town Old Quarter George Town, Penang"
+ },
+ {
+  "name": "Legoland Malaysia",
+  "country": "Malaysia",
+  "article": "Legoland Malaysia Resort",
+  "qid": "Q3229105",
+  "links": 14,
+  "via": "Legoland Malaysia Johor Bahru"
+ },
+ {
+  "name": "Sultan Omar Ali Saifuddien Mosque",
+  "country": "Brunei",
+  "article": "Bandar Seri Begawan",
+  "qid": "Q9279",
+  "links": 146,
+  "via": "Sultan Omar Ali Saifuddien Mosque Bandar Seri Begawan"
+ },
+ {
+  "name": "Varanasi Ghats",
+  "country": "India",
+  "article": "Varanasi",
+  "qid": "Q79980",
+  "links": 116,
+  "via": "Varanasi Ghats Varanasi"
+ },
+ {
+  "name": "Everest Base Camp — South",
+  "country": "Nepal",
+  "article": "1975 British Mount Everest Southwest Face expedition",
+  "qid": "Q18109188",
+  "links": 5,
+  "via": "Everest Base Camp — South Lukla"
+ },
+ {
+  "name": "Hanifaru Bay",
+  "country": "Maldives",
+  "article": "Baa Atoll",
+  "qid": "Q949513",
+  "links": 22,
+  "via": "Hanifaru Bay Baa Atoll"
+ },
+ {
+  "name": "Gordon Beach",
+  "country": "Israel",
+  "article": "Tel Aviv Promenade",
+  "qid": "Q7695551",
+  "links": 6,
+  "via": "Gordon Beach Tel Aviv"
+ },
+ {
+  "name": "Church of the Nativity",
+  "country": "Palestinian Territories",
+  "article": "Church of the Nativity",
+  "qid": "Q194504",
+  "links": 61,
+  "via": "Church of the Nativity Bethlehem"
+ },
+ {
+  "name": "Old City of Sana'a",
+  "country": "Yemen",
+  "article": "Sanaa",
+  "qid": "Q2471",
+  "links": 150,
+  "via": "Old City of Sana'a Sana'a"
+ },
+ {
+  "name": "Wadi Shab",
+  "country": "Oman",
+  "article": "Wadi Tiwi",
+  "qid": "Q3565018",
+  "links": 6,
+  "via": "Wadi Shab Tiwi"
+ },
+ {
+  "name": "Legoland Dubai",
+  "country": "United Arab Emirates",
+  "article": "Motiongate Dubai",
+  "qid": "Q23823579",
+  "links": 6,
+  "via": "Legoland Dubai Dubai"
+ },
+ {
+  "name": "Door of No Return",
+  "country": "Benin",
+  "article": "Door of No Return, Ouidah",
+  "qid": "Q18467833",
+  "links": 9,
+  "via": "Door of No Return Ouidah"
+ },
+ {
+  "name": "Temple of Pythons",
+  "country": "Benin",
+  "article": "Ouidah",
+  "qid": "Q850031",
+  "links": 40,
+  "via": "Temple of Pythons Ouidah"
+ },
+ {
+  "name": "Karfiguéla Falls & Fabedougou Domes",
+  "country": "Burkina Faso",
+  "article": "Cascades de Karfiguéla",
+  "qid": "Q954384",
+  "links": 16,
+  "via": "Karfiguéla Falls Burkina Faso"
+ },
+ {
+  "name": "Praia de Chaves",
+  "country": "Cabo Verde",
+  "article": "Boa Vista, Cape Verde",
+  "qid": "Q110440",
+  "links": 45,
+  "via": "Praia de Chaves Boa Vista"
+ },
+ {
+  "name": "Taï National Park",
+  "country": "Côte d'Ivoire",
+  "article": "Taï National Park",
+  "qid": "Q328577",
+  "links": 47,
+  "via": "Taï National Park Taï"
+ },
+ {
+  "name": "Lac Abbé",
+  "country": "Djibouti",
+  "article": "Abbé Huard Lake",
+  "qid": "Q22643231",
+  "links": 5,
+  "via": "Lac Abbé"
+ },
+ {
+  "name": "Bissau Velho",
+  "country": "Guinea-Bissau",
+  "article": "Olivais Station",
+  "qid": "Q376192",
+  "links": 11,
+  "via": "Bissau Velho"
+ },
+ {
+  "name": "Sir Seewoosagur Ramgoolam Botanical Garden",
+  "country": "Mauritius",
+  "article": "Sir Seewoosagur Ramgoolam Botanical Garden",
+  "qid": "Q931430",
+  "links": 12,
+  "via": "Sir Seewoosagur Ramgoolam Botanical Garden Pamplemousses"
+ },
+ {
+  "name": "Koutoubia Mosque",
+  "country": "Morocco",
+  "article": "Kutubiyya Mosque",
+  "qid": "Q1137533",
+  "links": 41,
+  "via": "Koutoubia Mosque Marrakech"
+ },
+ {
+  "name": "Dakhla Lagoon",
+  "country": "Morocco",
+  "article": "Cintra Bay",
+  "qid": "Q8199676",
+  "links": 8,
+  "via": "Dakhla Lagoon Dakhla"
+ },
+ {
+  "name": "Nyungwe Forest Canopy Walkway",
+  "country": "Rwanda",
+  "article": "Rwanda",
+  "qid": "Q1037",
+  "links": 256,
+  "via": "Nyungwe Forest Canopy Walkway Rusizi"
+ },
+ {
+  "name": "River No. 2 Beach",
+  "country": "Sierra Leone",
+  "article": "Freetown, Massachusetts",
+  "qid": "Q304284",
+  "links": 27,
+  "via": "River No. 2 Beach Freetown"
+ },
+ {
+  "name": "Tacugama Chimpanzee Sanctuary",
+  "country": "Sierra Leone",
+  "article": "Freetown",
+  "qid": "Q3780",
+  "links": 144,
+  "via": "Tacugama Chimpanzee Sanctuary Freetown"
+ },
+ {
+  "name": "Mandela House",
+  "country": "South Africa",
+  "article": "Mandela House",
+  "qid": "Q3844400",
+  "links": 9,
+  "via": "Mandela House Soweto"
+ },
+ {
+  "name": "Nungwi & Kendwa Beaches",
+  "country": "Tanzania",
+  "article": "Nungwi",
+  "qid": "Q3376139",
+  "links": 5,
+  "via": "Nungwi Tanzania"
+ },
+ {
+  "name": "Koutammakou (Takienta Tower Houses)",
+  "country": "Togo",
+  "article": "Koutammakou",
+  "qid": "Q508040",
+  "links": 36,
+  "via": "Koutammakou Kara"
+ },
+ {
+  "name": "Napoleon's Tomb & Longwood House",
+  "country": "Saint Helena (UK)",
+  "article": "Valley of the Tomb",
+  "qid": "Q3554092",
+  "links": 7,
+  "via": "Napoleon's Tomb & Longwood House Jamestown"
+ },
+ {
+  "name": "Madison Square Garden",
+  "country": "United States",
+  "article": "The Theater at Madison Square Garden",
+  "qid": "Q17089953",
+  "links": 8,
+  "via": "Madison Square Garden New York, NY"
+ },
+ {
+  "name": "EPCOT",
+  "country": "United States",
+  "article": "Orlando, Florida",
+  "qid": "Q49233",
+  "links": 112,
+  "via": "EPCOT Orlando, FL"
+ },
+ {
+  "name": "The White House",
+  "country": "United States",
+  "article": "Burning of Washington",
+  "qid": "Q897786",
+  "links": 26,
+  "via": "The White House Washington, DC"
+ },
+ {
+  "name": "Central Park",
+  "country": "United States",
+  "article": "Central Park",
+  "qid": "Q160409",
+  "links": 78,
+  "via": "Central Park New York, NY"
+ },
+ {
+  "name": "Legoland New York",
+  "country": "United States",
+  "article": "Legoland New York",
+  "qid": "Q81610473",
+  "links": 5,
+  "via": "Legoland New York Goshen, NY"
+ },
+ {
+  "name": "Cedar Point",
+  "country": "United States",
+  "article": "Cedar Point",
+  "qid": "Q859230",
+  "links": 22,
+  "via": "Cedar Point Sandusky, OH"
+ },
+ {
+  "name": "Rogers Centre",
+  "country": "Canada",
+  "article": "Rogers Centre",
+  "qid": "Q76318",
+  "links": 35,
+  "via": "Rogers Centre Toronto, ON"
+ },
+ {
+  "name": "Playa Delfines",
+  "country": "Mexico",
+  "article": "Hotel Zone (Cancún)",
+  "qid": "Q134996543",
+  "links": 2,
+  "via": "Playa Delfines Cancún"
+ },
+ {
+  "name": "Copán Ruins",
+  "country": "Honduras",
+  "article": "Copán",
+  "qid": "Q214827",
+  "links": 54,
+  "via": "Copán Ruins Copán Ruinas"
+ },
+ {
+  "name": "Tortuguero National Park",
+  "country": "Costa Rica",
+  "article": "Tortuguero National Park",
+  "qid": "Q602120",
+  "links": 22,
+  "via": "Tortuguero National Park Tortuguero"
+ },
+ {
+  "name": "Grand Anse Beach",
+  "country": "Grenada",
+  "article": "Caribbean",
+  "qid": "Q664609",
+  "links": 133,
+  "via": "Grand Anse Beach St. George's"
+ },
+ {
+  "name": "Champagne Reef",
+  "country": "Dominica",
+  "article": "Regional Natural Park of the Ardennes",
+  "qid": "Q3364626",
+  "links": 4,
+  "via": "Champagne Reef Pointe Michel"
+ },
+ {
+  "name": "Eagle Beach",
+  "country": "Aruba (Netherlands territory)",
+  "article": "Eagle Beach",
+  "qid": "Q5325023",
+  "links": 6,
+  "via": "Eagle Beach Oranjestad"
+ },
+ {
+  "name": "Mendoza Wine Region",
+  "country": "Argentina",
+  "article": "Mendoza, Argentina",
+  "qid": "Q44237",
+  "links": 82,
+  "via": "Mendoza Wine Region Mendoza"
+ },
+ {
+  "name": "Easter Island (Rapa Nui Moai)",
+  "country": "Chile",
+  "article": "Hanga Roa",
+  "qid": "Q233369",
+  "links": 57,
+  "via": "Easter Island Hanga Roa"
+ },
+ {
+  "name": "Casa del Árbol (Swing at the End of the World)",
+  "country": "Ecuador",
+  "article": "Estadio Zorros del Desierto",
+  "qid": "Q21044371",
+  "links": 7,
+  "via": "Casa del Árbol Baños"
+ },
+ {
+  "name": "Volunteer Point",
+  "country": "Falkland Islands (British Overseas Territory)",
+  "article": "Volunteer Point",
+  "qid": "Q431031",
+  "links": 7,
+  "via": "Volunteer Point Stanley"
+ },
+ {
+  "name": "Christ Church Cathedral & Whalebone Arch",
+  "country": "Falkland Islands (British Overseas Territory)",
+  "article": "Christ Church Cathedral (Falkland Islands)",
+  "qid": "Q3320132",
+  "links": 11,
+  "via": "Christ Church Cathedral & Whalebone Arch Stanley"
+ },
+ {
+  "name": "Kangaroo Island",
+  "country": "Australia",
+  "article": "Kangaroo Island",
+  "qid": "Q210371",
+  "links": 55,
+  "via": "Kangaroo Island Adelaide"
+ },
+ {
+  "name": "Bouma National Heritage Park",
+  "country": "Fiji",
+  "article": "Taveuni",
+  "qid": "Q1138545",
+  "links": 33,
+  "via": "Bouma National Heritage Park Taveuni"
+ },
+ {
+  "name": "Pentecost Land Diving (Naghol)",
+  "country": "Vanuatu",
+  "article": "Pentecost (island)",
+  "qid": "Q960808",
+  "links": 24,
+  "via": "Pentecost Land Diving Pentecost Island"
+ },
+ {
+  "name": "Moorea",
+  "country": "French Polynesia (France)",
+  "article": "Moʼorea",
+  "qid": "Q673400",
+  "links": 42,
+  "via": "Moorea Moorea"
+ },
+ {
+  "name": "New Caledonia Lagoon (Amédée Islet)",
+  "country": "New Caledonia (France)",
+  "article": "New Caledonian barrier reef",
+  "qid": "Q1330981",
+  "links": 32,
+  "via": "New Caledonia Lagoon Nouméa"
+ },
+ {
+  "name": "Muri Lagoon",
+  "country": "Cook Islands (New Zealand)",
+  "article": "Muri Lagoon",
+  "qid": "Q108044396",
+  "links": 1,
+  "via": "Muri Lagoon Rarotonga"
+ },
+ {
+  "name": "Talava Arches",
+  "country": "Niue (New Zealand)",
+  "article": "Geography of Niue",
+  "qid": "Q2602265",
+  "links": 11,
+  "via": "Talava Arches Alofi"
+ },
+ {
+  "name": "National Park of American Samoa",
+  "country": "American Samoa (United States)",
+  "article": "Pago Pago, American Samoa",
+  "qid": "Q51678",
+  "links": 87,
+  "via": "National Park of American Samoa Pago Pago"
+ }
+]

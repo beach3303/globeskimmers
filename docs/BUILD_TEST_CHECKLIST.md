@@ -573,3 +573,9 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - **State:** stampable rows by source now icons 1,261 · ranked 301 · wikivoyage 190 · curated 143 · auto 47 · founder 3.
 - **Deployed/activated:** yes — applied directly to remote D1 in 200-stmt chunks. No worker change; no Activate steps pending.
 - **Also:** `aggregate-pageviews.mjs` rewritten (v2) after the full-planet run OOM'd Node's 2GB heap: shell-side grep prefilter, index-scan parsing, Float64Array tallies, per-month checkpoints (resumable).
+
+## 2026-09-03 — Atlas close-out: retry + triage passes applied; 1,317 icons live
+- **Retry pass** (`seed-atlas-retry.mjs`): 73/77 first-pass misses re-resolved via top-5 candidate scan gated on coords. **P31 verifier** (`verify-atlas-retry.mjs`) then flagged 31 wrong entities (cities, events, sub-venues — e.g. EPCOT→Orlando, White House→Burning of Washington).
+- **Founder-triage pass** (`seed-atlas-final.mjs` + `data/atlas-decisions.json`): 35 accepts by qid, 20 exact-title corrections (municipal guard still enforced), micro-round recovered Lake District (Q211778) + Dashashwamedh Ghat (Q3630402, stands in for Varanasi Ghats).
+- **Applied to remote D1** + dedup v2 re-run + popularity copied from qid twins. **Final: 1,317 `source='icons'` rows** (1,315 stampable), **23 places on `data/atlas-founder-manual.json`** — no confident enwiki/Wikidata identity exists; founder supplies coords or drops them.
+- **Deployed/activated:** yes, all D1 changes applied remote. No worker change in this batch.

@@ -1,0 +1,232 @@
+[
+ {
+  "continent": "asia",
+  "country": "Nepal",
+  "name": "Everest Base Camp — South",
+  "city": "Lukla",
+  "category": "entry-point",
+  "scope": "world",
+  "tried": "Everest base camps",
+  "why": "no coords"
+ },
+ {
+  "continent": "asia",
+  "country": "China",
+  "name": "Everest Base Camp — North (Tibet)",
+  "city": "Tingri",
+  "category": "entry-point",
+  "scope": "world",
+  "tried": "Everest base camps",
+  "why": "no coords"
+ },
+ {
+  "continent": "asia",
+  "country": "Oman",
+  "name": "Wadi Shab",
+  "city": "Tiwi",
+  "category": "natural-wonder",
+  "scope": "national",
+  "tried": "Wadi Shab",
+  "why": "no article"
+ },
+ {
+  "continent": "europe",
+  "country": "Malta",
+  "name": "Blue Lagoon",
+  "city": "Comino",
+  "category": "beach",
+  "scope": "world",
+  "tried": "Blue Lagoon (Comino)",
+  "why": "no article"
+ },
+ {
+  "continent": "europe",
+  "country": "Faroe Islands (Denmark, territory)",
+  "name": "Múlafossur Waterfall",
+  "city": "Gásadalur",
+  "category": "natural-wonder",
+  "scope": "national",
+  "tried": "Múlafossur",
+  "why": "no article"
+ },
+ {
+  "continent": "asia",
+  "country": "Malaysia",
+  "name": "George Town Old Quarter",
+  "city": "George Town, Penang",
+  "category": "historic",
+  "scope": "national",
+  "tried": "Melaka and George Town, Historic Cities of the Straits of Malacca",
+  "why": "no coords"
+ },
+ {
+  "continent": "asia",
+  "country": "Maldives",
+  "name": "Hanifaru Bay",
+  "city": "Baa Atoll",
+  "category": "natural-wonder",
+  "scope": "national",
+  "tried": "Hanifaru Bay",
+  "why": "no article"
+ },
+ {
+  "continent": "asia",
+  "country": "Israel",
+  "name": "Gordon Beach",
+  "city": "Tel Aviv",
+  "category": "beach",
+  "scope": "national",
+  "tried": "Gordon Beach",
+  "why": "no article"
+ },
+ {
+  "continent": "africa",
+  "country": "Benin",
+  "name": "Temple of Pythons",
+  "city": "Ouidah",
+  "category": "religious",
+  "scope": "regional",
+  "tried": "Temple of Pythons",
+  "why": "no article"
+ },
+ {
+  "continent": "africa",
+  "country": "Sierra Leone",
+  "name": "River No. 2 Beach",
+  "city": "Freetown",
+  "category": "beach",
+  "scope": "national",
+  "tried": "River Number Two Beach",
+  "why": "no article"
+ },
+ {
+  "continent": "africa",
+  "country": "Sierra Leone",
+  "name": "Tacugama Chimpanzee Sanctuary",
+  "city": "Freetown",
+  "category": "landmark",
+  "scope": "national",
+  "tried": "Tacugama Chimpanzee Sanctuary",
+  "why": "no article"
+ },
+ {
+  "continent": "north-america",
+  "country": "Grenada",
+  "name": "Grand Anse Beach",
+  "city": "St. George's",
+  "category": "beach",
+  "scope": "national",
+  "tried": "Grand Anse Beach",
+  "why": "no article"
+ },
+ {
+  "continent": "south-america",
+  "country": "Argentina",
+  "name": "Mendoza Wine Region",
+  "city": "Mendoza",
+  "category": "landmark",
+  "scope": "national",
+  "tried": "Mendoza wine",
+  "why": "no coords"
+ },
+ {
+  "continent": "oceania",
+  "country": "Fiji",
+  "name": "Bouma National Heritage Park",
+  "city": "Taveuni",
+  "category": "national-park",
+  "scope": "national",
+  "tried": "Bouma National Heritage Park",
+  "why": "no article"
+ },
+ {
+  "continent": "asia",
+  "country": "Kuwait",
+  "name": "Souq Al-Mubarakiya",
+  "city": "Kuwait City",
+  "category": "landmark",
+  "scope": "national",
+  "tried": "Souq Al-Mubarakiya",
+  "why": "no coords"
+ },
+ {
+  "continent": "north-america",
+  "country": "Dominican Republic",
+  "name": "27 Waterfalls of Damajagua",
+  "city": "Puerto Plata",
+  "category": "natural-wonder",
+  "scope": "national",
+  "tried": "Damajagua",
+  "why": "no article"
+ },
+ {
+  "continent": "africa",
+  "country": "Cabo Verde",
+  "name": "Praia de Chaves",
+  "city": "Boa Vista",
+  "category": "beach",
+  "scope": "regional",
+  "tried": null,
+  "why": "triage: no article exists"
+ },
+ {
+  "continent": "africa",
+  "country": "Guinea-Bissau",
+  "name": "Bissau Velho",
+  "city": "Bissau",
+  "category": "historic",
+  "scope": "regional",
+  "tried": null,
+  "why": "triage: no article exists"
+ },
+ {
+  "continent": "africa",
+  "country": "Tanzania",
+  "name": "Nungwi & Kendwa Beaches",
+  "city": "Zanzibar",
+  "category": "beach",
+  "scope": "world",
+  "tried": null,
+  "why": "triage: no article exists"
+ },
+ {
+  "continent": "north-america",
+  "country": "Mexico",
+  "name": "Playa Delfines",
+  "city": "Cancún",
+  "category": "beach",
+  "scope": "world",
+  "tried": null,
+  "why": "triage: no article exists"
+ },
+ {
+  "continent": "north-america",
+  "country": "Dominica",
+  "name": "Champagne Reef",
+  "city": "Pointe Michel",
+  "category": "natural-wonder",
+  "scope": "national",
+  "tried": null,
+  "why": "triage: no article exists"
+ },
+ {
+  "continent": "south-america",
+  "country": "Ecuador",
+  "name": "Casa del Árbol (Swing at the End of the World)",
+  "city": "Baños",
+  "category": "landmark",
+  "scope": "national",
+  "tried": null,
+  "why": "triage: no article exists"
+ },
+ {
+  "continent": "oceania",
+  "country": "Niue (New Zealand)",
+  "name": "Talava Arches",
+  "city": "Alofi",
+  "category": "natural-wonder",
+  "scope": "national",
+  "tried": null,
+  "why": "triage: no article exists"
+ }
+]
