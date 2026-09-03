@@ -50,7 +50,6 @@
 import ATMFinder from './pages/ATMFinder';
 import ActivityDetail from './pages/ActivityDetail';
 import AdminAnalytics from './pages/AdminAnalytics';
-import AdminDashboard from './pages/AdminDashboard';
 import BasicPhrases from './pages/BasicPhrases';
 import CoffeeFinder from './pages/CoffeeFinder';
 import ConvenienceStore from './pages/ConvenienceStore';
@@ -59,7 +58,6 @@ import FindAHotel from './pages/FindAHotel';
 import GetARide from './pages/GetARide';
 import Home from './pages/Home';
 import Insight from './pages/Insight';
-import Map from './pages/Map';
 import MoneyExchange from './pages/MoneyExchange';
 import MyTrip from './pages/MyTrip';
 import Onboarding from './pages/Onboarding';
@@ -83,7 +81,6 @@ export const PAGES = {
     "ATMFinder": ATMFinder,
     "ActivityDetail": ActivityDetail,
     "AdminAnalytics": AdminAnalytics,
-    "AdminDashboard": AdminDashboard,
     "BasicPhrases": BasicPhrases,
     "CoffeeFinder": CoffeeFinder,
     "ConvenienceStore": ConvenienceStore,
@@ -92,7 +89,6 @@ export const PAGES = {
     "GetARide": GetARide,
     "Home": Home,
     "Insight": Insight,
-    "Map": Map,
     "MoneyExchange": MoneyExchange,
     "MyTrip": MyTrip,
     "Onboarding": Onboarding,
