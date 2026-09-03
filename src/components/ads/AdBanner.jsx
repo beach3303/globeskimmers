@@ -15,6 +15,15 @@ import { ADMOB_BANNER_IDS, USE_PRODUCTION_ADS } from '@/lib/admobConfig';
 // overlay, only ONE instance of this should be mounted at a time — Layout
 // guarantees that by rendering it for at most the one active page.
 //
+// All plugin calls are serialized through one module-level promise chain, and
+// teardown is generation-guarded: the native banner is a singleton, so a
+// replaced instance's late-resolving hide/remove (Home->finder handoff, Home
+// overlay toggles remounting HomeBanner) could land AFTER the next instance's
+// showBanner and silently kill the fresh ad. Now: newest generation wins.
+let adGeneration = 0;
+let adOp = Promise.resolve();
+const adQueue = (fn) => { adOp = adOp.then(fn).catch(() => {}); return adOp; };
+
 // HomeBanner re-exports this so Home keeps its identical, proven behavior.
 export default function AdBanner() {
   useEffect(() => {
@@ -22,6 +31,7 @@ export default function AdBanner() {
     if (platform === 'web') return; // native-only plugin
 
     let mounted = true;
+    const gen = ++adGeneration;
     const adId = platform === 'ios' ? ADMOB_BANNER_IDS.ios : ADMOB_BANNER_IDS.android;
 
     const init = async () => {
@@ -53,14 +63,17 @@ export default function AdBanner() {
       }
     };
 
-    init();
+    adQueue(init);
 
     return () => {
       mounted = false;
       // Tear down on unmount so the overlay doesn't float over the next
-      // screen. Best-effort no-ops if no banner is currently up.
-      AdMob.hideBanner().catch(() => {});
-      AdMob.removeBanner().catch(() => {});
+      // screen — but only if no newer instance has taken over the singleton.
+      adQueue(async () => {
+        if (gen !== adGeneration) return;
+        await AdMob.hideBanner().catch(() => {});
+        await AdMob.removeBanner().catch(() => {});
+      });
     };
   }, []);
 
