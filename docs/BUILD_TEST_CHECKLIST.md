@@ -566,3 +566,10 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - [ ] Founder reads the brief → go/no-go on Phase 0 (photo roulette → P18-by-QID, one-pool dedup, chrome un-stack, hero collapse, dead-surface deletes) and Phase 1 (the spine)
 - [ ] Apply to Flex Pay (Uplift) — longest lead item; needed for Smart Packages installments
 - [ ] Nuitée sandbox device test → production flip (Phase 0's money item)
+
+## 2026-09-03 — Global Stamp Atlas applied to D1 (source='icons')
+- **What:** 1,363 founder-approved atlas rows resolved via enwiki search → Wikidata QID + P625 coords; 1,263 inserted into `globeskimmers-attractions` as `id='icon:<qid>'`, `source='icons'`, `founder_scope=<atlas scope>`, `scope=<fame-bar verdict from measured sitelinks>`, `tier='page'`. 77 unresolved went to a second pass (`seed-atlas-retry.mjs`, top-5 candidate scan gated on coords) — remainder goes to the founder's manual list.
+- **Dedup v2** run after apply: one row per qid, priority founder > icons > curated > wikivoyage > ranked > auto; losers demoted to `scope='local'`, `founder_scope=NULL` (new — old dedup left founder_scope set, which `coalesce(founder_scope,scope)` would still have stamped), `class_ban='duplicate'`. 106 demoted. Verified: Q243 Eiffel → icon row canonical, curated+wikivoyage twins demoted.
+- **State:** stampable rows by source now icons 1,261 · ranked 301 · wikivoyage 190 · curated 143 · auto 47 · founder 3.
+- **Deployed/activated:** yes — applied directly to remote D1 in 200-stmt chunks. No worker change; no Activate steps pending.
+- **Also:** `aggregate-pageviews.mjs` rewritten (v2) after the full-planet run OOM'd Node's 2GB heap: shell-side grep prefilter, index-scan parsing, Float64Array tallies, per-month checkpoints (resumable).
