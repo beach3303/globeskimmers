@@ -12194,8 +12194,14 @@ async function enrichOwnedOne(env, origin, b) {
   const lat = parseFloat(b.lat ?? b.latitude), lng = parseFloat(b.lng ?? b.longitude);
   const maxPhotos = Math.min(Math.max(parseInt(b.maxPhotos, 10) || 3, 0), 6);
 
-  // Resolve owned uuid → Google place id (cached), else use a passed Google id.
-  let gid = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id) ? null : (id || null);
+  // Resolve an owned id → Google place id (cached), else use a passed Google id.
+  // Owned ids come in TWO families: Overture uuids AND the attractions-D1
+  // prefixes (icon:/wikidata:/curated:/wv:/auto:). The old uuid-only test let
+  // every attraction id fall through AS a Google place id → details 404 →
+  // matched:false for all D1 attraction rows (measured: Eiffel). Only a
+  // Google-shaped id ("ChIJ…" / "places/…") may skip resolution.
+  const looksGoogle = /^(places\/)?ChIJ|^(places\/)?[A-Za-z0-9_-]{27}$/.test(id) && !id.includes(':');
+  let gid = id && looksGoogle ? id : null;
   if (!gid && id) {
     const mapKey = `owned2gid:${id}`;
     gid = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(mapKey).catch(() => null) : null;
