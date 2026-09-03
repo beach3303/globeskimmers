@@ -4631,7 +4631,7 @@ async function handleParseIntent(request, env) {
 // miss vs ~$0.045 via the generic /invoke-llm it replaces for the spine.
 // ============================================================================
 const PARSE_SEARCH_TTL_SECONDS = 24 * 60 * 60;
-const PARSE_SEARCH_PROMPT_VERSION = 'v1';
+const PARSE_SEARCH_PROMPT_VERSION = 'v2';
 const PARSE_SEARCH_CATEGORIES = new Set(['eat', 'coffee', 'things', 'hotel', 'shopping', 'atm', 'money', 'ride', 'convenience', 'restroom', 'weather', 'none']);
 const PARSE_SEARCH_SCOPES = new Set(['near_me', 'at_stay', 'named_place', 'unknown']);
 
@@ -4643,7 +4643,8 @@ OUTPUT SCHEMA (return EXACTLY this shape — no extra keys, no markdown):
   "scope": "near_me" | "at_stay" | "named_place" | "unknown",
   "place": "<city/place name if scope is named_place, else empty string>",
   "query": "<the core thing to search, cleaned of scope words, e.g. ramen, viral desserts>",
-  "confidence": <0.0-1.0>
+  "confidence": <0.0-1.0>,
+  "dream_destination": {"name": "<place>", "city": "<city/region>", "country": "<country>"} | null
 }
 
 CATEGORY = which finder fits:
@@ -4668,6 +4669,7 @@ RULES:
 3. If the whole query is just a place name, category = "none", query = "".
 4. confidence: 0.0-1.0. Below 0.4 = unsure.
 5. Return ONLY JSON — no prose, no markdown fences.
+6. dream_destination: ONLY when the query expresses a travel EXPERIENCE or dream not tied to the traveler's current surroundings — a phenomenon, activity, or sight someone would travel FOR ("see bears catch fish", "northern lights", "swim with whale sharks", "cherry blossoms"). Name the single best-known real place for it. Everything else (including all near-me/at-stay searches): "dream_destination": null. Never invent places.
 
 EXAMPLES:
 Input: "ramen near my hotel"
@@ -4679,7 +4681,9 @@ Output: {"category":"eat","scope":"unknown","place":"","query":"viral desserts",
 Input: "Positano"
 Output: {"category":"none","scope":"named_place","place":"Positano","query":"","confidence":0.9}
 Input: "where can I exchange money"
-Output: {"category":"money","scope":"unknown","place":"","query":"currency exchange","confidence":0.9}`;
+Output: {"category":"money","scope":"unknown","place":"","query":"currency exchange","confidence":0.9}
+Input: "see bears catch fish"
+Output: {"category":"things","scope":"unknown","place":"","query":"bear viewing","confidence":0.85,"dream_destination":{"name":"Brooks Falls","city":"Katmai National Park, Alaska","country":"United States"}}`;
 
 async function handleParseSearch(request, env) {
   if (!env.ANTHROPIC_API_KEY) return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
@@ -4724,6 +4728,32 @@ async function handleParseSearch(request, env) {
     return jsonResponse({ error: 'Claude parse error: ' + (e.message || 'unknown') }, 500);
   }
 
+  // Dream-intent destination, grounded against the owned attractions DB when a
+  // matching world/national-tier row exists (brief Part Three S1). Ungrounded
+  // suggestions still surface — labeled grounded:false, never with invented
+  // coordinates.
+  let destination = null;
+  const dd = parsed.dream_destination;
+  if (dd && typeof dd === 'object' && typeof dd.name === 'string' && dd.name.trim()) {
+    destination = {
+      grounded: false,
+      name: dd.name.trim().slice(0, 80),
+      city: typeof dd.city === 'string' ? dd.city.trim().slice(0, 80) : '',
+      country: typeof dd.country === 'string' ? dd.country.trim().slice(0, 60) : '',
+    };
+    if (env.ATTRACTIONS_DB) {
+      try {
+        const row = await env.ATTRACTIONS_DB.prepare(
+          `SELECT id, name, city, country, lat, lng, qid FROM attractions
+            WHERE name LIKE ?1 AND coalesce(founder_scope, scope) IN ('world','national')
+              AND (class_ban IS NULL OR class_ban = '' OR class_ban LIKE 'review:%')
+            ORDER BY (popularity IS NULL) ASC, popularity DESC, sitelinks DESC LIMIT 1`
+        ).bind(`%${destination.name.replace(/[%_]/g, '')}%`).first();
+        if (row) destination = { grounded: true, id: row.id, name: row.name, city: row.city || '', country: row.country || '', lat: row.lat, lng: row.lng, qid: row.qid || null };
+      } catch { /* ungrounded suggestion stands */ }
+    }
+  }
+
   const category = (typeof parsed.category === 'string' && PARSE_SEARCH_CATEGORIES.has(parsed.category)) ? parsed.category : 'none';
   const scope = (typeof parsed.scope === 'string' && PARSE_SEARCH_SCOPES.has(parsed.scope)) ? parsed.scope : 'unknown';
   const normalized = {
@@ -4732,6 +4762,7 @@ async function handleParseSearch(request, env) {
     place: (typeof parsed.place === 'string' && parsed.place.trim()) ? parsed.place.trim() : null,
     query: typeof parsed.query === 'string' ? parsed.query.trim() : '',
     confidence: typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : 0.5,
+    destination,
   };
 
   if (env.GLOBESKIMMERS_KV) {
@@ -6232,7 +6263,7 @@ async function handleAttractionsNearby(request, env, ctx) {
     SELECT id, name, category, lat, lng, city, country, description,
            why_visit, typical_minutes, photo_url, rating,
            is_marquee, free_to_visit,
-           popularity, footprint_radius_m, parent_id, tier
+           popularity, footprint_radius_m, parent_id, tier, qid
       FROM attractions
      WHERE ${wheres.join(' AND ')}
   ORDER BY is_marquee DESC, (popularity IS NULL) ASC, popularity DESC, rating DESC
@@ -6289,6 +6320,7 @@ async function handleAttractionsNearby(request, env, ctx) {
       footprint_radius_m: r.footprint_radius_m ?? null,
       parentId: r.parent_id || null,
       tier: r.tier || 'page',
+      qid: r.qid || null,
       distanceKm: distKm,
       distanceMiles: distKm * 0.621371,
     };
@@ -6426,15 +6458,55 @@ async function fetchOpenversePhoto(env, query, _ctx) {
   } catch { return null; }
 }
 
+// Canonical Commons hero for a QID-keyed attraction — Wikidata P18 by KNOWN
+// QID: no name search, no wrong-match risk (brief Part Five #2, "end photo
+// roulette"). Openverse text search remains ONLY for qid-less rows. 180d cache;
+// misses cached 30d so a P18-less entity doesn't refetch per render.
+async function getWikiPhotoByQid(env, qid) {
+  const q = String(qid || '').trim();
+  if (!/^Q\d+$/.test(q)) return null;
+  const cacheKey = `wikiphoto_qid:v1:${q}`;
+  const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+  if (cached) return cached.none ? null : cached;
+  try {
+    const e = await wikiJson(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${q}&props=claims&format=json`);
+    const p18 = e.entities?.[q]?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+    if (!p18 || badWikiFile(p18)) {
+      await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify({ none: true }), { expirationTtl: 30 * 24 * 60 * 60 }).catch(() => {});
+      return null;
+    }
+    const photo = {
+      url: commonsThumb(p18),
+      photographer: '',
+      license: 'CC',
+      link: `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(p18)}`,
+      credit: 'Wikimedia Commons',
+    };
+    await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(photo), { expirationTtl: 180 * 24 * 60 * 60 }).catch(() => {});
+    return photo;
+  } catch { return null; }
+}
+
 // Build the global "Where to next" inspiration row from Openverse destination
 // photos. No API key needed now (free) — returns null only if too few resolve.
 async function buildWhereToNextRow(env, seasonKey, ctx) {
   const dests = (HOME_SEASONAL_DESTINATIONS[seasonKey] || HOME_SEASONAL_DESTINATIONS.summer).slice(0, 6);
   const cards = [];
   for (const dest of dests) {
-    const photo = await fetchOpenversePhoto(env, dest, ctx);
+    // Canonical imagery first: Wikidata/Commons via the curated destination name
+    // (quality-gated ≥1000×600, badWikiFile blacklist, 180d cache). Openverse is
+    // the fallback only — this row's one job is selling the dream, and it never
+    // again leads with CC-search roulette (measured failure: Hitler for "Munich").
+    const name = dest.split(',')[0].trim();
+    let photo = null;
+    try {
+      const wiki = await getWikiPhotos(env, name, NaN, NaN);
+      const w = wiki?.photos?.[0];
+      if (w?.url) photo = { url: w.url, photographer: '', credit: w.credit || 'Wikimedia Commons', link: '' };
+    } catch { /* fall through to Openverse */ }
+    if (!photo) photo = await fetchOpenversePhoto(env, dest, ctx);
     if (photo?.url) {
-      cards.push({ id: `esc_${dest}`, name: dest.split(',')[0].trim(), whyVisit: dest, photoUrl: photo.url, photographer: photo.photographer, credit: photo.credit, creditLink: photo.link });
+      cards.push({ id: `esc_${dest}`, name, whyVisit: dest, photoUrl: photo.url, photographer: photo.photographer, credit: photo.credit, creditLink: photo.link });
     }
   }
   if (cards.length < 3) return null;
@@ -6515,6 +6587,38 @@ async function homeRowsPlanetPool(env, latitude, longitude) {
   } catch (e) { console.error('home/rows planet pool failed:', e?.message); return []; }
 }
 
+// /attractions/get — one attraction row by id, for deep-linked / shared
+// ActivityDetail URLs (?id=...). Same graceful degradation as /attractions/nearby.
+async function handleAttractionsGet(request, env) {
+  if (!env.ATTRACTIONS_DB) return jsonResponse({ attraction: null, note: 'ATTRACTIONS_DB binding not present' });
+  let body;
+  try { body = await request.json(); }
+  catch { return jsonResponse({ error: 'Invalid JSON body' }, 400); }
+  const id = String(body?.id || '').trim();
+  if (!id || id.length > 200) return jsonResponse({ error: 'id required' }, 400);
+  try {
+    const row = await env.ATTRACTIONS_DB.prepare(
+      `SELECT id, name, category, lat, lng, city, country, description, why_visit,
+              typical_minutes, photo_url, rating, is_marquee, free_to_visit,
+              popularity, footprint_radius_m, parent_id, tier, qid
+         FROM attractions WHERE id = ?1 LIMIT 1`
+    ).bind(id).first();
+    if (!row) return jsonResponse({ attraction: null }, 404);
+    return jsonResponse({ attraction: {
+      id: row.id, name: row.name, category: row.category, lat: row.lat, lng: row.lng,
+      city: row.city || '', country: row.country, description: row.description || '',
+      whyVisit: row.why_visit || '', typicalMinutes: row.typical_minutes ?? null,
+      photoUrl: row.photo_url || null, rating: row.rating ?? null,
+      isMarquee: row.is_marquee === 1, freeToVisit: row.free_to_visit === 1,
+      popularity: row.popularity ?? null, footprint_radius_m: row.footprint_radius_m ?? null,
+      parentId: row.parent_id || null, tier: row.tier || 'page', qid: row.qid || null,
+    } });
+  } catch (err) {
+    console.error('attractions/get D1 query failed:', err?.message);
+    return jsonResponse({ attraction: null, error: err?.message || 'D1 query failed' }, 500);
+  }
+}
+
 async function handleHomeRows(request, env, ctx) {
   const startedAt = Date.now();
   let body;
@@ -6534,7 +6638,7 @@ async function handleHomeRows(request, env, ctx) {
   // key make the homepage reshuffle across the day.
   const rLat = Math.round(latitude * 10) / 10;
   const rLng = Math.round(longitude * 10) / 10;
-  const cacheKey = `homerows_v2_${rLat}_${rLng}_${dayPart}_${weatherBucket}`;
+  const cacheKey = `homerows_v3_${rLat}_${rLng}_${dayPart}_${weatherBucket}`;   // v3: deduped pool + P18-by-QID photos (v2 bundles carried Openverse-only art + repeats)
 
   const cachedBundle = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
   if (cachedBundle && Array.isArray(cachedBundle.rows)) {
@@ -6579,6 +6683,7 @@ async function handleHomeRows(request, env, ctx) {
     photoUrl: a.photoUrl, rating: a.rating, whyVisit: a.whyVisit,
     distanceMiles: a.distanceMiles, freeToVisit: a.freeToVisit, lat: a.lat, lng: a.lng,
     footprint_radius_m: a.footprint_radius_m ?? null, popularity: a.popularity ?? null, tier: a.tier || 'page',
+    qid: a.qid || null,
   });
   const withPhoto = attractions.filter((a) => a.photoUrl);
   const pool = withPhoto.length >= 6 ? withPhoto : attractions;
@@ -6626,24 +6731,31 @@ async function handleHomeRows(request, env, ctx) {
     } catch (e) { console.error('home/rows trending query failed:', e?.message); }
   }
 
+  // Partition tracker: each attraction row below draws only cards no earlier
+  // row used (trending claimed its cards first). This is what makes "no
+  // destination twice per scroll" produce SEVERAL distinct rows instead of one
+  // row plus casualties — overlap-then-dedup collapsed small pools entirely.
+  const used = new Set(rows.flatMap((r) => r.cards.map((c) => String(c.id))));
+  const claim = (cards) => { for (const c of cards) used.add(String(c.id)); return cards; };
+
   // Row 1 — day-part row, rotated so morning vs evening opens differ visibly.
   const order = ['earlyMorning', 'morning', 'midday', 'afternoon', 'evening', 'lateNight'];
   const off = pool.length ? (Math.max(0, order.indexOf(dayPart)) % pool.length) : 0;
   const rotated = pool.slice(off).concat(pool.slice(0, off));
   const dp = HOME_DAYPART_ROW[dayPart] || HOME_DAYPART_ROW.midday;
   const wAccent = HOME_WEATHER_ACCENT[weatherBucket];
-  const dpCards = take(rotated, 10);
+  const dpCards = claim(take(rotated.filter((a) => !used.has(String(a.id))), 10));
   if (dpCards.length) rows.push({ key: 'dayPart', title: dp.title, subtitle: wAccent ? `${wAccent} · ${dp.subtitle}` : dp.subtitle, seeAll: { action: 'Things to Do' }, cards: dpCards });
 
   // Row 2 — nearest to you now.
   const nearest = [...pool].sort((a, b) => (a.distanceMiles ?? 1e9) - (b.distanceMiles ?? 1e9));
-  const nearCards = take(nearest, 10);
+  const nearCards = claim(take(nearest.filter((a) => !used.has(String(a.id))), 10));
   if (nearCards.length) rows.push({ key: 'nearYou', title: 'Near you now', subtitle: 'Closest to where you are', seeAll: { action: 'Things to Do' }, cards: nearCards });
 
   // Row 3 — seasonal (client-passed season = hemisphere-correct).
   const seasonCfg = HOME_SEASONAL_ROWS[seasonKey];
   if (seasonCfg) {
-    const seasonCards = take(pool, 10);
+    const seasonCards = claim(take(pool.filter((a) => !used.has(String(a.id))), 10));
     if (seasonCards.length) rows.push({ key: 'seasonal', title: seasonCfg.title, subtitle: seasonCfg.subtitle, seeAll: { action: 'Things to Do' }, cards: seasonCards });
   }
 
@@ -6657,13 +6769,25 @@ async function handleHomeRows(request, env, ctx) {
   // Parallel + capped so first build stays fast; cards that already have a photo
   // are skipped.
   {
-    // Dedup by "{name}, {city}" so cards repeated across rows fetch each unique
-    // place once, applying the photo to all its cards.
+    // Photo fill, two passes. Pass 1 — canonical P18 by KNOWN QID (wrong-match-
+    // proof), grouped so each QID fetches once and fills every card that shares
+    // it. Pass 2 — the content-safe Openverse picker, ONLY for qid-less cards
+    // (planet-pool fallback rows) or entities with no P18.
+    const photoless = [];
+    for (const r of rows) for (const c of r.cards) { if (!c.photoUrl && c.name) photoless.push(c); }
+    const byQid = new Map();
+    for (const c of photoless) {
+      if (!c.qid) continue;
+      if (!byQid.has(c.qid)) byQid.set(c.qid, []);
+      byQid.get(c.qid).push(c);
+    }
+    await Promise.all([...byQid.keys()].slice(0, 40).map(async (qid) => {
+      const photo = await getWikiPhotoByQid(env, qid);
+      if (photo?.url) for (const c of byQid.get(qid)) { c.photoUrl = photo.url; c.photographer = photo.photographer; c.credit = photo.credit; c.creditLink = photo.link; }
+    }));
     const byQuery = new Map();
-    for (const r of rows) for (const c of r.cards) {
-      if (c.photoUrl || !c.name) continue;
-      // Normalize non-Latin / ALL-CAPS names + add city+country context so the
-      // photo search actually lands (fixes Manila-style photoless real sights).
+    for (const c of photoless) {
+      if (c.photoUrl) continue;
       const q = cleanPhotoQuery(c.name, c.city, c.country);
       if (!q) continue;
       if (!byQuery.has(q)) byQuery.set(q, []);
@@ -6673,6 +6797,25 @@ async function handleHomeRows(request, env, ctx) {
       const photo = await fetchOpenversePhoto(env, q, ctx);
       if (photo?.url) for (const c of byQuery.get(q)) { c.photoUrl = photo.url; c.photographer = photo.photographer; c.credit = photo.credit; c.creditLink = photo.link; }
     }));
+  }
+
+  // One deduped pool per render (brief Part Five #3): a destination appears
+  // ONCE per bundle. First appearance wins — push order makes trending >
+  // dayPart > nearYou > seasonal the priority — and rows thinned under 3
+  // cards are dropped rather than rendered threadbare.
+  {
+    const seen = new Set();
+    for (const r of rows) {
+      r.cards = r.cards.filter((c) => {
+        const k = String(c.id || c.name);
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i].key !== 'whereToNext' && rows[i].cards.length < 3) rows.splice(i, 1);
+    }
   }
 
   const bundle = { rows, dayPart };
@@ -13076,6 +13219,9 @@ async function handleViatorProducts(request, env) {
       }
     }
     if (!payload) return jsonResponse({ match: null, products: [], reason: lastStatus ? `http_${lastStatus}` : 'empty' });
+    recordPriceHistory(env, null, payload.products.slice(0, 3)
+      .filter((pr) => typeof pr.price === 'number')
+      .map((pr) => ({ corridor: payload.destination ? `${String(payload.destination).toLowerCase()}|viator` : null, component: 'tour', productId: pr.code || pr.productCode || null, price: pr.price, currency: 'USD' })));
     if (kv) await kv.put(ck, JSON.stringify(payload), { expirationTtl: (payload.products.length ? 24 : 7 * 24) * 3600 }).catch(() => {});
     return jsonResponse({ ...payload, source: 'live' });
   } catch { return jsonResponse({ match: null, products: [] }); }
@@ -13171,6 +13317,46 @@ async function handleViatorSchedule(request, env) {
     codes.forEach((c, i) => { if (results[i]) schedules[c] = results[i]; });
     return jsonResponse({ schedules });
   } catch { return jsonResponse({ schedules: {} }); }
+}
+
+// ── Rung 3 (Full-Access): live seats + exact pricing for a chosen date ───────
+// POST /viator/availability {productCode, travelDate, adults} → real-time
+// availability for that date/party. 10-min KV cache — this is LIVE data.
+// Response mapping is defensive: unknown shapes return {available:null}
+// (an honest "couldn't verify"), never a guess.
+async function handleViatorAvailability(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const code = String(b.productCode || b.code || '').trim();
+    const date = String(b.travelDate || b.date || '').trim();
+    const adults = Math.min(Math.max(parseInt(b.adults, 10) || 2, 1), 9);
+    if (!/^[A-Za-z0-9_-]{3,40}$/.test(code) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return jsonResponse({ available: null, reason: 'code_and_date_required' }, 400);
+    if (!env.VIATOR_API_KEY) return jsonResponse({ available: null, reason: 'no_key' });
+    const ck = `viatoravail:v1:${code}:${date}:${adults}`;
+    const kv = env.GLOBESKIMMERS_KV;
+    const cached = kv ? await kv.get(ck, { type: 'json' }).catch(() => null) : null;
+    if (cached) return jsonResponse({ ...cached, source: 'cache' });
+    let res;
+    try {
+      res = await fetch(`${VIATOR_API}/availability/check`, {
+        method: 'POST', headers: viatorHeaders(env),
+        body: JSON.stringify({ productCode: code, travelDate: date, currency: 'USD', paxMix: [{ ageBand: 'ADULT', numberOfTravelers: adults }] }),
+      });
+    } catch { return jsonResponse({ available: null, reason: 'network' }); }
+    if (!res.ok) return jsonResponse({ available: null, reason: `http_${res.status}` });
+    const d = await res.json().catch(() => ({}));
+    const items = Array.isArray(d?.bookableItems) ? d.bookableItems : [];
+    const open = items.filter((it) => it && it.available !== false);
+    let fromPrice = null;
+    for (const it of open) {
+      const cand = it?.totalPrice?.price?.partnerTotalPrice ?? it?.totalPrice?.price?.recommendedRetailPrice ?? it?.totalPrice?.partnerTotalPrice ?? null;
+      if (typeof cand === 'number' && (fromPrice == null || cand < fromPrice)) fromPrice = cand;
+    }
+    const payload = { available: items.length ? open.length > 0 : null, options: open.length, fromPrice, currency: d?.currency || 'USD', travelDate: date, adults };
+    if (kv) await kv.put(ck, JSON.stringify(payload), { expirationTtl: 10 * 60 }).catch(() => {});
+    if (typeof fromPrice === 'number') recordPriceHistory(env, null, [{ corridor: null, component: 'tour', productId: code, price: fromPrice, currency: payload.currency, meta: { travelDate: date, adults } }]);
+    return jsonResponse({ ...payload, source: 'live' });
+  } catch { return jsonResponse({ available: null }); }
 }
 
 // Free-text Tours & Activities search (Viator) → surfaces bookable EXPERIENCES the
@@ -13517,6 +13703,29 @@ async function nuiteeSessPut(env, s) {
 // dates. ONE call (rates + hotel data), cheapest rate per hotel, sorted by total.
 // Rates are volatile → 20-minute KV. Requires coordinates and dates (Stay22 keeps
 // covering flexible-date and address-only searches).
+// ── price_history capture (Smart Packages groundwork) ────────────────────────
+// Ambient per-corridor component price observations, written fire-and-forget
+// from handlers that already hold live prices. Captured from day one so the
+// future best-time vs cheapest-time verdicts are EARNED from real history
+// (brief Part Three S3), never invented. Must never block or fail a response.
+function recordPriceHistory(env, ctx, entries) {
+  try {
+    if (!env.DB || !Array.isArray(entries) || !entries.length) return;
+    const ts = Math.floor(Date.now() / 1000);
+    const stmt = env.DB.prepare(
+      `INSERT INTO price_history (ts, corridor, component, product_id, price, currency, meta)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
+    );
+    const batch = entries
+      .filter((e) => e && typeof e.price === 'number' && Number.isFinite(e.price) && e.price > 0 && e.component)
+      .slice(0, 5)
+      .map((e) => stmt.bind(ts, e.corridor || null, String(e.component), e.productId ? String(e.productId) : null, e.price, e.currency || 'USD', e.meta ? JSON.stringify(e.meta).slice(0, 500) : null));
+    if (!batch.length) return;
+    const run = env.DB.batch(batch).catch(() => {});
+    if (ctx && ctx.waitUntil) ctx.waitUntil(run);
+  } catch { /* capture must never break a response */ }
+}
+
 async function handleNuiteeSearch(request, env, ctx) {
   try {
     const b = await request.json().catch(() => ({}));
@@ -13578,6 +13787,12 @@ async function handleNuiteeSearch(request, env, ctx) {
       };
     }).filter(Boolean);
     hotels.sort((a, c) => a.price - c.price);
+    // Ambient capture: the 3 cheapest nightly rates for this destination/stay.
+    recordPriceHistory(env, ctx, hotels.slice(0, 3).map((h) => ({
+      corridor: `${(h.city || '').toLowerCase()}|${(h.country || '').toLowerCase()}`,
+      component: 'hotel', productId: h.hotelId, price: h.nightly, currency: h.currency,
+      meta: { checkin, nights, adults, kids },
+    })));
     const payload = { hotels, nights, checkin, checkout, currency, env: nuiteeEnv(env) };
     if (hotels.length && ctx) ctx.waitUntil(env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(payload), { expirationTtl: 20 * 60 }).catch(() => {}));
     return jsonResponse({ ...payload, source: 'live' });
@@ -14155,6 +14370,7 @@ export default {
       if (pathname === '/viator/match' && request.method === 'POST') return await handleViatorMatch(request, env);
       if (pathname === '/viator/products' && request.method === 'POST') return await handleViatorProducts(request, env);
       if (pathname === '/viator/schedule' && request.method === 'POST') return await handleViatorSchedule(request, env);
+      if (pathname === '/viator/availability' && request.method === 'POST') return await handleViatorAvailability(request, env);
       if (pathname === '/activities/search' && request.method === 'POST') return await handleActivitySearch(request, env, ctx);
       if (pathname === '/events/search' && request.method === 'POST') return await handleEventsSearch(request, env);
       if (pathname === '/hotels/search' && request.method === 'POST') return await handleHotelSearch(request, env, ctx);
@@ -14238,6 +14454,7 @@ export default {
       // ctx is forwarded so the handler can ctx.waitUntil() a Phase B
       // background seed task when D1 returns sparse for this region.
       if (pathname === '/attractions/nearby' && request.method === 'POST') return await handleAttractionsNearby(request, env, ctx);
+      if (pathname === '/attractions/get' && request.method === 'POST') return await handleAttractionsGet(request, env);
       if (pathname === '/home/rows' && request.method === 'POST') return await handleHomeRows(request, env, ctx);
       // Phase B manual / debug trigger. Same seed logic as the
       // ctx.waitUntil path above, just synchronous so the response
