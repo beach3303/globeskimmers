@@ -58,9 +58,9 @@ const ROOTS = {
     "Q349",      // sport (closure: rugby union/league, badminton — Sydney's old top-5)
     "Q31629",    // type of sport (belt-and-suspenders direct hit)
     "Q1414729",  // IMAX's format class
-    "Q2424752",  // product/trademark class (IMAX's second P31)
     "Q1001378",  // art-form/genre class (the Animation article, via a bad Animate link)
     "Q26401003", // individual animal (Hachikō the dog; the STATUE's own article stays welcome)
+    "Q47728",    // hobby (measured: scuba diving + badminton)
   ],
   // SOFT: institutional types that are USUALLY not sights — but the closure
   // reaches surprising places (madrasa→school, avenue→road, Pont Alexandre III→
@@ -123,14 +123,21 @@ const qidOf = (r) => (r.wikidata || "").trim() || qidByArticle.get(r.article) ||
 
 // ---- 2. entity types (P31) + home venues (P115) -----------------------------
 const qids = [...new Set(rows.map(qidOf).filter(Boolean))];
-console.error(`fetching claims for ${qids.length} entities...`);
-const entity = new Map();   // qid -> {p31:[], p115:[]}
-for (let i = 0; i < qids.length; i += 50) {
-  const batch = qids.slice(i, i + 50);
+const entity = new Map();   // qid -> {p31:[], p115:[], heritage, sitelinks}
+// Disk memo — a planet re-run was paying ~1.5k batched calls (72k entities)
+// every time the blacklist moved one line.
+const ECACHE = path.join(OUT, "entity-cache.jsonl");
+if (fs.existsSync(ECACHE)) for (const l of fs.readFileSync(ECACHE, "utf8").split("\n")) { if (!l) continue; try { const j = JSON.parse(l); entity.set(j.k, j.v); } catch { /* skip */ } }
+const eOut = fs.createWriteStream(ECACHE, { flags: "a" });
+const needE = qids.filter((q) => !entity.has(q));
+console.error(`fetching claims for ${qids.length} entities (${entity.size} cached, ${needE.length} to fetch)...`);
+for (let i = 0; i < needE.length; i += 50) {
+  const batch = needE.slice(i, i + 50);
   const j = await api("https://www.wikidata.org/w/api.php?action=wbgetentities&props=claims|sitelinks&format=json&ids=" + batch.join("|"));
   for (const [id, e] of Object.entries(j.entities || {})) {
     const claim = (p) => (e.claims?.[p] || []).map((c) => c.mainsnak?.datavalue?.value?.id).filter(Boolean);
-    entity.set(id, { p31: claim("P31"), p115: claim("P115"), heritage: (e.claims?.P1435 || []).length > 0, sitelinks: Object.keys(e.sitelinks || {}).length });
+    const v = { p31: claim("P31"), p115: claim("P115"), heritage: (e.claims?.P1435 || []).length > 0, sitelinks: Object.keys(e.sitelinks || {}).length };
+    entity.set(id, v); eOut.write(JSON.stringify({ k: id, v }) + "\n");
   }
   await sleep(150);
 }
@@ -197,6 +204,10 @@ console.error(`blacklisted classes found: ${classVerdict.size}`);
 const verdictOf = (qid) => {
   const e = qid && entity.get(qid);
   if (!e) return { v: "KEEP" };
+  // Concept guard: a massively-famous article with ZERO P31 typing is a
+  // concept (Swimming, Sun tanning — measured on Sydney), not a place; real
+  // places essentially always carry P31. Obscure P31-less places survive.
+  if (!e.p31.length && e.sitelinks >= 50) return { v: "DROP", why: ["no-P31+fame"] };
   const hits = new Set();
   const why = [];
   for (const c of e.p31) for (const v of classVerdict.get(c) || []) { hits.add(v); why.push(`${c}:${v}`); }
