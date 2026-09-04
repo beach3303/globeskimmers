@@ -52,6 +52,15 @@ const ROOTS = {
     "Q1248784",  // airport (they get AIRPORT stamps, not destination rows)
     "Q851358",   // red-light district (family product call)
     "Q27686",    // hotel — belongs in the stay bucket, not attractions
+    // Planet-run additions (measured on Sydney/Tokyo tops): generic-CONCEPT
+    // articles whose global pageviews bleed onto local listings. A sport, a
+    // film format, an art form, or a famous individual animal is not a place.
+    "Q349",      // sport (closure: rugby union/league, badminton — Sydney's old top-5)
+    "Q31629",    // type of sport (belt-and-suspenders direct hit)
+    "Q1414729",  // IMAX's format class
+    "Q2424752",  // product/trademark class (IMAX's second P31)
+    "Q1001378",  // art-form/genre class (the Animation article, via a bad Animate link)
+    "Q26401003", // individual animal (Hachikō the dog; the STATUE's own article stays welcome)
   ],
   // SOFT: institutional types that are USUALLY not sights — but the closure
   // reaches surprising places (madrasa→school, avenue→road, Pont Alexandre III→
