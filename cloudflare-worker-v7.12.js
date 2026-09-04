@@ -13836,6 +13836,133 @@ async function handleNuiteeSearch(request, env, ctx) {
   } catch (e) { return jsonResponse({ hotels: [], error: e.message }); }
 }
 
+// ── Smart Packages: draft composer (foundation) ──────────────────────────────
+// POST /package/draft — compose a PRICED, sandbox-safe package draft from live
+// components and persist it in package_orders. NO payment anywhere: booking
+// stays per-component. Hotels come back as TWO honest choices (cheapest +
+// best-reviewed within 1.6× the cheapest total); tours and the event are
+// OPTIONS with their own prices — the per-choice totals carry the stay only,
+// so nothing the user didn't pick is ever rolled into a number.
+async function handlePackageDraft(request, env, ctx) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const lat = parseFloat(b.destLat), lng = parseFloat(b.destLng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      return jsonResponse({ ok: false, reason: 'coords_required' }, 400);
+    }
+    const checkin = String(b.checkin || ''), checkout = String(b.checkout || '');
+    if (!nuiteeIsoDate(checkin) || !nuiteeIsoDate(checkout) || checkout <= checkin) {
+      return jsonResponse({ ok: false, reason: 'dates_required' }, 400);
+    }
+    const adults = Math.min(Math.max(parseInt(b.adults, 10) || 2, 1), 8);
+    const children = Math.min(Math.max(parseInt(b.children, 10) || 0, 0), 6);
+    const destName = String(b.destName || '').trim().slice(0, 120);
+    const interestQuery = String(b.interestQuery || '').trim().slice(0, 80);
+    const user = await gbUser(request, env).catch(() => null); // optional attribution, like prebook
+
+    // Components via the existing handlers (internal Requests, the handleHomeRows
+    // pattern) so pricing, caching and price_history capture stay in ONE place.
+    const origin = new URL(request.url).origin;
+    const post = (path, payload) => new Request(`${origin}${path}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    const [hotelData, tourData, eventData] = await Promise.all([
+      handleNuiteeSearch(post('/hotels/nuitee/search', { latitude: lat, longitude: lng, checkin, checkout, adults, children }), env, ctx)
+        .then((r) => r.json()).catch(() => null),
+      interestQuery
+        ? handleViatorProducts(post('/viator/products', { name: interestQuery, lat, lng, city: destName, count: 5 }), env)
+            .then((r) => r.json()).catch(() => null)
+        : Promise.resolve(null),
+      handleEventsSearch(post('/events/search', { latitude: lat, longitude: lng, city: destName }), env)
+        .then((r) => r.json()).catch(() => null),
+    ]);
+
+    // HOTELS — the package's backbone. No hotels → no draft (honest, never fabricated).
+    const hotels = Array.isArray(hotelData?.hotels) ? hotelData.hotels : [];
+    if (!hotels.length) return jsonResponse({ ok: false, reason: 'no_hotels', detail: hotelData?.reason || null });
+    const nights = hotelData.nights || nuiteeNights(checkin, checkout);
+    const cheapest = hotels[0]; // handleNuiteeSearch sorts cheapest-first
+    const cap = cheapest.price * 1.6;
+    let best = null;
+    for (const h of hotels) {
+      if (h.price > cap || typeof h.reviewScore !== 'number') continue;
+      if (!best || h.reviewScore > best.reviewScore) best = h;
+    }
+    const secondIsBest = !!(best && best.hotelId !== cheapest.hotelId);
+    const second = secondIsBest ? best : (hotels.find((h) => h.hotelId !== cheapest.hotelId) || null);
+    const toChoice = (h, role) => ({ role, ...h, stayTotal: h.price ?? Math.round(h.nightly * nights * 100) / 100 });   // h.price IS the bookable stay total; derive only if absent
+    const hotelChoices = [toChoice(cheapest, 'cheapest')];
+    if (second) hotelChoices.push(toChoice(second, secondIsBest ? 'best_reviewed' : 'second_cheapest'));
+    const currency = cheapest.currency || hotelData.currency || 'USD';
+
+    // TOURS — priced options only (top 2). Never auto-added to a total.
+    const tours = (Array.isArray(tourData?.products) ? tourData.products : [])
+      .filter((p) => typeof p.fromPrice === 'number' && Number.isFinite(p.fromPrice) && p.fromPrice > 0)
+      .slice(0, 2)
+      .map((p) => ({
+        code: p.code || null, title: p.title, price: p.fromPrice, currency: p.currency || 'USD',
+        url: p.url, thumbnail: p.thumbnail || null, duration: p.duration || null,
+        freeCancellation: !!p.freeCancellation,
+      }));
+
+    // EVENT — the soonest PRICED event inside the stay window, if any (events
+    // come back date-asc from handleEventsSearch). Also an option, not a total.
+    const event = (Array.isArray(eventData?.events) ? eventData.events : [])
+      .filter((e) => e && e.date && e.date >= checkin && e.date <= checkout
+        && typeof e.fromPrice === 'number' && Number.isFinite(e.fromPrice) && e.fromPrice > 0)
+      .map((e) => ({
+        id: e.id, name: e.name, date: e.date, venue: e.venue || '', city: e.city || '',
+        url: e.url, image: e.image || null, fromPrice: e.fromPrice, currency: e.currency || 'USD',
+      }))[0] || null;
+
+    const draft = {
+      destName: destName || cheapest.city || '', checkin, checkout, nights,
+      party: { adults, children }, hotelChoices, tours, event, currency, env: nuiteeEnv(env),
+    };
+
+    // PERSIST — package_orders (cloudflare-worker/sql/07_package_orders.sql).
+    // Missing DB binding degrades to an unpersisted (still fully priced) draft.
+    const sid = crypto.randomUUID().replace(/-/g, '');
+    const corridor = `${(destName || cheapest.city || '').toLowerCase()}|${(cheapest.country || '').toLowerCase()}`;
+    let persisted = false;
+    if (env.DB) {
+      const now = Date.now();
+      persisted = await env.DB.prepare(
+        'insert into package_orders (sid, user_id, status, env, corridor, created, updated, data) values (?,?,?,?,?,?,?,?)'
+      ).bind(sid, user?.id || null, 'priced', nuiteeEnv(env), corridor, now, now, JSON.stringify(draft))
+        .run().then(() => true).catch(() => false);
+    }
+
+    // Ambient capture for the two surfaced hotel choices (fire-and-forget).
+    recordPriceHistory(env, ctx, hotelChoices.map((h) => ({
+      // Same corridor keying as handleNuiteeSearch's ambient capture (city|country) so one stay never fragments across corridors.
+      corridor: `${(h.city || '').toLowerCase()}|${(h.country || '').toLowerCase()}`, component: 'hotel', productId: h.hotelId, price: h.nightly, currency: h.currency,
+      meta: { checkin, nights, adults, children, role: h.role, package: sid },
+    })));
+
+    return jsonResponse({ ok: true, sid, persisted, draft });
+  } catch (e) { return jsonResponse({ ok: false, error: e.message }, 500); }
+}
+
+// POST /package/get { sid } — the stored draft + status. Drafts older than 30
+// days read back as 'expired' (row kept for support lookups, like nuitee_sessions).
+async function handlePackageGet(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const sid = String(b.sid || '').replace(/[^a-f0-9]/g, '').slice(0, 64);
+    if (!sid) return jsonResponse({ ok: false, reason: 'sid_required' }, 400);
+    if (!env.DB) return jsonResponse({ ok: false, reason: 'not_found' }, 404);
+    const row = await env.DB.prepare(
+      'select status, env, corridor, created, updated, data from package_orders where sid = ?'
+    ).bind(sid).first().catch(() => null);
+    if (!row) return jsonResponse({ ok: false, reason: 'not_found' }, 404);
+    const status = (Date.now() - Number(row.created) > 30 * 86400000) ? 'expired' : row.status;
+    let draft = null;
+    try { draft = JSON.parse(row.data); } catch { /* corrupt data row → draft:null, status still honest */ }
+    return jsonResponse({ ok: true, sid, status, env: row.env, corridor: row.corridor, created: row.created, updated: row.updated, draft });
+  } catch (e) { return jsonResponse({ ok: false, error: e.message }, 500); }
+}
+
 // POST /hotels/nuitee/prebook — re-confirms the offer (price may move →
 // priceChanged), opens a Payment-SDK transaction, and stores everything the
 // return page needs in KV for 30 minutes under a random session id. The phone
@@ -14417,6 +14544,9 @@ export default {
       if (pathname === '/hotels/nuitee/booking' && request.method === 'POST') return await handleNuiteeBooking(request, env);
       if (pathname === '/hotels/nuitee/checkout' && request.method === 'GET') return await handleNuiteeCheckout(request, env);
       if (pathname === '/hotels/nuitee/return' && request.method === 'GET') return await handleNuiteeReturn(request, env);
+      // Smart Packages (priced drafts only — NO payment; booking stays per-component)
+      if (pathname === '/package/draft' && request.method === 'POST') return await handlePackageDraft(request, env, ctx);
+      if (pathname === '/package/get' && request.method === 'POST') return await handlePackageGet(request, env);
       if (pathname === '/guestbook/list' && request.method === 'POST') return await handleGuestbookList(request, env);
       if (pathname === '/guestbook/sign' && request.method === 'POST') return await handleGuestbookSign(request, env, ctx);
       if (pathname === '/guestbook/edit' && request.method === 'POST') return await handleGuestbookEdit(request, env);
