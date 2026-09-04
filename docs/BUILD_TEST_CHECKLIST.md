@@ -608,3 +608,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - **PerfectDay** page (registered manually in pages.config) — selection-before-itinerary: 8 stampable cards, mood lens (VibeBundles moods, de-emoji'd), pick 2–4 → Morning/Afternoon/Evening with mono travel-delta estimates (footnoted), owned lunch/dinner anchors (source-labeled), TONIGHT event, deterministic Swap/Regenerate, Save-this-day (localStorage). Entry cards on both Home stacks. All owned/cached data; no new AI calls.
 - **Review:** 2 confirmed findings fixed post-review (selection ring teal→stamp red; StopRow img onError→StampVisual). Tablet still on RightNowStrip — tabled by founder.
 - **Gates:** eslint ✓ build ✓ boot-check ✓ (re-run after fixes).
+
+## 2026-09-04 — Wave A SHIPPED + /package/draft live-verified
+- Deployed (bdf1df0): dream-search answer card, Trips + nav pill, package endpoints. Live probe: Anaheim 10/09–10/12 ×2 adults → [cheapest] Candlewood Suites $320.63 total · [second_cheapest] DoubleTree $380.97 · 2 priced tours (Universal VIP $359.96, LA icons $99) · event: none in window (honest) · draft persisted (package_orders, status 'priced', sandbox). cap:sync ✓ — native projects carry Wave A.
+- Ops note: two boot-check zombie hangs traced to orphaned vite/Chrome holding port 4173 after a foreground timeout; gates now run with explicit orphan kills + a 200s watchdog. `split` 2-letter-suffix cap (676 files) silently truncated the planet load — tail re-chunked with -a 3 and loaded in parallel.
