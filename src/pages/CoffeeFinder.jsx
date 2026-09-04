@@ -4,23 +4,27 @@ import { createPageUrl } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import LocationModePicker from "@/components/location/LocationModePicker";
-import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
+import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
-import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 import { logSearch, logZeroResults } from "@/lib/logSearch";
 import { matchesQuery } from "@/lib/searchText";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
-import { ChevronLeft, MapPin, Coffee as CoffeeIcon } from "lucide-react";
+import { Coffee as CoffeeIcon, SlidersHorizontal, Sparkles } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import MapAppSelector from "@/components/MapAppSelector";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import CafeWorkProfileSection from "@/components/CafeWorkProfileSection";
 import { useIsTablet } from "@/lib/useIsTablet";
+import FinderHeader from "@/components/finder/FinderHeader";
+import FinderEmptyState from "@/components/finder/FinderEmptyState";
+import FilterSheet from "@/components/finder/FilterSheet";
+import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
+import WishlistButton from "@/components/WishlistButton";
 
 // iPad editorial design tokens (design handoff — modeled on "Places to Eat · iPad").
 const ED_SERIF = '"Instrument Serif", Georgia, serif';
@@ -30,13 +34,8 @@ const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
 // ─── COLORS ────────────────────────────────────────────────────────────────
 const BROWN      = "#6F4E37";
 const BROWN_DARK = "#4A3728";
-const BROWN_LIGHT= "#F5F0EB";
-const CREAM      = "#FFF8F0";
-const GOLD       = "#D4A574";
-const CORAL      = "#FF6B6B";
 const GRAY       = "#64748B";
 const DARK       = "#1A2332";
-const GREEN      = "#4CAF50";
 // T1.8: Open Now is disabled until at least one shop in view has a known open
 // state (owned rows ship no hours; cards lift Google hours in as they load).
 const OPEN_NOW_HINT = "needs café hours — none loaded yet";
@@ -184,25 +183,6 @@ function processShop(shop, userLat, userLng, isLocal) {
 // Directions handled by the shared <MapAppSelector> (address-aware destination +
 // "from my location / other address" origin picker) — see src/components/MapAppSelector.jsx
 
-// ─── PHOTO CAROUSEL ────────────────────────────────────────────────────────
-function PhotoCarousel({ photos=[], height="180px" }) {
-  const [cur,setCur]=useState(0); const [errs,setErrs]=useState({}); const ref=useRef(null);
-  const [galleryOpen,setGalleryOpen]=useState(false); const [galleryStart,setGalleryStart]=useState(0);
-  const valid=photos.filter((_,i)=>!errs[i]);
-  if(!valid.length)return <div style={{height:"120px",background:`linear-gradient(135deg,${CREAM},${BROWN_LIGHT},${GOLD}40)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(48px*var(--fs))"}}>☕</div>;
-  return (
-    <div style={{position:"relative",overflow:"hidden"}}>
-      <div ref={ref} onScroll={()=>ref.current&&setCur(Math.round(ref.current.scrollLeft/ref.current.offsetWidth))} style={{display:"flex",overflowX:"auto",scrollSnapType:"x mandatory",scrollbarWidth:"none",height}}>
-        {valid.map((p,i)=><img key={i} src={p} onError={()=>setErrs(e=>({...e,[photos.indexOf(p)]:true}))} onClick={()=>{setGalleryStart(i);setGalleryOpen(true);}} style={{minWidth:"100%",height,objectFit:"cover",scrollSnapAlign:"start",flexShrink:0,cursor:"zoom-in"}} alt=""/>)}
-      </div>
-      {/* tap-to-enlarge affordance */}
-      <div style={{position:"absolute",top:"10px",right:"10px",background:"rgba(0,0,0,0.55)",color:"#fff",width:"28px",height:"28px",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(15px*var(--fs))",pointerEvents:"none"}}>⤢</div>
-      {valid.length>1&&<div style={{position:"absolute",bottom:"10px",right:"10px",background:"rgba(0,0,0,0.6)",color:"#fff",padding:"4px 10px",borderRadius:"20px",fontSize:"calc(12px*var(--fs))",fontWeight:"600"}}>{cur+1}/{valid.length}</div>}
-      {galleryOpen&&<PhotoGalleryModal photos={valid} initialIndex={galleryStart} isOpen onClose={()=>setGalleryOpen(false)}/>}
-    </div>
-  );
-}
-
 // ─── COFFEE CARD · EDITORIAL (responsive: phone + iPad) ──────────────────────
 // Editorial card used at BOTH widths. Same props, same fields, same handlers
 // (drinks / amenities / seating / parking / phone / directions via the internal
@@ -213,6 +193,8 @@ function PhotoCarousel({ photos=[], height="180px" }) {
 function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDistance, isTablet, isLocal, onHours, batchEnrich }) {
   const [expanded,setExpanded]=useState(false);
   const [showDir,setShowDir]=useState(false);
+  const [galleryOpen,setGalleryOpen]=useState(false);
+  const [galleryStart,setGalleryStart]=useState(0);
   const [enriched,setEnriched]=useState(null);
   // 3 real Google photos + hours for OWNED shops (owned records carry none) —
   // (Website og:image was tried as a free rung and pulled for quality, so Google's
@@ -283,6 +265,12 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
         ? shop.primaryType.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())
         : 'Café');
   const openText = is24 ? 'Open 24/7' : (openNow===true ? 'Open' : openNow===false ? 'Closed' : '');
+  // Wishlist geo (demand signal) — cafés carry location only in the address
+  // string; last comma-part ~= country, second-to-last ~= city (same derivation
+  // as ThingsToDo's tier cards).
+  const _wlAddr=(shop.formattedAddress||address||"").split(",").map(s=>s.trim()).filter(Boolean);
+  const wlCity=shop.city||(_wlAddr.length>=2?_wlAddr[_wlAddr.length-2]:"");
+  const wlCountry=shop.country||(_wlAddr.length>=1?_wlAddr[_wlAddr.length-1]:"");
 
   const Tag=({bg,color,children})=>(
     <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(z(9,6))} ${fs(z(16,11))}`,fontSize:fs(z(15.5,12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
@@ -292,11 +280,16 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
     <motion.div initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(index,8)*0.03}}
       style={{background:"#fff",borderRadius:z("28px","20px"),overflow:"hidden",boxShadow:z("0 24px 50px -30px rgba(22,17,13,.4)","0 14px 30px -22px rgba(22,17,13,.34)"),border:`1px solid ${ED_RULE}`,minHeight:z("auto","320px")}}>
 
-      {/* Photo — editorial height, with rank badge + Specialty tag */}
+      {/* Photo — PhotoOrIcon (first working photo, icon-on-tint fallback), rank
+          badge, Specialty tag + wishlist heart; tap opens the full gallery */}
       <div style={{position:"relative"}}>
-        <PhotoCarousel photos={photos} height={z("360px","200px")}/>
+        <PhotoOrIcon photos={photos} alt={name} fallbackIcon={CoffeeIcon} tint={CAT.coffee} height={z(360,200)} iconSize={z(56,44)}
+          onClick={photos.length?(i)=>{setGalleryStart(typeof i==="number"?i:0);setGalleryOpen(true);}:undefined}/>
         <div style={{position:"absolute",top:fs(z(14,11)),left:fs(z(14,11)),background:ACCENT,color:"#fff",width:fs(z(38,30)),height:fs(z(38,30)),borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:fs(z(16,13)),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
-        {shop.tier===1&&<div style={{position:"absolute",top:fs(z(14,11)),right:fs(z(14,11)),background:"rgba(255,255,255,0.95)",padding:`${fs(z(4,3))} ${fs(z(11,9))}`,borderRadius:"8px",fontSize:fs(z(14,11.5)),fontWeight:700,color:ACCENT,boxShadow:"0 1px 4px rgba(0,0,0,0.12)"}}>✨ Specialty</div>}
+        <div style={{position:"absolute",top:fs(z(14,11)),right:fs(z(14,11)),display:"flex",alignItems:"center",gap:fs(8)}}>
+          {shop.tier===1&&<div style={{display:"inline-flex",alignItems:"center",gap:fs(4),background:"rgba(255,255,255,0.95)",padding:`${fs(z(4,3))} ${fs(z(11,9))}`,borderRadius:"8px",fontSize:fs(z(14,11.5)),fontWeight:700,color:ACCENT,boxShadow:"0 1px 4px rgba(0,0,0,0.12)"}}><Sparkles size={12} strokeWidth={2}/>Specialty</div>}
+          <WishlistButton item={{kind:"food",id:shop.placeId||shop.id,title:name,city:wlCity,country:wlCountry,image:photos[0]||null,meta:{finder:"coffee"}}} size={17}/>
+        </div>
       </div>
 
       <div style={{padding:z(`${fs(28)} ${fs(32)} ${fs(32)}`,`${fs(16)} ${fs(16)} ${fs(18)}`)}}>
@@ -435,6 +428,7 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
         </AnimatePresence>
       </div>
       <MapAppSelector isOpen={showDir} onClose={()=>setShowDir(false)} destination={{name, address, latitude:shop.lat, longitude:shop.lng}} userLat={userLat} userLng={userLng}/>
+      {galleryOpen&&<PhotoGalleryModal photos={photos} initialIndex={galleryStart} isOpen onClose={()=>setGalleryOpen(false)}/>}
     </motion.div>
   );
 }
@@ -510,7 +504,7 @@ export default function CoffeeFinderPage() {
   // Analytics: log a page_view once on mount.
   useEffect(() => { logEvent('page_view', {}, 'CoffeeFinder'); }, []);
   const [directionsShop,setDirectionsShop] = useState(null);
-  const [showAdvanced,setShowAdvanced] = useState(false);
+  const [filterSheetOpen,setFilterSheetOpen] = useState(false);
   const [quickFilter,setQuickFilter]   = useState("all");
   const [sortBy,setSortBy]             = useState("nearby");
   const [filterOpenNow,setFilterOpenNow]       = useState(false);
@@ -551,7 +545,7 @@ export default function CoffeeFinderPage() {
     setRadius(25); // fixed wide net (radius filter removed app-wide)
   }, [activeLocation?.placeId]);
 
-  const activeFilterCount = [filterOpenNow,filterShopType!=="all",filterWifi,filterWork,filterOutlets,filterQuiet,filterAC].filter(Boolean).length;
+  const activeFilterCount = [quickFilter!=="all",filterOpenNow,filterShopType!=="all",filterWifi,filterWork,filterOutlets,filterQuiet,filterAC].filter(Boolean).length;   // quick pills count too — a pill-only empty list deserves the Clear-filters action
   const workFilterActive = filterWork||filterOutlets||filterQuiet||filterAC;
 
   // Lazily fetch work-profiles for the nearest cafes when a work filter is on.
@@ -587,7 +581,7 @@ export default function CoffeeFinderPage() {
           const processed=places.map(p=>processShop(p,lat,lng,isLocal));
           processed.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
           setShops(processed);
-        } else { setError(data?.error||"No coffee shops found. Try expanding your search."); }
+        } else { setError(data?.error||"No coffee shops found near this location."); }
       } catch(e){ if(!cancelled) setError(`Failed to load: ${e.message}`);}
       finally{ if(!cancelled) setLoading(false);}
     })();
@@ -635,7 +629,6 @@ export default function CoffeeFinderPage() {
     let r=[...base];
     if(quickFilter==="open"&&hoursKnown) r=r.filter(s=>s.isOpen===true);
     if(quickFilter==="specialty")    r=r.filter(s=>s.isSpecialty);
-    if(quickFilter==="wifi")         r=r.filter(s=>s.hasWifi);
     if(filterOpenNow&&hoursKnown) r=r.filter(s=>s.isOpen===true);
     if(filterWifi)          r=r.filter(s=>s.hasWifi);
     if(filterShopType==="chain")      r=r.filter(s=>s.isChain);
@@ -748,58 +741,35 @@ export default function CoffeeFinderPage() {
 
   return (
     <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
-      {/* HEADER — redesign pattern (chevron back + Coffee pill + refresh) */}
-      <div className="px-4 pt-2 pb-3">
-        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
-          <button
-            onClick={()=>fromPlacesToEat ? navigate(-1) : navigate(createPageUrl("Home"))}
-            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]"
-            style={{background:'#FFFFFF',border:'1px solid #F0E9DC'}}
-            aria-label="Back"
-          >
-            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
-          </button>
-          <div
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
-            style={{background:CAT.coffee.bg,color:CAT.coffee.ink}}
-          >
-            <CoffeeIcon size={13} color={CAT.coffee.ink} strokeWidth={2} />
-            Coffee Finder
-          </div>
-          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh coffee shops" />
-        </div>
-      </div>
-
-      {/* LOCATION CARD */}
-      <div className={`px-4 ${colWrap} mx-auto pb-3`}>
-        <button
-          onClick={()=>setShowLocPicker(true)}
-          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]"
-          style={{background:'#FFFFFF',border:'1px solid #F0E9DC',boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)'}}
-        >
-          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
-          <div className="flex-1 min-w-0">
-            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{color:'#94A3B8'}}>
-              {isCity ? '🏙️ City' : '📍 Location'}
-            </div>
-            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">{locationText}</div>
-          </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{background:CAT.coffee.bg,color:CAT.coffee.ink}}>
-            Change
-          </span>
-        </button>
-      </div>
-
-      <div className={`${colWrap} mx-auto`} style={{padding:"0 16px"}}>
-        <div style={{display:"none"}}>{/* legacy spacer removed */}</div>
-
-        {isCity && (
-          <div style={{fontSize:"calc(11px*var(--fs))",color:"#92400E",padding:"8px 10px",background:"#FFFBEB",border:"1px solid #FCD34D",borderRadius:"8px",marginBottom:"10px",lineHeight:1.4}}>
-            💡 Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}
+      {/* HEADER — shared FinderHeader (back chevron · Coffee pill · mono count ·
+          refresh), location card + city disclaimer inside; search/filter band
+          rides along as children. The page keeps owning LocationModePicker. */}
+      <FinderHeader
+        catKey="coffee"
+        icon={CoffeeIcon}
+        title="Coffee Finder"
+        count={(!lat||!lng||loading||error)?null:stats.total}   /* stale-count rule: never show the previous location's number mid-refetch */
+        onBack={()=>fromPlacesToEat ? navigate(-1) : navigate(createPageUrl("Home"))}
+        onRefresh={handleRefresh}
+        refreshing={loading}
+        refreshTitle="Refresh coffee shops"
+        onChangeLocation={()=>setShowLocPicker(true)}
+        locationLabel={locationText}
+        isCity={isCity}
+        cityName={activeLocation?.address?.city || activeLocation?.placeName}
+      >
+        {/* Substats — the specialty/open/parking counts as one honest mono line */}
+        {!loading&&!error&&(stats.specialty>0||stats.open>0||stats.withParking>0)&&(
+          <div className="font-mono uppercase font-semibold" style={{fontSize:"calc(10.5px*var(--fs))",letterSpacing:"0.12em",color:"#736657",marginBottom:"8px"}}>
+            {[
+              stats.specialty>0&&`${stats.specialty} specialty`,
+              stats.open>0&&`${stats.open} open`,
+              stats.withParking>0&&`${stats.withParking} parking`,
+            ].filter(Boolean).join(" · ")}
           </div>
         )}
 
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"10px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
 
         {/* Café / drink search */}
         <form onSubmit={(e)=>{e.preventDefault();runSearch();}} style={{display:"flex",gap:"8px",margin:"8px 0 2px"}}>
@@ -808,85 +778,18 @@ export default function CoffeeFinderPage() {
           {submitted&&<button type="button" onClick={clearSearch} style={{padding:"11px 12px",borderRadius:"12px",border:"1.5px solid #E2E8F0",background:"#fff",color:GRAY,fontWeight:"700",fontSize:"calc(13px*var(--fs))",fontFamily:"inherit",cursor:"pointer"}}>✕</button>}
         </form>
 
-        {/* Sort + quick filters */}
-        {/* Nearby/Best sort toggle removed — results default to nearest-first */}
+        {/* Quick filters — two inline toggles; everything else lives in the sheet */}
         <div style={{display:"flex",gap:"8px",overflowX:"auto",padding:"4px 0 8px",scrollbarWidth:"none",alignItems:"center"}}>
-          {[{value:"all",label:"All",emoji:"☕"},{value:"open",label:"Open Now",emoji:"🟢"},{value:"specialty",label:"Specialty",emoji:"✨"},{value:"wifi",label:"WiFi",emoji:"📶"}].map(f=><FilterPill key={f.value} {...f} active={quickFilter===f.value} onClick={()=>setQuickFilter(f.value)} disabled={f.value==="open"&&!hoursKnown} title={f.value==="open"&&!hoursKnown?`Open Now ${OPEN_NOW_HINT}`:undefined}/>)}
+          <FilterPill label="Open Now" active={quickFilter==="open"} onClick={()=>setQuickFilter(f=>f==="open"?"all":"open")} disabled={!hoursKnown} title={!hoursKnown?`Open Now ${OPEN_NOW_HINT}`:undefined}/>
+          <FilterPill label="Specialty" active={quickFilter==="specialty"} onClick={()=>setQuickFilter(f=>f==="specialty"?"all":"specialty")}/>
+          <button onClick={()=>setFilterSheetOpen(true)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 14px",borderRadius:"20px",border:activeFilterCount>0?`2px solid ${BROWN}`:"1.5px solid #E2E8F0",background:activeFilterCount>0?`${BROWN}15`:"#fff",color:activeFilterCount>0?BROWN:GRAY,fontWeight:activeFilterCount>0?"700":"500",fontSize:"calc(13px*var(--fs))",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",flexShrink:0}}>
+            <SlidersHorizontal size={13} strokeWidth={2}/>
+            Filters
+            {activeFilterCount>0&&<span style={{background:BROWN,color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"calc(11px*var(--fs))",fontWeight:"700"}}>{activeFilterCount}</span>}
+          </button>
         </div>
         {!hoursKnown&&listBase.length>0&&!loading&&<div style={{fontSize:"calc(11px*var(--fs))",color:GRAY,margin:"-4px 0 8px"}}>Open Now {OPEN_NOW_HINT}</div>}
-
-        {/* Advanced filters toggle */}
-        <button onClick={()=>setShowAdvanced(!showAdvanced)} style={{display:"flex",alignItems:"center",gap:"8px",width:"100%",padding:"10px 14px",borderRadius:"10px",border:`1.5px solid ${showAdvanced||activeFilterCount>0?BROWN:"#E2E8F0"}`,background:showAdvanced||activeFilterCount>0?`${BROWN}10`:"#fff",color:showAdvanced||activeFilterCount>0?BROWN_DARK:GRAY,fontWeight:"600",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit",marginBottom:"6px"}}>
-          <span>🔧 Advanced Filters</span>
-          {activeFilterCount>0&&<span style={{background:BROWN,color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"calc(11px*var(--fs))",fontWeight:"700"}}>{activeFilterCount}</span>}
-          <span style={{marginLeft:"auto"}}>{showAdvanced?"▲":"▼"}</span>
-        </button>
-
-        <AnimatePresence>
-          {showAdvanced&&(
-            <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{background:"#fff",borderRadius:"12px",border:"1px solid #E8EDF2",padding:"14px",marginBottom:"10px",display:"flex",flexDirection:"column",gap:"14px"}}>
-
-                <div>
-                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>⏰ Status</div>
-                  <div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
-                    <ToggleChip label="Open Now" active={filterOpenNow} onClick={()=>setFilterOpenNow(!filterOpenNow)} icon="🟢" disabled={!hoursKnown} title={!hoursKnown?`Open Now ${OPEN_NOW_HINT}`:undefined}/>
-                    {/* hint rendered once, under the quick pills — the chip is already disabled + titled */}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>🏪 Shop Type</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-                    {[{v:"all",l:"All",i:"☕"},{v:"specialty",l:"Specialty Only",i:"✨"},{v:"chain",l:"Chains Only",i:"🏪"}].map(({v,l,i})=><ToggleChip key={v} label={l} icon={i} active={filterShopType===v} onClick={()=>setFilterShopType(v)}/>)}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>📶 WiFi</div>
-                  <ToggleChip label="Has WiFi" icon="📶" active={filterWifi} onClick={()=>setFilterWifi(!filterWifi)}/>
-                </div>
-
-                <div>
-                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>💻 Good for working</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-                    <ToggleChip label="Good for work" icon="💻" active={filterWork} onClick={()=>setFilterWork(!filterWork)}/>
-                    <ToggleChip label="Outlets" icon="🔌" active={filterOutlets} onClick={()=>setFilterOutlets(!filterOutlets)}/>
-                    <ToggleChip label="Quiet" icon="🔇" active={filterQuiet} onClick={()=>setFilterQuiet(!filterQuiet)}/>
-                    <ToggleChip label="A/C" icon="❄️" active={filterAC} onClick={()=>setFilterAC(!filterAC)}/>
-                  </div>
-                  <div style={{fontSize:"calc(10.5px*var(--fs))",color:GRAY,marginTop:"6px",lineHeight:1.4}}>⚠️ Estimated from customer reviews{workBusy?" · checking cafés…":""} — call ahead to confirm.</div>
-                </div>
-
-
-                {/* Trust legend */}
-                <div style={{padding:"10px 12px",background:"#F8FAFC",borderRadius:"8px",border:"1px solid #E8EDF2"}}>
-                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,marginBottom:"6px"}}>DATA TRUST GUIDE</div>
-                  <div style={{fontSize:"calc(11px*var(--fs))",color:DARK,lineHeight:"1.7"}}>
-                    <div>✅ <strong>Google confirmed</strong> — from Google Places API (reliable)</div>
-                    <div>⚠️ <strong>Mentioned in reviews</strong> — customer-reported, may have changed</div>
-                    <div style={{marginTop:"4px",color:GRAY}}>For critical needs (accessibility, event-day parking), always call ahead.</div>
-                  </div>
-                </div>
-
-                {activeFilterCount>0&&<button onClick={clearFilters} style={{padding:"9px",borderRadius:"8px",border:`1.5px solid ${CORAL}`,background:"#FFF5F5",color:CORAL,fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>✕ Clear All Filters ({activeFilterCount})</button>}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Stats + view toggle */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px",fontSize:"calc(13px*var(--fs))"}}>
-          <div style={{color:GRAY,fontWeight:"600",display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap"}}>
-            <span style={{background:BROWN,color:"#fff",padding:"2px 8px",borderRadius:"10px",fontWeight:"700",fontSize:"calc(12px*var(--fs))"}}>{(!lat||!lng)?"–":stats.total}</span>
-            <span>coffee shops</span>
-            {stats.specialty>0&&<span style={{color:"#E65100"}}>· {stats.specialty} specialty</span>}
-            {stats.open>0&&<span style={{color:GREEN}}>· {stats.open} open</span>}
-            {stats.withParking>0&&<span style={{color:GRAY}}>· {stats.withParking} 🅿️</span>}
-          </div>
-          {/* List/Map view toggle removed — list is primary; per-card map still works */}
-        </div>
-      </div>
+      </FinderHeader>
 
       {(!lat||!lng)?(
         /* T1.4: no location yet (first run, nothing restored) — a clear ask plus
@@ -901,7 +804,9 @@ export default function CoffeeFinderPage() {
       ):loading?(
         <div style={{textAlign:"center",padding:"60px 20px"}}><div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px",animation:"pulse 1.5s infinite"}}>☕</div><div style={{color:GRAY,fontWeight:"600"}}>Finding coffee shops...</div></div>
       ):error?(
-        <div style={{textAlign:"center",padding:"60px 20px"}}><div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px"}}>😕</div><div style={{color:CORAL,fontWeight:"600"}}>{error}</div></div>
+        <div style={{padding:"24px 16px 100px"}}>
+          <FinderEmptyState catKey="coffee" icon={CoffeeIcon} title="Couldn't load coffee shops" reason={error} actionLabel="Try again" onAction={handleRefresh}/>
+        </div>
       ):viewMode==="list"?(
         <div style={isTablet
           ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
@@ -911,12 +816,16 @@ export default function CoffeeFinderPage() {
             (searchBusy||workBusy)?(
               <div style={{textAlign:"center",padding:"40px 20px",background:"#fff",borderRadius:"12px"}}><div style={{fontSize:"calc(32px*var(--fs))",marginBottom:"10px",animation:"pulse 1.5s infinite"}}>☕</div><div style={{fontWeight:"600",color:GRAY}}>{workBusy?"Checking cafés for work-friendliness…":"Searching cafés…"}</div></div>
             ):(
-            <div style={{textAlign:"center",padding:"40px 20px",background:"#fff",borderRadius:"12px"}}>
-              <div style={{fontSize:"calc(32px*var(--fs))",marginBottom:"10px"}}>🔍</div>
-              <div style={{fontWeight:"600",color:DARK,marginBottom:"8px"}}>{submitted?`No cafés for "${submitted}" nearby`:"No matches found"}</div>
-              <div style={{fontSize:"calc(13px*var(--fs))",color:GRAY,marginBottom:"14px"}}>{submitted?"Try a different drink or café name, or widen the radius":"Try adjusting filters or expanding the radius"}</div>
-              {activeFilterCount>0&&<button onClick={clearFilters} style={{padding:"9px 18px",borderRadius:"8px",border:"none",background:BROWN,color:"#fff",fontWeight:"600",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Clear Filters</button>}
-            </div>
+            <FinderEmptyState
+              catKey="coffee"
+              icon={CoffeeIcon}
+              title={submitted?`No cafés for "${submitted}"`:"No cafés match"}
+              reason={submitted?"Try a different drink or café name, or search another spot":activeFilterCount>0?"Nothing within 25 miles matches these filters":"Nothing found within 25 miles of this location"}
+              actionLabel="Search somewhere else"
+              onAction={()=>setShowLocPicker(true)}
+              secondaryLabel={activeFilterCount>0?"Clear filters":submitted?"Clear search":undefined}
+              onSecondary={activeFilterCount>0?clearFilters:submitted?clearSearch:undefined}
+            />
             )
           ):filtered.map((shop,i)=>{
             const Card = CoffeeCardTablet;
@@ -931,7 +840,44 @@ export default function CoffeeFinderPage() {
         </div>
       )}
 
-      {showAdvanced&&<button onClick={()=>setShowAdvanced(false)} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9999,width:"40px",height:"40px",borderRadius:"50%",border:"none",background:DARK,color:"#fff",fontWeight:"700",fontSize:"calc(18px*var(--fs))",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
+      {/* FILTER SHEET — WiFi / shop type / good-for-working moved off the inline band */}
+      <FilterSheet open={filterSheetOpen} onClose={()=>setFilterSheetOpen(false)} title="Coffee filters" onClear={activeFilterCount>0?clearFilters:undefined}>
+        <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
+          <div>
+            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Status</div>
+            <ToggleChip label="Open Now" active={filterOpenNow} onClick={()=>setFilterOpenNow(!filterOpenNow)} disabled={!hoursKnown} title={!hoursKnown?`Open Now ${OPEN_NOW_HINT}`:undefined}/>
+          </div>
+          <div>
+            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Shop Type</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+              {[{v:"all",l:"All"},{v:"specialty",l:"Specialty Only"},{v:"chain",l:"Chains Only"}].map(({v,l})=><ToggleChip key={v} label={l} active={filterShopType===v} onClick={()=>setFilterShopType(v)}/>)}
+            </div>
+          </div>
+          <div>
+            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>WiFi</div>
+            <ToggleChip label="Has WiFi" active={filterWifi} onClick={()=>setFilterWifi(!filterWifi)}/>
+          </div>
+          <div>
+            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Good for working</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+              <ToggleChip label="Good for work" active={filterWork} onClick={()=>setFilterWork(!filterWork)}/>
+              <ToggleChip label="Outlets" active={filterOutlets} onClick={()=>setFilterOutlets(!filterOutlets)}/>
+              <ToggleChip label="Quiet" active={filterQuiet} onClick={()=>setFilterQuiet(!filterQuiet)}/>
+              <ToggleChip label="A/C" active={filterAC} onClick={()=>setFilterAC(!filterAC)}/>
+            </div>
+            <div style={{fontSize:"calc(10.5px*var(--fs))",color:GRAY,marginTop:"6px",lineHeight:1.4}}>Estimated from customer reviews{workBusy?" · checking cafés…":""} — call ahead to confirm.</div>
+          </div>
+          {/* Trust legend — glosses the ✅/⚠️ badges the cards themselves render */}
+          <div style={{padding:"10px 12px",background:"#fff",borderRadius:"8px",border:"1px solid #E8EDF2"}}>
+            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,marginBottom:"6px"}}>DATA TRUST GUIDE</div>
+            <div style={{fontSize:"calc(11px*var(--fs))",color:DARK,lineHeight:"1.7"}}>
+              <div>✅ <strong>Google confirmed</strong> — from Google Places API (reliable)</div>
+              <div>⚠️ <strong>Mentioned in reviews</strong> — customer-reported, may have changed</div>
+              <div style={{marginTop:"4px",color:GRAY}}>For critical needs (accessibility, event-day parking), always call ahead.</div>
+            </div>
+          </div>
+        </div>
+      </FilterSheet>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:12px;padding:0;overflow:hidden}.gs-popup .leaflet-popup-content{margin:0}`}</style>
       <LocationModePicker isOpen={showLocPicker} onClose={()=>setShowLocPicker(false)}/>
       <MapAppSelector

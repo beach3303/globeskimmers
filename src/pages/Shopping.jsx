@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import { useLocation as useRouterLocation } from "react-router-dom";
-import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
+import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
@@ -11,9 +11,14 @@ import { ROUTE } from "@/lib/workerRoutes";
 import { logSearch } from "@/lib/logSearch";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
-import { ChevronLeft, MapPin, ShoppingBag } from "lucide-react";
-import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import { MapPin, ShoppingBag, Clock, Gem, SlidersHorizontal, ShoppingCart, Check, AlertCircle, SearchX } from "lucide-react";
+import { CAT, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
+import FinderHeader from "@/components/finder/FinderHeader";
+import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
+import FinderEmptyState from "@/components/finder/FinderEmptyState";
+import FilterSheet from "@/components/finder/FilterSheet";
+import WishlistButton from "@/components/WishlistButton";
 
 // iPad editorial design tokens (design handoff — shared across all finders).
 const ED_SERIF = '"Instrument Serif", Georgia, serif';
@@ -101,24 +106,6 @@ function openStatus(p,isLocal=true){
 // Directions handled by the shared <MapAppSelector> (address-aware destination +
 // "from my location / other address" origin picker) — see src/components/MapAppSelector.jsx
 
-function PhotoStrip({photos,fallback="🛍️",bg,height}){
-  const [err,setErr]=useState({}); const [ld,setLd]=useState({0:true,1:true});
-  const valid=(photos||[]).filter((_,i)=>_&&!err[i]);
-  const fbBg=bg||`linear-gradient(135deg,${T.accentL},#C4B5FD)`;
-  // Optional fixed-height override (used by the iPad editorial card). When set,
-  // every layout collapses to a single full-width photo at that height so the
-  // tall editorial hero reads cleanly; the phone layout passes no height and is
-  // byte-identical to before.
-  if(height!=null){
-    const H=typeof height==="number"?`${height}px`:height;
-    if(!valid.length) return <div style={{height:H,background:fbBg,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:"calc(72px*var(--fs))",filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.15))"}}>{fallback}</span></div>;
-    return(<div style={{position:"relative",height:H,overflow:"hidden"}}>{ld[0]&&<div style={{position:"absolute",inset:0,background:fbBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(56px*var(--fs))"}}>{fallback}</div>}<img src={valid[0]} alt="" onError={()=>setErr((p)=>({...p,0:true}))} onLoad={()=>setLd((p)=>({...p,0:false}))} style={{width:"100%",height:H,objectFit:"cover",opacity:ld[0]?0:1,transition:"opacity 0.4s"}}/></div>);
-  }
-  if(!valid.length) return <div style={{height:"130px",background:fbBg,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:"calc(52px*var(--fs))",filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.15))"}}>{fallback}</span></div>;
-  if(valid.length===1) return(<div style={{position:"relative",height:"170px",overflow:"hidden"}}>{ld[0]&&<div style={{position:"absolute",inset:0,background:fbBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(40px*var(--fs))"}}>{fallback}</div>}<img src={valid[0]} alt="" onError={()=>setErr((p)=>({...p,0:true}))} onLoad={()=>setLd((p)=>({...p,0:false}))} style={{width:"100%",height:"170px",objectFit:"cover",opacity:ld[0]?0:1,transition:"opacity 0.4s"}}/></div>);
-  return(<div style={{display:"grid",gridTemplateColumns:"60% 40%",height:"150px",overflow:"hidden"}}>{valid.slice(0,2).map((url,i)=>(<div key={i} style={{position:"relative",overflow:"hidden",borderRight:i===0?"2px solid #fff":"none"}}>{ld[i]&&<div style={{position:"absolute",inset:0,background:T.accentL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(30px*var(--fs))"}}>{fallback}</div>}<img src={url} alt="" onError={()=>setErr((p)=>({...p,[i]:true}))} onLoad={()=>setLd((p)=>({...p,[i]:false}))} style={{width:"100%",height:"150px",objectFit:"cover",opacity:ld[i]?0:1,transition:"opacity 0.4s"}}/></div>))}</div>);
-}
-
 // ─── SHOP CARD — EDITORIAL (responsive: phone + iPad) ────────────────────────
 // One editorial card for BOTH platforms — gated by the isTablet prop via the
 // local v(tablet,phone) helper. Tablet keeps the original handoff sizes; phone
@@ -158,6 +145,11 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
   const activeTags=PROP_TAGS.filter(t=>p.props?.[t.key]);
   const vColor=p.venueColor||T.accent;
   const phone=p.nationalPhoneNumber||p.internationalPhoneNumber||"";
+  // Wishlist geo (same derivation as ThingsToDo's TierCard): shops carry location
+  // only in formattedAddress — last comma-part ~= country, second-to-last ~= city.
+  const _wlAddr=(p.formattedAddress||"").split(",").map(s=>s.trim()).filter(Boolean);
+  const wlCity=_wlAddr.length>=2?_wlAddr[_wlAddr.length-2]:"";
+  const wlCountry=_wlAddr.length>=1?_wlAddr[_wlAddr.length-1]:"";
 
   // Responsive token picker: tablet value | phone value. Every text size stays
   // wrapped in fs() so the 4-step glasses control scales card text gracefully.
@@ -171,11 +163,14 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
     <motion.div ref={cardRef} initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(index,8)*0.03}}
       style={{background:"#fff",borderRadius:v("28px","20px"),overflow:"hidden",minHeight:v(fs(560),fs(360)),boxShadow:isHighlighted?`0 0 0 3px ${T.accent},0 24px 50px -30px rgba(22,17,13,.4)`:v("0 24px 50px -30px rgba(22,17,13,.4)","0 12px 30px -20px rgba(22,17,13,.35)"),border:isHighlighted?`2px solid ${T.accent}`:`1px solid ${ED_RULE}`,transition:"box-shadow 0.3s,border 0.3s"}}>
 
-      {/* Photo — editorial hero with rank badge + venue category tag */}
+      {/* Photo — editorial hero (PhotoOrIcon: first working photo, else icon-on-tint) + rank badge + save + venue tag */}
       <div style={{position:"relative"}}>
-        <PhotoStrip photos={photos} fallback={p.venueIcon||"🛍️"} bg={`linear-gradient(135deg,${vColor}dd,${vColor}99)`} height={v(360,200)}/>
+        <PhotoOrIcon photos={photos} alt={name} fallbackIcon={ShoppingBag} tint={p.venueColor||CAT.shopping} height={v(360,200)} iconSize={v(64,48)}/>
         <div style={{position:"absolute",top:fs(14),left:fs(14),width:v(fs(38),fs(32)),height:v(fs(38),fs(32)),borderRadius:"50%",background:index===0?"linear-gradient(135deg,#FFD700,#FFA000)":index===1?"linear-gradient(135deg,#B0BEC5,#78909C)":index===2?"linear-gradient(135deg,#FFAB40,#F57C00)":T.accent,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",fontSize:v(fs(16),fs(13)),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
-        {p.venueLabel&&<div style={{position:"absolute",top:fs(14),right:fs(14),background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:v(`${fs(5)} ${fs(12)}`,`${fs(4)} ${fs(10)}`),borderRadius:"999px",fontSize:v(fs(14),fs(11)),fontWeight:"800",color:vColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{p.venueIcon} {p.venueLabel}</div>}
+        <div style={{position:"absolute",top:fs(14),right:fs(14),zIndex:15}} onClick={(e)=>e.stopPropagation()}>
+          <WishlistButton item={{kind:"other",id:p.placeId||p.id,title:name,city:wlCity,country:wlCountry,image:(photos||[]).find(Boolean)}} size={17}/>
+        </div>
+        {p.venueLabel&&<div style={{position:"absolute",top:fs(14),right:`calc(${fs(14)} + ${fs(48)})`,background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:v(`${fs(5)} ${fs(12)}`,`${fs(4)} ${fs(10)}`),borderRadius:"999px",fontSize:v(fs(14),fs(11)),fontWeight:"800",color:vColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{p.venueIcon} {p.venueLabel}</div>}
       </div>
 
       <div style={{padding:v(`${fs(28)} ${fs(32)} ${fs(32)}`,`${fs(16)} ${fs(16)} ${fs(18)}`)}}>
@@ -281,7 +276,11 @@ export default function ShoppingFinder() {
   const [places,setPlaces]=useState([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState(null);
+  const [refreshTick,setRefreshTick]=useState(0);
+  const forceNextRef=useRef(false);
+  const handleRefresh=()=>{ forceNextRef.current=true; setRefreshTick(t=>t+1); };
   const [viewMode,setViewMode]=useState("list");
+  const [filterSheet,setFilterSheet]=useState(false);
   const [category,setCategory]=useState("all");
   const [radius]=useState(25); // wide net; no radius UI — nearest-first
   const [openOnly,setOpenOnly]=useState(false);
@@ -322,13 +321,14 @@ export default function ShoppingFinder() {
     if(!lat||!lng){ setLoading(false); return; } // no location yet — don't spin forever
     let cancelled=false;
     setLoading(true); setError(null);
+    const force=forceNextRef.current; forceNextRef.current=false;
     (async()=>{
       try{
         // List source: GOOGLE (getShoppingPlaces) — real stores with photos + hours
         // and sensible filter results. Temporary: the owned planet DB shopping data
         // is low-quality (junk names, no photos), so we source from Google until it's
         // cleaned, then flip back to owned-first. `category` filters server-side.
-        const {data, error: workerError}=await callWorker(ROUTE.getShoppingPlaces,{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,category});
+        const {data, error: workerError}=await callWorker(ROUTE.getShoppingPlaces,{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,category,forceRefresh:force});
         if(cancelled) return; // a newer fetch (radius/category/location change) superseded this one
         if (workerError) throw new Error(workerError);
         const raw=data?.places||[];
@@ -344,7 +344,7 @@ export default function ShoppingFinder() {
       finally{ if(!cancelled) setLoading(false);}
     })();
     return ()=>{ cancelled=true; };
-  },[lat,lng,radius,category]);
+  },[lat,lng,radius,category,refreshTick]);
 
   const filtered=useMemo(()=>{
     let r=[...places];
@@ -406,64 +406,53 @@ export default function ShoppingFinder() {
 
   return(
     <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
-      {/* HEADER */}
-      <div className="px-4 pt-2 pb-3">
-        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
-          <button onClick={()=>window.history.back()} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{background:'#FFFFFF',border:'1px solid #F0E9DC'}} aria-label="Back">
-            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
-          </button>
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]" style={{background:CAT.shopping.bg,color:CAT.shopping.ink}}>
-            <ShoppingBag size={13} color={CAT.shopping.ink} strokeWidth={2} />
-            Shopping
-          </div>
-          <div className="w-10 h-10" />
-        </div>
-      </div>
-
-      {/* LOCATION CARD */}
-      <div className={`px-4 ${colWrap} mx-auto pb-3`}>
-        <button onClick={()=>setLocPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{background:'#FFFFFF',border:'1px solid #F0E9DC',boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)'}}>
-          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
-          <div className="flex-1 min-w-0">
-            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{color:'#94A3B8'}}>
-              {isCity ? '🏙️ City' : '📍 Location'}
-            </div>
-            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
-          </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{background:CAT.shopping.bg,color:CAT.shopping.ink}}>
-            Change
-          </span>
-        </button>
-        {isCity && (
-          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[calc(12px*var(--fs))] leading-snug flex items-start gap-2" style={{background:CAT.weather.bg,color:CAT.weather.ink}}>
-            <span>💡</span>
-            <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Filters band */}
-      <div className={`px-4 ${colWrap} mx-auto pb-2`}>
+      {/* HEADER + LOCATION + FILTER BAND — shared FinderHeader (Passport Standard) */}
+      <FinderHeader
+        catKey="shopping"
+        icon={ShoppingBag}
+        title="Shopping"
+        count={(!lat||!lng||loading||error)?null:filtered.length}
+        countNoun="nearby"
+        onRefresh={handleRefresh}
+        refreshing={loading}
+        refreshTitle="Refresh shopping"
+        onChangeLocation={()=>setLocPicker(true)}
+        locationLabel={locLabel}
+        isCity={isCity}
+        cityName={activeLocation?.address?.city || activeLocation?.placeName}
+      >
         <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
         <div style={{overflowX:"auto",scrollbarWidth:"none"}}><div style={{display:"flex",gap:"7px",paddingBottom:"10px"}}>{CATEGORIES.map(c=><motion.button key={c.id} whileTap={{scale:0.94}} onClick={()=>{setCategory(c.id); if(c.id!=='all') logSearch('shopping',c.label,{category:c.id});}} className="font-sans" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",padding:"8px 12px",borderRadius:"14px",flexShrink:0,border:category===c.id?`2px solid ${c.color}`:"1px solid #F0E9DC",background:category===c.id?`${c.color}18`:"#fff",color:category===c.id?c.color:'#475569',fontWeight:category===c.id?"700":"500",fontSize:"calc(11px*var(--fs))",cursor:"pointer",minWidth:"64px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>{c.icon}</span><span>{c.label}</span></motion.button>)}</div></div>
-      </div>
-      <div style={{background:"#fff",padding:"10px 14px",borderBottom:"1px solid #E8EDF2",display:"flex",alignItems:"center",gap:"8px",overflowX:"auto",scrollbarWidth:"none"}}>
-        {[{label:"🟢 Open Now",state:openOnly,set:setOpenOnly,color:T.green},{label:"🛒 Food Only",state:foodOnly,set:setFoodOnly,color:"#2E7D32"},{label:"💎 Luxury",state:luxOnly,set:setLuxOnly,color:"#BE185D"}].map(f=><button key={f.label} onClick={()=>f.set((x)=>!x)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 13px",borderRadius:"20px",flexShrink:0,border:f.state?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.state?f.color+"18":"#fff",color:f.state?f.color:T.gray,fontWeight:f.state?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{f.label}</button>)}
-        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
-          <span style={{background:T.accent,color:"#fff",padding:"2px 9px",borderRadius:"10px",fontWeight:"800",fontSize:"calc(12px*var(--fs))"}}>{(!lat||!lng)?"–":loading?"…":filtered.length}</span>
-          <div style={{display:"flex",gap:"3px"}}>{["list","map"].map(v=><button key={v} onClick={()=>setViewMode(v)} style={{padding:"6px 11px",borderRadius:"8px",border:"none",background:viewMode===v?T.accent:"#E2E8F0",color:viewMode===v?"#fff":T.gray,fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{v==="list"?"List View":"Map View"}</button>)}</div>
+        {/* Quick filters: the 2 highest-use inline; the rest live in the FilterSheet */}
+        <div style={{display:"flex",alignItems:"center",gap:"8px",overflowX:"auto",scrollbarWidth:"none",paddingBottom:"6px"}}>
+          {[{label:"Open Now",Icon:Clock,state:openOnly,set:setOpenOnly,color:T.green},{label:"Luxury",Icon:Gem,state:luxOnly,set:setLuxOnly,color:"#BE185D"}].map(f=><button key={f.label} onClick={()=>f.set((x)=>!x)} aria-pressed={f.state} style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 13px",borderRadius:"20px",flexShrink:0,border:f.state?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.state?f.color+"18":"#fff",color:f.state?f.color:T.gray,fontWeight:f.state?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}><f.Icon size={13} strokeWidth={2}/>{f.label}</button>)}
+          <button onClick={()=>setFilterSheet(true)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 13px",borderRadius:"20px",flexShrink:0,border:foodOnly?`2px solid ${CAT.shopping.ink}`:"1.5px solid #E2E8F0",background:foodOnly?`${CAT.shopping.ink}18`:"#fff",color:foodOnly?CAT.shopping.ink:T.gray,fontWeight:foodOnly?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}><SlidersHorizontal size={13} strokeWidth={2}/>Filters{foodOnly?" · 1":""}</button>
+          <div style={{marginLeft:"auto",display:"flex",gap:"3px",flexShrink:0}}>{["list","map"].map(m=><button key={m} onClick={()=>setViewMode(m)} style={{padding:"6px 11px",borderRadius:"8px",border:"none",background:viewMode===m?T.accent:"#E2E8F0",color:viewMode===m?"#fff":T.gray,fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{m==="list"?"List View":"Map View"}</button>)}</div>
         </div>
-      </div>
+      </FinderHeader>
       {/* No location yet (first-run / permission denied): say so and open the picker — never a spinner or a misleading "No matches" (T1.4) */}
-      {(!lat||!lng)?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>📍</div><div style={{color:T.dark,fontWeight:"700",fontSize:"calc(16px*var(--fs))",marginBottom:"6px"}}>Choose a location to search</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))"}}>Malls · Markets · Boutiques · Souks · Night Markets</div><button onClick={()=>setLocPicker(true)} style={{marginTop:"18px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Choose Location</button></div>)
+      {(!lat||!lng)?(<div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}><FinderEmptyState catKey="shopping" icon={MapPin} title="Choose a location to search" reason="Malls · Markets · Boutiques · Souks · Night Markets" actionLabel="Choose location" onAction={()=>setLocPicker(true)}/></div>)
       :loading?(<div style={{textAlign:"center",padding:"70px 24px"}}><motion.div animate={{scale:[1,1.1,1],rotate:[0,5,-5,0]}} transition={{repeat:Infinity,duration:1.8}} style={{fontSize:"calc(52px*var(--fs))",marginBottom:"16px",display:"inline-block"}}>🛍️</motion.div><div style={{color:T.dark,fontWeight:"700",fontSize:"calc(16px*var(--fs))",marginBottom:"6px"}}>Finding shopping nearby…</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))"}}>Malls · Markets · Boutiques · Souks · Night Markets</div><div style={{display:"flex",justifyContent:"center",gap:"6px",marginTop:"18px"}}>{[0,1,2].map(i=><motion.div key={i} animate={{opacity:[0.3,1,0.3]}} transition={{repeat:Infinity,duration:1.2,delay:i*0.2}} style={{width:"8px",height:"8px",borderRadius:"50%",background:T.accent}}/>)}</div></div>)
-      :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"calc(16px*var(--fs))"}}>{error}</div><div style={{marginTop:"10px",color:T.gray,fontSize:"calc(13px*var(--fs))"}}>Check your connection and try again.</div></div>)
+      :error?(/^Failed/.test(error)
+        ?<div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}><FinderEmptyState catKey="shopping" icon={AlertCircle} title="Couldn't load shopping" reason={error} actionLabel="Try again" onAction={handleRefresh} secondaryLabel="Search somewhere else" onSecondary={()=>setLocPicker(true)}/></div>
+        :<div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}><FinderEmptyState catKey="shopping" icon={SearchX} title="No shopping found" reason={error} actionLabel="Search somewhere else" onAction={()=>setLocPicker(true)} secondaryLabel="Try again" onSecondary={handleRefresh}/></div>)
       :viewMode==="list"?(<div style={isTablet
         ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
-        : {width:"100%",padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>{filtered.length===0?<div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div></div>:filtered.map((p,i)=>{const Card=ShopCardTablet;return <Card key={p.id||i} p={p} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet} isLocal={isLocal} batchEnrich={ownedEnrich[p.id||p.placeId]}/>;})}</div>)
+        : {width:"100%",padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>{filtered.length===0?<FinderEmptyState catKey="shopping" icon={SearchX} title="No matches" reason="Nothing here passes the current filters." actionLabel="Search somewhere else" onAction={()=>setLocPicker(true)} secondaryLabel={(openOnly||luxOnly||foodOnly)?"Clear filters":undefined} onSecondary={(openOnly||luxOnly||foodOnly)?()=>{setOpenOnly(false);setLuxOnly(false);setFoodOnly(false);}:undefined}/>:filtered.map((p,i)=>{const Card=ShopCardTablet;return <Card key={p.id||i} p={p} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet} isLocal={isLocal} batchEnrich={ownedEnrich[p.id||p.placeId]}/>;})}</div>)
       :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:T.dark}}>✕</button></div>)}
       <style>{`::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:16px;padding:0;overflow:hidden;}.gs-popup .leaflet-popup-content{margin:0;}.gs-popup .leaflet-popup-tip-container{display:none;}`}</style>
       <MapAppSelector isOpen={!!dirsP} onClose={()=>setDirsP(null)} destination={dirsP?{name:dirsP.displayName?.text||dirsP.name,address:dirsP.formattedAddress||dirsP.shortFormattedAddress||dirsP.vicinity||dirsP.address||"",latitude:dirsP.lat,longitude:dirsP.lng}:null} userLat={lat} userLng={lng}/>
+      <FilterSheet open={filterSheet} onClose={()=>setFilterSheet(false)} title="Filters" onClear={foodOnly?()=>setFoodOnly(false):undefined}>
+        <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2" style={{color:'#94A3B8'}}>Show only</div>
+        <button onClick={()=>setFoodOnly((x)=>!x)} aria-pressed={foodOnly} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{background:'#FFFFFF',border:foodOnly?`2px solid ${CAT.shopping.ink}`:'1px solid #F0E9DC',cursor:'pointer'}}>
+          <ShoppingCart size={18} color={foodOnly?CAT.shopping.ink:'#736657'} strokeWidth={2} className="flex-none"/>
+          <span className="flex-1 min-w-0">
+            <span className="block font-bold text-[calc(13.5px*var(--fs))]" style={{color:'#0F1419'}}>Food shopping only</span>
+            <span className="block text-[calc(11.5px*var(--fs))]" style={{color:'#736657'}}>Groceries, markets &amp; fresh produce</span>
+          </span>
+          {foodOnly&&<Check size={16} color={CAT.shopping.ink} strokeWidth={2.5} className="flex-none"/>}
+        </button>
+      </FilterSheet>
       <LocationModePicker isOpen={locPicker} onClose={()=>setLocPicker(false)}/>
     </div>
   );

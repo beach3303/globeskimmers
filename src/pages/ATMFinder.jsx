@@ -1,17 +1,20 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
-import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
+import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
-import RefreshButton from "@/components/RefreshButton";
 import AtmAIDetails from "@/components/AtmAIDetails";
+import FinderHeader from "@/components/finder/FinderHeader";
+import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
+import FinderEmptyState from "@/components/finder/FinderEmptyState";
+import FilterSheet from "@/components/finder/FilterSheet";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import MapAppSelector from "@/components/MapAppSelector";
-import { ChevronLeft, MapPin, CreditCard } from "lucide-react";
+import { ChevronDown, Landmark, MapPin, CreditCard } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 
@@ -23,9 +26,6 @@ const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)", ED_EAT = "#D8443C";
 
 // ─── THEME ─────────────────────────────────────────────────────────────────
 const TEAL      = "#00BCD4";
-const TEAL_DARK = "#00838F";
-const TEAL_LIGHT= "#E0F7FA";
-const CORAL     = "#FF6B6B";
 const GOLD      = "#FFB74D";
 const DARK      = "#1A2332";
 const GRAY      = "#64748B";
@@ -165,8 +165,8 @@ function enrichATM(atm, userLat, userLng) {
 // limit) need per-ATM Haiku data which we don't pre-compute at list time;
 // those badges will land if/when crowdsourced fee data exists (Phase A6).
 // For now we surface the badges we CAN ground:
-//   💎 Best Overall — highest composite score (must clear a confidence floor).
-//   🛡️ Safest Option — best bank-branch ATM in the list.
+//   BEST OVERALL — highest composite score (must clear a confidence floor).
+//   SAFEST — best bank-branch ATM in the list.
 // Existing per-ATM badges (24/7, Bank Network, venue type) are preserved.
 function scoreATM(atm) {
   let s = 0;
@@ -201,70 +201,15 @@ function rankATMs(list) {
     // mediocre ATM when the list is weak overall.
     const runnerUp = sortedByScore[1]?.score ?? -Infinity;
     if (bestOverall.idx === i && bestOverall.score >= 20 && (bestOverall.score - runnerUp) >= 3) {
-      extra.push({ icon: "💎", label: "Best Overall", color: "#166534", bg: "#DCFCE7" });
+      extra.push({ rank: true, label: "Best Overall", color: "#166534", bg: "#DCFCE7" });
     }
     if (safest && safest.idx === i && safest.idx !== bestOverall.idx) {
-      extra.push({ icon: "🛡️", label: "Safest Option", color: "#1E40AF", bg: "#DBEAFE" });
+      extra.push({ rank: true, label: "Safest", color: "#1E40AF", bg: "#DBEAFE" });
     }
     if (extra.length === 0) return atm;
     return { ...atm, badges: [...extra, ...(atm.badges || [])].slice(0, 5) };
   });
 }
-
-// ─── PHOTO STRIP (up to 2 photos) ──────────────────────────────────────────
-// `height` is optional — phone layout passes nothing (defaults preserved); the
-// iPad editorial card passes ~360 so the photo reads at editorial scale.
-function ATMPhotoStrip({ photos, fallbackIcon = "🏧", onPhotoClick, height }) {
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState({ 0: true, 1: true });
-
-  const validPhotos = (photos || []).filter((p, i) => p && !errors[i]);
-  const emptyH  = height ? `${height}px` : "120px";
-  const singleH = height ? `${height}px` : "160px";
-  const dualH   = height ? `${height}px` : "140px";
-
-  if (validPhotos.length === 0) {
-    return (
-      <div style={{ height:emptyH, background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2, #80DEEA)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"calc(52px*var(--fs))" }}>
-        {fallbackIcon}
-      </div>
-    );
-  }
-
-  if (validPhotos.length === 1) {
-    return (
-      <div onClick={() => onPhotoClick?.(0)} style={{ position:"relative", height:singleH, overflow:"hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
-        {loading[0] && (
-          <div style={{ position:"absolute", inset:0, background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"calc(36px*var(--fs))" }}>🏧</div>
-        )}
-        <img src={validPhotos[0]} alt="" onError={() => setErrors(p => ({...p, 0:true}))} onLoad={() => setLoading(p => ({...p, 0:false}))}
-          style={{ width:"100%", height:singleH, objectFit:"cover", opacity:loading[0]?0:1, transition:"opacity 0.3s" }} />
-      </div>
-    );
-  }
-
-  // Two photos side by side
-  return (
-    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:dualH, overflow:"hidden", gap:"2px" }}>
-      {validPhotos.slice(0,2).map((url, i) => (
-        <div key={i} onClick={() => onPhotoClick?.(i)} style={{ position:"relative", overflow:"hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
-          {loading[i] && (
-            <div style={{ position:"absolute", inset:0, background:`linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"calc(28px*var(--fs))" }}>🏧</div>
-          )}
-          <img src={url} alt="" onError={() => setErrors(p => ({...p, [i]:true}))} onLoad={() => setLoading(p => ({...p, [i]:false}))}
-            style={{ width:"100%", height:dualH, objectFit:"cover", opacity:loading[i]?0:1, transition:"opacity 0.3s" }} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const btn = (bg, color) => ({
-  display:"flex", alignItems:"center", gap:"5px",
-  padding:"8px 14px", borderRadius:"10px",
-  border:"none", fontSize:"calc(13px*var(--fs))", fontWeight:"600",
-  cursor:"pointer", background:bg, color, fontFamily:"inherit",
-});
 
 // ─── ATM CARD — editorial layout (design handoff) ───────────────────────────
 // Full-width editorial card mirroring RestaurantCardTablet: big photo (or a
@@ -273,7 +218,7 @@ const btn = (bg, color) => ({
 // venue), green Open bar, blue phone bar (only when a phone exists), and three
 // action buttons with a "More ▾" expand panel (badges / daily hours /
 // AtmAIDetails / website). Same props/handlers as the old ATMCard; reuses
-// ATMPhotoStrip / AtmAIDetails / MapAppSelector / PhotoGalleryModal.
+// PhotoOrIcon / AtmAIDetails / MapAppSelector / PhotoGalleryModal.
 //
 // RESPONSIVE: this single editorial card now serves BOTH platforms. The parent
 // passes `isTablet`; every size is gated through the `D` token map below so the
@@ -364,11 +309,14 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
       {/* Photo (editorial height) — index badge + network tag chrome layered
           over the photo or, when no photo exists, over the placeholder. */}
       <div style={{ position:"relative" }}>
-        <ATMPhotoStrip
+        <PhotoOrIcon
           photos={cardPhotos}
-          fallbackIcon={atm.venueIcon || "🏧"}
-          onPhotoClick={(i) => setGallery({ open: true, idx: i })}
+          alt={name}
+          fallbackIcon={CreditCard}
+          tint={CAT.atm}
           height={D.photoH}
+          iconSize={isTablet ? 64 : 48}
+          onClick={cardPhotos.length ? (i) => setGallery({ open: true, idx: i }) : undefined}
         />
         <div style={{ position:"absolute", top:fs(D.chromeOff), left:fs(D.chromeOff), width:fs(D.idxSize), height:fs(D.idxSize), borderRadius:"50%", background:TEAL, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:fs(D.idxFs), boxShadow:"0 2px 8px rgba(0,0,0,0.25)", border:"2px solid #fff" }}>{index+1}</div>
         {network && (
@@ -395,10 +343,14 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
           {atm.distanceMiles!=null && <span>{atm.rating ? "· " : ""}📍 {formatDistance(atm.distanceMiles)}</span>}
         </div>
 
-        {/* Pill tags */}
+        {/* Pill tags — rank badges (Best Overall / Safest) render as mono chips */}
         {atm.badges?.length > 0 && (
-          <div style={{ display:"flex", gap:fs(D.tagsGap), flexWrap:"wrap", marginTop:fs(D.tagsMt) }}>
-            {atm.badges.map((b, i) => <Tag key={i} bg={b.bg} color={b.color}>{b.icon} {b.label}</Tag>)}
+          <div style={{ display:"flex", gap:fs(D.tagsGap), flexWrap:"wrap", alignItems:"center", marginTop:fs(D.tagsMt) }}>
+            {atm.badges.map((b, i) => b.rank ? (
+              <span key={i} className="font-mono uppercase" style={{ background:b.bg, color:b.color, borderRadius:"999px", padding:`${fs(D.tagPadV)} ${fs(D.tagPadH)}`, fontSize:fs(D.tagFs - 3), fontWeight:700, letterSpacing:"0.08em", whiteSpace:"nowrap" }}>{b.label}</span>
+            ) : (
+              <Tag key={i} bg={b.bg} color={b.color}>{b.icon} {b.label}</Tag>
+            ))}
           </div>
         )}
 
@@ -528,20 +480,19 @@ function buildMapPopup(atm, index, fmt) {
   `;
 }
 
-// ─── FILTER PILL ───────────────────────────────────────────────────────────
-function FilterPill({ label, active, onClick, emoji }) {
+// ─── BANK CHIP (FilterSheet) ───────────────────────────────────────────────
+// Single-select toggle chip for the bank-network sheet — same filter
+// semantics as the old <select>: one bank, or "all". Active inks with CAT.atm.
+function BankChip({ label, active, onClick }) {
   return (
     <button onClick={onClick} style={{
-      padding:"7px 13px", borderRadius:"20px",
-      border: active ? `2px solid ${TEAL}` : "1.5px solid #E2E8F0",
-      background: active ? TEAL_LIGHT : "#fff",
-      color: active ? TEAL_DARK : GRAY,
+      padding:"8px 14px", borderRadius:"999px",
+      border: active ? `1.5px solid ${CAT.atm.ink}` : "1.5px solid #E2E8F0",
+      background: active ? CAT.atm.bg : "#fff",
+      color: active ? CAT.atm.ink : GRAY,
       fontWeight: active ? "700" : "500",
       fontSize:"calc(13px*var(--fs))", cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit",
-      display:"flex", alignItems:"center", gap:"4px",
-    }}>
-      {emoji && <span>{emoji}</span>}{label}
-    </button>
+    }}>{label}</button>
   );
 }
 
@@ -550,7 +501,6 @@ export default function ATMFinderPage() {
   // iPad: wider centered column + editorial ATM cards (design handoff).
   // Phone layout is unchanged — every tablet branch is gated on this.
   const isTablet = useIsTablet();
-  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
   const [atms,           setATMs]           = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState(null);
@@ -559,6 +509,7 @@ export default function ATMFinderPage() {
   const handleRefresh                        = () => { forceNextRef.current = true; setRefreshTick(t=>t+1); };
   const [viewMode,       setViewMode]       = useState("list");
   const [bankFilter,     setBankFilter]     = useState("all");
+  const [showBankSheet,  setShowBankSheet]  = useState(false);
   const [availableBanks, setAvailableBanks] = useState([]);
   const [openOnly,       setOpenOnly]       = useState(false);
   const [radius,         setRadius]         = useState(25); // wide net; no radius UI — nearest-first
@@ -618,14 +569,17 @@ export default function ATMFinderPage() {
 
         const rawList = data?.atms || data?.places || [];
         if (rawList.length > 0) {
-          // Phase A5: rank pass appends 💎 Best Overall + 🛡️ Safest Option
-          // badges. Uses only list-time signals — no extra Haiku calls.
+          // Phase A5: rank pass appends the BEST OVERALL + SAFEST mono
+          // chips. Uses only list-time signals — no extra Haiku calls.
           const processed = rankATMs(rawList.map(p => enrichATM(p, lat, lng)));
           setATMs(processed);
           if (data?.banks?.length > 0) setAvailableBanks(data.banks);
         } else {
-          setATMs([]); // drop the previous result so the stats badge can't show a stale count next to the error
-          setError(data?.error || "No ATMs found. Try expanding your search radius.");
+          // Zero results is NOT an error — drop the old list (so the header
+          // count can't go stale) and let the designed empty state offer
+          // "Search somewhere else". Only a real backend message is an error.
+          setATMs([]);
+          if (data?.error) setError(data.error);
         }
       } catch (e) {
         if (cancelled) return;
@@ -759,102 +713,89 @@ export default function ATMFinderPage() {
     banks: filtered.filter(a => a.network !== "Independent").length,
     open:  filtered.filter(a => a.isOpen === true).length,
   };
+  // Header count is only honest once a fetch for the current location has
+  // resolved — mid-fetch `atms` still holds the previous result.
+  const headerCount = (!lat || !lng || loading || error) ? null : stats.total;
+  const hasFilters = openOnly || bankFilter !== "all";
 
   return (
     <div className="font-sans" style={{ background: IVORY, minHeight:"100vh" }}>
 
-      {/* HEADER — redesign pattern */}
-      <div className="px-4 pt-2 pb-3">
-        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
-          <button onClick={() => window.history.back()} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
-            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
-          </button>
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]" style={{ background: CAT.atm.bg, color: CAT.atm.ink }}>
-            <CreditCard size={13} color={CAT.atm.ink} strokeWidth={2} />
-            ATM Finder
-          </div>
-          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh ATMs" />
-        </div>
-      </div>
+      {/* HEADER + LOCATION + CITY DISCLAIMER — shared finder top (FinderHeader).
+          List/Map view toggle removed — list is primary; per-card map still works. */}
+      <FinderHeader
+        catKey="atm"
+        icon={CreditCard}
+        title="ATM Finder"
+        count={headerCount}
+        onRefresh={handleRefresh}
+        refreshing={loading}
+        refreshTitle="Refresh ATMs"
+        onChangeLocation={() => setShowLocPicker(true)}
+        locationLabel={locLabel}
+        isCity={isCity}
+        cityName={activeLocation?.address?.city || activeLocation?.placeName}
+      >
+        <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:"14px" }}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
 
-      {/* LOCATION CARD */}
-      <div className={`px-4 ${colWrap} mx-auto pb-3`}>
-        <button onClick={() => setShowLocPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
-          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
-          <div className="flex-1 min-w-0">
-            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>
-              {isCity ? '🏙️ City' : '📍 Location'}
-            </div>
-            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
-          </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{ background: CAT.atm.bg, color: CAT.atm.ink }}>
-            Change
-          </span>
-        </button>
-        {isCity && (
-          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[calc(12px*var(--fs))] leading-snug flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
-            <span>💡</span>
-            <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Filter band */}
-      <div className={`px-4 ${colWrap} mx-auto`}>
-
-        {/* Radius buttons */}
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
-
-        {/* Quick filters row */}
+        {/* Quick filters row — Open Only stays inline; the bank <select> is now
+            toggle chips inside FilterSheet (same single-bank filter semantics). */}
         <div style={{ display:"flex", gap:"8px", alignItems:"center", overflowX:"auto", scrollbarWidth:"none", marginBottom:"8px" }}>
-          {/* Open only pill */}
           <button onClick={() => setOpenOnly(o => !o)} style={{
+            display:"flex", alignItems:"center", gap:"6px",
             padding:"7px 13px", borderRadius:"20px", flexShrink:0,
             border: openOnly ? `2px solid ${GREEN}` : "1.5px solid #E2E8F0",
             background: openOnly ? "#E8F5E9" : "#fff",
             color: openOnly ? "#2E7D32" : GRAY,
             fontWeight: openOnly ? "700" : "500",
-            fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit",
-          }}>🟢 Open Only</button>
+            fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap",
+          }}>
+            <span style={{ width:"calc(8px*var(--fs))", height:"calc(8px*var(--fs))", borderRadius:"50%", background:GREEN, flexShrink:0 }} />
+            Open Only
+          </button>
 
-          {/* Bank filter */}
           {availableBanks.length > 0 && (
-            <select value={bankFilter} onChange={e => setBankFilter(e.target.value)} style={{
-              padding:"7px 10px", borderRadius:"20px", flexShrink:0,
-              border: bankFilter!=="all" ? `2px solid #1565C0` : "1.5px solid #E2E8F0",
-              background: bankFilter!=="all" ? "#E3F2FD" : "#fff",
-              color: bankFilter!=="all" ? "#1565C0" : GRAY,
-              fontWeight: bankFilter!=="all" ? "700" : "500",
-              fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit",
-              appearance:"none", paddingRight:"20px",
+            <button onClick={() => setShowBankSheet(true)} style={{
+              display:"flex", alignItems:"center", gap:"5px",
+              padding:"7px 13px", borderRadius:"20px", flexShrink:0,
+              border: bankFilter !== "all" ? `2px solid ${CAT.atm.ink}` : "1.5px solid #E2E8F0",
+              background: bankFilter !== "all" ? CAT.atm.bg : "#fff",
+              color: bankFilter !== "all" ? CAT.atm.ink : GRAY,
+              fontWeight: bankFilter !== "all" ? "700" : "500",
+              fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap",
             }}>
-              <option value="all">🏦 All Banks</option>
-              {availableBanks.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
+              <Landmark size={13} strokeWidth={2} />
+              {bankFilter === "all" ? "Banks" : bankFilter}
+              <ChevronDown size={12} strokeWidth={2.2} />
+            </button>
           )}
         </div>
 
-        {/* Stats (List/Map view toggle removed — list is primary; per-card map still works).
-            Gated on loading: `atms` still holds the previous result mid-fetch, so
-            showing its count here would be the old filter's number. */}
-        <div style={{ display:"flex", alignItems:"center", gap:"8px", fontSize:"calc(13px*var(--fs))" }}>
-          <span style={{ background:TEAL, color:"#fff", padding:"2px 9px", borderRadius:"10px", fontWeight:"700", fontSize:"calc(12px*var(--fs))" }}>{loading ? "…" : stats.total}</span>
-          <span style={{ color:GRAY, fontWeight:"600" }}>ATMs</span>
-          {!loading && stats.banks > 0 && <span style={{ color:"#1565C0", fontWeight:"600" }}>· {stats.banks} banks</span>}
-          {!loading && stats.open  > 0 && <span style={{ color:"#2E7D32", fontWeight:"600" }}>· {stats.open} open</span>}
-        </div>
-      </div>
+        {/* Substats — mono line; the total lives in the header's count segment.
+            Gated on headerCount: `atms` still holds the previous result mid-fetch. */}
+        {headerCount != null && (stats.banks > 0 || stats.open > 0) && (
+          <div className="font-mono text-[calc(10.5px*var(--fs))] tracking-[0.12em] uppercase font-semibold" style={{ color:"#736657" }}>
+            {stats.banks > 0 && <span>{stats.banks} banks</span>}
+            {stats.banks > 0 && stats.open > 0 && <span> · </span>}
+            {stats.open > 0 && <span>{stats.open} open now</span>}
+          </div>
+        )}
+      </FinderHeader>
 
       {/* ── Content ── */}
       {(!lat || !lng) ? (
         // No location yet: the fetch effect bails out with loading=false, so
         // without this branch a cold start falls through to the misleading
-        // "No matches for this filter" state. Offer the picker directly.
-        <div style={{ textAlign:"center", padding:"60px 20px" }}>
-          <div style={{ fontSize:"calc(48px*var(--fs))", marginBottom:"14px" }}>📍</div>
-          <div style={{ color:DARK, fontWeight:"600", fontSize:"calc(15px*var(--fs))" }}>Choose a location to search</div>
-          <div style={{ color:GRAY, fontSize:"calc(12px*var(--fs))", marginTop:"6px" }}>Use your current position or pick a city to find ATMs nearby.</div>
-          <button onClick={() => setShowLocPicker(true)} style={{ marginTop:"14px", ...btn(TEAL,"#fff"), display:"inline-flex" }}>📍 Choose a location</button>
+        // zero-results state. Offer the picker directly.
+        <div className="px-4 pt-8 pb-24">
+          <FinderEmptyState
+            catKey="atm"
+            icon={MapPin}
+            title="Choose a location"
+            reason="Use your current position or pick a city to find ATMs nearby."
+            actionLabel="Choose a location"
+            onAction={() => setShowLocPicker(true)}
+          />
         </div>
       ) : loading ? (
         <div style={{ textAlign:"center", padding:"60px 20px" }}>
@@ -863,21 +804,35 @@ export default function ATMFinderPage() {
           <div style={{ color:GRAY, fontSize:"calc(12px*var(--fs))", marginTop:"6px" }}>Scanning airports, transit, stores, banks & more</div>
         </div>
       ) : error ? (
-        <div style={{ textAlign:"center", padding:"60px 20px" }}>
-          <div style={{ fontSize:"calc(40px*var(--fs))", marginBottom:"12px" }}>😕</div>
-          <div style={{ color:CORAL, fontWeight:"600" }}>{error}</div>
-          <button onClick={() => setRadius(r => Math.min(r+5,25))} style={{ marginTop:"14px", ...btn(TEAL,"#fff") }}>Try Larger Radius</button>
+        // Load failure. The old "Try Larger Radius" was a no-op (every finder
+        // already starts at the 25-mile cap) — the honest action is a retry.
+        <div className="px-4 pt-8 pb-24">
+          <FinderEmptyState
+            catKey="atm"
+            icon={CreditCard}
+            title="Couldn't load ATMs"
+            reason={error}
+            actionLabel="Try again"
+            onAction={handleRefresh}
+          />
         </div>
       ) : viewMode === "list" ? (
         <div style={isTablet
           ? { maxWidth:1024, margin:"0 auto", padding:"0 24px 170px", display:"flex", flexDirection:"column", gap:"30px" }
           : { width:"100%", padding:"0 12px 100px", display:"flex", flexDirection:"column", gap:"16px" }}>
           {filtered.length === 0 ? (
-            <div style={{ textAlign:"center", padding:"40px 20px", background:"#fff", borderRadius:"12px" }}>
-              <div style={{ fontSize:"calc(32px*var(--fs))", marginBottom:"10px" }}>🔍</div>
-              <div style={{ fontWeight:"600", color:DARK }}>No matches for this filter</div>
-              <div style={{ color:GRAY, fontSize:"calc(13px*var(--fs))", marginTop:"4px" }}>Try expanding your radius or clearing filters</div>
-            </div>
+            <FinderEmptyState
+              catKey="atm"
+              icon={CreditCard}
+              title="No ATMs found"
+              reason={hasFilters
+                ? "No ATMs match these filters within 25 miles."
+                : "Nothing within 25 miles of this location."}
+              actionLabel="Search somewhere else"
+              onAction={() => setShowLocPicker(true)}
+              secondaryLabel={hasFilters ? "Clear filters" : undefined}
+              onSecondary={hasFilters ? () => { setOpenOnly(false); setBankFilter("all"); } : undefined}
+            />
           ) : (
             filtered.map((atm, i) => {
               // Single editorial card serves both platforms — phone-tuned via isTablet.
@@ -941,6 +896,23 @@ export default function ATMFinderPage() {
         .gs-popup .leaflet-popup-tip-container { display:none; }
         .leaflet-popup { z-index:9000 !important; }
       `}</style>
+
+      {/* Bank-network sheet — chips replace the old <select>; picking closes it. */}
+      <FilterSheet
+        open={showBankSheet}
+        onClose={() => setShowBankSheet(false)}
+        title="Banks"
+        onClear={bankFilter !== "all" ? () => { setBankFilter("all"); setShowBankSheet(false); } : undefined}
+        clearLabel="Clear"
+      >
+        <div className="font-mono text-[calc(10.5px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2.5" style={{ color:"#94A3B8" }}>Bank network</div>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:"8px" }}>
+          <BankChip label="All banks" active={bankFilter === "all"} onClick={() => { setBankFilter("all"); setShowBankSheet(false); }} />
+          {availableBanks.map(b => (
+            <BankChip key={b} label={b} active={bankFilter === b} onClick={() => { setBankFilter(bankFilter === b ? "all" : b); setShowBankSheet(false); }} />
+          ))}
+        </div>
+      </FilterSheet>
 
       <LocationModePicker isOpen={showLocPicker} onClose={() => setShowLocPicker(false)} />
       {directionsATM && (

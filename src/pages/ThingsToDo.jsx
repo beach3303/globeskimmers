@@ -19,7 +19,7 @@ import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 import { logSearch, logZeroResults } from "@/lib/logSearch";
 import { matchesQuery } from "@/lib/searchText";
-import { ChevronLeft, MapPin, Star } from "lucide-react";
+import { ChevronLeft, MapPin, Star, CalendarDays, X } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import WishlistButton from "@/components/WishlistButton";
@@ -28,6 +28,7 @@ import { usePersona, personaRank } from "@/lib/persona";
 
 // iPad editorial design tokens (design handoff: matches "Places to Eat · iPad").
 const ED_SERIF = '"Instrument Serif", Georgia, serif';
+const ED_MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
 const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
 // Things-To-Do category accent — this finder's own color world. Replaces the
@@ -492,11 +493,56 @@ const tourNextDate=(iso)=>{
   const d=new Date(`${iso}T12:00:00Z`);
   return Number.isNaN(d.getTime())?null:d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",timeZone:"UTC"});
 };
-function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet}){
+// "Sat, Mar 14" from YYYY-MM-DD — travel-date chip + availability lines (UTC day
+// granularity, same convention as tourNextDate above, minus the "today" case).
+const travelDateLabel=(iso)=>{
+  if(!iso)return null;
+  const d=new Date(`${iso}T12:00:00Z`);
+  return Number.isNaN(d.getTime())?null:d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",timeZone:"UTC"});
+};
+const isoToday=()=>new Date().toISOString().slice(0,10);
+const isoDaysOut=(days)=>{const d=new Date();d.setDate(d.getDate()+days);return d.toISOString().slice(0,10);};
+// Compact mono travel-date chip — "Pick a date" opens the NATIVE date input (an
+// invisible overlay, so the tap lands on it directly; the repo has no date-picker
+// lib and this works on web + both Capacitor shells). Min today, max one year
+// out. With a date set it reads "Sat, Mar 14" (tap = repick) and the X clears.
+// Quiet by design — availability is a helper, not the page's primary action.
+function TourDateChip({travelDate,onChange}){
+  const label=travelDateLabel(travelDate);
+  return(
+    <span onClick={(e)=>e.stopPropagation()} style={{position:"relative",display:"inline-flex",alignItems:"center",gap:"calc(5px*var(--fs))",background:"#fff",border:`1px solid ${ED_RULE}`,borderRadius:"999px",padding:"calc(4px*var(--fs)) calc(10px*var(--fs))",fontFamily:ED_MONO,fontSize:"calc(11px*var(--fs))",fontWeight:500,color:ED_INK2,whiteSpace:"nowrap"}}>
+      <CalendarDays size={12} color={ED_INK3} strokeWidth={2}/>
+      <span>{label||"Pick a date"}</span>
+      <input type="date" value={travelDate||""} min={isoToday()} max={isoDaysOut(365)}
+        onChange={(e)=>onChange(e.target.value||null)} aria-label="Travel date for tour availability"
+        style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,cursor:"pointer",border:"none",padding:0,margin:0}}/>
+      {travelDate&&<button onClick={(e)=>{e.stopPropagation();onChange(null);}} aria-label="Clear travel date" style={{position:"relative",zIndex:1,display:"inline-flex",alignItems:"center",background:"none",border:"none",padding:0,margin:0,cursor:"pointer",color:ED_INK3}}><X size={12} strokeWidth={2.4}/></button>}
+    </span>
+  );
+}
+// One product's availability on the picked date — mono data line. Renders ONLY
+// on a real answer: true → "Sat, Mar 14: available · from $89" (price when the
+// worker returned one), false → quiet "not available Sat, Mar 14". null =
+// couldn't verify → render NOTHING availability-related (honest-UX rule; the
+// caller keeps its schedule line and the source credit stays un-earned).
+function AvailabilityLine({av,travelDate,fontSize}){
+  if(!av||(av.available!==true&&av.available!==false))return null;
+  const dLabel=travelDateLabel(travelDate);
+  if(!dLabel)return null;
+  const price=av.available?tourPrice(av):null;
+  return(
+    <div style={{marginTop:"calc(3px*var(--fs))",fontFamily:ED_MONO,fontSize,fontWeight:av.available?600:400,color:av.available?"#2E7D46":ED_INK3}}>
+      {av.available?`${dLabel}: available${price?` · from ${price}`:""}`:`not available ${dLabel}`}
+    </div>
+  );
+}
+function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet,travelDate=null,onTravelDate=null}){
   const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false); const [hoursExp,setHoursExp]=useState(false); const [gallery,setGallery]=useState({open:false,idx:0});
   const [viatorMatch,setViatorMatch]=useState(null); // null=checking · true=Viator has products · false=no · 'na'=can't verify (no key/rate-limited)
   const [tours,setTours]=useState([]);               // top tours AT this attraction (price · duration · rating) — /viator/products
   const [sched,setSched]=useState(null);             // {code:{daysLabel,nextDate}} — /viator/schedule, fetched lazily on expand
+  const [avail,setAvail]=useState({});               // {`${code}|${date}`: /viator/availability answer} — fetched lazily when a travel date is picked
+  const availReq=useRef({});                         // keys already requested — ONE call per code+date; a date change fetches only its new keys
   const fs=(n)=>`calc(${n}px*var(--fs))`;
   // t(tabletValue, phoneValue) — pick the size for the active platform. Used for
   // BOTH fs()-wrapped type sizes and raw px (photo height, radius, paddings).
@@ -540,12 +586,37 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
       .catch(()=>{if(!cancelled)setSched({});});
     return()=>{cancelled=true;};
   },[exp,tours,sched]);
+  // Date availability — when the user picked a travel date, ask /viator/availability
+  // per visible tour (same lazy gate as the schedule effect above: only once the
+  // card is expanded, so a list never fans out N×3 calls on a date pick). Cached
+  // by code+date, so re-expanding or re-picking a checked date never re-calls.
+  useEffect(()=>{
+    if(!exp||!travelDate||!tours.length)return;
+    let cancelled=false;
+    tours.forEach(tp=>{
+      if(!tp.code)return;
+      const key=`${tp.code}|${travelDate}`;
+      if(availReq.current[key])return;
+      availReq.current[key]=true;
+      callWorker('viator/availability',{productCode:tp.code,travelDate,adults:2})
+        .then(({data})=>{
+          if(cancelled){delete availReq.current[key];return;} // unmounted — let a remount refetch
+          setAvail(m=>({...m,[key]:data&&typeof data==="object"?data:{available:null}}));
+        })
+        .catch(()=>{if(!cancelled)setAvail(m=>({...m,[key]:{available:null}}));}); // couldn't verify → renders nothing
+    });
+    return()=>{cancelled=true;};
+  },[exp,tours,travelDate]);
   // Tap a tour row → the PRODUCT page (not a search page), in the in-app sheet,
   // with the product code on the click record for attribution.
   const openTourProduct=async(tp)=>{
     const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorProductLink(tp.url)||viatorSearchLink(tp.title),productId:tp.code,category:"tour",productName:tp.title,destCity:a.city,destCountry:a.country});
     if(url) openPartner(url);
   };
+  // Credit "availability per Viator" only when a REAL answer (true/false) rendered
+  // for the picked date — mirrors the sched credit guard below; available:null
+  // renders nothing, so it earns no credit.
+  const availAnswered=!!travelDate&&tours.some(tp=>{const av=avail[`${tp.code}|${travelDate}`];return !!av&&(av.available===true||av.available===false);});
   const activeTags=PROP_TAGS.filter(t=>a.props?.[t.key]);
   const aColor=a.activityColor||T.accent;
   const photos=(a.photos||[]).filter(Boolean);
@@ -649,13 +720,17 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
             a tap lands on the product in the in-app sheet. Sources labeled. */}
         {viatorMatch===true&&tours.length>0&&(
           <div style={{marginTop:fs(t(14,10))}}>
-            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:fs(8),margin:`0 ${fs(2)} ${fs(8)}`}}>
-              <span style={{fontWeight:700,fontSize:fs(t(16,13)),color:ED_INK2}}>🎟️ Tours here</span>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:fs(8),flexWrap:"wrap",margin:`0 ${fs(2)} ${fs(8)}`}}>
+              <span style={{display:"inline-flex",alignItems:"center",gap:fs(8)}}>
+                <span style={{fontWeight:700,fontSize:fs(t(16,13)),color:ED_INK2}}>🎟️ Tours here</span>
+                {onTravelDate&&<TourDateChip travelDate={travelDate} onChange={onTravelDate}/>}
+              </span>
               <button onClick={openViatorTour} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit",fontSize:fs(t(13.5,11.5)),fontWeight:600,color:"#127a5e"}}>See all · Viator ↗</button>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:fs(8)}}>
               {tours.map((tp)=>{
                 const s=sched?.[tp.code]; const price=tourPrice(tp); const next=tourNextDate(s?.nextDate);
+                const av=travelDate?avail[`${tp.code}|${travelDate}`]:null; const avAnswered=!!av&&(av.available===true||av.available===false);
                 return(
                 <button key={tp.code||tp.url} onClick={()=>openTourProduct(tp)} style={{display:"flex",gap:fs(t(12,10)),alignItems:"center",textAlign:"left",background:"#fff",border:`1px solid ${ED_RULE}`,borderRadius:t("14px","12px"),padding:fs(t(10,8)),cursor:"pointer",fontFamily:"inherit",width:"100%"}}>
                   {tp.thumbnail&&<img src={tp.thumbnail} alt="" style={{width:fs(t(84,68)),height:fs(t(64,52)),objectFit:"cover",borderRadius:t("10px","8px"),flexShrink:0}}/>}
@@ -667,7 +742,11 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
                       {tp.freeCancellation&&<span style={{color:"#2E7D46",fontWeight:600}}>· Free cancellation</span>}
                       {tp.skipTheLine&&<span style={{fontWeight:600}}>· Skip the line</span>}
                     </div>
-                    {(s?.daysLabel||next)&&<div style={{marginTop:fs(3),fontSize:fs(t(12,10.5)),color:ED_INK3}}>{s?.daysLabel}{s?.daysLabel&&next?" · ":""}{next?(next==="today"?"runs today":`next ${next}`):""}</div>}
+                    {/* A real yes/no for the picked date REPLACES the generic schedule
+                        line; no date picked (or available:null) keeps the schedule default. */}
+                    {avAnswered
+                      ?<AvailabilityLine av={av} travelDate={travelDate} fontSize={fs(t(12,10.5))}/>
+                      :(s?.daysLabel||next)&&<div style={{marginTop:fs(3),fontSize:fs(t(12,10.5)),color:ED_INK3}}>{s?.daysLabel}{s?.daysLabel&&next?" · ":""}{next?(next==="today"?"runs today":`next ${next}`):""}</div>}
                   </div>
                   <div style={{textAlign:"right",flexShrink:0}}>
                     {price&&<div style={{fontWeight:800,fontSize:fs(t(15,13)),color:ED_INK}}><span style={{fontWeight:500,fontSize:fs(t(11.5,10)),color:ED_INK3}}>from </span>{price}</div>}
@@ -679,7 +758,7 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
             </div>
             {/* Credit the schedule source only when a schedule was actually rendered —
                 sched is {} (truthy) after an empty or failed /viator/schedule fetch. */}
-            <div style={{fontSize:fs(t(11,10)),color:ED_INK3,margin:`${fs(6)} ${fs(2)} 0`}}>Tours &amp; prices by Viator{sched&&Object.keys(sched).length?" · schedule per Viator":""} · we may earn a commission</div>
+            <div style={{fontSize:fs(t(11,10)),color:ED_INK3,margin:`${fs(6)} ${fs(2)} 0`}}>Tours &amp; prices by Viator{sched&&Object.keys(sched).length?" · schedule per Viator":""}{availAnswered?" · availability per Viator":""} · we may earn a commission</div>
           </div>
         )}
         {/* Plain button only when we KNOW tours exist but got no rows, or can't
@@ -765,7 +844,7 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
 // Old verb keys stay so payloads cached before the change still color.
 const TRAVEL_COLORS={'100+ mi away':{bg:'#FEE2E2',color:'#DC2626'},'≈50–100 mi':{bg:'#FED7AA',color:'#C2410C'},'≈15–50 mi':{bg:'#FEF3C7',color:'#D97706'},'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'✈️ Flights Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'},'📍 Nearby':{bg:'#D1FAE5',color:'#059669'}};
 
-function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,cardRef=null}){
+function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,cardRef=null,travelDate=null,onTravelDate=null}){
   const [dirs,setDirs]=useState(false);
   const [gallery,setGallery]=useState({open:false,idx:0});
   // fs()-style scaler for the editorial body (used at both widths now).
@@ -878,7 +957,7 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
                 aria-label="Close"
                 style={{position:"absolute",top:"12px",right:"12px",zIndex:10000,width:"36px",height:"36px",borderRadius:"50%",border:"none",background:"rgba(255,255,255,0.95)",color:T.dark,fontSize:"calc(18px*var(--fs))",fontWeight:"800",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}
               >✕</button>
-              <ActivityCardTablet a={_photos.length?{...a,photos:_photos}:a} index={0} onMap={()=>setMapOpen(true)} isHighlighted={false} cardRef={null} forceExpanded={true} userLat={userLat} userLng={userLng} formatDistance={fmtDist} isTablet={isTablet}/>
+              <ActivityCardTablet a={_photos.length?{...a,photos:_photos}:a} index={0} onMap={()=>setMapOpen(true)} isHighlighted={false} cardRef={null} forceExpanded={true} userLat={userLat} userLng={userLng} formatDistance={fmtDist} isTablet={isTablet} travelDate={travelDate} onTravelDate={onTravelDate}/>
             </div>
           </motion.div>
         )}
@@ -890,7 +969,7 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
   );
 }
 
-function TierSection({title,icon,items,userLat,userLng,isTablet,defaultCollapsed=false}){
+function TierSection({title,icon,items,userLat,userLng,isTablet,defaultCollapsed=false,travelDate=null,onTravelDate=null}){
   const persona=usePersona();
   const [collapsed,setCollapsed]=useState(defaultCollapsed);
   if(!items?.length) return null;
@@ -921,7 +1000,7 @@ function TierSection({title,icon,items,userLat,userLng,isTablet,defaultCollapsed
       </div>
       <AnimatePresence>{!collapsed&&(
         <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-          <div style={itemsLayout}>{personaRank(items,persona).map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} isTablet={isTablet}/>)}</div>
+          <div style={itemsLayout}>{personaRank(items,persona).map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} isTablet={isTablet} travelDate={travelDate} onTravelDate={onTravelDate}/>)}</div>
         </motion.div>
       )}</AnimatePresence>
     </div>
@@ -966,6 +1045,9 @@ export default function ThingsToDoFinder() {
   const [submitted,setSubmitted]=useState("");
   const [tours,setTours]=useState(null); // null=not searched · []=none · [...]=results
   const [tourBusy,setTourBusy]=useState(false);
+  const [travelDate,setTravelDate]=useState(null);   // ISO YYYY-MM-DD | null — tour-availability date (chips in the tour headers)
+  const [tourAvail,setTourAvail]=useState({});       // {`${code}|${date}`: /viator/availability answer} — page-level experience rows
+  const tourAvailReq=useRef({});                     // keys already requested — one call per code+date
   const [searchPlaces,setSearchPlaces]=useState([]); // live Google Places keyword results
   const [searchError,setSearchError]=useState(null); // callWorker envelope error for the last search — distinct from "no results"
   const cardRefs=useRef({});
@@ -1175,6 +1257,30 @@ export default function ThingsToDoFinder() {
     setTourBusy(false);
   };
   const clearSearch=()=>{setQ("");setSubmitted("");setTours(null);setSearchPlaces([]);setSearchError(null);};
+  // Page-level date availability — when a travel date is picked, check each
+  // bookable-experience row via the worker's POST /viator/availability (one call
+  // per code+date, cached in tourAvail; a date change fetches only its new keys).
+  // Mirrors the per-card lazy pattern in ActivityCardTablet.
+  useEffect(()=>{
+    if(!travelDate||!tours||!tours.length)return;
+    let cancelled=false;
+    tours.forEach(tp=>{
+      if(!tp.code)return;
+      const key=`${tp.code}|${travelDate}`;
+      if(tourAvailReq.current[key])return;
+      tourAvailReq.current[key]=true;
+      callWorker('viator/availability',{productCode:tp.code,travelDate,adults:2})
+        .then(({data})=>{
+          if(cancelled){delete tourAvailReq.current[key];return;}
+          setTourAvail(m=>({...m,[key]:data&&typeof data==="object"?data:{available:null}}));
+        })
+        .catch(()=>{if(!cancelled)setTourAvail(m=>({...m,[key]:{available:null}}));}); // couldn't verify → renders nothing
+    });
+    return()=>{cancelled=true;};
+  },[travelDate,tours]);
+  // Credit "availability per Viator" in the attribution line only when a real
+  // yes/no actually rendered (available:null renders nothing — no credit).
+  const tourAvailAnswered=!!travelDate&&Array.isArray(tours)&&tours.some(tp=>{const av=tourAvail[`${tp.code}|${travelDate}`];return !!av&&(av.available===true||av.available===false);});
 
   // Smart-Search spine / cross-finder handoff: a query passed via router state
   // prefills the box and auto-runs the activity search once coords are ready.
@@ -1310,9 +1416,9 @@ export default function ThingsToDoFinder() {
         )}
         {browseFilterActive&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🔧</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Filtered results</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
         {!submitted&&!browseFilterActive&&(nationalIcons.length>0||regionalGems.length>0||nearbyAttractions.length>0)&&<PersonaChooser/>}
-        {!submitted&&!browseFilterActive&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
-        {!submitted&&!browseFilterActive&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
-        {!submitted&&!browseFilterActive&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet}/>}
+        {!submitted&&!browseFilterActive&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet} travelDate={travelDate} onTravelDate={setTravelDate} defaultCollapsed/>}
+        {!submitted&&!browseFilterActive&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet} travelDate={travelDate} onTravelDate={setTravelDate} defaultCollapsed/>}
+        {!submitted&&!browseFilterActive&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet} travelDate={travelDate} onTravelDate={setTravelDate}/>}
         {!submitted&&!browseFilterActive&&(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Near You</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
         {/* Empty state */}
         {submitted
@@ -1332,7 +1438,7 @@ export default function ThingsToDoFinder() {
           const showBeyondHeader=submitted&&searchBeyond.length>0&&i===filtered.length;
           return (<React.Fragment key={a.id||i}>
             {showBeyondHeader&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:isTablet?"14px 4px 4px":"6px 4px 2px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🧭</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>A bit farther — worth the trip</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({searchBeyond.length})</span></div>}
-            <TierCard a={a} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={expandedIdx===i} cardRef={(el)=>cardRefs.current[i]=el}/>
+            <TierCard a={a} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={expandedIdx===i} cardRef={(el)=>cardRefs.current[i]=el} travelDate={travelDate} onTravelDate={setTravelDate}/>
           </React.Fragment>);
         })}</div>
 
@@ -1340,7 +1446,7 @@ export default function ThingsToDoFinder() {
             direct product deep-links. Demoted from the old top-of-page slot. */}
         {submitted&&(tourBusy||(tours&&tours.length>0))&&(
           <div style={{marginTop:"18px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 10px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🎟️</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Book &ldquo;{submitted}&rdquo; experiences</span></div>
+            <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap",margin:"4px 4px 10px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🎟️</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Book &ldquo;{submitted}&rdquo; experiences</span><TourDateChip travelDate={travelDate} onChange={setTravelDate}/></div>
             {tourBusy?(<div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",padding:"6px 4px"}}>Searching tours…</div>):(<>
               <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>{tours.map((tp)=>(
                 <button key={tp.code||tp.url} onClick={()=>openTour(tp)} style={{display:"flex",gap:"12px",alignItems:"center",textAlign:"left",background:"#fff",border:"1px solid #E8EDF2",borderRadius:"16px",padding:"10px",cursor:"pointer",fontFamily:"inherit"}}>
@@ -1353,11 +1459,14 @@ export default function ThingsToDoFinder() {
                       {tp.freeCancellation&&<span style={{fontSize:"calc(11.5px*var(--fs))",color:"#2E7D46",fontWeight:"600"}}>· Free cancellation</span>}
                       {tp.fromPrice!=null&&<span style={{fontSize:"calc(12px*var(--fs))",fontWeight:"700",color:T.accentD}}>from {tp.currency==="USD"?"$":""}{Math.round(tp.fromPrice)}{tp.currency&&tp.currency!=="USD"?` ${tp.currency}`:""}</span>}
                     </div>
+                    {/* Picked-date availability — sibling of the meta row; renders only
+                        on a real yes/no from /viator/availability (null → nothing). */}
+                    <AvailabilityLine av={travelDate?tourAvail[`${tp.code}|${travelDate}`]:null} travelDate={travelDate} fontSize="calc(11.5px*var(--fs))"/>
                   </div>
                   <span style={{background:T.accent,color:"#fff",padding:"7px 12px",borderRadius:"10px",fontWeight:"700",fontSize:"calc(12px*var(--fs))",flexShrink:0}}>Book</span>
                 </button>
               ))}</div>
-              <div style={{fontSize:"calc(10.5px*var(--fs))",color:T.gray,margin:"6px 4px 0"}}>Tours &amp; prices by Viator · we may earn a commission</div>
+              <div style={{fontSize:"calc(10.5px*var(--fs))",color:T.gray,margin:"6px 4px 0"}}>Tours &amp; prices by Viator{tourAvailAnswered?" · availability per Viator":""} · we may earn a commission</div>
             </>)}
           </div>
         )}
