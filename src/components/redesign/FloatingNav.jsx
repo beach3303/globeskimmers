@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { createPageUrl } from '@/utils';
-import { useAuth } from '@/lib/AuthContext';
-import { clearAppCache } from '@/lib/clearAppCache';
 import { useIsTablet } from '@/lib/useIsTablet';
 
 // Floating pill nav — fixed, centered, 22px above bottom safe area.
-// Per the Claude-design spec: 3 anchors only (Home, Saved, Settings).
-// NOT Search — that was explicitly removed.
+// 4 anchors: Home, Trips, Passport, Settings.
+// NOT Search — that was explicitly removed (per the Claude-design spec).
+// Saved now lives inside Trips (its SAVED tab); /SavedLocations stays routed
+// for management + deep links. The old admin-gated Refresh action moved to
+// Settings ("Refresh app data").
 //
 // Active state is derived from useLocation().pathname so Layout can render
 // <FloatingNav /> without prop wiring. Pass `dark` over dark/map surfaces
@@ -20,36 +21,30 @@ import { useIsTablet } from '@/lib/useIsTablet';
 export default function FloatingNav({ active, dark = false, liftForAd = false }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { canRefresh } = useAuth();
-  const [refreshing, setRefreshing] = useState(false);
   const isTablet = useIsTablet();
-
-  // Global refresh (admins + admin-granted users only): wipe cached RESULTS so
-  // the user gets fresh data, then reload to refetch. Never touches auth, prefs,
-  // or saved locations (see clearAppCache). The 🔄 icon spins from the moment
-  // the button is hit until the reload, so clearing the cache is visibly confirmed.
-  const handleRefresh = () => {
-    if (typeof window !== 'undefined' && !window.confirm('Refresh all cached results? The app will reload with fresh data.')) return;
-    setRefreshing(true);
-    clearAppCache();
-    // Short delay so the spin is visible before the reload swaps the page out.
-    setTimeout(() => { try { window.location.reload(); } catch { /* ignore */ } }, 600);
-  };
 
   // Emoji nav icons (matches the iPad redesign spec). Shown on BOTH phone and
   // iPad so the chrome is consistent — each item is a real emoji + label.
   const items = [
     { id: 'home',     emoji: '🏠', label: 'Home',     route: 'Home' },
-    { id: 'saved',    emoji: '🔖', label: 'Saved',    route: 'SavedLocations' },
+    { id: 'trips',    emoji: '🧳', label: 'Trips',    route: 'Trips' },
+    { id: 'passport', emoji: '🛂', label: 'Passport', route: 'Passport' },
     { id: 'settings', emoji: '⚙️', label: 'Settings', route: 'Settings' },
   ];
 
-  // Auto-detect active tab from route. Mirrors the BottomNav logic so swapping
-  // BottomNav -> FloatingNav doesn't lose the highlight behavior.
+  // Auto-detect active tab from route. The Trips anchor also lights up on the
+  // surfaces it absorbed (MyTrip / Wishlist / SavedLocations stay routed for
+  // deep links), so the pill never loses the highlight on those pages.
   const path = location.pathname.toLowerCase();
   const detectActive = () => {
     if (active) return active;
-    if (path.includes('savedlocations') || path.endsWith('/saved')) return 'saved';
+    if (
+      path.includes('trips') ||
+      path.includes('mytrip') ||
+      path.includes('wishlist') ||
+      path.includes('savedlocations')
+    ) return 'trips';
+    if (path.includes('passport')) return 'passport';
     if (path.includes('settings')) return 'settings';
     if (path === '/' || path.includes('home')) return 'home';
     return null;  // any other finder/page -> no tab highlighted
@@ -64,12 +59,12 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
   //     button at the top.
   //
   //   - Onboarding flow (multi-step form: referral source, location, home
-  //     country, currency, language, temperature). Showing Home/Saved/
-  //     Settings during onboarding is hostile because the user hasn't been
-  //     authenticated to those features yet AND the pill overlaps the
-  //     content on small Android viewports (Galaxy S10 reported this hiding
-  //     the country dropdown / language list behind it). The "Skip for now"
-  //     link inside each step is the intentional escape hatch.
+  //     country, currency, language, temperature). Showing the nav during
+  //     onboarding is hostile because the user hasn't been authenticated to
+  //     those features yet AND the pill overlaps the content on small Android
+  //     viewports (Galaxy S10 reported this hiding the country dropdown /
+  //     language list behind it). The "Skip for now" link inside each step is
+  //     the intentional escape hatch.
   if (
     path.includes('smarttextscanner') ||
     path.includes('smartpricescanner') ||
@@ -146,35 +141,6 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
           </button>
         );
       })}
-
-      {/* 4th icon: global refresh / clear-cache. Only for admins + granted users
-          (canRefresh). Runs an action, not a route. */}
-      {canRefresh && (
-        <button
-          onClick={handleRefresh}
-          aria-label="refresh"
-          title="Refresh app (clear cached results)"
-          style={{
-            minWidth: 62,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 3,
-            padding: '7px 10px',
-            background: 'transparent',
-            border: 'none',
-            borderRadius: 18,
-            color: fg,
-            opacity: 0.62,
-            cursor: 'pointer',
-            transition: 'background 120ms, opacity 120ms',
-          }}
-        >
-          <span className={refreshing ? 'animate-spin' : ''} style={{ fontSize: 22, lineHeight: 1, display: 'inline-block' }}>🔄</span>
-          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.2, lineHeight: 1 }}>Refresh</span>
-        </button>
-      )}
     </div>
   );
 }

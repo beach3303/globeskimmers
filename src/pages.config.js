@@ -73,6 +73,7 @@ import SmartTextScanner from './pages/SmartTextScanner';
 import ThingsToDo from './pages/ThingsToDo';
 import Transportation from './pages/Transportation';
 import TravelEssentials from './pages/TravelEssentials';
+import Trips from './pages/Trips';
 import Weather from './pages/Weather';
 import Wishlist from './pages/Wishlist';
 import __Layout from './Layout.jsx';
@@ -105,6 +106,7 @@ export const PAGES = {
     "ThingsToDo": ThingsToDo,
     "Transportation": Transportation,
     "TravelEssentials": TravelEssentials,
+    "Trips": Trips,
     "Weather": Weather,
     "Wishlist": Wishlist,
 }

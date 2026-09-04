@@ -15,6 +15,7 @@ import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
 import { useLocation, readOpenBehavior, writeOpenBehavior } from "@/components/location/LocationContext";
+import { clearAppCache } from "@/lib/clearAppCache";
 
 // ADMIN_EMAILS now imported from @/lib/admins (single source of truth, 4 admins).
 
@@ -406,7 +407,7 @@ export default function SettingsPage() {
   const [suggestArrivals, setSuggestArrivals] = useState(() => { try { return localStorage.getItem("pp_suggest_arrivals") !== "0"; } catch { return true; } });
   const [cityPrompt, setCityPrompt] = useState(() => { try { return localStorage.getItem("pp_city_prompt") !== "0"; } catch { return true; } });
 
-  const { logout, deleteAccount, profile, user: authUser, refreshProfile } = useAuth(); // Supabase
+  const { logout, deleteAccount, profile, user: authUser, refreshProfile, canRefresh } = useAuth(); // Supabase
   const countryBoxRef = useRef(null);
   const [countryOpen, setCountryOpen] = useState(false);
   const [countryQuery, setCountryQuery] = useState("");
@@ -609,11 +610,22 @@ export default function SettingsPage() {
       </div>
     );
 
+    // Refresh app data — the old FloatingNav refresh action, moved here as a
+    // quiet Settings row (same impl): confirm → clearAppCache (cached RESULTS
+    // only, never auth/prefs/saved) → reload to refetch fresh data.
+    const handleRefreshData = () => {
+      if (typeof window !== "undefined" && !window.confirm("Refresh all cached results? The app will reload with fresh data.")) return;
+      clearAppCache();
+      setTimeout(() => { try { window.location.reload(); } catch { /* ignore */ } }, 600);
+    };
+
     const navItems = [
       { show: true, onClick: () => navigate(createPageUrl("SavedLocations")), icon: MapPin, bg: CAT.money.ink, title: "Saved Locations", desc: "Manage your favorite places" },
       { show: isAdmin, onClick: () => navigate(createPageUrl("AdminAnalytics")), icon: BarChart3, bg: CAT.transit.ink, title: "Admin Portal", desc: "Users, sign-ups & usage analytics" },
       { show: isAdmin, onClick: () => setShowRefreshAccess(true), icon: RefreshCw, bg: CAT.atm.ink, title: "Refresh Access", desc: "Grant the refresh button to users" },
       { show: true, onClick: () => setShowContactUs(true), icon: MessageCircle, bg: CAT.restroom.ink, title: "Contact Us", desc: "Get in touch with our team" },
+      // Same admin gate the old FloatingNav button had — the Refresh Access grant flow below stays meaningful.
+      { show: canRefresh, onClick: handleRefreshData, icon: RefreshCw, bg: CAT.coffee.ink, title: "Refresh app data", desc: "Clear cached results and reload with fresh data" },
     ].filter((n) => n.show);
 
     return (
