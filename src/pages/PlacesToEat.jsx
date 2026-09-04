@@ -35,21 +35,24 @@ import { useNavigate, useLocation as useRouterLocation } from "react-router-dom"
 import { createPageUrl } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
-import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
+import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
-import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 import { logSearch, logZeroResults } from "@/lib/logSearch";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
-import { ChevronLeft, MapPin, Utensils } from "lucide-react";
+import { MapPin, Utensils, Clock, SlidersHorizontal, SearchX, AlertCircle } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
+import FinderHeader from "@/components/finder/FinderHeader";
+import FinderEmptyState from "@/components/finder/FinderEmptyState";
+import FilterSheet from "@/components/finder/FilterSheet";
+import WishlistButton from "@/components/WishlistButton";
 
 // iPad editorial design tokens (design handoff: "Places to Eat · iPad").
 const ED_SERIF = '"Instrument Serif", Georgia, serif';
@@ -537,8 +540,8 @@ function PhotoCarousel({ photos=[], rank, badges=[], height=180 }) {
       )}
       {/* Rank badge */}
       <div style={{position:"absolute",top:"10px",left:"10px",width:"36px",height:"36px",borderRadius:"50%",background:rank<=3?medalColors[rank-1]:BLUE,color:rank<=3?"#fff":"#fff",fontWeight:"800",fontSize:rank<=3?"18px":"13px",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{rankLabel}</div>
-      {/* Smart badges */}
-      {badges.length>0&&<div style={{position:"absolute",top:"10px",right:"10px",display:"flex",flexDirection:"column",gap:"4px",alignItems:"flex-end"}}>{badges.slice(0,2).map((b,i)=><span key={i} style={{background:"rgba(255,255,255,0.95)",color:b.color,padding:"3px 8px",borderRadius:"6px",fontSize:"calc(11px*var(--fs))",fontWeight:"700",boxShadow:"0 1px 4px rgba(0,0,0,0.1)"}}>{b.icon} {b.label}</span>)}</div>}
+      {/* Smart badges — shifted left of the wishlist heart the card overlays top-right */}
+      {badges.length>0&&<div style={{position:"absolute",top:"10px",right:"54px",display:"flex",flexDirection:"column",gap:"4px",alignItems:"flex-end"}}>{badges.slice(0,2).map((b,i)=><span key={i} style={{background:"rgba(255,255,255,0.95)",color:b.color,padding:"3px 8px",borderRadius:"6px",fontSize:"calc(11px*var(--fs))",fontWeight:"700",boxShadow:"0 1px 4px rgba(0,0,0,0.1)"}}>{b.icon} {b.label}</span>)}</div>}
       {/* Tap-to-enlarge hint */}
       {valid.length>0&&<div style={{position:"absolute",bottom:"8px",left:"10px",background:"rgba(0,0,0,0.55)",color:"#fff",padding:"3px 8px",borderRadius:"20px",fontSize:"calc(10.5px*var(--fs))",fontWeight:"600",pointerEvents:"none"}}>🔍 Tap to enlarge</div>}
       {valid.length>1&&<div style={{position:"absolute",bottom:"8px",right:"10px",background:"rgba(0,0,0,0.6)",color:"#fff",padding:"3px 8px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"600"}}>📷 {cur+1}/{valid.length}</div>}
@@ -612,7 +615,7 @@ function FallbackDisclaimer({ fallbackInfo, onExpandRadius }) {
           style={{ padding:"8px 14px", borderRadius:"8px", border:"none",
                    background:"#F59E0B", color:"#fff", fontWeight:"700",
                    fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit" }}>
-          📏 Expand Search Radius
+          Search a wider area
         </button>
         {fallbackInfo.nearestAuthenticName && (
           <div style={{ padding:"8px 12px", borderRadius:"8px", background:"#FEF3C7",
@@ -633,7 +636,7 @@ function FallbackDisclaimer({ fallbackInfo, onExpandRadius }) {
 // found cuisine-umbrella restaurants in the existing pool (e.g. "Mang Inasal"
 // in Santa Clarita -> no Mang Inasal branches but 8 Filipino restaurants
 // nearby). Sets honest expectations before the user sees the alternative list.
-function AlsoServesBanner({ banner, onExpandRadius }) {
+function AlsoServesBanner({ banner, onSearchElsewhere }) {
   if (!banner?.cuisine) return null;
   return (
     <motion.div
@@ -647,11 +650,13 @@ function AlsoServesBanner({ banner, onExpandRadius }) {
       <div style={{ fontSize:"calc(13px*var(--fs))", color:"#1E3A8A", marginBottom:"10px", lineHeight:"1.5" }}>
         Showing nearby <strong>{banner.cuisine}</strong> restaurants you might like instead.
       </div>
-      <button onClick={onExpandRadius}
+      {/* Honest action: every finder already searches the full 25-mile net, so the
+          only real way to widen is to move the search — open the location picker. */}
+      <button onClick={onSearchElsewhere}
         style={{ padding:"8px 14px", borderRadius:"8px", border:"none",
                  background:"#2563EB", color:"#fff", fontWeight:"700",
                  fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit" }}>
-        📏 Expand Search Radius
+        Search somewhere else
       </button>
     </motion.div>
   );
@@ -714,6 +719,12 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
   // Google's weekdayDescriptions start on Monday; getDay() is Sunday-based.
   const todayHrs = openInfo.todayHours || (weekdays.length && today!=null ? ((weekdays[(today+6)%7]||'').split(': ').slice(1).join(': ')||null) : null);
   const openText = is24 ? 'Open 24/7' : (openNow===true ? 'Open' : openNow===false ? 'Closed' : '');
+  // Wishlist geo (demand signal) — restaurants carry location only in the address
+  // string; last comma-part ~= country, second-to-last ~= city (same derivation
+  // as CoffeeFinder's card).
+  const _wlAddr=(restaurant.formattedAddress||restaurant.shortFormattedAddress||"").split(",").map(s=>s.trim()).filter(Boolean);
+  const wlCity=restaurant.city||(_wlAddr.length>=2?_wlAddr[_wlAddr.length-2]:"");
+  const wlCountry=restaurant.country||(_wlAddr.length>=1?_wlAddr[_wlAddr.length-1]:"");
 
   const Tag=({bg,color,children})=>(
     <span style={{background:bg,color,borderRadius:"999px",padding:`${t(fs(9),fs(5))} ${t(fs(16),fs(11))}`,fontSize:t(fs(15.5),fs(12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
@@ -723,8 +734,14 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
     <motion.div initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(rank,8)*0.03}}
       style={{background:"#fff",borderRadius:t("28px","20px"),overflow:"hidden",boxShadow:t("0 24px 50px -30px rgba(22,17,13,.4)","0 12px 28px -18px rgba(22,17,13,.4)"),border:`1px solid ${ED_RULE}`}}>
 
-      {/* Photo — reuse the carousel (rank badge + smart badges incl. Dish Specialist) at editorial height */}
-      <PhotoCarousel photos={photosToShow} rank={rank} badges={restaurant.badges||[]} height={t(360,200)}/>
+      {/* Photo — reuse the carousel (rank badge + smart badges incl. Dish Specialist) at editorial
+          height, with the wishlist heart overlaid top-right (smart badges shift left of it) */}
+      <div style={{position:"relative"}}>
+        <PhotoCarousel photos={photosToShow} rank={rank} badges={restaurant.badges||[]} height={t(360,200)}/>
+        <div style={{position:"absolute",top:"10px",right:"10px",zIndex:15}} onClick={(e)=>e.stopPropagation()}>
+          <WishlistButton item={{kind:"food",id:restaurant.placeId||restaurant.id,title:name,city:wlCity,country:wlCountry,image:photosToShow.find(p=>typeof p==="string")||null,meta:{finder:"eat"}}} size={17}/>
+        </div>
+      </div>
 
       <div style={{padding:t(`${fs(28)} ${fs(32)} ${fs(32)}`,`${fs(16)} ${fs(16)} ${fs(18)}`)}}>
         {cuisineLabel&&<div style={{color:ED_EAT,fontWeight:600,fontSize:t(fs(17),fs(13)),letterSpacing:"0.2px"}}>{cuisineLabel}</div>}
@@ -964,7 +981,7 @@ export default function PlacesToEat() {
   }, [routerLocation.state?.presetQuery]);
   const [radius, setRadius]             = useState(25); // wide net; no radius UI — results show nearest-first
   const [displayCount, setDisplayCount] = useState(20);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false); // advanced filters live in the shared FilterSheet
   const [selectedMapIndex, setSelectedMapIndex] = useState(null);
   const [showLocPicker, setShowLocPicker] = useState(false);
   // Collapsible "You are here" tooltip on the map view. Expanded shows the
@@ -1048,6 +1065,15 @@ export default function PlacesToEat() {
     filterMinRating>0, filterMaxPrice>0,
     filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterBars,
     !selectedCuisines.has('all') && selectedCuisines.size > 0,
+  ].filter(Boolean).length;
+
+  // Count of filters that live INSIDE the FilterSheet (Open Now and the cuisine
+  // scroller stay inline) — drives the "Filters · N" chip and the sheet's Clear.
+  const sheetFilterCount = [
+    filterBakery, filterBars,
+    Object.values(filterVibes).some(Boolean),
+    Object.values(filterDietary).some(Boolean),
+    filterMinRating>0, filterMaxPrice>0,
   ].filter(Boolean).length;
 
   // ── FETCH ──────────────────────────────────────────────────────────────────
@@ -1188,7 +1214,7 @@ export default function PlacesToEat() {
         } else {
           setRestaurants([]); // Clear stale results so the UI doesn't show "67 results" from a prior fetch
           setFallbackBanner(null);
-          setError(data?.error || "No results found. Try expanding your radius.");
+          setError(data?.error || "No restaurants found near this location."); // honest copy: 25mi is already the widest net — no radius left to expand
           // Analytics: zero-result searches are the most valuable to track —
           // every empty result is a search-quality bug or a coverage gap.
           logZeroResults('eat', searchText, {
@@ -1309,6 +1335,14 @@ export default function PlacesToEat() {
     setSelectedCuisines(new Set(['all']));
   };
 
+  // Sheet-scoped clear — resets only the groups the FilterSheet owns (keeps the
+  // inline Open Now chip + cuisine scroller selection untouched).
+  const clearSheetFilters = () => {
+    setFilterBakery(false); setFilterBars(false);
+    setFilterVibes({}); setFilterDietary({});
+    setFilterMinRating(0); setFilterMaxPrice(0);
+  };
+
   const handleSearch = () => setSearchText(searchInput.trim());
 
   // ── LAZY PHOTO LABELING ON LOAD MORE ────────────────────────────────────
@@ -1426,63 +1460,30 @@ export default function PlacesToEat() {
   return (
     <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
 
-      {/* ── HEADER — chevron back + Places to Eat pill (redesign) ── */}
-      <div className="px-4 pt-2 pb-3">
-        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
-          <button
-            onClick={()=>window.history.back()}
-            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]"
-            style={{background:'#FFFFFF',border:'1px solid #F0E9DC'}}
-            aria-label="Back"
-          >
-            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
-          </button>
-          <div
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
-            style={{background:CAT.food.bg,color:CAT.food.ink}}
-          >
-            <Utensils size={13} color={CAT.food.ink} strokeWidth={2} />
-            Places to Eat
-          </div>
-          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh places" />
-        </div>
-      </div>
-
-      {/* ── LOCATION CARD ── */}
-      <div className={`px-4 pb-3 ${colWrap} mx-auto`}>
-        <button
-          onClick={()=>setShowLocPicker(true)}
-          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]"
-          style={{background:'#FFFFFF',border:'1px solid #F0E9DC',boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)'}}
-        >
-          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
-          <div className="flex-1 min-w-0">
-            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{color:'#94A3B8'}}>
-              {isCity ? '🏙️ City' : '📍 Location'}
-            </div>
-            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">{locationText}</div>
-          </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{background:CAT.food.bg,color:CAT.food.ink}}>
-            Change
-          </span>
-        </button>
-        {isCity && (
-          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[calc(12px*var(--fs))] leading-snug flex items-start gap-2" style={{background:CAT.weather.bg,color:CAT.weather.ink}}>
-            <span>💡</span>
-            <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
-          </div>
-        )}
-      </div>
-
-      {/* ── SEARCH + FILTERS PANEL ── */}
-      <div className={`px-4 ${colWrap} mx-auto pb-2`}>
+      {/* ── HEADER + LOCATION + SEARCH/FILTER BAND — shared FinderHeader (Passport
+          Standard). The page keeps owning LocationModePicker; search bar, cuisine
+          scroller and quick filters ride along as children. ── */}
+      <FinderHeader
+        catKey="food"
+        icon={Utensils}
+        title="Places to Eat"
+        count={(!lat||!lng||loading||error)?null:stats.total}   /* stale-count rule: never show the previous fetch's number mid-load */
+        countNoun="results"
+        onRefresh={handleRefresh}
+        refreshing={loading}
+        refreshTitle="Refresh places"
+        onChangeLocation={()=>setShowLocPicker(true)}
+        locationLabel={locationText}
+        isCity={isCity}
+        cityName={activeLocation?.address?.city || activeLocation?.placeName}
+      >
         {/* Search bar — food-coral submit button */}
         <div style={{display:"flex",gap:"8px",marginBottom:"14px"}}>
           <input
             value={searchInput}
             onChange={e=>setSearchInput(e.target.value)}
             onKeyDown={e=>e.key==='Enter'&&handleSearch()}
-            placeholder="🔎  Search dish or restaurant..."
+            placeholder="Search dish or restaurant..."
             className="font-sans"
             style={{flex:1,padding:"14px 16px",borderRadius:"14px",border:"1px solid #F0E9DC",fontSize:"calc(15px*var(--fs))",outline:"none",color:"#0F1419",background:"#fff",boxShadow:"0 1px 3px rgba(15,20,25,0.04)"}}
           />
@@ -1505,104 +1506,38 @@ export default function PlacesToEat() {
         {/* List/Map view toggle removed — list is the primary view; a card's
             "📍 Map" button still opens that place on the map. */}
 
-        {/* Advanced Filters + result summary (single merged row) */}
-        <button onClick={()=>setShowAdvanced(!showAdvanced)} className="font-sans" style={{display:"flex",alignItems:"center",gap:"10px",width:"100%",padding:"12px 14px",borderRadius:"14px",border:`1px solid ${showAdvanced||activeFilterCount>0?CAT.food.ink:"#F0E9DC"}`,background:showAdvanced||activeFilterCount>0?CAT.food.bg:"#fff",color:showAdvanced||activeFilterCount>0?CAT.food.ink:'#0F1419',fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",marginBottom:"10px"}}>
-          <span>⚙️ Advanced Filters</span>
-          {activeFilterCount>0&&<span style={{background:CAT.food.ink,color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"calc(11px*var(--fs))",fontWeight:"800"}}>{activeFilterCount}</span>}
-          <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"10px",color:'#6B7280',fontSize:"calc(12px*var(--fs))",fontWeight:"600"}}>
-            {(!lat||!lng)?null:loading?"Loading…":<><span>{stats.total} results</span>{stats.open>0&&<span style={{color:CAT.convenience.ink}}>· {stats.open} open</span>}</>}
-            <span style={{color:'#94A3B8'}}>{showAdvanced?"▲":"▼"}</span>
-          </span>
-        </button>
+        {/* Cuisine quick-scroll — the door's signature, kept inline (multi-select;
+            dietary types excluded — they live in the FilterSheet's Dietary group) */}
+        <div ref={cuisineScrollRef} style={{display:"flex",gap:"6px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none",marginBottom:"8px"}}>
+          {CUISINES.filter(c=>!['vegetarian','vegan','halal','kosher'].includes(c.id)).map(c=>{
+            const active = selectedCuisines.has(c.id);
+            return (
+              <button key={c.id} onClick={()=>toggleCuisine(c.id)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:"4px",padding:"6px 12px",borderRadius:"20px",border:active?`2px solid ${c.special?GOLD:BLUE}`:"1.5px solid #E2E8F0",background:active?(c.special?`${GOLD}15`:BLUE_LT):"#fff",color:active?(c.special?ORANGE:BLUE):GRAY,fontWeight:active?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                <span>{c.icon}</span><span>{c.label}</span>
+              </button>
+            );
+          })}
+        </div>
 
-        {/* Advanced panel */}
-        <AnimatePresence>
-          {showAdvanced&&(
-            <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{position:"relative",background:"#fff",borderRadius:"12px",border:"1px solid #E8EDF2",padding:"14px",marginBottom:"10px",display:"flex",flexDirection:"column",gap:"14px"}}>
+        {/* Quick filters: Open Now stays inline; every other advanced group lives in the FilterSheet */}
+        <div style={{display:"flex",alignItems:"center",gap:"8px",overflowX:"auto",scrollbarWidth:"none",paddingBottom:"6px"}}>
+          <button onClick={()=>setFilterOpenNow(!filterOpenNow)} aria-pressed={filterOpenNow} className="font-sans" style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 13px",borderRadius:"20px",flexShrink:0,border:filterOpenNow?`2px solid ${GREEN}`:"1.5px solid #E2E8F0",background:filterOpenNow?`${GREEN}18`:"#fff",color:filterOpenNow?GREEN:GRAY,fontWeight:filterOpenNow?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer"}}><Clock size={13} strokeWidth={2}/>Open Now</button>
+          <button onClick={()=>setFilterSheetOpen(true)} className="font-sans" style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 13px",borderRadius:"20px",flexShrink:0,border:sheetFilterCount>0?`2px solid ${CAT.food.ink}`:"1.5px solid #E2E8F0",background:sheetFilterCount>0?`${CAT.food.ink}18`:"#fff",color:sheetFilterCount>0?CAT.food.ink:GRAY,fontWeight:sheetFilterCount>0?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer"}}><SlidersHorizontal size={13} strokeWidth={2}/>Filters{sheetFilterCount>0?` · ${sheetFilterCount}`:""}</button>
+        </div>
+        {/* Substat — honest mono open count (the total lives beside the header pill) */}
+        {!(!lat||!lng||loading||error)&&stats.open>0&&(
+          <div className="font-mono uppercase font-semibold" style={{fontSize:"calc(10.5px*var(--fs))",letterSpacing:"0.12em",color:"#736657",margin:"0 0 6px"}}>{stats.open} open now</div>
+        )}
 
-                {/* All Foods — cuisine multi-select (dietary types excluded; they live in Dietary section) */}
-                <div>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
-                    <span style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px"}}>🍽️ All Foods</span>
-                    {activeFilterCount>0&&<button onClick={clearFilters} style={{background:"none",border:"none",padding:"0",color:CORAL,fontSize:"calc(11px*var(--fs))",fontWeight:"600",cursor:"pointer",fontFamily:"inherit",opacity:0.8}}>Clear Filters</button>}
-                  </div>
-                  <div ref={cuisineScrollRef} style={{display:"flex",gap:"6px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none",marginBottom:"8px"}}>
-                    {CUISINES.filter(c=>!['vegetarian','vegan','halal','kosher'].includes(c.id)).map(c=>{
-                      const active = selectedCuisines.has(c.id);
-                      return (
-                        <button key={c.id} onClick={()=>toggleCuisine(c.id)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:"4px",padding:"6px 12px",borderRadius:"20px",border:active?`2px solid ${c.special?GOLD:BLUE}`:"1.5px solid #E2E8F0",background:active?(c.special?`${GOLD}15`:BLUE_LT):"#fff",color:active?(c.special?ORANGE:BLUE):GRAY,fontWeight:active?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                          <span>{c.icon}</span><span>{c.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-                    <Chip label="Bakery & Pastry" icon="🥐" active={filterBakery} onClick={()=>setFilterBakery(!filterBakery)} color={TEAL}/>
-                    <Chip label="Bars & Pubs"     icon="🍺" active={filterBars}   onClick={()=>setFilterBars(!filterBars)}   color={ORANGE}/>
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>⏰ Status</div>
-                  <Chip label="Open Now" active={filterOpenNow} onClick={()=>setFilterOpenNow(!filterOpenNow)} icon="🟢" color={GREEN}/>
-                </div>
-
-                <div>
-                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>✨ Vibe</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-                    {VIBE_OPTIONS.map(v=><Chip key={v.id} label={v.label} icon={v.icon} active={!!filterVibes[v.id]} onClick={()=>setFilterVibes(p=>({...p,[v.id]:!p[v.id]}))} color={PURPLE}/>)}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>🥦 Dietary</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-                    {DIETARY_OPTIONS.map(d=><Chip key={d.id} label={d.label} icon={d.icon} active={!!filterDietary[d.id]} onClick={()=>setFilterDietary(p=>({...p,[d.id]:!p[d.id]}))} color={GREEN}/>)}
-                  </div>
-                </div>
-
-
-                <div>
-                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>⭐ Min Rating</div>
-                  <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-                    {[{v:0,l:"Any"},{v:3.5,l:"3.5+"},{v:4.0,l:"4.0+"},{v:4.5,l:"4.5+"}].map(({v,l})=><Chip key={v} label={l} active={filterMinRating===v} onClick={()=>setFilterMinRating(v)}/>)}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>💰 Max Price</div>
-                  <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-                    {[{v:0,l:"Any"},{v:1,l:"$"},{v:2,l:"$$"},{v:3,l:"$$$"},{v:4,l:"$$$$"}].map(({v,l})=><Chip key={v} label={l} active={filterMaxPrice===v} onClick={()=>setFilterMaxPrice(v)}/>)}
-                  </div>
-                </div>
-
-                {/* Data trust legend */}
-                <div style={{padding:"10px 12px",background:"#F8FAFC",borderRadius:"8px",border:"1px solid #E8EDF2"}}>
-                  <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,marginBottom:"5px"}}>DATA TRUST GUIDE</div>
-                  <div style={{fontSize:"calc(11px*var(--fs))",color:DARK,lineHeight:"1.7"}}>
-                    <div>✅ <strong>Confirmed</strong> — Google Places API data (reliable)</div>
-                    <div>⚠️ <strong>Reviews</strong> — Customer-reported, may have changed</div>
-                  </div>
-                </div>
-
-                {activeFilterCount>0&&<button onClick={clearFilters} style={{padding:"9px",borderRadius:"8px",border:`1.5px solid ${CORAL}`,background:"#FFF5F5",color:CORAL,fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>✕ Clear All Filters ({activeFilterCount})</button>}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      </FinderHeader>
 
       {/* ── CONTENT ── */}
       {(!lat||!lng)?(
         /* No location yet (first run, GPS denied, cleared storage). Sits AHEAD of
            the loading branch so a no-location cold start can never show a spinner —
            `loading` starts true and the fetch effect bails before clearing it. */
-        <div style={{textAlign:"center",padding:"60px 20px"}}>
-          <div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px"}}>📍</div>
-          <div style={{fontWeight:"700",color:DARK,marginBottom:"6px"}}>Choose a location to search</div>
-          <div style={{fontSize:"calc(13px*var(--fs))",color:GRAY,marginBottom:"14px"}}>Use your current location or pick a city to find restaurants nearby.</div>
-          <button onClick={()=>setShowLocPicker(true)} style={{padding:"10px 20px",borderRadius:"10px",border:`2px solid ${BLUE}`,background:BLUE_LT,color:BLUE,fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Choose Location</button>
+        <div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}>
+          <FinderEmptyState catKey="food" icon={MapPin} title="Choose a location to search" reason="Use your current location or pick a city to find restaurants nearby" actionLabel="Choose location" onAction={()=>setShowLocPicker(true)}/>
         </div>
       ):loading?(
         <div style={{textAlign:"center",padding:"60px 20px"}}>
@@ -1614,30 +1549,29 @@ export default function PlacesToEat() {
           </div>
         </div>
       ):error?(
-        <div style={{textAlign:"center",padding:"60px 20px"}}>
-          <div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px"}}>😕</div>
-          <div style={{color:CORAL,fontWeight:"600",marginBottom:"12px"}}>{error}</div>
-          <button onClick={()=>setRadius(r=>Math.min(r+5,25))} style={{padding:"10px 20px",borderRadius:"10px",border:`2px solid ${BLUE}`,background:BLUE_LT,color:BLUE,fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Expand Radius</button>
-        </div>
+        /* Was a dead "Expand Radius" button (every search already runs the full
+           25-mile net). Honest actions instead: retry a failed load; move the
+           search or clear filters/search on an empty result. */
+        /^Failed/.test(error)
+          ? <div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}><FinderEmptyState catKey="food" icon={AlertCircle} title="Couldn't load restaurants" reason={error} actionLabel="Try again" onAction={handleRefresh} secondaryLabel="Search somewhere else" onSecondary={()=>setShowLocPicker(true)}/></div>
+          : <div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}><FinderEmptyState catKey="food" icon={SearchX} title="No restaurants found" reason={error} actionLabel="Search somewhere else" onAction={()=>setShowLocPicker(true)} secondaryLabel={(activeFilterCount>0||searchText)?"Clear filters":"Try again"} onSecondary={(activeFilterCount>0||searchText)?()=>{clearFilters();setSearchInput("");setSearchText("");}:handleRefresh}/></div>
       ):viewMode==="list"?(
         <div style={isTablet
           ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
           : {width:"100%",padding:"0 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>
           {filtered.length===0?(
-            <div style={{textAlign:"center",padding:"40px 20px",background:"#fff",borderRadius:"12px",border:"1px solid #E2E8F0"}}>
-              <div style={{fontSize:"calc(32px*var(--fs))",marginBottom:"10px"}}>🔍</div>
-              <div style={{fontWeight:"700",color:DARK,marginBottom:"6px"}}>No matches</div>
-              <div style={{fontSize:"calc(13px*var(--fs))",color:GRAY,marginBottom:"14px"}}>Try adjusting filters or expanding the radius</div>
-              {activeFilterCount>0&&<button onClick={clearFilters} style={{padding:"9px 18px",borderRadius:"8px",border:"none",background:BLUE,color:"#fff",fontWeight:"600",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Clear Filters</button>}
-            </div>
+            <FinderEmptyState catKey="food" icon={SearchX} title="No matches" reason="Nothing here passes the current filters." actionLabel="Search somewhere else" onAction={()=>setShowLocPicker(true)} secondaryLabel={(activeFilterCount>0||searchText)?"Clear filters":undefined} onSecondary={(activeFilterCount>0||searchText)?()=>{clearFilters();setSearchInput("");setSearchText("");}:undefined}/>
           ):(<>
+            {/* 25mi is already the ceiling, so a radius bump was a no-op — the honest
+                "expand" is moving the search. (FallbackDisclaimer's internal button
+                copy belongs to that component, not this call site.) */}
             <FallbackDisclaimer
               fallbackInfo={fallbackInfo}
-              onExpandRadius={() => setRadius(r => Math.min(r + 5, 25))}
+              onExpandRadius={() => setShowLocPicker(true)}
             />
             <AlsoServesBanner
               banner={fallbackBanner}
-              onExpandRadius={() => setRadius(r => Math.min(r + 5, 25))}
+              onSearchElsewhere={() => setShowLocPicker(true)}
             />
             {/* Subtle cross-promo: if the user typed a coffee query, point
                 them to the dedicated CoffeeFinder feature for more options.
@@ -1680,10 +1614,52 @@ export default function PlacesToEat() {
 
       <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}::-webkit-scrollbar{display:none}.gs-rest-popup .leaflet-popup-content-wrapper{border-radius:10px;padding:0;overflow:hidden}.gs-rest-popup .leaflet-popup-content{margin:0}`}</style>
 
-      {/* Floating close button for advanced filter — follows page scroll */}
-      {showAdvanced&&(
-        <button onClick={()=>setShowAdvanced(false)} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9999,width:"40px",height:"40px",borderRadius:"50%",border:"none",background:BLUE,color:"#fff",fontWeight:"700",fontSize:"calc(18px*var(--fs))",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
-      )}
+      {/* FILTER SHEET — Bakery/Bars, Vibe, Dietary, Min Rating, Max Price + the
+          trust legend, moved off the inline band (replaces the old accordion +
+          its floating close FAB). */}
+      <FilterSheet open={filterSheetOpen} onClose={()=>setFilterSheetOpen(false)} title="Food filters" onClear={sheetFilterCount>0?clearSheetFilters:undefined}>
+        <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
+          <div>
+            <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2" style={{color:'#94A3B8'}}>More food types</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+              <Chip label="Bakery & Pastry" active={filterBakery} onClick={()=>setFilterBakery(!filterBakery)} color={TEAL}/>
+              <Chip label="Bars & Pubs" active={filterBars} onClick={()=>setFilterBars(!filterBars)} color={ORANGE}/>
+            </div>
+          </div>
+          <div>
+            <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2" style={{color:'#94A3B8'}}>Vibe</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+              {VIBE_OPTIONS.map(v=><Chip key={v.id} label={v.label} active={!!filterVibes[v.id]} onClick={()=>setFilterVibes(p=>({...p,[v.id]:!p[v.id]}))} color={PURPLE}/>)}
+            </div>
+          </div>
+          <div>
+            <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2" style={{color:'#94A3B8'}}>Dietary</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+              {DIETARY_OPTIONS.map(d=><Chip key={d.id} label={d.label} active={!!filterDietary[d.id]} onClick={()=>setFilterDietary(p=>({...p,[d.id]:!p[d.id]}))} color={GREEN}/>)}
+            </div>
+          </div>
+          <div>
+            <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2" style={{color:'#94A3B8'}}>Min rating</div>
+            <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+              {[{v:0,l:"Any"},{v:3.5,l:"3.5+"},{v:4.0,l:"4.0+"},{v:4.5,l:"4.5+"}].map(({v,l})=><Chip key={v} label={l} active={filterMinRating===v} onClick={()=>setFilterMinRating(v)}/>)}
+            </div>
+          </div>
+          <div>
+            <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2" style={{color:'#94A3B8'}}>Max price</div>
+            <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+              {[{v:0,l:"Any"},{v:1,l:"$"},{v:2,l:"$$"},{v:3,l:"$$$"},{v:4,l:"$$$$"}].map(({v,l})=><Chip key={v} label={l} active={filterMaxPrice===v} onClick={()=>setFilterMaxPrice(v)}/>)}
+            </div>
+          </div>
+          {/* Trust legend — glosses the ✅/⚠️ marks the cards themselves render (TrustTag) */}
+          <div style={{padding:"10px 12px",background:"#F8FAFC",borderRadius:"8px",border:"1px solid #E8EDF2"}}>
+            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,marginBottom:"5px"}}>DATA TRUST GUIDE</div>
+            <div style={{fontSize:"calc(11px*var(--fs))",color:DARK,lineHeight:"1.7"}}>
+              <div>✅ <strong>Confirmed</strong> — Google Places API data (reliable)</div>
+              <div>⚠️ <strong>Reviews</strong> — Customer-reported, may have changed</div>
+            </div>
+          </div>
+        </div>
+      </FilterSheet>
       {/* Scroll-to-top now provided globally by Layout's <BackToTop /> on finder pages. */}
       <LocationModePicker isOpen={showLocPicker} onClose={()=>setShowLocPicker(false)}/>
       <MapAppSelector

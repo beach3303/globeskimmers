@@ -3,8 +3,10 @@ import { base44 } from "@/api/base44Client";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { useNavigate } from "react-router-dom";
-import { MapPin, Loader2, Phone, Search, TrendingUp, ChevronDown, ArrowUpDown, Info, Map, Navigation, X, ChevronLeft, DollarSign } from "lucide-react";
+import { MapPin, Loader2, Phone, Search, TrendingUp, ChevronDown, ChevronUp, ArrowUpDown, Info, Map, Navigation, X, DollarSign, Clock, Globe, SearchX, AlertCircle } from "lucide-react";
 import { CAT, IVORY } from "@/components/redesign/constants";
+import FinderHeader from "@/components/finder/FinderHeader";
+import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
@@ -18,8 +20,7 @@ import MapAppSelector from "../components/MapAppSelector";
 import { useLocation } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
 import DistanceUnitToggle from "../components/location/DistanceUnitToggle";
-import { CITY_DISCLAIMER, getLocationLabel } from "../components/location/locationLabel";
-import RefreshButton from "@/components/RefreshButton";
+import { getLocationLabel, isCityLocation } from "../components/location/locationLabel";
 
 // Helper function
 const createPageUrl = (pageName) => `/${pageName}`;
@@ -53,18 +54,11 @@ const MILES_COUNTRIES = [
   'Myanmar'
 ];
 
-const RADIUS_VALUES = {
-  km: [1, 2, 5, 10, 25],
-  mi: [0.5, 1, 3, 5, 10, 25]
-};
+// No radius UI (doctrine): every finder casts the same 25-mile wide net,
+// nearest-first. This pins the fetch to the ceiling the old slider allowed.
+const RADIUS_MILES = 25;
 
-const DEFAULT_RADIUS = {
-  km: 5,
-  mi: 3
-};
-
-// Conversion helpers
-const kmToMiles = (km) => km * 0.621371;
+// Conversion helper (display only — the fetch radius is fixed in miles)
 const milesToKm = (miles) => miles * 1.60934;
 
 // COMPREHENSIVE CURRENCY DATABASE (150+ currencies)
@@ -259,7 +253,7 @@ export default function MoneyExchangePage() {
   // titles are 2-line clamped and cards use min-height (never fixed) so larger
   // text grows the element instead of clipping.
   const t = (tab, phone) => (isTablet ? tab : phone);
-  const { activeLocation, locationMode, initialized, switchToCurrentLocation } = useLocation();
+  const { activeLocation, initialized } = useLocation();
   const [user, setUser] = useState(null);
   const [fromAmount, setFromAmount] = useState("1");
   const [fromCurrency, setFromCurrency] = useState("USD");
@@ -276,9 +270,8 @@ export default function MoneyExchangePage() {
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [exchangeStores, setExchangeStores] = useState([]);
   const [loadingStores, setLoadingStores] = useState(false);
+  const [storesError, setStoresError] = useState(null);
   const [viewMode, setViewMode] = useState("list");
-  const [searchRadius, setSearchRadius] = useState(DEFAULT_RADIUS.km);
-  const [radiusIndex, setRadiusIndex] = useState(2);
   const [sortBy, setSortBy] = useState("distance");
   const [usesMiles, setUsesMiles] = useState(false);
   const [distanceUnit, setDistanceUnit] = useState("km");
@@ -318,13 +311,6 @@ export default function MoneyExchangePage() {
         const countryUsesMiles = MILES_COUNTRIES.includes(activeLocation.address.country);
         setUsesMiles(countryUsesMiles);
         setDistanceUnit(countryUsesMiles ? "mi" : "km");
-
-        const defaultRadiusValue = countryUsesMiles ? DEFAULT_RADIUS.mi : DEFAULT_RADIUS.km;
-        setSearchRadius(defaultRadiusValue);
-
-        const radiusArray = countryUsesMiles ? RADIUS_VALUES.mi : RADIUS_VALUES.km;
-        const defaultIndex = radiusArray.indexOf(defaultRadiusValue);
-        setRadiusIndex(defaultIndex >= 0 ? defaultIndex : 2);
       }
     }
   }, [activeLocation, initialized, user]);
@@ -339,7 +325,7 @@ export default function MoneyExchangePage() {
     if (initialized && activeLocation?.coordinates && toCurrency && fromCurrency) {
       loadExchangeStores();
     }
-  }, [activeLocation, initialized, toCurrency, fromCurrency, searchRadius, sortBy, openOnly]);
+  }, [activeLocation, initialized, toCurrency, fromCurrency, sortBy, openOnly]);
 
   const loadUserAndLocation = async () => {
     try {
@@ -350,17 +336,9 @@ export default function MoneyExchangePage() {
       if (userData.preferred_distance_unit === 'miles') {
         setUsesMiles(true);
         setDistanceUnit('mi');
-        setSearchRadius(DEFAULT_RADIUS.mi);
-        const radiusArray = RADIUS_VALUES.mi;
-        const defaultIndex = radiusArray.indexOf(DEFAULT_RADIUS.mi);
-        setRadiusIndex(defaultIndex >= 0 ? defaultIndex : 2);
       } else if (userData.preferred_distance_unit === 'kilometers') {
         setUsesMiles(false);
         setDistanceUnit('km');
-        setSearchRadius(DEFAULT_RADIUS.km);
-        const radiusArray = RADIUS_VALUES.km;
-        const defaultIndex = radiusArray.indexOf(DEFAULT_RADIUS.km);
-        setRadiusIndex(defaultIndex >= 0 ? defaultIndex : 2);
       }
 
       setLoading(false);
@@ -418,23 +396,22 @@ export default function MoneyExchangePage() {
     if (!activeLocation?.coordinates || !toCurrency || !fromCurrency) return;
 
     setLoadingStores(true);
+    setStoresError(null);
     try {
-      const radiusInMiles = usesMiles ? searchRadius : kmToMiles(searchRadius);
-
       // LOCATIONS only — the exchange-RATE fetch (getExchangeRate, above) is
       // separate and untouched.
       // List source: Google (handleMoneyExchange) — it reads sortBy ("best rate")
       // + "Open now" + radiusMiles and returns live locations, so those controls
       // actually work (the owned handler dropped them and owned rows had no rate/
       // hours). radiusMiles is the param it reads; `radius` is left as a harmless
-      // extra for any other reader.
+      // extra for any other reader. Fixed 25-mile wide net (doctrine: no radius UI).
       const { data } = await callWorker(ROUTE.getMoneyExchangeLocations, {
         latitude: activeLocation.coordinates.latitude,
         longitude: activeLocation.coordinates.longitude,
         fromCurrency: fromCurrency,
         toCurrency: toCurrency,
-        radius: radiusInMiles * 1609,
-        radiusMiles: radiusInMiles,
+        radius: RADIUS_MILES * 1609,
+        radiusMiles: RADIUS_MILES,
         maxResults: 60,
         limit: null, // Fetch all stores, then slice for list view
         sortBy: sortBy,
@@ -462,18 +439,12 @@ export default function MoneyExchangePage() {
     } catch (error) {
       console.error("Error loading exchange stores:", error);
       setExchangeStores([]);
+      setStoresError("Failed to load exchange stores. Check your connection and try again.");
     }
     setLoadingStores(false);
   };
 
-  const handleRadiusChange = (index) => {
-    const radiusArray = usesMiles ? RADIUS_VALUES.mi : RADIUS_VALUES.km;
-    setRadiusIndex(index);
-    setSearchRadius(radiusArray[index]);
-  };
-
-  // Local fallback retained for backward compat with the radius slider values.
-  // The card distance display now uses sharedFormatDistance from the hook.
+  // Renders distance in the user's preferred unit (fetch radius stays in miles).
   const formatDistance = (distanceMiles) => {
     if (usesMiles) {
       return `${distanceMiles?.toFixed(1) || '0.0'} mi`;
@@ -588,14 +559,16 @@ export default function MoneyExchangePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#f5f7fa] to-[#e2e8f0] flex items-center justify-center">
-        <Loader2 className="w-12 h-12 text-[#667eea] animate-spin" />
+      <div className="min-h-screen flex items-center justify-center" style={{background:IVORY}}>
+        <Loader2 className="w-12 h-12 animate-spin" style={{color:ED_MONEY}} />
       </div>
     );
   }
 
   const localCurrencyData = getCurrencyByCode(localCurrency);
-  const radiusArray = usesMiles ? RADIUS_VALUES.mi : RADIUS_VALUES.km;
+  // STALE-COUNT RULE: the header count is null while loading / on error / with
+  // no usable location — never a stale or misleading number.
+  const headerCount = (!activeLocation?.coordinates || !toCurrency || !fromCurrency || loadingStores || storesError) ? null : exchangeStores.length;
   const selectedStore = selectedStoreIndex !== null ? exchangeStores[selectedStoreIndex] : null;
   const mapCenter = selectedStore
     ? [selectedStore.latitude, selectedStore.longitude]
@@ -605,96 +578,26 @@ export default function MoneyExchangePage() {
 
   return (
     <div className="min-h-screen font-sans" style={{background:IVORY}}>
-      {/* HEADER — chevron back + Currency Exchange pill (redesign) */}
-      <div className="px-4 pt-2 pb-3">
-        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
-          <button
-            onClick={() => navigate(createPageUrl("Home"))}
-            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]"
-            style={{background:'#FFFFFF',border:'1px solid #F0E9DC'}}
-            aria-label="Back"
-          >
-            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
-          </button>
-          <div
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full uppercase"
-            style={{background:CAT.money.bg,color:CAT.money.ink,fontFamily:ED_MONO,fontSize:t(fs(11),fs(10.5)),letterSpacing:".08em",fontWeight:500}}
-          >
-            <DollarSign size={13} color={CAT.money.ink} strokeWidth={2} />
-            Currency Exchange
-          </div>
-          <RefreshButton onClick={handleRefresh} isRefreshing={converting || loadingStores} tone="light" title="Refresh rates & stores" />
-        </div>
-      </div>
-
-      {/* Editorial page title + mono kicker (handoff "Money Exchange" frame) */}
-      <div className={`px-4 ${colWrap} mx-auto pb-1 text-center`}>
-        <h1 className="leading-none" style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:t(fs(46),fs(30)),color:ED_INK}}>Money Exchange</h1>
-        <p className="uppercase mt-2 font-semibold" style={{fontFamily:ED_MONO,fontSize:t(fs(10.5),fs(10)),letterSpacing:"0.16em",color:ED_INK3}}>Compare live rates near you</p>
-      </div>
+      {/* HEADER + LOCATION + CITY DISCLAIMER — shared FinderHeader (Passport
+          Standard). The old serif h1 dies — the pill title carries the page
+          name and the mono count segment carries the result total. */}
+      <FinderHeader
+        catKey="money"
+        icon={DollarSign}
+        title="Currency Exchange"
+        count={headerCount}
+        countNoun="nearby"
+        onBack={() => navigate(createPageUrl("Home"))}
+        onRefresh={handleRefresh}
+        refreshing={converting || loadingStores}
+        refreshTitle="Refresh rates & stores"
+        onChangeLocation={() => setShowLocationPicker(true)}
+        locationLabel={getLocationLabel(activeLocation)}
+        isCity={isCityLocation(activeLocation)}
+        cityName={activeLocation?.address?.city || activeLocation?.placeName}
+      />
 
       <div className={`${colWrap} mx-auto px-4`}>
-        {/* Location Display */}
-        <div className="mb-3">
-          <div
-            className={t("rounded-[20px] p-5", "rounded-[18px] p-4")}
-            style={{background:"#FFFFFF",border:`1px solid ${ED_RULE}`,boxShadow:"0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)"}}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="text-2xl flex-shrink-0">
-                  {activeLocation?.granularity === 'city' ? '🏙️' : (locationMode === 'current' ? '📍' : '🧭')}
-                </div>
-                <div className="flex-1 min-w-0">
-                  {(() => {
-                    if (!activeLocation) return <p style={{fontSize:fs(13.5),color:ED_INK3}}>Loading location...</p>;
-
-                    return (
-                      <>
-                        <p className="uppercase" style={{fontFamily:ED_MONO,fontSize:t(fs(10),fs(10)),letterSpacing:".12em",color:ED_INK3,marginBottom:fs(3)}}>
-                          {activeLocation?.granularity === 'city' ? 'City' : (locationMode === 'navigate' ? 'Selected location' : 'Current location')}
-                        </p>
-                        <p className="truncate" style={{fontFamily:ED_SERIF,fontSize:t(fs(24),fs(21)),lineHeight:1.05,color:ED_INK}}>
-                          {locationMode === 'navigate' ? activeLocation.placeName : activeLocation.address?.city}
-                        </p>
-                        {activeLocation.address?.city && locationMode === 'navigate' && (
-                          <p className="truncate" style={{fontSize:t(fs(14),fs(13)),color:ED_INK3,marginTop:fs(2)}}>
-                            {activeLocation.address.city}, {activeLocation.address.state || activeLocation.address.country}
-                          </p>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {locationMode === 'navigate' && (
-                  <button
-                    onClick={() => switchToCurrentLocation()}
-                    className="p-2 rounded-lg transition-colors"
-                    style={{background:CAT.money.bg}}
-                    title="Use Current Location"
-                  >
-                    <Navigation className="w-4 h-4" style={{color:ED_MONEY}} />
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowLocationPicker(true)}
-                  className="flex-none rounded-[10px]"
-                  style={{background:CAT.money.bg,color:ED_MONEY,fontFamily:ED_MONO,fontSize:t(fs(11),fs(10.5)),letterSpacing:".06em",fontWeight:600,padding:`${fs(7)} ${fs(12)}`,textTransform:"uppercase"}}
-                >
-                  Change
-                </button>
-              </div>
-            </div>
-          </div>
-          {activeLocation?.granularity === 'city' && (
-            <div className="mt-2 px-3.5 py-2.5 rounded-[12px] leading-snug flex items-start gap-2" style={{background:CAT.weather.bg,color:CAT.weather.ink,fontSize:t(fs(12),fs(11.5))}}>
-              <span>💡</span>
-              <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
-            </div>
-          )}
-        </div>
 
         {/* Currency Converter */}
         <div
@@ -1030,47 +933,43 @@ export default function MoneyExchangePage() {
               Showing stores that exchange {fromCurrency} to {toCurrency}
             </p>
 
-            {/* View Mode Tabs + Refresh Button */}
-            <div className="mb-3">
-              <div className="flex items-center justify-between mb-2">
-                <p
-                  className="uppercase"
-                  style={{fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3}}
-                >VIEW MODE</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-[calc(11px*var(--fs))] px-3"
-                  onClick={() => loadExchangeStores(true)}
-                  disabled={loadingStores}
-                >
-                  🔄 Refresh
-                </Button>
-              </div>
-              {/* List/Map view toggle removed — list is primary; per-card map still works */}
-            </div>
+            {/* Refresh lives in the FinderHeader now; list is primary and the
+                per-card map still works. The 2 inline controls below (sort +
+                open-only) stay on the page — everything else is doctrine-fixed. */}
 
-            {/* Sort By Tabs - Only show in list view */}
+            {/* Sort By Tabs + distance unit - Only show in list view */}
             {viewMode === "list" && (
               <div className="mb-4">
-                <p
-                  className="mb-2 uppercase"
-                  style={{fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3}}
-                >SORT BY</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p
+                    className="uppercase"
+                    style={{fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3}}
+                  >SORT BY</p>
+                  <DistanceUnitToggle
+                    unit={distanceUnit}
+                    setUnit={(u) => {
+                      setUsesMiles(u === 'mi');
+                      setDistanceUnit(u);
+                    }}
+                    variant="light"
+                  />
+                </div>
                 <div className="flex gap-2" style={{borderBottom:`1px solid ${ED_RULE}`}}>
                   <button
                     onClick={() => setSortBy("distance")}
-                    className="pb-2 px-3 font-semibold transition-colors"
+                    className="pb-2 px-3 font-semibold transition-colors inline-flex items-center gap-1.5"
                     style={{fontSize:t(fs(13),fs(13.5)),color:sortBy === "distance" ? ED_MONEY : ED_INK3,borderBottom:sortBy === "distance" ? `2px solid ${ED_MONEY}` : "2px solid transparent"}}
                   >
-                    📍 Nearest
+                    <MapPin size={13} strokeWidth={2} />
+                    Nearest
                   </button>
                   <button
                     onClick={() => setSortBy("rate")}
-                    className="pb-2 px-3 font-semibold transition-colors"
+                    className="pb-2 px-3 font-semibold transition-colors inline-flex items-center gap-1.5"
                     style={{fontSize:t(fs(13),fs(13.5)),color:sortBy === "rate" ? ED_MONEY : ED_INK3,borderBottom:sortBy === "rate" ? `2px solid ${ED_MONEY}` : "2px solid transparent"}}
                   >
-                    💰 Best Rate
+                    <TrendingUp size={13} strokeWidth={2} />
+                    Best Rate
                   </button>
                 </div>
               </div>
@@ -1093,50 +992,8 @@ export default function MoneyExchangePage() {
               </label>
             </div>
 
-            {/* Radius Slider */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-                <p
-                  className="uppercase"
-                  style={{fontFamily:ED_MONO,fontSize:fs(10),letterSpacing:".1em",color:ED_INK3}}
-                >Search Radius</p>
-                <div className="flex items-center gap-2">
-                  <DistanceUnitToggle
-                    unit={usesMiles ? 'mi' : 'km'}
-                    setUnit={(u) => {
-                      const next = u === 'mi';
-                      setUsesMiles(next);
-                      const arr = next ? RADIUS_VALUES.mi : RADIUS_VALUES.km;
-                      const def = next ? DEFAULT_RADIUS.mi : DEFAULT_RADIUS.km;
-                      setSearchRadius(def);
-                      setRadiusIndex(arr.indexOf(def));
-                      setDistanceUnit(next ? 'mi' : 'km');
-                    }}
-                    variant="light"
-                  />
-                  <span
-                    style={{fontFamily:ED_SERIF,fontSize:t(fs(18),fs(17)),color:ED_MONEY}}
-                  >{searchRadius} {distanceUnit}</span>
-                </div>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max={radiusArray.length - 1}
-                value={radiusIndex}
-                onChange={(e) => handleRadiusChange(parseInt(e.target.value))}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                style={{accentColor:ED_MONEY}}
-              />
-              <div
-                className="flex justify-between mt-1"
-                style={{fontFamily:ED_MONO,fontSize:fs(10),color:ED_INK3}}
-              >
-                <span>{radiusArray[0]}{distanceUnit}</span>
-                <span>{radiusArray[Math.floor(radiusArray.length / 2)]}{distanceUnit}</span>
-                <span>{radiusArray[radiusArray.length - 1]}{distanceUnit}</span>
-              </div>
-            </div>
+            {/* Radius slider removed (doctrine: no radius UI) — the fetch casts
+                the same fixed 25-mile wide net as every other finder. */}
 
             {/* Store Listings */}
             {loadingStores ? (
@@ -1145,9 +1002,33 @@ export default function MoneyExchangePage() {
                 <p style={{fontSize:t(fs(13),fs(13.5)),color:ED_INK3}}>Finding exchange stores...</p>
               </div>
             ) : viewMode === "list" ? (
-              exchangeStores.length > 0 ? (
+              storesError ? (
+                <FinderEmptyState
+                  catKey="money"
+                  icon={AlertCircle}
+                  title="Couldn't load exchange stores"
+                  reason={storesError}
+                  actionLabel="Try again"
+                  onAction={() => loadExchangeStores(true)}
+                  secondaryLabel="Search somewhere else"
+                  onSecondary={() => setShowLocationPicker(true)}
+                />
+              ) : exchangeStores.length > 0 ? (
+                // DELIBERATE VARIANT (Passport Standard): exchange offices are
+                // data rows, not photo cards — no PhotoOrIcon here. Rank circle +
+                // serif name + ONE mono data line (rate · distance · open),
+                // expandable details.
                 <div className="space-y-3">
-                  {exchangeStores.slice(0, 10).map((store, index) => ( // Slice for list view
+                  {exchangeStores.slice(0, 10).map((store, index) => { // Slice for list view
+                    // hours_today ("Monday: 9 AM–5 PM") carries today's times when
+                    // the source provides them — the mono line shows them after
+                    // "Open"; otherwise a plain Open now / Closed.
+                    const todayHrs = store.hours_today ? String(store.hours_today).split(':').slice(1).join(':').trim() : '';
+                    const openSeg = store.is_open === undefined ? null
+                      : !store.is_open ? 'Closed'
+                      : todayHrs && todayHrs.toLowerCase() !== 'closed' ? `Open ${todayHrs}` : 'Open now';
+                    const hasDetails = (store.hours && store.hours.length > 0) || store.website || store.phone || store.source === 'owned';
+                    return (
                     <div
                       key={index}
                       className={t("rounded-[18px] p-4", "rounded-[18px] p-4")}
@@ -1164,47 +1045,21 @@ export default function MoneyExchangePage() {
                           <h4 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:t(fs(22),fs(20)),lineHeight:1.05,color:ED_INK,marginBottom:fs(2),display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{store.name}</h4>
                           <NameLanguageHelp placeId={store.place_id || store.placeId || store.id} name={store.name} />
 
-                          {store.exchange_rate && (
-                            <div className="inline-block mb-2" style={{background:CAT.money.bg,color:ED_MONEY,fontFamily:ED_MONO,fontSize:t(fs(12),fs(11.5)),fontWeight:600,padding:`${fs(4)} ${fs(10)}`,borderRadius:"10px",border:`1px solid ${CAT.money.soft}`}}>
-                              1 {fromCurrency} = {store.exchange_rate.toFixed(4)} {toCurrency}
-                            </div>
-                          )}
-
-                          <div className="flex items-center gap-2 mb-1">
-                            <MapPin className="w-3 h-3" style={{color:ED_MONEY}} />
-                            <span
-                              className="font-semibold"
-                              style={{fontSize:t(fs(12.5),fs(12.5)),color:ED_MONEY}}
-                            >
-                              📍 {formatDistance(store.distance_miles)} away
-                            </span>
+                          {/* ONE mono data line: rate · distance · open-until */}
+                          <div className="font-mono uppercase" style={{fontSize:t(fs(11.5),fs(11)),letterSpacing:"0.05em",fontWeight:600,color:ED_INK3,marginTop:fs(3),marginBottom:fs(5)}}>
+                            {store.exchange_rate != null && (
+                              <span style={{color:ED_MONEY}}>1 {fromCurrency} = {store.exchange_rate.toFixed(4)} {toCurrency} · </span>
+                            )}
+                            <span>{formatDistance(store.distance_miles)}</span>
+                            {openSeg && (
+                              <span style={{color:store.is_open ? ED_MONEY : "#DC2626"}}> · {openSeg}</span>
+                            )}
                           </div>
 
                           <p
                             className="mb-2"
                             style={{fontSize:t(fs(12.5),fs(12.5)),color:ED_INK3}}
                           >{store.address}</p>
-
-                          <div className="flex items-center gap-3 mb-2 flex-wrap">
-                            {store.is_open !== undefined && (
-                              <span
-                                className="font-semibold"
-                                style={{fontSize:t(fs(12),fs(12)),color:store.is_open ? ED_MONEY : "#DC2626"}}
-                              >
-                                {store.is_open ? '● Open Now' : '● Closed'}
-                              </span>
-                            )}
-                            {store.phone && (
-                              <a
-                                href={`tel:${store.phone}`}
-                                className="flex items-center gap-1"
-                                style={{fontSize:t(fs(12),fs(12)),color:ED_INK3}}
-                              >
-                                <Phone className="w-3 h-3" />
-                                {store.phone}
-                              </a>
-                            )}
-                          </div>
 
                           <div className="flex gap-2 mt-2">
                             <Button
@@ -1226,7 +1081,7 @@ export default function MoneyExchangePage() {
                               <Map className="w-3 h-3 mr-1" />
                               Map
                             </Button>
-                            {((store.hours && store.hours.length > 0) || store.website || store.source === 'owned') && (
+                            {hasDetails && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1234,12 +1089,13 @@ export default function MoneyExchangePage() {
                                 style={{fontSize:t(fs(12.5),fs(12.5)),borderColor:ED_RULE,color:ED_INK2,borderRadius:"12px",background:"#FFFFFF"}}
                                 onClick={() => setExpandedStoreIndex(expandedStoreIndex === index ? null : index)}
                               >
-                                {expandedStoreIndex === index ? '▲ Less' : '▼ Details'}
+                                {expandedStoreIndex === index ? <ChevronUp className="w-3 h-3 mr-1" /> : <ChevronDown className="w-3 h-3 mr-1" />}
+                                {expandedStoreIndex === index ? 'Less' : 'Details'}
                               </Button>
                             )}
                           </div>
 
-                          {expandedStoreIndex === index && ((store.hours && store.hours.length > 0) || store.website || store.source === 'owned') && (
+                          {expandedStoreIndex === index && hasDetails && (
                             <div
                               className="mt-2 p-3 rounded-[12px]"
                               style={{background:"#FFFFFF",border:`1px solid ${ED_RULE}`}}
@@ -1247,9 +1103,9 @@ export default function MoneyExchangePage() {
                               {store.hours && store.hours.length > 0 && (
                                 <>
                                   <div
-                                    className="uppercase mb-1"
+                                    className="uppercase mb-1 flex items-center gap-1.5"
                                     style={{fontFamily:ED_MONO,fontSize:t(fs(9.5),fs(10)),letterSpacing:".1em",color:ED_INK3}}
-                                  >🕐 Weekly Hours</div>
+                                  ><Clock size={11} strokeWidth={2} />Weekly Hours</div>
                                   {store.hours.map((h, di) => {
                                     const today = new Date().getDay();
                                     const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -1271,18 +1127,29 @@ export default function MoneyExchangePage() {
                                   })}
                                 </>
                               )}
+                              {store.phone && (
+                                <a
+                                  href={`tel:${store.phone}`}
+                                  className={`flex items-center gap-1.5 font-semibold ${store.hours && store.hours.length > 0 ? 'mt-2 pt-2' : ''}`}
+                                  style={{fontSize:t(fs(12),fs(12)),color:ED_INK2,borderTop:(store.hours && store.hours.length > 0) ? `1px solid ${ED_RULE}` : undefined}}
+                                >
+                                  <Phone size={12} strokeWidth={2} />
+                                  {store.phone}
+                                </a>
+                              )}
                               {store.website && (
                                 <a
                                   href={store.website}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className={`block font-semibold ${store.hours && store.hours.length > 0 ? 'mt-2 pt-2' : ''}`}
-                                  style={{fontSize:t(fs(12),fs(12)),color:ED_MONEY,borderTop:(store.hours && store.hours.length > 0) ? `1px solid ${ED_RULE}` : undefined}}
+                                  className={`flex items-center gap-1.5 font-semibold ${((store.hours && store.hours.length > 0) || store.phone) ? 'mt-2 pt-2' : ''}`}
+                                  style={{fontSize:t(fs(12),fs(12)),color:ED_MONEY,borderTop:((store.hours && store.hours.length > 0) || store.phone) ? `1px solid ${ED_RULE}` : undefined}}
                                 >
-                                  🌐 Visit Website
+                                  <Globe size={12} strokeWidth={2} />
+                                  Visit Website
                                 </a>
                               )}
-                              {(!store.hours || store.hours.length === 0) && !store.website && (
+                              {(!store.hours || store.hours.length === 0) && !store.website && !store.phone && (
                                 <div style={{fontSize:t(fs(12),fs(12)),color:ED_INK3}}>Hours not listed for this location.</div>
                               )}
                             </div>
@@ -1290,13 +1157,24 @@ export default function MoneyExchangePage() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
-                <div className="text-center py-12">
-                  <p className="mb-2" style={{fontFamily:ED_SERIF,fontSize:t(fs(20),fs(20)),color:ED_INK}}>No exchange stores found nearby</p>
-                  <p style={{fontSize:t(fs(13),fs(13.5)),color:ED_INK3}}>Try increasing the search radius</p>
-                </div>
+                // Honest empty state — no dead radius button (the net already
+                // spans the 25-mile ceiling); the primary action is a new place.
+                <FinderEmptyState
+                  catKey="money"
+                  icon={SearchX}
+                  title="No exchange stores found"
+                  reason={openOnly
+                    ? `No open stores exchanging ${toCurrency} within 25 miles.`
+                    : `Nothing exchanging ${toCurrency} within 25 miles of this location.`}
+                  actionLabel="Search somewhere else"
+                  onAction={() => setShowLocationPicker(true)}
+                  secondaryLabel={openOnly ? "Clear filters" : "Try again"}
+                  onSecondary={openOnly ? () => setOpenOnly(false) : () => loadExchangeStores(true)}
+                />
               )
             ) : ( // Map View
               <div className="relative h-[500px] rounded-lg overflow-hidden border border-gray-200">

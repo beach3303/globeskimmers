@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
-import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
+import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
-import RefreshButton from "@/components/RefreshButton";
 import RestroomAIDetails from "@/components/RestroomAIDetails";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
-import { ChevronLeft, MapPin, Crosshair, Loader2 } from "lucide-react";
+import { MapPin, Crosshair, Loader2, Toilet, Accessibility, SearchX, AlertCircle } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
+import FinderHeader from "@/components/finder/FinderHeader";
+import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
+import FinderEmptyState from "@/components/finder/FinderEmptyState";
 
 // iPad editorial design tokens (design handoff — matches "Places to Eat · iPad").
 const ED_SERIF = '"Instrument Serif", Georgia, serif';
@@ -25,7 +27,6 @@ const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
 const TEAL = "#00BCD4";
 const TEAL_DARK = "#00838F";
 const TEAL_LIGHT = "#E0F7FA";
-const CORAL = "#FF6B6B";
 const GOLD = "#FFB74D";
 const DARK = "#1A2332";
 const DARK2 = "#243447";
@@ -126,41 +127,6 @@ function toM(s) {
   return h * 60 + mins;
 }
 
-// ─── PHOTO STRIP ───────────────────────────────────────────────────────────
-function PhotoStrip({ photos, fallbackIcon = "🚻", onPhotoClick, height = null }) {
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState({ 0: true, 1: true });
-  const valid = (photos || []).filter((p, i) => p && !errors[i]);
-  // Optional editorial height (iPad). When unset, keep the original per-branch
-  // phone heights exactly (no-photo/2-up = 140px, single = 160px) so the phone
-  // layout is byte-identical.
-  const H = (n) => (height != null ? `${height}px` : `${n}px`);
-
-  if (!valid.length) return (
-    <div style={{ height: H(140), background: `linear-gradient(135deg, ${TEAL_LIGHT}, #B2EBF2)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <span style={{ fontSize: "calc(48px*var(--fs))" }}>{fallbackIcon}</span>
-    </div>
-  );
-  if (valid.length === 1) return (
-    <div onClick={() => onPhotoClick?.(0)} style={{ position: "relative", height: H(160), overflow: "hidden", cursor: onPhotoClick ? "pointer" : "default" }}>
-      {loading[0] && <div style={{ position: "absolute", inset: 0, background: TEAL_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "calc(36px*var(--fs))" }}>{fallbackIcon}</div>}
-      <img src={valid[0]} alt="" onError={() => setErrors(p => ({ ...p, 0: true }))} onLoad={() => setLoading(p => ({ ...p, 0: false }))}
-        style={{ width: "100%", height: H(160), objectFit: "cover", opacity: loading[0] ? 0 : 1, transition: "opacity 0.4s" }} />
-    </div>
-  );
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "60% 40%", height: H(140), overflow: "hidden" }}>
-      {valid.slice(0, 2).map((url, i) => (
-        <div key={i} onClick={() => onPhotoClick?.(i)} style={{ position: "relative", overflow: "hidden", borderRight: i === 0 ? "2px solid #fff" : "none", cursor: onPhotoClick ? "pointer" : "default" }}>
-          {loading[i] && <div style={{ position: "absolute", inset: 0, background: TEAL_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "calc(28px*var(--fs))" }}>{fallbackIcon}</div>}
-          <img src={url} alt="" onError={() => setErrors(p => ({ ...p, [i]: true }))} onLoad={() => setLoading(p => ({ ...p, [i]: false }))}
-            style={{ width: "100%", height: H(140), objectFit: "cover", opacity: loading[i] ? 0 : 1, transition: "opacity 0.4s" }} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ─── RESTROOM CARD · EDITORIAL (responsive) ────────────────────────────────
 // The editorial card, now rendered at BOTH widths. Mirrors PlacesToEat's
 // RestaurantCardTablet (soft shadow, ED_* tokens, serif name, accent kicker,
@@ -168,7 +134,7 @@ function PhotoStrip({ photos, fallbackIcon = "🚻", onPhotoClick, height = null
 // gates every size: tablet keeps the original handoff sizes; phone uses a
 // compact, phone-tuned scale (≈200px photo, 20px radius, fs(26) serif name,
 // fs(13) kicker, fs(16) body padding). Reuses the SAME fields + handlers +
-// shared sub-components (PhotoStrip, NameLanguageHelp, getFeatureChips,
+// shared sub-components (PhotoOrIcon, NameLanguageHelp, getFeatureChips,
 // computeOpenStatus, RestroomAIDetails, PhotoGalleryModal, MapAppSelector).
 // Domain content only: access (free/customers/fee), clean/accessible/family/
 // bidet chips, place type kicker. No phone bar unless a phone exists; no open
@@ -238,13 +204,16 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
         border: isHighlighted ? `2px solid ${TEAL}` : `1px solid ${ED_RULE}`,
       }}
     >
-      {/* Photo — editorial height, reuses the same PhotoStrip (rank + venue pill + open status overlays) */}
+      {/* Photo — editorial height, shared PhotoOrIcon (first working photo, lucide-on-tint fallback); rank + access + open-status overlays ride on top */}
       <div style={{ position: "relative" }}>
-        <PhotoStrip
+        <PhotoOrIcon
           photos={photos}
-          fallbackIcon={r.venueIcon || "🚻"}
+          alt={name}
+          fallbackIcon={Toilet}
+          tint={CAT.restroom}
           height={S.photoH}
-          onPhotoClick={(i) => setGallery({ open: true, idx: i })}
+          iconSize={isTablet ? 64 : 48}
+          onClick={photos.length ? (i) => setGallery({ open: true, idx: i }) : undefined}
         />
 
         {/* Rank — top-3 medal gradients; rest use the restroom accent #0F8A82 for a single coherent color world */}
@@ -649,7 +618,7 @@ export default function RestroomFinderPage() {
         } else if (!gotQuick) {
           autoExpandRef.current = false;
           setRestrooms([]);
-          setError(data?.error || "No restrooms found. Try expanding radius.");
+          setError(data?.error || `Nothing within ${radius} miles of this location.`);
         }
         // else: full came back empty but we already have the quick results — keep them.
       } catch (e) {
@@ -755,84 +724,41 @@ export default function RestroomFinderPage() {
     };
   }, [viewMode, filtered, lat, lng, activeMapPin, unit, userPinExpanded, locLabel, activeLocation?.mode]);
 
-  const stats = { total: filtered.length, free: filtered.filter(r => r.accessType === "free").length, open: filtered.filter(r => r.isOpen === true || r.properties?.is24Hours).length };
   const selectedRestroom = activeMapPin !== null ? filtered[activeMapPin] : null;
 
   return (
     <div className="font-sans" style={{ background: IVORY, minHeight: "100vh" }}>
 
-      {/* HEADER — redesign pattern */}
-      <div className="px-4 pt-2 pb-3">
-        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
-          <button
-            onClick={() => window.history.back()}
-            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]"
-            style={{ background: '#FFFFFF', border: '1px solid #F0E9DC' }}
-            aria-label="Back"
-          >
-            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
-          </button>
-          <div
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
-            style={{ background: CAT.restroom.bg, color: CAT.restroom.ink }}
-          >
-            🚻 Restroom Finder
-          </div>
-          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh restrooms" />
-        </div>
-      </div>
-
-      {/* LOCATION CARD */}
-      <div className={`px-4 ${colWrap} mx-auto pb-3`}>
-        <button
-          onClick={() => setShowLocPicker(true)}
-          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]"
-          style={{ background: '#FFFFFF', border: '1px solid #F0E9DC', boxShadow: '0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}
-        >
-          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
-          <div className="flex-1 min-w-0">
-            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: '#94A3B8' }}>
-              {isCity ? '🏙️ City' : '📍 Location'}
-            </div>
-            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
-          </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{ background: CAT.restroom.bg, color: CAT.restroom.ink }}>
-            Change
-          </span>
-        </button>
-        {isCity && (
-          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[calc(12px*var(--fs))] leading-snug flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
-            <span>💡</span>
-            <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
-          </div>
-        )}
-        {/* Two refreshes, side by side: subtle text (re-search the SELECTED
-            location shown above) on the left; the prominent GPS "near me"
-            snap on the right. */}
-        <div className="mt-2 flex items-center justify-between gap-3">
-          <button
-            onClick={handleRefresh}
-            disabled={loading}
-            className="text-[calc(12.5px*var(--fs))] font-medium underline underline-offset-2 text-left disabled:opacity-50 transition-colors"
-            style={{ color: CAT.restroom.ink }}
-          >
-            {loading ? 'Refreshing…' : 'Refresh search in this location'}
-          </button>
+      {/* HEADER + LOCATION + CITY DISCLAIMER — shared finder top (FinderHeader).
+          The old dual-refresh row collapsed: the header refresh re-searches the
+          selected location; the GPS snap survives below as one quiet mono action
+          (distinct job — jump to the user's exact position at 5 mi + auto-widen). */}
+      <FinderHeader
+        catKey="restroom"
+        icon={Toilet}
+        title="Restroom Finder"
+        count={(!lat || !lng || loading || error) ? null : filtered.length}   /* stale-count rule: null while loading / error / no location */
+        onRefresh={handleRefresh}
+        refreshing={loading}
+        refreshTitle="Refresh restrooms"
+        onChangeLocation={() => setShowLocPicker(true)}
+        locationLabel={locLabel}
+        isCity={isCity}
+        cityName={activeLocation?.address?.city || activeLocation?.placeName}
+      >
+        {/* Quiet GPS snap (left) + unit toggle (right) on one row */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "12px" }}>
           <button
             onClick={handleUseCurrentLocation}
             disabled={gpsLoading}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-[12px] font-semibold text-[calc(13px*var(--fs))] flex-shrink-0 transition-transform active:scale-[0.99] disabled:opacity-60"
-            style={{ background: CAT.restroom.ink, color: '#fff' }}
+            className="inline-flex items-center gap-1.5 font-mono text-[calc(10.5px*var(--fs))] tracking-[0.12em] uppercase font-semibold disabled:opacity-50"
+            style={{ background: "transparent", border: "none", padding: 0, color: CAT.restroom.ink, cursor: gpsLoading ? "default" : "pointer" }}
           >
-            {gpsLoading ? <Loader2 size={15} className="animate-spin" /> : <Crosshair size={15} />}
-            {gpsLoading ? 'Locating…' : 'Refresh search near me'}
+            {gpsLoading ? <Loader2 size={12} className="animate-spin" /> : <Crosshair size={12} strokeWidth={2.2} />}
+            {gpsLoading ? "Locating…" : "Refresh search near me"}
           </button>
+          <DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" />
         </div>
-      </div>
-
-      {/* Filters band — keeps existing radius/venue tabs structure, restyled to fit warm-ivory */}
-      <div className={`px-4 ${colWrap} mx-auto pb-2`}>
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
 
         {/* Venue tabs */}
         <div style={{ overflowX: "auto", scrollbarWidth: "none" }}>
@@ -845,34 +771,34 @@ export default function RestroomFinderPage() {
             ))}
           </div>
         </div>
-      </div>
 
-      {/* Controls bar — white background stays full-bleed; inner row is centered in the tablet column (mirrors the header wrappers) */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #E8EDF2" }}>
-        <div className={`${colWrap} mx-auto`} style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", scrollbarWidth: "none" }}>
-          <button onClick={() => setOpenOnly(o => !o)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", borderRadius: "20px", flexShrink: 0, border: openOnly ? `2px solid ${GREEN}` : "1px solid #E2E8F0", background: openOnly ? GREEN_LIGHT : "#fff", color: openOnly ? GREEN : GRAY, fontWeight: openOnly ? "700" : "500", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>
-            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: openOnly ? GREEN : "#CBD5E1" }} /> Open Now
+        {/* Quick filters — exactly two, inline (no sheet needed); the total lives in the header's count segment */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", scrollbarWidth: "none", paddingBottom: "6px" }}>
+          <button onClick={() => setOpenOnly(o => !o)} aria-pressed={openOnly} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 13px", borderRadius: "20px", flexShrink: 0, border: openOnly ? `2px solid ${GREEN}` : "1.5px solid #E2E8F0", background: openOnly ? GREEN_LIGHT : "#fff", color: openOnly ? GREEN : GRAY, fontWeight: openOnly ? "700" : "500", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: openOnly ? GREEN : "#CBD5E1", flexShrink: 0 }} /> Open Now
           </button>
-          <button onClick={() => setAccessOnly(a => !a)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", borderRadius: "20px", flexShrink: 0, border: accessOnly ? `2px solid ${BLUE}` : "1px solid #E2E8F0", background: accessOnly ? BLUE_LIGHT : "#fff", color: accessOnly ? BLUE : GRAY, fontWeight: accessOnly ? "700" : "500", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>
-            ♿ Accessible
+          <button onClick={() => setAccessOnly(a => !a)} aria-pressed={accessOnly} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 13px", borderRadius: "20px", flexShrink: 0, border: accessOnly ? `2px solid ${BLUE}` : "1.5px solid #E2E8F0", background: accessOnly ? BLUE_LIGHT : "#fff", color: accessOnly ? BLUE : GRAY, fontWeight: accessOnly ? "700" : "500", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+            <Accessibility size={13} strokeWidth={2} /> Accessible
           </button>
-
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-            <span style={{ background: TEAL, color: "#fff", padding: "2px 8px", borderRadius: "10px", fontWeight: "800", fontSize: "calc(12px*var(--fs))" }}>{stats.total}</span>
-            {/* List/Map view toggle removed — list is primary; per-card map still works */}
-          </div>
         </div>
-      </div>
+      </FinderHeader>
 
       {/* Content */}
       {(!lat || !lng) ? (
-        <div style={{ textAlign: "center", padding: "60px 24px" }}>
-          <div style={{ fontSize: "calc(48px*var(--fs))", marginBottom: "14px" }}>📍</div>
-          <div style={{ color: DARK, fontWeight: "700", fontSize: "calc(16px*var(--fs))", marginBottom: "6px" }}>Set your location to find restrooms</div>
-          <div style={{ color: GRAY, fontSize: "calc(13px*var(--fs))", marginBottom: "18px", maxWidth: "300px", marginLeft: "auto", marginRight: "auto" }}>Find the nearest restroom right now — use your current location, or tap “Change” above to pick a place.</div>
-          <button onClick={handleUseCurrentLocation} disabled={gpsLoading} style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "12px 24px", borderRadius: "12px", border: "none", background: `linear-gradient(135deg,${TEAL_DARK},${TEAL})`, color: "#fff", fontWeight: "700", fontSize: "calc(14px*var(--fs))", cursor: gpsLoading ? "default" : "pointer", fontFamily: "inherit", opacity: gpsLoading ? 0.6 : 1 }}>
-            {gpsLoading ? "Locating…" : "📍 Refresh to current location"}
-          </button>
+        /* No location yet (first run / permission denied): the urgent GPS snap is
+           the primary, the picker the quiet secondary — never a spinner or a
+           misleading zero-results state. */
+        <div className={`px-4 ${colWrap} mx-auto`} style={{ paddingTop: "40px" }}>
+          <FinderEmptyState
+            catKey="restroom"
+            icon={MapPin}
+            title="Set your location"
+            reason="Find the nearest restroom right now — use your exact position, or pick a place."
+            actionLabel={gpsLoading ? "Locating…" : "Use my current location"}
+            onAction={handleUseCurrentLocation}
+            secondaryLabel="Choose a location"
+            onSecondary={() => setShowLocPicker(true)}
+          />
         </div>
       ) : loading ? (
         <div style={{ textAlign: "center", padding: "60px 24px" }}>
@@ -881,11 +807,17 @@ export default function RestroomFinderPage() {
           <div style={{ color: GRAY, fontSize: "calc(13px*var(--fs))" }}>Coffee · Malls · Transit · Parks · More</div>
         </div>
       ) : error ? (
-        <div style={{ textAlign: "center", padding: "60px 24px" }}>
-          <div style={{ fontSize: "calc(44px*var(--fs))", marginBottom: "14px" }}>😕</div>
-          <div style={{ color: CORAL, fontWeight: "700", fontSize: "calc(16px*var(--fs))", marginBottom: "6px" }}>{error}</div>
-          <button onClick={() => setRadius(r => Math.min(r + 5, 25))} style={{ marginTop: "14px", padding: "12px 24px", borderRadius: "12px", border: "none", background: `linear-gradient(135deg,${TEAL_DARK},${TEAL})`, color: "#fff", fontWeight: "700", fontSize: "calc(14px*var(--fs))", cursor: "pointer", fontFamily: "inherit" }}>Try Larger Radius</button>
-        </div>
+        /* The old "Try Larger Radius" was a no-op (the search already runs at the
+           25-mile cap) — the honest actions are retry and search-elsewhere. */
+        /^Failed/.test(error) ? (
+          <div className={`px-4 ${colWrap} mx-auto`} style={{ paddingTop: "40px" }}>
+            <FinderEmptyState catKey="restroom" icon={AlertCircle} title="Couldn't load restrooms" reason={error} actionLabel="Try again" onAction={handleRefresh} secondaryLabel="Search somewhere else" onSecondary={() => setShowLocPicker(true)} />
+          </div>
+        ) : (
+          <div className={`px-4 ${colWrap} mx-auto`} style={{ paddingTop: "40px" }}>
+            <FinderEmptyState catKey="restroom" icon={SearchX} title="No restrooms found" reason={error} actionLabel="Search somewhere else" onAction={() => setShowLocPicker(true)} secondaryLabel="Try again" onSecondary={handleRefresh} />
+          </div>
+        )
       ) : viewMode === "list" ? (
         <div style={isTablet
           ? { maxWidth: 1024, margin: "0 auto", padding: "0 24px 170px", display: "flex", flexDirection: "column", gap: "30px" }
@@ -896,11 +828,16 @@ export default function RestroomFinderPage() {
             </div>
           )}
           {filtered.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "50px 24px", background: "#fff", borderRadius: "20px" }}>
-              <div style={{ fontSize: "calc(48px*var(--fs))", marginBottom: "14px" }}>🔍</div>
-              <div style={{ fontWeight: "800", fontSize: "calc(18px*var(--fs))", color: DARK, marginBottom: "6px" }}>No matches</div>
-              <div style={{ color: GRAY, fontSize: "calc(13px*var(--fs))" }}>Try removing filters or switching category</div>
-            </div>
+            <FinderEmptyState
+              catKey="restroom"
+              icon={SearchX}
+              title="No matches"
+              reason="Nothing here passes the current filters."
+              actionLabel="Search somewhere else"
+              onAction={() => setShowLocPicker(true)}
+              secondaryLabel={(openOnly || accessOnly) ? "Clear filters" : undefined}
+              onSecondary={(openOnly || accessOnly) ? () => { setOpenOnly(false); setAccessOnly(false); } : undefined}
+            />
           ) : filtered.map((r, i) => {
             const Card = RestroomCardTablet;
             return (

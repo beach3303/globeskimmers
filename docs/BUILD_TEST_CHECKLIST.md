@@ -618,3 +618,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - **Converted:** Shopping (pilot; + refresh it never had, + WishlistButton), CoffeeFinder (quick pills capped at 2, rest → sheet; + save), ATMFinder (bank <select> → sheet chips; emoji badges → mono BEST OVERALL/SAFEST). Empty/error states across all three now honest (Search somewhere else / Clear filters / Try again).
 - **ThingsToDo date picker:** 'Pick a date' chip (page + per-card) → POST /viator/availability per code+date → 'available · from $X' / 'not available' / silence when unverifiable (credit only when a real answer rendered). adults=2 v1.
 - **Review:** 1 confirmed fix (Coffee stale count mid-refetch) + tone + quick-pill clear-filters gap — all fixed pre-push. Gates: eslint ✓ build ✓ boot-check ✓.
+
+## 2026-09-04 — Wave B2: all ten doors on the template
+- Converted: RestroomFinder (dual-refresh collapsed; auto-widen kept), ConvenienceStore (local PhotoGallery deleted → shared modal; +save; popup CSS hoisted), PlacesToEat (7-group accordion → sheet; cuisine scroller stays the signature; +save; zero behavior change to fetch/tiers — reviewer diffed the pipeline byte-level), MoneyExchange (the app's last radius slider dies; data-row variant documented), GetARide + Transportation headers. FallbackDisclaimer button copy aligned with its new action ("Search a wider area").
+- Review: CLEAN, zero confirmed defects. Gates: eslint ✓ build ✓ boot-check ✓.

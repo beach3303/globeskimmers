@@ -11,6 +11,12 @@
  * - Swipeable photo gallery with fullscreen option
  * - Improved filter design
  * - Sticky X on advanced filters
+ *
+ * v9 (Passport Standard): shared finder primitives — FinderHeader (3-block top
+ * + stale-gated mono count), PhotoOrIcon card photo, shared PhotoGalleryModal
+ * (local swipe gallery deleted), FinderEmptyState for no-location / error /
+ * zero-results, ATM + Hot Food moved into FilterSheet behind a Filters chip,
+ * WishlistButton on every card.
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -18,15 +24,20 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useLocation } from '@/components/location/LocationContext';
 import LocationModePicker from '@/components/location/LocationModePicker';
-import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from '@/components/location/locationLabel';
+import { getLocationLabel, isCityLocation } from '@/components/location/locationLabel';
 import { useDistanceUnit } from '@/components/location/distanceUnit';
 import DistanceUnitToggle from '@/components/location/DistanceUnitToggle';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
-import RefreshButton from '@/components/RefreshButton';
 import NameLanguageHelp from '@/components/NameLanguageHelp';
 import MapAppSelector from '@/components/MapAppSelector';
-import { ChevronLeft, MapPin, Store } from 'lucide-react';
+import PhotoGalleryModal from '@/components/coffee/PhotoGalleryModal';
+import FinderHeader from '@/components/finder/FinderHeader';
+import PhotoOrIcon from '@/components/finder/PhotoOrIcon';
+import FinderEmptyState from '@/components/finder/FinderEmptyState';
+import FilterSheet from '@/components/finder/FilterSheet';
+import WishlistButton from '@/components/WishlistButton';
+import { MapPin, Store, Clock, Moon, CreditCard, Flame, SlidersHorizontal, Check, AlertCircle, SearchX } from 'lucide-react';
 import { CAT, TEAL_DEEP, IVORY } from '@/components/redesign/constants';
 import { useIsTablet } from '@/lib/useIsTablet';
 
@@ -83,21 +94,12 @@ const CHAIN_INFO = {
 };
 
 // ============================================================================
-// FILTERS CONFIG
-// ============================================================================
-
-const QUICK_FILTERS = [
-  { id: 'open', label: 'Open Now', icon: '✅', key: 'openOnly' },
-  { id: '24hr', label: '24 Hours', icon: '🌙', key: 'open24Hours' },
-  { id: 'atm', label: 'ATM', icon: '🏧', key: 'hasATM' },
-  { id: 'food', label: 'Hot Food', icon: '🍔', key: 'hasHotFood' }
-];
-
-
-// ============================================================================
 // WORKER CONFIG
 // ============================================================================
 
+// Used ONLY as the /places/photo img-src base (an <img> src can't go through
+// callWorker) — the data fetch itself goes through callWorker like every other
+// finder. Same constant PlacesToEat/SmartPriceScanner keep as WORKER_URL.
 const API_BASE_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
 
 // ============================================================================
@@ -200,193 +202,6 @@ function normalizeStore(store) {
 }
 
 // ============================================================================
-// COMPONENT: Photo Gallery with Swipe
-// ============================================================================
-
-function PhotoGallery({ photos, storeName, onClose }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const touchStartX = useRef(0);
-
-  const goToPrevious = (e) => {
-    if (e) e.stopPropagation();
-    setCurrentIndex((prev) => (prev === 0 ? photos.length - 1 : prev - 1));
-  };
-  const goToNext = (e) => {
-    if (e) e.stopPropagation();
-    setCurrentIndex((prev) => (prev === photos.length - 1 ? 0 : prev + 1));
-  };
-
-  const handleTouchStart = (e) => {
-    touchStartX.current = e.touches[0].clientX;
-  };
-
-  const handleTouchEnd = (e) => {
-    const diff = touchStartX.current - e.changedTouches[0].clientX;
-    if (Math.abs(diff) > 50) {
-      if (diff > 0 && currentIndex < photos.length - 1) {
-        setCurrentIndex(currentIndex + 1);
-      } else if (diff < 0 && currentIndex > 0) {
-        setCurrentIndex(currentIndex - 1);
-      }
-    }
-  };
-
-  if (!photos || photos.length === 0) return null;
-  
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0,0,0,0.95)',
-        zIndex: 1000,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}
-      onClick={onClose}
-    >
-      {/* Close Button */}
-      <button
-        onClick={onClose}
-        style={{
-          position: 'absolute',
-          top: '20px',
-          right: '20px',
-          width: '44px',
-          height: '44px',
-          borderRadius: '50%',
-          border: 'none',
-          background: 'rgba(255,255,255,0.2)',
-          color: '#fff',
-          fontSize: "calc(24px*var(--fs))",
-          cursor: 'pointer',
-          zIndex: 10
-        }}
-      >
-        ✕
-      </button>
-      
-      {/* Photo + side arrows (arrows only visible when >1 photo) */}
-      <div
-        style={{
-          width: '100%',
-          height: '70vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '20px',
-          position: 'relative'
-        }}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {photos.length > 1 && (
-          <button
-            onClick={goToPrevious}
-            aria-label="Previous photo"
-            style={{
-              position: 'absolute',
-              left: '16px',
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              border: 'none',
-              background: 'rgba(255,255,255,0.2)',
-              color: '#fff',
-              fontSize: "calc(22px*var(--fs))",
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 5
-            }}
-          >
-            ‹
-          </button>
-        )}
-        <img
-          src={getPhotoUrl(photos[currentIndex], 800)}
-          alt={`${storeName} ${currentIndex + 1}`}
-          style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
-            objectFit: 'contain',
-            borderRadius: '12px'
-          }}
-        />
-        {photos.length > 1 && (
-          <button
-            onClick={goToNext}
-            aria-label="Next photo"
-            style={{
-              position: 'absolute',
-              right: '16px',
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              border: 'none',
-              background: 'rgba(255,255,255,0.2)',
-              color: '#fff',
-              fontSize: "calc(22px*var(--fs))",
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 5
-            }}
-          >
-            ›
-          </button>
-        )}
-      </div>
-      
-      {/* Dots Indicator */}
-      {photos.length > 1 && (
-        <div style={{
-          display: 'flex',
-          gap: '8px',
-          marginTop: '16px'
-        }}>
-          {photos.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={(e) => {
-                e.stopPropagation();
-                setCurrentIndex(idx);
-              }}
-              style={{
-                width: idx === currentIndex ? '24px' : '8px',
-                height: '8px',
-                borderRadius: '4px',
-                border: 'none',
-                background: idx === currentIndex ? '#fff' : 'rgba(255,255,255,0.4)',
-                transition: 'all 0.2s',
-                cursor: 'pointer'
-              }}
-            />
-          ))}
-        </div>
-      )}
-      
-      {/* Counter */}
-      <p style={{
-        color: 'rgba(255,255,255,0.7)',
-        marginTop: '12px',
-        fontSize: "calc(14px*var(--fs))"
-      }}>
-        {currentIndex + 1} / {photos.length}
-      </p>
-    </div>
-  );
-}
-
-// ============================================================================
 // COMPONENT: Store Card — editorial layout (design handoff)
 // ============================================================================
 // Full-width editorial card mirroring RestaurantCardTablet exactly: big photo
@@ -396,7 +211,8 @@ function PhotoGallery({ photos, storeName, onClose }) {
 // green Open bar, a blue phone bar, Directions/Map/More action buttons, and a
 // "More ▾" expand panel (payment row, payment tip, daily hours, website).
 // Same props/handlers as the old StoreCard; reuses normalizeStore / detectChain
-// / getTodayHours / getPhotoUrl / PhotoGallery / MapAppSelector / NameLanguageHelp.
+// / getTodayHours / getPhotoUrl / MapAppSelector / NameLanguageHelp. Photo strip
+// is the shared PhotoOrIcon; fullscreen viewing is the shared PhotoGalleryModal.
 // RESPONSIVE: `isTablet` gates every size — tablet keeps the big editorial
 // proportions, phone (the primary platform) gets the compact phone-tuned set
 // (~200px photo, 20px radius, serif fs26, etc.). All text uses fs() so the
@@ -407,12 +223,10 @@ function PhotoGallery({ photos, storeName, onClose }) {
 function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShowOnMap, index, formatDistance = formatDistanceMi, isTablet = false }) {
   const [expanded, setExpanded] = useState(false);
   const [hoursExpanded, setHoursExpanded] = useState(false);
-  const [showGallery, setShowGallery] = useState(false);
-  const [photoError, setPhotoError] = useState(false);
-  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryStart, setGalleryStart] = useState(0);
   const [showDirs, setShowDirs] = useState(false);
   const [enriched, setEnriched] = useState(null);
-  const touchStartX = useRef(0);
   const fs = (n) => `calc(${n}px*var(--fs))`;
 
   // Fetch real Google photos + hours for OWNED stores (owned records carry none) —
@@ -464,8 +278,10 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
     isOpen: enriched.hours?.openNow ?? store0.isOpen,
   } : store0;
   const chainInfo = detectChain(store.name);
-  const photos = store.photos || [];
-  const mainPhotoUrl = photos.length > 0 && !photoError ? getPhotoUrl(photos[0], 800) : null;
+  // Normalize photo entries to URL strings — PhotoOrIcon and PhotoGalleryModal
+  // both take string-src arrays (Google search returns photo OBJECTS, owned
+  // enrich returns strings; getPhotoUrl handles every shape).
+  const photos = (store.photos || []).map((p) => getPhotoUrl(p, 800)).filter(Boolean);
   const todayHrs = getTodayHours(store.hours, store.is24Hours);
 
   // Kicker = store type / chain
@@ -474,20 +290,14 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
     : 'Convenience Store');
   const openText = store.is24Hours ? 'Open 24/7' : (store.isOpen ? 'Open' : 'Closed');
 
-  // Swipe handlers for the inline photo carousel
-  const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
-  const handleTouchEnd = (e) => {
-    if (photos.length <= 1) return;
-    const diff = touchStartX.current - e.changedTouches[0].clientX;
-    if (Math.abs(diff) > 50) {
-      if (diff > 0 && currentPhotoIndex < photos.length - 1) setCurrentPhotoIndex(currentPhotoIndex + 1);
-      else if (diff < 0 && currentPhotoIndex > 0) setCurrentPhotoIndex(currentPhotoIndex - 1);
-    }
-  };
+  // Wishlist geo (same derivation as Shopping's ShopCardTablet): stores carry
+  // location only in the address — last comma-part ~= country, second-to-last
+  // ~= city.
+  const _wlAddr = (store.address || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const wlCity = _wlAddr.length >= 2 ? _wlAddr[_wlAddr.length - 2] : '';
+  const wlCountry = _wlAddr.length >= 1 ? _wlAddr[_wlAddr.length - 1] : '';
 
   const rank = (index ?? 0) + 1;
-  const rankLabel = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : `#${rank}`;
-  const medalColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
 
   const Tag = ({ bg, color, children }) => (
     <span style={{ background: bg, color, borderRadius: "999px", padding: t ? `${fs(9)} ${fs(16)}` : `${fs(6)} ${fs(12)}`, fontSize: fs(SZ.tag), fontWeight: 600, whiteSpace: "nowrap" }}>{children}</span>
@@ -500,13 +310,9 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
 
   return (
     <>
-      {/* Fullscreen Gallery */}
-      {showGallery && (
-        <PhotoGallery
-          photos={photos}
-          storeName={store.name}
-          onClose={() => setShowGallery(false)}
-        />
+      {/* Fullscreen gallery — shared modal (components/coffee/PhotoGalleryModal) */}
+      {galleryOpen && (
+        <PhotoGalleryModal photos={photos} initialIndex={galleryStart} isOpen onClose={() => setGalleryOpen(false)} />
       )}
       <MapAppSelector
         isOpen={showDirs}
@@ -524,47 +330,31 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
       <motion.div initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(rank, 8) * 0.03 }}
         style={{ background: "#fff", borderRadius: SZ.radius, overflow: "hidden", boxShadow: "0 24px 50px -30px rgba(22,17,13,.4)", border: isExpanded ? `1px solid ${ED_CONV}` : `1px solid ${ED_RULE}`, minHeight: fs(SZ.minH) }}>
 
-        {/* Photo — editorial height (tablet ~360 / phone ~200), rank badge + chain tag */}
-        <div
-          style={{ position: "relative", height: fs(SZ.photoH), overflow: "hidden", cursor: mainPhotoUrl ? "pointer" : "default", background: "#F1F5F9" }}
-          onClick={() => photos.length > 0 && setShowGallery(true)}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-        >
-          {mainPhotoUrl ? (
-            <img
-              src={getPhotoUrl(photos[currentPhotoIndex], 800)}
-              alt={store.name}
-              style={{ width: "100%", height: "100%", objectFit: "cover", transition: "opacity 0.3s" }}
-              onError={() => setPhotoError(true)}
-            />
-          ) : (
-            <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#EFF6FF,#DBEAFE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: fs(SZ.badgeIcon) }}>
-              {chainInfo.icon}
-            </div>
-          )}
+        {/* Photo — PhotoOrIcon (first working photo, else Store icon on the
+            convenience tint) + rank badge + save + chain tag; tap opens the
+            shared fullscreen gallery */}
+        <div style={{ position: "relative" }}>
+          <PhotoOrIcon
+            photos={photos}
+            alt={store.name}
+            fallbackIcon={Store}
+            tint={CAT.convenience}
+            height={fs(SZ.photoH)}
+            iconSize={t ? 64 : 48}
+            onClick={photos.length ? (i) => { setGalleryStart(typeof i === "number" ? i : 0); setGalleryOpen(true); } : undefined}
+          />
 
-          {/* Rank badge */}
-          <div style={{ position: "absolute", top: "14px", left: "14px", minWidth: fs(SZ.medalMin), height: fs(SZ.medalMin), padding: `0 ${fs(8)}`, borderRadius: "999px", background: rank <= 3 ? medalColors[rank - 1] : ED_CONV, color: "#fff", fontWeight: 800, fontSize: rank <= 3 ? fs(SZ.medalBig) : fs(SZ.medalSmall), display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.25)", border: "2px solid #fff" }}>{rankLabel}</div>
+          {/* Rank badge — numeric on gradient medals for the top 3 (Shopping's shape) */}
+          <div style={{ position: "absolute", top: "14px", left: "14px", width: fs(SZ.medalMin), height: fs(SZ.medalMin), borderRadius: "50%", background: rank === 1 ? "linear-gradient(135deg,#FFD700,#FFA000)" : rank === 2 ? "linear-gradient(135deg,#B0BEC5,#78909C)" : rank === 3 ? "linear-gradient(135deg,#FFAB40,#F57C00)" : ED_CONV, color: "#fff", fontWeight: 800, fontSize: rank <= 3 ? fs(SZ.medalBig) : fs(SZ.medalSmall), display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.25)", border: "2px solid #fff" }}>{rank}</div>
 
-          {/* Chain tag (the "Dish Specialist"-style tag analog) */}
+          {/* Save to wishlist */}
+          <div style={{ position: "absolute", top: "14px", right: "14px", zIndex: 15 }} onClick={(e) => e.stopPropagation()}>
+            <WishlistButton item={{ kind: "other", id: store.placeId || store.id, title: store.name, city: wlCity, country: wlCountry, image: photos[0] || null, meta: { finder: "convenience" } }} size={17} />
+          </div>
+
+          {/* Chain tag (left of the heart — the "Dish Specialist"-style tag analog) */}
           {chainInfo.chain && (
-            <div style={{ position: "absolute", top: "14px", right: "14px", background: "rgba(255,255,255,0.95)", padding: `${fs(6)} ${fs(13)}`, borderRadius: "999px", fontSize: fs(t ? 14 : 12.5), fontWeight: 700, display: "flex", alignItems: "center", gap: fs(6), boxShadow: "0 1px 4px rgba(0,0,0,0.1)" }}>
-              <span>{chainInfo.icon}</span>
-              <span style={{ color: chainInfo.color }}>{chainInfo.chain}</span>
-            </div>
-          )}
-
-          {/* Photo counter + dots */}
-          {photos.length > 1 && mainPhotoUrl && (
-            <div style={{ position: "absolute", bottom: "14px", right: "14px", background: "rgba(0,0,0,0.6)", color: "#fff", padding: `${fs(4)} ${fs(10)}`, borderRadius: "999px", fontSize: fs(13), fontWeight: 600 }}>📷 {currentPhotoIndex + 1}/{photos.length}</div>
-          )}
-          {photos.length > 1 && mainPhotoUrl && (
-            <div style={{ position: "absolute", bottom: "16px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "6px" }}>
-              {photos.slice(0, 5).map((_, idx) => (
-                <div key={idx} style={{ width: idx === currentPhotoIndex ? "16px" : "6px", height: "6px", borderRadius: "3px", background: idx === currentPhotoIndex ? "#fff" : "rgba(255,255,255,0.5)", transition: "all 0.2s" }} />
-              ))}
-            </div>
+            <div style={{ position: "absolute", top: "14px", right: `calc(14px + ${fs(48)})`, background: "rgba(255,255,255,0.95)", padding: `${fs(6)} ${fs(13)}`, borderRadius: "999px", fontSize: fs(t ? 14 : 12.5), fontWeight: 700, color: chainInfo.color, boxShadow: "0 1px 4px rgba(0,0,0,0.1)", whiteSpace: "nowrap" }}>{chainInfo.chain}</div>
           )}
         </div>
 
@@ -690,37 +480,6 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
 }
 
 // ============================================================================
-// COMPONENT: Filter Chip
-// ============================================================================
-
-function FilterChip({ filter, isActive, onToggle }) {
-  return (
-    <button
-      onClick={onToggle}
-      style={{
-        background: isActive ? COLORS.primary : '#fff',
-        color: isActive ? '#fff' : COLORS.text,
-        border: isActive ? 'none' : `1px solid ${COLORS.border}`,
-        padding: '10px 16px',
-        borderRadius: '24px',
-        fontSize: "calc(14px*var(--fs))",
-        fontWeight: '500',
-        whiteSpace: 'nowrap',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        transition: 'all 0.2s',
-        boxShadow: isActive ? '0 2px 8px rgba(30,58,95,0.3)' : '0 1px 3px rgba(0,0,0,0.05)'
-      }}
-    >
-      <span>{filter.icon}</span>
-      <span>{filter.label}</span>
-    </button>
-  );
-}
-
-// ============================================================================
 // MAP POPUP HTML
 // ============================================================================
 
@@ -806,8 +565,9 @@ export default function ConvenienceStorePage() {
   const mapInstanceRef = useRef(null);
   const cardRefs = useRef({});
 
-  // Filters
+  // Filters — Open Now + 24 Hours stay inline; ATM + Hot Food live in the FilterSheet
   const [activeFilters, setActiveFilters] = useState({});
+  const [filterSheet, setFilterSheet] = useState(false);
   const [searchRadius, setSearchRadius] = useState(25); // wide net; no radius UI — nearest-first
 
   // Radius filter removed app-wide — fixed wide net, results shown nearest-first.
@@ -873,6 +633,10 @@ export default function ConvenienceStorePage() {
   };
   
   const activeFilterCount = Object.values(activeFilters).filter(Boolean).length;
+  const sheetCount = (activeFilters.hasATM ? 1 : 0) + (activeFilters.hasHotFood ? 1 : 0);
+  // Header count is only honest once a fetch for the current location has
+  // resolved — mid-fetch `stores` still holds the previous result (stale-count rule).
+  const headerCount = (!location || loading || error) ? null : stores.length;
 
   // Pre-normalize for the map (so popup/markers match what cards display).
   // Default order is whatever the backend returned — typically by distance.
@@ -981,103 +745,58 @@ export default function ConvenienceStorePage() {
   
   return (
     <div className="font-sans" style={{ minHeight: '100vh', background: IVORY, paddingBottom: '100px' }}>
-      {/* HEADER */}
-      <div className="px-4 pt-2 pb-3">
-        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
-          <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
-            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
+      {/* HEADER + LOCATION + FILTER BAND — shared FinderHeader (Passport Standard) */}
+      <FinderHeader
+        catKey="convenience"
+        icon={Store}
+        title="Convenience Stores"
+        count={headerCount}
+        countNoun="nearby"
+        onBack={() => navigate(-1)}
+        onRefresh={handleRefresh}
+        refreshing={loading}
+        refreshTitle="Refresh stores"
+        onChangeLocation={() => setShowLocPicker(true)}
+        locationLabel={locLabel}
+        isCity={isCity}
+        cityName={activeLocation?.address?.city || activeLocation?.placeName}
+      >
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "14px" }}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
+        {/* Quick filters: the 2 highest-use inline; ATM + Hot Food live in the FilterSheet */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", scrollbarWidth: "none", paddingBottom: "6px" }}>
+          {[
+            { label: "Open Now", Icon: Clock, key: "openOnly", color: "#2E7D32" },
+            { label: "24 Hours", Icon: Moon, key: "open24Hours", color: "#1565C0" },
+          ].map((f) => {
+            const on = !!activeFilters[f.key];
+            return (
+              <button key={f.key} onClick={() => toggleFilter(f.key)} aria-pressed={on} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 13px", borderRadius: "20px", flexShrink: 0, border: on ? `2px solid ${f.color}` : "1.5px solid #E2E8F0", background: on ? `${f.color}18` : "#fff", color: on ? f.color : "#64748B", fontWeight: on ? "700" : "500", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                <f.Icon size={13} strokeWidth={2} />{f.label}
+              </button>
+            );
+          })}
+          <button onClick={() => setFilterSheet(true)} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 13px", borderRadius: "20px", flexShrink: 0, border: sheetCount ? `2px solid ${CAT.convenience.ink}` : "1.5px solid #E2E8F0", background: sheetCount ? `${CAT.convenience.ink}18` : "#fff", color: sheetCount ? CAT.convenience.ink : "#64748B", fontWeight: sheetCount ? "700" : "500", fontSize: "calc(12px*var(--fs))", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+            <SlidersHorizontal size={13} strokeWidth={2} />Filters{sheetCount ? ` · ${sheetCount}` : ""}
           </button>
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]" style={{ background: CAT.convenience.bg, color: CAT.convenience.ink }}>
-            <Store size={13} color={CAT.convenience.ink} strokeWidth={2} />
-            Convenience Stores
-          </div>
-          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh stores" />
         </div>
-      </div>
+      </FinderHeader>
 
-      {/* LOCATION CARD */}
-      <div className={`px-4 ${colWrap} mx-auto pb-3`}>
-        <button onClick={() => setShowLocPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC', boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)' }}>
-          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
-          <div className="flex-1 min-w-0">
-            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color:'#94A3B8' }}>
-              {isCity ? '🏙️ City' : '📍 Location'}
-            </div>
-            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
-          </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{ background: CAT.convenience.bg, color: CAT.convenience.ink }}>
-            Change
-          </span>
-        </button>
-        {isCity && (
-          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[calc(12px*var(--fs))] leading-snug flex items-start gap-2" style={{ background: CAT.weather.bg, color: CAT.weather.ink }}>
-            <span>💡</span>
-            <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
-          </div>
-        )}
-      </div>
-
-      {/* RADIUS */}
-      <div className={`px-4 ${colWrap} mx-auto pb-2`}>
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
-      </div>
-
-      {/* Quick Filters */}
-      <div style={{
-        background: '#fff',
-        padding: '14px 16px',
-        borderBottom: `1px solid ${COLORS.border}`,
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-      }}>
-        <div style={{
-          display: 'flex',
-          gap: '10px',
-          overflowX: 'auto',
-          paddingBottom: '4px',
-          msOverflowStyle: 'none',
-          scrollbarWidth: 'none',
-          ...(isTablet ? { maxWidth: 1024, margin: '0 auto' } : null)
-        }}>
-          {QUICK_FILTERS.map(filter => (
-            <FilterChip
-              key={filter.id}
-              filter={filter}
-              isActive={activeFilters[filter.key]}
-              onToggle={() => toggleFilter(filter.key)}
-            />
-          ))}
-        </div>
-      </div>
-      
       {/* Results */}
       <div style={isTablet
         ? { maxWidth: 1024, margin: '0 auto', padding: '16px 24px 170px' }
         : { padding: '16px' }}>
-        {/* No location set yet */}
+        {/* No location yet (first-run / permission denied): say so and open the
+            picker — never a spinner or a misleading "No stores found" */}
         {!location && !loading && (
-          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <div style={{ fontSize: "calc(48px*var(--fs))", marginBottom: '16px' }}>📍</div>
-            <p style={{ color: COLORS.textLight, marginBottom: '16px' }}>
-              Pick a location to find nearby convenience stores.
-            </p>
-            <button
-              onClick={() => setShowLocPicker(true)}
-              style={{
-                background: COLORS.primary,
-                color: '#fff',
-                border: 'none',
-                padding: '12px 24px',
-                borderRadius: '10px',
-                fontSize: "calc(14px*var(--fs))",
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
-            >
-              Set Location
-            </button>
+          <div style={{ paddingTop: '24px' }}>
+            <FinderEmptyState
+              catKey="convenience"
+              icon={MapPin}
+              title="Choose a location to search"
+              reason="Corner stores · Drugstores · Gas stations · Mini-marts"
+              actionLabel="Choose location"
+              onAction={() => setShowLocPicker(true)}
+            />
           </div>
         )}
 
@@ -1097,67 +816,25 @@ export default function ConvenienceStorePage() {
               borderRadius: '50%',
               animation: 'spin 1s linear infinite'
             }} />
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } } .gs-popup .leaflet-popup-content-wrapper{border-radius:12px;padding:0;overflow:hidden}.gs-popup .leaflet-popup-content{margin:0}`}</style>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             <p style={{ fontSize: "calc(15px*var(--fs))" }}>Finding stores nearby...</p>
           </div>
         )}
         
-        {/* Error */}
+        {/* Error — honest primary: retry the fetch; secondary: search elsewhere.
+            Result count lives in the FinderHeader mono segment now. */}
         {error && !loading && (
-          <div style={{
-            textAlign: 'center',
-            padding: '60px 20px'
-          }}>
-            <div style={{ fontSize: "calc(48px*var(--fs))", marginBottom: '16px' }}>😕</div>
-            <p style={{ color: COLORS.error, marginBottom: '16px' }}>{error}</p>
-            <button
-              onClick={fetchStores}
-              style={{
-                background: COLORS.primary,
-                color: '#fff',
-                border: 'none',
-                padding: '12px 24px',
-                borderRadius: '10px',
-                fontSize: "calc(14px*var(--fs))",
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
-            >
-              Try Again
-            </button>
-          </div>
-        )}
-        
-        {/* Results Count + View Toggle */}
-        {!loading && !error && stores.length > 0 && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '16px',
-            gap: '12px',
-            flexWrap: 'wrap'
-          }}>
-            <p style={{
-              fontSize: "calc(14px*var(--fs))",
-              color: COLORS.textLight,
-              margin: 0,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}>
-              <span style={{
-                background: COLORS.primary,
-                color: '#fff',
-                padding: '2px 10px',
-                borderRadius: '10px',
-                fontWeight: '600'
-              }}>
-                {stores.length}
-              </span>
-              stores within {searchRadius} mi
-            </p>
-            {/* List/Map view toggle removed — list is primary; per-card map still works */}
+          <div style={{ paddingTop: '24px' }}>
+            <FinderEmptyState
+              catKey="convenience"
+              icon={AlertCircle}
+              title="Couldn't load stores"
+              reason={error}
+              actionLabel="Try again"
+              onAction={handleRefresh}
+              secondaryLabel="Search somewhere else"
+              onSecondary={() => setShowLocPicker(true)}
+            />
           </div>
         )}
 
@@ -1227,34 +904,52 @@ export default function ConvenienceStorePage() {
           />
         )}
         
-        {/* No Results */}
-        {!loading && !error && stores.length === 0 && (
-          <div style={{
-            textAlign: 'center',
-            padding: '60px 20px'
-          }}>
-            <div style={{ fontSize: "calc(48px*var(--fs))", marginBottom: '16px' }}>🔍</div>
-            <p style={{ color: COLORS.textLight, marginBottom: '16px' }}>
-              No stores found matching your filters
-            </p>
-            <button
-              onClick={clearFilters}
-              style={{
-                background: COLORS.secondary,
-                color: '#fff',
-                border: 'none',
-                padding: '12px 24px',
-                borderRadius: '10px',
-                fontSize: "calc(14px*var(--fs))",
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
-            >
-              Clear Filters
-            </button>
+        {/* No Results — one honest primary (search somewhere else; the radius is
+            already at the 25-mile cap), quiet Clear filters when filters are on */}
+        {!loading && !error && location && stores.length === 0 && (
+          <div style={{ paddingTop: '24px' }}>
+            <FinderEmptyState
+              catKey="convenience"
+              icon={SearchX}
+              title="No stores found"
+              reason={activeFilterCount > 0 ? 'Nothing here passes the current filters.' : 'No convenience stores near this location.'}
+              actionLabel="Search somewhere else"
+              onAction={() => setShowLocPicker(true)}
+              secondaryLabel={activeFilterCount > 0 ? 'Clear filters' : undefined}
+              onSecondary={activeFilterCount > 0 ? clearFilters : undefined}
+            />
           </div>
         )}
       </div>
+
+      <style>{`.gs-popup .leaflet-popup-content-wrapper{border-radius:12px;padding:0;overflow:hidden}.gs-popup .leaflet-popup-content{margin:0}`}</style>
+
+      {/* ATM + Hot Food — sheet filters behind the Filters chip (server-side:
+          both keys ride the fetch body, so toggling refetches) */}
+      <FilterSheet
+        open={filterSheet}
+        onClose={() => setFilterSheet(false)}
+        title="Filters"
+        onClear={sheetCount ? () => setActiveFilters((prev) => ({ ...prev, hasATM: false, hasHotFood: false })) : undefined}
+      >
+        <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2" style={{ color: '#94A3B8' }}>Show only</div>
+        <button onClick={() => toggleFilter('hasATM')} aria-pressed={!!activeFilters.hasATM} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99] mb-2" style={{ background: '#FFFFFF', border: activeFilters.hasATM ? `2px solid ${CAT.convenience.ink}` : '1px solid #F0E9DC', cursor: 'pointer' }}>
+          <CreditCard size={18} color={activeFilters.hasATM ? CAT.convenience.ink : '#736657'} strokeWidth={2} className="flex-none" />
+          <span className="flex-1 min-w-0">
+            <span className="block font-bold text-[calc(13.5px*var(--fs))]" style={{ color: '#0F1419' }}>Has an ATM</span>
+            <span className="block text-[calc(11.5px*var(--fs))]" style={{ color: '#736657' }}>Cash machine on site</span>
+          </span>
+          {activeFilters.hasATM && <Check size={16} color={CAT.convenience.ink} strokeWidth={2.5} className="flex-none" />}
+        </button>
+        <button onClick={() => toggleFilter('hasHotFood')} aria-pressed={!!activeFilters.hasHotFood} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{ background: '#FFFFFF', border: activeFilters.hasHotFood ? `2px solid ${CAT.convenience.ink}` : '1px solid #F0E9DC', cursor: 'pointer' }}>
+          <Flame size={18} color={activeFilters.hasHotFood ? CAT.convenience.ink : '#736657'} strokeWidth={2} className="flex-none" />
+          <span className="flex-1 min-w-0">
+            <span className="block font-bold text-[calc(13.5px*var(--fs))]" style={{ color: '#0F1419' }}>Hot food</span>
+            <span className="block text-[calc(11.5px*var(--fs))]" style={{ color: '#736657' }}>Ready-to-eat meals &amp; snacks</span>
+          </span>
+          {activeFilters.hasHotFood && <Check size={16} color={CAT.convenience.ink} strokeWidth={2.5} className="flex-none" />}
+        </button>
+      </FilterSheet>
 
       <LocationModePicker isOpen={showLocPicker} onClose={() => setShowLocPicker(false)} />
     </div>

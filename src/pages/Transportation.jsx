@@ -5,7 +5,7 @@ import { ROUTE } from "@/lib/workerRoutes";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
-  ArrowLeft, Hotel, Plane, Loader2, ExternalLink, Search, X, Star, Navigation, Phone, ChevronRight, Bus, MapPin, Check
+  ChevronLeft, Hotel, Plane, Loader2, ExternalLink, Search, X, Star, Navigation, Phone, ChevronRight, Bus, MapPin, Check
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
@@ -2319,7 +2319,7 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
   return (
     <div className="min-h-screen font-sans pb-28" style={{ background: IVORY }}>
       {/* HEADER — chevron back + Transportation pill (redesign) */}
-      <div className="px-4 pt-2 pb-4">
+      <div className="px-4 pt-2 pb-3">
         <div className={`${colWrap} mx-auto flex items-center justify-between`}>
           <button
             onClick={() => {
@@ -2332,14 +2332,14 @@ Be specific to ${city}. Use real station names, route names, and local knowledge
             style={{ background: '#FFFFFF', border: '1px solid #F0E9DC' }}
             aria-label="Back"
           >
-            <ArrowLeft size={18} color="#0F1419" strokeWidth={2.2} />
+            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
           </button>
           <div
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))] font-sans"
             style={{ background: CAT.transit.bg, color: CAT.transit.ink }}
           >
             <Bus size={13} color={CAT.transit.ink} strokeWidth={2} />
-            Transportation Information
+            Transportation
           </div>
           <div className="w-10 h-10" />
         </div>
