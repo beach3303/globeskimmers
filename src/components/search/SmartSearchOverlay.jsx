@@ -4,8 +4,15 @@
 // need NO AI: the scope is a tap and the category is rule-parsed. Only ambiguous
 // free-text falls through to the Haiku parser. On submit it re-centers the app and
 // opens the right finder (or re-centers Home for a bare place), logging the search
-// to the demand graph. Reuses smartSearch.js (parse + dispatch), searchLocation
+// to the demand graph. Reuses smartSearch.js (ruleParse + dispatch), searchLocation
 // (place autocomplete), and the LocationContext re-center primitive.
+//
+// Dream search: ambiguous free text (no keyword category, no place) goes to
+// /parse-search from HERE — not via smartSearch.aiParse, which drops the
+// worker's `destination` field. When a non-null destination comes back, the
+// overlay renders DreamAnswerCard in place of routing; the card's actions
+// navigate (ActivityDetail for grounded rows, ThingsToDo as the ungrounded
+// fallback) and close the overlay.
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { X, Search, MapPin, Home as HomeIcon, Globe, Loader2, Clock } from "lucide-react";
@@ -14,7 +21,10 @@ import { getPrimaryStay } from "@/lib/savedLocations";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { placePhrase } from "@/lib/placeContext";
-import { parseSmartSearch, runSmartSearch } from "@/lib/smartSearch";
+import { ruleParse, runSmartSearch } from "@/lib/smartSearch";
+import { logSearch } from "@/lib/logSearch";
+import { createPageUrl } from "@/utils";
+import DreamAnswerCard from "./DreamAnswerCard";
 
 const IVORY = "#FFFCF7", INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
 const RECENTS_KEY = "gs_smart_search_recents_v1";
@@ -40,6 +50,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
   const [placeResults, setPlaceResults] = useState([]);
   const [chosenPlace, setChosenPlace] = useState(null); // a searchLocation result
   const [busy, setBusy] = useState(false);
+  const [dream, setDream] = useState(null); // {destination, parsed} — dream-search answer card
   const [recents, setRecents] = useState([]);
   const inputRef = useRef(null);
 
@@ -48,7 +59,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
   // Reset + focus when opened.
   useEffect(() => {
     if (!isOpen) return;
-    setQ(""); setScope("near_me"); setPlaceQuery(""); setPlaceResults([]); setChosenPlace(null); setBusy(false);
+    setQ(""); setScope("near_me"); setPlaceQuery(""); setPlaceResults([]); setChosenPlace(null); setBusy(false); setDream(null);
     setRecents(readRecents().slice(0, 6));
     const t = setTimeout(() => inputRef.current?.focus(), 70);
     return () => clearTimeout(t);
@@ -89,26 +100,62 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
     // Named-place with no chosen place + no text → nothing to do.
     if (!raw && !(scope === "named_place" && (chosenPlace || placeQuery.trim()))) return;
     setBusy(true);
+    setDream(null);
     try {
       const active = location.getActiveLocation?.();
       const explicitPlace = scope === "named_place"
         ? (chosenPlace?.placeName || chosenPlace?.address?.city || placeQuery.trim() || null)
         : null;
-      const parsed = await parseSmartSearch(raw, {
-        scopeChip: scope,
-        explicitPlace,
-        activePhrase: placePhrase(active),
-      });
+      // Rule-first parse (free). Mirrors parseSmartSearch, except a rule miss
+      // (no category, no place) calls /parse-search directly so the worker's
+      // `destination` answer isn't dropped by aiParse.
+      let parsed = ruleParse(raw, scope);
+      if (explicitPlace) { parsed.scope = "named_place"; parsed.place = String(explicitPlace).trim(); }
+      let destination = null;
+      if (raw && !explicitPlace && !parsed.category && !parsed.place) {
+        try {
+          const { data, error } = await callWorker(ROUTE.parseSearch, {
+            query: raw,
+            scope: scope || "",
+            activePhrase: placePhrase(active) || "",
+          });
+          if (!error && data && typeof data === "object" && !data.error) {
+            destination = (data.destination && typeof data.destination === "object" && data.destination.name)
+              ? data.destination : null;
+            parsed = {
+              category: data.category || null,
+              scope: data.scope && data.scope !== "unknown" ? data.scope : (scope || null),
+              place: (data.place || "").trim() || null,
+              query: String(data.query || "").trim(),
+              parsedBy: "ai",
+              confidence: typeof data.confidence === "number" ? data.confidence : 0.9,
+            };
+          }
+        } catch { /* keep the rule result */ }
+      }
       if (raw) saveRecent(raw);
-      // Fast path: user picked an exact place from autocomplete → re-center on it
-      // directly (skip re-geocoding by name), then dispatch category/query.
-      if (scope === "named_place" && chosenPlace?.coordinates) {
+      if (destination) {
+        // Dream answer — show the destination card instead of routing. Log the
+        // search here since runSmartSearch (the usual logger) isn't called.
+        try {
+          logSearch("destination", raw, {
+            scope: parsed.scope || scope || "near_me",
+            place: destination.name || null,
+            parsed_by: "ai",
+            source: "smart_search",
+          });
+        } catch { /* non-fatal */ }
+        setDream({ destination, parsed });
+      } else if (scope === "named_place" && chosenPlace?.coordinates) {
+        // Fast path: user picked an exact place from autocomplete → re-center on
+        // it directly (skip re-geocoding by name), then dispatch category/query.
         try { await location.switchToNavigateMode(chosenPlace); } catch { /* ignore */ }
         await runSmartSearch({ ...parsed, scope: "near_me", place: chosenPlace.placeName || explicitPlace }, { navigate, location });
+        onClose();
       } else {
         await runSmartSearch(parsed, { navigate, location });
+        onClose();
       }
-      onClose();
     } catch { /* keep the overlay open on failure */ }
     setBusy(false);
   }, [q, scope, chosenPlace, placeQuery, location, navigate, onClose]);
@@ -127,7 +174,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
             <input
               ref={inputRef}
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => { setQ(e.target.value); setDream(null); }}
               onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
               placeholder="Search food, hotels, a whole city…"
               className="flex-1 bg-transparent outline-none text-[calc(15px*var(--fs))]"
@@ -153,7 +200,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
                 <button
                   key={s.id}
                   disabled={disabled}
-                  onClick={() => { setScope(s.id); if (s.id !== "named_place") { setChosenPlace(null); setPlaceQuery(""); } }}
+                  onClick={() => { setScope(s.id); setDream(null); if (s.id !== "named_place") { setChosenPlace(null); setPlaceQuery(""); } }}
                   title={disabled ? "Set where you're staying first" : undefined}
                   className="flex items-center gap-1.5 rounded-full px-3 py-2 text-[calc(12.5px*var(--fs))] font-semibold transition-colors disabled:opacity-40"
                   style={active ? { background: TEAL, color: "#fff" } : { background: "#F2EEE6", color: INK }}
@@ -215,6 +262,30 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
           >
             {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Searching…</> : <><Search className="w-4 h-4" strokeWidth={2.4} /> Search</>}
           </button>
+
+          {/* Dream-destination answer card — renders when /parse-search grounds
+              (or merely suggests) a destination for an ambiguous dream query. */}
+          {dream && (
+            <DreamAnswerCard
+              destination={dream.destination}
+              onView={() => {
+                // Clear any stale in-app handoff so ?id= wins (belt — ActivityDetail also compares ids).
+                try { sessionStorage.removeItem("current_activity"); sessionStorage.removeItem("activity_location"); } catch { /* ignore */ }
+                navigate(createPageUrl("ActivityDetail") + "?id=" + encodeURIComponent(dream.destination.id));
+                onClose();
+              }}
+              onPerfectDay={() => { navigate(createPageUrl("PerfectDay")); onClose(); }}
+              onSearchThings={async () => {
+                try {
+                  await runSmartSearch(
+                    { category: "things", scope: "near_me", place: null, query: dream.destination.name, parsedBy: "ai" },
+                    { navigate, location },
+                  );
+                } catch { /* stay on the overlay */ }
+                onClose();
+              }}
+            />
+          )}
 
           {/* Recents / suggestions */}
           <div className="mt-6">

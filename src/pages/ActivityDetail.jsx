@@ -133,14 +133,21 @@ export default function ActivityDetailPage() {
       const storedActivity = sessionStorage.getItem('current_activity');
       const storedLocation = sessionStorage.getItem('activity_location');
 
+      const urlId = new URLSearchParams(location.search).get('id');
       let activityData = null;
       if (storedActivity) {
-        // Fast path: the in-app handoff (HomeRows / StampsNearYou / finders).
-        activityData = JSON.parse(storedActivity);
-      } else {
+        // Fast path: the in-app handoff — but ONLY when it matches the URL.
+        // The handoff key is never cleared, so a stale entry must lose to an
+        // explicit ?id= (dream-search card, shared links opened in-app).
+        try {
+          const stored = JSON.parse(storedActivity);
+          if (!urlId || String(stored?.id) === urlId) activityData = stored;
+        } catch { /* corrupt handoff → fall through to ?id= */ }
+      }
+      if (!activityData) {
         // Deep link / share: no handoff → fetch the D1 row by ?id= and map it
         // into the activity shape this page renders.
-        const id = new URLSearchParams(location.search).get('id');
+        const id = urlId;
         if (id) {
           const { data } = await callWorker('attractions/get', { id });
           const row = data?.attraction ?? (data?.id != null ? data : null);
