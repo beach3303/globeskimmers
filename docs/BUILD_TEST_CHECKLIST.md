@@ -622,3 +622,11 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 ## 2026-09-04 — Wave B2: all ten doors on the template
 - Converted: RestroomFinder (dual-refresh collapsed; auto-widen kept), ConvenienceStore (local PhotoGallery deleted → shared modal; +save; popup CSS hoisted), PlacesToEat (7-group accordion → sheet; cuisine scroller stays the signature; +save; zero behavior change to fetch/tiers — reviewer diffed the pipeline byte-level), MoneyExchange (the app's last radius slider dies; data-row variant documented), GetARide + Transportation headers. FallbackDisclaimer button copy aligned with its new action ("Search a wider area").
 - Review: CLEAN, zero confirmed defects. Gates: eslint ✓ build ✓ boot-check ✓.
+
+## 2026-09-04 — THE PLANET IS LIVE: global seed loaded, scored, deduped, remediated
+- **Loaded:** 104,875 emitted rows (734 chunks; split-suffix truncation caught + tail-loaded) → **102294 total rows** in ATTRACTIONS_DB covering 20,923 city pages worldwide.
+- **Scored:** fame bar over every row — near-API-free via prewarmed caches (QIDs decoded from ids; signals from the classify fetch; P279 closure memoized). Tally pre-dedup: 734 world · 9,368 national · 11,122 regional.
+- **Repaired:** 3,292 duplicate-id collisions P625-verified (214 restored — the Kolkata-owned Eiffel among them, 8,961 km off; 117 full-mistag deletes). qid backfilled; dedup v2 re-run (icons > wikivoyage priority).
+- **Remediated (4 passes + 1 surgical):** name+proximity stamp dups (Magellan's Cross case) · mall/creative-work/pure-city classes · pre-classify six-city leaks (rides, teams, sports-concepts) · P279-closure subclass sweep (Tatsu-class). **Final: 18654 stampable rows planet-wide.**
+- **Rails verified live:** Valencia CA = Six Flags ONLY (the founder's original bar, now planet-scale) · Paris = Eiffel→Arc→Louvre→Catacombs→Panthéon · Anaheim = Disneyland·Queen Mary·Knott's · Cebu, Tokyo, Marrakech serving real attractions.
+- **Founder review lane (deliberate residuals):** stadiums/arenas stay pending event-gated stamping (philosophy); Shinjuku Station, NYSE, Gap Bluff, Officers' Mess, 'Disney Animation' await verdicts; **Harrods + Galleria V.E. II demoted as malls — promote via founder-lane if they should stamp.** 696 dup-ids had no P625 (left alone), 21 residual concept/team rows were cache-blind (2 fixed surgically).
