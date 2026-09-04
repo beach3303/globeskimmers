@@ -600,3 +600,11 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 
 ## 2026-09-03 — enrich-owned gid guard (attraction ids no longer masquerade as Google ids)
 - Probe found `matched:false` for `icon:Q243` — the uuid-only test let every attractions-D1 prefixed id (`icon:`/`wikidata:`/`curated:`/`wv:`) pass straight into the details call AS a Google place id → 404 → no hours/utcOffsetMinutes for any attraction row (silently undermining T1.5). Only Google-shaped ids skip resolution now; deployed + live-verified: Eiffel `matched:true`, utcOffsetMinutes 120, photos 3, openNow true.
+
+## 2026-09-04 — NOW phase: Today card · Dream shelf · masthead passport line · Perfect Day planner
+- **TodayCard** replaces RightNowStrip on phone NEARBY Home — one answer card: meal-window headline, dish chips (byte-identical culture cache keys — zero new AI spend), TONIGHT priced-event line (shared 6h events KV), one teal Find-{meal} action.
+- **DreamShelf** — DREAM-mode stampable rail with the endowed denominator ('{CITY} · N OF 12'); photo cards or engraved stamp cards, never placeholders; COLLECTED tags; no secrets (found by being there).
+- **Masthead** — mono 'PASSPORT · N' (never a fake count; arrow when 0/loading) in the Home header.
+- **PerfectDay** page (registered manually in pages.config) — selection-before-itinerary: 8 stampable cards, mood lens (VibeBundles moods, de-emoji'd), pick 2–4 → Morning/Afternoon/Evening with mono travel-delta estimates (footnoted), owned lunch/dinner anchors (source-labeled), TONIGHT event, deterministic Swap/Regenerate, Save-this-day (localStorage). Entry cards on both Home stacks. All owned/cached data; no new AI calls.
+- **Review:** 2 confirmed findings fixed post-review (selection ring teal→stamp red; StopRow img onError→StampVisual). Tablet still on RightNowStrip — tabled by founder.
+- **Gates:** eslint ✓ build ✓ boot-check ✓ (re-run after fixes).

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { MapPin, Cloud } from "lucide-react";
+import { MapPin, Cloud, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -8,9 +8,10 @@ import { useLocation, isLocationAskSnoozedToday, snoozeLocationAskToday, readOpe
 import LocationModePicker from "../components/location/LocationModePicker";
 import HomeRows from "../components/home/HomeRows";
 import StampsNearYou from "../components/home/StampsNearYou";
+import DreamShelf from "../components/home/DreamShelf";
 import StayAnchor from "../components/home/StayAnchor";
 import EscapesRow from "../components/home/EscapesRow";
-import RightNowStrip from "../components/home/RightNowStrip";
+import TodayCard from "../components/home/TodayCard";
 import EventsRow from "../components/home/EventsRow";
 import MyTripCard from "../components/home/MyTripCard";
 import WishlistCard from "../components/home/WishlistCard";
@@ -21,6 +22,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { extractFirstName } from "@/lib/extractFirstName";
 import { isLocationPermissionGranted } from "@/lib/geolocation";
 import { callWorker } from "@/lib/callWorker";
+import { listPassport } from "@/lib/passport";
 import AirportArrivalPrompt from "@/components/AirportArrivalPrompt";
 import BorderCrossingPrompt from "@/components/BorderCrossingPrompt";
 import { ROUTE } from "@/lib/workerRoutes";
@@ -130,6 +132,9 @@ export default function HomePage() {
   const [physicalLabel, setPhysicalLabel] = useState('');
   const [showHomeFlag, setShowHomeFlag] = useState(false);
   const [homeFlagUrl, setHomeFlagUrl] = useState(null);
+  // Masthead passport count — null while loading; null and 0 both render the
+  // quiet "PASSPORT →" (never a fake count, never a bare zero).
+  const [passportTotal, setPassportTotal] = useState(null);
   const pickerPrompted = useRef(false); // gate the one-time location-picker auto-open (per mount)
 
   useEffect(() => {
@@ -258,6 +263,20 @@ export default function HomePage() {
       setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // One /passport/list read for the masthead count — the lightest existing
+  // passport endpoint (there is no count-only route). Signed-out the worker
+  // returns empty stats, never an error, so this stays quiet in every state.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { stats } = await listPassport();
+        if (!cancelled) setPassportTotal(Number.isFinite(stats?.total) ? stats.total : 0);
+      } catch { if (!cancelled) setPassportTotal(0); }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const loadUserAndWeather = async () => {
@@ -456,6 +475,48 @@ export default function HomePage() {
     if (routes[actionLabel]) navigate(createPageUrl(routes[actionLabel]));
   };
 
+  // Dream-shelf tap → the same ActivityDetail hand-off HomeRows.openFullPage
+  // uses (attraction row into sessionStorage as the fast path, ?id= keeps the
+  // page deep-linkable). Inlined here — Home owns what opening a dream means.
+  const openDreamActivity = (item) => {
+    try {
+      const loc = getActiveLocation?.();
+      const activity = {
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        photos: item.photoUrl ? [item.photoUrl] : [],
+        description: item.whyVisit || item.description || "",
+        address: item.address || "",
+        latitude: item.lat,
+        longitude: item.lng,
+        rating: item.rating,
+        free_to_visit: item.freeToVisit,
+        distance_km: Number.isFinite(item.distanceMiles) ? +(item.distanceMiles * 1.60934).toFixed(1) : undefined,
+        // Stamps earned from the detail page carry their country (passport
+        // "countries" count, GPS-vs-IP check) and the per-row stamp radius
+        // override — pass them through whenever the row has them.
+        city: item.city || undefined,
+        region: item.region || item.state || undefined,
+        country: item.country || undefined,
+        countryCode: item.countryCode || item.cc || undefined,
+        footprint_radius_m: item.footprint_radius_m ?? item.footprintRadiusM ?? undefined,
+      };
+      sessionStorage.setItem("current_activity", JSON.stringify(activity));
+      if (loc) sessionStorage.setItem("activity_location", JSON.stringify(loc));
+      trackEvent("dream_shelf_open_detail", { place_id: item.id, place_name: item.name });
+      navigate(createPageUrl("ActivityDetail") + "?id=" + encodeURIComponent(activity.id));
+    } catch {
+      handleQuickAction("Things to Do"); // safe fallback to the finder list
+    }
+  };
+
+  // Planner entry — both Discover stacks carry the quiet PerfectDay card.
+  const openPerfectDay = () => {
+    trackEvent('feature_used', { feature_name: 'perfect_day_entry' });
+    navigate(createPageUrl('PerfectDay'));
+  };
+
   // ── Journey-state: adapt which Discover sections LEAD, by context ──────────
   // home/discovery (you're based here) → escapes/plan first; on a trip
   // (domestic/international) → stamps + what's-nearby first; planning (browsing a
@@ -614,7 +675,8 @@ export default function HomePage() {
         <div className="max-w-md mx-auto">
           {/* LINE 1 — mono "Hello 👋" kicker (+ local greeting) flowing into
               the serif name (italic) and "in {city}" (regular serif) as one
-              wrappable line; FontScaleButton keeps its spot far right. */}
+              wrappable line; the quiet mono passport line (→ Passport) and
+              FontScaleButton share the far right. */}
           <div className="flex items-start justify-between gap-2">
             <p className="flex-1 min-w-0 leading-snug">
               <span className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))]" style={{ color: '#736657' }}>Hello 👋</span>
@@ -635,7 +697,19 @@ export default function HomePage() {
                 </span>
               )}
             </p>
-            <div className="flex-none"><FontScaleButton /></div>
+            <div className="flex-none flex items-center gap-2">
+              {/* Quiet mono passport line — a real count or the plain arrow,
+                  never a fake number and never a bare "0". */}
+              <button
+                onClick={() => handleQuickAction('Passport')}
+                className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] whitespace-nowrap"
+                style={{ color: '#736657' }}
+                aria-label="Open your passport"
+              >
+                {passportTotal ? `PASSPORT · ${passportTotal}` : 'PASSPORT →'}
+              </button>
+              <FontScaleButton />
+            </div>
           </div>
 
           {/* LINE 2 — date · temp toggle (°C/°F, same handler) · location pill
@@ -720,17 +794,20 @@ export default function HomePage() {
       {/* DISCOVER — living sections below the chips (each renders NOTHING when
           there's no coverage, and all re-center as the user moves). Two stable
           stacks, capped and mode-correct — getTravelMode decides which:
-            nearby (domestic/international/discovery): what's on right now →
-              stamps → events → top spots, then the trip anchors (self-hiding);
-            home/planning: the dream shelf (HomeRows until the dedicated one
-              exists) → escapes → events, then the trip anchors.
+            nearby (domestic/international/discovery): today's answer card →
+              stamps → events → planner entry → top spots, then the trip
+              anchors (self-hiding);
+            home/planning: the dream shelf (self-hiding — when it renders,
+              HomeRows drops to second) → escapes → events → planner entry,
+              then the trip anchors.
           VibeBundles + WhereToStay moved OFF Home — the planner and the
           FindAHotel flow own them next. */}
       {["domestic", "international", "discovery"].includes(journeyMode) ? (
         <>
-          <RightNowStrip onAction={handleQuickAction} />
+          <TodayCard onAction={handleQuickAction} />
           <StampsNearYou onAction={handleQuickAction} />
           <EventsRow />
+          <PerfectDayCard city={cityName} onOpen={openPerfectDay} />
           <HomeRows onAction={handleQuickAction} />
           <StayAnchor />
           <MyTripCard />
@@ -738,9 +815,16 @@ export default function HomePage() {
         </>
       ) : (
         <>
+          <DreamShelf
+            latitude={activeLocation?.coordinates?.latitude}
+            longitude={activeLocation?.coordinates?.longitude}
+            cityName={cityName}
+            onOpenActivity={openDreamActivity}
+          />
           <HomeRows onAction={handleQuickAction} />
           <EscapesRow onAction={handleQuickAction} />
           <EventsRow />
+          <PerfectDayCard city={cityName} onOpen={openPerfectDay} />
           <WishlistCard />
           <MyTripCard />
           <StayAnchor />
@@ -792,5 +876,36 @@ function FinderChip({ label, accent = false, onClick }) {
     >
       {label}
     </motion.button>
+  );
+}
+
+// ── PerfectDayCard — quiet planner entry (both Discover stacks) ────────────
+// One serif headline + one mono subtitle + a chevron, navigating into the
+// PerfectDay planner. Ivory, no photo, no teal — this card is navigation, not
+// the screen's primary action. Hides without a named city (the planner
+// composes a day around one).
+function PerfectDayCard({ city, onOpen }) {
+  if (!city) return null;
+  return (
+    <div className="px-4 pb-3">
+      <div className="max-w-md mx-auto">
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={onOpen}
+          className="w-full flex items-center justify-between gap-3 rounded-2xl p-4 text-left"
+          style={{ background: IVORY_2, border: '1px solid #E6DFD0' }}
+        >
+          <div className="min-w-0">
+            <div className="font-serif text-[calc(19px*var(--fs))] leading-tight truncate" style={{ color: '#16110D' }}>
+              A perfect day in {city}
+            </div>
+            <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] mt-1" style={{ color: '#736657' }}>
+              Pick a few stamps · get a full-day plan
+            </div>
+          </div>
+          <ChevronRight size={18} color="#736657" strokeWidth={2} className="flex-none" />
+        </motion.button>
+      </div>
+    </div>
   );
 }
