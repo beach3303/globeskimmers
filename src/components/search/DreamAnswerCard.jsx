@@ -3,15 +3,17 @@
 // Rendered by SmartSearchOverlay when /parse-search returns a non-null
 // `destination` (a dream query like "see bears catch fish"). Grounded answers
 // (matched to an owned world/national attraction row, with real coordinates)
-// get the full card: kicker, serif name, mono place line, and actions. An
-// ungrounded suggestion is honest about itself — quieter styling, a
-// "Suggested — unverified" kicker, no coordinate-dependent actions, and only
-// a Things-to-Do search as the fallback. One teal action max.
+// get the full card: kicker, serif name, mono place line, and actions —
+// including "Build my trip", the Smart-Package composer entry (coords-
+// dependent, so grounded only). An ungrounded suggestion is honest about
+// itself — quieter styling, a "Suggested — unverified" kicker, no
+// coordinate-dependent actions, and only a Things-to-Do search as the
+// fallback. One teal action max.
 import { TEAL_DEEP, IVORY_2 } from "@/components/redesign/constants";
 
 const INK = "#16302B", SUB = "#71827D", EDGE = "#E6DFD0";
 
-export default function DreamAnswerCard({ destination, onView, onPerfectDay, onSearchThings }) {
+export default function DreamAnswerCard({ destination, onView, onPerfectDay, onBuildTrip, onSearchThings }) {
   if (!destination?.name) return null;
   const grounded = !!destination.grounded;
   const placeLine = [destination.city, destination.country].filter(Boolean).join(" · ");
@@ -31,20 +33,31 @@ export default function DreamAnswerCard({ destination, onView, onPerfectDay, onS
         <div className="font-mono text-[calc(11.5px*var(--fs))] mt-1" style={{ color: SUB }}>{placeLine}</div>
       )}
       {grounded ? (
-        <div className="mt-3.5 flex items-center gap-2">
+        <div className="mt-3.5">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onView}
+              className="flex-1 min-w-0 h-11 rounded-xl font-semibold text-white text-[calc(13.5px*var(--fs))] px-3 flex items-center justify-center"
+              style={{ background: TEAL_DEEP }}
+            >
+              <span className="truncate">View {destination.name}</span>
+            </button>
+            <button
+              onClick={onPerfectDay}
+              className="flex-none h-11 rounded-xl font-semibold text-[calc(13.5px*var(--fs))] px-3.5"
+              style={{ background: IVORY_2, color: INK, border: `1px solid ${EDGE}` }}
+            >
+              Plan a perfect day
+            </button>
+          </div>
+          {/* Primary-adjacent: the Smart-Package composer (needs the grounded
+              coords, so it never renders on the unverified branch). */}
           <button
-            onClick={onView}
-            className="flex-1 min-w-0 h-11 rounded-xl font-semibold text-white text-[calc(13.5px*var(--fs))] px-3 flex items-center justify-center"
-            style={{ background: TEAL_DEEP }}
+            onClick={onBuildTrip}
+            className="mt-2 w-full h-11 rounded-xl font-semibold text-[calc(13.5px*var(--fs))]"
+            style={{ background: "#fff", color: INK, border: `1px solid ${EDGE}` }}
           >
-            <span className="truncate">View {destination.name}</span>
-          </button>
-          <button
-            onClick={onPerfectDay}
-            className="flex-none h-11 rounded-xl font-semibold text-[calc(13.5px*var(--fs))] px-3.5"
-            style={{ background: IVORY_2, color: INK, border: `1px solid ${EDGE}` }}
-          >
-            Plan a perfect day
+            Build my trip
           </button>
         </div>
       ) : (

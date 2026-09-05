@@ -517,6 +517,12 @@ export default function HomePage() {
     navigate(createPageUrl('PerfectDay'));
   };
 
+  // Smart-Package entry — the dream stack's quiet trip-composer card.
+  const openSmartPackage = () => {
+    trackEvent('feature_used', { feature_name: 'smart_package_entry' });
+    navigate(createPageUrl('SmartPackages'));
+  };
+
   // ── Journey-state: adapt which Discover sections LEAD, by context ──────────
   // home/discovery (you're based here) → escapes/plan first; on a trip
   // (domestic/international) → stamps + what's-nearby first; planning (browsing a
@@ -825,6 +831,7 @@ export default function HomePage() {
           <EscapesRow onAction={handleQuickAction} />
           <EventsRow />
           <PerfectDayCard city={cityName} onOpen={openPerfectDay} />
+          <SmartPackageCard onOpen={openSmartPackage} />
           <WishlistCard />
           <MyTripCard />
           <StayAnchor />
@@ -901,6 +908,35 @@ function PerfectDayCard({ city, onOpen }) {
             </div>
             <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] mt-1" style={{ color: '#736657' }}>
               Pick a few stamps · get a full-day plan
+            </div>
+          </div>
+          <ChevronRight size={18} color="#736657" strokeWidth={2} className="flex-none" />
+        </motion.button>
+      </div>
+    </div>
+  );
+}
+
+// ── SmartPackageCard — quiet Smart-Package entry (dream stack) ─────────────
+// Same register as PerfectDayCard: serif headline + mono subtitle + chevron,
+// navigating into the SmartPackages composer. Needs no city — the composer
+// resolves its own destination — so it always renders.
+function SmartPackageCard({ onOpen }) {
+  return (
+    <div className="px-4 pb-3">
+      <div className="max-w-md mx-auto">
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={onOpen}
+          className="w-full flex items-center justify-between gap-3 rounded-2xl p-4 text-left"
+          style={{ background: IVORY_2, border: '1px solid #E6DFD0' }}
+        >
+          <div className="min-w-0">
+            <div className="font-serif text-[calc(19px*var(--fs))] leading-tight truncate" style={{ color: '#16110D' }}>
+              Build a full trip
+            </div>
+            <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] mt-1" style={{ color: '#736657' }}>
+              Hotel · things to do · one plan
             </div>
           </div>
           <ChevronRight size={18} color="#736657" strokeWidth={2} className="flex-none" />

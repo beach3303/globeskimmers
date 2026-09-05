@@ -68,6 +68,7 @@ import RestroomFinder from './pages/RestroomFinder';
 import SavedLocations from './pages/SavedLocations';
 import Settings from './pages/Settings';
 import Shopping from './pages/Shopping';
+import SmartPackages from './pages/SmartPackages';
 import SmartPriceScanner from './pages/SmartPriceScanner';
 import SmartTextScanner from './pages/SmartTextScanner';
 import ThingsToDo from './pages/ThingsToDo';
@@ -101,6 +102,7 @@ export const PAGES = {
     "SavedLocations": SavedLocations,
     "Settings": Settings,
     "Shopping": Shopping,
+    "SmartPackages": SmartPackages,
     "SmartPriceScanner": SmartPriceScanner,
     "SmartTextScanner": SmartTextScanner,
     "ThingsToDo": ThingsToDo,
