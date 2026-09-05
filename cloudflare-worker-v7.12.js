@@ -11721,6 +11721,89 @@ async function handleWikiPhotos(request, env) {
   } catch (e) { return jsonResponse({ error: 'wiki photos failed', details: e.message }, 500); }
 }
 
+// ─── Destination dream galleries (Commons full-text search — $0) ─────────────
+// Themed photo galleries for a destination ("Santorini beach"), served free
+// from Wikimedia Commons search. NEVER Google Places photos — that is the core
+// cost design. Honest-empty: no matches means an empty gallery; we never pad
+// with wrong-place photos or fall back to a different destination.
+const GALLERY_BUCKETS = {
+  views: 'skyline OR landscape OR panorama',
+  beach: 'beach OR coast',
+  food: 'food OR cuisine OR restaurant',
+  family: 'park OR promenade OR harbour',
+};
+function gallerySlug(s) {
+  return String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x';
+}
+// Core: up to `limit` CC photos for a destination name (+optional country for
+// disambiguation — Paris/Texas) and optional theme bucket. 30d KV cache,
+// non-empty results only. Attribution (artist + license + link) is
+// non-negotiable — the app always labels sources.
+async function getDestinationGallery(env, name, country, bucket, limit) {
+  const emptyOut = { name, bucket, photos: [] };
+  // The cache always holds the full 40-photo set; `limit` is sliced per-request
+  // below, so it must stay OUT of this key (a limit:1 first caller would
+  // otherwise poison the pair for 30 days — the filterSuffix failure class).
+  const cacheKey = `dreamgal:v1:${gallerySlug(name + ' ' + country)}:${bucket || 'all'}`;
+  const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
+  if (cached && Array.isArray(cached.photos) && cached.photos.length) return { ...cached, photos: cached.photos.slice(0, limit) };
+  try {
+    const base = country ? `${name} ${country}` : name;
+    const terms = bucket ? [`${base} ${GALLERY_BUCKETS[bucket]}`] : [base, `${base} landscape`];
+    // Non-photo junk by filename — maps, heraldry, vector/animated formats.
+    const BAD = ['map', 'coat_of_arms', 'coat of arms', 'flag', 'locator', 'logo', 'diagram', 'seal', 'emblem', 'plan', 'chart', '.svg', '.gif', '.tif'];
+    const seen = new Set();
+    const photos = [];
+    for (const term of terms) {
+      if (photos.length >= 40) break;
+      const data = await wikiJson(
+        `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(term)}&gsrnamespace=6&gsrlimit=40&prop=imageinfo&iiprop=${encodeURIComponent('url|extmetadata|size|mime')}&iiurlwidth=1200&format=json&origin=*`
+      ).catch(() => null);
+      const pages = Object.values(data?.query?.pages || {});
+      pages.sort((a, b) => (a.index || 0) - (b.index || 0)); // generator pages are unordered; index = search rank
+      for (const p of pages) {
+        const canonical = p.title || ''; // dedup key across both no-bucket passes
+        if (!canonical || seen.has(canonical)) continue;
+        seen.add(canonical);
+        const ii = p.imageinfo?.[0];
+        if (!ii || !ii.url) continue;
+        const mime = ii.mime || '';
+        if (!mime.startsWith('image/') || mime.includes('svg')) continue;
+        const w = ii.width || 0, h = ii.height || 0;
+        if (w < 800) continue;                              // skip low-res / poor scans
+        if (h > 0 && w > h * 4) continue;                   // skip stitched panoramas (>4:1)
+        if (BAD.some((t) => canonical.toLowerCase().includes(t))) continue;
+        photos.push({
+          src: ii.thumburl || ii.url,
+          full: ii.url,
+          w,
+          h,
+          title: canonical.replace(/^File:/, '').replace(/\.[a-z0-9]+$/i, '').replace(/_/g, ' ').trim(),
+          artist: stripHtml(ii.extmetadata?.Artist?.value).slice(0, 80),
+          license: stripHtml(ii.extmetadata?.LicenseShortName?.value) || '',
+          link: ii.descriptionurl || '',
+        });
+        if (photos.length >= 40) break;
+      }
+    }
+    if (!photos.length) return emptyOut; // honest empty — never cached, never padded
+    const payload = { name, bucket, photos, source: 'commons' };
+    await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: 30 * 24 * 60 * 60 }).catch(() => {});
+    return { ...payload, photos: photos.slice(0, limit) };
+  } catch { return emptyOut; }
+}
+async function handleDestinationGallery(request, env) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const name = (body.name || '').toString().trim();
+    if (!name) return jsonResponse({ error: 'name is required' }, 400);
+    const country = (body.country || '').toString().trim();
+    const bucket = Object.prototype.hasOwnProperty.call(GALLERY_BUCKETS, body.bucket) ? String(body.bucket) : null; // unknown bucket → all
+    const limit = Math.min(40, Math.max(1, parseInt(body.limit, 10) || 24));
+    return jsonResponse(await getDestinationGallery(env, name, country, bucket, limit));
+  } catch (e) { return jsonResponse({ error: 'destination gallery failed', details: e.message }, 500); }
+}
+
 // Accent/Unicode-insensitive fold for owned substring matching — mirrors the
 // frontend @/lib/searchText foldText so restaurant name/cuisine search is global
 // (NFKD + strip combining diacritics + lowercase): "cafe"→"Café", "sao"→"São".
@@ -14760,6 +14843,7 @@ export default {
       if (pathname === '/places/dietary') return await handleDietarySearch(request, env);
       if (pathname === '/places/nearby-owned' && request.method === 'POST') return await handleNearbyOwned(request, env);
       if (pathname === '/places/wiki-photos' && request.method === 'POST') return await handleWikiPhotos(request, env);
+      if (pathname === '/destination/gallery' && request.method === 'POST') return await handleDestinationGallery(request, env);
       if (pathname.startsWith('/gb-photo/') && request.method === 'GET') return await handleGuestbookPhotoServe(request, env);
       if (pathname.startsWith('/legal/') && request.method === 'GET') return await handleLegalPage(request, env);
       if (pathname === '/guestbook/photo-upload' && request.method === 'POST') return await handleGuestbookPhotoUpload(request, env, ctx);

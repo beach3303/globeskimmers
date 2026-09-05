@@ -51,5 +51,6 @@ export const ROUTE = {
   getAnalytics: 'analytics-bundle',
   InvokeLLM: 'invoke-llm',
   parseSearch: 'parse-search',
+  destinationGallery: 'destination/gallery',
 
 };

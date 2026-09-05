@@ -12,13 +12,17 @@
 //   - NO distance lines — dreaming isn't nearby;
 //   - photo-forward cards when a place has a real photoUrl, the engraved
 //     typographic stamp card otherwise (never a colored placeholder box).
-// A tap hands the raw attraction row to onOpenActivity — Home owns what
-// opening means (same openStamp/full-page pattern as the nearby rail).
+// A tap opens the DreamGallery photo sheet (the dream browser) as the first
+// touch; the old open-activity behavior stays reachable as the gallery's
+// quiet "View details" action, which hands the raw attraction row to
+// onOpenActivity — Home still owns what opening means (same openStamp/
+// full-page pattern as the nearby rail).
 import { useEffect, useState } from "react";
 import { callWorker } from "@/lib/callWorker";
 import { listPassport } from "@/lib/passport";
 import { stampArtUrl } from "@/lib/stampArt";
 import TypographicStamp from "@/components/passport/TypographicStamp";
+import DreamGallery from "@/components/home/DreamGallery";
 import { logDiscover } from "@/lib/logDiscover";
 import { IVORY_2 } from "@/components/redesign/constants";
 
@@ -105,6 +109,7 @@ function DreamCard({ item, collected, onOpen }) {
 export default function DreamShelf({ latitude, longitude, cityName, onOpenActivity }) {
   const [items, setItems] = useState([]);
   const [earnedIds, setEarnedIds] = useState(() => new Set());
+  const [galleryItem, setGalleryItem] = useState(null); // raw attraction row the dream browser is open for
 
   useEffect(() => {
     let cancelled = false;
@@ -141,9 +146,11 @@ export default function DreamShelf({ latitude, longitude, cityName, onOpenActivi
   const earned = items.filter((it) => earnedIds.has(String(it.id))).length;
   const city = String(cityName || "").trim();
 
+  // First touch is the photo-immersion gallery; "View details" inside it
+  // routes through the original onOpenActivity handoff.
   const openDream = (item) => {
     logDiscover("dream_shelf_tap", { place_id: item.id, place_name: item.name });
-    onOpenActivity?.(item);
+    setGalleryItem(item);
   };
 
   return (
@@ -161,6 +168,16 @@ export default function DreamShelf({ latitude, longitude, cityName, onOpenActivi
           ))}
         </div>
       </div>
+      <DreamGallery
+        open={!!galleryItem}
+        onClose={() => setGalleryItem(null)}
+        dest={galleryItem ? { name: galleryItem.name, city: galleryItem.city, country: galleryItem.country, lat: galleryItem.lat, lng: galleryItem.lng } : null}
+        onView={() => {
+          const it = galleryItem;
+          setGalleryItem(null);
+          if (it) onOpenActivity?.(it);
+        }}
+      />
     </div>
   );
 }

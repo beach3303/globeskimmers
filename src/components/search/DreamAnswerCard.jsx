@@ -8,12 +8,17 @@
 // dependent, so grounded only). An ungrounded suggestion is honest about
 // itself — quieter styling, a "Suggested — unverified" kicker, no
 // coordinate-dependent actions, and only a Things-to-Do search as the
-// fallback. One teal action max.
+// fallback. One teal action max. Grounded answers also get a quiet
+// "See photos" line that opens the DreamGallery photo sheet (the dream
+// browser) for the destination — dreaming in pictures before committing.
+import { useState } from "react";
+import DreamGallery from "@/components/home/DreamGallery";
 import { TEAL_DEEP, IVORY_2 } from "@/components/redesign/constants";
 
 const INK = "#16302B", SUB = "#71827D", EDGE = "#E6DFD0";
 
 export default function DreamAnswerCard({ destination, onView, onPerfectDay, onBuildTrip, onSearchThings }) {
+  const [showGallery, setShowGallery] = useState(false);
   if (!destination?.name) return null;
   const grounded = !!destination.grounded;
   const placeLine = [destination.city, destination.country].filter(Boolean).join(" · ");
@@ -59,6 +64,14 @@ export default function DreamAnswerCard({ destination, onView, onPerfectDay, onB
           >
             Build my trip
           </button>
+          {/* Quiet secondary: browse real photos of the place first. */}
+          <button
+            onClick={() => setShowGallery(true)}
+            className="mt-2 w-full text-center font-mono uppercase tracking-[0.08em] text-[calc(10px*var(--fs))] font-semibold underline underline-offset-2"
+            style={{ color: SUB }}
+          >
+            See photos
+          </button>
         </div>
       ) : (
         <button
@@ -68,6 +81,13 @@ export default function DreamAnswerCard({ destination, onView, onPerfectDay, onB
         >
           Search Things to Do
         </button>
+      )}
+      {grounded && (
+        <DreamGallery
+          open={showGallery}
+          onClose={() => setShowGallery(false)}
+          dest={{ name: destination.name, city: destination.city, country: destination.country, lat: destination.lat, lng: destination.lng }}
+        />
       )}
     </div>
   );
