@@ -33,12 +33,14 @@ import { ROUTE } from "@/lib/workerRoutes";
 import { logSearch } from "@/lib/logSearch";
 import { buildStay22Url } from "@/lib/stay22";
 import { nearestAirports } from "@/lib/airports";
+import { TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 
 const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const ED_INK = "#16110D";
 const INK2 = "#6B7280";
-const ACCENT = "#2563EB";
-const ACCENT_BG = "#EAF1FE";
+// Passport Standard: ONE teal primary per surface, on the ivory ground.
+const ACCENT = TEAL_DEEP;
+const ACCENT_BG = "#E4F1EF";
 const fs = (n) => `calc(${n}px*var(--fs))`;
 
 const GOALS = [
@@ -273,7 +275,7 @@ export default function FindAHotel() {
   const shownHotels = (hotels || []).filter((h) => maxPrice == null || (h.price != null && h.price <= maxPrice));
 
   return (
-    <div className="min-h-screen" style={{ background: "#FFFCF7" }}>
+    <div className="min-h-screen" style={{ background: IVORY }}>
       {/* Header */}
       <div className="flex items-center gap-3 px-4 pt-4 pb-2">
         <button onClick={() => navigate(-1)} aria-label="Back" className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#F1EADF" }}>
@@ -507,12 +509,21 @@ export default function FindAHotel() {
                       {h.reviewScore != null && <span className="text-[calc(11px*var(--fs))] font-bold px-1.5 py-0.5 rounded-[6px]" style={{ background: "#E7F3EA", color: "#2E7D46" }}>{Number(h.reviewScore).toFixed(1)}{h.reviewCount ? ` · ${h.reviewCount}` : ""}</span>}
                       {h.distanceMiles != null && <span className="text-[calc(11px*var(--fs))]" style={{ color: INK2 }}>{h.distanceMiles} mi</span>}
                     </div>
+                    {/* One cancellation line, from the CHEAPEST rate (the worker's
+                        flattened fields ARE the cheapest rate's) — room names are
+                        chosen in the sheet, not sold on the card. */}
                     <div className="text-[calc(11.5px*var(--fs))] mt-1" style={{ color: h.freeCancellation ? "#2E7D46" : INK2 }}>
-                      {[h.roomName, h.board, h.freeCancellation ? `free cancellation${h.cancelBy ? ` until ${String(h.cancelBy).slice(0, 10)}` : ""}` : "non-refundable"].filter(Boolean).join(" · ")}
+                      {h.freeCancellation ? `Free cancellation${h.cancelBy ? ` until ${String(h.cancelBy).slice(0, 10)}` : ""}` : "Non-refundable"}
                     </div>
-                    <div className="mt-auto flex items-center justify-between pt-1">
-                      <span><span className="font-bold text-[calc(15px*var(--fs))]" style={{ color: ED_INK }}>{money(h.price)}</span><span className="text-[calc(10.5px*var(--fs))]" style={{ color: INK2 }}> total · {money(h.nightly)}/night</span></span>
-                      <span className="px-3 py-1.5 rounded-[10px] font-bold text-[calc(12px*var(--fs))] text-white flex-none" style={{ background: ACCENT }}>Book here</span>
+                    {/* Trip total leads — never a bare nightly. */}
+                    <div className="mt-auto flex items-end justify-between gap-2 pt-1">
+                      <span className="min-w-0">
+                        <span className="block font-bold text-[calc(15px*var(--fs))] truncate" style={{ color: ED_INK }}>{money(h.price)} total · {h.nights || inAppMeta?.nights || 1} night{(h.nights || inAppMeta?.nights || 1) === 1 ? "" : "s"}</span>
+                        <span className="block font-mono text-[calc(10.5px*var(--fs))]" style={{ color: INK2 }}>{money(h.nightly)}/night</span>
+                      </span>
+                      <span className="px-3 py-1.5 rounded-[10px] font-bold text-[calc(12px*var(--fs))] text-white flex-none" style={{ background: ACCENT }}>
+                        {Array.isArray(h.rates) && (h.rates || []).filter((r) => r && r.offerId && r.price != null).length > 1 ? "See rooms" : "Book here"}
+                      </span>
                     </div>
                   </div>
                 </button>
@@ -589,7 +600,7 @@ export default function FindAHotel() {
         )}
 
         {/* Honest note — amenities are refined on the booking site */}
-        <div className="mt-4 rounded-[14px] px-4 py-3 text-[calc(12.5px*var(--fs))] leading-relaxed" style={{ background: ACCENT_BG, color: "#1E3A8A" }}>
+        <div className="mt-4 rounded-[14px] px-4 py-3 text-[calc(12.5px*var(--fs))] leading-relaxed" style={{ background: ACCENT_BG, color: "#0B4F49" }}>
           💡 Tap a stay to book on the best site (Booking, Expedia, Agoda…), where you can also filter for <b>breakfast, pool, gym, A/C</b> and more.
         </div>
 

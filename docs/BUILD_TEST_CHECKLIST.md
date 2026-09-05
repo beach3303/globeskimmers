@@ -639,3 +639,8 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 ## 2026-09-05 — Bookings v2, Wave 3: address/date plumbing
 - Prebook payload + session carry address/lat/lng/thumbnail/roomLabel (guarded, zero new API calls); /hotels/nuitee/booking merges them (live payload wins, nothing invented for legacy rows); affiliate_clicks gains checkin/checkout (08 migration APPLIED remote 2026-09-05; worker degrades gracefully either deploy order — INSERT + SELECT fallbacks simulated by the reviewer); Trips sorting prefers real columns over the name regex; detail sheet address card opens MapAppSelector ("Directions"); share picks up address automatically.
 - Review: CLEAN. Gates: node --check ✓ eslint ✓ build ✓ boot-check ✓.
+
+## 2026-09-05 — Bookings v2, Wave 4: rooms & rates
+- Worker: maxRatesPerHotel 1→6 + roomMapping; per-hotel rates[] (≤6, price ASC, offerId-deduped) with top-level fields still the cheapest rate (package-draft verified compatible); KV key nuitee:search v1→v2.
+- Frontend: results card leads with trip total ('$X total · N nights', nightly beneath) + cancellation line; 'See rooms' opens the new first stage in the book sheet — ≤3 room cards (supplier's real names, serif) × cheapest + refundable alt ('+$X · free cancellation until {date}'), 'More rooms' disclosure; no-rates hotels behave exactly as before; page accents blue→teal.
+- Review: 1 CONFIRMED (rates[] emitted 'refundable' vs sheet's 'freeCancellation' — the refundable-upgrade feature was silently inert + labels wrong; fixed at source) + offerId dedupe + valid-rates gate. Gates: node --check ✓ eslint ✓ build ✓ boot-check ✓.

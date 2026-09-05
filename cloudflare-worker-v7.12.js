@@ -13776,7 +13776,9 @@ async function handleNuiteeSearch(request, env, ctx) {
     const radiusM = Math.min(Math.max(Math.round((parseFloat(b.radiusKm) || 8) * 1000), 1000), 30000);
     const currency = /^[A-Z]{3}$/.test(String(b.currency || '')) ? b.currency : 'USD';
     const nationality = /^[A-Z]{2}$/.test(String(b.nationality || '')) ? b.nationality : 'US';
-    const ck = `nuitee:search:v1:${nuiteeEnv(env)}:${lat.toFixed(3)},${lng.toFixed(3)}:${radiusM}:${checkin}:${checkout}:${adults}_${kids}:${currency}:${nationality}`;
+    // v2: grouped-rates response shape (per-hotel rates[]) — v1 entries hold a
+    // single rate and must not serve against clients expecting the room picker.
+    const ck = `nuitee:search:v2:${nuiteeEnv(env)}:${lat.toFixed(3)},${lng.toFixed(3)}:${radiusM}:${checkin}:${checkout}:${adults}_${kids}:${currency}:${nationality}`;
     const cached = await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null);
     if (cached) return jsonResponse({ ...cached, source: 'cache' });
     const body = {
@@ -13786,7 +13788,14 @@ async function handleNuiteeSearch(request, env, ctx) {
       // default keeps the quote honest for most families and exact ages are
       // confirmed at checkout.
       occupancies: [{ adults, ...(kids ? { children: Array.from({ length: kids }, () => 8) } : {}) }],
-      includeHotelData: true, maxRatesPerHotel: 1, limit: 40,
+      // Wave 4 grouped rates: up to 6 rates/hotel + roomMapping so rate rows can
+      // link to static room content. Payload size (estimated, sandbox not
+      // reachable from this repo): each trimmed rate is ~350B JSON (the offerId
+      // string dominates), so 6 rates adds ~2KB/hotel → ~110KB uncompressed for
+      // 40 hotels (~10-15KB gzipped on the wire), well inside KV's value cap at
+      // a 20-min TTL — so limit STAYS 40 (a 20-row page + one full +20 page).
+      // Revisit to 25 only if live logs show responses past ~250KB.
+      includeHotelData: true, maxRatesPerHotel: 6, roomMapping: true, limit: 40,
     };
     let res;
     try { res = await fetch(`${NUITEE_API}/hotels/rates`, { method: 'POST', headers: nuiteeHeaders(env), body: JSON.stringify(body) }); }
@@ -13797,15 +13806,35 @@ async function handleNuiteeSearch(request, env, ctx) {
     const nights = nuiteeNights(checkin, checkout);
     const hotels = (d?.data || []).map((h) => {
       const meta = info.get(String(h.hotelId)) || {};
-      let best = null;
+      // Wave 4: GROUP the priced rates per hotel (room picker), trimmed to the
+      // fields the sheet needs, cheapest first, capped at 6. The top-level
+      // hotel fields below stay the CHEAPEST rate's values — old clients and
+      // /package/draft keep reading the same shape unchanged.
+      const rates = [];
+      let best = null; // cheapest rate, keeping cancelByRaw for the legacy top-level field
       for (const rt of h.roomTypes || []) for (const r of rt.rates || []) {
-        const amt = r?.retailRate?.total?.[0]?.amount;
+        const tot = r?.retailRate?.total?.[0];
+        const amt = tot?.amount;
         if (amt == null) continue;
-        if (!best || amt < best.amt) best = { amt, cur: r.retailRate.total[0].currency || currency, offerId: rt.offerId, r };
+        const cp = r.cancellationPolicies || {};
+        const cancelByRaw = (cp.cancelPolicyInfos || []).map((c) => c && c.cancelTime).filter(Boolean).sort()[0] || null;
+        const mappedRoomId = rt.mappedRoomId ?? r.mappedRoomId ?? null;
+        const rate = {
+          offerId: rt.offerId,
+          roomName: r.name || rt.name || null,
+          board: r.boardName || r.boardType || null,
+          price: amt, currency: tot.currency || currency,
+          nightly: Math.round((amt / nights) * 100) / 100,
+          freeCancellation: cp.refundableTag === 'RFN',   // the sheet's documented rates[] contract (session/prebook keep 'refundable')
+          cancelBy: cancelByRaw ? String(cancelByRaw).slice(0, 10) : null,
+          maxOccupancy: r.maxOccupancy ?? null,
+          ...(mappedRoomId != null ? { mappedRoomId } : {}),
+        };
+        rates.push(rate);
+        if (!best || amt < best.price) best = { ...rate, cancelByRaw };
       }
       if (!best) return null;
-      const cp = best.r.cancellationPolicies || {};
-      const cancelBy = (cp.cancelPolicyInfos || []).map((c) => c && c.cancelTime).filter(Boolean).sort()[0] || null;
+      rates.sort((a, c) => a.price - c.price);
       const dist = (meta.latitude != null && meta.longitude != null) ? haversineMilesLoc(lat, lng, meta.latitude, meta.longitude) : NaN;
       return {
         id: `nuitee:${h.hotelId}`, hotelId: String(h.hotelId), offerId: best.offerId,
@@ -13816,10 +13845,11 @@ async function handleNuiteeSearch(request, env, ctx) {
         address: meta.address || '', city: meta.city || '', country: meta.country || '',
         lat: meta.latitude ?? null, lng: meta.longitude ?? null,
         distanceMiles: Number.isFinite(dist) ? Math.round(dist * 10) / 10 : null,
-        price: best.amt, currency: best.cur, nights, nightly: Math.round((best.amt / nights) * 100) / 100,
-        roomName: best.r.name || null, board: best.r.boardName || null,
-        freeCancellation: cp.refundableTag === 'RFN', cancelBy,
-        maxOccupancy: best.r.maxOccupancy ?? null,
+        price: best.price, currency: best.currency, nights, nightly: best.nightly,
+        roomName: best.roomName, board: best.board,
+        freeCancellation: best.refundable, cancelBy: best.cancelByRaw,
+        maxOccupancy: best.maxOccupancy,
+        rates: rates.filter((r, i, arr) => arr.findIndex((x) => x.offerId === r.offerId) === i).slice(0, 6),   // roomType-shared offerIds: one plan per bookable offer
         supplier: 'nuitee', bookUrl: null, inApp: true,
       };
     }).filter(Boolean);
