@@ -680,3 +680,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Founder: "Add date of event on each card. Even if it says today and tomorrow." Card line is now "Tonight · Sep 5 · 7:30 PM" / "Today · Sep 5 · 10:00 AM – 12:00 PM" — relative label keeps the short calendar date beside it; full "Sat, Sep 12" stays for non-relative dates. End times unchanged (shown only when TM reports a real one).
 - Honesty polish from the same screenshots: morning/afternoon events (start < 5 PM, or unknown time) say "Today", not "Tonight"; TM's literal segment name "Undefined" is stripped at the worker source and guarded in the pill render (covers 6h-cached v5 payloads).
 - Gates: node --check ✓ eslint ✓ build ✓ boot-check ✓.
+
+## 2026-09-05 — Hotel checkout: big Pay button with the amount on it
+- Founder: "make Pay a larger button". Inspected Nuitée's payment wrapper (loader + liteAPIPaymentStripe.js): the submit button is class .lp-submit-button, label set via config submitButton.text using textContent, and Nuitée ships NO CSS for it (cssFile empty in their /config) — hence the tiny default button. Our checkout page now styles it: full-width, 58px, 18px bold, TEAL_DEEP #0E7C73 with pressed/disabled states, matching the page's .btn language. Label is now "Pay $213.63"-style (raw nuiteeMoney — textContent, so unescaped by design).
+- Gates: node --check ✓ (worker-only change; no frontend build needed).
