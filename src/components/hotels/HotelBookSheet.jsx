@@ -154,12 +154,18 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
               {field("Phone (optional)", "phone", "tel", "tel")}
             </div>
             {err && <div className="text-[calc(12.5px*var(--fs))] mt-3 font-semibold" style={{ color: BAD }}>{err}</div>}
-            <button onClick={prebook} disabled={!valid || stage === "prebooking"}
-              className="w-full py-3.5 rounded-[14px] font-bold text-white text-[calc(15px*var(--fs))] mt-4"
-              style={{ background: ACCENT, opacity: (!valid || stage === "prebooking") ? 0.6 : 1, fontFamily: "inherit" }}>
-              {stage === "prebooking" ? "Confirming availability…" : "Continue to secure payment"}
-            </button>
-            <p className="text-[calc(10.5px*var(--fs))] leading-snug mt-3 px-0.5" style={{ color: "#9AA0A6" }}>
+            {/* Sticky full-width Continue bar — stays visible while the form scrolls */}
+            <div className="sticky bottom-0 -mx-4 px-4 pt-3 pb-1 mt-4" style={{ background: "#FBF8F1" }}>
+              <button onClick={prebook} disabled={!valid || stage === "prebooking"}
+                className="w-full py-3.5 rounded-[14px] font-bold text-white text-[calc(15px*var(--fs))]"
+                style={{ background: ACCENT, minHeight: 52, opacity: (!valid || stage === "prebooking") ? 0.6 : 1, fontFamily: "inherit" }}>
+                {stage === "prebooking" ? "Confirming availability…" : "Continue to secure payment"}
+              </button>
+              <p className="text-[calc(11px*var(--fs))] leading-snug mt-2 px-0.5 text-center" style={{ color: INK2 }}>
+                Nothing is charged until you tap Pay on the next screen.
+              </p>
+            </div>
+            <p className="text-[calc(10.5px*var(--fs))] leading-snug mt-2 px-0.5" style={{ color: "#9AA0A6" }}>
               Your card is handled by Nuitée Travel Ltd, our booking partner and the merchant of record — GlobeSkimmers never sees card details. Member rate: available because you're signed in.
             </p>
           </>
