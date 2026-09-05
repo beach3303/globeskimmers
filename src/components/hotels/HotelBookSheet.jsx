@@ -59,6 +59,12 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
       const { data } = await callWorker("hotels/nuitee/prebook", {
         offerId: hotel.offerId, hotelName: hotel.name, holder, adults, children,
         dest_city: dest?.city || hotel.city || "", dest_country: dest?.country || hotel.country || "",
+        // Stay plumbing (Wave 3): the worker stores these on the session so My
+        // Trips can map/share/sort the booking without regexing names. All come
+        // straight off the search-result hotel object — never invented here.
+        address: hotel.address || "", lat: hotel.lat ?? null, lng: hotel.lng ?? null,
+        thumbnail: hotel.thumbnail || null,
+        roomLabel: [hotel.roomName, hotel.board].filter(Boolean).join(" · ") || null,
       });
       if (!data?.sid) { setErr(data?.detail || data?.error || "This rate is no longer available — pick another stay."); setStage("form"); return; }
       setPre(data); setStage("ready");

@@ -132,10 +132,17 @@ export default function TripsPage() {
       const isNuitee = (it.partner || "").toLowerCase() === "nuitee";
       const { name, dates } = splitProductName(it.product_name);
       let checkin = null, checkout = null;
-      if (isNuitee && dates) {
-        const [a, b] = dates.split(" → ");
-        checkin = parseYMD(a);
-        checkout = parseYMD(b);
+      if (isNuitee) {
+        // Prefer the real stay-date columns (worker Wave 3 / 08_nuitee_stay_
+        // fields.sql) when the row carries BOTH; legacy rows fall back to the
+        // product_name parse. Still never a fabricated date for partner rows.
+        checkin = parseYMD(it.checkin);
+        checkout = parseYMD(it.checkout);
+        if ((checkin == null || checkout == null) && dates) {
+          const [a, b] = dates.split(" → ");
+          checkin = parseYMD(a);
+          checkout = parseYMD(b);
+        }
       }
       return { it, name, dates, dated: checkin != null && checkout != null, checkin, checkout };
     });

@@ -29,12 +29,13 @@
 // render bookings with one vocabulary.
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Copy, ExternalLink, Share2 } from "lucide-react";
+import { X, Copy, ExternalLink, Share2, Navigation } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { openPartner } from "@/lib/openPartner";
 import { shareBooking } from "@/lib/shareBooking";
 import { useDismissable } from "@/lib/dismissStack";
 import { showToast } from "@/components/Toast";
+import MapAppSelector from "@/components/MapAppSelector";
 import { IVORY, TEAL_DEEP } from "@/components/redesign/constants";
 
 // Editorial design tokens (shared with MyTrip / SavedLocations / PlacesToEat).
@@ -156,6 +157,11 @@ function cancellationLine(cp) {
 export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClose, fs, t }) {
   const isOpen = !!booking;
   useDismissable(isOpen, onClose);
+  // "Get Directions" sheet for the stay address — the exact MapAppSelector every
+  // finder uses (e.g. CoffeeFinder.jsx). No device location here, so the sheet
+  // opens on its "Other address" origin mode.
+  const [showMap, setShowMap] = useState(false);
+  useEffect(() => { if (!isOpen) setShowMap(false); }, [isOpen]); // never leak an open map into the next booking
 
   const inApp = !!booking && (booking.partner || "").toLowerCase() === "nuitee";
   const bookingId = inApp && booking.product_id ? String(booking.product_id) : null;
@@ -199,14 +205,22 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
   const fetching = inApp && !!bookingId && !entry;
   const stayDates = (bk?.checkin && bk?.checkout) ? `${bk.checkin} → ${bk.checkout}` : dates;
   const confirmationCode = bk?.hotelConfirmationCode || null;
-  const rooms = Array.isArray(bk?.rooms) ? bk.rooms.map(roomLine).filter(Boolean) : [];
+  // Room lines from the live payload; when it carries none, the worker-merged
+  // roomLabel (prebook-confirmed room · board) fills in — never both.
+  const roomLines = Array.isArray(bk?.rooms) ? bk.rooms.map(roomLine).filter(Boolean) : [];
+  const rooms = roomLines.length ? roomLines : (bk?.roomLabel ? [bk.roomLabel] : []);
   const holderName = bk?.holder
     ? [bk.holder.firstName, bk.holder.lastName].filter(Boolean).join(" ") || null
     : null;
   const cancelLine = cancellationLine(bk?.cancellationPolicies);
   const paidAmount = bk && bk.price != null && Number.isFinite(Number(bk.price)) && bk.currency
     ? `${Number(bk.price).toFixed(2)} ${bk.currency}` : null;
-  const address = hotelAddress(bk?.hotel);
+  // Address: Nuitée's live hotel record first, else the stay fields the worker
+  // merged from the prebook session (Wave 3). Coords come the same way — only
+  // ever real values; MapAppSelector uses them as a fallback destination.
+  const address = hotelAddress(bk?.hotel) || bk?.address || null;
+  const stayLat = bk?.hotel?.latitude ?? bk?.lat ?? null;
+  const stayLng = bk?.hotel?.longitude ?? bk?.lng ?? null;
   // The reference the hotel front desk recognizes: their confirmation code
   // when Nuitée has one, else the booking id.
   const refCode = confirmationCode || it.product_id || null;
@@ -369,17 +383,30 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
                     </div>
                   )}
 
-                  {/* Address ONLY when the booking payload carries one. */}
+                  {/* Address ONLY when the booking payload carries one — a tap
+                      opens the same Get Directions sheet every finder uses. */}
                   {!fetching && (
                     address ? (
-                      <div className="mt-3 p-3 rounded-[14px]" style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}` }}>
-                        <div className="uppercase font-semibold" style={{ fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".07em", color: ED_INK3 }}>
-                          Address
+                      <button
+                        onClick={() => setShowMap(true)}
+                        className="mt-3 p-3 rounded-[14px] w-full flex items-center gap-3 text-left transition-transform active:scale-[0.98]"
+                        style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}` }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="uppercase font-semibold" style={{ fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".07em", color: ED_INK3 }}>
+                            Address
+                          </div>
+                          <p className="mt-0.5" style={{ fontFamily: ED_MONO, fontSize: fs(11.5), color: ED_INK, overflowWrap: "anywhere" }}>
+                            {address}
+                          </p>
                         </div>
-                        <p className="mt-0.5" style={{ fontFamily: ED_MONO, fontSize: fs(11.5), color: ED_INK, overflowWrap: "anywhere" }}>
-                          {address}
-                        </p>
-                      </div>
+                        <span
+                          className="flex-none inline-flex items-center gap-1.5 px-3 py-2 rounded-full font-semibold uppercase"
+                          style={{ background: "#EFEAE0", color: ED_INK, fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".06em" }}
+                        >
+                          <Navigation size={12} strokeWidth={2.2} /> Directions
+                        </span>
+                      </button>
                     ) : (
                       refCode && (
                         <p className="mt-3 px-1" style={{ fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".04em", color: ED_INK3, lineHeight: 1.6 }}>
@@ -426,6 +453,15 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
             </div>
             <div className="h-2" />
           </motion.div>
+
+          {/* Get Directions — the shared finder sheet (name + address destination,
+              coords only as MapAppSelector's own fallback). Stacks above this
+              sheet (z-9998/9999 vs 9995/9996). */}
+          <MapAppSelector
+            isOpen={showMap}
+            onClose={() => setShowMap(false)}
+            destination={{ name: title, address: address || "", latitude: stayLat, longitude: stayLng }}
+          />
         </>
       )}
     </AnimatePresence>

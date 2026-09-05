@@ -14002,6 +14002,14 @@ async function handleNuiteePrebook(request, env) {
       refundable: cp.refundableTag === 'RFN', cancelBy: (cp.cancelPolicyInfos || []).map((c) => c && c.cancelTime).filter(Boolean).sort()[0] || null,
       holder, adults: Math.min(Math.max(parseInt(b.adults, 10) || 2, 1), 8), children: Math.min(Math.max(parseInt(b.children, 10) || 0, 0), 6),
       dest_city: String(b.dest_city || '').slice(0, 120), dest_country: String(b.dest_country || '').slice(0, 80),
+      // Stay fields from the search-result hotel object (Wave 3) — stored so
+      // /hotels/nuitee/booking can hand My Trips an address/pin/photo without a
+      // single extra API call. Client-supplied; validated, never invented.
+      address: String(b.address || '').trim().slice(0, 240) || null,
+      lat: Number.isFinite(parseFloat(b.lat)) && Math.abs(parseFloat(b.lat)) <= 90 ? parseFloat(b.lat) : null,
+      lng: Number.isFinite(parseFloat(b.lng)) && Math.abs(parseFloat(b.lng)) <= 180 ? parseFloat(b.lng) : null,
+      thumbnail: /^https:\/\//i.test(String(b.thumbnail || '')) ? String(b.thumbnail).slice(0, 500) : null,
+      roomLabel: String(b.roomLabel || '').trim().slice(0, 200) || null,
       status: 'pending', booking: null, error: null,
     };
     await nuiteeSessPut(env, session);
@@ -14159,16 +14167,27 @@ async function nuiteeRecordBooking(env, s) {
   const bk = s.booking;
   if (!env.DB) return;   // user_id may be null (sandbox/curl) — bookings analytics still count it; My Trips reads by user_id
   const ts = Math.floor(Date.now() / 1000);
-  await env.DB.prepare(
-    'insert or ignore into affiliate_clicks (subid,ts,user_id,session_id,intent,persona,partner,product_id,product_name,category,dest_country,dest_city,target_url,converted,commission,currency,status,converted_ts) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
-  ).bind(
+  const base = [
     // intent='sandbox' tags test bookings so analytics can exclude them
     // (`where intent is not 'sandbox'`) and cleanup is one delete.
     `nuitee_${bk.bookingId}`, ts, s.user_id, s.sid, s.env === 'sandbox' ? 'sandbox' : null, null,
     'nuitee', String(bk.bookingId), `${bk.hotelName || s.hotelName || 'Hotel'} · ${s.checkin} → ${s.checkout}`, 'hotel',
     s.dest_country || null, s.dest_city || null, null,
-    1, null, bk.currency || s.currency, 'confirmed', ts
-  ).run();
+    1, null, bk.currency || s.currency, 'confirmed', ts,
+  ];
+  try {
+    // Preferred: real stay-date columns so My Trips sorts without regexing
+    // product_name (cloudflare-worker/sql/08_nuitee_stay_fields.sql).
+    await env.DB.prepare(
+      'insert or ignore into affiliate_clicks (subid,ts,user_id,session_id,intent,persona,partner,product_id,product_name,category,dest_country,dest_city,target_url,converted,commission,currency,status,converted_ts,checkin,checkout) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+    ).bind(...base, s.checkin || null, s.checkout || null).run();
+  } catch {
+    // Fallback if the checkin/checkout columns aren't added yet (run 08_nuitee_
+    // stay_fields.sql then re-deploy) — the booking row never breaks on ordering.
+    await env.DB.prepare(
+      'insert or ignore into affiliate_clicks (subid,ts,user_id,session_id,intent,persona,partner,product_id,product_name,category,dest_country,dest_city,target_url,converted,commission,currency,status,converted_ts) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+    ).bind(...base).run();
+  }
 }
 
 // POST /hotels/nuitee/status {sid} — the app asks this when the checkout sheet
@@ -14194,16 +14213,37 @@ async function handleNuiteeBooking(request, env) {
     const bookingId = String(b.bookingId || '').trim().slice(0, 80);
     if (!bookingId) return jsonResponse({ error: 'bookingId required' }, 400);
     // Ownership = the confirmed row this booking wrote for this user (D1, strongly consistent).
-    const own = env.DB ? await env.DB.prepare("select 1 as ok from affiliate_clicks where partner='nuitee' and product_id = ? and user_id = ? limit 1").bind(bookingId, user.id).first().catch(() => null) : null;
+    // Preferred select carries the stay-date columns (08_nuitee_stay_fields.sql);
+    // fall back to the pre-migration column list so the lookup never breaks on
+    // ordering — same degrade pattern as handleLogEvent's anon_id.
+    let own = null;
+    if (env.DB) {
+      own = await env.DB.prepare("select session_id, checkin, checkout from affiliate_clicks where partner='nuitee' and product_id = ? and user_id = ? limit 1").bind(bookingId, user.id).first().catch(() => null);
+      if (!own) own = await env.DB.prepare("select session_id from affiliate_clicks where partner='nuitee' and product_id = ? and user_id = ? limit 1").bind(bookingId, user.id).first().catch(() => null);
+    }
     if (!own) return jsonResponse({ error: 'not_found' }, 404);
+    // Stay fields captured at prebook time (address/pin/photo/room label) live in
+    // the session's data JSON — booked nuitee_sessions rows are kept, so this is
+    // a free D1 read. Legacy rows (no session, or a session predating Wave 3)
+    // simply merge nothing: absent fields stay null and the app hides them.
+    const sess = own.session_id ? await nuiteeSessGet(env, own.session_id).catch(() => null) : null;
     const res = await fetch(`${NUITEE_BOOK}/bookings/${encodeURIComponent(bookingId)}`, { headers: nuiteeHeaders(env) });
     const d = await res.json().catch(() => ({}));
     if (!res.ok || !d?.data) return jsonResponse({ error: 'lookup_failed', status: res.status }, 502);
     const k = d.data;
     return jsonResponse({ booking: {
       bookingId: k.bookingId, status: k.status, hotelConfirmationCode: k.hotelConfirmationCode || null,
-      hotel: k.hotel || null, checkin: k.checkin, checkout: k.checkout, price: k.price, currency: k.currency,
+      hotel: k.hotel || null,
+      checkin: k.checkin || sess?.checkin || own.checkin || null,
+      checkout: k.checkout || sess?.checkout || own.checkout || null,
+      price: k.price, currency: k.currency,
       holder: k.holder || null, rooms: k.bookedRooms || k.rooms || [], cancellationPolicies: k.cancellationPolicies || null, createdAt: k.createdAt,
+      // Wave 3 stay fields from the prebook session — null when the row predates them.
+      address: sess?.address || null,
+      lat: sess?.lat ?? null, lng: sess?.lng ?? null,
+      thumbnail: sess?.thumbnail || null,
+      // Prebook-confirmed room name wins; the search-result label is the fallback.
+      roomLabel: (sess?.roomName ? [sess.roomName, sess.board].filter(Boolean).join(' · ') : null) || sess?.roomLabel || null,
     } });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -14251,7 +14291,15 @@ async function handleAffiliateMine(request, env) {
     if (!env.DB) return jsonResponse({ items: [], error: 'analytics DB not configured' }, 500);
     const user = await gbUser(request, env).catch(() => null);
     if (!user) return jsonResponse({ items: [], needsAuth: true });
-    const rs = await env.DB.prepare(
+    // Preferred select carries the Nuitée stay-date columns (08_nuitee_stay_
+    // fields.sql); fall back to the pre-migration column list so My Trips never
+    // goes blank on ordering — same degrade pattern as handleLogEvent's anon_id.
+    let rs = await env.DB.prepare(
+      `select subid, ts, partner, product_id, product_name, category, dest_country, dest_city,
+              target_url, converted, commission, currency, status, converted_ts, checkin, checkout
+       from affiliate_clicks where user_id = ? order by ts desc limit 300`
+    ).bind(user.id).all().catch(() => null);
+    if (!rs) rs = await env.DB.prepare(
       `select subid, ts, partner, product_id, product_name, category, dest_country, dest_city,
               target_url, converted, commission, currency, status, converted_ts
        from affiliate_clicks where user_id = ? order by ts desc limit 300`
@@ -14268,9 +14316,14 @@ async function handleAffiliateMine(request, env) {
           dest_city: r.dest_city || null, dest_country: r.dest_country || null,
           target_url: r.target_url || null, ts: r.ts, taps: 0,
           status: 'started', commission: null, currency: null,
+          // Real stay dates (Nuitée rows written after 08_nuitee_stay_fields.sql);
+          // null for partner taps and legacy rows — the app then falls back to
+          // its product_name parse, never an invented date.
+          checkin: r.checkin || null, checkout: r.checkout || null,
         };
         groups.set(key, g);
       }
+      if (!g.checkin && r.checkin) { g.checkin = r.checkin; g.checkout = r.checkout || null; }
       g.taps += 1;
       if (r.ts > g.ts) { g.ts = r.ts; g.target_url = r.target_url || g.target_url; }
       // Strongest status wins: confirmed > cancelled > started.
