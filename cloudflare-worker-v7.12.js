@@ -14189,6 +14189,11 @@ async function handleNuiteeCheckout(request, env) {
     // Stripe Appearance pass-through — progressive enhancement only: the LiteAPI
     // payment wrapper may ignore `variables` entirely, which is harmless.
     appearance: { theme: 'flat', variables: { colorPrimary: '#0E7C73', fontSizeBase: '16px' } },
+    // Progressive enhancement: prefill the traveler's email so Stripe Link
+    // (consumer-scoped, cross-merchant) recognizes returning users — the one
+    // saved-card path that spans the Nuitée lane and our future packages lane.
+    email: s.holder && s.holder.email ? s.holder.email : undefined,
+    defaultValues: s.holder && s.holder.email ? { billingDetails: { email: s.holder.email } } : undefined,
     options: { business: { name: 'GlobeSkimmers' } },
   }).replace(/</g, '\\u003c');
   return nuiteeHtml('Secure checkout', `<p class="wordmark">GlobeSkimmers</p>${recap}${cxl}<h1 class="commit">Pay ${totalLine}</h1><div class="card"><div id="pay"></div></div><p class="trust">${lock}<span>Payments processed securely by Stripe · Nuitée is the merchant of record — Nuitée is the name you'll see on your card statement.</span></p><p class="note">By paying you accept the cancellation policy shown above. Card details go directly to Nuitée, our booking partner — GlobeSkimmers never sees them.${s.env === 'sandbox' ? ' <b>Sandbox:</b> card 4242 4242 4242 4242, any future date, any CVC.' : ''}</p>
@@ -14821,6 +14826,19 @@ export default {
       // the Base44 backend's existing Places-based fallback takes over.
       // ctx is forwarded so the handler can ctx.waitUntil() a Phase B
       // background seed task when D1 returns sparse for this region.
+      // Apple Pay web domain verification (Stripe's canonical, account-agnostic
+      // association file — required at this exact path on any domain that shows
+      // Apple Pay via Stripe; ships ahead of the Stripe account, harmless until).
+      if (pathname === '/.well-known/apple-developer-merchantid-domain-association') {
+        const ck = 'stripe:apple-assoc:v1';
+        let body = await env.GLOBESKIMMERS_KV.get(ck).catch(() => null);
+        if (!body) {
+          const r = await fetch('https://stripe.com/files/apple-pay/apple-developer-merchantid-domain-association').catch(() => null);
+          if (r && r.ok) { body = await r.text(); ctx && ctx.waitUntil && ctx.waitUntil(env.GLOBESKIMMERS_KV.put(ck, body, { expirationTtl: 30 * 24 * 60 * 60 }).catch(() => {})); }
+        }
+        if (!body) return new Response('unavailable', { status: 503 });
+        return new Response(body, { status: 200, headers: { 'Content-Type': 'text/plain' } });
+      }
       if (pathname === '/attractions/nearby' && request.method === 'POST') return await handleAttractionsNearby(request, env, ctx);
       if (pathname === '/attractions/get' && request.method === 'POST') return await handleAttractionsGet(request, env);
       if (pathname === '/home/rows' && request.method === 'POST') return await handleHomeRows(request, env, ctx);
