@@ -13446,10 +13446,14 @@ function gaMapSearchPlace(p, userLat, userLng) {
 // only falls back to a Viator exit link when BOTH are empty.
 // Events "What's on" — real concerts, sports (incl. playoffs), theatre, comedy from
 // the Ticketmaster Discovery API (free key = env.TICKETMASTER_API_KEY) PLUS Viator
-// experiences (env.VIATOR_API_KEY — bookable + monetized TODAY). NO Google spend
-// (Viator freetext only). TM listings power the Demand Radar; TM revenue is via the
-// Impact affiliate later (deep-link until then). Graceful: each source independently
-// returns [] if its key is missing. KV-cached 6h.
+// experiences (env.VIATOR_API_KEY — bookable + monetized TODAY). NO Google spend.
+// The two lanes are HONESTLY separate: events[] are dated Ticketmaster listings
+// (localDate + localTime/dateTime when TM provides them, source:'ticketmaster');
+// experiences[] are undated Viator products scoped to the nearest Viator
+// destination (source:'viator') — they never carry dates they don't have.
+// TM listings power the Demand Radar; TM revenue is via the Impact affiliate
+// later (deep-link until then). Graceful: each source independently returns []
+// if its key is missing. KV-cached 6h.
 async function handleEventsSearch(request, env) {
   try {
     const b = await request.json().catch(() => ({}));
@@ -13460,7 +13464,7 @@ async function handleEventsSearch(request, env) {
     // (Rome, Italy vs Rome, Georgia would otherwise share a "rome" key and poison
     // each other for 6h). ~11km grid (1 decimal) groups a metro without splitting.
     const ckId = (hasGeo ? `${lat.toFixed(1)},${lng.toFixed(1)}` : (city || 'x')).toLowerCase();
-    const ck = `events:v3:${ckId}`;
+    const ck = `events:v4:${ckId}`; // v4: events gained dateTime/localTime/source; experiences reshaped + destination-scoped
     if (env.GLOBESKIMMERS_KV) {
       const cached = await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null);
       if (cached) return jsonResponse({ ...cached, source: 'cache' });
@@ -13489,9 +13493,15 @@ async function handleEventsSearch(request, env) {
           const venue = e._embedded && e._embedded.venues && e._embedded.venues[0];
           const img = (e.images || []).slice().sort((a, b) => (b.width || 0) - (a.width || 0)).find((i) => (i.width || 0) >= 500) || (e.images || [])[0];
           const pr = (e.priceRanges || [])[0];
+          const start = (e.dates && e.dates.start) || {};
+          const end = (e.dates && e.dates.end) || {};
           return {
             id: e.id, name: e.name,
-            date: (e.dates && e.dates.start && e.dates.start.localDate) || null,
+            date: start.localDate || null,           // "2026-09-06" (venue-local day)
+            dateTime: start.dateTime || null,        // full ISO instant when TM has it
+            localTime: start.localTime || null,      // "19:30:00" (venue-local) when TM has it
+            endDate: (!end.approximate && end.localDate) || null, // real (non-approximate) end only
+            endTime: (!end.approximate && end.localTime) || null, // "when does it end" gets truth or nothing
             venue: (venue && venue.name) || '',
             city: (venue && venue.city && venue.city.name) || city || '',
             country: (venue && venue.country && venue.country.countryCode) || '',
@@ -13500,6 +13510,7 @@ async function handleEventsSearch(request, env) {
             url: e.url || null,
             fromPrice: pr ? pr.min : null,
             currency: pr ? pr.currency : null,
+            source: 'ticketmaster',
           };
         }).filter((e) => {
           if (!e.name || !e.url) return false;
@@ -13511,27 +13522,47 @@ async function handleEventsSearch(request, env) {
       } catch { return []; }
     })();
     // Viator experiences (bookable + monetized NOW — no Google spend).
+    // DESTINATION-SCOPED via the tours machinery (viatorDestinations →
+    // viatorNearestDestination → productFiltering.destination), same pattern as
+    // handleViatorProducts. A bare freetext here served Abu Dhabi safaris and
+    // Barcelona flamenco to a user in Santa Clarita — wrong-city products
+    // monetize nothing and burn trust. No coordinates, or no Viator destination
+    // within range → NO products: empty beats wrong-city. Ladder: destination →
+    // parent → honest empty; a 429 stops the ladder.
+    let vScopeName = null; // destination name the experiences were ACTUALLY scoped to
     const vP = (async () => {
-      if (!env.VIATOR_API_KEY) return [];
-      const term = city ? `${city} shows and live entertainment` : 'live entertainment shows';
-      try {
-        const res = await fetch('https://api.viator.com/partner/search/freetext', {
-          method: 'POST',
-          headers: { 'exp-api-key': env.VIATOR_API_KEY, Accept: 'application/json;version=2.0', 'Accept-Language': 'en-US', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ searchTerm: term, searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count: 12 } }], currency: 'USD' }),
-        });
-        if (!res.ok) return [];
-        const d = await res.json();
+      if (!env.VIATOR_API_KEY || !hasGeo) return [];
+      const list = await viatorDestinations(env);
+      const dest = list ? viatorNearestDestination(list, lat, lng) : null;
+      if (!dest) return [];
+      const term = `${dest.name} shows and live entertainment`;
+      // Parent-ladder honesty: products served from the PARENT catalog are labeled
+      // with the parent's own name (e.g. "Los Angeles"), never the nearest city's —
+      // a card must not claim "Santa Clarita" for a product that may be elsewhere
+      // in the parent region.
+      const pRow = dest.parentId != null ? list.find((r) => String(r[0]) === String(dest.parentId)) : null;
+      const attempts = [{ id: String(dest.id), name: dest.name }];
+      if (dest.parentId != null) attempts.push({ id: String(dest.parentId), name: (pRow && pRow[5]) || null });
+      for (const att of attempts) {
+        const destination = att.id;
+        let res;
+        try {
+          res = await fetch(`${VIATOR_API}/search/freetext`, {
+            method: 'POST', headers: viatorHeaders(env),
+            body: JSON.stringify({ searchTerm: term, searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count: 12 } }], currency: 'USD', productFiltering: { destination } }),
+          });
+        } catch { return []; }
+        if (!res.ok) { if (res.status === 429) break; continue; }
+        const d = await res.json().catch(() => ({}));
         const results = Array.isArray(d?.products?.results) ? d.products.results : [];
-        return results.map((p) => {
-          const variants = (p?.images?.[0]?.variants) || [];
-          const img = variants.find((v) => v.width >= 360 && v.width <= 720)?.url || variants[variants.length - 1]?.url || null;
-          return { code: p.productCode || null, title: p.title || null, thumbnail: img, url: p.productUrl || null, fromPrice: (p?.pricing?.summary?.fromPrice ?? null), currency: (p?.pricing?.currency || 'USD') };
-        }).filter((p) => p.title && p.url);
-      } catch { return []; }
+        const products = results.map(viatorMapProduct).filter((p) => p.title && p.url)
+          .map((p) => ({ id: p.code, title: p.title, city: att.name, image: p.thumbnail, url: p.url, fromPrice: p.fromPrice, currency: p.currency, duration: p.duration, source: 'viator' }));
+        if (products.length) { vScopeName = att.name; return products; }
+      }
+      return [];
     })();
     const [events, experiences] = await Promise.all([tmP, vP]);
-    const payload = { events, experiences };
+    const payload = { events, experiences, destination: vScopeName };
     if (env.GLOBESKIMMERS_KV && (events.length || experiences.length)) await env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(payload), { expirationTtl: 6 * 3600 }).catch(() => {});
     return jsonResponse({ ...payload, source: 'live' });
   } catch (e) { return jsonResponse({ events: [], experiences: [], error: e.message }); }
