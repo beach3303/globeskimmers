@@ -37,6 +37,8 @@ const splitName = (full) => {
   return p.length > 1 ? { first: p.slice(0, -1).join(" "), last: p[p.length - 1] } : { first: p[0] || "", last: "" };
 };
 const fmtDate = (iso) => { const d = new Date(`${iso}T12:00:00Z`); return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }); };
+const prettyRoom = (s) => String(s || "").replace(/\s*,\s*/g, " · ").replace(/\s+/g, " ").trim()
+  .toLowerCase().replace(/(^|[\s·(\/-])([a-z])/g, (m, p, c) => p + c.toUpperCase()).replace(/\bWifi\b/g, "WiFi");   // display-only: tame supplier ALL-CAPS comma-runs
 
 export default function HotelBookSheet({ hotel, checkin, checkout, adults, children, dest, onClose }) {
   const navigate = useNavigate();
@@ -190,7 +192,7 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
             rooms stage, where the room cards themselves carry this. */}
         {stage !== "rooms" && (
         <div className="rounded-[16px] p-3.5 mt-3" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
-          {room?.name && <div className="text-[calc(13.5px*var(--fs))] font-semibold" style={{ color: INK }}>{room.name}{room.board ? <span style={{ color: INK2, fontWeight: 500 }}> · {room.board}</span> : null}</div>}
+          {room?.name && <div className="text-[calc(13.5px*var(--fs))] font-semibold" style={{ color: INK }}>{prettyRoom(room.name)}{room.board ? <span style={{ color: INK2, fontWeight: 500 }}> · {room.board}</span> : null}</div>}
           <div className="text-[calc(12.5px*var(--fs))] mt-1" style={{ color: room?.refundable ? OK : BAD }}>
             {room?.refundable ? `Free cancellation${room.cancelBy ? ` until ${fmtDate(String(room.cancelBy).slice(0, 10))}` : ""}` : "Non-refundable"}
           </div>
@@ -213,7 +215,7 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
               {(allRooms ? roomGroups : roomGroups.slice(0, 3)).map((g) => (
                 <div key={g.name} className="rounded-[16px] p-3.5" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
                   <div className="flex items-baseline justify-between gap-2">
-                    <div className="min-w-0 text-[calc(17.5px*var(--fs))] leading-snug" style={{ fontFamily: SERIF, color: INK }}>{g.name}</div>
+                    <div className="min-w-0 text-[calc(17.5px*var(--fs))] leading-snug" style={{ fontFamily: SERIF, color: INK }}>{prettyRoom(g.name)}</div>
                     {g.occ ? <span className="flex-none font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase" style={{ color: INK2 }}>Sleeps {g.occ}</span> : null}
                   </div>
                   <div className="mt-2 flex flex-col gap-1.5">

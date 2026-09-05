@@ -208,7 +208,7 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
   // Room lines from the live payload; when it carries none, the worker-merged
   // roomLabel (prebook-confirmed room · board) fills in — never both.
   const roomLines = Array.isArray(bk?.rooms) ? bk.rooms.map(roomLine).filter(Boolean) : [];
-  const rooms = roomLines.length ? roomLines : (bk?.roomLabel ? [bk.roomLabel] : []);
+  const rooms = (roomLines.length ? roomLines : (bk?.roomLabel ? [bk.roomLabel] : [])).map(prettyRoom);
   const holderName = bk?.holder
     ? [bk.holder.firstName, bk.holder.lastName].filter(Boolean).join(" ") || null
     : null;
