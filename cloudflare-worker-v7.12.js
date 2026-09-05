@@ -13588,7 +13588,8 @@ async function handleEventsSearch(request, env) {
             venue: (venue && venue.name) || '',
             city: (venue && venue.city && venue.city.name) || city || '',
             country: (venue && venue.country && venue.country.countryCode) || '',
-            category: (e.classifications && e.classifications[0] && e.classifications[0].segment && e.classifications[0].segment.name) || '',
+            // TM literally sends segment name "Undefined" for uncategorized events — that's no category, not a label.
+            category: (() => { const c = (e.classifications && e.classifications[0] && e.classifications[0].segment && e.classifications[0].segment.name) || ''; return /^undefined$/i.test(c) ? '' : c; })(),
             image: (img && img.url) || null,
             url: e.url || null,
             fromPrice: pr ? pr.min : null,

@@ -45,6 +45,9 @@ const CUR_SYM = { USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
 const fmtPrice = (n, cur) => { const c = String(cur || "").toUpperCase(); return `${c ? (CUR_SYM[c] || `${c} `) : "$"}${Math.round(n)}`; };
 const parseDate = (s) => { try { return s ? new Date(s + "T00:00:00") : null; } catch { return null; } };
 const fmtDate = (d) => { try { return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }); } catch { return ""; } };
+// Short date ("Sep 5") for pairing with a relative label that already carries
+// the day ("Tonight · Sep 5") — repeating the weekday there would be noise.
+const fmtDateShort = (d) => { try { return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); } catch { return ""; } };
 // "19:30:00" / "19:30" → "7:30 PM". Anything unparseable → "" (date-only card —
 // we never invent a time the payload doesn't carry).
 const fmtTime = (t) => {
@@ -102,6 +105,8 @@ export default function EventsRow({ wide = false }) {
             id: e.id, name: e.name, image: e.image,
             date: e.date, dateObj: parseDate(e.date),
             time: fmtTime(e.time || e.localTime), // defensive: worker may not send time yet → date-only
+            // Raw 24h start hour — "Tonight" vs "Today" honesty (a 10 AM event is not tonight).
+            rawH: (() => { const m = /^(\d{1,2}):/.exec(String(e.time || e.localTime || "")); return m ? Number(m[1]) : null; })(),
             // End time only when TM reported a real same-day end — never estimated.
             endTime: !e.endDate || e.endDate === e.date ? fmtTime(e.endTime) : "",
             venue: e.venue || "", city: e.city || "", cat: e.category,
@@ -185,9 +190,9 @@ export default function EventsRow({ wide = false }) {
     all: "",
   };
 
-  const relLabel = (d) => {
+  const relLabel = (d, rawH) => {
     const k = ymd(d);
-    if (k === W.todayKey) return "Tonight";
+    if (k === W.todayKey) return rawH != null && rawH >= 17 ? "Tonight" : "Today"; // morning/afternoon (or unknown time) → "Today"
     if (k === W.tomorrowKey) return "Tomorrow";
     const diff = Math.round((d - W.startToday) / 86400000);
     if (diff >= 2 && diff <= 6) return `This ${WD[d.getDay()]}`;
@@ -242,8 +247,9 @@ export default function EventsRow({ wide = false }) {
 
             <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
               {shownEvents.map((it) => {
-                const rel = relLabel(it.dateObj);
-                const datePart = rel || fmtDate(it.dateObj);
+                const rel = relLabel(it.dateObj, it.rawH);
+                // The calendar date always shows — "Tonight" alone made people do math.
+                const datePart = rel ? `${rel} · ${fmtDateShort(it.dateObj)}` : fmtDate(it.dateObj);
                 const timePart = it.time && it.endTime ? `${it.time} – ${it.endTime}` : it.time; // end shown only when TM reports one
                 const dateLine = timePart ? `${datePart} · ${timePart}` : datePart; // date-only when the payload has no time
                 const placeLine = [it.venue, it.city].filter(Boolean).join(" · ");
@@ -253,7 +259,7 @@ export default function EventsRow({ wide = false }) {
                       {it.image
                         ? <img src={it.image} alt="" loading="lazy" className="w-full h-full object-cover" />
                         : <div className="w-full h-full flex items-center justify-center font-serif text-[34px]" style={{ color: "rgba(255,255,255,0.85)" }}>{(it.name || "?").charAt(0)}</div>}
-                      {it.cat && (
+                      {it.cat && !/^undefined$/i.test(it.cat) && (
                         <div className="absolute top-2 left-2 px-2 py-0.5 rounded text-[calc(9.5px*var(--fs))] font-semibold" style={{ background: "rgba(255,255,255,0.92)", color: INK }}>
                           {it.cat}
                         </div>

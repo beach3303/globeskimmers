@@ -675,3 +675,8 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Founder (live on device): "Experiences nearby — it's not even the same city" (Santa Clarita user, Santa Monica rail — Viator has no Santa Clarita catalog, nearest real one is ~29 mi). Worker now sends destinationMi (rounded straight-line miles to the scoped destination, parent-attempt distance computed from the parent's own coords); KV events:v5.
 - EventsRow: kicker says EXPERIENCES NEARBY only when the destination is the user's own city or ≤12 mi; otherwise WORTH THE DRIVE · {dest} · ~{mi} mi — distance reframed as the day-trip pitch instead of a false "nearby". Alternative on the table if founder prefers: hide the rail entirely outside the user's city.
 - Gates: node --check ✓ eslint ✓ build ✓ boot-check ✓.
+
+## 2026-09-05 — Events cards: date always shown, Today vs Tonight, no "Undefined" pill
+- Founder: "Add date of event on each card. Even if it says today and tomorrow." Card line is now "Tonight · Sep 5 · 7:30 PM" / "Today · Sep 5 · 10:00 AM – 12:00 PM" — relative label keeps the short calendar date beside it; full "Sat, Sep 12" stays for non-relative dates. End times unchanged (shown only when TM reports a real one).
+- Honesty polish from the same screenshots: morning/afternoon events (start < 5 PM, or unknown time) say "Today", not "Tonight"; TM's literal segment name "Undefined" is stripped at the worker source and guarded in the pill render (covers 6h-cached v5 payloads).
+- Gates: node --check ✓ eslint ✓ build ✓ boot-check ✓.
