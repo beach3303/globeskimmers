@@ -29,7 +29,7 @@ import { viatorSearchLink } from "@/lib/viator";
 import { logDiscover } from "@/lib/logDiscover";
 import { openPartner } from "@/lib/openPartner";
 import TypographicStamp from "@/components/passport/TypographicStamp";
-import BookingDetailSheet, { StatusChip, partnerLabel, fmtDate } from "@/components/trips/BookingDetailSheet";
+import BookingDetailSheet, { StatusChip, partnerLabel, fmtDate, splitProductName } from "@/components/trips/BookingDetailSheet";
 import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesign/constants";
 
 // Editorial design tokens (shared with MyTrip / Wishlist / SavedLocations).
@@ -37,6 +37,7 @@ const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const ED_MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const ED_INK = "#16110D", ED_INK3 = "#736657";
 const ED_RULE = "rgba(22,17,13,.10)";
+const DAY_MS = 86400000;
 
 const TABS = [
   { id: "dreaming", label: "Dreaming" },
@@ -111,15 +112,64 @@ export default function TripsPage() {
     return () => { cancelled = true; };
   }, [attempt]);
 
-  const bookings = items
-    .filter((it) => (it.status || "").toLowerCase() === "confirmed")
-    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  // ── BOOKED sections (Wave 1) ──────────────────────────────────────────────
+  // A tap is still not a booking: only partner-confirmed rows show. CANCELLED
+  // rows are kept too (never deleted) but sink straight to Past trips, muted.
+  //
+  // dueDate per row: ONLY Nuitée rows carry real stay dates (the worker encodes
+  // "<hotel> · <checkin> → <checkout>" in product_name — splitProductName reads
+  // them back). Partner rows get NO dueDate ever — their dates live with the
+  // partner and we never fabricate them.
+  const parseYMD = (s) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || "");
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : null;
+  };
+  const todayStart = new Date().setHours(0, 0, 0, 0);
+
+  const rows = items
+    .filter((it) => ["confirmed", "cancelled"].includes((it.status || "").toLowerCase()))
+    .map((it) => {
+      const isNuitee = (it.partner || "").toLowerCase() === "nuitee";
+      const { name, dates } = splitProductName(it.product_name);
+      let checkin = null, checkout = null;
+      if (isNuitee && dates) {
+        const [a, b] = dates.split(" → ");
+        checkin = parseYMD(a);
+        checkout = parseYMD(b);
+      }
+      return { it, name, dates, dated: checkin != null && checkout != null, checkin, checkout };
+    });
+
+  const isCancelled = (r) => (r.it.status || "").toLowerCase() === "cancelled";
+  // Past = the checkout day is fully over (checkout+1 <= today) — or cancelled.
+  const isPast = (r) => isCancelled(r) || (r.dated && r.checkout < todayStart);
+
+  // (1) UPCOMING — dated rows, check-in ASC; mid-stay rows pin to the top.
+  const upcoming = rows.filter((r) => r.dated && !isPast(r)).sort((a, b) => a.checkin - b.checkin);
+  const current = upcoming.filter((r) => r.checkin <= todayStart);
+  const future = upcoming.filter((r) => r.checkin > todayStart);
+  // (2) undated confirmed partner rows — newest tap first.
+  const undated = rows.filter((r) => !r.dated && !isCancelled(r)).sort((a, b) => (b.it.ts || 0) - (a.it.ts || 0));
+  // (3) past — reverse-chron by checkout (cancelled/undated fall back to ts).
+  const past = rows
+    .filter(isPast)
+    .sort((a, b) => (b.checkout ?? (b.it.ts || 0) * 1000) - (a.checkout ?? (a.it.ts || 0) * 1000));
+  const bookedCount = upcoming.length + undated.length + past.length;
+
+  // Countdown captions — dated rows only. Mid-stay pins say ENJOY YOUR STAY
+  // (CHECK-IN TODAY on the check-in day itself); the soonest future stay says
+  // IN {N} DAYS. Partner rows never get one — we don't know their dates.
+  const currentCaption = (r) => (r.checkin === todayStart ? "CHECK-IN TODAY" : "ENJOY YOUR STAY");
+  const futureCaption = (r) => {
+    const n = Math.round((r.checkin - todayStart) / DAY_MS);
+    return `IN ${n} ${n === 1 ? "DAY" : "DAYS"}`;
+  };
 
   // Default tab: BOOKED when ≥1 confirmed booking, else DREAMING — decided when
   // the first load lands, and never after the traveler taps a tab themselves.
   useEffect(() => {
-    if (!loading && !picked.current && bookings.length > 0) setTab("booked");
-  }, [loading]); // bookings derives from the same load — loading is the real trigger
+    if (!loading && !picked.current && rows.some((r) => !isCancelled(r))) setTab("booked");
+  }, [loading]); // rows derives from the same load — loading is the real trigger
 
   // SAVED — same on-device read the SavedLocations page uses.
   const [saved, setSaved] = useState([]);
@@ -261,7 +311,7 @@ export default function TripsPage() {
               cta="Sign in"
               onCta={() => navigate(createPageUrl("Settings"))}
             />
-          ) : bookings.length === 0 ? (
+          ) : bookedCount === 0 ? (
             <EmptyCard
               fs={fs} t={t}
               title="No bookings yet"
@@ -275,34 +325,50 @@ export default function TripsPage() {
               <p className="mb-4 px-1" style={{ color: ED_INK3, fontSize: t(fs(12.5), fs(12)), lineHeight: 1.5 }}>
                 Everything here is confirmed by the partner you booked with. New bookings usually appear a day or two after you pay.
               </p>
+
+              {/* (1) UPCOMING — dated stays, mid-stay pinned, then check-in ASC */}
+              {upcoming.length > 0 && (
+                <p className="uppercase font-semibold mb-2 px-1" style={{ fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".14em", color: ED_INK3 }}>
+                  Upcoming
+                </p>
+              )}
               <div className="flex flex-col gap-2.5">
-                {bookings.map((it) => (
-                  <button
-                    key={it.key}
-                    onClick={() => setDetail(it)}
-                    className="w-full text-left p-3.5 rounded-[16px] transition-colors hover:bg-black/[0.02]"
-                    style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}
-                  >
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <StatusChip status={it.status} fs={fs} />
-                      <span className="uppercase font-semibold" style={{ fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".06em", color: ED_INK3 }}>
-                        {partnerLabel(it.partner)}
-                      </span>
-                    </div>
-                    <div
-                      className="font-medium mt-1.5"
-                      style={{ fontFamily: ED_SERIF, fontSize: t(fs(17), fs(15.5)), color: ED_INK, lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
-                    >
-                      {it.product_name || partnerLabel(it.partner)}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1.5" style={{ color: ED_INK3, fontSize: t(fs(12), fs(11.5)) }}>
-                      {it.dest_city && <span>{it.dest_city}{it.dest_country ? `, ${it.dest_country}` : ""}</span>}
-                      {it.dest_city && <span aria-hidden="true">·</span>}
-                      <span>{fmtDate(it.ts)}</span>
-                    </div>
-                  </button>
+                {current.map((r) => (
+                  <BookedRow key={r.it.key} r={r} fs={fs} t={t} display="confirmed" caption={currentCaption(r)} onOpen={() => setDetail(r.it)} />
+                ))}
+                {future.map((r, i) => (
+                  <BookedRow key={r.it.key} r={r} fs={fs} t={t} display="confirmed" caption={i === 0 ? futureCaption(r) : null} onOpen={() => setDetail(r.it)} />
+                ))}
+                {/* (2) undated confirmed partner rows — their dates live with the partner */}
+                {undated.map((r) => (
+                  <BookedRow
+                    key={r.it.key} r={r} fs={fs} t={t} display="confirmed"
+                    // An in-app row without parseable dates has no partner to
+                    // hold them — say nothing rather than something wrong.
+                    microcopy={(r.it.partner || "").toLowerCase() === "nuitee" ? null : `Dates live with ${partnerLabel(r.it.partner)}`}
+                    onOpen={() => setDetail(r.it)}
+                  />
                 ))}
               </div>
+
+              {/* (3) Past trips — completed stays reverse-chron; cancelled rows
+                  sink here immediately, muted, and still open the sheet. */}
+              {past.length > 0 && (
+                <>
+                  <h2 className="italic mt-7 mb-3 px-1" style={{ fontFamily: ED_SERIF, fontSize: t(fs(20), fs(18)), color: ED_INK3 }}>
+                    Past trips
+                  </h2>
+                  <div className="flex flex-col gap-2.5">
+                    {past.map((r) => (
+                      <BookedRow
+                        key={r.it.key} r={r} fs={fs} t={t} muted
+                        display={isCancelled(r) ? "cancelled" : "completed"}
+                        onOpen={() => setDetail(r.it)}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </>
           )
         )}
@@ -409,6 +475,53 @@ function DreamRow({ it, fs, t, onOpen }) {
         )}
       </div>
       <ChevronRight size={16} color={ED_INK3} strokeWidth={2} className="flex-none" />
+    </button>
+  );
+}
+
+// One booking card. `display` is the DISPLAY status (confirmed / completed /
+// cancelled — the stored row is never rewritten); `caption` is the countdown
+// line (dated Nuitée rows only); `microcopy` is the honest dates-live-with-
+// partner line for undated rows. Muted (past) rows still open the sheet.
+function BookedRow({ r, fs, t, display, caption, microcopy, muted, onOpen }) {
+  const { it, name, dates, dated } = r;
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full text-left p-3.5 rounded-[16px] transition-colors hover:bg-black/[0.02]"
+      style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT, opacity: muted ? 0.65 : 1 }}
+    >
+      {caption && (
+        <div className="uppercase font-semibold mb-1.5" style={{ fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".12em", color: TEAL_DEEP }}>
+          {caption}
+        </div>
+      )}
+      <div className="flex items-center gap-2 flex-wrap">
+        <StatusChip status={display || it.status} fs={fs} />
+        <span className="uppercase font-semibold" style={{ fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".06em", color: ED_INK3 }}>
+          {partnerLabel(it.partner)}
+        </span>
+      </div>
+      <div
+        className="font-medium mt-1.5"
+        style={{ fontFamily: ED_SERIF, fontSize: t(fs(17), fs(15.5)), color: ED_INK, lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+      >
+        {name || it.product_name || partnerLabel(it.partner)}
+      </div>
+      <div className="flex items-center gap-2 mt-1.5 flex-wrap" style={{ color: ED_INK3, fontSize: t(fs(12), fs(11.5)) }}>
+        {it.dest_city && <span>{it.dest_city}{it.dest_country ? `, ${it.dest_country}` : ""}</span>}
+        {it.dest_city && <span aria-hidden="true">·</span>}
+        {dated ? (
+          <span style={{ fontFamily: ED_MONO, fontSize: t(fs(11), fs(10.5)), letterSpacing: ".02em" }}>{dates}</span>
+        ) : (
+          <span>{fmtDate(it.ts)}</span>
+        )}
+      </div>
+      {microcopy && (
+        <div className="mt-1.5 uppercase font-semibold" style={{ fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".06em", color: ED_INK3 }}>
+          {microcopy}
+        </div>
+      )}
     </button>
   );
 }
