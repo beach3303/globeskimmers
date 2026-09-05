@@ -13,12 +13,19 @@
 //     → search around that landmark's coords
 //
 // Affiliate: handoff via trackAffiliateClick (partner "stay22" → SubID in
-// Stay22's `campaign` param, logged D1). Amenity filters (breakfast/pool/gym…)
-// are chosen on the results page (meta-search) — the UI says so; native amenity
-// pre-filtering is the planned Agoda-API follow-up.
+// Stay22's `campaign` param, logged D1). Amenity filters (Wave 5): server-side
+// on the in-app Nuitée lane — facilities / boardTypes / refundableOnly ride
+// /hotels/nuitee/search, and anything the worker can't honor comes back in
+// filtersDropped and is named on screen. The Stay22 meta-search lane still
+// refines amenities on the booking site — the UI says so.
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
-import { ArrowLeft, MapPin, Minus, Plus, Search, X, Calendar as CalendarIcon } from "lucide-react";
+import {
+  ArrowLeft, MapPin, Minus, Plus, Search, X, Calendar as CalendarIcon,
+  CircleParking, Croissant, Wifi, Snowflake, ShieldCheck, Dumbbell,
+  Refrigerator, Microwave, PlaneTakeoff, BusFront,
+  SlidersHorizontal, ChevronDown, ChevronUp,
+} from "lucide-react";
 import { DayPicker } from "react-day-picker";
 import { format } from "date-fns";
 import "react-day-picker/dist/style.css";
@@ -48,6 +55,37 @@ const GOALS = [
   { key: "airport", emoji: "✈️", label: "Near an airport" },
   { key: "centre",  emoji: "🏙️", label: "City centre" },
   { key: "sights",  emoji: "🗺️", label: "Near the sights" },
+];
+
+// ── Wave 5 amenity filters (in-app Nuitée lane) ──────────────────────────────
+// Each chip maps to the worker's /hotels/nuitee/search params EXACTLY:
+//   req.facility → facilities: [<name strings>]  — the worker resolves names to
+//     LiteAPI facility ids (aliases + normalized match); unmatched names come
+//     back VERBATIM in filtersDropped, so `req.facility` doubles as the
+//     reverse-map key for the honest dropped line.
+//   req.board    → boardTypes: [<code>]          — 'BI' = breakfast included.
+//     Per-RATE, not a hotel amenity: filters to rates that actually include
+//     breakfast (the worker exposes boardTypes, so breakfast rides it, not
+//     facilities). Dropped boards come back as 'board:<CODE>'.
+//   req.refundable → refundableOnly: true        — worker forwards it AND
+//     enforces it locally on parsed rates. Dropped as 'refundableOnly'.
+// "A/C" sends the full "Air conditioning" — the normalized token 'ac' is too
+// short to name-match safely. "Airport transfer" sends "Airport shuttle" (the
+// supplier's term; the worker aliases it). ONE "Shuttle service" chip only:
+// the supplier cannot distinguish town vs airport shuttles — never imply it can.
+const HOTEL_FILTERS = [
+  { key: "parking",   label: "Parking",           Icon: CircleParking, req: { facility: "Parking" } },
+  { key: "breakfast", label: "Free breakfast",    Icon: Croissant,     req: { board: "BI" } },
+  { key: "wifi",      label: "Free WiFi",         Icon: Wifi,          req: { facility: "Free WiFi" } },
+  { key: "ac",        label: "A/C",               Icon: Snowflake,     req: { facility: "Air conditioning" } },
+  { key: "refund",    label: "Free cancellation", Icon: ShieldCheck,   req: { refundable: true } },
+  // Under "More" — fridge/microwave are in-room amenities with patchy supplier
+  // coverage; the disclosure carries the coverage note.
+  { key: "gym",       label: "Gym",               Icon: Dumbbell,      req: { facility: "Gym" }, more: true },
+  { key: "fridge",    label: "Fridge",            Icon: Refrigerator,  req: { facility: "Fridge" }, more: true },
+  { key: "microwave", label: "Microwave",         Icon: Microwave,     req: { facility: "Microwave" }, more: true },
+  { key: "transfer",  label: "Airport transfer",  Icon: PlaneTakeoff,  req: { facility: "Airport shuttle" }, more: true },
+  { key: "shuttle",   label: "Shuttle service",   Icon: BusFront,      req: { facility: "Shuttle service" }, more: true },
 ];
 
 function Stepper({ label, value, setValue, min = 0, max = 16 }) {
@@ -92,6 +130,10 @@ export default function FindAHotel() {
   const [sightInputOpen, setSightInputOpen] = useState(false); // free-text bar expanded
   const [sightBusy, setSightBusy] = useState(false);
   const [maxPrice, setMaxPrice] = useState(null);   // client-side price cap on results
+  // Wave 5 amenity filters — chip keys from HOTEL_FILTERS; ride the in-app search.
+  const [filtersOn, setFiltersOn] = useState(() => new Set());
+  const [moreOpen, setMoreOpen] = useState(false);      // "More" disclosure row
+  const [filtersDropped, setFiltersDropped] = useState([]); // tokens the worker couldn't honor (last in-app response)
 
   const [range, setRange] = useState();        // { from: Date, to: Date } | undefined
   const [dateOpen, setDateOpen] = useState(false);
@@ -151,7 +193,7 @@ export default function FindAHotel() {
     // Clear stale results — but NOT bookSheet: a checkout in progress must survive
     // background location drift ("here" is re-centred by auto-follow every 5 min
     // and on every visibilitychange, which the Android payment sheet itself fires).
-    abandonInFlight(); setHotels(null); setInApp(null); setInAppMeta(null);
+    abandonInFlight(); setHotels(null); setInApp(null); setInAppMeta(null); setFiltersDropped([]);
     if (goal === "airport" && hasCoords) {
       setAirportsBusy(true); setAirport(null); setApOpen(true);
       nearestAirports(dest.lat, dest.lng, 6, 130)
@@ -170,8 +212,38 @@ export default function FindAHotel() {
   // A date change invalidates the in-app offers (exact-date rates): drop them and
   // any sheet opened from them, so a stale offer cannot be booked under new dates.
   useEffect(() => {
-    abandonInFlight(); setInApp(null); setInAppMeta(null); setBookSheet(null);
+    abandonInFlight(); setInApp(null); setInAppMeta(null); setBookSheet(null); setFiltersDropped([]);
   }, [checkin, checkout]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Wave 5 — chip toggles + request params. filterParams() emits EXACTLY the
+  // worker's contract on /hotels/nuitee/search: facilities (name strings),
+  // boardTypes (codes), refundableOnly (boolean). Params are omitted entirely
+  // when empty, so an unfiltered search hits the same KV entry as before.
+  const toggleFilter = (key) => setFiltersOn((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const filterParams = () => {
+    const on = HOTEL_FILTERS.filter((f) => filtersOn.has(f.key));
+    const facilities = on.map((f) => f.req.facility).filter(Boolean);
+    const boardTypes = on.map((f) => f.req.board).filter(Boolean);
+    return {
+      ...(facilities.length ? { facilities } : {}),
+      ...(boardTypes.length ? { boardTypes } : {}),
+      ...(on.some((f) => f.req.refundable) ? { refundableOnly: true } : {}),
+    };
+  };
+  // Response tokens → chip labels for the honest dropped line: facilities echo
+  // the name we sent, boards come back as 'board:<CODE>', refundableOnly as
+  // itself. Unknown tokens print as-is — never silently hidden.
+  const droppedLabels = () => [...new Set(filtersDropped.map((t) => {
+    const s = String(t);
+    if (s === "refundableOnly") return "Free cancellation";
+    const code = s.startsWith("board:") ? s.slice(6) : null;
+    const def = HOTEL_FILTERS.find((f) => (code ? f.req.board === code : f.req.facility === s));
+    return def ? def.label : s;
+  }))];
 
   const searchCities = async () => {
     const q = cityQuery.trim(); if (!q) return;
@@ -215,12 +287,13 @@ export default function FindAHotel() {
     // In-app (Nuitée) lane runs in parallel — exact dates + coordinates only;
     // flexible dates and address-only searches stay Stay22-only.
     const wantInApp = !!(checkin && checkout && Number.isFinite(lp.lat) && Number.isFinite(lp.lng));
-    setInApp(null); setInAppMeta(null); setInAppBusy(wantInApp);
+    setInApp(null); setInAppMeta(null); setFiltersDropped([]); setInAppBusy(wantInApp);
     if (wantInApp) {
-      callWorker("hotels/nuitee/search", { latitude: lp.lat, longitude: lp.lng, checkin, checkout, adults, children })
+      callWorker("hotels/nuitee/search", { latitude: lp.lat, longitude: lp.lng, checkin, checkout, adults, children, ...filterParams() })
         .then(({ data }) => {
           if (!live()) return;
           setInApp(Array.isArray(data?.hotels) ? data.hotels : []);
+          setFiltersDropped(Array.isArray(data?.filtersDropped) ? data.filtersDropped : []);
           // The OFFER's dates travel with the results — the sheet shows these, never
           // the live picker, which may move after the search.
           setInAppMeta({ nights: data?.nights, env: data?.env, checkin: data?.checkin || checkin, checkout: data?.checkout || checkout });
@@ -239,6 +312,23 @@ export default function FindAHotel() {
     } catch { if (live()) setHotels([]); }
     if (live()) setHotelsBusy(false);
   };
+
+  // Wave 5 — a chip change re-runs the search through the SAME request-seq
+  // guard as any new search: findHotels takes a fresh ticket, so a superseded
+  // (differently-filtered) response can never land on the new chips. Only when
+  // a search is already on screen — toggling first just primes the request.
+  const filterSig = [...filtersOn].sort().join(",");
+  const prevFilterSig = useRef(filterSig);
+  useEffect(() => {
+    if (prevFilterSig.current === filterSig) return;
+    prevFilterSig.current = filterSig;
+    if (blocked) return;
+    // Filters only apply to the dated in-app lane — without exact dates a chip
+    // toggle would just re-fire the identical Stay22 search and inflate the
+    // demand analytics (review finding). The chips stay primed for the next run.
+    if (!checkin || !checkout) return;
+    if (hotels !== null || inApp !== null || hotelsBusy || inAppBusy) findHotels();
+  }, [filterSig]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Smart handoff: when we arrive via a preset area/place ("Where visitors usually
   // stay" → Find hotels), auto-run the search ONCE so the user lands straight on
@@ -465,10 +555,63 @@ export default function FindAHotel() {
         </button>
 
         {/* Who */}
-        <div className="rounded-[16px] px-4 mb-4" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
+        <div className="rounded-[16px] px-4 mb-3" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
           <Stepper label="Adults" value={adults} setValue={setAdults} min={1} />
           <div className="h-px" style={{ background: "#F5F0E8" }} />
           <Stepper label="Children" value={children} setValue={setChildren} min={0} />
+        </div>
+
+        {/* Amenity filters (Wave 5) — icon+text chips, server-side on the
+            in-app bookable lane. First row always visible; "More" discloses the
+            rest, with the in-room coverage note in the honest mono register. */}
+        <div className="mb-4">
+          <div className="flex flex-wrap gap-2">
+            {HOTEL_FILTERS.filter((f) => !f.more).map((f) => {
+              const on = filtersOn.has(f.key);
+              return (
+                <button key={f.key} onClick={() => toggleFilter(f.key)} aria-pressed={on}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
+                  style={{ background: on ? ACCENT : "#FFFFFF", color: on ? "#fff" : ED_INK, border: `1.5px solid ${on ? ACCENT : "#F0E9DC"}` }}>
+                  <f.Icon size={14} strokeWidth={2.2} />{f.label}
+                </button>
+              );
+            })}
+            {(() => {
+              const moreCount = HOTEL_FILTERS.filter((f) => f.more && filtersOn.has(f.key)).length;
+              return (
+                <button onClick={() => setMoreOpen((o) => !o)} aria-expanded={moreOpen}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
+                  style={{ background: "#FFFFFF", color: ED_INK, border: `1.5px solid ${moreCount ? ACCENT : "#F0E9DC"}` }}>
+                  <SlidersHorizontal size={14} strokeWidth={2.2} />More{moreCount ? ` · ${moreCount}` : ""}
+                  {moreOpen ? <ChevronUp size={14} strokeWidth={2.2} /> : <ChevronDown size={14} strokeWidth={2.2} />}
+                </button>
+              );
+            })()}
+          </div>
+          {moreOpen && (
+            <>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {HOTEL_FILTERS.filter((f) => f.more).map((f) => {
+                  const on = filtersOn.has(f.key);
+                  return (
+                    <button key={f.key} onClick={() => toggleFilter(f.key)} aria-pressed={on}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
+                      style={{ background: on ? ACCENT : "#FFFFFF", color: on ? "#fff" : ED_INK, border: `1.5px solid ${on ? ACCENT : "#F0E9DC"}` }}>
+                      <f.Icon size={14} strokeWidth={2.2} />{f.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="font-mono text-[calc(10px*var(--fs))] mt-1.5 px-1 leading-snug" style={{ color: "#9AA0A6" }}>
+                In-room amenities per supplier data — coverage varies
+              </div>
+            </>
+          )}
+          {filtersOn.size > 0 && !(checkin && checkout) && (
+            <div className="font-mono text-[calc(10px*var(--fs))] mt-1.5 px-1 leading-snug" style={{ color: "#9AA0A6" }}>
+              Filters apply to in-app rates — pick exact dates to use them
+            </div>
+          )}
         </div>
 
         {/* Find */}
@@ -480,6 +623,14 @@ export default function FindAHotel() {
         {blocked && (
           <div className="text-center text-[calc(12px*var(--fs))] mt-2" style={{ color: INK2 }}>
             {!hasDest ? "Choose a destination to search." : "Pick an airport above."}
+          </div>
+        )}
+
+        {/* Wave 5 honesty: any filter the worker couldn't honor is named — one
+            mono line in the FallbackDisclaimer register, no pretending. */}
+        {filtersDropped.length > 0 && !inAppBusy && (
+          <div className="font-mono text-[calc(11px*var(--fs))] mt-3 px-1 leading-snug" style={{ color: "#B45309" }}>
+            Some filters aren&apos;t supported for this search: {droppedLabels().join(", ")}
           </div>
         )}
 

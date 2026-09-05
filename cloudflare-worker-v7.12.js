@@ -13763,6 +13763,68 @@ function recordPriceHistory(env, ctx, entries) {
   } catch { /* capture must never break a response */ }
 }
 
+// ── Wave 5: server-side amenity filters (zero extra rate calls) ──────────────
+// LiteAPI /hotels/rates accepts `facilities` (array of numeric facility IDs,
+// OR semantics by default), `refundableRatesOnly` (bool) and `boardType`
+// (comma-separated codes, e.g. 'BI,HB') — verified against
+// docs.liteapi.travel/reference/post_hotels-rates. Facility NAMES from the
+// client resolve to IDs at request time from GET /data/facilities
+// ({ data: [{ facility_id, facility }] }), KV-cached 30 days — it is static
+// reference data, so the map costs one API call per month, not per search.
+// Anything unmatched or rejected by the API is DROPPED and reported in
+// filtersDropped[] so the client can label results honestly.
+const NUITEE_FACILITIES_CK = 'nuitee:facilities:v1';
+async function nuiteeFacilitiesList(env, ctx) {
+  const cached = await env.GLOBESKIMMERS_KV.get(NUITEE_FACILITIES_CK, { type: 'json' }).catch(() => null);
+  if (Array.isArray(cached) && cached.length) return cached;
+  let res;
+  try { res = await fetch(`${NUITEE_API}/data/facilities`, { headers: nuiteeHeaders(env) }); } catch { return null; }
+  if (!res.ok) return null;
+  const d = await res.json().catch(() => ({}));
+  const list = (d?.data || [])
+    .map((f) => ({ id: Number(f.facility_id ?? f.facilityId ?? f.id), name: String(f.facility ?? f.name ?? '') }))
+    .filter((f) => Number.isFinite(f.id) && f.name);
+  if (!list.length) return null;
+  const put = env.GLOBESKIMMERS_KV.put(NUITEE_FACILITIES_CK, JSON.stringify(list), { expirationTtl: 30 * 24 * 3600 }).catch(() => {});
+  if (ctx && ctx.waitUntil) ctx.waitUntil(put);
+  return list;
+}
+const nuiteeFacNorm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+// Alias fallbacks tried after the literal name, normalized ('gym' finds
+// "Fitness centre"/"Fitness center" whichever spelling the live list uses;
+// wifi/wi-fi normalize to the same token so both spellings match either way).
+const NUITEE_FACILITY_ALIASES = {
+  gym: ['fitness', 'fitnesscenter', 'fitnesscentre'],
+  fitness: ['fitnesscenter', 'fitnesscentre', 'gym'],
+  freewifi: ['wifi', 'internet'], wifi: ['freewifi', 'internet'],
+  breakfast: ['breakfastavailable', 'breakfastbuffet', 'continentalbreakfast'],
+  airportshuttle: ['airportshuttlefree'], shuttleservice: ['shuttleservicefree'],
+  parking: ['freeparking'],
+};
+// Exact normalized match first, else the SHORTEST facility name containing the
+// term (most generic wins: "Parking" beats "Parking garage"). Unmatched names
+// go to dropped — never guessed.
+function nuiteeMatchFacilities(list, names) {
+  const ids = [], applied = [], dropped = [];
+  for (const name of names) {
+    const want = nuiteeFacNorm(name);
+    if (!want || !Array.isArray(list) || !list.length) { dropped.push(name); continue; }
+    let hit = null;
+    for (const t of [want, ...(NUITEE_FACILITY_ALIASES[want] || [])]) {
+      hit = list.find((f) => nuiteeFacNorm(f.name) === t);
+      if (hit) break;
+      const containing = list.filter((f) => nuiteeFacNorm(f.name).includes(t));
+      if (containing.length) { containing.sort((a, b) => a.name.length - b.name.length); hit = containing[0]; break; }
+    }
+    if (hit) { ids.push(hit.id); applied.push(name); } else dropped.push(name);
+  }
+  return { ids: [...new Set(ids)], applied, dropped };
+}
+// LiteAPI board codes: RO room only, BI breakfast included, HB half board,
+// FB full board, AI all-inclusive. Unknown codes are dropped (flagged), not
+// forwarded — an unrecognized code would 400 the whole rates call.
+const NUITEE_BOARD_TYPES = new Set(['RO', 'BI', 'HB', 'FB', 'AI']);
+
 async function handleNuiteeSearch(request, env, ctx) {
   try {
     const b = await request.json().catch(() => ({}));
@@ -13776,11 +13838,33 @@ async function handleNuiteeSearch(request, env, ctx) {
     const radiusM = Math.min(Math.max(Math.round((parseFloat(b.radiusKm) || 8) * 1000), 1000), 30000);
     const currency = /^[A-Z]{3}$/.test(String(b.currency || '')) ? b.currency : 'USD';
     const nationality = /^[A-Z]{2}$/.test(String(b.nationality || '')) ? b.nationality : 'US';
+    // Wave 5 filters: facility NAMES + refundableOnly + board codes from the client.
+    const reqFacilities = Array.isArray(b.facilities) ? [...new Set(b.facilities.map((s) => String(s).trim().slice(0, 40)).filter(Boolean))].slice(0, 8) : [];
+    const refundableOnly = b.refundableOnly === true;
+    const reqBoards = Array.isArray(b.boardTypes) ? [...new Set(b.boardTypes.map((s) => String(s).trim().toUpperCase()).filter(Boolean))].slice(0, 5) : [];
+    const boardTypes = reqBoards.filter((t) => NUITEE_BOARD_TYPES.has(t));
+    let filtersApplied = [], filtersDropped = reqBoards.filter((t) => !NUITEE_BOARD_TYPES.has(t)).map((t) => `board:${t}`);
+    // Deterministic filter suffix on the cache key (same rule as the Google
+    // filterSuffix pattern) — filtered results must never poison the
+    // unfiltered entry or each other. Sorted so param order can't fragment it.
+    // (keyed on REQUESTED boards, not the valid subset, so a request carrying
+    // an unknown code never shares the pristine unfiltered entry's metadata)
+    const filterSuffix = (reqFacilities.length || refundableOnly || reqBoards.length)
+      ? `:flt:f=${reqFacilities.map(nuiteeFacNorm).sort().join(',')}:r=${refundableOnly ? 1 : 0}:b=${[...reqBoards].sort().join(',')}`
+      : '';
     // v2: grouped-rates response shape (per-hotel rates[]) — v1 entries hold a
     // single rate and must not serve against clients expecting the room picker.
-    const ck = `nuitee:search:v2:${nuiteeEnv(env)}:${lat.toFixed(3)},${lng.toFixed(3)}:${radiusM}:${checkin}:${checkout}:${adults}_${kids}:${currency}:${nationality}`;
+    const ck = `nuitee:search:v2:${nuiteeEnv(env)}:${lat.toFixed(3)},${lng.toFixed(3)}:${radiusM}:${checkin}:${checkout}:${adults}_${kids}:${currency}:${nationality}${filterSuffix}`;
     const cached = await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null);
     if (cached) return jsonResponse({ ...cached, source: 'cache' });
+    // Resolve facility names → IDs (KV-cached list; only fetched when asked for).
+    let facilityIds = [];
+    if (reqFacilities.length) {
+      const m = nuiteeMatchFacilities(await nuiteeFacilitiesList(env, ctx), reqFacilities);
+      facilityIds = m.ids; filtersApplied.push(...m.applied); filtersDropped.push(...m.dropped);
+    }
+    if (refundableOnly) filtersApplied.push('refundableOnly');
+    filtersApplied.push(...boardTypes.map((t) => `board:${t}`));
     const body = {
       latitude: lat, longitude: lng, radius: radiusM,
       checkin, checkout, currency, guestNationality: nationality,
@@ -13796,14 +13880,29 @@ async function handleNuiteeSearch(request, env, ctx) {
       // a 20-min TTL — so limit STAYS 40 (a 20-row page + one full +20 page).
       // Revisit to 25 only if live logs show responses past ~250KB.
       includeHotelData: true, maxRatesPerHotel: 6, roomMapping: true, limit: 40,
+      // Wave 5: server-side filters — same single rates call, zero extra cost.
+      ...(facilityIds.length ? { facilities: facilityIds } : {}),
+      ...(refundableOnly ? { refundableRatesOnly: true } : {}),
+      ...(boardTypes.length ? { boardType: boardTypes.join(',') } : {}),
     };
     let res;
     try { res = await fetch(`${NUITEE_API}/hotels/rates`, { method: 'POST', headers: nuiteeHeaders(env), body: JSON.stringify(body) }); }
     catch { return jsonResponse({ hotels: [], reason: 'network' }); }
+    if (!res.ok && res.status === 400 && (facilityIds.length || refundableOnly || boardTypes.length)) {
+      // A filter param this environment rejects must not kill the search:
+      // degrade by dropping ALL filters, flag them, serve unfiltered honestly.
+      const { facilities: _drop1, refundableRatesOnly: _drop2, boardType: _drop3, ...bare } = body;
+      filtersDropped.push(...filtersApplied); filtersApplied = [];
+      try { res = await fetch(`${NUITEE_API}/hotels/rates`, { method: 'POST', headers: nuiteeHeaders(env), body: JSON.stringify(bare) }); }
+      catch { return jsonResponse({ hotels: [], reason: 'network' }); }
+    }
     if (!res.ok) { const t = await res.text().catch(() => ''); return jsonResponse({ hotels: [], reason: `http_${res.status}`, detail: t.slice(0, 300) }); }
     const d = await res.json().catch(() => ({}));
     const info = new Map((d?.hotels || []).map((h) => [String(h.id ?? h.hotelId), h]));
     const nights = nuiteeNights(checkin, checkout);
+    // When refundableOnly survived, ALSO enforce it locally on the parsed rates
+    // — free, and keeps the promise even if the upstream param is ignored.
+    const refundableEnforced = filtersApplied.includes('refundableOnly');
     const hotels = (d?.data || []).map((h) => {
       const meta = info.get(String(h.hotelId)) || {};
       // Wave 4: GROUP the priced rates per hotel (room picker), trimmed to the
@@ -13817,6 +13916,7 @@ async function handleNuiteeSearch(request, env, ctx) {
         const amt = tot?.amount;
         if (amt == null) continue;
         const cp = r.cancellationPolicies || {};
+        if (refundableEnforced && cp.refundableTag !== 'RFN') continue;
         const cancelByRaw = (cp.cancelPolicyInfos || []).map((c) => c && c.cancelTime).filter(Boolean).sort()[0] || null;
         const mappedRoomId = rt.mappedRoomId ?? r.mappedRoomId ?? null;
         const rate = {
@@ -13847,7 +13947,7 @@ async function handleNuiteeSearch(request, env, ctx) {
         distanceMiles: Number.isFinite(dist) ? Math.round(dist * 10) / 10 : null,
         price: best.price, currency: best.currency, nights, nightly: best.nightly,
         roomName: best.roomName, board: best.board,
-        freeCancellation: best.refundable, cancelBy: best.cancelByRaw,
+        freeCancellation: best.freeCancellation, cancelBy: best.cancelByRaw,
         maxOccupancy: best.maxOccupancy,
         rates: rates.filter((r, i, arr) => arr.findIndex((x) => x.offerId === r.offerId) === i).slice(0, 6),   // roomType-shared offerIds: one plan per bookable offer
         supplier: 'nuitee', bookUrl: null, inApp: true,
@@ -13860,7 +13960,7 @@ async function handleNuiteeSearch(request, env, ctx) {
       component: 'hotel', productId: h.hotelId, price: h.nightly, currency: h.currency,
       meta: { checkin, nights, adults, kids },
     })));
-    const payload = { hotels, nights, checkin, checkout, currency, env: nuiteeEnv(env) };
+    const payload = { hotels, nights, checkin, checkout, currency, env: nuiteeEnv(env), filtersApplied, filtersDropped };
     if (hotels.length && ctx) ctx.waitUntil(env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(payload), { expirationTtl: 20 * 60 }).catch(() => {}));
     return jsonResponse({ ...payload, source: 'live' });
   } catch (e) { return jsonResponse({ hotels: [], error: e.message }); }
