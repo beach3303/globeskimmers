@@ -19,6 +19,8 @@
 //   experiences[]: { id, title, image, city (optional), fromPrice, currency, url }
 //                  (code/thumbnail also accepted — pre-v4 field names)
 //   destination:   Viator destination name the experiences were scoped to (optional)
+//   destinationMi: straight-line miles to that destination (optional) — gates the
+//                  "EXPERIENCES NEARBY" vs "WORTH THE DRIVE" framing below
 // Time and per-experience city are read defensively — a card shows date-only when
 // the payload carries no time (never an invented one), and falls back to the base
 // city for experiences.
@@ -112,7 +114,8 @@ export default function EventsRow({ wide = false }) {
             city: p.city || "", fromPrice: p.fromPrice, currency: p.currency, url: p.url,
           }));
         const destName = data?.destination || data?.destinationName || "";
-        setPayload({ events, exps, destName });
+        const destMi = Number.isFinite(data?.destinationMi) ? data.destinationMi : null;
+        setPayload({ events, exps, destName, destMi });
         if (events.length || exps.length) logDiscover("event_view", { city, country, count: events.length + exps.length });
       } catch { if (!cancelled) setPayload(null); }
     })();
@@ -274,10 +277,20 @@ export default function EventsRow({ wide = false }) {
             separated from the dated events (they are NOT tonight's events). */}
         {shownExps.length > 0 && (
           <div className={events.length ? "mt-3" : ""}>
-            <div className="flex items-baseline gap-2 mb-1.5 px-0.5">
-              <span className="text-[calc(10.5px*var(--fs))] font-semibold tracking-[0.08em]" style={{ fontFamily: MONO, color: SUB }}>EXPERIENCES NEARBY</span>
-              {(payload.destName || city) && <span className="font-serif text-[calc(14px*var(--fs))]" style={{ color: INK }}>{payload.destName || city}</span>}
-            </div>
+            {/* "Nearby" only when it's true: same city, or within ~12 mi. A farther
+                catalog (Viator has none for many suburbs) is framed honestly as a
+                day-trip — "WORTH THE DRIVE · Santa Monica · ~29 MI", never "nearby". */}
+            {(() => {
+              const sameCity = !!payload.destName && !!city && payload.destName.trim().toLowerCase() === city.trim().toLowerCase();
+              const isNear = sameCity || !payload.destName || (payload.destMi != null && payload.destMi <= 12);
+              return (
+                <div className="flex items-baseline gap-2 mb-1.5 px-0.5">
+                  <span className="text-[calc(10.5px*var(--fs))] font-semibold tracking-[0.08em]" style={{ fontFamily: MONO, color: SUB }}>{isNear ? "EXPERIENCES NEARBY" : "WORTH THE DRIVE"}</span>
+                  {(payload.destName || city) && <span className="font-serif text-[calc(14px*var(--fs))]" style={{ color: INK }}>{payload.destName || city}</span>}
+                  {!isNear && payload.destMi != null && <span className="text-[calc(10.5px*var(--fs))]" style={{ fontFamily: MONO, color: SUB }}>~{payload.destMi} mi</span>}
+                </div>
+              );
+            })()}
             <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
               {shownExps.map((it) => (
                 <button key={"exp" + it.id} onClick={() => open(it, "exp")} className={`flex-none ${expW} rounded-2xl overflow-hidden text-left bg-white`} style={{ border: `1px solid ${EDGE}`, boxShadow: "0 8px 20px -16px rgba(22,17,13,.4)" }}>

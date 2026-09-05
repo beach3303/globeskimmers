@@ -670,3 +670,8 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Frontend: DreamGallery.jsx full-screen photo wall (2-col, lightbox with Commons credit link, bucket chips that hide when honestly empty, shimmer loading) + sticky "Build my trip" → SmartPackages via the existing router-state handoff. Opens from Dream Shelf taps (old details path kept as secondary) and from grounded dream answers ("See photos").
 - Review: 2 CONFIRMED fixed pre-push — cache key omitted limit (the filterSuffix class; now always fetch/cache 40, slice per request) and a stuck-shimmer race on dest-swap-while-open (state keys now destination-scoped). Contract diff worker↔frontend verified field-by-field clean; no Google calls in the new path.
 - Gates: node --check ✓ eslint ✓ build ✓ boot-check ✓.
+
+## 2026-09-05 — Events: distance-honest experiences rail ("nearby" must be true)
+- Founder (live on device): "Experiences nearby — it's not even the same city" (Santa Clarita user, Santa Monica rail — Viator has no Santa Clarita catalog, nearest real one is ~29 mi). Worker now sends destinationMi (rounded straight-line miles to the scoped destination, parent-attempt distance computed from the parent's own coords); KV events:v5.
+- EventsRow: kicker says EXPERIENCES NEARBY only when the destination is the user's own city or ≤12 mi; otherwise WORTH THE DRIVE · {dest} · ~{mi} mi — distance reframed as the day-trip pitch instead of a false "nearby". Alternative on the table if founder prefers: hide the rail entirely outside the user's city.
+- Gates: node --check ✓ eslint ✓ build ✓ boot-check ✓.

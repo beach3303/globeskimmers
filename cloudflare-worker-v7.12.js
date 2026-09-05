@@ -13547,7 +13547,7 @@ async function handleEventsSearch(request, env) {
     // (Rome, Italy vs Rome, Georgia would otherwise share a "rome" key and poison
     // each other for 6h). ~11km grid (1 decimal) groups a metro without splitting.
     const ckId = (hasGeo ? `${lat.toFixed(1)},${lng.toFixed(1)}` : (city || 'x')).toLowerCase();
-    const ck = `events:v4:${ckId}`; // v4: events gained dateTime/localTime/source; experiences reshaped + destination-scoped
+    const ck = `events:v5:${ckId}`; // v5: + destinationMi (distance honesty — "nearby" vs "worth the drive")
     if (env.GLOBESKIMMERS_KV) {
       const cached = await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null);
       if (cached) return jsonResponse({ ...cached, source: 'cache' });
@@ -13613,6 +13613,8 @@ async function handleEventsSearch(request, env) {
     // within range → NO products: empty beats wrong-city. Ladder: destination →
     // parent → honest empty; a 429 stops the ladder.
     let vScopeName = null; // destination name the experiences were ACTUALLY scoped to
+    let vScopeMi = null;   // straight-line miles from the user to that destination — the
+                           // frontend uses it to say "nearby" only when it's true
     const vP = (async () => {
       if (!env.VIATOR_API_KEY || !hasGeo) return [];
       const list = await viatorDestinations(env);
@@ -13624,8 +13626,9 @@ async function handleEventsSearch(request, env) {
       // a card must not claim "Santa Clarita" for a product that may be elsewhere
       // in the parent region.
       const pRow = dest.parentId != null ? list.find((r) => String(r[0]) === String(dest.parentId)) : null;
-      const attempts = [{ id: String(dest.id), name: dest.name }];
-      if (dest.parentId != null) attempts.push({ id: String(dest.parentId), name: (pRow && pRow[5]) || null });
+      const pMi = pRow && pRow[2] != null && pRow[3] != null ? haversineMilesLoc(lat, lng, pRow[2], pRow[3]) : null;
+      const attempts = [{ id: String(dest.id), name: dest.name, mi: dest.mi }];
+      if (dest.parentId != null) attempts.push({ id: String(dest.parentId), name: (pRow && pRow[5]) || null, mi: pMi });
       for (const att of attempts) {
         const destination = att.id;
         let res;
@@ -13640,12 +13643,12 @@ async function handleEventsSearch(request, env) {
         const results = Array.isArray(d?.products?.results) ? d.products.results : [];
         const products = results.map(viatorMapProduct).filter((p) => p.title && p.url)
           .map((p) => ({ id: p.code, title: p.title, city: att.name, image: p.thumbnail, url: p.url, fromPrice: p.fromPrice, currency: p.currency, duration: p.duration, source: 'viator' }));
-        if (products.length) { vScopeName = att.name; return products; }
+        if (products.length) { vScopeName = att.name; vScopeMi = Number.isFinite(att.mi) ? Math.round(att.mi) : null; return products; }
       }
       return [];
     })();
     const [events, experiences] = await Promise.all([tmP, vP]);
-    const payload = { events, experiences, destination: vScopeName };
+    const payload = { events, experiences, destination: vScopeName, destinationMi: vScopeMi };
     if (env.GLOBESKIMMERS_KV && (events.length || experiences.length)) await env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(payload), { expirationTtl: 6 * 3600 }).catch(() => {});
     return jsonResponse({ ...payload, source: 'live' });
   } catch (e) { return jsonResponse({ events: [], experiences: [], error: e.message }); }
