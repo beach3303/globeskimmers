@@ -650,3 +650,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Frontend: chip row (Parking · Free breakfast · Free WiFi · A/C · Free cancellation) + More disclosure (Gym · Fridge · Microwave · Airport transfer · Shuttle service, coverage note); honest amber line for dropped filters; re-search through the request-seq guard, gated on exact dates.
 - Review: 2 CONFIRMED fixed pre-push (top-level freeCancellation went undefined after the W4 rename — every card read Non-refundable; chip toggles re-fired Stay22 + demand analytics without dates). Gates all ✓.
 - **Bookings v2 COMPLETE (Waves 1–5). Next: founder sandbox re-test → production flip.** Post-deploy smoke: probe facilities:["parking","free wifi","gym","air conditioning","airport shuttle","shuttle service","breakfast"] and check the applied/dropped split.
+
+## 2026-09-05 — 🎉 NUITÉE PRODUCTION FLIP (founder-authorized)
+- Founder completed TWO sandbox device tests end-to-end (wumWlmV9Q on the v1 flow; uSFAzVwPN through the full Bookings-v2 flow) and said "flip it". NUITEE_ENV sandbox→production (one line); sandbox rows purged (affiliate_clicks intent='sandbox' + nuitee_sessions env='sandbox'); privacy page names Nuitée Travel Ltd as merchant of record. In-app hotel bookings are LIVE with real inventory and real payments.
+- Still on founder: Commission/Payout in the Nuitée dashboard (margin accrual); one real low-value booking to verify the statement descriptor + cancellation path. "Book a Hotel" rename remains an open verdict — not shipped without the word.

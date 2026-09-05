@@ -57,4 +57,4 @@ bucket_name = "globeskimmers-media"
 # simulated payments) · anything else → NUITEE_API_KEY (real bookings).
 # Flip to "production" when the in-app hotel lane goes live to travelers.
 [vars]
-NUITEE_ENV = "sandbox"
+NUITEE_ENV = "production"
