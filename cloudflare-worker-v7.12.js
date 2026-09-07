@@ -14195,8 +14195,11 @@ function validateDestIntel(raw) {
 // land here, so they share one KV cache ('destintel:v1:<slug>'). Only
 // available:true results are cached: a transient model failure must not pin
 // { available: false } for 90 days.
-async function destinationIntel(env, ctx, { name, country, lat, lng }) {
+async function destinationIntel(env, ctx, { name, country, lat, lng, debug }) {
   const unavailable = { available: false, guidance: DEST_INTEL_GUIDANCE };
+  // debug:true (ops only) marks WHICH stage failed — a coarse label, never
+  // key material or model output.
+  const fail = (stage) => (debug ? { ...unavailable, stage } : unavailable);
   const slug = destIntelSlug(name, country);
   if (!slug || !env.ANTHROPIC_API_KEY) return unavailable;
   const ck = `destintel:v1:${slug}`;
@@ -14220,19 +14223,21 @@ async function destinationIntel(env, ctx, { name, country, lat, lng }) {
         messages: [{ role: 'user', content: userContent }]
       })
     });
-    if (!apiRes.ok) return unavailable;
+    if (!apiRes.ok) return fail(`http_${apiRes.status}`);
     const data = await apiRes.json();
     const raw = data?.content?.[0]?.text?.trim() || '';
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-    const validated = validateDestIntel(JSON.parse(cleaned));
-    if (!validated) return unavailable;
+    let parsed = null;
+    try { parsed = JSON.parse(cleaned); } catch { return fail('parse'); }
+    const validated = validateDestIntel(parsed);
+    if (!validated) return fail(parsed && parsed.known === false ? 'model_unknown' : 'validate');
     const intel = { available: true, ...validated, guidance: DEST_INTEL_GUIDANCE };
     if (env.GLOBESKIMMERS_KV) {
       const put = env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(intel), { expirationTtl: DEST_INTEL_TTL_SECONDS }).catch(() => {});
       if (ctx) ctx.waitUntil(put); else await put;
     }
     return { ...intel, _cache: 'miss' };
-  } catch { return unavailable; }
+  } catch { return fail('error'); }
 }
 
 async function handleDestinationIntel(request, env, ctx) {
@@ -14251,6 +14256,7 @@ async function handleDestinationIntel(request, env, ctx) {
     name, country,
     lat: (Number.isFinite(lat) && Math.abs(lat) <= 90) ? lat : NaN,
     lng: (Number.isFinite(lng) && Math.abs(lng) <= 180) ? lng : NaN,
+    debug: body?.debug === true,
   }));
 }
 
