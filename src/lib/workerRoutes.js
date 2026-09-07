@@ -57,4 +57,7 @@ export const ROUTE = {
   // Smart Packages — Stripe hosted checkout (test mode; founder-only entry)
   packageCheckout: 'package/checkout',
 
+  // Deal Radar — airline fare-sale list for the Home row
+  dealsList: 'deals/list',
+
 };

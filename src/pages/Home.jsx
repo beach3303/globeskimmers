@@ -13,6 +13,7 @@ import StayAnchor from "../components/home/StayAnchor";
 import EscapesRow from "../components/home/EscapesRow";
 import TodayCard from "../components/home/TodayCard";
 import EventsRow from "../components/home/EventsRow";
+import DealRadarRow from "../components/home/DealRadarRow";
 import MyTripCard from "../components/home/MyTripCard";
 import WishlistCard from "../components/home/WishlistCard";
 import AllServicesSheet from "../components/home/AllServicesSheet";
@@ -813,6 +814,7 @@ export default function HomePage() {
           <TodayCard onAction={handleQuickAction} />
           <StampsNearYou onAction={handleQuickAction} />
           <EventsRow />
+          <DealRadarRow />
           <PerfectDayCard city={cityName} onOpen={openPerfectDay} />
           <HomeRows onAction={handleQuickAction} />
           <StayAnchor />
@@ -830,6 +832,7 @@ export default function HomePage() {
           <HomeRows onAction={handleQuickAction} />
           <EscapesRow onAction={handleQuickAction} />
           <EventsRow />
+          <DealRadarRow />
           <PerfectDayCard city={cityName} onOpen={openPerfectDay} />
           <SmartPackageCard onOpen={openSmartPackage} />
           <WishlistCard />

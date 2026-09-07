@@ -15364,6 +15364,316 @@ async function handleGuestbookVisit(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// DEAL RADAR v1 — airline promo sweep (cron-driven; see wrangler.toml [triggers])
+// ═════════════════════════════════════════════════════════════════════════════
+// HONESTY IS THE PRODUCT: a promo card may only claim what the airline's own
+// page says — and that is enforced MECHANICALLY, not by prompt alone. Every
+// promo must carry a verbatim `evidence` quote that is a literal substring of
+// the fetched page text; every %/fare number in the headline/detail must appear
+// inside that quote; the `ends` date must appear in it too. Any promo failing
+// any check is dropped whole — never trimmed into a half-claim.
+// Pipeline (per source, sequential): fetch page → strip to text → hash-compare
+// (unchanged page = zero AI spend) → Haiku classification (house Anthropic
+// pattern, one retry like destinationIntel) → evidence validation → D1 upsert
+// (events DB, binding `DB`; schema in cloudflare-worker/sql/10_deal_radar.sql).
+// Reads via GET /deals/list; `evidence` stays server-side as the audit trail.
+
+// Curated OFFICIAL deals/offers pages only — the airline's own domain, nothing
+// third-party. URLs search-verified 2026-09-07. `key` is the KV hash slug —
+// keep it stable forever or the sweep re-classifies (and re-spends) once.
+// Philippine Airlines is deliberately OMITTED: PAL publishes each seat sale at
+// a per-campaign press-release URL, and both stable-landing-page candidates
+// (/ph/en/promotions.html and /en/ph/home/book-flights/promotions) 404 — there
+// is no reliable URL to sweep, and guessing one is exactly what this feature
+// forbids. Add PAL if they ever ship a stable seat-sale landing page.
+const DEAL_SOURCES = [
+  { key: 'southwest', airline: 'Southwest',         url: 'https://www.southwest.com/special-offers/flight-deals/' },                  // "Flight Deals and Offers | Southwest Airlines"
+  { key: 'alaska',    airline: 'Alaska Airlines',   url: 'https://www.alaskaair.com/content/deals/flights/sale' },                    // "Flight Sales Promotions - Alaska Airlines"
+  { key: 'hawaiian',  airline: 'Hawaiian Airlines', url: 'https://www.hawaiianairlines.com/content/deals-and-offers/flights' },       // Hawaiian's deals-and-offers flights hub
+  { key: 'jetblue',   airline: 'JetBlue',           url: 'https://www.jetblue.com/sale' },                                            // "Current Flight Deals | JetBlue Flight Sale"
+  { key: 'united',    airline: 'United',            url: 'https://www.united.com/en/us/fly/travel/trip-planning/travel-deals.html' }, // "Travel Deals - Special Flight Offers"
+  { key: 'delta',     airline: 'Delta',             url: 'https://www.delta.com/us/en/flight-deals/current-flight-deals' },           // "Current Flight Deals | Delta Air Lines"
+  { key: 'american',  airline: 'American Airlines', url: 'https://www.aa.com/en-us/domestic-deals' },                                 // "Domestic deals | American Airlines" — the confirmed aa.com deals page (no single all-deals hub was verifiable)
+];
+
+const DEAL_LIST_CACHE_KEY = 'deals:list:v1';    // 1h response cache — the sweep also busts it on change
+const DEAL_PAGE_TEXT_CAP = 6000;                // chars of stripped page text the model sees (and evidence is checked against)
+const DEAL_PAGE_HASH_TTL = 30 * 24 * 60 * 60;   // 30d — a page untouched that long re-classifies once, harmless
+
+// Fetch one deals page and strip it to plain text. null = skip this source
+// (network trouble, bot-wall status, shell page) — never throws.
+async function fetchDealPageText(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const r = await fetch(url, {
+      signal: controller.signal,
+      redirect: 'follow',
+      headers: {
+        // Normal desktop UA — several airline pages sit behind bot managers
+        // that 403/406 bare fetches; when they still block us we skip cleanly.
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    }).catch(() => null);
+    if (!r || !r.ok) return null;
+    const html = await r.text();
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"')
+      .replace(/&#0?39;|&apos;/gi, "'").replace(/&[a-z]{2,8};|&#\d{1,6};/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, DEAL_PAGE_TEXT_CAP);
+    return text.length >= 100 ? text : null;  // sub-100-char "pages" are bot-wall shells, not content
+  } catch { return null; }
+  finally { clearTimeout(timer); }
+}
+
+// Whitespace+case normalization used for the substring honesty checks — the
+// model may re-space a quote slightly, but words and numbers must be intact.
+function dealNorm(s) {
+  return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// Digit runs ("30", "1499") with commas/spaces stripped, so "$1,499" and
+// "$1499" compare equal. Every run in a claim must exist verbatim in evidence.
+function dealDigitRuns(s) {
+  return String(s || '').replace(/[,\s]/g, '').match(/\d+/g) || [];
+}
+
+function buildDealRadarSystemPrompt() {
+  return `You are GlobeSkimmers' Deal Radar. You read the stripped TEXT of an airline's own deals page and extract ONLY promotions that page currently states.
+
+HONESTY RULES (ABSOLUTE):
+- The page text is your ONLY source. NEVER add numbers, dates, destinations, routes, or offers that are not literally in the text. No outside knowledge.
+- "evidence" must be a VERBATIM quote copied character-for-character from the page text (20-200 chars) containing the key claim. Never paraphrase inside evidence — your output is rejected mechanically if the quote is not an exact substring of the text.
+- Every percentage or fare number you put in headline/detail MUST also appear inside your evidence quote.
+- "ends" must be the end/book-by date string copied verbatim FROM the text, and it must appear inside the evidence quote. If the text shows no end date, use null. Never normalize or reformat dates.
+- Generic marketing ("Find great deals!", newsletter signups, route lists with no stated offer) is NOT a promotion. If the page states no current sale/promotion, return exactly: {"promos": []}
+
+OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
+{"promos": [{"headline": "...", "detail": "...", "destName": "... or null", "ends": "... or null", "evidence": "..."}]}
+
+FIELD RULES:
+- promos: up to 3, the clearest currently-stated offers only.
+- headline: <= 80 chars — the offer itself, in the page's own terms.
+- detail: <= 140 chars — qualifying facts from the text (travel window, routes, restrictions), or null.
+- destName: ONE city or region the sale clearly centers on, else null. Do not force one.
+- ends: verbatim date string from the text, or null.
+- evidence: the verbatim source snippet (20-200 chars) backing headline/detail/ends.
+
+Return JSON only.`;
+}
+
+// Hard validation + the anti-hallucination gate. Returns the cleaned promo
+// array (possibly empty) or null when the payload shape itself is unusable.
+// A promo failing ANY check is dropped whole — checks, in order:
+//   1. evidence is 20-200 chars AND a literal substring of the fetched page
+//      text (whitespace/case-normalized) — the claim provably came from the page;
+//   2. every digit run in headline/detail also appears in evidence — no
+//      invented percentages or fares;
+//   3. ends, when present, appears verbatim inside evidence — no guessed dates.
+function validateDealPromos(raw, pageText) {
+  try {
+    if (!raw || typeof raw !== 'object' || !Array.isArray(raw.promos)) return null;
+    const page = dealNorm(pageText);
+    // Clip-at-word-boundary instead of rejecting (same doctrine as
+    // validateDestIntel): the model can't count chars, and a 6-char overage
+    // shouldn't kill an evidence-backed promo. Empty/non-string still rejects.
+    const str = (v, cap) => {
+      if (typeof v !== 'string') return null;
+      const t = v.trim();
+      if (!t) return null;
+      if (t.length <= cap) return t;
+      const cut = t.slice(0, cap);
+      const sp = cut.lastIndexOf(' ');
+      return (sp > cap * 0.6 ? cut.slice(0, sp) : cut).replace(/[,;:\s]+$/, '');
+    };
+    const out = [];
+    for (const p of raw.promos.slice(0, 3)) {
+      if (!p || typeof p !== 'object') continue;
+      const evidence = typeof p.evidence === 'string' ? p.evidence.trim() : '';
+      if (evidence.length < 20 || evidence.length > 200) continue;
+      const evNorm = dealNorm(evidence);
+      if (!page.includes(evNorm)) continue;                    // not the airline's words → gone
+      const headline = str(p.headline, 80);
+      if (!headline) continue;
+      const detail = str(p.detail, 140);                      // null is fine
+      const evRuns = new Set(dealDigitRuns(evidence));
+      const claimRuns = dealDigitRuns(`${headline} ${detail || ''}`);
+      if (claimRuns.some((n) => !evRuns.has(n))) continue;    // number not in evidence → gone
+      const ends = (typeof p.ends === 'string' && p.ends.trim()) ? p.ends.trim().slice(0, 60) : null;
+      if (ends && !evNorm.includes(dealNorm(ends))) continue; // date not in evidence → gone
+      const destName = str(p.destName, 60);                   // display hint only — no evidence rule
+      out.push({ headline, detail, destName, ends, evidence });
+    }
+    return out;
+  } catch { return null; }
+}
+
+// House Anthropic pattern (clone of destinationIntel's loop): 2 attempts,
+// strict JSON, validate-or-retry. Returns the validated promo array (possibly
+// empty — an honest "no current sale") or null on failure. On null the caller
+// leaves the page hash UNSTORED so the next sweep retries — a transient model
+// failure must not pin stale promos for 30 days.
+async function classifyDealPage(env, pageText) {
+  if (!env.ANTHROPIC_API_KEY) return null;
+  const userContent = `AIRLINE DEALS PAGE TEXT (stripped, truncated):\n\n${pageText}\n\nExtract the currently-stated promotions per the honesty rules above.`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1000,
+          temperature: 0,   // extraction, not prose — the evidence quote must be exact
+          system: buildDealRadarSystemPrompt(),
+          messages: [{ role: 'user', content: userContent }]
+        })
+      });
+      if (!apiRes.ok) return null; // upstream trouble — don't hammer
+      const data = await apiRes.json();
+      const rawText = data?.content?.[0]?.text?.trim() || '';
+      const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+      let parsed = null;
+      try { parsed = JSON.parse(cleaned); } catch { continue; }
+      const promos = validateDealPromos(parsed, pageText);
+      if (promos === null) continue;                       // unusable shape → retry
+      // Model CLAIMED promos but every one failed the evidence gate — one
+      // retry (usually quote sloppiness); still all-dropped after that =
+      // treat as no promos. An honest {"promos": []} never retries.
+      if (promos.length === 0 && Array.isArray(parsed.promos) && parsed.promos.length > 0 && attempt === 0) continue;
+      return promos;
+    } catch { /* network / runtime — fall through to retry */ }
+  }
+  return null;
+}
+
+// One source: fetch → hash-compare → classify → upsert. Returns the per-airline
+// status string for the sweep report. dealRadarSweep also guards with try/catch.
+async function sweepDealSource(env, ctx, src) {
+  const text = await fetchDealPageText(src.url);
+  if (!text) return 'fail: fetch';           // bot-wall / network / shell — skip, retry next sweep
+  const hash = await sha256Hex(text);
+  const hk = `dealpage:v1:${src.key}`;
+  const prevHash = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(hk).catch(() => null) : null;
+  if (prevHash === hash) {
+    // Same content → zero AI spend — but an UNCHANGED page was still READ and
+    // still shows the sale, so its promos stay fresh. Without this touch, a
+    // steady 3-week sale would vanish from /deals/list after day 7.
+    await env.DB.prepare("update airline_promos set last_seen = datetime('now') where airline = ? and active = 1")
+      .bind(src.airline).run().catch(() => {});
+    return 'unchanged';
+  }
+  const promos = await classifyDealPage(env, text);
+  if (promos === null) return 'fail: classify'; // hash NOT stored → next sweep re-tries this page
+  // Store the new hash only now that classification succeeded — storing it
+  // earlier would pin a transient model failure as "unchanged" for 30 days.
+  if (env.GLOBESKIMMERS_KV) {
+    const put = env.GLOBESKIMMERS_KV.put(hk, hash, { expirationTtl: DEAL_PAGE_HASH_TTL }).catch(() => {});
+    if (ctx) ctx.waitUntil(put); else await put;
+  }
+  if (env.DB) {
+    // A changed page supersedes this airline's old promos wholesale…
+    await env.DB.prepare('update airline_promos set active = 0 where airline = ?').bind(src.airline).run().catch(() => {});
+    // …then the survivors come back (or re-activate) with a fresh last_seen.
+    // The coalesce subselect preserves first_seen across INSERT OR REPLACE
+    // (SQLite materializes the new row — subqueries included — before the
+    // REPLACE deletes the conflicting old one).
+    for (const p of promos) {
+      const id = (await sha256Hex(`${src.airline}|${p.headline}`)).slice(0, 32);
+      await env.DB.prepare(
+        `insert or replace into airline_promos
+           (id, airline, airline_url, headline, detail, dest_name, ends, evidence, first_seen, last_seen, active)
+         values (?,?,?,?,?,?,?,?, coalesce((select first_seen from airline_promos where id = ?), datetime('now')), datetime('now'), 1)`
+      ).bind(id, src.airline, src.url, p.headline, p.detail, p.destName, p.ends, p.evidence, id).run().catch(() => {});
+    }
+  }
+  return `changed: ${promos.length} promos`;
+}
+
+// The full sweep — sequential on purpose (politeness to the airline pages and
+// a bounded subrequest count: ~7 fetches + at most ~7 Haiku calls, usually far
+// fewer thanks to the hash gate). Returns { airline: status } for the manual
+// trigger; the cron path ignores the return value.
+async function dealRadarSweep(env, ctx) {
+  const results = {};
+  let changed = false;
+  for (const src of DEAL_SOURCES) {
+    let status;
+    try { status = await sweepDealSource(env, ctx, src); }
+    catch { status = 'fail: error'; }
+    results[src.airline] = status;
+    if (status.startsWith('changed')) changed = true;
+  }
+  // New promos shouldn't wait out the list cache's remaining TTL.
+  if (changed && env.GLOBESKIMMERS_KV) {
+    const del = env.GLOBESKIMMERS_KV.delete(DEAL_LIST_CACHE_KEY).catch(() => {});
+    if (ctx) ctx.waitUntil(del); else await del;
+  }
+  return results;
+}
+
+// GET /deals/list — public (same auth stance as /events/search: browse data,
+// no identity). Fresh promos only: active AND seen by a sweep within 7 days —
+// a page we can no longer read goes quiet instead of advertising stale sales.
+// `evidence` is deliberately NOT selected: it is the server-side audit trail.
+async function handleDealsList(request, env, ctx) {
+  try {
+    if (env.GLOBESKIMMERS_KV) {
+      const cached = await env.GLOBESKIMMERS_KV.get(DEAL_LIST_CACHE_KEY, { type: 'json' }).catch(() => null);
+      if (cached) return jsonResponse(cached);
+    }
+    let deals = [];
+    if (env.DB) {
+      const q = await env.DB.prepare(
+        `select id, airline, airline_url, headline, detail, dest_name, ends
+           from airline_promos
+          where active = 1 and last_seen >= datetime('now', '-7 days')
+          order by last_seen desc
+          limit 12`
+      ).all().catch(() => null);
+      deals = ((q && q.results) || []).map((r) => ({
+        id: r.id, airline: r.airline, url: r.airline_url,
+        headline: r.headline, detail: r.detail, destName: r.dest_name, ends: r.ends,
+      }));
+    }
+    const payload = { deals, source: 'radar' };
+    if (env.GLOBESKIMMERS_KV) {
+      const put = env.GLOBESKIMMERS_KV.put(DEAL_LIST_CACHE_KEY, JSON.stringify(payload), { expirationTtl: 60 * 60 }).catch(() => {});
+      if (ctx) ctx.waitUntil(put); else await put;
+    }
+    return jsonResponse(payload);
+  } catch (e) {
+    return jsonResponse({ deals: [], source: 'radar', error: e.message });
+  }
+}
+
+// POST /deals/sweep — manual trigger for TESTING only. Guarded by the
+// out-of-band secret DEAL_SWEEP_KEY (npx wrangler secret put DEAL_SWEEP_KEY);
+// a wrong/missing key — or an unset secret — returns the exact same 404 body
+// the router's fall-through produces, so the route is indistinguishable from
+// absent to anyone probing.
+async function handleDealsSweepManual(request, env, ctx) {
+  const b = await request.json().catch(() => ({}));
+  if (!env.DEAL_SWEEP_KEY || typeof b?.key !== 'string' || b.key !== env.DEAL_SWEEP_KEY) {
+    return jsonResponse({ error: 'Not found', path: '/deals/sweep' }, 404);
+  }
+  const results = await dealRadarSweep(env, ctx);
+  return jsonResponse({ ok: true, results });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -15414,6 +15724,11 @@ export default {
       if (pathname === '/viator/availability' && request.method === 'POST') return await handleViatorAvailability(request, env);
       if (pathname === '/activities/search' && request.method === 'POST') return await handleActivitySearch(request, env, ctx);
       if (pathname === '/events/search' && request.method === 'POST') return await handleEventsSearch(request, env);
+      // Deal Radar (airline promos — every claim evidence-gated to the airline's own page)
+      // POST included: callWorker (the app's only transport) can ONLY POST — a
+      // GET-only route here is a dead route for every client.
+      if (pathname === '/deals/list' && (request.method === 'GET' || request.method === 'POST')) return await handleDealsList(request, env, ctx);
+      if (pathname === '/deals/sweep' && request.method === 'POST') return await handleDealsSweepManual(request, env, ctx);
       if (pathname === '/hotels/search' && request.method === 'POST') return await handleHotelSearch(request, env, ctx);
       if (pathname === '/hotels/nuitee/search' && request.method === 'POST') return await handleNuiteeSearch(request, env, ctx);
       if (pathname === '/hotels/nuitee/prebook' && request.method === 'POST') return await handleNuiteePrebook(request, env);
@@ -15530,6 +15845,18 @@ export default {
       return jsonResponse({ error: 'Not found', path: pathname }, 404);
     } catch (error) {
       return jsonResponse({ error: error.message, stack: error.stack }, 500);
+    }
+  },
+
+  // Cron (wrangler.toml [triggers]: "0 15 * * *" = 15:00 UTC ≈ 7am PT) — Deal
+  // Radar sweep. FULLY caught: a sweep failure can never take the API down;
+  // the fetch handler above is untouched and completely independent of this.
+  async scheduled(event, env, ctx) {
+    try {
+      await dealRadarSweep(env, ctx);
+    } catch (_e) {
+      // swallow — sweep trouble is invisible to the API surface; the next
+      // day's cron (or POST /deals/sweep) simply tries again
     }
   }
 };

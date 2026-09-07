@@ -185,7 +185,12 @@ export default function SmartPackages() {
       ? { name: d.name || d.city || "", city: d.city || "", country: d.country || "", lat: d.lat, lng: d.lng }
       : null;
   });
-  const [destQuery, setDestQuery] = useState("");
+  // A name-only handoff (Deal Radar's "Build my trip" has no coords) prefills
+  // the typed search instead of being discarded — the button must land somewhere.
+  const [destQuery, setDestQuery] = useState(() => {
+    const d = routerState?.dest;
+    return d && !(Number.isFinite(d.lat) && Number.isFinite(d.lng)) && d.name ? String(d.name) : "";
+  });
   const [destResults, setDestResults] = useState([]);
   const [destSearching, setDestSearching] = useState(false);
 

@@ -58,3 +58,14 @@ bucket_name = "globeskimmers-media"
 # Flip to "production" when the in-app hotel lane goes live to travelers.
 [vars]
 NUITEE_ENV = "production"
+
+# ── CRON TRIGGERS ───────────────────────────────────────────────────────────
+# Daily Deal Radar sweep at 15:00 UTC (≈ 7am PT): fetches each airline's own
+# deals page and refreshes airline_promos in D1 (events DB, binding `DB` —
+# schema: cloudflare-worker/sql/10_deal_radar.sql, applied manually).
+# Handled by the `scheduled` export in cloudflare-worker-v7.12.js — this
+# section and that handler MUST ship in the same commit (push = deploy).
+# Manual test trigger: POST /deals/sweep, gated on the out-of-band secret
+# DEAL_SWEEP_KEY (npx wrangler secret put DEAL_SWEEP_KEY).
+[triggers]
+crons = ["0 15 * * *"]
