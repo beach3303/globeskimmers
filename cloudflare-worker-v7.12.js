@@ -15456,6 +15456,7 @@ HONESTY RULES (ABSOLUTE):
 - Every percentage or fare number you put in headline/detail MUST also appear inside your evidence quote.
 - "ends" must be the end/book-by date string copied verbatim FROM the text, and it must appear inside the evidence quote. If the text shows no end date, use null. Never normalize or reformat dates.
 - Generic marketing ("Find great deals!", newsletter signups, route lists with no stated offer) is NOT a promotion. If the page states no current sale/promotion, return exactly: {"promos": []}
+- FARE SALES ONLY: extract offers about flight prices (fare sales, discounted routes, companion FARES, promo-code fare discounts). NEVER extract credit-card signup offers, bonus-points/miles promotions, co-brand card deals, vacation-package upsells, or loyalty-program marketing — those are not fare sales, even when they appear on the deals page.
 
 OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
 {"promos": [{"headline": "...", "detail": "...", "destName": "... or null", "ends": "... or null", "evidence": "..."}]}
@@ -15566,7 +15567,7 @@ async function sweepDealSource(env, ctx, src) {
   const text = await fetchDealPageText(src.url);
   if (!text) return 'fail: fetch';           // bot-wall / network / shell — skip, retry next sweep
   const hash = await sha256Hex(text);
-  const hk = `dealpage:v1:${src.key}`;
+  const hk = `dealpage:v2:${src.key}`; // v2: fare-sales-only prompt — reclassify every page once
   const prevHash = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(hk).catch(() => null) : null;
   if (prevHash === hash) {
     // Same content → zero AI spend — but an UNCHANGED page was still READ and
