@@ -14215,6 +14215,236 @@ async function handlePackageGet(request, env) {
   } catch (e) { return jsonResponse({ ok: false, error: e.message }, 500); }
 }
 
+// ── Stripe (Wave 1 — GlobeSkimmers-as-merchant package checkout) ─────────────
+// Direct REST, no SDK (Workers-friendly). STRIPE_SECRET_KEY is set out of band
+// via `npx wrangler secret put` and may be test OR live — mode always follows
+// the key, the code never assumes. STRIPE_PUBLISHABLE_KEY is optional until the
+// pay page ships for real; /package/pay degrades honestly without it. Tables:
+// cloudflare-worker/sql/09_stripe_payments.sql (globeskimmers-events, env.DB).
+// Card data NEVER touches this worker — Stripe.js collects it in the browser.
+// The secret key never leaves the Authorization header and is never logged.
+const STRIPE_API = 'https://api.stripe.com/v1';
+async function stripeApi(env, method, path, params) {
+  if (!env.STRIPE_SECRET_KEY) return { error: { message: 'Stripe is not configured', code: 'not_configured', type: 'config_error' } };
+  // Flat form-encoding per Stripe's v1 API — nested keys arrive literally as
+  // param names ('automatic_payment_methods[enabled]', 'metadata[order_id]').
+  const form = new URLSearchParams();
+  for (const [k, v] of Object.entries(params || {})) { if (v !== undefined && v !== null) form.append(k, String(v)); }
+  const qs = form.toString();
+  const opts = { method, headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` } };
+  let target = `${STRIPE_API}${path}`;
+  if (method === 'GET') { if (qs) target += (target.includes('?') ? '&' : '?') + qs; }
+  else { opts.headers['Content-Type'] = 'application/x-www-form-urlencoded'; opts.body = qs; }
+  let res;
+  try { res = await fetch(target, opts); }
+  catch { return { error: { message: 'Network error reaching Stripe', code: 'network', type: 'network_error' } }; }
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) return { error: { message: d?.error?.message || `Stripe error (${res.status})`, code: d?.error?.code || null, type: d?.error?.type || null } };
+  return d;
+}
+const stripeHex = (chars) => { const b = new Uint8Array(chars / 2); crypto.getRandomValues(b); return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join(''); };
+// Amounts go to Stripe in the currency's SMALLEST unit. We assume 2-decimal
+// currencies and honestly refuse the ones where *100 would mischarge.
+const STRIPE_NON2DEC = new Set(['BIF', 'CLP', 'DJF', 'GNF', 'JPY', 'KMF', 'KRW', 'MGA', 'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF', 'BHD', 'JOD', 'KWD', 'OMR', 'TND']);
+
+// POST /package/checkout { orderId, choice? } — mints a PaymentIntent for the
+// stored hotel stay total of a priced package_orders draft and returns ONLY a
+// pay-page URL. The amount is computed server-side from D1 — any client-sent
+// amount is ignored; `choice` merely selects WHICH stored hotel option (index
+// into draft.hotelChoices, default 0 = cheapest), every price stays ours.
+async function handlePackageCheckout(request, env) {
+  try {
+    // Business failures answer 200 {ok:false, reason} — callWorker discards
+    // non-2xx bodies, which turned every reason into "check your connection"
+    // in the app. HTTP errors are reserved for transport problems.
+    if (!env.STRIPE_SECRET_KEY || !env.DB) return jsonResponse({ ok: false, reason: 'not_configured' });
+    const b = await request.json().catch(() => ({}));
+    const orderId = String(b.orderId || b.sid || '').replace(/[^a-f0-9]/g, '').slice(0, 64);
+    if (!orderId) return jsonResponse({ ok: false, reason: 'orderId_required' });
+    const row = await env.DB.prepare('select status, created, data from package_orders where sid = ?').bind(orderId).first().catch(() => null);
+    if (!row) return jsonResponse({ ok: false, reason: 'not_found' });
+    if (Date.now() - Number(row.created) > 30 * 86400000) return jsonResponse({ ok: false, reason: 'expired' });
+    if (/^paid/.test(String(row.status || ''))) return jsonResponse({ ok: false, reason: 'already_paid' });
+    let draft = null;
+    try { draft = JSON.parse(row.data); } catch { /* corrupt row → no_priced_total below */ }
+    const choices = Array.isArray(draft?.hotelChoices) ? draft.hotelChoices : [];
+    const idx = Math.min(Math.max(parseInt(b.choice, 10) || 0, 0), Math.max(choices.length - 1, 0));
+    const chosen = choices[idx] || null;
+    const stayTotal = (chosen && typeof chosen.stayTotal === 'number' && Number.isFinite(chosen.stayTotal) && chosen.stayTotal > 0) ? chosen.stayTotal : null;
+    if (stayTotal == null) return jsonResponse({ ok: false, reason: 'no_priced_total' });
+    const currency = String(chosen.currency || draft.currency || 'USD').toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency) || STRIPE_NON2DEC.has(currency)) {
+      return jsonResponse({ ok: false, reason: 'unsupported_currency', currency });
+    }
+    const amount = Math.round(stayTotal * 100);
+    if (!Number.isInteger(amount) || amount <= 0) return jsonResponse({ ok: false, reason: 'amount_invalid' });
+
+    // Idempotency on the money path: an abandoned redirect (sheet closed before
+    // /package/pay/return loaded) leaves a payable — possibly already SUCCEEDED —
+    // intent behind with the order still 'priced'. Never mint a second intent
+    // while the last one's fate is unknown: that is the double-charge window.
+    const prior = await env.DB.prepare('select pid, intent_id, status from stripe_payments where order_id = ? order by created desc limit 1').bind(orderId).first().catch(() => null);
+    if (prior && prior.intent_id && prior.status !== 'canceled') {
+      const prev = await stripeApi(env, 'GET', `/payment_intents/${prior.intent_id}`, {});
+      if (prev && !prev.error && prev.status) {
+        if (prev.status === 'succeeded') {
+          await env.DB.prepare("update stripe_payments set status = 'succeeded', updated = datetime('now') where pid = ?").bind(prior.pid).run().catch(() => {});
+          await env.DB.prepare('update package_orders set status = ?, updated = ? where sid = ?').bind(prev.livemode === true ? 'paid' : 'paid_test', Date.now(), orderId).run().catch(() => {});
+          return jsonResponse({ ok: false, reason: 'already_paid' });
+        }
+        if (prev.status !== 'canceled') {
+          // Alive and unpaid → hand back the SAME payment session instead of a new charge.
+          return jsonResponse({ ok: true, pid: prior.pid, url: `${new URL(request.url).origin}/package/pay?pid=${prior.pid}`, amount, currency, customerAttached: false, reused: true });
+        }
+      } else {
+        // Can't verify the prior intent right now — refusing to mint beats risking a double charge.
+        return jsonResponse({ ok: false, reason: 'stripe_error', detail: 'prior_intent_unverifiable' });
+      }
+    }
+
+    // Customer attachment ONLY for a GoTrue-verified caller (gbUser forwards the
+    // JWT to Supabase and trusts nothing client-sent). Anonymous → no customer.
+    const user = await gbUser(request, env).catch(() => null);
+    let customerId = null;
+    if (user?.id) {
+      const c = await env.DB.prepare('select customer_id from stripe_customers where user_id = ?').bind(user.id).first().catch(() => null);
+      if (c?.customer_id) customerId = c.customer_id;
+      else {
+        const created = await stripeApi(env, 'POST', '/customers', {
+          'metadata[supabase_user_id]': user.id, ...(user.email ? { email: user.email } : {}),
+        });
+        if (created && !created.error && created.id) {
+          customerId = created.id;
+          await env.DB.prepare('insert or ignore into stripe_customers (user_id, customer_id) values (?,?)')
+            .bind(user.id, customerId).run().catch(() => {});
+        }
+        // Customer creation failing is non-fatal — the payment proceeds guest-style.
+      }
+    }
+
+    const pi = await stripeApi(env, 'POST', '/payment_intents', {
+      amount, currency: currency.toLowerCase(),
+      'automatic_payment_methods[enabled]': 'true',
+      description: `GlobeSkimmers package ${orderId}`,
+      'metadata[order_id]': orderId,
+      ...(customerId ? { customer: customerId } : {}),
+    });
+    if (pi.error || !pi.id || !pi.client_secret) {
+      return jsonResponse({ ok: false, reason: 'stripe_error', detail: pi.error?.code || null });
+    }
+    const pid = stripeHex(24);
+    const saved = await env.DB.prepare(
+      "insert into stripe_payments (pid, intent_id, client_secret, order_id, user_id, amount, currency, status, updated) values (?,?,?,?,?,?,?,?,datetime('now'))"
+    ).bind(pid, pi.id, pi.client_secret, orderId, user?.id || null, amount, currency, 'created')
+      .run().then(() => true).catch(() => false);
+    if (!saved) return jsonResponse({ ok: false, reason: 'persist_failed' });
+    const origin = new URL(request.url).origin;
+    // NOTHING sensitive: the client_secret stays in D1 + the pay page it renders.
+    return jsonResponse({ ok: true, pid, url: `${origin}/package/pay?pid=${pid}`, amount, currency, customerAttached: !!customerId });
+  } catch { return jsonResponse({ ok: false, reason: 'error' }); }
+}
+
+// GET /package/pay?pid= — the card page, served by us in the nuiteeHtml visual
+// language, opened in the in-app sheet. Mounts Stripe.js Payment Element with
+// the client_secret injected server-side into the page — never carried in the
+// URL. Without STRIPE_PUBLISHABLE_KEY it says so honestly (no fake form).
+async function handlePackagePay(request, env) {
+  const url = new URL(request.url);
+  const pid = (url.searchParams.get('pid') || '').replace(/[^a-f0-9]/g, '').slice(0, 64);
+  const row = (pid && env.DB)
+    ? await env.DB.prepare('select intent_id, client_secret, order_id, amount, currency, status from stripe_payments where pid = ?').bind(pid).first().catch(() => null)
+    : null;
+  if (!row || !row.client_secret) return nuiteeHtml('Payment expired', '<h1>This payment link has expired</h1><p class="sub">Go back to the app and start checkout again — totals are re-checked each time.</p>');
+  if (row.status === 'succeeded') return Response.redirect(`${url.origin}/package/pay/return?pid=${pid}`, 302);
+  const pk = env.STRIPE_PUBLISHABLE_KEY || '';
+  if (!pk) return nuiteeHtml('Payments not configured', '<p class="wordmark">GlobeSkimmers</p><h1>Payments are not fully configured yet</h1><p class="sub">Card entry needs one more server setting before it can go live. Nothing was charged — please try again later.</p>');
+  const money = nuiteeMoney(row.amount / 100, row.currency);
+  const totalLine = nuiteeEsc(money);
+  const testMode = pk.startsWith('pk_test_');
+  const recap = `<div class="card"><p class="hname">Package checkout</p><div class="row"><span>Order</span><span class="mono">${nuiteeEsc(row.order_id || pid)}</span></div><div class="row tot"><span>Total</span><span class="mono">${totalLine}</span></div></div>`;
+  const lock = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="flex:none;margin-top:2px"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
+  const cfg = JSON.stringify({
+    pk, clientSecret: row.client_secret,
+    returnUrl: `${url.origin}/package/pay/return?pid=${pid}`,
+  }).replace(/</g, '\\u003c');
+  return nuiteeHtml('Secure checkout', `<p class="wordmark">GlobeSkimmers</p>${recap}<h1 class="commit">Pay ${totalLine}</h1><form id="payform"><div class="card"><div id="pay"></div><p id="payerr" class="cxl bad" role="alert"></p></div><div class="lp-submit-button-wrapper"><button id="paybtn" type="submit" class="lp-submit-button">Pay ${totalLine}</button></div></form>${testMode ? '<p class="trust">TEST MODE — no real charge</p>' : ''}<p class="trust">${lock}<span>Payments processed securely by Stripe · GlobeSkimmers is the merchant</span></p><p class="note">Card details go directly to Stripe — GlobeSkimmers never sees them.${testMode ? ' <b>Test:</b> card 4242 4242 4242 4242, any future date, any CVC.' : ''}</p>
+<script src="https://js.stripe.com/v3/"></script>
+<script>(function(){var C=${cfg};try{
+var stripe=Stripe(C.pk);
+var elements=stripe.elements({clientSecret:C.clientSecret,appearance:{theme:'flat',variables:{colorPrimary:'#0E7C73',fontSizeBase:'16px'}}});
+elements.create('payment').mount('#pay');
+document.getElementById('payform').addEventListener('submit',function(ev){ev.preventDefault();var btn=document.getElementById('paybtn');btn.disabled=true;
+stripe.confirmPayment({elements:elements,confirmParams:{return_url:C.returnUrl}}).then(function(r){if(r&&r.error){document.getElementById('payerr').textContent=r.error.message||'Payment failed. Please try again.';btn.disabled=false;}});});
+}catch(e){document.getElementById('pay').innerHTML='<p class="bad">The payment form failed to load. Please go back and try again.</p>';}})();</script>`);
+}
+
+// GET /package/pay/return?pid= — where Stripe lands after a charge attempt.
+// Re-reads the PaymentIntent server-side (the URL's own redirect params are
+// untrusted), records its status, marks the package order paid on success
+// ('paid_test' when livemode=false — a test key must never mint a real 'paid'),
+// and renders the receipt / honest-failure page.
+async function handlePackagePayReturn(request, env) {
+  const url = new URL(request.url);
+  const pid = (url.searchParams.get('pid') || '').replace(/[^a-f0-9]/g, '').slice(0, 64);
+  const row = (pid && env.DB)
+    ? await env.DB.prepare('select intent_id, order_id, amount, currency, status from stripe_payments where pid = ?').bind(pid).first().catch(() => null)
+    : null;
+  if (!row || !row.intent_id) return nuiteeHtml('Session expired', '<h1>We lost this payment session</h1><p class="sub">If you were charged, the payment still completed on Stripe&#39;s side — contact support with your card statement.</p>');
+  const pi = await stripeApi(env, 'GET', `/payment_intents/${row.intent_id}`, null);
+  const live = !!(pi && !pi.error && pi.livemode === true);
+  const status = (pi && !pi.error && pi.status) ? pi.status : (row.status || 'unknown');
+  if (pi && !pi.error && pi.status) {
+    await env.DB.prepare("update stripe_payments set status = ?, updated = datetime('now') where pid = ?").bind(pi.status, pid).run().catch(() => {});
+    if (pi.status === 'succeeded' && row.order_id) {
+      await env.DB.prepare('update package_orders set status = ?, updated = ? where sid = ?')
+        .bind(live ? 'paid' : 'paid_test', Date.now(), row.order_id).run().catch(() => {});
+    }
+  }
+  const money = nuiteeEsc(nuiteeMoney(row.amount / 100, row.currency));
+  const orderRow = row.order_id ? `<div class="row"><span>Order</span><span class="mono">${nuiteeEsc(row.order_id)}</span></div>` : '';
+  if (status === 'succeeded') {
+    return nuiteeHtml('Payment confirmed', `<p class="wordmark">GlobeSkimmers</p><h1>Payment confirmed</h1><div class="card">${orderRow}<div class="row"><span>Status</span><span class="mono ok">succeeded</span></div><div class="row tot"><span>Paid</span><span class="mono">${money}</span></div></div><button class="btn" onclick="try{window.close()}catch(e){}">Return to GlobeSkimmers</button><p class="sub" style="margin-top:10px">Your payment is recorded — tapping <b>Done</b> also brings you back.</p><p class="note">Keep this order id for support.${live ? '' : ' <b>Test payment — no real money moved.</b>'}</p>`);
+  }
+  if (status === 'processing') {
+    return nuiteeHtml('Payment processing', `<p class="wordmark">GlobeSkimmers</p><h1>Payment processing</h1><p class="sub">Your bank is still confirming this payment — it usually settles within a few minutes.</p><div class="card">${orderRow}<div class="row tot"><span>Total</span><span class="mono">${money}</span></div></div><button class="btn" onclick="try{window.close()}catch(e){}">Return to GlobeSkimmers</button><p class="note">You won&#39;t be charged twice — reopening this page just re-checks the status.</p>`);
+  }
+  // requires_payment_method / canceled / anything else — honest, retryable.
+  return nuiteeHtml('Payment not completed', `<p class="wordmark">GlobeSkimmers</p><h1>Payment not completed</h1><p class="sub">${status === 'canceled' ? 'This payment was canceled.' : 'Nothing was charged.'}</p><div class="card">${orderRow}<div class="row"><span>Status</span><span class="mono bad">${nuiteeEsc(status)}</span></div><div class="row tot"><span>Total</span><span class="mono">${money}</span></div></div>${status === 'canceled' ? '' : `<a class="btn" href="${url.origin}/package/pay?pid=${pid}">Back to payment</a>`}<p class="note">Or tap <b>Done</b> to return to the app${status === 'canceled' ? ' and start checkout again' : ''}.</p>`);
+}
+
+// GET /stripe/health — configuration probe: is the secret set, does it reach
+// Stripe, which mode is it in, is the publishable key present. No amounts, no
+// key material — safe to curl.
+async function handleStripeHealth(request, env) {
+  const configured = !!env.STRIPE_SECRET_KEY;
+  const publishable = !!env.STRIPE_PUBLISHABLE_KEY;
+  if (!configured) return jsonResponse({ ok: false, configured, publishable });
+  const bal = await stripeApi(env, 'GET', '/balance', null);
+  // Code only, never the message — Stripe's invalid-key message echoes key fragments,
+  // and this endpoint is publicly reachable.
+  if (bal.error) return jsonResponse({ ok: false, configured, publishable, detail: bal.error.code || 'stripe_unreachable' }, 502);
+  return jsonResponse({ ok: true, livemode: !!bal.livemode, configured, publishable });
+}
+
+// POST /stripe/domain/register { domain } — registers a payment-method domain
+// with Stripe (Apple Pay / Google Pay / Link need it). Hardcoded allowlist —
+// this must never become an open proxy for registering arbitrary domains.
+// Idempotent by nature: re-registering an existing domain re-runs validation.
+const STRIPE_DOMAIN_ALLOWLIST = ['globeskimmers-api.maizasimeon.workers.dev', 'pay.globeskimmers.io'];
+async function handleStripeDomainRegister(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const domain = String(b.domain || '').trim().toLowerCase();
+    if (!STRIPE_DOMAIN_ALLOWLIST.includes(domain)) {
+      return jsonResponse({ ok: false, reason: 'domain_not_allowed', allowlist: STRIPE_DOMAIN_ALLOWLIST }, 400);
+    }
+    const d = await stripeApi(env, 'POST', '/payment_method_domains', { domain_name: domain });
+    if (d.error) return jsonResponse({ ok: false, error: d.error }, 502);
+    // The payment_method_domain object holds no secrets — return it verbatim.
+    return jsonResponse({ ok: true, ...d });
+  } catch (e) { return jsonResponse({ ok: false, error: e.message }, 500); }
+}
+
 // POST /hotels/nuitee/prebook — re-confirms the offer (price may move →
 // priceChanged), opens a Payment-SDK transaction, and stores everything the
 // return page needs in KV for 30 minutes under a random session id. The phone
@@ -14875,6 +15105,12 @@ export default {
       // Smart Packages (priced drafts only — NO payment; booking stays per-component)
       if (pathname === '/package/draft' && request.method === 'POST') return await handlePackageDraft(request, env, ctx);
       if (pathname === '/package/get' && request.method === 'POST') return await handlePackageGet(request, env);
+      // Stripe payments (Wave 1 — GlobeSkimmers as merchant; hotel stay total of a priced package)
+      if (pathname === '/package/checkout' && request.method === 'POST') return await handlePackageCheckout(request, env);
+      if (pathname === '/package/pay' && request.method === 'GET') return await handlePackagePay(request, env);
+      if (pathname === '/package/pay/return' && request.method === 'GET') return await handlePackagePayReturn(request, env);
+      if (pathname === '/stripe/health' && request.method === 'GET') return await handleStripeHealth(request, env);
+      if (pathname === '/stripe/domain/register' && request.method === 'POST') return await handleStripeDomainRegister(request, env);
       if (pathname === '/guestbook/list' && request.method === 'POST') return await handleGuestbookList(request, env);
       if (pathname === '/guestbook/sign' && request.method === 'POST') return await handleGuestbookSign(request, env, ctx);
       if (pathname === '/guestbook/edit' && request.method === 'POST') return await handleGuestbookEdit(request, env);

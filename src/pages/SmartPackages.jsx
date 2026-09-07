@@ -33,7 +33,7 @@ import { callWorker } from "@/lib/callWorker";
 import { viatorProductLink } from "@/lib/viator";
 import { ROUTE } from "@/lib/workerRoutes";
 import { trackAffiliateClick } from "@/lib/affiliate";
-import { openPartner } from "@/lib/openPartner";
+import { openPartner, openPartnerAndWait } from "@/lib/openPartner";
 import HotelBookSheet from "@/components/hotels/HotelBookSheet";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
@@ -130,6 +130,8 @@ export default function SmartPackages() {
   const [fail, setFail] = useState(null);     // { reason } from ok:false / network
   const [selIdx, setSelIdx] = useState(0);    // chosen hotelChoices index — default: the first (cheapest)
   const [bookSheet, setBookSheet] = useState(null); // the choice being booked (opens HotelBookSheet)
+  const [testBusy, setTestBusy] = useState(false);  // founder-only Stripe test checkout in flight
+  const [testErr, setTestErr] = useState(null);     // its error reason — quiet inline line only
   const resultRef = useRef(null);
 
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
@@ -139,6 +141,10 @@ export default function SmartPackages() {
   const hasCoords = Number.isFinite(dest?.lat) && Number.isFinite(dest?.lng);
   const canCompose = hasCoords && !!checkin && !!checkout && checkout > checkin;   // ISO string compare — same-day stays disabled, matching the worker's checkout<=checkin 400
   const hasResult = !!draft || !!fail; // demotes the compose button to quiet ivory
+  // Founder-only test lane while Stripe is in test mode — the page reads no URL
+  // params otherwise, so this comes straight off window.location.search. Without
+  // ?stripetest=1 nothing below renders differently.
+  const stripeTest = new URLSearchParams(window.location.search).get("stripetest") === "1";
 
   useEffect(() => {
     if (draft && resultRef.current) resultRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -168,7 +174,7 @@ export default function SmartPackages() {
 
   const compose = async () => {
     if (!canCompose || composing) return;
-    setComposing(true); setFail(null); setDraft(null); setSid(null); setSelIdx(0); setBookSheet(null);
+    setComposing(true); setFail(null); setDraft(null); setSid(null); setSelIdx(0); setBookSheet(null); setTestErr(null);
     const { data, error } = await callWorker("package/draft", {
       destLat: dest.lat, destLng: dest.lng,
       checkin, checkout, adults, children,
@@ -206,6 +212,22 @@ export default function SmartPackages() {
       category: "event", destCity: ev.city || chosen?.city || draft?.destName, destCountry: chosen?.country,
     });
     openPartner(url || ev.url);
+  };
+
+  // Founder-only (?stripetest=1): POST /package/checkout with the draft's
+  // server-side package_orders row id (sid, from compose's data.sid) → { url },
+  // Stripe's hosted payment page, opened exactly like the hotel checkout does
+  // (openPartnerAndWait — native browser sheet; a new tab on web).
+  const testCheckout = async () => {
+    if (!sid || testBusy) return;
+    setTestBusy(true); setTestErr(null);
+    const { data, error } = await callWorker(ROUTE.packageCheckout, { orderId: sid });
+    if (data?.url) {
+      await openPartnerAndWait(data.url);
+    } else {
+      setTestErr(data?.reason || data?.error || (error ? "network" : "error"));
+    }
+    setTestBusy(false);
   };
 
   const partyLine = draft
@@ -468,6 +490,22 @@ export default function SmartPackages() {
                 <div className="font-mono text-[calc(10px*var(--fs))] text-center mt-2" style={{ color: SUB }}>
                   Room choice and secure checkout come next.
                 </div>
+                {/* Founder-only Stripe test lane — hidden unless ?stripetest=1;
+                    needs sid (the server-side order this draft is priced under). */}
+                {stripeTest && sid && (
+                  <>
+                    <button onClick={testCheckout} disabled={testBusy}
+                      className="w-full py-3 rounded-[12px] mt-3 font-mono text-[calc(10px*var(--fs))] tracking-[0.14em] uppercase font-semibold"
+                      style={{ background: "#FFFFFF", color: SUB, border: `1px dashed ${EDGE}`, opacity: testBusy ? 0.6 : 1 }}>
+                      {testBusy ? "Starting test checkout…" : "Test package checkout · Stripe"}
+                    </button>
+                    {testErr && (
+                      <div className="text-center text-[calc(12px*var(--fs))] mt-2" style={{ color: INK2 }}>
+                        Test checkout couldn't start — {testErr === "network" ? "check your connection" : testErr}.
+                      </div>
+                    )}
+                  </>
+                )}
               </>
             )}
 

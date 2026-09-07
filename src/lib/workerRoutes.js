@@ -53,4 +53,7 @@ export const ROUTE = {
   parseSearch: 'parse-search',
   destinationGallery: 'destination/gallery',
 
+  // Smart Packages — Stripe hosted checkout (test mode; founder-only entry)
+  packageCheckout: 'package/checkout',
+
 };
