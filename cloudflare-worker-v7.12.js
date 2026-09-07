@@ -14171,7 +14171,18 @@ Return JSON only.`;
 function validateDestIntel(raw) {
   try {
     if (!raw || typeof raw !== 'object' || raw.known !== true) return null;
-    const str = (v, cap) => (typeof v === 'string' && v.trim() && v.trim().length <= cap) ? v.trim() : null;
+    // Clip-at-word-boundary instead of rejecting: the model can't count chars,
+    // and a 6-char overage shouldn't kill the whole intel. Empty/non-string
+    // still rejects.
+    const str = (v, cap) => {
+      if (typeof v !== 'string') return null;
+      const t = v.trim();
+      if (!t) return null;
+      if (t.length <= cap) return t;
+      const cut = t.slice(0, cap);
+      const sp = cut.lastIndexOf(' ');
+      return (sp > cap * 0.6 ? cut.slice(0, sp) : cut).replace(/[,;:\s]+$/, '');
+    };
     const bt = raw.bestTime, dn = raw.daysNeeded, kf = raw.knownFor;
     const months = str(bt && bt.months, 60), btWhy = str(bt && bt.why, 140);
     if (!months || !btWhy) return null;
@@ -14184,9 +14195,11 @@ function validateDestIntel(raw) {
     const ideal = (dn && Number.isInteger(dn.ideal)) ? dn.ideal : NaN;
     const dnWhy = str(dn && dn.why, 120);
     if (!(min >= 1 && min <= ideal && ideal <= 21) || !dnWhy) return null;
-    if (!Array.isArray(kf) || kf.length < 3 || kf.length > 6) return null;
-    const knownFor = kf.map((s) => str(s, 40));
-    if (knownFor.some((s) => !s)) return null;
+    // Tolerant list handling: drop bad entries, keep at most 6; reject only
+    // when fewer than 3 good ones remain.
+    if (!Array.isArray(kf)) return null;
+    const knownFor = kf.map((s) => str(s, 40)).filter(Boolean).slice(0, 6);
+    if (knownFor.length < 3) return null;
     return { bestTime: { months, why: btWhy }, daysNeeded: { min, ideal, why: dnWhy }, knownFor };
   } catch { return null; }
 }
@@ -14207,41 +14220,49 @@ async function destinationIntel(env, ctx, { name, country, lat, lng, debug }) {
   if (cached && cached.available === true) return { ...cached, _cache: 'hit' };
   const coords = (Number.isFinite(lat) && Number.isFinite(lng)) ? `\nAPPROXIMATE COORDINATES: ${lat.toFixed(3)}, ${lng.toFixed(3)}` : '';
   const userContent = `DESTINATION: ${String(name).trim().slice(0, 120)}${country ? `\nCOUNTRY: ${String(country).trim().slice(0, 80)}` : ''}${coords}\n\nGenerate the destination intel JSON per the honesty rules above.`;
-  try {
-    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 600,
-        temperature: 0.2,   // planning facts, not prose — keep it near-deterministic
-        system: buildDestinationIntelSystemPrompt(),
-        messages: [{ role: 'user', content: userContent }]
-      })
-    });
-    if (!apiRes.ok) return fail(`http_${apiRes.status}`);
-    const data = await apiRes.json();
-    const raw = data?.content?.[0]?.text?.trim() || '';
-    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-    let parsed = null;
-    try { parsed = JSON.parse(cleaned); } catch { return fail('parse'); }
-    const validated = validateDestIntel(parsed);
-    if (!validated) {
-      const f = fail(parsed && parsed.known === false ? 'model_unknown' : 'validate');
-      if (debug) f.sample = cleaned.slice(0, 400); // generated guidance text, not sensitive
-      return f;
-    }
-    const intel = { available: true, ...validated, guidance: DEST_INTEL_GUIDANCE };
-    if (env.GLOBESKIMMERS_KV) {
-      const put = env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(intel), { expirationTtl: DEST_INTEL_TTL_SECONDS }).catch(() => {});
-      if (ctx) ctx.waitUntil(put); else await put;
-    }
-    return { ...intel, _cache: 'miss' };
-  } catch { return fail('error'); }
+  // Even at temperature 0.2 the model occasionally busts a char cap or entry
+  // count (it can't count characters) — one retry turns that coin-flip into a
+  // reliable answer. An honest {"known": false} never retries.
+  let lastFail = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 600,
+          temperature: 0.2,   // planning facts, not prose — keep it near-deterministic
+          system: buildDestinationIntelSystemPrompt(),
+          messages: [{ role: 'user', content: userContent }]
+        })
+      });
+      if (!apiRes.ok) return fail(`http_${apiRes.status}`); // upstream trouble — don't hammer
+      const data = await apiRes.json();
+      const raw = data?.content?.[0]?.text?.trim() || '';
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+      let parsed = null;
+      try { parsed = JSON.parse(cleaned); } catch { lastFail = fail('parse'); continue; }
+      if (parsed && parsed.known === false) return fail('model_unknown'); // honest unknown — final
+      const validated = validateDestIntel(parsed);
+      if (!validated) {
+        lastFail = fail('validate');
+        if (debug) lastFail.sample = cleaned.slice(0, 400); // generated guidance text, not sensitive
+        continue;
+      }
+      const intel = { available: true, ...validated, guidance: DEST_INTEL_GUIDANCE };
+      if (env.GLOBESKIMMERS_KV) {
+        const put = env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(intel), { expirationTtl: DEST_INTEL_TTL_SECONDS }).catch(() => {});
+        if (ctx) ctx.waitUntil(put); else await put;
+      }
+      return { ...intel, _cache: 'miss' };
+    } catch { lastFail = fail('error'); }
+  }
+  return lastFail || unavailable;
 }
 
 async function handleDestinationIntel(request, env, ctx) {
