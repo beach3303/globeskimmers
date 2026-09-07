@@ -12,6 +12,10 @@
 //                soonest in-window event as separately-booked rows, an honest
 //                hotel-only total, and ONE teal primary that hands the selected
 //                choice into the existing HotelBookSheet checkout.
+//                Wave A additive fields — destination intel ("Know before you
+//                go"), a selectable "What you'll see" attractions rail, honest
+//                AC/breakfast notes — are read defensively: every one may be
+//                absent (old worker, cached drafts) and absent renders nothing.
 //   S3 FAIL    — ok:false reasons render one designed FinderEmptyState card.
 //
 // Doctrine notes: totals are never fabricated — the bold figure is the hotel
@@ -23,14 +27,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import {
-  ArrowLeft, BedDouble, Calendar as CalendarIcon, CloudOff, MapPin,
+  ArrowLeft, BedDouble, Calendar as CalendarIcon, Check, CloudOff, MapPin,
   Minus, Plus, Search, X,
 } from "lucide-react";
 import { DayPicker } from "react-day-picker";
 import { format } from "date-fns";
 import "react-day-picker/dist/style.css";
 import { callWorker } from "@/lib/callWorker";
-import { viatorProductLink } from "@/lib/viator";
+import { viatorProductLink, viatorSearchLink } from "@/lib/viator";
 import { ROUTE } from "@/lib/workerRoutes";
 import { trackAffiliateClick } from "@/lib/affiliate";
 import { openPartner, openPartnerAndWait } from "@/lib/openPartner";
@@ -44,6 +48,7 @@ const MONO = '"JetBrains Mono", ui-monospace, monospace';
 const INK = "#16110D", SUB = "#736657", EDGE = "#E6DFD0", INK2 = "#6B7280";
 const STAMP = "#B0472F"; // selection ring — teal stays on the one primary
 const ACCENT = TEAL_DEEP, ACCENT_BG = "#E4F1EF", OK = "#2E7D46";
+const AMBER = "#B45309"; // honest-notes register — FindAHotel's dropped-filters line
 const fs = (n) => `calc(${n}px*var(--fs))`;
 
 // Same Intl money as HotelBookSheet — whole units, real currency code.
@@ -85,6 +90,72 @@ function Stepper({ label, value, setValue, min = 0, max = 16 }) {
   );
 }
 
+// 4:3 photo tile for a "What you'll see" card — serif-initial fallback (a
+// letter on the accent wash, never an icon or emoji) when the photo is missing
+// or fails to load.
+function AttractionThumb({ photoUrl, name }) {
+  const [broken, setBroken] = useState(false);
+  const initial = (String(name || "").trim().charAt(0) || "?").toUpperCase();
+  if (!photoUrl || broken) {
+    return (
+      <div className="flex items-center justify-center" aria-hidden="true"
+        style={{ height: 112, background: `linear-gradient(135deg, ${ACCENT_BG}, ${IVORY_2})` }}>
+        <span style={{ fontFamily: SERIF, fontSize: fs(38), color: ACCENT, lineHeight: 1 }}>{initial}</span>
+      </div>
+    );
+  }
+  return (
+    <img src={photoUrl} alt={name || ""} loading="lazy" onError={() => setBroken(true)}
+      style={{ width: "100%", height: 112, objectFit: "cover", display: "block" }} />
+  );
+}
+
+// KNOW BEFORE YOU GO — the draft's additive destination intel. Every field is
+// read defensively (old workers and cached drafts send none): an absent line
+// simply doesn't render, and without intel.available nothing renders at all.
+// The guidance sub-line stays in the quiet mono register — it is AI-written,
+// honest labeling over polish.
+function IntelCard({ intel }) {
+  if (!intel?.available) return null;
+  const bt = intel.bestTime || {};
+  const months = Array.isArray(bt.months) ? bt.months.filter(Boolean).join(", ") : (bt.months || "");
+  const dn = intel.daysNeeded || {};
+  const dMin = Number(dn.min), dIdeal = Number(dn.ideal);
+  const hasDays = Number.isFinite(dMin) || Number.isFinite(dIdeal);
+  const daysTxt = Number.isFinite(dMin) && Number.isFinite(dIdeal)
+    ? (dIdeal === dMin ? `${dMin}` : `${dMin}–${dIdeal}`)
+    : `${Number.isFinite(dIdeal) ? dIdeal : dMin}`;
+  const known = (Array.isArray(intel.knownFor) ? intel.knownFor : []).filter(Boolean);
+  if (!months && !hasDays && known.length === 0 && !intel.guidance) return null;
+  return (
+    <div className="mt-4 rounded-2xl px-4 py-3.5" style={{ background: "#FFFFFF", border: `1px solid ${EDGE}` }}>
+      <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: SUB }}>
+        Know before you go
+      </div>
+      {months ? (
+        <div className="text-[calc(12.5px*var(--fs))] leading-snug mt-1.5" style={{ color: INK }}>
+          <span className="font-semibold">Best time:</span> {months}{bt.why ? ` — ${bt.why}` : ""}
+        </div>
+      ) : null}
+      {hasDays && (
+        <div className="text-[calc(12.5px*var(--fs))] leading-snug mt-1" style={{ color: INK }}>
+          <span className="font-semibold">Days needed:</span> {daysTxt}{dn.why ? ` — ${dn.why}` : ""}
+        </div>
+      )}
+      {known.length > 0 && (
+        <div className="text-[calc(12.5px*var(--fs))] leading-snug mt-1" style={{ color: INK }}>
+          <span className="font-semibold">Known for:</span> {known.join(" · ")}
+        </div>
+      )}
+      {intel.guidance ? (
+        <div className="font-mono text-[calc(11px*var(--fs))] leading-snug mt-2" style={{ color: SUB }}>
+          {intel.guidance}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // Skeleton block matching the final draft layout (heading, two cards, rows, total).
 function DraftSkeleton() {
   const blk = (h, extra = "") => (
@@ -122,10 +193,17 @@ export default function SmartPackages() {
   const [dateOpen, setDateOpen] = useState(false);
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
+  const [childAges, setChildAges] = useState([]); // index-aligned ages 0–17; unset entries default to 8 (the worker's mid-childhood default)
+  const [rooms, setRooms] = useState(1);          // 1–min(adults,4); only sent when > 1
+  // Rooms can never exceed adults (a 2-adult party can't fill 3 rooms — the
+  // quote wouldn't cover them); re-clamp when adults shrinks.
+  useEffect(() => { setRooms((r) => Math.min(r, Math.max(1, Math.min(adults, 4)))); }, [adults]);
   const [interest, setInterest] = useState(""); // optional → interestQuery
 
   const [composing, setComposing] = useState(false);
   const [draft, setDraft] = useState(null);   // the worker's priced draft
+  const [extra, setExtra] = useState(null);   // additive draft extras — { intel, attractions, acNote, breakfastNote }, each may be null/empty
+  const [picks, setPicks] = useState({});     // "What you'll see" selections — local Wave-A state only, keyed by attraction id/name
   const [sid, setSid] = useState(null);       // package_orders row id (server-side)
   const [fail, setFail] = useState(null);     // { reason } from ok:false / network
   const [selIdx, setSelIdx] = useState(0);    // chosen hotelChoices index — default: the first (cheapest)
@@ -174,13 +252,24 @@ export default function SmartPackages() {
 
   const compose = async () => {
     if (!canCompose || composing) return;
-    setComposing(true); setFail(null); setDraft(null); setSid(null); setSelIdx(0); setBookSheet(null); setTestErr(null);
-    const { data, error } = await callWorker("package/draft", {
+    setComposing(true); setFail(null); setDraft(null); setExtra(null); setPicks({}); setSid(null); setSelIdx(0); setBookSheet(null); setTestErr(null);
+    // Party fields beyond the defaults are only sent when they carry signal —
+    // the worker treats absence exactly as the defaults (no children, one room).
+    const body = {
       destLat: dest.lat, destLng: dest.lng,
-      checkin, checkout, adults, children,
+      checkin, checkout, adults,
       destName: dest.name || dest.city || "",
       interestQuery: interest.trim().slice(0, 80),
-    });
+    };
+    if (children > 0) {
+      body.children = children;
+      body.childrenAges = Array.from({ length: children }, (_, i) => {
+        const a = Number(childAges[i]);
+        return Number.isFinite(a) ? Math.min(17, Math.max(0, Math.round(a))) : 8;
+      });
+    }
+    if (rooms > 1) body.rooms = rooms;
+    const { data, error } = await callWorker("package/draft", body);
     if (data?.ok && data.draft) {
       setDraft(data.draft);
       // sid: the worker already stored this draft in D1 package_orders
@@ -188,6 +277,17 @@ export default function SmartPackages() {
       // no client work in v1 — a future wave will use this sid to move the
       // order row's status to 'booked' from the booking-return path.
       setSid(data.sid || null);
+      // Additive Wave-A fields — new workers return them beside the draft, but
+      // read both spots and tolerate every field being absent (old worker,
+      // cached drafts). Absent extras render nothing at all.
+      const pick2 = (k) => data[k] ?? data.draft[k];
+      const attractions = pick2("attractions");
+      setExtra({
+        intel: pick2("intel") || null,
+        attractions: Array.isArray(attractions) ? attractions : [],
+        acNote: typeof pick2("acNote") === "string" ? pick2("acNote") : null,
+        breakfastNote: typeof pick2("breakfastNote") === "string" ? pick2("breakfastNote") : null,
+      });
     } else {
       setFail({ reason: data?.reason || (error ? "network" : "error") });
     }
@@ -212,6 +312,28 @@ export default function SmartPackages() {
       category: "event", destCity: ev.city || chosen?.city || draft?.destName, destCountry: chosen?.country,
     });
     openPartner(url || ev.url);
+  };
+
+  // WHAT YOU'LL SEE — selection is purely local Wave-A state (nothing books
+  // from these cards); keys survive missing ids by falling back to name+index.
+  const attractions = extra?.attractions || [];
+  const attrKey = (a, i) => (a?.id != null ? String(a.id) : `${a?.name || "attr"}-${i}`);
+  const togglePick = (k) => setPicks((p) => ({ ...p, [k]: !p[k] }));
+  const pickedNames = attractions
+    .filter((a, i) => picks[attrKey(a, i)])
+    .map((a) => a?.name)
+    .filter(Boolean);
+  // "See tours" on a ticketed card — Wave A has no attraction booking, so this
+  // hands off to Viator search for the attraction name through the same
+  // payout-wrapped path every tour link uses (never a raw URL).
+  const openAttractionTours = async (a) => {
+    if (!a?.name) return;
+    const target = viatorSearchLink(a.name);
+    const url = await trackAffiliateClick({
+      partner: "viator", targetUrl: target, productName: a.name,
+      category: "tour", destCity: a.city || chosen?.city || draft?.destName, destCountry: chosen?.country,
+    });
+    openPartner(url || target);
   };
 
   // Founder-only (?stripetest=1): POST /package/checkout with the draft's
@@ -320,11 +442,41 @@ export default function SmartPackages() {
           <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{ background: ACCENT_BG, color: ACCENT }}>{range?.from ? "Edit" : "Pick"}</span>
         </button>
 
-        {/* Who */}
+        {/* Who — adults/children steppers, per-child ages when any, rooms */}
         <div className="rounded-[16px] px-4 mb-3" style={{ background: "#FFFFFF", border: `1px solid ${EDGE}` }}>
           <Stepper label="Adults" value={adults} setValue={setAdults} min={1} max={8} />
           <div className="h-px" style={{ background: "#F5F0E8" }} />
           <Stepper label="Children" value={children} setValue={setChildren} min={0} max={6} />
+          {children > 0 && (
+            <div className="pb-3">
+              <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: SUB }}>
+                Children&apos;s ages
+              </div>
+              <div className="flex flex-wrap gap-2 mt-1.5">
+                {Array.from({ length: children }, (_, i) => (
+                  <label key={i} className="flex items-center gap-1.5">
+                    <span className="font-mono text-[calc(10px*var(--fs))]" style={{ color: INK2 }}>#{i + 1}</span>
+                    <select
+                      value={childAges[i] ?? 8}
+                      onChange={(e) => setChildAges((prev) => { const next = [...prev]; next[i] = Number(e.target.value); return next; })}
+                      aria-label={`Age of child ${i + 1}`}
+                      className="font-mono font-semibold text-[calc(12px*var(--fs))] rounded-[10px] px-2 py-1.5"
+                      style={{ color: INK, background: IVORY_2, border: `1px solid ${EDGE}` }}>
+                      {Array.from({ length: 18 }, (_, a) => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </label>
+                ))}
+              </div>
+              <div className="text-[calc(10.5px*var(--fs))] mt-1.5 leading-snug" style={{ color: INK2 }}>
+                So we pick baby-friendly flights and the right rooms.
+              </div>
+            </div>
+          )}
+          <div className="h-px" style={{ background: "#F5F0E8" }} />
+          <Stepper label="Rooms" value={rooms} setValue={setRooms} min={1} max={Math.min(adults, 4)} />
+          <div className="text-[calc(10.5px*var(--fs))] -mt-1 pb-3 leading-snug" style={{ color: INK2 }}>
+            4 travelers can be two couples — pick the rooms you actually want.
+          </div>
         </div>
 
         {/* Optional interest → the draft's tour picks */}
@@ -389,6 +541,9 @@ export default function SmartPackages() {
               {partyLine}{draft.env === "sandbox" ? " · SANDBOX" : ""}
             </div>
 
+            {/* KNOW BEFORE YOU GO — additive intel; absent renders nothing */}
+            <IntelCard intel={extra?.intel} />
+
             {/* THE TWO CHOICES — exactly what the draft returned, cheapest pre-selected */}
             <div className={`grid gap-2.5 mt-4 ${draft.hotelChoices.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
               {draft.hotelChoices.map((h, i) => {
@@ -426,6 +581,67 @@ export default function SmartPackages() {
               })}
             </div>
 
+            {/* HONEST NOTES — FindAHotel's dropped-filters register: one quiet
+                amber mono line per note, only when the worker sent one. */}
+            {extra?.acNote && (
+              <div className="font-mono text-[calc(11px*var(--fs))] mt-3 px-1 leading-snug" style={{ color: AMBER }}>{extra.acNote}</div>
+            )}
+            {extra?.breakfastNote && (
+              <div className="font-mono text-[calc(11px*var(--fs))] mt-2 px-1 leading-snug" style={{ color: AMBER }}>{extra.breakfastNote}</div>
+            )}
+
+            {/* WHAT YOU'LL SEE — additive attractions rail. Tapping a card is a
+                local pick (stamp-red ring + check, the hotel-choice pattern);
+                nothing books from these cards in Wave A. */}
+            {attractions.length > 0 && (
+              <div className="mt-4">
+                <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: SUB }}>
+                  What you&apos;ll see
+                </div>
+                <div className="flex gap-2.5 mt-2 overflow-x-auto pb-1.5" style={{ WebkitOverflowScrolling: "touch" }}>
+                  {attractions.map((a, i) => {
+                    const k = attrKey(a, i);
+                    const selected = !!picks[k];
+                    const mi = Number(a?.mi);
+                    return (
+                      <div key={k} role="button" tabIndex={0} aria-pressed={selected}
+                        onClick={() => togglePick(k)}
+                        onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); togglePick(k); } }}
+                        className="relative flex-none rounded-2xl overflow-hidden"
+                        style={{ width: 150, background: "#FFFFFF", border: `1px solid ${EDGE}`, boxShadow: selected ? `0 0 0 2px ${STAMP}` : "none", cursor: "pointer" }}>
+                        <AttractionThumb photoUrl={a?.photoUrl} name={a?.name} />
+                        {selected && (
+                          <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: STAMP }}>
+                            <Check size={12} color="#FFFFFF" strokeWidth={3} />
+                          </div>
+                        )}
+                        <div className="px-2.5 pt-2 pb-2.5">
+                          <div className="leading-snug" style={{ fontFamily: SERIF, fontSize: fs(14), color: INK, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                            {a?.name}
+                          </div>
+                          {Number.isFinite(mi) && (
+                            <div className="font-mono text-[calc(9.5px*var(--fs))] mt-1" style={{ color: SUB }}>
+                              ~{mi >= 10 ? Math.round(mi) : Math.round(mi * 10) / 10} mi away
+                            </div>
+                          )}
+                          {a?.ticketedHint && (
+                            <div className="flex items-center justify-between gap-1 mt-1">
+                              <span className="font-mono text-[calc(9px*var(--fs))] uppercase tracking-[0.08em]" style={{ color: SUB }}>tours available</span>
+                              <button onClick={(e) => { e.stopPropagation(); openAttractionTours(a); }}
+                                className="font-mono font-semibold underline flex-none text-[calc(9.5px*var(--fs))]"
+                                style={{ color: SUB, textUnderlineOffset: 2 }}>
+                                See tours
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* THINGS TO DO — booked separately, honest per-partner labels */}
             {(draft.tours?.length > 0 || draft.event) && (
               <div className="mt-4 rounded-2xl overflow-hidden" style={{ background: "#FFFFFF", border: `1px solid ${EDGE}` }}>
@@ -461,6 +677,14 @@ export default function SmartPackages() {
                     </div>
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* YOUR PICKS — the local "What you'll see" selections, honest
+                about what the distance figures meant */}
+            {pickedNames.length > 0 && (
+              <div className="font-mono text-[calc(10.5px*var(--fs))] mt-3 px-1 leading-snug" style={{ color: SUB }}>
+                Your picks: {pickedNames.join(" · ")} — distances are from the city center
               </div>
             )}
 

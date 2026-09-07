@@ -52,6 +52,7 @@ export const ROUTE = {
   InvokeLLM: 'invoke-llm',
   parseSearch: 'parse-search',
   destinationGallery: 'destination/gallery',
+  destinationIntel: 'destination/intel',
 
   // Smart Packages — Stripe hosted checkout (test mode; founder-only entry)
   packageCheckout: 'package/checkout',

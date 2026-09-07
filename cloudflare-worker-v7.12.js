@@ -13947,6 +13947,18 @@ function nuiteeMatchFacilities(list, names) {
 // forwarded — an unrecognized code would 400 the whole rates call.
 const NUITEE_BOARD_TYPES = new Set(['RO', 'BI', 'HB', 'FB', 'AI']);
 
+// Distribute a party across rooms: adults split as evenly as possible (every
+// room keeps at least one adult — `rooms` is pre-clamped to the adult count),
+// then children round-robin so no room is child-only. LiteAPI takes one
+// occupancy object per room with per-child ages.
+function nuiteeOccupancies(adults, childAges, rooms) {
+  const list = [];
+  const base = Math.floor(adults / rooms), extra = adults % rooms;
+  for (let i = 0; i < rooms; i++) list.push({ adults: base + (i < extra ? 1 : 0), ages: [] });
+  childAges.forEach((age, i) => list[i % rooms].ages.push(age));
+  return list.map((r) => ({ adults: r.adults, ...(r.ages.length ? { children: r.ages } : {}) }));
+}
+
 async function handleNuiteeSearch(request, env, ctx) {
   try {
     const b = await request.json().catch(() => ({}));
@@ -13957,6 +13969,23 @@ async function handleNuiteeSearch(request, env, ctx) {
     if (!nuiteeIsoDate(checkin) || !nuiteeIsoDate(checkout) || checkout <= checkin) return jsonResponse({ hotels: [], reason: 'dates_required' });
     const adults = Math.min(Math.max(parseInt(b.adults, 10) || 2, 1), 8);
     const kids = Math.min(Math.max(parseInt(b.children, 10) || 0, 0), 6);
+    // Wave A occupancy detail (additive): multi-room and real child ages.
+    // Defaults (rooms=1, no ages) reproduce the legacy single-room shape and
+    // the legacy cache key byte-for-byte, so existing clients are untouched.
+    const rooms = Math.min(Math.max(parseInt(b.rooms, 10) || 1, 1), Math.min(adults, 4));
+    // Index-ALIGNED (invalid → null in place, defaulted below) — filtering
+    // would shift a later child's age onto an earlier child.
+    const reqAges = Array.isArray(b.childrenAges)
+      ? b.childrenAges.slice(0, kids).map((a) => { const n = parseInt(a, 10); return Number.isFinite(n) && n >= 0 && n <= 17 ? n : null; })
+      : [];
+    // Ages the client didn't supply fall back to the documented mid-childhood
+    // default (8) — exact ages are confirmed at checkout.
+    const childAges = Array.from({ length: kids }, (_, i) => (reqAges[i] != null ? reqAges[i] : 8));
+    // Non-default occupancy shapes get their own cache entries (same rule as
+    // filterSuffix — a 2-room quote must never serve a 1-room client).
+    // All-default ages (every child 8) in 1 room build occupancies byte-identical
+    // to the legacy shape — keep the legacy cache key warm instead of forking it.
+    const occSuffix = (rooms > 1 || childAges.some((a) => a !== 8)) ? `:occ${rooms}:${childAges.join('_')}` : '';
     const radiusM = Math.min(Math.max(Math.round((parseFloat(b.radiusKm) || 8) * 1000), 1000), 30000);
     const currency = /^[A-Z]{3}$/.test(String(b.currency || '')) ? b.currency : 'USD';
     const nationality = /^[A-Z]{2}$/.test(String(b.nationality || '')) ? b.nationality : 'US';
@@ -13976,7 +14005,7 @@ async function handleNuiteeSearch(request, env, ctx) {
       : '';
     // v2: grouped-rates response shape (per-hotel rates[]) — v1 entries hold a
     // single rate and must not serve against clients expecting the room picker.
-    const ck = `nuitee:search:v2:${nuiteeEnv(env)}:${lat.toFixed(3)},${lng.toFixed(3)}:${radiusM}:${checkin}:${checkout}:${adults}_${kids}:${currency}:${nationality}${filterSuffix}`;
+    const ck = `nuitee:search:v2:${nuiteeEnv(env)}:${lat.toFixed(3)},${lng.toFixed(3)}:${radiusM}:${checkin}:${checkout}:${adults}_${kids}${occSuffix}:${currency}:${nationality}${filterSuffix}`;
     const cached = await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null);
     if (cached) return jsonResponse({ ...cached, source: 'cache' });
     // Resolve facility names → IDs (KV-cached list; only fetched when asked for).
@@ -13990,10 +14019,10 @@ async function handleNuiteeSearch(request, env, ctx) {
     const body = {
       latitude: lat, longitude: lng, radius: radiusM,
       checkin, checkout, currency, guestNationality: nationality,
-      // Children's ages aren't collected on the search form yet; a mid-childhood
-      // default keeps the quote honest for most families and exact ages are
-      // confirmed at checkout.
-      occupancies: [{ adults, ...(kids ? { children: Array.from({ length: kids }, () => 8) } : {}) }],
+      // Multi-room parties split adults evenly with children round-robin;
+      // ages the client didn't supply keep the mid-childhood default baked
+      // into childAges above.
+      occupancies: nuiteeOccupancies(adults, childAges, rooms),
       // Wave 4 grouped rates: up to 6 rates/hotel + roomMapping so rate rows can
       // link to static room content. Payload size (estimated, sandbox not
       // reachable from this repo): each trimmed rate is ~350B JSON (the offerId
@@ -14088,6 +14117,201 @@ async function handleNuiteeSearch(request, env, ctx) {
   } catch (e) { return jsonResponse({ hotels: [], error: e.message }); }
 }
 
+// ── Destination intel (Smart Packages Wave A) ────────────────────────────────
+// POST /destination/intel { name, country?, lat?, lng? } — best-time /
+// trip-length / known-for planning guidance. Same Anthropic house pattern as
+// /attraction-ai-details (same env key gate, same call + fence-strip shape).
+// $0 doctrine: model + KV only, no Google. Honesty doctrine: a response that
+// fails ANY validation check ships as { available: false } — never a
+// half-guess — and EVERY response carries the verify-locally guidance line.
+const DEST_INTEL_TTL_SECONDS = 90 * 24 * 60 * 60;  // 90 days — seasonal facts drift slowly
+const DEST_INTEL_GUIDANCE = 'AI travel guidance — verify dates locally';
+
+function destIntelSlug(name, country) {
+  return `${String(name || '')} ${String(country || '')}`.toLowerCase().normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+}
+
+function buildDestinationIntelSystemPrompt() {
+  return `You are GlobeSkimmers' destination planning engine. For the given destination, return STRICT JSON with practical trip-planning intelligence.
+
+HONESTY RULES (ABSOLUTE):
+- Only state things that are broadly true and well-known about this destination. NEVER invent festivals, seasons, or activities you are not confident about.
+- NEVER mention prices, costs, discounts, tickets, or claim anything is free or cheap — this guidance sits next to a priced package and money claims are not yours to make.
+- If you do not confidently recognize the destination, return exactly: {"known": false}
+- No marketing fluff. Concrete, useful, specific.
+
+OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
+{
+  "known": true,
+  "bestTime": {
+    "months": "May–June & September",
+    "why": "..."
+  },
+  "daysNeeded": {
+    "min": 2,
+    "ideal": 4,
+    "why": "..."
+  },
+  "knownFor": ["snorkeling", "ATV dunes", "street food"]
+}
+
+FIELD RULES:
+- bestTime.months: the best months/windows to visit, <= 60 chars.
+- bestTime.why: <= 140 chars — weather / crowds / what's-open reasons only.
+- daysNeeded.min: integer — minimum days that make the trip worth it. daysNeeded.ideal: integer >= min — a comfortable trip length. Constraint: 1 <= min <= ideal <= 21.
+- daysNeeded.why: <= 120 chars — account for rest after flights + seeing the top 3-6 sights.
+- knownFor: 3 to 6 SHORT activity strings travelers actually come for (like "snorkeling", "ATV dunes", "street food"), each <= 40 chars, lowercase unless a proper noun.
+
+Return JSON only.`;
+}
+
+// Hard validation — types, ranges, string caps. Returns the cleaned intel core
+// or null; null NEVER becomes a partial answer upstream.
+function validateDestIntel(raw) {
+  try {
+    if (!raw || typeof raw !== 'object' || raw.known !== true) return null;
+    const str = (v, cap) => (typeof v === 'string' && v.trim() && v.trim().length <= cap) ? v.trim() : null;
+    const bt = raw.bestTime, dn = raw.daysNeeded, kf = raw.knownFor;
+    const months = str(bt && bt.months, 60), btWhy = str(bt && bt.why, 140);
+    if (!months || !btWhy) return null;
+    // Money-claim guard (mirrors the FORBIDDEN lists on the sibling AI
+    // endpoints): any price/cost/free/ticket language kills the whole intel —
+    // "crowd-free"-style compounds are allowed via the hyphen lookbehind.
+    const MONEY = /(\$|€|£)|\b(cheap(?:er|est)?|prices?|costs?|discounts?|tickets?)\b|(?<!-)\bfree\b/i;
+    if (MONEY.test(months) || MONEY.test(btWhy) || MONEY.test(String((raw.daysNeeded && raw.daysNeeded.why) || ''))) return null;
+    const min = (dn && Number.isInteger(dn.min)) ? dn.min : NaN;
+    const ideal = (dn && Number.isInteger(dn.ideal)) ? dn.ideal : NaN;
+    const dnWhy = str(dn && dn.why, 120);
+    if (!(min >= 1 && min <= ideal && ideal <= 21) || !dnWhy) return null;
+    if (!Array.isArray(kf) || kf.length < 3 || kf.length > 6) return null;
+    const knownFor = kf.map((s) => str(s, 40));
+    if (knownFor.some((s) => !s)) return null;
+    return { bestTime: { months, why: btWhy }, daysNeeded: { min, ideal, why: dnWhy }, knownFor };
+  } catch { return null; }
+}
+
+// Shared core — the standalone route AND /package/draft's inline intel both
+// land here, so they share one KV cache ('destintel:v1:<slug>'). Only
+// available:true results are cached: a transient model failure must not pin
+// { available: false } for 90 days.
+async function destinationIntel(env, ctx, { name, country, lat, lng }) {
+  const unavailable = { available: false, guidance: DEST_INTEL_GUIDANCE };
+  const slug = destIntelSlug(name, country);
+  if (!slug || !env.ANTHROPIC_API_KEY) return unavailable;
+  const ck = `destintel:v1:${slug}`;
+  const cached = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null) : null;
+  if (cached && cached.available === true) return { ...cached, _cache: 'hit' };
+  const coords = (Number.isFinite(lat) && Number.isFinite(lng)) ? `\nAPPROXIMATE COORDINATES: ${lat.toFixed(3)}, ${lng.toFixed(3)}` : '';
+  const userContent = `DESTINATION: ${String(name).trim().slice(0, 120)}${country ? `\nCOUNTRY: ${String(country).trim().slice(0, 80)}` : ''}${coords}\n\nGenerate the destination intel JSON per the honesty rules above.`;
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 600,
+        temperature: 0.2,   // planning facts, not prose — keep it near-deterministic
+        system: buildDestinationIntelSystemPrompt(),
+        messages: [{ role: 'user', content: userContent }]
+      })
+    });
+    if (!apiRes.ok) return unavailable;
+    const data = await apiRes.json();
+    const raw = data?.content?.[0]?.text?.trim() || '';
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    const validated = validateDestIntel(JSON.parse(cleaned));
+    if (!validated) return unavailable;
+    const intel = { available: true, ...validated, guidance: DEST_INTEL_GUIDANCE };
+    if (env.GLOBESKIMMERS_KV) {
+      const put = env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(intel), { expirationTtl: DEST_INTEL_TTL_SECONDS }).catch(() => {});
+      if (ctx) ctx.waitUntil(put); else await put;
+    }
+    return { ...intel, _cache: 'miss' };
+  } catch { return unavailable; }
+}
+
+async function handleDestinationIntel(request, env, ctx) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
+  }
+  let body;
+  try { body = await request.json(); } catch (_e) {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400);
+  }
+  const name = String(body?.name || '').trim().slice(0, 120);
+  if (!name) return jsonResponse({ error: 'name required' }, 400);
+  const country = String(body?.country || '').trim().slice(0, 80);
+  const lat = parseFloat(body?.lat), lng = parseFloat(body?.lng);
+  return jsonResponse(await destinationIntel(env, ctx, {
+    name, country,
+    lat: (Number.isFinite(lat) && Math.abs(lat) <= 90) ? lat : NaN,
+    lng: (Number.isFinite(lng) && Math.abs(lng) <= 180) ? lng : NaN,
+  }));
+}
+
+// ── Smart Packages: "what you'll see" attractions ────────────────────────────
+// Top attractions near the package destination — SAME owned D1 table and fame
+// ordering as /attractions/nearby (is_marquee → popularity → rating), $0, no
+// new photo fetches (photo_url is already on the row). Returns [] on any
+// failure; the draft never blocks on attractions.
+const PACKAGE_ATTRACTIONS_RADIUS_MI = 30;
+async function packageDraftAttractions(env, lat, lng) {
+  if (!env.ATTRACTIONS_DB) return [];
+  try {
+    const radiusKm = PACKAGE_ATTRACTIONS_RADIUS_MI * 1.60934;
+    const latDelta = (radiusKm * 1.05) / 111;
+    const lngDelta = (radiusKm * 1.05) / (111 * Math.cos(lat * Math.PI / 180) || 1);
+    const { results } = await env.ATTRACTIONS_DB.prepare(`
+      SELECT id, name, city, lat, lng, photo_url, is_marquee, popularity, rating
+        FROM attractions
+       WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?
+         AND (class_ban IS NULL OR class_ban = '' OR class_ban LIKE 'review:%')
+         AND (tier IS NULL OR tier != 'secret')
+    ORDER BY is_marquee DESC, (popularity IS NULL) ASC, popularity DESC, rating DESC
+       LIMIT 40;
+    `).bind(lat - latDelta, lat + latDelta, lng - lngDelta, lng + lngDelta).all();
+    return (results || [])
+      .map((r) => ({ ...r, mi: Math.round(haversineMilesLoc(lat, lng, r.lat, r.lng) * 10) / 10 }))
+      .filter((r) => r.mi <= PACKAGE_ATTRACTIONS_RADIUS_MI)   // true-circle clip of the bounding box
+      .sort((a, b) => {
+        if ((a.is_marquee === 1) !== (b.is_marquee === 1)) return a.is_marquee === 1 ? -1 : 1;
+        const pa = a.popularity ?? -1, pb = b.popularity ?? -1;   // seed ranking first, unranked last
+        if (pa !== pb) return pb - pa;
+        const ra = a.rating ?? 0, rb = b.rating ?? 0;
+        if (ra !== rb) return rb - ra;
+        return a.mi - b.mi;
+      })
+      .slice(0, 8)
+      .map((r) => ({
+        id: r.id, name: r.name, city: r.city || '', lat: r.lat, lng: r.lng,
+        photoUrl: r.photo_url || null, mi: r.mi, toursLink: null,
+      }));
+  } catch { return []; }
+}
+
+// Honest ticketed hint: ONLY when a Viator tour already attached to THIS draft
+// shares a meaningful name token with the attraction do we say 'tours
+// available'. Everything else says NOTHING about free/ticketed — we don't
+// know, and we never guess.
+const TOUR_HINT_STOPWORDS = new Set(['tour', 'tours', 'city', 'with', 'from', 'ticket', 'tickets', 'entry', 'private', 'guided', 'experience', 'day', 'half', 'full', 'walking', 'skip', 'line', 'admission']);
+function attractionTourHint(attractions, tours) {
+  if (!attractions.length || !tours.length) return attractions;
+  const tokenize = (s) => new Set(String(s || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .split(/[^a-z0-9]+/).filter((t) => t.length >= 4 && !TOUR_HINT_STOPWORDS.has(t)));
+  const tourTokens = tours.map((t) => tokenize(t.title));
+  return attractions.map((a) => {
+    const at = [...tokenize(a.name)];
+    return tourTokens.some((tt) => at.some((tok) => tt.has(tok)))
+      ? { ...a, ticketedHint: 'tours available' }
+      : a;
+  });
+}
+
 // ── Smart Packages: draft composer (foundation) ──────────────────────────────
 // POST /package/draft — compose a PRICED, sandbox-safe package draft from live
 // components and persist it in package_orders. NO payment anywhere: booking
@@ -14095,6 +14319,9 @@ async function handleNuiteeSearch(request, env, ctx) {
 // best-reviewed within 1.6× the cheapest total); tours and the event are
 // OPTIONS with their own prices — the per-choice totals carry the stay only,
 // so nothing the user didn't pick is ever rolled into a number.
+// Wave A additions (all additive): multi-room + child-age occupancies, the
+// A/C-always + breakfast-preferred hotel ladder with honest degrade notes,
+// owned-D1 "what you'll see" attractions, and inline destination intel.
 async function handlePackageDraft(request, env, ctx) {
   try {
     const b = await request.json().catch(() => ({}));
@@ -14108,6 +14335,20 @@ async function handlePackageDraft(request, env, ctx) {
     }
     const adults = Math.min(Math.max(parseInt(b.adults, 10) || 2, 1), 8);
     const children = Math.min(Math.max(parseInt(b.children, 10) || 0, 0), 6);
+    // Wave A party detail (all additive — today's SmartPackages sends
+    // adults/children only and keeps getting the old shape): real child ages
+    // + multi-room, forwarded to the Nuitée search which distributes the
+    // party across rooms (see nuiteeOccupancies).
+    // Index-ALIGNED: an invalid entry becomes null in place (defaulted per-index
+    // downstream), never filtered out — filtering would shift a later child's
+    // age onto an earlier child.
+    const childrenAges = Array.isArray(b.childrenAges)
+      ? b.childrenAges.slice(0, children).map((a) => { const n = parseInt(a, 10); return Number.isFinite(n) && n >= 0 && n <= 17 ? n : null; })
+      : [];
+    // Same clamp the search applies (nuiteeOccupancies precondition): rooms can
+    // never exceed adults — persisting a higher count would record rooms the
+    // quote doesn't cover.
+    const rooms = Math.min(Math.max(parseInt(b.rooms, 10) || 1, 1), Math.min(Math.max(adults, 1), 4));
     const destName = String(b.destName || '').trim().slice(0, 120);
     const interestQuery = String(b.interestQuery || '').trim().slice(0, 80);
     const user = await gbUser(request, env).catch(() => null); // optional attribution, like prebook
@@ -14118,15 +14359,38 @@ async function handlePackageDraft(request, env, ctx) {
     const post = (path, payload) => new Request(`${origin}${path}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
-    const [hotelData, tourData, eventData] = await Promise.all([
-      handleNuiteeSearch(post('/hotels/nuitee/search', { latitude: lat, longitude: lng, checkin, checkout, adults, children }), env, ctx)
-        .then((r) => r.json()).catch(() => null),
+    // A/C DOCTRINE + breakfast preference — an honest-degrade ladder through
+    // the existing Wave-5 facility machinery: (1) A/C + breakfast, (2) A/C
+    // only, (3) unfiltered. The first pass with >= 2 hotels wins (the
+    // two-choice UI needs two); what got dropped is said out loud via
+    // acNote/breakfastNote below, mirroring filtersDropped style. Each pass
+    // is the same 20-min-KV-cached Nuitée call — no Google, $0.
+    const searchHotels = (facilities) => handleNuiteeSearch(post('/hotels/nuitee/search', {
+      latitude: lat, longitude: lng, checkin, checkout, adults, children,
+      ...(childrenAges.length ? { childrenAges } : {}), ...(rooms > 1 ? { rooms } : {}),
+      ...(facilities.length ? { facilities } : {}),
+    }), env, ctx).then((r) => r.json()).catch(() => null);
+    const hotelLadder = async () => {
+      let out = null;
+      for (const facilities of [['air conditioning', 'breakfast'], ['air conditioning'], []]) {
+        out = await searchHotels(facilities);
+        if (Array.isArray(out?.hotels) && out.hotels.length >= 2) break;
+      }
+      return out;
+    };
+    const [hotelData, tourData, eventData, attractionsRaw, intel] = await Promise.all([
+      hotelLadder(),
       interestQuery
         ? handleViatorProducts(post('/viator/products', { name: interestQuery, lat, lng, city: destName, count: 5 }), env)
             .then((r) => r.json()).catch(() => null)
         : Promise.resolve(null),
       handleEventsSearch(post('/events/search', { latitude: lat, longitude: lng, city: destName }), env)
         .then((r) => r.json()).catch(() => null),
+      packageDraftAttractions(env, lat, lng),
+      // Inline destination intel — same helper + KV cache as /destination/intel,
+      // so the composer gets it in this one round trip. Degrades to
+      // { available: false } without touching the rest of the draft.
+      destinationIntel(env, ctx, { name: destName, country: '', lat, lng }),
     ]);
 
     // HOTELS — the package's backbone. No hotels → no draft (honest, never fabricated).
@@ -14167,9 +14431,28 @@ async function handlePackageDraft(request, env, ctx) {
         url: e.url, image: e.image || null, fromPrice: e.fromPrice, currency: e.currency || 'USD',
       }))[0] || null;
 
+    // ATTRACTIONS — "what you'll see": owned-D1 fame ranking near the
+    // destination. ticketedHint appears ONLY where a tour in THIS draft
+    // matches by name token; otherwise no free/ticketed claim at all.
+    const attractions = attractionTourHint(attractionsRaw, tours);
+
+    // Honest filter notes — read from the WINNING pass's filtersApplied (the
+    // search itself may also have dropped a facility it couldn't resolve, so
+    // the response, not the request, is the truth).
+    const filtersApplied = Array.isArray(hotelData.filtersApplied) ? hotelData.filtersApplied : [];
+    const acNote = filtersApplied.includes('air conditioning')
+      ? null : 'Air conditioning could not be confirmed for these hotels';
+    const breakfastNote = filtersApplied.includes('breakfast')
+      ? null : 'Breakfast could not be confirmed for these hotels';
+
     const draft = {
       destName: destName || cheapest.city || '', checkin, checkout, nights,
-      party: { adults, children }, hotelChoices, tours, event, currency, env: nuiteeEnv(env),
+      party: { adults, children, rooms, ...(childrenAges.length ? { childrenAges } : {}) },
+      hotelChoices, tours, event, currency, env: nuiteeEnv(env),
+      filtersApplied,
+      ...(acNote ? { acNote } : {}),
+      ...(breakfastNote ? { breakfastNote } : {}),
+      attractions,
     };
 
     // PERSIST — package_orders (cloudflare-worker/sql/07_package_orders.sql).
@@ -14192,7 +14475,9 @@ async function handlePackageDraft(request, env, ctx) {
       meta: { checkin, nights, adults, children, role: h.role, package: sid },
     })));
 
-    return jsonResponse({ ok: true, sid, persisted, draft });
+    // intel rides the response only (not the stored draft) — it has its own
+    // 90-day KV cache and /destination/intel serves it standalone.
+    return jsonResponse({ ok: true, sid, persisted, draft, intel });
   } catch (e) { return jsonResponse({ ok: false, error: e.message }, 500); }
 }
 
@@ -15108,6 +15393,8 @@ export default {
       // Smart Packages (priced drafts only — NO payment; booking stays per-component)
       if (pathname === '/package/draft' && request.method === 'POST') return await handlePackageDraft(request, env, ctx);
       if (pathname === '/package/get' && request.method === 'POST') return await handlePackageGet(request, env);
+      // Destination planning intel (Wave A) — Anthropic + KV only, hard-validated, always carries the verify-locally guidance line
+      if (pathname === '/destination/intel' && request.method === 'POST') return await handleDestinationIntel(request, env, ctx);
       // Stripe payments (Wave 1 — GlobeSkimmers as merchant; hotel stay total of a priced package)
       if (pathname === '/package/checkout' && request.method === 'POST') return await handlePackageCheckout(request, env);
       if (pathname === '/package/pay' && request.method === 'GET') return await handlePackagePay(request, env);
