@@ -14230,7 +14230,11 @@ async function destinationIntel(env, ctx, { name, country, lat, lng, debug }) {
     let parsed = null;
     try { parsed = JSON.parse(cleaned); } catch { return fail('parse'); }
     const validated = validateDestIntel(parsed);
-    if (!validated) return fail(parsed && parsed.known === false ? 'model_unknown' : 'validate');
+    if (!validated) {
+      const f = fail(parsed && parsed.known === false ? 'model_unknown' : 'validate');
+      if (debug) f.sample = cleaned.slice(0, 400); // generated guidance text, not sensitive
+      return f;
+    }
     const intel = { available: true, ...validated, guidance: DEST_INTEL_GUIDANCE };
     if (env.GLOBESKIMMERS_KV) {
       const put = env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(intel), { expirationTtl: DEST_INTEL_TTL_SECONDS }).catch(() => {});
