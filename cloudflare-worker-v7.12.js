@@ -14422,7 +14422,10 @@ async function handleStripeHealth(request, env) {
   const bal = await stripeApi(env, 'GET', '/balance', null);
   // Code only, never the message — Stripe's invalid-key message echoes key fragments,
   // and this endpoint is publicly reachable.
-  if (bal.error) return jsonResponse({ ok: false, configured, publishable, detail: bal.error.code || 'stripe_unreachable' }, 502);
+  // Code/type only, never the message — Stripe's invalid-key message echoes key
+  // fragments, and this endpoint is publicly reachable. type 'authentication_error'
+  // (or invalid_request_error on /balance) = the stored secret key is wrong/truncated.
+  if (bal.error) return jsonResponse({ ok: false, configured, publishable, detail: bal.error.code || bal.error.type || 'stripe_unreachable' }, 502);
   return jsonResponse({ ok: true, livemode: !!bal.livemode, configured, publishable });
 }
 
