@@ -696,3 +696,10 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 ## 2026-09-07 — Stripe account ACTIVE (live mode exists; worker deliberately stays on TEST keys)
 - Founder completed activation ~2:11 AM: account "globeskimmers.io", payments enabled, live keys issued. Radar Standard on; Stripe Tax skipped deliberately (memory reminder set for first real revenue); Klarna auto-enabled.
 - Worker keeps TEST keys ON PURPOSE: /package/checkout charges but does not yet fulfill (no auto hotel booking from our funds). Live swap is gated on Wave 2 fulfillment — charging real money before delivery exists is the one thing we never do. NOTE: payment_method_domains registration is PER MODE — re-register the domain after the live swap.
+
+## 2026-09-07 — DREAMER'S CORNER (Where-to-next reborn, $0 photo dreaming)
+- Founder mandate: rename to Dreamer's Corner, events-size cards, swipeable per-country photo galleries with place-name captions, food photos, type-any-country, 10-20+ photos preseeded — all at $0 (Commons engine).
+- HomeRows: row renders DREAMER'S CORNER kicker + "Places to dream about"; 300px 4:3 photo cards (EventsRow spec, serif name + mono COUNTRY, no emoji); tap opens DreamGallery (old quick-look kept as "View details"); end-of-rail "Dream anywhere" card with a real type-a-country input.
+- DreamGallery: lightbox is now an index — swipe left/right (48px horizontal-dominant), chevrons hidden at ends, arrow keys, mono "N of M", reduced-motion-safe fade; wall photos gained serif place-name captions.
+- scripts/prewarm-dream-galleries.mjs: warms 45 countries (typed path) + 27 curated card {name,country} PAIRS × all+food buckets, sequential 400ms, $0, re-run monthly.
+- Review: 2 CONFIRMED fixed pre-push — preseed warmed only bare-country keys while curated cards key on name+country (the feature's primary taps would all have been cold; DESTINATIONS pairs added), and a stale lightbox index that swallowed Escape and could pop the lightbox open uninvited after an all-images-failed wall (empty-list clear effect). Gates: eslint ✓ build ✓ boot-check ✓ node --check ✓; frontend-only (no worker deploy).

@@ -21,7 +21,94 @@ import { trackEvent } from "@/Layout";
 import { createPageUrl } from "@/utils";
 import MapAppSelector from "@/components/MapAppSelector";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
+import DreamGallery from "@/components/home/DreamGallery";
 import useHorizontalSwipe from "@/lib/useHorizontalSwipe";
+
+const INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
+const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+
+// whereToNext cards carry country only inside `whyVisit` ("City, Country") —
+// the worker sends no `country` field on this row, so derive it client-side.
+function parseDreamCountry(whyVisit) {
+  const parts = String(whyVisit || "").split(",");
+  return parts.length > 1 ? parts.slice(1).join(",").trim() : "";
+}
+
+// DREAMER'S CORNER card — EventsRow's dated-card size (photo-led w-[300px]),
+// not the small HomeRowCard: this row sells the dream, so the photo is big.
+function DreamerCornerCard({ card, country, onOpen, wide }) {
+  return (
+    <button
+      onClick={onOpen}
+      className={`flex-none ${wide ? "w-[320px]" : "w-[300px]"} rounded-2xl overflow-hidden bg-white text-left`}
+      style={{ border: `1px solid ${EDGE}`, boxShadow: "0 8px 20px -16px rgba(22,17,13,.4)" }}
+    >
+      <div className="relative w-full" style={{ aspectRatio: "4 / 3", background: "linear-gradient(135deg,#E7C7A0,#C98A2E)" }}>
+        {card.photoUrl ? (
+          <img src={card.photoUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center font-serif text-[calc(34px*var(--fs))]" style={{ color: "rgba(255,255,255,0.85)" }}>
+            {(card.name || "?").charAt(0)}
+          </div>
+        )}
+        {card.photoUrl && (card.credit || card.photographer) && (
+          <div
+            className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[calc(8px*var(--fs))] leading-none"
+            style={{ background: "rgba(0,0,0,0.42)", color: "rgba(255,255,255,0.9)" }}
+          >
+            {card.credit || card.photographer}
+          </div>
+        )}
+      </div>
+      <div className="p-3">
+        <div
+          className="font-serif leading-[1.14] text-[calc(16px*var(--fs))]"
+          style={{ color: INK, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+        >
+          {card.name || "Explore"}
+        </div>
+        {country && (
+          <div
+            className="mt-1 truncate uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] font-semibold"
+            style={{ fontFamily: MONO, color: SUB }}
+          >
+            {country}
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+// End-of-rail "Dream anywhere" card — a typed doorway into DreamGallery. No
+// fetch here: the gallery's own honest-empty state answers nonsense input.
+function DreamAnywhereCard({ wide, value, onChange, onSubmit }) {
+  return (
+    <div
+      className={`flex-none ${wide ? "w-[320px]" : "w-[300px]"} rounded-2xl p-4 flex flex-col justify-center gap-2.5`}
+      style={{ border: `1.5px dashed ${EDGE}`, background: "#FBF6EC" }}
+    >
+      <div className="font-serif text-[calc(18px*var(--fs))] leading-tight" style={{ color: INK }}>
+        Dream anywhere
+      </div>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") onSubmit(); }}
+        placeholder="Type a country…"
+        className="w-full rounded-xl px-3 py-2 text-[calc(12px*var(--fs))] bg-white"
+        style={{ fontFamily: MONO, color: INK, border: `1px solid ${EDGE}`, outline: "none" }}
+      />
+      <button
+        onClick={onSubmit}
+        className="self-start uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] font-semibold underline underline-offset-2"
+        style={{ fontFamily: MONO, color: TEAL }}
+      >
+        See photos
+      </button>
+    </div>
+  );
+}
 
 function HomeRowCard({ card, onOpen, wide }) {
   const name = card.name || "Explore";
@@ -75,6 +162,10 @@ export default function HomeRows({ onAction, wide = false }) {
   const [modalPhotos, setModalPhotos] = useState([]); // [{url, credit}] for the quick-look modal
   const [modalIdx, setModalIdx] = useState(0);
   const [galleryOpen, setGalleryOpen] = useState(false); // fullscreen viewer over the modal
+  // DREAMER'S CORNER → DreamGallery. { dest: {name, country, lat, lng}, card|null };
+  // card kept so the gallery's "View details" can reopen the quick-look modal.
+  const [dream, setDream] = useState(null);
+  const [dreamQuery, setDreamQuery] = useState(""); // "Dream anywhere" input — persists across gallery opens
 
   // Swipe the modal's hero photo left/right through the loaded photos.
   const heroSwipe = useHorizontalSwipe({
@@ -96,6 +187,22 @@ export default function HomeRows({ onAction, wide = false }) {
         })
         .catch(() => {});
     }
+  };
+
+  // DREAMER'S CORNER card tap → DreamGallery (photo immersion), not the modal.
+  // Cards on this row carry no lat/lng/country fields — country is parsed from
+  // whyVisit, coords stay undefined (SmartPackages degrades to typed search).
+  const openDreamCard = (card) => {
+    const country = parseDreamCountry(card.whyVisit);
+    trackEvent("home_row_card_tap", { row: "whereToNext", place_id: card.id, place_name: card.name, country });
+    setDream({ dest: { name: card.name, country, lat: card.lat, lng: card.lng }, card });
+  };
+
+  const openDreamAnywhere = () => {
+    const q = dreamQuery.trim();
+    if (!q) return;
+    trackEvent("dreamer_corner_anywhere", { query: q });
+    setDream({ dest: { name: q, country: "" }, card: null });
   };
 
   // Open the FULL attraction page (address, hours, gallery, directions, map, AI
@@ -190,13 +297,31 @@ export default function HomeRows({ onAction, wide = false }) {
     <>
     <div className={wide ? "pb-3" : "px-4 pb-3"}>
       <div className={wide ? "flex flex-col gap-5" : "max-w-md mx-auto flex flex-col gap-4"}>
-        {rows.map((row) => (
+        {rows.map((row) => {
+          // whereToNext renders as DREAMER'S CORNER — its own header (the
+          // worker-baked title/subtitle strings are ignored), EventsRow-sized
+          // photo cards, DreamGallery on tap, and a "Dream anywhere" tail card.
+          const isDream = row.key === "whereToNext";
+          return (
           <div key={row.key}>
             <div className="flex items-baseline justify-between mb-2 px-0.5 gap-3">
               <div className="min-w-0">
-                <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1]" style={{ color: "#16302B" }}>{row.title}</div>
-                {row.subtitle && (
-                  <div className="text-[calc(12px*var(--fs))] mt-0.5" style={{ color: "#71827D" }}>{row.subtitle}</div>
+                {isDream ? (
+                  <>
+                    <div className="uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] font-semibold" style={{ fontFamily: MONO, color: SUB }}>
+                      DREAMER'S CORNER
+                    </div>
+                    <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1] mt-0.5" style={{ color: INK }}>
+                      Places to dream about
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1]" style={{ color: "#16302B" }}>{row.title}</div>
+                    {row.subtitle && (
+                      <div className="text-[calc(12px*var(--fs))] mt-0.5" style={{ color: "#71827D" }}>{row.subtitle}</div>
+                    )}
+                  </>
                 )}
               </div>
               {row.seeAll?.action && (
@@ -213,27 +338,43 @@ export default function HomeRows({ onAction, wide = false }) {
               )}
             </div>
             <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
-              {row.cards.map((card) => (
-                <HomeRowCard
-                  key={card.id}
-                  card={card}
-                  wide={wide}
-                  onOpen={() => {
-                    trackEvent("home_row_card_tap", {
-                      row: row.key,
-                      place_id: card.id,
-                      place_name: card.name,
-                      category: card.category,
-                      city: card.city,
-                      country: card.country,
-                    });
-                    openDetail(card); // open THIS attraction (quick-look modal)
-                  }}
-                />
-              ))}
+              {isDream ? (
+                <>
+                  {row.cards.map((card) => (
+                    <DreamerCornerCard
+                      key={card.id}
+                      card={card}
+                      country={parseDreamCountry(card.whyVisit)}
+                      wide={wide}
+                      onOpen={() => openDreamCard(card)}
+                    />
+                  ))}
+                  <DreamAnywhereCard wide={wide} value={dreamQuery} onChange={setDreamQuery} onSubmit={openDreamAnywhere} />
+                </>
+              ) : (
+                row.cards.map((card) => (
+                  <HomeRowCard
+                    key={card.id}
+                    card={card}
+                    wide={wide}
+                    onOpen={() => {
+                      trackEvent("home_row_card_tap", {
+                        row: row.key,
+                        place_id: card.id,
+                        place_name: card.name,
+                        category: card.category,
+                        city: card.city,
+                        country: card.country,
+                      });
+                      openDetail(card); // open THIS attraction (quick-look modal)
+                    }}
+                  />
+                ))
+              )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
 
@@ -330,6 +471,16 @@ export default function HomeRows({ onAction, wide = false }) {
         userLng={activeLng}
       />
     )}
+
+    {/* DREAMER'S CORNER photo immersion. "View details" (curated cards only —
+        not the typed "Dream anywhere" path) reopens the quick-look modal the
+        row's tap used to open, so the old behavior stays reachable. */}
+    <DreamGallery
+      open={!!dream}
+      onClose={() => setDream(null)}
+      dest={dream?.dest || null}
+      onView={dream?.card ? () => { const c = dream.card; setDream(null); openDetail(c); } : undefined}
+    />
     </>
   );
 }

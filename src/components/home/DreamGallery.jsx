@@ -17,9 +17,9 @@
 // The CTA hands { name, city, country, lat, lng } to /SmartPackages via the
 // EXACT router-state mechanism SmartSearchOverlay already uses — one handoff,
 // not two.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { X } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { createPageUrl } from "@/utils";
@@ -66,17 +66,56 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
   // Keys are destination-scoped so a dest swap while open can never make the
   // fetch effect skip on a stale closure of the previous destination's map.
   const [byBucket, setByBucket] = useState({});
-  const [lightbox, setLightbox] = useState(null);
+  // Lightbox = an INDEX into the current bucket's photo list (so swipe/arrows
+  // can walk it), not a photo object; clamped defensively at render in case
+  // the list shrinks underneath (an image erroring out of `failed`).
+  const [lightboxIdx, setLightboxIdx] = useState(null);
   const [failed, setFailed] = useState(() => new Set());
 
   const name = dest?.name ? String(dest.name) : "";
   const destKey = name ? `${name}|${dest?.country || ""}` : "";
 
+  // Current bucket's photos — derived BEFORE the effects so the keyboard
+  // handler below can step through them.
+  const slot = byBucket[`${destKey}:${active}`];
+  const loading = !slot || slot.status === "loading";
+  const photos = (slot?.photos || []).filter((p) => !failed.has(p.src));
+
+  // Step the lightbox within the current list — no wrap; ends are ends
+  // (the chevrons hide there too).
+  const stepLightbox = (delta) => {
+    setLightboxIdx((i) => {
+      if (i == null || photos.length === 0) return i;
+      const cur = Math.min(Math.max(i, 0), photos.length - 1);
+      const next = cur + delta;
+      return next < 0 || next >= photos.length ? cur : next;
+    });
+  };
+
+  // Lightbox swipe — raw touch deltas so a mostly-vertical drag never pages.
+  const touchRef = useRef(null);
+  const onLbTouchStart = (e) => {
+    const t = e.touches && e.touches[0];
+    if (t) touchRef.current = { x: t.clientX, y: t.clientY, dx: 0, dy: 0 };
+  };
+  const onLbTouchMove = (e) => {
+    const s = touchRef.current;
+    const t = e.touches && e.touches[0];
+    if (s && t) { s.dx = t.clientX - s.x; s.dy = t.clientY - s.y; }
+  };
+  const onLbTouchEnd = () => {
+    const s = touchRef.current;
+    touchRef.current = null;
+    if (!s) return;
+    if (Math.abs(s.dx) < 48 || Math.abs(s.dx) <= Math.abs(s.dy)) return;
+    stepLightbox(s.dx < 0 ? 1 : -1);
+  };
+
   // New destination → forget the previous destination's photos entirely.
   useEffect(() => {
     setActive("");
     setByBucket({});
-    setLightbox(null);
+    setLightboxIdx(null);
     setFailed(new Set());
   }, [destKey]);
 
@@ -88,17 +127,22 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
     return () => { document.body.style.overflow = prev; };
   }, [open]);
 
-  // Escape closes the lightbox first, then the sheet.
+  // Escape closes the lightbox first, then the sheet; arrows page the lightbox.
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
-      if (e.key !== "Escape") return;
-      if (lightbox) setLightbox(null);
-      else onClose?.();
+      if (e.key === "Escape") {
+        if (lightboxIdx != null) setLightboxIdx(null);
+        else onClose?.();
+        return;
+      }
+      if (lightboxIdx == null) return;
+      if (e.key === "ArrowLeft") stepLightbox(-1);
+      else if (e.key === "ArrowRight") stepLightbox(1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, lightbox, onClose]);
+  }, [open, lightboxIdx, onClose, photos.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (open && name) logDiscover("dream_gallery_open", { place_name: name, country: dest?.country || "" });
@@ -125,12 +169,25 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
     return () => { cancelled = true; };
   }, [open, active, destKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A vanished list (every image erroring into `failed`) must also CLEAR the
+  // lightbox index — the render clamp only hides it, leaving a stale index that
+  // swallows one Escape and pops the lightbox open uninvited on the next
+  // non-empty bucket. Guarded on !loading so a bucket-switch transient can't
+  // clear a legitimate index.
+  useEffect(() => {
+    if (lightboxIdx != null && !loading && photos.length === 0) setLightboxIdx(null);
+  }, [photos.length, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!open || !name) return null;
 
   const country = dest?.country ? String(dest.country) : "";
-  const slot = byBucket[`${destKey}:${active}`];
-  const loading = !slot || slot.status === "loading";
-  const photos = (slot?.photos || []).filter((p) => !failed.has(p.src));
+
+  // Clamp the lightbox index against the live list — if the list shrank under
+  // it the nearest photo shows; if the list is empty the lightbox just closes.
+  const lbIdx = lightboxIdx == null || photos.length === 0
+    ? null
+    : Math.min(Math.max(lightboxIdx, 0), photos.length - 1);
+  const lbPhoto = lbIdx == null ? null : photos[lbIdx];
 
   // Honest chips: a bucket that was tried and came back empty disappears —
   // unless it's the one on screen (its empty state explains itself).
@@ -220,7 +277,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
               {photos.map((p, i) => (
                 <button
                   key={p.src + i}
-                  onClick={() => setLightbox(p)}
+                  onClick={() => setLightboxIdx(i)}
                   className="block w-full rounded-xl overflow-hidden mb-2.5 bg-white"
                   style={{ breakInside: "avoid", border: `1px solid ${EDGE}` }}
                   aria-label={p.title ? `View photo: ${p.title}` : "View photo"}
@@ -235,6 +292,15 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
                       : { background: IVORY_2 }}
                     onError={() => setFailed((s) => { const n = new Set(s); n.add(p.src); return n; })}
                   />
+                  {/* Visible place-name caption — breakInside:avoid on the
+                      button keeps it glued to its photo in the masonry. */}
+                  {p.title && (
+                    <div className="px-2 pt-1 pb-1.5 text-left">
+                      <div className="font-serif text-[calc(12.5px*var(--fs))] truncate" style={{ color: INK }}>
+                        {p.title}
+                      </div>
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
@@ -269,46 +335,87 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
         </div>
       </div>
 
-      {/* Lightbox — full-bleed dim backdrop, image contained, attributed. */}
-      {lightbox && (
+      {/* Lightbox — full-bleed dim backdrop, image contained, attributed.
+          Swipe / chevrons / arrow keys walk the current bucket's photos;
+          Escape and a backdrop tap still close. */}
+      {lbPhoto && (
         <div
           className="fixed inset-0 z-[60] flex flex-col items-center justify-center px-3 py-8"
           style={{ background: "rgba(12,10,8,0.93)" }}
-          onClick={() => setLightbox(null)}
+          onClick={() => setLightboxIdx(null)}
+          onTouchStart={onLbTouchStart}
+          onTouchMove={onLbTouchMove}
+          onTouchEnd={onLbTouchEnd}
         >
+          {/* Cross-fade on photo change — guarded so reduced-motion users get
+              an instant cut instead. */}
+          <style>{`
+            @media (prefers-reduced-motion: no-preference) {
+              .dg-lb-img { animation: dgLbFade 0.18s ease; }
+              @keyframes dgLbFade { from { opacity: 0.35; } to { opacity: 1; } }
+            }
+          `}</style>
           <button
-            onClick={() => setLightbox(null)}
+            onClick={() => setLightboxIdx(null)}
             aria-label="Close photo"
             className="absolute top-4 right-4 w-9 h-9 rounded-full flex items-center justify-center"
             style={{ background: "rgba(255,255,255,0.14)", color: "#fff" }}
           >
             <X className="w-4 h-4" strokeWidth={2.2} />
           </button>
+          {lbIdx > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); stepLightbox(-1); }}
+              aria-label="Previous photo"
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center"
+              style={{ background: "rgba(255,255,255,0.14)", color: "#fff" }}
+            >
+              <ChevronLeft className="w-5 h-5" strokeWidth={2.2} />
+            </button>
+          )}
+          {lbIdx < photos.length - 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); stepLightbox(1); }}
+              aria-label="Next photo"
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center"
+              style={{ background: "rgba(255,255,255,0.14)", color: "#fff" }}
+            >
+              <ChevronRight className="w-5 h-5" strokeWidth={2.2} />
+            </button>
+          )}
           <img
-            src={lightbox.full || lightbox.src}
-            alt={lightbox.title || ""}
-            className="max-w-full flex-1 min-h-0 object-contain"
+            key={lbPhoto.src || lbIdx}
+            src={lbPhoto.full || lbPhoto.src}
+            alt={lbPhoto.title || ""}
+            className="dg-lb-img max-w-full flex-1 min-h-0 object-contain"
+            onClick={(e) => e.stopPropagation()}
           />
           <div className="flex-none mt-3 text-center max-w-md">
-            {lightbox.title && (
+            {lbPhoto.title && (
               <div className="font-serif text-[calc(14px*var(--fs))]" style={{ color: "rgba(255,252,247,0.95)" }}>
-                {lightbox.title}
+                {lbPhoto.title}
               </div>
             )}
             {/* License attribution — required by CC licenses; links to the
                 Commons file page. Stop propagation so the tap doesn't close. */}
-            {(creditLine(lightbox) || lightbox.link) && (
+            {(creditLine(lbPhoto) || lbPhoto.link) && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (lightbox.link) window.open(lightbox.link, "_blank", "noopener");
+                  if (lbPhoto.link) window.open(lbPhoto.link, "_blank", "noopener");
                 }}
                 className="font-mono text-[calc(10px*var(--fs))] mt-1 underline underline-offset-2"
                 style={{ color: "rgba(255,252,247,0.65)" }}
               >
-                {creditLine(lightbox) || "Wikimedia Commons"}
+                {creditLine(lbPhoto) || "Wikimedia Commons"}
               </button>
             )}
+            <div
+              className="font-mono uppercase tracking-[0.08em] text-[calc(10px*var(--fs))] mt-1"
+              style={{ color: "rgba(255,252,247,0.5)" }}
+            >
+              {lbIdx + 1} of {photos.length}
+            </div>
           </div>
         </div>
       )}
