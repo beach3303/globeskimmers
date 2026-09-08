@@ -285,7 +285,16 @@ export default function SmartPackages() {
       const { data } = await callWorker(ROUTE.searchLocation, { query: q });
       results = (Array.isArray(data?.results) ? data.results : [])
         .filter((r) => Number.isFinite(r?.coordinates?.latitude) && Number.isFinite(r?.coordinates?.longitude));
-      if (!results.length) {
+      // A region we have curated cities for (Tuscany, Bali, Hawaii) is better
+      // served by its cities than by a hotel search around one map point —
+      // offer the chips instead of composing at the region's centre.
+      const top = results[0];
+      if (top && top.granularity === "region" && citiesFor(top.placeName || top.city).length) {
+        const name = top.placeName || top.city;
+        setDestBroad({ name, kind: "region", country: top.address?.country || "", cities: citiesFor(name) });
+        results = [];
+      }
+      if (!results.length && !top) {
         const broad = Array.isArray(data?.tooBroad) ? data.tooBroad[0] : null;
         if (broad) {
           const name = broad.name || q;
