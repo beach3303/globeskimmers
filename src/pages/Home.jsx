@@ -16,6 +16,7 @@ import EventsRow from "../components/home/EventsRow";
 import DealRadarRow from "../components/home/DealRadarRow";
 import MyTripCard from "../components/home/MyTripCard";
 import WishlistCard from "../components/home/WishlistCard";
+import WanderlustLine from "../components/home/WanderlustLine";
 // Extracted by the sibling rebuild task: Dreamer's Corner (ex-HomeRows
 // whereToNext branch) and Experiences (ex-EventsRow Viator sub-rail).
 // fetchHomeRows is DreamersCorner's shared /home/rows client cache — Home
@@ -896,6 +897,10 @@ export default function HomePage() {
       <StayAnchor />
       <MyTripCard />
       <WishlistCard />
+
+      {/* A quiet daily travel quote to close the scroll — encouragement, never
+          a sales line. Copyright-safe (public-domain authors + originals). */}
+      <WanderlustLine />
 
       {/* Bottom clearance for the FloatingNav pill. Home no longer mounts an
           ad banner and the pill is no longer lifted here (Layout passes
