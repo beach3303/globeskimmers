@@ -53,6 +53,8 @@ Two things cannot be deployed from this repo at all: the `globeskimmers-airport-
 
 ## Local Setup
 
+Setting up a second machine: follow `docs/LAPTOP_SETUP.md` (tools, clone, the three local-only credentials, gates, OTA, restoring Claude's memory from `docs/claude-memory/`).
+
 There is no `.env.example` and `.env*` is gitignored. `.env.local` needs six vars — the README documents only the first two:
 
 ```

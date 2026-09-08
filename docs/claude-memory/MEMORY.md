@@ -1,0 +1,6 @@
+- [Capgo OTA reminder — DELIVER AT SESSION START](capgo-ota-setup-reminder.md) — founder asked 2026-09-05 to be reminded first thing next chat: console.capgo.app signup → app com.globeskimmers.app → API key → npx @capgo/cli login
+- [Stripe Tax — remind at FIRST REAL REVENUE](stripe-tax-when-revenue.md) — skipped at activation (rightly); when first live package sale or Nuitée commissions land, raise Stripe Tax + accountant conversation
+- [Nuitée production — LIVE 2026-09-05](nuitee-production-flip-pending.md) — flipped (2d293ab); remaining: Commission/Payout in dashboard + one real low-value booking + rename verdict
+- [Stamp-worthiness philosophy](stamp-worthiness-philosophy.md) — absolute fame bar for stamps (world/national/regional/event-gated); local spots never stamp; global seed waits for this bar
+- [Google of Travel brief + Stamp Atlas](google-of-travel-brief.md) — north-star product/design brief artifact + the 1,364-place icon list; phases 0-4, Smart Packages, anticipation loop
+- [Smart Packages doctrine](smart-packages-doctrine.md) — three audiences, two-choice rule, pre-decided defaults, Klarna, day packages
