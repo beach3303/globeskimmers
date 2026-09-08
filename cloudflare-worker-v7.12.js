@@ -5799,9 +5799,18 @@ function haversineMilesLoc(lat1, lon1, lat2, lon2) {
 }
 
 // Largest administrative unit /search-location still treats as a destination
-// (viewport half-diagonal, miles). 60 keeps Da Nang (~20), Tokyo's urban
-// prefecture, Bali (~55) and Hong Kong; a US state or a country stays broad.
-const SEARCH_REGION_MAX_HALF_DIAG_MI = 60;
+// (viewport half-diagonal, miles). Measured live 2026-09-08: Hong Kong ≤60,
+// Da Nang 67, Tuscany 103, Tokyo 105 (its viewport spans the Izu islands),
+// Lapland 207, Hawaii 236, Maldives 321, Vietnam 581. 110 admits every
+// province-level CITY seen so far; region-sized units that slip under it
+// (Tuscany) are handled by the composer's curated city chips, and a US
+// state or a country stays broad. The `location` Google returns for an
+// admitted unit is its main-city point, not the viewport centroid.
+const SEARCH_REGION_MAX_HALF_DIAG_MI = 110;
+// Google omits `types` on some address components (Bali's, live 2026-09-08)
+// — a bare `.types.includes` threw and turned the whole search into an
+// error. Every component lookup goes through this.
+const hasType = (x, t) => Array.isArray(x?.types) && x.types.includes(t);
 
 async function handleSearchLocation(request, env) {
   let body;
@@ -5876,7 +5885,7 @@ async function handleSearchLocation(request, env) {
         granularity = 'region';
       } else {
         rejectedTooBroadCount++;
-        const cc = (place.addressComponents || []).find(x => x.types.includes('country'));
+        const cc = (place.addressComponents || []).find(x => hasType(x,'country'));
         tooBroad.push({
           name: place.displayName?.text || '',
           kind: granularity,
@@ -5888,14 +5897,14 @@ async function handleSearchLocation(request, env) {
     }
 
     const c = place.addressComponents || [];
-    const streetNumber = c.find(x => x.types.includes('street_number'))?.longText || '';
-    const route = c.find(x => x.types.includes('route'))?.longText || '';
+    const streetNumber = c.find(x => hasType(x,'street_number'))?.longText || '';
+    const route = c.find(x => hasType(x,'route'))?.longText || '';
     const street = streetNumber && route ? `${streetNumber} ${route}` : route || streetNumber;
-    const city = c.find(x => x.types.includes('locality'))?.longText || c.find(x => x.types.includes('sublocality'))?.longText || c.find(x => x.types.includes('postal_town'))?.longText || '';
-    const state = c.find(x => x.types.includes('administrative_area_level_1'))?.shortText || '';
-    const region = c.find(x => x.types.includes('administrative_area_level_2'))?.longText || '';
-    const postalCode = c.find(x => x.types.includes('postal_code'))?.longText || '';
-    const countryComp = c.find(x => x.types.includes('country'));
+    const city = c.find(x => hasType(x,'locality'))?.longText || c.find(x => hasType(x,'sublocality'))?.longText || c.find(x => hasType(x,'postal_town'))?.longText || '';
+    const state = c.find(x => hasType(x,'administrative_area_level_1'))?.shortText || '';
+    const region = c.find(x => hasType(x,'administrative_area_level_2'))?.longText || '';
+    const postalCode = c.find(x => hasType(x,'postal_code'))?.longText || '';
+    const countryComp = c.find(x => hasType(x,'country'));
     const country = countryComp?.longText || '';
     const stateOrCountry = (countryComp?.shortText === 'US' || countryComp?.shortText === 'CA') ? (state || country) : country;
 
@@ -14175,6 +14184,42 @@ async function nuiteeFacilitiesList(env, ctx) {
   if (ctx && ctx.waitUntil) ctx.waitUntil(put);
   return list;
 }
+// ── Nuitée static hotel content ──────────────────────────────────────────
+// GET /data/hotel?hotelId= — the supplier's static description of ONE hotel:
+// photo gallery, room list (bed types, room photos, room amenities),
+// facilities. No rates, so no CUG concern, and no Google — $0. Cached long:
+// hotels do not redecorate weekly. Returns the supplier object as-is (the
+// composer normalises what it renders); null on any failure.
+const NUITEE_HOTEL_TTL = 14 * 24 * 3600;
+async function nuiteeHotelDetails(env, ctx, hotelId, { fresh = false } = {}) {
+  const id = String(hotelId || '').trim();
+  if (!/^[A-Za-z0-9_-]{1,40}$/.test(id)) return null;
+  const ck = `nuitee:hotel:v1:${id}`;
+  if (!fresh) {
+    const cached = await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null);
+    if (cached && typeof cached === 'object') return cached;
+  }
+  let res;
+  try { res = await fetch(`${NUITEE_API}/data/hotel?hotelId=${encodeURIComponent(id)}`, { headers: nuiteeHeaders(env) }); } catch { return null; }
+  if (!res.ok) return null;
+  const d = await res.json().catch(() => null);
+  const h = d && typeof d === 'object' ? (d.data && typeof d.data === 'object' ? d.data : d) : null;
+  if (!h || typeof h !== 'object' || Array.isArray(h)) return null;
+  const put = env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(h), { expirationTtl: NUITEE_HOTEL_TTL }).catch(() => {});
+  if (ctx && ctx.waitUntil) ctx.waitUntil(put);
+  return h;
+}
+// POST /hotels/nuitee/hotel { hotelId, fresh? } → { ok, hotel } — static
+// content for one hotel (photos, rooms, facilities). Business failures are
+// 200 {ok:false} because callWorker discards non-2xx bodies.
+async function handleNuiteeHotel(request, env, ctx) {
+  let b = {};
+  try { b = await request.json(); } catch { b = {}; }
+  const hotel = await nuiteeHotelDetails(env, ctx, b?.hotelId, { fresh: b?.fresh === true });
+  if (!hotel) return jsonResponse({ ok: false, reason: 'not_found' }, 200);
+  return jsonResponse({ ok: true, hotel }, 200);
+}
+
 const nuiteeFacNorm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 // Alias fallbacks tried after the literal name, normalized ('gym' finds
 // "Fitness centre"/"Fitness center" whichever spelling the live list uses;
@@ -14258,14 +14303,19 @@ async function handleNuiteeSearch(request, env, ctx) {
     const refundableOnly = b.refundableOnly === true;
     const reqBoards = Array.isArray(b.boardTypes) ? [...new Set(b.boardTypes.map((s) => String(s).trim().toUpperCase()).filter(Boolean))].slice(0, 5) : [];
     const boardTypes = reqBoards.filter((t) => NUITEE_BOARD_TYPES.has(t));
+    // Quality floor (composer's hotel bar): minimum star class and minimum
+    // guest score, both supplier-side so the 40-hotel page is drawn from the
+    // city's better hotels instead of its cheapest. 0 = not requested.
+    const minStars = Math.min(Math.max(parseInt(b.minStars, 10) || 0, 0), 5);
+    const minRating = Math.min(Math.max(Math.round((parseFloat(b.minRating) || 0) * 10) / 10, 0), 10);
     let filtersApplied = [], filtersDropped = reqBoards.filter((t) => !NUITEE_BOARD_TYPES.has(t)).map((t) => `board:${t}`);
     // Deterministic filter suffix on the cache key (same rule as the Google
     // filterSuffix pattern) — filtered results must never poison the
     // unfiltered entry or each other. Sorted so param order can't fragment it.
     // (keyed on REQUESTED boards, not the valid subset, so a request carrying
     // an unknown code never shares the pristine unfiltered entry's metadata)
-    const filterSuffix = (reqFacilities.length || refundableOnly || reqBoards.length)
-      ? `:flt:f=${reqFacilities.map(nuiteeFacNorm).sort().join(',')}:r=${refundableOnly ? 1 : 0}:b=${[...reqBoards].sort().join(',')}`
+    const filterSuffix = (reqFacilities.length || refundableOnly || reqBoards.length || minStars || minRating)
+      ? `:flt:f=${reqFacilities.map(nuiteeFacNorm).sort().join(',')}:r=${refundableOnly ? 1 : 0}:b=${[...reqBoards].sort().join(',')}${(minStars || minRating) ? `:q=${minStars}_${minRating}` : ''}`
       : '';
     // v2: grouped-rates response shape (per-hotel rates[]) — v1 entries hold a
     // single rate and must not serve against clients expecting the room picker.
@@ -14280,6 +14330,8 @@ async function handleNuiteeSearch(request, env, ctx) {
     }
     if (refundableOnly) filtersApplied.push('refundableOnly');
     filtersApplied.push(...boardTypes.map((t) => `board:${t}`));
+    if (minStars) filtersApplied.push(`stars:${minStars}+`);
+    if (minRating) filtersApplied.push(`rating:${minRating}+`);
     const body = {
       latitude: lat, longitude: lng, radius: radiusM,
       checkin, checkout, currency, guestNationality: nationality,
@@ -14299,14 +14351,18 @@ async function handleNuiteeSearch(request, env, ctx) {
       ...(facilityIds.length ? { facilities: facilityIds } : {}),
       ...(refundableOnly ? { refundableRatesOnly: true } : {}),
       ...(boardTypes.length ? { boardType: boardTypes.join(',') } : {}),
+      // Quality floor: LiteAPI's starRating takes the list of admitted
+      // classes; minRating is the guest-score floor (0–10).
+      ...(minStars ? { starRating: Array.from({ length: 6 - minStars }, (_, i) => minStars + i) } : {}),
+      ...(minRating ? { minRating } : {}),
     };
     let res;
     try { res = await fetch(`${NUITEE_API}/hotels/rates`, { method: 'POST', headers: nuiteeHeaders(env), body: JSON.stringify(body) }); }
     catch { return jsonResponse({ hotels: [], reason: 'network' }); }
-    if (!res.ok && res.status === 400 && (facilityIds.length || refundableOnly || boardTypes.length)) {
+    if (!res.ok && res.status === 400 && (facilityIds.length || refundableOnly || boardTypes.length || minStars || minRating)) {
       // A filter param this environment rejects must not kill the search:
       // degrade by dropping ALL filters, flag them, serve unfiltered honestly.
-      const { facilities: _drop1, refundableRatesOnly: _drop2, boardType: _drop3, ...bare } = body;
+      const { facilities: _drop1, refundableRatesOnly: _drop2, boardType: _drop3, starRating: _drop4, minRating: _drop5, ...bare } = body;
       filtersDropped.push(...filtersApplied); filtersApplied = [];
       try { res = await fetch(`${NUITEE_API}/hotels/rates`, { method: 'POST', headers: nuiteeHeaders(env), body: JSON.stringify(bare) }); }
       catch { return jsonResponse({ hotels: [], reason: 'network' }); }
@@ -16637,6 +16693,7 @@ export default {
       if (pathname === '/deals/sweep' && request.method === 'POST') return await handleDealsSweepManual(request, env, ctx);
       if (pathname === '/hotels/search' && request.method === 'POST') return await handleHotelSearch(request, env, ctx);
       if (pathname === '/hotels/nuitee/search' && request.method === 'POST') return await handleNuiteeSearch(request, env, ctx);
+      if (pathname === '/hotels/nuitee/hotel' && request.method === 'POST') return await handleNuiteeHotel(request, env, ctx);
       if (pathname === '/hotels/nuitee/prebook' && request.method === 'POST') return await handleNuiteePrebook(request, env);
       if (pathname === '/hotels/nuitee/status' && request.method === 'POST') return await handleNuiteeStatus(request, env);
       if (pathname === '/hotels/nuitee/booking' && request.method === 'POST') return await handleNuiteeBooking(request, env);
