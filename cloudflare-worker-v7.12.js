@@ -11940,7 +11940,7 @@ async function getDestinationGallery(env, name, country, bucket, limit) {
   // The cache always holds the full 40-photo set; `limit` is sliced per-request
   // below, so it must stay OUT of this key (a limit:1 first caller would
   // otherwise poison the pair for 30 days — the filterSuffix failure class).
-  const cacheKey = `dreamgal:v2:${gallerySlug(name + ' ' + country)}:${bucket || 'all'}`;  // v2: name-mandatory search + name-token post-filter — expire wrong v1 sets
+  const cacheKey = `dreamgal:v3:${gallerySlug(name + ' ' + country)}:${bucket || 'all'}`;  // v2: name-mandatory search + name-token post-filter — expire wrong v1 sets
   const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
   if (cached && Array.isArray(cached.photos) && cached.photos.length) return { ...cached, photos: cached.photos.slice(0, limit) };
   try {
@@ -11951,7 +11951,15 @@ async function getDestinationGallery(env, name, country, bucket, limit) {
     // `(Kyoto AND Japan AND skyline) OR landscape OR panorama` — which matched
     // any worldwide landscape/panorama with zero destination relevance. The
     // no-bucket terms already AND the name, so they stay as-is.
-    const terms = bucket ? [`${base} (${GALLERY_BUCKETS[bucket]})`] : [base, `${base} landscape`];
+    // Plain AND per theme — PROVEN: "Kyoto landscape" returns 8/8 Kyoto photos,
+    // while "Kyoto Japan (skyline OR landscape OR panorama)" returns 0/8 (CirrusSearch
+    // does not group parens the way you'd hope; the OR branches match any
+    // landscape on Earth). One query per theme word, deduped by the loop, plus an
+    // intitle: backstop that is name-relevant by construction.
+    const themeTerms = bucket
+      ? GALLERY_BUCKETS[bucket].split(' OR ').map((t) => `${base} ${t.trim()}`)
+      : [base, `${base} landscape`];
+    const terms = [...themeTerms, `intitle:"${name}"`];
     // Diacritic-folded destination-name tokens for the post-filter below. Strong
     // (>=3-char) tokens preferred so common short words don't wave junk through;
     // fall back to all tokens for very short names ("Ur", "Fes").
@@ -12004,8 +12012,14 @@ async function getDestinationGallery(env, name, country, bucket, limit) {
     // token of the destination. Precision over volume — 8 real Kyoto photos beat
     // 30 world photos. UNLESS the filter would empty the set: then keep Commons'
     // own top-relevance order rather than show nothing at all.
+    // Off-name photos are NEVER shown. The old "keep Commons' top order rather
+    // than show nothing" fallback is exactly how Château de Rentilly, Bangkok
+    // and an Iranian village shipped under "Kyoto". A dream gallery with fewer
+    // real photos beats one with wrong-place photos; zero real ones → honest
+    // empty (uncached, so a later crawl can still fill it).
     const named = photos.filter((p) => titleMatchesName(p.title));
-    const finalPhotos = named.length ? named : photos;
+    if (!named.length) return emptyOut;
+    const finalPhotos = named;
     const payload = { name, bucket, photos: finalPhotos, source: 'commons' };
     await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: 30 * 24 * 60 * 60 }).catch(() => {});
     return { ...payload, photos: finalPhotos.slice(0, limit) };
