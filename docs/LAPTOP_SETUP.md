@@ -1,13 +1,20 @@
 # Setting up a second machine (laptop) — 2026-09-08
 
+The backup was made on "Maiza's Mac mini" (macOS 26.6.2) and lives in **iCloud Drive** as two folders — signing the laptop into the same Apple ID (with iCloud Drive on) brings both down automatically; they appear in Finder → iCloud Drive within minutes, and big files download on first open:
+
+- **`GlobeSkimmers-Backup-2026-09-08/`** — project secrets, `repo/*.bundle` git bundle, Claude's memory + transcripts, and `RESTORE_ON_LAPTOP.md` (the step-by-step this doc mirrors — follow it top to bottom on the laptop).
+- **`Mac-Snapshot-2026-09-08/`** — the mini's Desktop, Documents, Downloads, shell/git config, and `MAC_INVENTORY.md` (every app, Homebrew package, and VS Code extension on the mini, so you reinstall only what you use).
+
+Known exclusions: Movies and Music are **not** in the snapshot (too large), and SSH private keys were deliberately left out of iCloud — GitHub uses HTTPS through `gh auth login`, so the laptop just signs in fresh. Migration Assistant was skipped during first-boot setup on purpose; it also works after setup (both Macs on the same Wi-Fi → Applications → Utilities → Migration Assistant on both) if apps/settings/accounts are still wanted.
+
 Everything that matters is in one of three places:
 
 | What | Where | How it gets to the laptop |
 |---|---|---|
 | Code, native projects, docs, checklists, roadmap | GitHub `beach3303/globeskimmers` (also `repo/*.bundle` in the backup folder) | `git clone` |
 | Worker secrets (Google, Anthropic, Nuitée, Stripe, Travelpayouts, Ticketmaster, Viator, Supabase service keys, DEAL_SWEEP_KEY) | Cloudflare (set with `npx wrangler secret put`) | Nothing to copy — they live on the worker |
-| Local-only credentials | `GlobeSkimmers-Backup-<date>/secrets/` (Desktop of the MacBook Pro) | AirDrop / USB / iCloud Drive — **never git, never chat** |
-| Claude's memory + session transcripts (the reasoning behind every decision) | `GlobeSkimmers-Backup-<date>/claude/` and `docs/claude-memory/` in the repo | Copy `claude/memory/` to the laptop's Claude project dir (below) |
+| Local-only credentials | `GlobeSkimmers-Backup-2026-09-08/secrets/` in iCloud Drive | Same Apple ID sign-in — **never git, never chat** |
+| Claude's memory + session transcripts (the reasoning behind every decision) | `GlobeSkimmers-Backup-2026-09-08/claude/` and `docs/claude-memory/` in the repo | Copy `claude/memory/` to the laptop's Claude project dir (below) |
 
 ## 1. Tools
 
@@ -28,6 +35,8 @@ npm install
 Keep the path `~/Documents/globeskimmers` — Claude's memory directory is keyed on it.
 
 ## 3. Local credentials (from the backup folder's `secrets/`)
+
+`<backup>` below is the iCloud folder: `~/Library/Mobile Documents/com~apple~CloudDocs/GlobeSkimmers-Backup-2026-09-08`.
 
 ```bash
 cp <backup>/secrets/env.local  ~/Documents/globeskimmers/.env.local   # Supabase URL + anon key, Base44 vars
