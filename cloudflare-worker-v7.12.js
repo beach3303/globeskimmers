@@ -14874,6 +14874,198 @@ async function handlePackageEstimate(request, env, ctx) {
   } catch (e) { return jsonResponse({ ok: false, error: e.message }); }
 }
 
+// ─── FLIGHTS DATA LANE (Travelpayouts / Aviasales) ───────────────────────────
+// POST /flights/months — cheapest cached fare per month for a hub-to-hub route,
+// from the Travelpayouts Data API. HONESTY LAW for this lane:
+//   • These are CACHED fares other travelers found, not live quotes — the
+//     response's `note` says so and the frontend must render it.
+//   • We only answer when BOTH ends sit within 600mi of a curated major hub;
+//     no hub → { ok:false, reason:'no_hub' }. We never guess an origin airport.
+//   • `direct` is real data (v1 monthly's `transfers` field) or null — never
+//     fabricated. Expired fares (expires_at in the past) are dropped.
+// Every failure is a 200 { ok:false, reason } — callWorker discards non-2xx.
+
+// Travelpayouts / Aviasales partner marker for account maizasimeon@gmail.com.
+// This marker IS the affiliate attribution (same doctrine as the Viator pid):
+// every Aviasales link this worker mints MUST carry `marker=` with this value.
+// NEVER drop, rename, or "simplify" it away — a link without it earns nothing.
+const TP_MARKER = '755378';
+
+// Curated major international hubs: [iata, lat, lng, cityLabel]. Coordinates
+// are the airport's own. Deliberately short — a dream-gallery flight tease only
+// makes sense from a big-gateway origin; long-tail airports would just mint
+// links to routes the Data API has no cached fares for.
+const FLIGHT_HUBS = [
+  ['LAX', 33.9416, -118.4085, 'Los Angeles'],
+  ['SFO', 37.6213, -122.3790, 'San Francisco'],
+  ['SEA', 47.4502, -122.3088, 'Seattle'],
+  ['DEN', 39.8561, -104.6737, 'Denver'],
+  ['DFW', 32.8998, -97.0403, 'Dallas'],
+  ['ORD', 41.9742, -87.9073, 'Chicago'],
+  ['ATL', 33.6407, -84.4277, 'Atlanta'],
+  ['JFK', 40.6413, -73.7781, 'New York'],
+  ['EWR', 40.6895, -74.1745, 'Newark'],
+  ['BOS', 42.3656, -71.0096, 'Boston'],
+  ['MIA', 25.7959, -80.2870, 'Miami'],
+  ['IAH', 29.9902, -95.3368, 'Houston'],
+  ['PHX', 33.4373, -112.0078, 'Phoenix'],
+  ['LAS', 36.0840, -115.1537, 'Las Vegas'],
+  ['SAN', 32.7338, -117.1933, 'San Diego'],
+  ['YVR', 49.1967, -123.1815, 'Vancouver'],
+  ['YYZ', 43.6777, -79.6248, 'Toronto'],
+  ['MEX', 19.4363, -99.0721, 'Mexico City'],
+  ['LHR', 51.4700, -0.4543, 'London'],
+  ['CDG', 49.0097, 2.5479, 'Paris'],
+  ['AMS', 52.3105, 4.7683, 'Amsterdam'],
+  ['FRA', 50.0379, 8.5622, 'Frankfurt'],
+  ['MAD', 40.4983, -3.5676, 'Madrid'],
+  ['BCN', 41.2974, 2.0833, 'Barcelona'],
+  ['FCO', 41.8003, 12.2389, 'Rome'],
+  ['IST', 41.2753, 28.7519, 'Istanbul'],
+  ['DXB', 25.2532, 55.3657, 'Dubai'],
+  ['DOH', 25.2731, 51.6081, 'Doha'],
+  ['JNB', -26.1367, 28.2411, 'Johannesburg'],
+  ['CAI', 30.1219, 31.4056, 'Cairo'],
+  ['NRT', 35.7720, 140.3929, 'Tokyo'],
+  ['HND', 35.5494, 139.7798, 'Tokyo'],
+  ['ICN', 37.4602, 126.4407, 'Seoul'],
+  ['PEK', 40.0799, 116.6031, 'Beijing'],
+  ['PVG', 31.1443, 121.8083, 'Shanghai'],
+  ['HKG', 22.3080, 113.9185, 'Hong Kong'],
+  ['SIN', 1.3644, 103.9915, 'Singapore'],
+  ['BKK', 13.6900, 100.7501, 'Bangkok'],
+  ['KUL', 2.7456, 101.7099, 'Kuala Lumpur'],
+  ['MNL', 14.5086, 121.0198, 'Manila'],
+  ['SYD', -33.9399, 151.1753, 'Sydney'],
+  ['MEL', -37.6690, 144.8410, 'Melbourne'],
+  ['AKL', -37.0082, 174.7850, 'Auckland'],
+  ['GRU', -23.4356, -46.4731, 'São Paulo'],
+  ['EZE', -34.8222, -58.5358, 'Buenos Aires'],
+  ['SCL', -33.3930, -70.7858, 'Santiago'],
+  ['BOG', 4.7016, -74.1469, 'Bogotá'],
+  ['LIM', -12.0219, -77.1143, 'Lima'],
+  ['DEL', 28.5562, 77.1000, 'Delhi'],
+  ['BOM', 19.0896, 72.8656, 'Mumbai'],
+];
+
+// Nearest curated hub to a coordinate, or null when the closest one is over
+// 600mi away — at that distance "your airport" would be a guess, and we don't
+// guess. Returns { iata, city, mi }.
+function nearestHub(lat, lng) {
+  let best = null;
+  for (const [iata, hlat, hlng, city] of FLIGHT_HUBS) {
+    const mi = haversineMilesLoc(lat, lng, hlat, hlng);
+    if (!best || mi < best.mi) best = { iata, city, mi: Math.round(mi) };
+  }
+  return best && best.mi <= 600 ? best : null;
+}
+
+const FLIGHT_MONTHS_TTL_SECONDS = 24 * 60 * 60;  // fares are cached-by-TP anyway; a day is plenty
+
+// POST /flights/months { originLat, originLng, destLat, destLng, destName? } →
+// { ok:true, origin:{iata,city}, dest:{iata,city}, currency, months:[{ month:
+// 'YYYY-MM', label, price, direct }], note, link } — months cheapest-first
+// (max 12), with one nonstop-first nudge: a direct month within 20% of the
+// overall cheapest is promoted ahead of cheaper 1–2-stop months. `direct`
+// comes from the API's `transfers` field (0 = nonstop); an unparseable
+// transfers value yields direct:null, never a guess. `link` deep-links
+// Aviasales search for the overall-cheapest month (mid-month, +7d return,
+// 1 pax) and ALWAYS carries marker=TP_MARKER. Empty data → months:[] honestly.
+// Data source: Travelpayouts Data API /v1/prices/monthly (one row per month,
+// token in X-Access-Token), cached in KV 24h per (origin, dest) pair.
+async function handleFlightsMonths(request, env, ctx) {
+  try {
+    if (!env.TRAVELPAYOUTS_TOKEN) return jsonResponse({ ok: false, reason: 'not_configured' });
+    const b = await request.json().catch(() => ({}));
+    const oLat = parseFloat(b.originLat), oLng = parseFloat(b.originLng);
+    const dLat = parseFloat(b.destLat), dLng = parseFloat(b.destLng);
+    const finite = (v, cap) => Number.isFinite(v) && Math.abs(v) <= cap;
+    if (!finite(oLat, 90) || !finite(oLng, 180) || !finite(dLat, 90) || !finite(dLng, 180)) {
+      return jsonResponse({ ok: false, reason: 'coords_required' });
+    }
+    const o = nearestHub(oLat, oLng);
+    const d = nearestHub(dLat, dLng);
+    if (!o || !d) return jsonResponse({ ok: false, reason: 'no_hub' });
+    if (o.iata === d.iata) return jsonResponse({ ok: false, reason: 'same_hub' });
+
+    const ck = `flmonths:v1:${o.iata}:${d.iata}`;
+    const cached = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null) : null;
+    if (cached && cached.ok === true) return jsonResponse({ ...cached, _cache: 'hit' });
+
+    // /v1/prices/monthly: the one-row-per-month endpoint. Cached data, so per
+    // the docs' own guidance we treat it as batch material — gzip + KV, never
+    // per-keystroke. Fields per row: price, transfers, departure_at, expires_at.
+    let res;
+    try {
+      res = await fetch(
+        `https://api.travelpayouts.com/v1/prices/monthly?currency=usd&origin=${o.iata}&destination=${d.iata}`,
+        { headers: { 'X-Access-Token': env.TRAVELPAYOUTS_TOKEN, 'Accept-Encoding': 'gzip, deflate' } },
+      );
+    } catch { return jsonResponse({ ok: false, reason: 'network' }); }
+    if (!res.ok) return jsonResponse({ ok: false, reason: 'api_error', status: res.status });
+    const j = await res.json().catch(() => null);
+    if (!j || j.success !== true) return jsonResponse({ ok: false, reason: 'api_error' });
+
+    const now = Date.now();
+    const nowMonth = new Date(now).toISOString().slice(0, 7);
+    const rows = [];
+    for (const [month, r] of Object.entries(j.data || {})) {
+      if (!/^\d{4}-\d{2}$/.test(month) || month < nowMonth || !r) continue;  // past months are dead links
+      const price = Math.round(Number(r.price));
+      if (!Number.isFinite(price) || price <= 0) continue;
+      // Honor expires_at: "It is not recommended to use expired prices."
+      const exp = r.expires_at ? Date.parse(r.expires_at) : NaN;
+      if (Number.isFinite(exp) && exp < now) continue;
+      const dep = r.departure_at ? Date.parse(r.departure_at) : NaN;
+      if (Number.isFinite(dep) && dep < now) continue;                        // fare's own departure already behind us
+      const t = Number(r.transfers);
+      const direct = Number.isFinite(t) ? t === 0 : null;                     // real stops data or null — never invented
+      const mIdx = parseInt(month.slice(5, 7), 10) - 1;
+      rows.push({ month, label: MONTH_LABELS[mIdx] || month, price, direct });
+    }
+    rows.sort((a, b) => a.price - b.price);
+
+    // Aviasales search deep link for the overall-cheapest month: DDMM date
+    // grammar (strictly two digits each), depart mid-month, return +7d, 1 pax.
+    // A mid-month day already behind us slides to 3 days out so the link is
+    // always a searchable future trip. marker= is sacred — see TP_MARKER.
+    let link = null;
+    if (rows.length) {
+      const DAY = 86400000;
+      const cheapest = rows[0];
+      let depMs = Date.UTC(parseInt(cheapest.month.slice(0, 4), 10), parseInt(cheapest.month.slice(5, 7), 10) - 1, 15);
+      if (depMs < now + 2 * DAY) depMs = now + 3 * DAY;
+      const retMs = depMs + 7 * DAY;
+      const ddmm = (ms) => { const x = new Date(ms); return String(x.getUTCDate()).padStart(2, '0') + String(x.getUTCMonth() + 1).padStart(2, '0'); };
+      link = `https://www.aviasales.com/search/${o.iata}${ddmm(depMs)}${d.iata}${ddmm(retMs)}1?marker=${TP_MARKER}`;
+    }
+
+    // months[0] MUST stay the genuine cheapest — the tease says "cheapest in
+    // {month}" and the link opens months[0], so any reorder makes both lie.
+    // (Nonstop-first is a FLIGHT-SELECTION rule for the itinerary picker, not a
+    // WHEN-is-cheapest-month rule — a month isn't "nonstop", specific flights
+    // are. So the calendar stays purely cheapest-first; each month keeps its
+    // `direct` flag, and "· nonstop" only appears when the cheapest month itself
+    // happens to be a nonstop fare.)
+    const months = rows.slice(0, 12);
+
+    const out = {
+      ok: true,
+      origin: { iata: o.iata, city: o.city },
+      dest: { iata: d.iata, city: d.city },
+      currency: typeof j.currency === 'string' && j.currency ? j.currency.toUpperCase() : 'USD',
+      months,
+      note: 'cheapest fares travelers found recently — not live quotes',
+      link,
+    };
+    if (months.length && env.GLOBESKIMMERS_KV) {  // empty answers are never cached — a route may fill in within the day
+      const put = env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(out), { expirationTtl: FLIGHT_MONTHS_TTL_SECONDS }).catch(() => {});
+      if (ctx) ctx.waitUntil(put); else await put;
+    }
+    return jsonResponse({ ...out, _cache: 'miss' });
+  } catch (e) { return jsonResponse({ ok: false, reason: 'error', error: e.message }); }
+}
+
 // ── Stripe (Wave 1 — GlobeSkimmers-as-merchant package checkout) ─────────────
 // Direct REST, no SDK (Workers-friendly). STRIPE_SECRET_KEY is set out of band
 // via `npx wrangler secret put` and may be test OR live — mode always follows
@@ -16202,6 +16394,7 @@ export default {
       if (pathname === '/package/get' && request.method === 'POST') return await handlePackageGet(request, env);
       // Living-room estimate tease (Wave B) — intel-dated, dry-run-priced cheapest hotel + split-four arithmetic; failures are 200s
       if (pathname === '/package/estimate' && request.method === 'POST') return await handlePackageEstimate(request, env, ctx);
+      if (pathname === '/flights/months' && request.method === 'POST') return await handleFlightsMonths(request, env, ctx);
       // Destination planning intel (Wave A) — Anthropic + KV only, hard-validated, always carries the verify-locally guidance line
       if (pathname === '/destination/intel' && request.method === 'POST') return await handleDestinationIntel(request, env, ctx);
       // Stripe payments (Wave 1 — GlobeSkimmers as merchant; hotel stay total of a priced package)

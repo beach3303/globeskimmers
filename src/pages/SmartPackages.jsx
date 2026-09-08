@@ -785,7 +785,7 @@ export default function SmartPackages() {
                 </div>
                 {Number.isFinite(estTotal) && estTotal > 0 && (
                   <div className="font-mono text-[calc(10.5px*var(--fs))] mt-1 leading-snug" style={{ color: SUB }}>
-                    ~{money(estTotal / 4, estCurrency)} × 4 if you split it
+                    ≈ {money(estTotal / 4, estCurrency)}/mo × 4 months
                   </div>
                 )}
               </div>

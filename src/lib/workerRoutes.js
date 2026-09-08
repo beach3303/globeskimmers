@@ -66,4 +66,7 @@ export const ROUTE = {
   // Trips — post-stay feedback prompt on past bookings
   tripFeedback: 'trip/feedback',
 
+  // Flights — cheapest-month teaser for the dream gallery's price tease
+  flightsMonths: 'flights/months',
+
 };
