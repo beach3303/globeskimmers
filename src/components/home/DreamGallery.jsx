@@ -565,7 +565,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
               {est.monthLabel ? `Best in ${est.monthLabel} · roughly` : "Roughly"} {money(est.stayTotal, est.currency)} for two · {est.nights} night{est.nights === 1 ? "" : "s"}
             </div>
             <div className="font-mono text-[calc(11.5px*var(--fs))] mt-0.5 leading-snug" style={{ color: SUB }}>
-              ≈ {money(est.splitFour, est.currency)}/mo × 4 months · hotel only — tours and tickets priced separately
+              ≈ {money(est.stayTotal / est.nights, est.currency)} a night for two · hotel only — tours and tickets priced separately
             </div>
             {/* Flight line — only when /flights/months came back whole. The
                 "· nonstop" tag needs a literal direct:true; the note below is

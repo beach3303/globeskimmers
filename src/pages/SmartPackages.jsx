@@ -783,11 +783,10 @@ export default function SmartPackages() {
                 <div className="font-mono text-[calc(10.5px*var(--fs))] mt-1.5 leading-snug" style={{ color: SUB }}>
                   {inclusionLine}
                 </div>
-                {Number.isFinite(estTotal) && estTotal > 0 && (
-                  <div className="font-mono text-[calc(10.5px*var(--fs))] mt-1 leading-snug" style={{ color: SUB }}>
-                    ≈ {money(estTotal / 4, estCurrency)}/mo × 4 months
-                  </div>
-                )}
+                {/* No payment-plan / split line on the composer — it's the
+                    decision surface (real total wanted), and no payment option
+                    exists at checkout yet. The full "Flexible payment options"
+                    presentation debuts when our own Klarna checkout is live. */}
               </div>
             )}
 
