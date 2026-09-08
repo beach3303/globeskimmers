@@ -529,7 +529,9 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: PAPER }}>
       {/* Header — mono COUNTRY kicker, serif destination name, close X. */}
-      <div className="flex-none px-4 pt-4 pb-2" style={{ borderBottom: `1px solid ${EDGE}` }}>
+      {/* Header pads BELOW the notch/Dynamic Island — a fixed 16px put the
+          kicker, name and close X under the status bar (the X read as dead). */}
+      <div className="flex-none px-4 pb-2" style={{ paddingTop: "max(16px, calc(env(safe-area-inset-top, 0px) + 12px))", borderBottom: `1px solid ${EDGE}` }}>
         <div className="max-w-md mx-auto flex items-start gap-3">
           <div className="flex-1 min-w-0">
             {country && (
@@ -544,10 +546,10 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
           <button
             onClick={onClose}
             aria-label="Close photo gallery"
-            className="flex-none w-9 h-9 rounded-full flex items-center justify-center bg-white"
+            className="flex-none w-11 h-11 rounded-full flex items-center justify-center bg-white"
             style={{ border: `1px solid ${EDGE}`, color: INK }}
           >
-            <X className="w-4 h-4" strokeWidth={2.2} />
+            <X className="w-5 h-5" strokeWidth={2.2} />
           </button>
         </div>
 
