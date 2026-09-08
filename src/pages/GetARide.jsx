@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
-import { CAT, IVORY, IVORY_2, SHADOW_CARD_SOFT } from "../components/redesign/constants";
+import { CAT, IVORY, IVORY_2, SHADOW_CARD_SOFT, TEAL_DEEP } from "../components/redesign/constants";
 import { trackAffiliateClick } from "@/lib/affiliate";
 import { logDiscover } from "@/lib/logDiscover";
 import { getRideProviders, ccFromLocation, openRide } from "@/lib/rideProviders";
@@ -28,18 +28,22 @@ const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const ED_INK = "#16110D";
 const fs = (n) => `calc(${n}px*var(--fs))`;
 
-// Bookable options. See the `soon` note in the header comment.
+// RENTAL CARS — its own section card (upgraded in place from a plain options
+// row, so there's exactly one rental surface). The link is the CONFIRMED
+// PostAffiliatePro homepage form — a_aid=beach3303 must survive to the landing
+// page, so never rebuild or strip params. City deep links
+// (/{country}/{city}?a_aid=…) are plausible but UNVERIFIED for click credit;
+// don't prefill a destination until the affiliate panel confirms the grammar.
+const RENTAL = {
+  key: "car", // trackAffiliateClick category
+  partner: "discovercars",
+  partnerName: "Discover Cars",
+  link: "https://www.discovercars.com/?a_aid=beach3303", // LIVE
+};
+
+// Bookable options. See the `soon` note in the header comment. (Rental cars
+// moved to the RENTAL section card above.)
 const OPTIONS = [
-  {
-    key: "car",
-    icon: CarFront,
-    title: "Rent a car",
-    sub: "Compare deals worldwide · free cancellation, no card fees",
-    partner: "discovercars",
-    partnerName: "Discover Cars",
-    accent: CAT.transit,
-    link: "https://www.discovercars.com/?a_aid=beach3303", // LIVE
-  },
   {
     key: "transfer",
     icon: CarTaxiFront,
@@ -70,6 +74,13 @@ export default function GetARide() {
       return;
     }
     setConfirm(opt);
+  };
+
+  // Rental section CTA — same confirm-sheet → trackAffiliateClick → open-returned-url
+  // path as every other partner option; only the tap-event `type` differs.
+  const startRental = () => {
+    logDiscover("ride_option_tap", { type: "rental", partner: RENTAL.partner });
+    setConfirm(RENTAL);
   };
 
   const proceed = async () => {
@@ -119,6 +130,53 @@ export default function GetARide() {
 
       {/* Options — ivory card · serif name · mono sub · honest partner label · chevron */}
       <div className="px-4 pt-1 space-y-3 pb-8" style={{ maxWidth: 640, margin: "0 auto" }}>
+        {/* RENTAL CARS — Passport Standard section card: mono kicker · serif ·
+            honest coverage line (Full Coverage is Discover Cars' checkout upsell,
+            never "insurance included") · mono source line (we quote no prices we
+            can't source) · one quiet teal CTA. */}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="px-4 py-4 rounded-[18px]"
+          style={{ background: "#FFFFFF", border: "1px solid #F0E9DC", boxShadow: SHADOW_CARD_SOFT }}
+        >
+          <div className="flex items-center gap-4">
+            <div
+              className="w-12 h-12 rounded-[14px] flex items-center justify-center flex-none"
+              style={{ background: CAT.transit.bg }}
+            >
+              <CarFront size={22} color={CAT.transit.ink} strokeWidth={2} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div
+                className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold"
+                style={{ color: "#94A3B8" }}
+              >
+                Rental cars
+              </div>
+              <div className="mt-0.5" style={{ fontFamily: ED_SERIF, fontSize: fs(19), lineHeight: 1.15, color: ED_INK }}>
+                Compare rentals with insurance options
+              </div>
+            </div>
+          </div>
+          <div className="font-mono text-[calc(11px*var(--fs))] leading-snug mt-3" style={{ color: "#6B7280" }}>
+            Free cancellation on most bookings · Full Coverage available at checkout
+          </div>
+          <div
+            className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.12em] uppercase font-semibold mt-1"
+            style={{ color: "#94A3B8" }}
+          >
+            DiscoverCars — prices on their site
+          </div>
+          <button
+            onClick={startRental}
+            className="w-full mt-3.5 py-3 rounded-[14px] font-semibold text-white text-[calc(14px*var(--fs))] transition-transform active:scale-[0.99]"
+            style={{ background: TEAL_DEEP }}
+          >
+            Browse rental cars
+          </button>
+        </motion.div>
+
         {OPTIONS.map((opt, i) => {
           const disabled = opt.soon || !opt.link;
           const OptIcon = opt.icon;
@@ -127,7 +185,7 @@ export default function GetARide() {
               key={opt.key}
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(i, 6) * 0.04 }}
+              transition={{ delay: Math.min(i + 1, 6) * 0.04 }}
               onClick={() => startOpen(opt)}
               disabled={disabled}
               className="w-full flex items-center gap-4 px-4 py-4 rounded-[18px] text-left transition-transform active:scale-[0.99]"
