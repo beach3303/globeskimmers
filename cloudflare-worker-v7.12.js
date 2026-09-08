@@ -16260,6 +16260,30 @@ function dealPromoWindow(text) {
   return { text: s.slice(windowStart, windowStart + DEAL_PAGE_TEXT_CAP), windowStart, signalAt: signalAt == null ? -1 : signalAt };
 }
 
+// "9/3", "9/7/26", "Sept 30", "October 15, 2026", "Ends Oct 15" → true when
+// that day is already behind us (UTC end of day). Unparseable → false: a
+// deal is never hidden on a guess. A year-less date reads as THIS year — a
+// sale that "ends 9/3" seen on 9/8 has ended; it is not next year's sale.
+// Applied at list time because a page that keeps its expired banner never
+// changes hash, so the sweep alone would keep serving it.
+const DEAL_MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+function dealEndsPast(ends) {
+  const s = String(ends || '').trim().replace(/^(ends?|through|thru|until|by)\s*(on\s*)?/i, '').replace(/\.$/, '').trim();
+  if (!s) return false;
+  const now = new Date();
+  const y0 = now.getUTCFullYear();
+  let y = null, m = null, d = null;
+  let mm = s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  if (mm) { m = +mm[1]; d = +mm[2]; y = mm[3] ? (+mm[3] < 100 ? 2000 + +mm[3] : +mm[3]) : y0; }
+  else {
+    mm = s.match(/^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?$/);
+    if (mm) { m = DEAL_MONTHS.indexOf(mm[1].slice(0, 3).toLowerCase()) + 1; d = +mm[2]; y = mm[3] ? +mm[3] : y0; }
+  }
+  if (!m || !d || m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const endUtc = Date.UTC(y, m - 1, d, 23, 59, 59);
+  return Number.isFinite(endUtc) && endUtc < now.getTime();
+}
+
 // Whitespace+case normalization used for the substring honesty checks — the
 // model may re-space a quote slightly, but words and numbers must be intact.
 function dealNorm(s) {
@@ -16578,7 +16602,7 @@ async function handleDealsList(request, env, ctx) {
         dest: (typeof r.dest_lat === 'number' && typeof r.dest_lng === 'number')
           ? { lat: r.dest_lat, lng: r.dest_lng, city: r.dest_city || null, country: r.dest_country || null }
           : null,
-      }));
+      })).filter((x) => !dealEndsPast(x.ends));   // an "Ends 9/3" banner must not outlive 9/3
     }
     const payload = { deals, source: 'radar' };
     if (env.GLOBESKIMMERS_KV) {
