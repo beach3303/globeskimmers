@@ -33,6 +33,7 @@ import React, { useState, useEffect } from 'react';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { logEvent } from '@/lib/analytics';
+import { openPartner } from '@/lib/openPartner';
 
 // Shared palette — matches AIDetailsSection.jsx so the AI panel reads the
 // same across the app even after the fork.
@@ -183,7 +184,7 @@ function Body({ loading, error, details, showVerdictHelper }) {
   const websiteUri = details.websiteUri || null;
   // Tap "call to confirm" stamps to open the place's website in a new tab.
   // When no website is known, the stamp is non-interactive (informational).
-  const callConfirm = websiteUri ? () => window.open(websiteUri, '_blank', 'noopener,noreferrer') : null;
+  const callConfirm = websiteUri ? () => openPartner(websiteUri) : null;
 
   // Phase 2: read source-tier from the Worker's _sources map. Any field the
   // Worker didn't tag (old cached entries, unmarked fields) is still

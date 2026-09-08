@@ -934,7 +934,7 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
         {a.formattedAddress&&<div style={{fontSize:fs(t(14,11.5)),color:ED_INK3,marginBottom:fs(12),whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress.split(',').slice(-3,-1).join(',').trim()}</div>}
         <div style={{display:"flex",gap:fs(t(10,8))}}>
           <button onClick={(e)=>{e.stopPropagation();setDirs(true);}} style={{flex:1,padding:fs(t(13,10)),borderRadius:t("14px","12px"),border:"none",background:ED_TODO,color:"#fff",fontWeight:600,fontSize:fs(t(16,12.5)),cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
-          {a.websiteUri&&<button onClick={(e)=>{e.stopPropagation();window.open(a.websiteUri,'_blank');}} style={{flex:1,padding:fs(t(13,10)),borderRadius:t("14px","12px"),border:"none",background:ED_IVORY2,color:ED_INK2,fontWeight:600,fontSize:fs(t(16,12.5)),cursor:"pointer",fontFamily:"inherit"}}>🌐 Website</button>}
+          {a.websiteUri&&<button onClick={(e)=>{e.stopPropagation();openPartner(a.websiteUri);}} style={{flex:1,padding:fs(t(13,10)),borderRadius:t("14px","12px"),border:"none",background:ED_IVORY2,color:ED_INK2,fontWeight:600,fontSize:fs(t(16,12.5)),cursor:"pointer",fontFamily:"inherit"}}>🌐 Website</button>}
         </div>
       </div>
     </div>

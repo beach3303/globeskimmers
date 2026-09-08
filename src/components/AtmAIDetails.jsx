@@ -33,6 +33,7 @@ import { base44 } from '@/api/base44Client';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { logEvent } from '@/lib/analytics';
+import { openPartner } from '@/lib/openPartner';
 
 // Palette — matches AIDetailsSection / AttractionAIDetails so the panel
 // reads consistently across the app.
@@ -234,7 +235,7 @@ function Body({ loading, error, details, showVerdictHelper }) {
   if (!details) return null;
 
   const websiteUri = details.websiteUri || null;
-  const callConfirm = websiteUri ? () => window.open(websiteUri, '_blank', 'noopener,noreferrer') : null;
+  const callConfirm = websiteUri ? () => openPartner(websiteUri) : null;
 
   // The Worker tags each field's provenance in _sources. Anything it did NOT
   // tag (older cache entries, fields the model left unmarked) is still

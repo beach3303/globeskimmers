@@ -693,7 +693,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (lbPhoto.link) window.open(lbPhoto.link, "_blank", "noopener");
+                  if (lbPhoto.link) openPartner(lbPhoto.link);
                 }}
                 className="font-mono text-[calc(10px*var(--fs))] mt-1 underline underline-offset-2"
                 style={{ color: "rgba(255,252,247,0.65)" }}

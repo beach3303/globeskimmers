@@ -23,6 +23,7 @@ import { CAT, IVORY, IVORY_2, SHADOW_CARD_SOFT, TEAL_DEEP } from "../components/
 import { trackAffiliateClick } from "@/lib/affiliate";
 import { logDiscover } from "@/lib/logDiscover";
 import { getRideProviders, ccFromLocation, openRide } from "@/lib/rideProviders";
+import { openPartner } from "@/lib/openPartner";
 
 const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const ED_INK = "#16110D";
@@ -70,7 +71,7 @@ export default function GetARide() {
     // Demand signal: rental car vs airport transfer, by city (present vs planning).
     logDiscover("ride_option_tap", { type: opt.key, partner: opt.partner });
     if (opt.utility) {
-      window.open(opt.link, "_blank");
+      openPartner(opt.link);
       return;
     }
     setConfirm(opt);
@@ -94,7 +95,7 @@ export default function GetARide() {
       destCity: activeLocation?.city || activeLocation?.name,
       destCountry: activeLocation?.country,
     });
-    window.open(url, "_blank");
+    openPartner(url);
   };
 
   return (

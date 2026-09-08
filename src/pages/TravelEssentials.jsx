@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
 import { CAT } from "../components/redesign/constants";
 import { trackAffiliateClick } from "@/lib/affiliate";
+import { openPartner } from "@/lib/openPartner";
 
 const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const ED_INK = "#16110D";
@@ -75,7 +76,7 @@ export default function TravelEssentials() {
       destCity: activeLocation?.city || activeLocation?.name,
       destCountry: activeLocation?.country,
     });
-    window.open(url, "_blank");
+    openPartner(url);
   };
 
   return (
