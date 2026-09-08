@@ -11940,12 +11940,29 @@ async function getDestinationGallery(env, name, country, bucket, limit) {
   // The cache always holds the full 40-photo set; `limit` is sliced per-request
   // below, so it must stay OUT of this key (a limit:1 first caller would
   // otherwise poison the pair for 30 days — the filterSuffix failure class).
-  const cacheKey = `dreamgal:v1:${gallerySlug(name + ' ' + country)}:${bucket || 'all'}`;
+  const cacheKey = `dreamgal:v2:${gallerySlug(name + ' ' + country)}:${bucket || 'all'}`;  // v2: name-mandatory search + name-token post-filter — expire wrong v1 sets
   const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
   if (cached && Array.isArray(cached.photos) && cached.photos.length) return { ...cached, photos: cached.photos.slice(0, limit) };
   try {
     const base = country ? `${name} ${country}` : name;
-    const terms = bucket ? [`${base} ${GALLERY_BUCKETS[bucket]}`] : [base, `${base} landscape`];
+    // Parenthesize the theme OR group so the destination name stays MANDATORY:
+    // CirrusSearch reads `Kyoto Japan (skyline OR landscape OR panorama)` as
+    // (Kyoto AND Japan AND one-of-theme), NOT the old low-precedence
+    // `(Kyoto AND Japan AND skyline) OR landscape OR panorama` — which matched
+    // any worldwide landscape/panorama with zero destination relevance. The
+    // no-bucket terms already AND the name, so they stay as-is.
+    const terms = bucket ? [`${base} (${GALLERY_BUCKETS[bucket]})`] : [base, `${base} landscape`];
+    // Diacritic-folded destination-name tokens for the post-filter below. Strong
+    // (>=3-char) tokens preferred so common short words don't wave junk through;
+    // fall back to all tokens for very short names ("Ur", "Fes").
+    const _nameToks = gsFold(name).split(/[^a-z0-9]+/).filter(Boolean);
+    const _strongToks = _nameToks.filter((t) => t.length >= 3);
+    const nameTokens = _strongToks.length ? _strongToks : _nameToks;
+    const titleMatchesName = (title) => {
+      if (!nameTokens.length) return true;            // no usable token → don't over-filter
+      const tf = gsFold(title);
+      return nameTokens.some((t) => tf.includes(t));
+    };
     // Non-photo junk by filename — maps, heraldry, vector/animated formats.
     const BAD = ['map', 'coat_of_arms', 'coat of arms', 'flag', 'locator', 'logo', 'diagram', 'seal', 'emblem', 'plan', 'chart', '.svg', '.gif', '.tif'];
     const seen = new Set();
@@ -11983,9 +12000,15 @@ async function getDestinationGallery(env, name, country, bucket, limit) {
       }
     }
     if (!photos.length) return emptyOut; // honest empty — never cached, never padded
-    const payload = { name, bucket, photos, source: 'commons' };
+    // Name-token post-filter: keep only photos whose file title carries a folded
+    // token of the destination. Precision over volume — 8 real Kyoto photos beat
+    // 30 world photos. UNLESS the filter would empty the set: then keep Commons'
+    // own top-relevance order rather than show nothing at all.
+    const named = photos.filter((p) => titleMatchesName(p.title));
+    const finalPhotos = named.length ? named : photos;
+    const payload = { name, bucket, photos: finalPhotos, source: 'commons' };
     await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: 30 * 24 * 60 * 60 }).catch(() => {});
-    return { ...payload, photos: photos.slice(0, limit) };
+    return { ...payload, photos: finalPhotos.slice(0, limit) };
   } catch { return emptyOut; }
 }
 async function handleDestinationGallery(request, env) {
@@ -14340,6 +14363,7 @@ HONESTY RULES (ABSOLUTE):
 OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
 {
   "known": true,
+  "about": "3-5 sentence intro — what it is, its character/size/vibe, how to get there (nearest airport/gateway + rough distance or time from the main hub), and why go",
   "bestTime": {
     "months": "May–June & September",
     "why": "..."
@@ -14353,6 +14377,7 @@ OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
 }
 
 FIELD RULES:
+- about: 3–5 plain sentences, 40–600 chars total. Cover, in order: what this place is; its character (rough size + vibe); how to GET there (nearest major airport or gateway + a rough distance or travel time from the main regional hub, e.g. "~2h15 by train from Tokyo; fly into Osaka/KIX or Tokyo then rail"); and why travelers go. State airport / route / distance facts ONLY if broadly true and well-known — if unsure, describe access in general terms rather than inventing a route. No prices, costs, tickets, or "free".
 - bestTime.months: the best months/windows to visit, <= 60 chars.
 - bestTime.why: <= 140 chars — weather / crowds / what's-open reasons only.
 - daysNeeded.min: integer — minimum days that make the trip worth it. daysNeeded.ideal: integer >= min — a comfortable trip length. Constraint: 1 <= min <= ideal <= 21.
@@ -14382,11 +14407,16 @@ function validateDestIntel(raw) {
     const bt = raw.bestTime, dn = raw.daysNeeded, kf = raw.knownFor;
     const months = str(bt && bt.months, 60), btWhy = str(bt && bt.why, 140);
     if (!months || !btWhy) return null;
+    // about: 3-5 sentence intro. REQUIRED for available:true — a place we can't
+    // describe honestly ships as { available:false }, never a fabricated blurb.
+    // 40-char floor rejects a one-liner; str() clips the 600 ceiling at a word.
+    const about = str(raw.about, 600);
+    if (!about || about.length < 40) return null;
     // Money-claim guard (mirrors the FORBIDDEN lists on the sibling AI
     // endpoints): any price/cost/free/ticket language kills the whole intel —
     // "crowd-free"-style compounds are allowed via the hyphen lookbehind.
     const MONEY = /(\$|€|£)|\b(cheap(?:er|est)?|prices?|costs?|discounts?|tickets?)\b|(?<!-)\bfree\b/i;
-    if (MONEY.test(months) || MONEY.test(btWhy) || MONEY.test(String((raw.daysNeeded && raw.daysNeeded.why) || ''))) return null;
+    if (MONEY.test(about) || MONEY.test(months) || MONEY.test(btWhy) || MONEY.test(String((raw.daysNeeded && raw.daysNeeded.why) || ''))) return null;
     const min = (dn && Number.isInteger(dn.min)) ? dn.min : NaN;
     const ideal = (dn && Number.isInteger(dn.ideal)) ? dn.ideal : NaN;
     const dnWhy = str(dn && dn.why, 120);
@@ -14396,12 +14426,12 @@ function validateDestIntel(raw) {
     if (!Array.isArray(kf)) return null;
     const knownFor = kf.map((s) => str(s, 40)).filter(Boolean).slice(0, 6);
     if (knownFor.length < 3) return null;
-    return { bestTime: { months, why: btWhy }, daysNeeded: { min, ideal, why: dnWhy }, knownFor };
+    return { about, bestTime: { months, why: btWhy }, daysNeeded: { min, ideal, why: dnWhy }, knownFor };
   } catch { return null; }
 }
 
 // Shared core — the standalone route AND /package/draft's inline intel both
-// land here, so they share one KV cache ('destintel:v1:<slug>'). Only
+// land here, so they share one KV cache ('destintel:v2:<slug>'). Only
 // available:true results are cached: a transient model failure must not pin
 // { available: false } for 90 days.
 async function destinationIntel(env, ctx, { name, country, lat, lng, debug }) {
@@ -14411,7 +14441,7 @@ async function destinationIntel(env, ctx, { name, country, lat, lng, debug }) {
   const fail = (stage) => (debug ? { ...unavailable, stage } : unavailable);
   const slug = destIntelSlug(name, country);
   if (!slug || !env.ANTHROPIC_API_KEY) return unavailable;
-  const ck = `destintel:v1:${slug}`;
+  const ck = `destintel:v2:${slug}`;  // v2: schema grew an `about` intro — stale v1 rows lack it
   const cached = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null) : null;
   if (cached && cached.available === true) return { ...cached, _cache: 'hit' };
   const coords = (Number.isFinite(lat) && Number.isFinite(lng)) ? `\nAPPROXIMATE COORDINATES: ${lat.toFixed(3)}, ${lng.toFixed(3)}` : '';
@@ -14431,7 +14461,7 @@ async function destinationIntel(env, ctx, { name, country, lat, lng, debug }) {
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 600,
+          max_tokens: 900,    // headroom for the added ~600-char `about` intro
           temperature: 0.2,   // planning facts, not prose — keep it near-deterministic
           system: buildDestinationIntelSystemPrompt(),
           messages: [{ role: 'user', content: userContent }]
@@ -14863,7 +14893,7 @@ async function handlePackageEstimate(request, env, ctx) {
       party: { adults: 2 },
       hotel: { name: cheapest.name || 'Hotel', stayTotal, currency: cheapest.currency || draftRes.draft.currency || 'USD' },
       splitFour: Math.round(stayTotal / 4 * 100) / 100,
-      intel: { bestTime: intel.bestTime, daysNeeded: intel.daysNeeded, knownFor: intel.knownFor, guidance: intel.guidance || DEST_INTEL_GUIDANCE },
+      intel: { about: intel.about, bestTime: intel.bestTime, daysNeeded: intel.daysNeeded, knownFor: intel.knownFor, guidance: intel.guidance || DEST_INTEL_GUIDANCE },
       includes: 'hotel only — tours and tickets priced separately',
     };
     if (env.GLOBESKIMMERS_KV) {

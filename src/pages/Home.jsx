@@ -1006,7 +1006,7 @@ function ZoneKicker({ label }) {
 // Replaces the quiet SmartPackageCard text row at the top of DREAM & PLAN.
 // Full-width card: backdrop is the first Dreamer's Corner card's photo when
 // available (else the house gold gradient), scrimmed for legibility; serif
-// "Build a full trip" + the standing mono subtitle + a mono destination hint
+// "Build a full trip" + an honest mono bookability subtitle + a mono hint
 // (the card's "City, Country") when we have one; teal CTA. The whole card is
 // one button → SmartPackages (onOpen carries the smart_package_entry event).
 function PackageHero({ card, onOpen }) {
@@ -1044,7 +1044,7 @@ function PackageHero({ card, onOpen }) {
               Build a full trip
             </div>
             <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] mt-1" style={{ color: 'rgba(255,252,247,0.85)' }}>
-              Hotel · things to do · one plan
+              Hotel books in-app; tours &amp; flights a tap away
             </div>
             <div className="mt-3 inline-flex items-center gap-1 rounded-full px-3.5 py-2" style={{ background: '#17A38F' }}>
               <span className="text-[calc(11.5px*var(--fs))] font-semibold" style={{ color: '#FFFCF7' }}>Start planning</span>

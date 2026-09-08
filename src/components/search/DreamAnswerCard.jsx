@@ -4,7 +4,7 @@
 // `destination` (a dream query like "see bears catch fish"). Grounded answers
 // (matched to an owned world/national attraction row, with real coordinates)
 // get the full card: kicker, serif name, mono place line, and actions —
-// including "Build my trip", the Smart-Package composer entry (coords-
+// including "Build my vacation", the Smart-Package composer entry (coords-
 // dependent, so grounded only). An ungrounded suggestion is honest about
 // itself — quieter styling, a "Suggested — unverified" kicker, no
 // coordinate-dependent actions, and only a Things-to-Do search as the
@@ -62,7 +62,7 @@ export default function DreamAnswerCard({ destination, onView, onPerfectDay, onB
             className="mt-2 w-full h-11 rounded-xl font-semibold text-[calc(13.5px*var(--fs))]"
             style={{ background: "#fff", color: INK, border: `1px solid ${EDGE}` }}
           >
-            Build my trip
+            Build my vacation
           </button>
           {/* Quiet secondary: browse real photos of the place first. */}
           <button

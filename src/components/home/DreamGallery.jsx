@@ -1,6 +1,6 @@
 // DreamGallery — the full-screen "dream browser": a photo-immersion sheet that
 // opens from dream surfaces (DreamShelf, DreamAnswerCard) so the user browses
-// MANY beautiful real photos of a destination and lands on "Build my trip".
+// MANY beautiful real photos of a destination and lands on "Build my vacation".
 //
 // Data: POST /destination/gallery { name, country?, bucket?, limit } →
 // { name, bucket, photos: [{ src, full, w, h, title, artist, license, link }] }
@@ -83,6 +83,14 @@ function normalizePhoto(p) {
 
 // Six shimmer blocks at staggered heights — masonry-shaped loading, no spinner.
 const SHIMMER_H = [180, 236, 204, 160, 224, 188];
+
+// Reduced-motion probe, read at gesture time so a mid-session OS toggle is
+// honoured. Guards the lightbox swipe-dismiss follow — reduced-motion users
+// still get threshold dismissal, just without the image tracking the finger.
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // Nuitee money register — currency symbol, 2dp only when the amount has cents.
 const money = (amt, cur) => {
@@ -168,6 +176,12 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
   // the list shrinks underneath (an image erroring out of `failed`).
   const [lightboxIdx, setLightboxIdx] = useState(null);
   const [failed, setFailed] = useState(() => new Set());
+  // Lightbox image fallback ladder — a full-res original that 404s falls back
+  // to the 1200px thumbnail (the one that already loaded on the wall); if even
+  // that fails the frame shows a "Photo unavailable" placeholder. Both keyed by
+  // photo.src, so onError can never loop. Reset on destination change.
+  const [lbFullFailed, setLbFullFailed] = useState(() => new Set());
+  const [lbImgFailed, setLbImgFailed] = useState(() => new Set());
   // { [destKey]: { status: 'loading'|'done', est: normalized|null } } — kept
   // across destination swaps so each destination is estimated at most once
   // per mount. done+null = tried, nothing showable (gallery stays as-is).
@@ -178,6 +192,11 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
   // done+null = nothing showable, the tease stays exactly as-is.
   const [flights, setFlights] = useState({});
   const flightLoggedRef = useRef(new Set());
+  // { [destKey]: { status: 'loading'|'done', about: string } } — the AI
+  // destination-intel blurb, fetched once per destKey when coords exist. Read
+  // DEFENSIVELY: available:false, a missing `about`, or any error → done+"" and
+  // the intro band renders nothing. Never blocks photos.
+  const [intels, setIntels] = useState({});
 
   const name = dest?.name ? String(dest.name) : "";
   const destKey = name ? `${name}|${dest?.country || ""}` : "";
@@ -195,6 +214,8 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
   const hasOrigin = Number.isFinite(gpsLat) && Number.isFinite(gpsLng);
   const flightSlot = flights[destKey];
   const flight = flightSlot?.status === "done" ? flightSlot.flight : null;
+  const intelSlot = intels[destKey];
+  const about = intelSlot?.status === "done" ? intelSlot.about : "";
 
   // Current bucket's photos — derived BEFORE the effects so the keyboard
   // handler below can step through them.
@@ -214,7 +235,9 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
   };
 
   // Lightbox swipe — raw touch deltas so a mostly-vertical drag never pages.
+  // Horizontal-dominant → page; vertical-dominant downward past ~80px → dismiss.
   const touchRef = useRef(null);
+  const lbImgRef = useRef(null);
   const onLbTouchStart = (e) => {
     const t = e.touches && e.touches[0];
     if (t) touchRef.current = { x: t.clientX, y: t.clientY, dx: 0, dy: 0 };
@@ -222,12 +245,27 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
   const onLbTouchMove = (e) => {
     const s = touchRef.current;
     const t = e.touches && e.touches[0];
-    if (s && t) { s.dx = t.clientX - s.x; s.dy = t.clientY - s.y; }
+    if (!s || !t) return;
+    s.dx = t.clientX - s.x;
+    s.dy = t.clientY - s.y;
+    // Downward-drag follow — a visible affordance that a swipe down dismisses.
+    // Skipped entirely for reduced-motion users (they still get the threshold
+    // dismissal below, just without the image tracking the finger).
+    const img = lbImgRef.current;
+    if (img && s.dy > 0 && Math.abs(s.dy) > Math.abs(s.dx) && !prefersReducedMotion()) {
+      img.style.transform = `translateY(${Math.min(s.dy, 240)}px)`;
+      img.style.opacity = String(Math.max(0.4, 1 - s.dy / 420));
+    }
   };
   const onLbTouchEnd = () => {
     const s = touchRef.current;
     touchRef.current = null;
+    // Always release any live drag transform, dismiss or not.
+    const img = lbImgRef.current;
+    if (img) { img.style.transform = ""; img.style.opacity = ""; }
     if (!s) return;
+    // Vertical-dominant downward drag past the threshold dismisses the lightbox.
+    if (Math.abs(s.dy) > Math.abs(s.dx) && s.dy > 80) { setLightboxIdx(null); return; }
     if (Math.abs(s.dx) < 48 || Math.abs(s.dx) <= Math.abs(s.dy)) return;
     stepLightbox(s.dx < 0 ? 1 : -1);
   };
@@ -238,6 +276,8 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
     setByBucket({});
     setLightboxIdx(null);
     setFailed(new Set());
+    setLbFullFailed(new Set());
+    setLbImgFailed(new Set());
   }, [destKey]);
 
   // Lock the page behind the sheet while it's open.
@@ -373,6 +413,29 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
     return () => { cancelled = true; };
   }, [open, destKey, hasCoords, hasOrigin]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Lazy destination-intel blurb — once per destKey, coords required, parallel
+  // to every other fetch (photos never wait on it). Read defensively: only a
+  // whole available:true payload with a non-empty string `about` becomes a
+  // blurb; everything else (unavailable, absent `about`, error) resolves to ""
+  // and the intro band renders nothing.
+  useEffect(() => {
+    if (!open || !name || !hasCoords) return;
+    if (intels[destKey]) return; // already loading or loaded
+    let cancelled = false;
+    setIntels((m) => ({ ...m, [destKey]: { status: "loading", about: "" } }));
+    (async () => {
+      const body = { name, country: dest?.country ? String(dest.country) : "", lat: dest.lat, lng: dest.lng };
+      const res = await callWorker(ROUTE.destinationIntel, body);
+      if (cancelled) return;
+      const d = res.error ? null : res.data;
+      const about = (d && d.available === true && typeof d.about === "string" && d.about.trim())
+        ? d.about.trim()
+        : "";
+      setIntels((m) => ({ ...m, [destKey]: { status: "done", about } }));
+    })();
+    return () => { cancelled = true; };
+  }, [open, destKey, hasCoords]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // One view event per shown estimate — keyed by destKey so a bucket switch
   // or reopen of the same destination never re-fires it.
   useEffect(() => {
@@ -408,6 +471,15 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
     ? null
     : Math.min(Math.max(lightboxIdx, 0), photos.length - 1);
   const lbPhoto = lbIdx == null ? null : photos[lbIdx];
+  // Lightbox source ladder, keyed by the stable thumbnail src. Prefer the
+  // full-res original; if it 404'd (or there is no distinct full) fall to the
+  // thumbnail that already loaded on the wall; if that fails too, show the
+  // "Photo unavailable" frame. `lbKey` stays constant across the full→thumb
+  // swap, so onError climbs the ladder exactly once and never loops.
+  const lbKey = lbPhoto ? lbPhoto.src : "";
+  const lbBroken = lbPhoto ? lbImgFailed.has(lbKey) : false;
+  const lbUseThumb = lbPhoto ? (lbFullFailed.has(lbKey) || !lbPhoto.full || lbPhoto.full === lbPhoto.src) : false;
+  const lbShowSrc = lbPhoto ? (lbUseThumb ? lbPhoto.src : lbPhoto.full) : "";
 
   // Honest chips: a bucket that was tried and came back empty disappears —
   // unless it's the one on screen (its empty state explains itself).
@@ -478,6 +550,21 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
             <X className="w-4 h-4" strokeWidth={2.2} />
           </button>
         </div>
+
+        {/* Destination intro — an AI overview blurb under the name, above the
+            chips. Renders only when the intel fetch returned a real `about`;
+            an absent/unavailable blurb shows nothing (photos never wait on it).
+            The micro-label keeps it honest: AI-written, verify on the ground. */}
+        {about && (
+          <div className="max-w-md mx-auto mt-2.5">
+            <p className="font-serif text-[calc(13.5px*var(--fs))] leading-relaxed" style={{ color: INK }}>
+              {about}
+            </p>
+            <div className="font-mono uppercase tracking-[0.08em] text-[calc(9.5px*var(--fs))] font-semibold mt-1" style={{ color: SUB }}>
+              AI overview · verify details locally
+            </div>
+          </div>
+        )}
 
         {/* Bucket chips — mono small-caps feel; active = teal fill. */}
         <div className="max-w-md mx-auto flex gap-2 overflow-x-auto mt-3 pb-1" style={{ scrollbarWidth: "none" }}>
@@ -604,7 +691,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
         <div className="max-w-md mx-auto flex items-center gap-3">
           <div className="flex-1 min-w-0">
             <div className="font-serif text-[calc(16px*var(--fs))] leading-tight" style={{ color: INK }}>
-              Dream it? Build the trip.
+              Dream it? Build your vacation.
             </div>
             {onView && (
               <button
@@ -621,7 +708,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
             className="flex-none h-11 rounded-xl font-semibold text-white text-[calc(13.5px*var(--fs))] px-4"
             style={{ background: TEAL_DEEP }}
           >
-            Build my trip
+            Build my vacation
           </button>
         </div>
       </div>
@@ -649,10 +736,15 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
           <button
             onClick={() => setLightboxIdx(null)}
             aria-label="Close photo"
-            className="absolute top-4 right-4 w-9 h-9 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.14)", color: "#fff" }}
+            className="absolute w-11 h-11 rounded-full flex items-center justify-center"
+            style={{
+              top: "max(12px, env(safe-area-inset-top))",
+              right: "max(12px, env(safe-area-inset-right))",
+              background: "rgba(255,255,255,0.14)",
+              color: "#fff",
+            }}
           >
-            <X className="w-4 h-4" strokeWidth={2.2} />
+            <X className="w-5 h-5" strokeWidth={2.2} />
           </button>
           {lbIdx > 0 && (
             <button
@@ -674,13 +766,33 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
               <ChevronRight className="w-5 h-5" strokeWidth={2.2} />
             </button>
           )}
-          <img
-            key={lbPhoto.src || lbIdx}
-            src={lbPhoto.full || lbPhoto.src}
-            alt={lbPhoto.title || ""}
-            className="dg-lb-img max-w-full flex-1 min-h-0 object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {lbBroken ? (
+            <div
+              className="dg-lb-img flex-1 min-h-0 flex items-center justify-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="font-mono uppercase tracking-[0.08em] text-[calc(11px*var(--fs))]" style={{ color: "rgba(255,252,247,0.7)" }}>
+                Photo unavailable
+              </div>
+            </div>
+          ) : (
+            <img
+              ref={lbImgRef}
+              key={lbShowSrc || lbIdx}
+              src={lbShowSrc}
+              alt={lbPhoto.title || ""}
+              className="dg-lb-img max-w-full flex-1 min-h-0 object-contain"
+              onClick={(e) => e.stopPropagation()}
+              onError={() => {
+                // Climb the ladder once: full→thumbnail, then thumbnail→placeholder.
+                if (!lbUseThumb && lbPhoto.full && lbPhoto.full !== lbPhoto.src) {
+                  setLbFullFailed((s) => { const n = new Set(s); n.add(lbKey); return n; });
+                } else {
+                  setLbImgFailed((s) => { const n = new Set(s); n.add(lbKey); return n; });
+                }
+              }}
+            />
+          )}
           <div className="flex-none mt-3 text-center max-w-md">
             {lbPhoto.title && (
               <div className="font-serif text-[calc(14px*var(--fs))]" style={{ color: "rgba(255,252,247,0.95)" }}>
