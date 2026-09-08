@@ -16031,36 +16031,79 @@ async function handleGuestbookVisit(request, env) {
 // the fetched page text; every %/fare number in the headline/detail must appear
 // inside that quote; the `ends` date must appear in it too. Any promo failing
 // any check is dropped whole — never trimmed into a half-claim.
-// Pipeline (per source, sequential): fetch page → strip to text → hash-compare
-// (unchanged page = zero AI spend) → Haiku classification (house Anthropic
-// pattern, one retry like destinationIntel) → evidence validation → D1 upsert
-// (events DB, binding `DB`; schema in cloudflare-worker/sql/10_deal_radar.sql).
-// Reads via GET /deals/list; `evidence` stays server-side as the audit trail.
+// Pipeline (per source, sequential): fetch page → strip to text → PROMO WINDOW
+// (the 8k-char slice the model sees, started near the first price/sale signal
+// rather than blindly at the top) → hash-compare (unchanged page = zero AI
+// spend) → Haiku classification (house Anthropic pattern, one retry like
+// destinationIntel; kind-aware prompt) → evidence validation → D1 upsert
+// (events DB, binding `DB`; schema in cloudflare-worker/sql/10_deal_radar.sql
+// + 12_deal_radar_v2.sql). Reads via GET /deals/list; `evidence` stays
+// server-side as the audit trail.
+// v2 (Deal Engine Phase 1): three KINDS of source — flight, cruise, car — each
+// with its own scope rule in the prompt but the SAME absolute evidence rules.
 
-// Curated OFFICIAL deals/offers pages only — the airline's own domain, nothing
-// third-party. URLs search-verified 2026-09-07. `key` is the KV hash slug —
-// keep it stable forever or the sweep re-classifies (and re-spends) once.
+// Curated OFFICIAL deals/offers pages only — the brand's own domain, nothing
+// third-party. Airline URLs search-verified 2026-09-07; cruise/car/new-airline
+// URLs research-verified fetchable + rich from a plain fetch (probe mode on
+// POST /deals/sweep confirms the same from the worker's own vantage before a
+// single Haiku call is spent). `key` is the KV hash slug — keep it stable
+// forever or the sweep re-classifies (and re-spends) once. `airline` is the
+// brand display name — the field (and D1 column) keep the v1 name; /deals/list
+// emits it as both `brand` and `airline`. `kind` selects the prompt's scope
+// rule and is written to the row.
 // Philippine Airlines is deliberately OMITTED: PAL publishes each seat sale at
 // a per-campaign press-release URL, and both stable-landing-page candidates
 // (/ph/en/promotions.html and /en/ph/home/book-flights/promotions) 404 — there
 // is no reliable URL to sweep, and guessing one is exactly what this feature
 // forbids. Add PAL if they ever ship a stable seat-sale landing page.
+// Also NOT here, on purpose: Spirit (ceased operations May 2026); Allegiant,
+// Breeze, MSC, Carnival, Disney, Hertz, Sixt (bot-walled or JS-rendered shells
+// — nothing readable in a plain fetch); DiscoverCars (no dated deals page).
 const DEAL_SOURCES = [
-  { key: 'southwest', airline: 'Southwest',         url: 'https://www.southwest.com/special-offers/flight-deals/' },                  // "Flight Deals and Offers | Southwest Airlines"
-  { key: 'alaska',    airline: 'Alaska Airlines',   url: 'https://www.alaskaair.com/content/deals/flights/sale' },                    // "Flight Sales Promotions - Alaska Airlines"
-  { key: 'hawaiian',  airline: 'Hawaiian Airlines', url: 'https://www.hawaiianairlines.com/content/deals-and-offers/flights' },       // Hawaiian's deals-and-offers flights hub
-  { key: 'jetblue',   airline: 'JetBlue',           url: 'https://www.jetblue.com/sale' },                                            // "Current Flight Deals | JetBlue Flight Sale"
-  { key: 'united',    airline: 'United',            url: 'https://www.united.com/en/us/fly/travel/trip-planning/travel-deals.html' }, // "Travel Deals - Special Flight Offers"
-  { key: 'delta',     airline: 'Delta',             url: 'https://www.delta.com/us/en/flight-deals/current-flight-deals' },           // "Current Flight Deals | Delta Air Lines"
-  { key: 'american',  airline: 'American Airlines', url: 'https://www.aa.com/en-us/domestic-deals' },                                 // "Domestic deals | American Airlines" — the confirmed aa.com deals page (no single all-deals hub was verifiable)
+  // ── flight ──
+  { key: 'southwest',  kind: 'flight', airline: 'Southwest',         url: 'https://www.southwest.com/special-offers/flight-deals/' },                  // "Flight Deals and Offers | Southwest Airlines"
+  { key: 'alaska',     kind: 'flight', airline: 'Alaska Airlines',   url: 'https://www.alaskaair.com/content/deals/flights/sale' },                    // "Flight Sales Promotions - Alaska Airlines"
+  { key: 'hawaiian',   kind: 'flight', airline: 'Hawaiian Airlines', url: 'https://www.hawaiianairlines.com/content/deals-and-offers/flights' },       // Hawaiian's deals-and-offers flights hub
+  { key: 'jetblue',    kind: 'flight', airline: 'JetBlue',           url: 'https://www.jetblue.com/sale' },                                            // "Current Flight Deals | JetBlue Flight Sale"
+  { key: 'united',     kind: 'flight', airline: 'United',            url: 'https://www.united.com/en/us/fly/travel/trip-planning/travel-deals.html' }, // "Travel Deals - Special Flight Offers"
+  { key: 'delta',      kind: 'flight', airline: 'Delta',             url: 'https://www.delta.com/us/en/flight-deals/current-flight-deals' },           // "Current Flight Deals | Delta Air Lines"
+  { key: 'american',   kind: 'flight', airline: 'American Airlines', url: 'https://www.aa.com/en-us/domestic-deals' },                                 // "Domestic deals | American Airlines" — the confirmed aa.com deals page (no single all-deals hub was verifiable)
+  { key: 'frontier',   kind: 'flight', airline: 'Frontier',          url: 'https://www.flyfrontier.com/' },                                            // homepage on purpose — /deals redirects here; fare promos + the "$249 pass" upsell (excluded by the flight prompt) render server-side
+  { key: 'suncountry', kind: 'flight', airline: 'Sun Country',       url: 'https://suncountry.com/flights/en/deals' },                                 // server-rendered deals grid; carries an "Updated N minutes ago" stamp (stripped before hashing)
+  { key: 'avelo',      kind: 'flight', airline: 'Avelo',             url: 'https://www.aveloair.com/' },                                               // homepage — fare promos sit ~5.5k chars in (promo window reaches them); "Avelo PLUS" membership excluded by the flight prompt
+  // ── cruise ──
+  { key: 'hal',            kind: 'cruise', airline: 'Holland America',  url: 'https://www.hollandamerica.com/en/us/cruise-deals' },      // server-rendered deals hub — fare %/instant-savings copy in plain text
+  { key: 'celebrity',      kind: 'cruise', airline: 'Celebrity Cruises', url: 'https://www.celebritycruises.com/cruise-deals' },         // offers page readable in a plain fetch; sale copy near the top
+  { key: 'virginvoyages',  kind: 'cruise', airline: 'Virgin Voyages',   url: 'https://www.virginvoyages.com/cruise-deals' },             // offer terms rendered server-side, dated "book by" lines
+  { key: 'princess',       kind: 'cruise', airline: 'Princess',         url: 'https://www.princess.com/cruise-deals-promotions' },        // promotions hub, fetchable; per-offer detail text present
+  { key: 'royalcaribbean', kind: 'cruise', airline: 'Royal Caribbean',  url: 'https://www.royalcaribbean.com/cruise-deals' },            // fetchable; a JS countdown ("NN hrs NN mins NN secs") is stripped before hashing
+  { key: 'ncl',            kind: 'cruise', airline: 'Norwegian',        url: 'https://www.ncl.com/cruise-deals' },                       // promo copy sits ~6.1k chars in — past the old 6k head-slice; the promo window rescues it
+  // ── car ──
+  { key: 'avis',   kind: 'car', airline: 'Avis',   url: 'https://www.avis.com/en/offers/us-offers' },     // US offers grid server-rendered; base-rate %/pay-now copy in text
+  { key: 'budget', kind: 'car', airline: 'Budget', url: 'https://www.budget.com/en/offers/us-offers' },   // same template as Avis; page is ~30k chars with offers deep in — window starts at the first price signal
 ];
 
-const DEAL_LIST_CACHE_KEY = 'deals:list:v1';    // 1h response cache — the sweep also busts it on change
-const DEAL_PAGE_TEXT_CAP = 6000;                // chars of stripped page text the model sees (and evidence is checked against)
+const DEAL_LIST_CACHE_KEY = 'deals:list:v2';    // 1h response cache — the sweep also busts it on change. v2: kind/brand/dest fields
+const DEAL_PAGE_TEXT_CAP = 8000;                // chars of windowed page text the model sees (and evidence is checked against)
+const DEAL_PROMO_LEAD = 1500;                   // chars of run-up kept before a deep promo signal, so the window opens on context, not mid-sentence
 const DEAL_PAGE_HASH_TTL = 30 * 24 * 60 * 60;   // 30d — a page untouched that long re-classifies once, harmless
+// The first thing on a deals page that looks like an actual offer: a price, a
+// percent-off, or sale-deadline wording. Where this lands decides the window.
+const DEAL_PROMO_SIGNAL = /\$\s?\d|\d{1,3}\s?%\s?off|sale ends|book by|buy by|instant savings/i;
+const DEAL_MISSING_COLUMN_RE = /no such column|has no column/i;   // the only D1 error that may trigger a pre-12_deal_radar_v2.sql fallback
+// Volatile page tokens that change every fetch without the offers changing —
+// Sun Country's "Updated: 12 minutes ago" stamp and Royal Caribbean's JS
+// countdown. Left in, they churn the page hash and buy a Haiku call a day for
+// nothing. Stripped from the text BEFORE windowing, so the window start, the
+// text Haiku sees, the validator's substring source, and the hash all agree.
+const DEAL_VOLATILE_TOKENS = [
+  /Updated:\s*\d+\s*(minutes?|hours?)\s*ago/gi,
+  /\d\d\s*hrs\s*\d\d\s*mins\s*\d\d\s*secs/gi,
+];
 
-// Fetch one deals page and strip it to plain text. null = skip this source
-// (network trouble, bot-wall status, shell page) — never throws.
+// Fetch one deals page and strip it to plain text — the FULL text, volatile
+// tokens removed; the caller windows it (dealPromoWindow). null = skip this
+// source (network trouble, bot-wall status, shell page) — never throws.
 async function fetchDealPageText(url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10000);
@@ -16078,19 +16121,56 @@ async function fetchDealPageText(url) {
     }).catch(() => null);
     if (!r || !r.ok) return null;
     const html = await r.text();
-    const text = html
+    const decoded = html
       .replace(/<script[\s\S]*?<\/script>/gi, ' ')
       .replace(/<style[\s\S]*?<\/style>/gi, ' ')
       .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
       .replace(/<[^>]+>/g, ' ')
       .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"')
-      .replace(/&#0?39;|&apos;/gi, "'").replace(/&[a-z]{2,8};|&#\d{1,6};/gi, ' ')
+      .replace(/&#0?39;|&apos;/gi, "'").replace(/&[a-z]{2,8};|&#\d{1,6};/gi, ' ');
+    const text = DEAL_VOLATILE_TOKENS.reduce((t, re) => t.replace(re, ' '), decoded)
       .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, DEAL_PAGE_TEXT_CAP);
+      .trim();
     return text.length >= 100 ? text : null;  // sub-100-char "pages" are bot-wall shells, not content
   } catch { return null; }
   finally { clearTimeout(timer); }
+}
+
+// The PROMO WINDOW: the DEAL_PAGE_TEXT_CAP-char slice of stripped page text
+// that Haiku reads and the validator checks evidence against. v1 took the
+// first 6k chars blind, which is fine for a deals page that leads with its
+// deals and useless for one that leads with 6k of nav/hero/footer boilerplate
+// (NCL's promo copy starts ~6.1k in; Budget's ~30k in). So: find the FIRST
+// price/percent/deadline signal; if it sits comfortably inside the head slice
+// (< 60% of the cap) keep the head slice, otherwise open the window
+// DEAL_PROMO_LEAD chars before the signal so the offer arrives with its
+// run-up. windowStart is reported by probe mode so a source can be judged
+// from the worker's own vantage before any AI spend.
+// The window is anchored on the DENSEST cluster of price signals, not the
+// first one: offers arrive in clusters, while a lone early hit is usually a
+// template placeholder (Budget's page opens with "$2345 Base rates" at char
+// ~700 and keeps its real offers ~30k in). Candidate starts are 0 and
+// DEAL_PROMO_LEAD before each hit; ties go to the LATEST start, which only
+// ever moves the window later when doing so drops no hit, i.e. to leave more
+// room after the cluster. No hit → head slice.
+function dealPromoWindow(text) {
+  const s = String(text || '');
+  const re = new RegExp(DEAL_PROMO_SIGNAL.source, 'gi');
+  const hits = [];
+  let m;
+  while ((m = re.exec(s)) && hits.length < 400) {
+    hits.push(m.index);
+    if (re.lastIndex === m.index) re.lastIndex++;
+  }
+  if (!hits.length) return { text: s.slice(0, DEAL_PAGE_TEXT_CAP), windowStart: 0, signalAt: -1 };
+  let best = null;
+  for (const start of [0, ...hits.map((h) => Math.max(0, h - DEAL_PROMO_LEAD))]) {
+    const score = hits.filter((h) => h >= start && h < start + DEAL_PAGE_TEXT_CAP).length;
+    if (!best || score > best.score || (score === best.score && start > best.start)) best = { start, score };
+  }
+  const windowStart = best.start;
+  const signalAt = hits.find((h) => h >= windowStart);
+  return { text: s.slice(windowStart, windowStart + DEAL_PAGE_TEXT_CAP), windowStart, signalAt: signalAt == null ? -1 : signalAt };
 }
 
 // Whitespace+case normalization used for the substring honesty checks — the
@@ -16105,8 +16185,34 @@ function dealDigitRuns(s) {
   return String(s || '').replace(/[,\s]/g, '').match(/\d+/g) || [];
 }
 
-function buildDealRadarSystemPrompt() {
-  return `You are GlobeSkimmers' Deal Radar. You read the stripped TEXT of an airline's own deals page and extract ONLY promotions that page currently states.
+// Per-kind prompt pieces. ONLY the scope bullet (what counts as an offer) and
+// the destName hint differ by kind; the five ABSOLUTE evidence rules in
+// buildDealRadarSystemPrompt are shared verbatim by every kind and are the
+// thing the validator enforces — do not fork them.
+const DEAL_KIND_PROMPT = {
+  flight: {
+    page: "an airline's own deals page",
+    label: 'AIRLINE DEALS PAGE',
+    scope: '- FARE SALES ONLY: extract offers about flight prices (fare sales, discounted routes, companion FARES, promo-code fare discounts). NEVER extract credit-card signup offers, bonus-points/miles promotions, co-brand card deals, vacation-package upsells, or loyalty-program marketing — those are not fare sales, even when they appear on the deals page. NEVER extract subscriptions or passes (an annual or all-you-can-fly pass, a "$249 pass", a membership tier such as "PLUS", a fare-club signup) — a pass sells access, not a fare, even when it appears on the deals page.',
+    dest: '- destName: ONE city or region the sale clearly centers on, else null. Do not force one.',
+  },
+  cruise: {
+    page: "a cruise line's own deals page",
+    label: 'CRUISE LINE DEALS PAGE',
+    scope: '- CRUISE FARE OFFERS ONLY: extract offers about the price of the sailing itself (percent-off fares, instant savings / dollars off, kids sail free or 3rd-and-4th-guest free, reduced deposits, onboard credit that is granted for BOOKING a cruise). NEVER extract loyalty-program points or tiers, onboard add-on packages (drinks, wifi, dining, spa, excursions), casino offers, credit-card offers, or gift-card promotions — those are not cruise fare offers, even when they appear on the deals page.',
+    dest: '- destName: ONE region or homeport the offer clearly centers on (a sea, an island group, a departure port), else null. Do not force one.',
+  },
+  car: {
+    page: "a car-rental company's own offers page",
+    label: 'CAR RENTAL OFFERS PAGE',
+    scope: '- RENTAL RATE OFFERS ONLY: extract offers about the price of the rental itself (percent off base rates, stated $/day or $/week rates, pay-now savings, promo-code or coupon-code rate discounts). NEVER extract loyalty-program offers, credit-card offers, partner points/miles promotions, or insurance / add-on upsells — those are not rental rate offers, even when they appear on the offers page.',
+    dest: '- destName: ONE city or region the offer clearly centers on, else null. Do not force one.',
+  },
+};
+
+function buildDealRadarSystemPrompt(kind) {
+  const k = DEAL_KIND_PROMPT[kind] || DEAL_KIND_PROMPT.flight;
+  return `You are GlobeSkimmers' Deal Radar. You read the stripped TEXT of ${k.page} and extract ONLY promotions that page currently states.
 
 HONESTY RULES (ABSOLUTE):
 - The page text is your ONLY source. NEVER add numbers, dates, destinations, routes, or offers that are not literally in the text. No outside knowledge.
@@ -16114,7 +16220,7 @@ HONESTY RULES (ABSOLUTE):
 - Every percentage or fare number you put in headline/detail MUST also appear inside your evidence quote.
 - "ends" must be the end/book-by date string copied verbatim FROM the text, and it must appear inside the evidence quote. If the text shows no end date, use null. Never normalize or reformat dates.
 - Generic marketing ("Find great deals!", newsletter signups, route lists with no stated offer) is NOT a promotion. If the page states no current sale/promotion, return exactly: {"promos": []}
-- FARE SALES ONLY: extract offers about flight prices (fare sales, discounted routes, companion FARES, promo-code fare discounts). NEVER extract credit-card signup offers, bonus-points/miles promotions, co-brand card deals, vacation-package upsells, or loyalty-program marketing — those are not fare sales, even when they appear on the deals page.
+${k.scope}
 
 OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
 {"promos": [{"headline": "...", "detail": "...", "destName": "... or null", "ends": "... or null", "evidence": "..."}]}
@@ -16123,7 +16229,7 @@ FIELD RULES:
 - promos: up to 3, the clearest currently-stated offers only.
 - headline: <= 80 chars — the offer itself, in the page's own terms.
 - detail: <= 140 chars — qualifying facts from the text (travel window, routes, restrictions), or null.
-- destName: ONE city or region the sale clearly centers on, else null. Do not force one.
+${k.dest}
 - ends: verbatim date string from the text, or null.
 - evidence: the verbatim source snippet (20-200 chars) backing headline/detail/ends.
 
@@ -16181,9 +16287,10 @@ function validateDealPromos(raw, pageText) {
 // empty — an honest "no current sale") or null on failure. On null the caller
 // leaves the page hash UNSTORED so the next sweep retries — a transient model
 // failure must not pin stale promos for 30 days.
-async function classifyDealPage(env, pageText) {
+async function classifyDealPage(env, pageText, kind) {
   if (!env.ANTHROPIC_API_KEY) return null;
-  const userContent = `AIRLINE DEALS PAGE TEXT (stripped, truncated):\n\n${pageText}\n\nExtract the currently-stated promotions per the honesty rules above.`;
+  const label = (DEAL_KIND_PROMPT[kind] || DEAL_KIND_PROMPT.flight).label;
+  const userContent = `${label} TEXT (stripped, windowed):\n\n${pageText}\n\nExtract the currently-stated promotions per the honesty rules above.`;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -16197,7 +16304,7 @@ async function classifyDealPage(env, pageText) {
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 1000,
           temperature: 0,   // extraction, not prose — the evidence quote must be exact
-          system: buildDealRadarSystemPrompt(),
+          system: buildDealRadarSystemPrompt(kind),
           messages: [{ role: 'user', content: userContent }]
         })
       });
@@ -16219,13 +16326,18 @@ async function classifyDealPage(env, pageText) {
   return null;
 }
 
-// One source: fetch → hash-compare → classify → upsert. Returns the per-airline
-// status string for the sweep report. dealRadarSweep also guards with try/catch.
+// One source: fetch → window → hash-compare → classify → upsert. Returns the
+// per-brand status string for the sweep report. dealRadarSweep also guards
+// with try/catch.
 async function sweepDealSource(env, ctx, src) {
-  const text = await fetchDealPageText(src.url);
-  if (!text) return 'fail: fetch';           // bot-wall / network / shell — skip, retry next sweep
-  const hash = await sha256Hex(text);
-  const hk = `dealpage:v2:${src.key}`; // v2: fare-sales-only prompt — reclassify every page once
+  const full = await fetchDealPageText(src.url);
+  if (!full) return 'fail: fetch';           // bot-wall / network / shell — skip, retry next sweep
+  const kind = src.kind || 'flight';
+  // Everything downstream — the hash, what Haiku reads, what the validator
+  // checks evidence against — is this ONE windowed string, never the full page.
+  const text = dealPromoWindow(full).text;
+  const hash = await sha256Hex(text);        // volatile tokens already gone (fetchDealPageText), so this is stable across fetches
+  const hk = `dealpage:v3:${src.key}`; // v3: 8k promo window + kind-aware prompt — reclassify every page once
   const prevHash = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(hk).catch(() => null) : null;
   if (prevHash === hash) {
     // Same content → zero AI spend — but an UNCHANGED page was still READ and
@@ -16235,7 +16347,7 @@ async function sweepDealSource(env, ctx, src) {
       .bind(src.airline).run().catch(() => {});
     return 'unchanged';
   }
-  const promos = await classifyDealPage(env, text);
+  const promos = await classifyDealPage(env, text, kind);
   if (promos === null) return 'fail: classify'; // hash NOT stored → next sweep re-tries this page
   // Store the new hash only now that classification succeeded — storing it
   // earlier would pin a transient model failure as "unchanged" for 30 days.
@@ -16252,19 +16364,32 @@ async function sweepDealSource(env, ctx, src) {
     // REPLACE deletes the conflicting old one).
     for (const p of promos) {
       const id = (await sha256Hex(`${src.airline}|${p.headline}`)).slice(0, 32);
-      await env.DB.prepare(
+      const wrote = await env.DB.prepare(
         `insert or replace into airline_promos
-           (id, airline, airline_url, headline, detail, dest_name, ends, evidence, first_seen, last_seen, active)
-         values (?,?,?,?,?,?,?,?, coalesce((select first_seen from airline_promos where id = ?), datetime('now')), datetime('now'), 1)`
-      ).bind(id, src.airline, src.url, p.headline, p.detail, p.destName, p.ends, p.evidence, id).run().catch(() => {});
+           (id, airline, kind, airline_url, headline, detail, dest_name, ends, evidence, first_seen, last_seen, active)
+         values (?,?,?,?,?,?,?,?,?, coalesce((select first_seen from airline_promos where id = ?), datetime('now')), datetime('now'), 1)`
+      ).bind(id, src.airline, kind, src.url, p.headline, p.detail, p.destName, p.ends, p.evidence, id).run().then(() => null).catch((e) => e || new Error('insert failed'));
+      if (wrote && DEAL_MISSING_COLUMN_RE.test(String((wrote && wrote.message) || wrote))) {
+        // Pre-12_deal_radar_v2.sql fallback (no `kind` column yet): the v1
+        // insert, so a push that lands before the ALTER degrades to
+        // flight-only rows instead of a silently empty radar. The column's
+        // DEFAULT makes these rows read as 'flight' once the ALTER runs.
+        // Gated on the missing-column error only — a transient D1 failure
+        // must not quietly write a cruise or car promo as a flight.
+        await env.DB.prepare(
+          `insert or replace into airline_promos
+             (id, airline, airline_url, headline, detail, dest_name, ends, evidence, first_seen, last_seen, active)
+           values (?,?,?,?,?,?,?,?, coalesce((select first_seen from airline_promos where id = ?), datetime('now')), datetime('now'), 1)`
+        ).bind(id, src.airline, src.url, p.headline, p.detail, p.destName, p.ends, p.evidence, id).run().catch(() => {});
+      }
     }
   }
   return `changed: ${promos.length} promos`;
 }
 
-// The full sweep — sequential on purpose (politeness to the airline pages and
-// a bounded subrequest count: ~7 fetches + at most ~7 Haiku calls, usually far
-// fewer thanks to the hash gate). Returns { airline: status } for the manual
+// The full sweep — sequential on purpose (politeness to the brand pages and
+// a bounded subrequest count: ~18 fetches + at most ~18 Haiku calls, usually
+// far fewer thanks to the hash gate). Returns { brand: status } for the manual
 // trigger; the cron path ignores the return value.
 async function dealRadarSweep(env, ctx) {
   const results = {};
@@ -16325,6 +16450,10 @@ async function analyticsRollup(env) {
 // no identity). Fresh promos only: active AND seen by a sweep within 7 days —
 // a page we can no longer read goes quiet instead of advertising stale sales.
 // `evidence` is deliberately NOT selected: it is the server-side audit trail.
+// v2 contract per deal: { id, kind, brand, airline, url, headline, detail,
+// destName, ends, dest } — `brand` is the display name, `airline` is the SAME
+// value kept for the v1 client (DealRadarRow reads d.airline); `dest` is
+// { lat, lng, city, country } once Phase 2 geocodes a promo, null until then.
 async function handleDealsList(request, env, ctx) {
   try {
     if (env.GLOBESKIMMERS_KV) {
@@ -16333,16 +16462,35 @@ async function handleDealsList(request, env, ctx) {
     }
     let deals = [];
     if (env.DB) {
-      const q = await env.DB.prepare(
-        `select id, airline, airline_url, headline, detail, dest_name, ends
-           from airline_promos
+      // 24, not 12: eighteen sources × up to three promos share near-identical
+      // last_seen stamps, so a tighter cap can starve a whole kind and leave a
+      // chip with nothing behind it.
+      const where = `from airline_promos
           where active = 1 and last_seen >= datetime('now', '-7 days')
           order by last_seen desc
-          limit 12`
-      ).all().catch(() => null);
+          limit 24`;
+      // v2 select first; if the 12_deal_radar_v2.sql columns aren't there yet
+      // fall back to the v1 column set (kind/dest then read as undefined →
+      // 'flight' / null below) rather than serving an empty radar. Only the
+      // missing-column error falls back — any other failure must not serve
+      // every cruise and car as a flight for the cache TTL.
+      let q = null;
+      try {
+        q = await env.DB.prepare(`select id, airline, kind, airline_url, headline, detail, dest_name, ends, dest_lat, dest_lng, dest_city, dest_country ${where}`).all();
+      } catch (e) {
+        if (DEAL_MISSING_COLUMN_RE.test(String((e && e.message) || e))) {
+          q = await env.DB.prepare(`select id, airline, airline_url, headline, detail, dest_name, ends ${where}`).all().catch(() => null);
+        }
+      }
       deals = ((q && q.results) || []).map((r) => ({
-        id: r.id, airline: r.airline, url: r.airline_url,
+        id: r.id,
+        kind: r.kind || 'flight',
+        brand: r.airline, airline: r.airline,
+        url: r.airline_url,
         headline: r.headline, detail: r.detail, destName: r.dest_name, ends: r.ends,
+        dest: (typeof r.dest_lat === 'number' && typeof r.dest_lng === 'number')
+          ? { lat: r.dest_lat, lng: r.dest_lng, city: r.dest_city || null, country: r.dest_country || null }
+          : null,
       }));
     }
     const payload = { deals, source: 'radar' };
@@ -16356,15 +16504,45 @@ async function handleDealsList(request, env, ctx) {
   }
 }
 
+// PROBE MODE for the manual trigger — fetch + window every source and report
+// what the worker itself can read, with ZERO Haiku calls and ZERO writes:
+// { brand: { key, kind, status, textLen, windowStart, signalAt, first120 } }.
+// This is how a candidate source is confirmed from the worker's own vantage
+// (bot managers treat a Cloudflare egress differently from a laptop) before
+// it costs anything. Sequential like the sweep; fetch failures report as
+// 'fail: fetch' with zeroed fields instead of throwing.
+async function dealRadarProbe() {
+  const results = {};
+  for (const src of DEAL_SOURCES) {
+    const base = { key: src.key, kind: src.kind || 'flight' };
+    try {
+      const full = await fetchDealPageText(src.url);
+      if (!full) { results[src.airline] = { ...base, status: 'fail: fetch', textLen: 0, windowStart: 0, signalAt: -1, first120: '' }; continue; }
+      const win = dealPromoWindow(full);
+      results[src.airline] = {
+        ...base, status: 'ok',
+        textLen: full.length, windowStart: win.windowStart, signalAt: win.signalAt,
+        first120: win.text.slice(0, 120),
+      };
+    } catch { results[src.airline] = { ...base, status: 'fail: error', textLen: 0, windowStart: 0, signalAt: -1, first120: '' }; }
+  }
+  return results;
+}
+
 // POST /deals/sweep — manual trigger for TESTING only. Guarded by the
 // out-of-band secret DEAL_SWEEP_KEY (npx wrangler secret put DEAL_SWEEP_KEY);
 // a wrong/missing key — or an unset secret — returns the exact same 404 body
 // the router's fall-through produces, so the route is indistinguishable from
-// absent to anyone probing.
+// absent to anyone probing. Body { key, probe: true } runs dealRadarProbe
+// instead of the sweep — same gate, no AI spend, no D1 writes.
 async function handleDealsSweepManual(request, env, ctx) {
   const b = await request.json().catch(() => ({}));
   if (!env.DEAL_SWEEP_KEY || typeof b?.key !== 'string' || b.key !== env.DEAL_SWEEP_KEY) {
     return jsonResponse({ error: 'Not found', path: '/deals/sweep' }, 404);
+  }
+  if (b.probe === true) {
+    const results = await dealRadarProbe();
+    return jsonResponse({ ok: true, probe: true, results });
   }
   const results = await dealRadarSweep(env, ctx);
   return jsonResponse({ ok: true, results });
