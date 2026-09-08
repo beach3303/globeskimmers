@@ -20,17 +20,20 @@ Everything that matters is in one of three places:
 ## 2. Clone and install
 
 ```bash
-git clone https://github.com/beach3303/globeskimmers.git ~/Documents/globeskimmers
-cd ~/Documents/globeskimmers
+mkdir -p ~/Developer
+git clone https://github.com/beach3303/globeskimmers.git ~/Developer/globeskimmers
+cd ~/Developer/globeskimmers
 npm install
 ```
 
-Keep the path `~/Documents/globeskimmers` — Claude's memory directory is keyed on it.
+**Clone to a LOCAL, non-iCloud folder** (`~/Developer` is safe). A new Mac often has "Desktop & Documents Folders" syncing to iCloud, and iCloud syncing a git repo plus `node_modules` corrupts and thrashes. The copy of the repo inside `Mac-Snapshot-*/Documents/` in iCloud Drive is a reference only — it has no `.git` and no `node_modules`; never build from it.
+
+Claude's memory directory is keyed on the repo path (`~/.claude/projects/-Users-<user>-Developer-globeskimmers/`) — see step 6.
 
 ## 3. Local credentials (from the backup folder's `secrets/`)
 
 ```bash
-cp <backup>/secrets/env.local  ~/Documents/globeskimmers/.env.local   # Supabase URL + anon key, Base44 vars
+cp <backup>/secrets/env.local  ~/Developer/globeskimmers/.env.local   # Supabase URL + anon key, Base44 vars
 cp <backup>/secrets/capgo-api-key.txt ~/.capgo                          # Capgo CLI (OTA uploads)
 npx wrangler login                                                     # Cloudflare (D1 SQL); browser OAuth
 ```
@@ -61,11 +64,14 @@ Push to `main` touching the worker or `wrangler*.toml` deploys the worker automa
 Install Claude Code, open the repo, then restore memory so a fresh session knows the doctrine:
 
 ```bash
-mkdir -p ~/.claude/projects/-Users-<user>-Documents-globeskimmers/memory
-cp <backup>/claude/memory/* ~/.claude/projects/-Users-<user>-Documents-globeskimmers/memory/
+cd ~/Developer/globeskimmers && claude      # first launch: sign in, then /exit — this creates the project dir
+ls ~/.claude/projects/                       # find the folder named after the repo path (slashes → dashes)
+cp <backup>/claude/memory/* ~/.claude/projects/-Users-<user>-Developer-globeskimmers/memory/
 ```
 
-(`<user>` = the laptop's macOS username; the directory name is the repo path with `/` → `-`.)
+(`<user>` = the laptop's macOS username.) Optional: copying the whole `claude/project-sessions-and-memory/` contents into that same project dir also brings the past session transcripts, so `claude --resume` can reopen them.
+
+`<backup>` on the laptop = `~/Library/Mobile Documents/com~apple~CloudDocs/GlobeSkimmers-Backup-2026-09-08` (Finder: iCloud Drive → GlobeSkimmers-Backup-2026-09-08).
 `docs/claude-memory/` in the repo is the same content, committed on 2026-09-08 as a durable snapshot.
 
 ## 7. Keep the MacBook Pro current
