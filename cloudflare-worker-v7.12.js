@@ -5798,6 +5798,11 @@ function haversineMilesLoc(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Largest administrative unit /search-location still treats as a destination
+// (viewport half-diagonal, miles). 60 keeps Da Nang (~20), Tokyo's urban
+// prefecture, Bali (~55) and Hong Kong; a US state or a country stays broad.
+const SEARCH_REGION_MAX_HALF_DIAG_MI = 60;
+
 async function handleSearchLocation(request, env) {
   let body;
   try { body = await request.json(); } catch (_e) { return jsonResponse({ error: 'Invalid request', results: [] }, 200); }
@@ -5834,6 +5839,7 @@ async function handleSearchLocation(request, env) {
 
   const results = [];
   let rejectedTooBroadCount = 0;
+  const tooBroad = [];
   for (const place of data.places.slice(0, 8)) {
     const types = place.types || [];
     const primaryType = place.primaryType || '';
@@ -5850,7 +5856,36 @@ async function handleSearchLocation(request, env) {
     else if (isState) granularity = 'state';
     else if (isCountry) granularity = 'country';
     else granularity = 'place';
-    if (granularity === 'state' || granularity === 'country') { rejectedTooBroadCount++; continue; }
+    // Viewport half-diagonal: how big this place is on the ground.
+    let halfDiagMi = null;
+    {
+      const vp = place.viewport;
+      if (vp?.high?.latitude != null && vp?.low?.latitude != null) {
+        halfDiagMi = haversineMilesLoc(vp.high.latitude, vp.high.longitude, vp.low.latitude, vp.low.longitude) / 2;
+      }
+    }
+    // City-sized administrative units — Da Nang, Tokyo, Bali, Hong Kong —
+    // come back typed administrative_area_level_1 or country, never
+    // locality, yet they are destinations, not "too broad". Keep any whose
+    // footprint is at most SEARCH_REGION_MAX_HALF_DIAG_MI across as a
+    // 'region'. Genuinely broad places (a country, a US state) are still
+    // rejected, but reported in `tooBroad` so the caller can offer their
+    // cities instead of dead-ending on a disabled button.
+    if (granularity === 'state' || granularity === 'country') {
+      if (halfDiagMi != null && halfDiagMi <= SEARCH_REGION_MAX_HALF_DIAG_MI) {
+        granularity = 'region';
+      } else {
+        rejectedTooBroadCount++;
+        const cc = (place.addressComponents || []).find(x => x.types.includes('country'));
+        tooBroad.push({
+          name: place.displayName?.text || '',
+          kind: granularity,
+          country: cc?.longText || '',
+          halfDiagMi: halfDiagMi == null ? null : Math.round(halfDiagMi),
+        });
+        continue;
+      }
+    }
 
     const c = place.addressComponents || [];
     const streetNumber = c.find(x => x.types.includes('street_number'))?.longText || '';
@@ -5874,12 +5909,8 @@ async function handleSearchLocation(request, env) {
     else if (types.includes('transit_station') || types.includes('train_station') || types.includes('bus_station') || primaryType === 'train_station') placeType = 'transit';
 
     let suggestedRadius = null;
-    if (granularity === 'city') {
-      const vp = place.viewport;
-      if (vp?.high?.latitude && vp?.low?.latitude) {
-        const halfDiagMi = haversineMilesLoc(vp.high.latitude, vp.high.longitude, vp.low.latitude, vp.low.longitude) / 2;
-        suggestedRadius = Math.max(5, Math.min(25, Math.round(halfDiagMi)));
-      } else suggestedRadius = 15;
+    if (granularity === 'city' || granularity === 'region') {
+      suggestedRadius = halfDiagMi != null ? Math.max(5, Math.min(25, Math.round(halfDiagMi))) : 15;
     }
 
     results.push({
@@ -5903,7 +5934,7 @@ async function handleSearchLocation(request, env) {
     const message = rejectedTooBroadCount > 0
       ? "That's too broad — please add a city (e.g. \"Paris, France\") or pick a specific address or landmark."
       : 'No locations found. Try a different search term.';
-    return jsonResponse({ results: [], message }, 200);
+    return jsonResponse({ results: [], message, tooBroad }, 200);
   }
   return jsonResponse({ results }, 200);
 }
