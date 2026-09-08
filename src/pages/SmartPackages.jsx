@@ -38,6 +38,7 @@ import { DayPicker } from "react-day-picker";
 import { format } from "date-fns";
 import "react-day-picker/dist/style.css";
 import { callWorker } from "@/lib/callWorker";
+import { citiesFor } from "@/lib/destinationCities";
 import { useDwell } from "@/lib/useDwell";
 import { viatorProductLink, viatorSearchLink } from "@/lib/viator";
 import { ROUTE } from "@/lib/workerRoutes";
@@ -198,6 +199,12 @@ export default function SmartPackages() {
   });
   const [destResults, setDestResults] = useState([]);
   const [destSearching, setDestSearching] = useState(false);
+  // A "too broad" answer from search-location (a country, a large region) →
+  // { name, kind, country, cities[] }: the composer offers cities instead of
+  // dead-ending on a disabled button. destMsg carries the worker's honest
+  // no-result line for a plain miss.
+  const [destBroad, setDestBroad] = useState(null);
+  const [destMsg, setDestMsg] = useState("");
 
   // Dates — { from: Date, to: Date } | undefined. Optionally prefilled from
   // router state (the gallery tease sends checkin/checkout beside dest): both
@@ -251,7 +258,11 @@ export default function SmartPackages() {
   // place_name (not `dest`) — the demand_dwell_30d report groups on $.place_name;
   // a divergent key silently collapses this surface into place=''.
   useDwell("smart_packages", { place_name: dest?.name || null });
-  const canCompose = hasCoords && !!checkin && !!checkout && checkout > checkin;   // ISO string compare — same-day stays disabled, matching the worker's checkout<=checkin 400
+  const typedDest = destQuery.trim();
+  // A typed-but-unresolved destination still enables Compose: compose()
+  // resolves it itself (top result, or city chips for a country), so nobody
+  // has to know a suggestion had to be tapped first.
+  const canCompose = (hasCoords || !!typedDest) && !!checkin && !!checkout && checkout > checkin;   // ISO string compare — same-day stays disabled, matching the worker's checkout<=checkin 400
   const hasResult = !!draft || !!fail; // demotes the compose button to quiet ivory
   // Founder-only test lane while Stripe is in test mode — the page reads no URL
   // params otherwise, so this comes straight off window.location.search. Without
@@ -264,35 +275,66 @@ export default function SmartPackages() {
 
   // Owned search-location route resolves a typed destination to coordinates
   // (same route FindAHotel uses for its "another city" mode).
-  const searchDest = async () => {
-    const q = destQuery.trim(); if (!q) return;
-    setDestSearching(true); setDestResults([]);
+  // Returns the resolved results so compose() can use them directly. Only
+  // results with real coordinates count — the composer needs a point.
+  const searchDest = async (qOverride) => {
+    const q = String(qOverride ?? destQuery).trim(); if (!q) return [];
+    setDestSearching(true); setDestResults([]); setDestBroad(null); setDestMsg("");
+    let results = [];
     try {
       const { data } = await callWorker(ROUTE.searchLocation, { query: q });
-      setDestResults(Array.isArray(data?.results) ? data.results : []);
-    } catch { setDestResults([]); }
+      results = (Array.isArray(data?.results) ? data.results : [])
+        .filter((r) => Number.isFinite(r?.coordinates?.latitude) && Number.isFinite(r?.coordinates?.longitude));
+      if (!results.length) {
+        const broad = Array.isArray(data?.tooBroad) ? data.tooBroad[0] : null;
+        if (broad) {
+          const name = broad.name || q;
+          setDestBroad({ name, kind: broad.kind === "state" ? "region" : "country", country: broad.country || "", cities: citiesFor(name) });
+        } else {
+          setDestMsg(data?.message || "No destination found — try a city name.");
+        }
+      }
+    } catch { setDestMsg("Couldn't search right now — try again."); }
+    setDestResults(results);
     setDestSearching(false);
+    return results;
   };
+  const destFromResult = (r) => ({
+    name: r.placeName || r.city || "",
+    city: r.city || r.placeName || "",
+    country: r.address?.country || "",
+    lat: r.coordinates?.latitude,
+    lng: r.coordinates?.longitude,
+  });
   const pickDest = (r) => {
-    setDest({
-      name: r.placeName || r.city || "",
-      city: r.city || r.placeName || "",
-      country: r.address?.country || "",
-      lat: r.coordinates?.latitude,
-      lng: r.coordinates?.longitude,
-    });
-    setDestResults([]); setDestQuery("");
+    setDest(destFromResult(r));
+    setDestResults([]); setDestQuery(""); setDestBroad(null); setDestMsg("");
+  };
+  // A city chip under a "too broad" answer: search "City, Country" and take
+  // the top hit — chip names are curated, so the first result is the one.
+  const pickCity = async (city) => {
+    const scope = destBroad?.kind === "country" ? destBroad.name : (destBroad?.country || destBroad?.name || "");
+    const rs = await searchDest(scope ? `${city}, ${scope}` : city);
+    if (rs[0]) pickDest(rs[0]);
   };
 
   const compose = async () => {
     if (!canCompose || composing) return;
+    let d = dest;
+    if (!hasCoords) {
+      // Typed but never resolved: resolve it now. A country answer leaves the
+      // city chips on screen; a plain miss leaves the honest message.
+      const rs = await searchDest();
+      if (!rs[0]) return;
+      d = destFromResult(rs[0]); pickDest(rs[0]);
+    }
     setComposing(true); setFail(null); setDraft(null); setExtra(null); setPicks({}); setSid(null); setSelIdx(0); setBookSheet(null); setTestErr(null);
     // Party fields beyond the defaults are only sent when they carry signal —
     // the worker treats absence exactly as the defaults (no children, one room).
     const body = {
-      destLat: dest.lat, destLng: dest.lng,
+      destLat: d.lat, destLng: d.lng,
       checkin, checkout, adults,
-      destName: dest.name || dest.city || "",
+      destName: d.name || d.city || "",
       interestQuery: interest.trim().slice(0, 80),
     };
     if (children > 0) {
@@ -493,6 +535,29 @@ export default function SmartPackages() {
                 ))}
               </div>
             )}
+            {destBroad && (
+              <div className="mt-2 rounded-[14px] px-4 py-3" style={{ background: "#FFFFFF", border: `1px solid ${EDGE}` }}>
+                <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase" style={{ color: SUB }}>
+                  {destBroad.name} is a whole {destBroad.kind} — pick a city
+                </div>
+                {destBroad.cities.length ? (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {destBroad.cities.map((c) => (
+                      <button key={c} onClick={() => pickCity(c)} disabled={destSearching}
+                        className="px-3 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
+                        style={{ background: IVORY_2, color: INK, border: `1px solid ${EDGE}`, opacity: destSearching ? 0.6 : 1 }}>
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-[calc(12px*var(--fs))] mt-1" style={{ color: INK2 }}>Type a city name to price a stay there.</div>
+                )}
+              </div>
+            )}
+            {destMsg && !destBroad && (
+              <div className="text-[calc(12px*var(--fs))] mt-2 px-1" style={{ color: INK2 }}>{destMsg}</div>
+            )}
             <div className="font-mono text-[calc(10px*var(--fs))] mt-1.5 px-1 leading-snug" style={{ color: "#9AA0A6" }}>
               Dream search on Home can also find a destination and start a package here
             </div>
@@ -569,7 +634,7 @@ export default function SmartPackages() {
         </button>
         {!canCompose && !composing && (
           <div className="text-center text-[calc(12px*var(--fs))] mt-2" style={{ color: INK2 }}>
-            {!hasCoords ? "Pick a destination to compose." : "Pick check-in and check-out dates."}
+            {!hasCoords && !typedDest ? "Type a destination to compose." : "Pick check-in and check-out dates."}
           </div>
         )}
 
