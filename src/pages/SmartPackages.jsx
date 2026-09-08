@@ -10,14 +10,20 @@
 //                an optional interest line, one teal "Compose my package".
 //   S2 DRAFT   — POST /package/draft → the worker's two-choice draft:
 //                exactly the two hotel choices the draft returns (pre-decided
-//                default = the first, the cheapest), ≤2 Viator tours + the
-//                soonest in-window event as separately-booked rows, an honest
-//                hotel-only total, and ONE teal primary that hands the selected
-//                choice into the existing HotelBookSheet checkout.
+//                default = the first), ≤2 Viator tours + the soonest in-window
+//                event as separately-booked rows, an honest hotel-only total,
+//                and ONE teal primary that hands the selected choice (and the
+//                chosen rate's offerId) into the existing HotelBookSheet.
 //                Wave A additive fields — destination intel ("Know before you
 //                go"), a selectable "What you'll see" attractions rail, honest
 //                AC/breakfast notes — are read defensively: every one may be
 //                absent (old worker, cached drafts) and absent renders nothing.
+//                Wave C (quality bar + rooms + photos): each choice renders as
+//                HotelChoiceCard (supplier gallery → PhotoLightbox, amenity
+//                tags, the chosen room line, "Choose room" → RoomChooserSheet);
+//                draft.qualityBar says which quality pass the pair came from;
+//                draft.stayAreas offer a "WHERE IN <CITY>?" recompose around
+//                one area. All additive, all read defensively.
 //   S3 FAIL    — ok:false reasons render one designed FinderEmptyState card.
 //
 // Doctrine notes: totals are never fabricated — the estimate figure is the
@@ -38,22 +44,25 @@ import { DayPicker } from "react-day-picker";
 import { format } from "date-fns";
 import "react-day-picker/dist/style.css";
 import { callWorker } from "@/lib/callWorker";
-import { citiesFor } from "@/lib/destinationCities";
+import { canonicalName, citiesFor } from "@/lib/destinationCities";
+import { logDiscover } from "@/lib/logDiscover";
 import { useDwell } from "@/lib/useDwell";
 import { viatorProductLink, viatorSearchLink } from "@/lib/viator";
 import { ROUTE } from "@/lib/workerRoutes";
 import { trackAffiliateClick } from "@/lib/affiliate";
 import { openPartner, openPartnerAndWait } from "@/lib/openPartner";
 import HotelBookSheet from "@/components/hotels/HotelBookSheet";
+import HotelChoiceCard, { bedLabelFor } from "@/components/hotels/HotelChoiceCard";
+import RoomChooserSheet from "@/components/hotels/RoomChooserSheet";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
-import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
+import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import { IVORY, IVORY_2, TEAL_DEEP } from "@/components/redesign/constants";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, monospace';
 const INK = "#16110D", SUB = "#736657", EDGE = "#E6DFD0", INK2 = "#6B7280";
 const STAMP = "#B0472F"; // selection ring — teal stays on the one primary
-const ACCENT = TEAL_DEEP, ACCENT_BG = "#E4F1EF", OK = "#2E7D46";
+const ACCENT = TEAL_DEEP, ACCENT_BG = "#E4F1EF"; // the refundable-green (OK) now lives in HotelChoiceCard / RoomChooserSheet
 const AMBER = "#B45309"; // honest-notes register — FindAHotel's dropped-filters line
 const fs = (n) => `calc(${n}px*var(--fs))`;
 
@@ -69,12 +78,20 @@ const fmtDate = (iso) => {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 };
 
-// Honest mono kickers for the worker's hotelChoices[].role values.
+// Honest mono kickers for the worker's hotelChoices[].role values — the
+// quality-bar composer's three roles plus the legacy trio (old cached drafts).
 const ROLE_LABEL = {
+  best_value: "BEST VALUE",
+  top_pick: "TOP PICK",
+  runner_up: "RUNNER-UP",          // second-best-rated when the top pick is also the cheapest
+  best_available: "BEST AVAILABLE",
   cheapest: "LOWEST PRICE",
   best_reviewed: "BEST REVIEWED",
   second_cheapest: "ALSO GREAT",
 };
+
+// The lightbox credit line — supplier photos, said plainly.
+const PHOTO_CREDIT = "Photos from the hotel's supplier";
 
 // FindAHotel's local Stepper pattern (copied, not imported — it is page-local there).
 function Stepper({ label, value, setValue, min = 0, max = 16 }) {
@@ -241,7 +258,11 @@ export default function SmartPackages() {
   const [picks, setPicks] = useState({});     // "What you'll see" selections — local Wave-A state only, keyed by attraction id/name
   const [sid, setSid] = useState(null);       // package_orders row id (server-side)
   const [fail, setFail] = useState(null);     // { reason } from ok:false / network
-  const [selIdx, setSelIdx] = useState(0);    // chosen hotelChoices index — default: the first (cheapest)
+  const [selIdx, setSelIdx] = useState(0);    // chosen hotelChoices index — default: the first (the worker's pre-decided default)
+  const [selRateByChoice, setSelRateByChoice] = useState({}); // { [choiceIdx]: rate } — a room plan picked in RoomChooserSheet; absent = the choice's cheapest
+  const [photoLb, setPhotoLb] = useState(null);    // { choiceIdx, photos:[{src,hd}], index, title } | null — the one PhotoLightbox
+  const [roomSheet, setRoomSheet] = useState(null); // choiceIdx | null — RoomChooserSheet open for that choice
+  const [stayAreaSel, setStayAreaSel] = useState(""); // "" = Anywhere; else a draft.stayAreas[].name sent as body.stayArea
   const [bookSheet, setBookSheet] = useState(null); // the choice being booked (opens HotelBookSheet)
   const [testBusy, setTestBusy] = useState(false);  // founder-only Stripe test checkout in flight
   const [testErr, setTestErr] = useState(null);     // its error reason — quiet inline line only
@@ -280,6 +301,16 @@ export default function SmartPackages() {
   const searchDest = async (qOverride) => {
     const q = String(qOverride ?? destQuery).trim(); if (!q) return [];
     setDestSearching(true); setDestResults([]); setDestBroad(null); setDestMsg("");
+    // Curated first, BEFORE any worker call (zero Google spend): a typed
+    // country or region we hold cities for shows its chips straight away.
+    // One curated city that IS the query ("Singapore") is a city, not a
+    // choice — that one goes on to the worker like any other city.
+    const local = citiesFor(q);
+    if (local.length > 1 || (local.length === 1 && local[0].toLowerCase() !== q.toLowerCase())) {
+      setDestBroad({ name: canonicalName(q), kind: "local", country: "", cities: local });
+      setDestSearching(false);
+      return [];
+    }
     let results = [];
     try {
       const { data } = await callWorker(ROUTE.searchLocation, { query: q });
@@ -318,17 +349,24 @@ export default function SmartPackages() {
   const pickDest = (r) => {
     setDest(destFromResult(r));
     setDestResults([]); setDestQuery(""); setDestBroad(null); setDestMsg("");
+    setStayAreaSel(""); // a stay area belongs to one city
   };
-  // A city chip under a "too broad" answer: search "City, Country" and take
-  // the top hit — chip names are curated, so the first result is the one.
+  // A city chip under a "WHERE IN <NAME>?" row: search "City, Name" for every
+  // kind (country, region, curated) and take the top hit — chip names are
+  // curated, so the first result is the one.
   const pickCity = async (city) => {
-    const scope = destBroad?.kind === "country" ? destBroad.name : (destBroad?.country || destBroad?.name || "");
+    const scope = destBroad?.name || "";
     const rs = await searchDest(scope ? `${city}, ${scope}` : city);
     if (rs[0]) pickDest(rs[0]);
   };
 
-  const compose = async () => {
+  // compose({ stayArea }) — an explicit area (or "" for Anywhere) overrides
+  // the remembered chip; a bare call (button onClick, empty-state retry) sends
+  // the remembered one. destName stays the CITY either way — the area only
+  // moves the hotel search point.
+  const compose = async (opts) => {
     if (!canCompose || composing) return;
+    const stayArea = opts && typeof opts === "object" && typeof opts.stayArea === "string" ? opts.stayArea : stayAreaSel;
     let d = dest;
     if (!hasCoords) {
       // Typed but never resolved: resolve it now. A country answer leaves the
@@ -338,6 +376,7 @@ export default function SmartPackages() {
       d = destFromResult(rs[0]); pickDest(rs[0]);
     }
     setComposing(true); setFail(null); setDraft(null); setExtra(null); setPicks({}); setSid(null); setSelIdx(0); setBookSheet(null); setTestErr(null);
+    setSelRateByChoice({}); setPhotoLb(null); setRoomSheet(null);
     // Party fields beyond the defaults are only sent when they carry signal —
     // the worker treats absence exactly as the defaults (no children, one room).
     const body = {
@@ -346,6 +385,7 @@ export default function SmartPackages() {
       destName: d.name || d.city || "",
       interestQuery: interest.trim().slice(0, 80),
     };
+    if (stayArea) body.stayArea = stayArea.slice(0, 80);
     if (children > 0) {
       body.children = children;
       body.childrenAges = Array.from({ length: children }, (_, i) => {
@@ -381,7 +421,66 @@ export default function SmartPackages() {
 
   // Tours and the event are separately-booked partner links — attribute the
   // click, then open in the partner sheet (EventsRow's pattern).
-  const chosen = draft?.hotelChoices?.[selIdx] || draft?.hotelChoices?.[0] || null;
+  const choices = Array.isArray(draft?.hotelChoices) ? draft.hotelChoices : [];
+  const chosen = choices[selIdx] || choices[0] || null;
+  // The rate the traveler picked for the chosen hotel (RoomChooserSheet), or
+  // null — then every figure falls back to the choice's own cheapest fields.
+  const selRate = selRateByChoice[selIdx] || null;
+  const placeName = draft?.destName || dest?.name || "";
+
+  // Wave C — the choice cards' handlers. Analytics via logDiscover carry the
+  // destination as place_name (the demand reports group on it).
+  const evtBase = (h, i) => ({ place_name: placeName, hotel_id: h?.hotelId || h?.id || null, role: h?.role || null, index: i });
+  const selectChoice = (i) => {
+    if (i === selIdx) return;
+    setSelIdx(i);
+    logDiscover("package_hotel_select", evtBase(choices[i], i));
+  };
+  const galleryOf = (h) => {
+    const list = (Array.isArray(h?.photos) ? h.photos : [])
+      .filter((p) => p && typeof p.url === "string" && p.url)
+      .map((p) => ({ src: p.url, hd: p.hd || undefined }));
+    if (!list.length && h?.thumbnail) list.push({ src: h.thumbnail });
+    return list;
+  };
+  const openChoicePhotos = (i, idx = 0) => {
+    const h = choices[i]; const photos = galleryOf(h);
+    if (!photos.length) return;
+    setPhotoLb({ choiceIdx: i, photos, index: Math.min(Math.max(idx, 0), photos.length - 1), title: h?.name || "" });
+    logDiscover("package_hotel_photo_open", evtBase(h, i));
+  };
+  const openRooms = (i) => {
+    setRoomSheet(i);
+    logDiscover("package_room_open", { place_name: placeName, hotel_id: choices[i]?.hotelId || choices[i]?.id || null });
+  };
+  const pickRate = (i, rate) => {
+    if (!rate || rate.offerId == null) return;
+    const h = choices[i];
+    setSelRateByChoice((m) => ({ ...m, [i]: rate }));
+    if (i !== selIdx) setSelIdx(i); // choosing a room in a hotel chooses that hotel
+    logDiscover("package_room_pick", {
+      place_name: placeName, hotel_id: h?.hotelId || h?.id || null, role: h?.role || null,
+      offer_id: rate.offerId, room_name: rate.roomName || null, bed_label: bedLabelFor(h, rate),
+      board: rate.boardLabel || rate.board || null, price: rate.price ?? null, currency: rate.currency || h?.currency || null,
+      refundable: !!rate.freeCancellation,
+    });
+  };
+  // Room-sheet lightbox: the room's supplier photos, titled "Hotel — Room".
+  const openRoomPhotos = (i, photos, idx, title) => {
+    if (!Array.isArray(photos) || !photos.length) return;
+    setPhotoLb({ choiceIdx: i, photos, index: Math.min(Math.max(idx || 0, 0), photos.length - 1), title: title || choices[i]?.name || "" });
+    logDiscover("package_hotel_photo_open", { ...evtBase(choices[i], i), room: title || null });
+  };
+  // Stay areas — from the draft (or the intel that rides beside it). A chip
+  // tap recomposes around that area; "Anywhere" recomposes city-wide.
+  const stayAreas = (Array.isArray(draft?.stayAreas) ? draft.stayAreas : (Array.isArray(extra?.intel?.stayAreas) ? extra.intel.stayAreas : []))
+    .filter((a) => a && typeof a.name === "string" && a.name.trim());
+  const pickArea = (name) => {
+    if (composing || name === stayAreaSel) return;
+    setStayAreaSel(name);
+    logDiscover("package_area_pick", { place_name: placeName, area: name || "Anywhere" });
+    compose({ stayArea: name });
+  };
   const openTour = async (t) => {
     if (!t?.url) return;
     const url = await trackAffiliateClick({
@@ -417,8 +516,8 @@ export default function SmartPackages() {
   // mismatched or missing price is counted, honestly, as "priced at booking";
   // nothing is ever silently converted. Old workers send neither field and
   // every pick lands in the unpriced bucket.
-  const estCurrency = chosen?.currency || draft?.currency || "USD";
-  const estBase = Number(chosen?.stayTotal ?? chosen?.price);
+  const estCurrency = selRate?.currency || chosen?.currency || draft?.currency || "USD";
+  const estBase = Number(selRate?.price ?? chosen?.stayTotal ?? chosen?.price);
   // Tour prices are Viator PER-TRAVELER from-rates; the hotel total covers the
   // whole party — so each priced pick multiplies by the party's adults, or the
   // sum quietly understates and mislabels a party-level figure.
@@ -434,7 +533,7 @@ export default function SmartPackages() {
     }
   });
   const estTotal = Number.isFinite(estBase) ? Math.round((estBase + pickedTourSum) * 100) / 100 : null;
-  const estDisplay = money(estTotal ?? (chosen?.stayTotal ?? chosen?.price), estCurrency);
+  const estDisplay = money(estTotal ?? (selRate?.price ?? chosen?.stayTotal ?? chosen?.price), estCurrency);
   const estNights = chosen?.nights || draft?.nights;
   // Inclusion line — three honest cases: no picks → hotel + nights; priced
   // picks → what's actually inside the figure; any unpriced picks append the
@@ -512,7 +611,7 @@ export default function SmartPackages() {
                 </div>
               )}
             </div>
-            <button onClick={() => setDest(null)} aria-label="Clear destination"
+            <button onClick={() => { setDest(null); setStayAreaSel(""); }} aria-label="Clear destination"
               className="w-8 h-8 rounded-full flex items-center justify-center flex-none" style={{ background: "#F1EADF" }}>
               <X size={15} color={INK} strokeWidth={2.2} />
             </button>
@@ -547,7 +646,7 @@ export default function SmartPackages() {
             {destBroad && (
               <div className="mt-2 rounded-[14px] px-4 py-3" style={{ background: "#FFFFFF", border: `1px solid ${EDGE}` }}>
                 <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase" style={{ color: SUB }}>
-                  {destBroad.name} is a whole {destBroad.kind} — pick a city
+                  Where in {destBroad.name}?
                 </div>
                 {destBroad.cities.length ? (
                   <div className="flex flex-wrap gap-2 mt-2">
@@ -681,58 +780,125 @@ export default function SmartPackages() {
           <div className="mt-6" ref={resultRef} data-sid={sid || undefined} style={{ scrollMarginTop: 12 }}>
             <h2 style={{ fontFamily: SERIF, fontSize: fs(24), color: INK, lineHeight: 1.1 }}>
               Your {draft.destName || dest?.name || "trip"} trip
+              {/* "staying in" only when the pool really came from the area
+                  (radiusKm set); radiusKm null = the area held too few hotels
+                  and the worker widened to the whole city. */}
+              {draft.stayArea?.name && draft.stayArea.radiusKm != null ? (
+                <span style={{ fontFamily: MONO, fontSize: fs(11), color: SUB, letterSpacing: "0.04em" }}> · staying in {draft.stayArea.name}</span>
+              ) : null}
             </h2>
             <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] mt-1" style={{ color: SUB }}>
               {partyLine}{draft.env === "sandbox" ? " · SANDBOX" : ""}
             </div>
+            {/* The worker could not geocode the picked area — say so, honestly. */}
+            {typeof draft.stayAreaDropped === "string" && draft.stayAreaDropped && (
+              <div className="font-mono text-[calc(11px*var(--fs))] mt-2 leading-snug" style={{ color: AMBER }}>
+                Couldn&rsquo;t place {draft.stayAreaDropped} on the map — showing the whole city
+              </div>
+            )}
+            {draft.stayArea?.name && draft.stayArea.radiusKm == null && (
+              <div className="font-mono text-[calc(11px*var(--fs))] mt-2 leading-snug" style={{ color: AMBER }}>
+                Few hotels in {draft.stayArea.name} for these dates — showing the whole city, distances measured from {draft.stayArea.name}
+              </div>
+            )}
 
             {/* KNOW BEFORE YOU GO — additive intel; absent renders nothing */}
             <IntelCard intel={extra?.intel} />
 
-            {/* THE TWO CHOICES — exactly what the draft returned, cheapest pre-selected */}
-            <div className={`grid gap-2.5 mt-4 ${draft.hotelChoices.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-              {draft.hotelChoices.map((h, i) => {
-                const selected = i === selIdx;
-                const total = h.stayTotal ?? h.price;
-                const nights = h.nights || draft.nights;
-                return (
-                  <button key={h.id || i} onClick={() => setSelIdx(i)} aria-pressed={selected}
-                    className="text-left rounded-2xl overflow-hidden flex flex-col"
-                    style={{ background: "#FFFFFF", border: `1px solid ${EDGE}`, boxShadow: selected ? `0 0 0 2px ${STAMP}` : "none" }}>
-                    <PhotoOrIcon photos={[h.thumbnail]} alt={h.name} fallbackIcon={BedDouble} tint={ACCENT} height={84} iconSize={30} />
-                    <div className="p-3 flex-1 flex flex-col">
-                      <div className="font-mono text-[calc(9px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: selected ? STAMP : SUB }}>
-                        {ROLE_LABEL[h.role] || "OPTION"}
-                      </div>
-                      <div className="mt-1 leading-snug" style={{ fontFamily: SERIF, fontSize: fs(16), color: INK, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                        {h.name}
-                      </div>
-                      <div className="font-mono text-[calc(10px*var(--fs))] mt-1 flex items-center gap-1.5 flex-wrap" style={{ color: SUB }}>
-                        {h.stars ? <span style={{ color: "#E0922F" }}>{"★".repeat(Math.min(Math.round(h.stars), 5))}</span> : null}
-                        {h.reviewScore != null && <span>{Number(h.reviewScore).toFixed(1)}{h.reviewCount ? ` (${h.reviewCount})` : ""}</span>}
-                        {h.distanceMiles != null && <span>· {h.distanceMiles} mi</span>}
-                      </div>
-                      <div className="mt-auto pt-2">
-                        <div className="font-bold text-[calc(14.5px*var(--fs))]" style={{ color: INK, fontVariantNumeric: "tabular-nums" }}>
-                          {money(total, h.currency || draft.currency)} total · {nights} night{nights === 1 ? "" : "s"}
-                        </div>
-                        <div className="text-[calc(10.5px*var(--fs))] mt-0.5" style={{ color: h.freeCancellation ? OK : INK2 }}>
-                          {h.freeCancellation ? `Free cancellation${h.cancelBy ? ` until ${String(h.cancelBy).slice(0, 10)}` : ""}` : "Non-refundable"}
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+            {/* WHERE IN <CITY>? — the draft's stay areas as chips. "Anywhere" is
+                the default; a tap recomposes around that area (stamp ring =
+                the selection; never a second teal). Self-hides without areas. */}
+            {stayAreas.length > 0 && (
+              <div className="mt-4">
+                <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: SUB }}>
+                  Where in {draft.destName || dest?.name || "the city"}?
+                </div>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {[{ name: "", label: "Anywhere" }, ...stayAreas.map((a) => ({ name: a.name, label: a.name, why: a.why }))].map((c) => {
+                    const on = c.name === stayAreaSel;
+                    return (
+                      <button key={c.name || "__any"} onClick={() => pickArea(c.name)} aria-pressed={on} disabled={composing}
+                        className="px-3 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]"
+                        style={{ background: on ? "#FFFFFF" : IVORY_2, color: INK, border: `1px solid ${EDGE}`, boxShadow: on ? `0 0 0 2px ${STAMP}` : "none" }}>
+                        {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {(() => {
+                  const why = stayAreas.find((a) => a.name === stayAreaSel)?.why;
+                  return typeof why === "string" && why.trim() ? (
+                    <div className="font-mono text-[calc(10px*var(--fs))] mt-1.5 px-1 leading-snug" style={{ color: SUB }}>{why}</div>
+                  ) : null;
+                })()}
+              </div>
+            )}
+
+            {/* THE TWO CHOICES — exactly what the draft returned, the first pre-selected */}
+            <div className={`grid gap-2.5 mt-4 ${choices.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+              {choices.map((h, i) => (
+                <HotelChoiceCard
+                  key={h.id || h.hotelId || i}
+                  choice={h}
+                  selected={i === selIdx}
+                  onSelect={() => selectChoice(i)}
+                  onOpenPhotos={(idx) => openChoicePhotos(i, idx)}
+                  onOpenRooms={() => openRooms(i)}
+                  selRate={selRateByChoice[i] || null}
+                  currency={draft.currency}
+                  nights={draft.nights}
+                  roleLabel={ROLE_LABEL[h.role] || "OPTION"}
+                  distanceFrom={draft.stayArea?.name || undefined}
+                />
+              ))}
             </div>
+
+            {/* QUALITY BAR — which pass the pair came from. Passes 1–2 state the
+                bar in the quiet mono register; pass 3 is the honest amber line. */}
+            {draft.qualityBar && (() => {
+              const qb = draft.qualityBar;
+              const pass = Number(qb.pass);
+              const city = draft.destName || dest?.name || "this city";
+              // The pool's true scope: the stay area's ring when the search was
+              // re-centred there, else the whole destination.
+              const scope = draft.stayArea?.name && draft.stayArea.radiusKm != null ? `near ${draft.stayArea.name}` : `in ${city}`;
+              const stars = Number.isFinite(Number(qb.minStars)) ? Number(qb.minStars) : (pass === 2 ? 3 : 4);
+              const rating = Number.isFinite(Number(qb.minRating)) ? Number(qb.minRating).toFixed(1) : (pass === 2 ? "8.0" : "8.5");
+              if (pass === 3) {
+                return (
+                  <div className="font-mono text-[calc(11px*var(--fs))] mt-2.5 px-1 leading-snug" style={{ color: AMBER }}>
+                    Few top-rated hotels here for these dates — showing the best available
+                  </div>
+                );
+              }
+              if (pass === 1) {
+                return (
+                  <div className="font-mono text-[calc(10px*var(--fs))] mt-2.5 px-1 leading-snug" style={{ color: SUB }}>
+                    {choices.length > 1 ? "Both drawn" : "Drawn"} from {stars}★+ hotels scoring {rating}+ {scope} · supplier ratings
+                  </div>
+                );
+              }
+              if (pass === 2) {
+                return (
+                  <div className="font-mono text-[calc(10px*var(--fs))] mt-2.5 px-1 leading-snug" style={{ color: SUB }}>
+                    {stars}★+ hotels scoring {rating}+ {scope} · supplier ratings
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             {/* HONEST NOTES — FindAHotel's dropped-filters register: one quiet
                 amber mono line per note, only when the worker sent one. */}
-            {extra?.acNote && (
-              <div className="font-mono text-[calc(11px*var(--fs))] mt-3 px-1 leading-snug" style={{ color: AMBER }}>{extra.acNote}</div>
+            {/* Notes describe the SELECTED hotel: per-choice notes when the worker
+                sent them, else the legacy draft-level note (first choice). */}
+            {(chosen && "acNote" in chosen ? chosen.acNote : extra?.acNote) && (
+              <div className="font-mono text-[calc(11px*var(--fs))] mt-3 px-1 leading-snug" style={{ color: AMBER }}>{chosen && "acNote" in chosen ? chosen.acNote : extra.acNote}</div>
             )}
-            {extra?.breakfastNote && (
-              <div className="font-mono text-[calc(11px*var(--fs))] mt-2 px-1 leading-snug" style={{ color: AMBER }}>{extra.breakfastNote}</div>
+            {/* Once the traveler has picked a breakfast-included rate, the
+                base-rate breakfast note is no longer the story. */}
+            {!selRate?.breakfast && (chosen && "breakfastNote" in chosen ? chosen.breakfastNote : extra?.breakfastNote) && (
+              <div className="font-mono text-[calc(11px*var(--fs))] mt-2 px-1 leading-snug" style={{ color: AMBER }}>{chosen && "breakfastNote" in chosen ? chosen.breakfastNote : extra.breakfastNote}</div>
             )}
 
             {/* WHAT YOU'LL SEE — additive attractions rail. Tapping a card is a
@@ -873,7 +1039,7 @@ export default function SmartPackages() {
                   Book this hotel
                 </button>
                 <div className="font-mono text-[calc(10px*var(--fs))] text-center mt-2" style={{ color: SUB }}>
-                  Room choice and secure checkout come next.
+                  {selRate ? "Secure checkout comes next" : "Room choice and secure checkout come next."}
                 </div>
                 {/* Founder-only Stripe test lane — hidden unless ?stripetest=1;
                     needs sid (the server-side order this draft is priced under). */}
@@ -921,6 +1087,8 @@ export default function SmartPackages() {
       {/* The existing in-app checkout — the draft choice is a superset of the
           search hotel object (offerId, price, rates[], name, city, …), so it
           hands straight in; the sheet ignores the extra role/stayTotal fields.
+          initialOfferId = the room plan picked here (undefined → the sheet's
+          own room step / cheapest, exactly as before).
           sid ties this draft to its server-side package_orders row (see compose). */}
       {bookSheet && draft && (
         <HotelBookSheet
@@ -930,9 +1098,34 @@ export default function SmartPackages() {
           adults={draft.party?.adults ?? adults}
           children={draft.party?.children ?? children}
           dest={{ city: bookSheet.city || draft.destName || "", country: bookSheet.country || "" }}
+          initialOfferId={selRate?.offerId ?? undefined}
           onClose={() => setBookSheet(null)}
         />
       )}
+
+      {/* ROOM CHOOSER — FilterSheet-hosted; a pick stores the rate for that
+          choice and closes. Its photo taps open the same lightbox below. */}
+      <RoomChooserSheet
+        open={roomSheet != null && !!choices[roomSheet]}
+        choice={roomSheet != null ? choices[roomSheet] : null}
+        selRate={roomSheet != null ? (selRateByChoice[roomSheet] || null) : null}
+        onPick={(rate) => pickRate(roomSheet, rate)}
+        onClose={() => setRoomSheet(null)}
+        onOpenPhotos={(photos, idx, title) => openRoomPhotos(roomSheet, photos, idx, title)}
+        currency={draft?.currency}
+        nights={draft?.nights}
+      />
+
+      {/* THE ONE LIGHTBOX — hotel gallery or a room's photos; portal at
+          z-[9999] so it sits over the room sheet too. */}
+      <PhotoLightbox
+        photos={photoLb?.photos || []}
+        index={photoLb ? photoLb.index : null}
+        onClose={() => setPhotoLb(null)}
+        onIndexChange={(i) => setPhotoLb((p) => (p ? { ...p, index: i } : p))}
+        title={photoLb?.title || ""}
+        credit={PHOTO_CREDIT}
+      />
     </div>
   );
 }

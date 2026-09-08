@@ -139,7 +139,9 @@ const ALIASES = {
   "uae": "united arab emirates", "emirates": "united arab emirates",
   "czech republic": "czechia", "turkiye": "turkey",
   "the philippines": "philippines", "the bahamas": "bahamas", "the maldives": "maldives",
-  "hong kong": "china", "viet nam": "vietnam", "ivory coast": "cote divoire",
+  "viet nam": "vietnam", "ivory coast": "cote divoire",
+  // No "hong kong" alias: Hong Kong resolves as its own region through the
+  // worker's search-location, and composing at its centre is the right answer.
 };
 
 // "Việt Nam" / "Türkiye" / "USA " all normalise to a map key.
@@ -156,4 +158,28 @@ function keyFor(name) {
 // Cities to offer for a country / region name; [] when we have no curated list.
 export function citiesFor(name) {
   return CITIES[keyFor(name)] || [];
+}
+
+// "united states of america" → "United States of America" — for the
+// "WHERE IN <NAME>?" kicker and the "City, Name" search a chip fires. Small
+// connective words stay lowercase except at the start.
+const SMALL = new Set(["of", "de", "del", "da", "and", "the", "d'"]);
+export function titleCase(name) {
+  return String(name || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .map((w, i) => {
+      const lw = w.toLowerCase();
+      if (i > 0 && SMALL.has(lw)) return lw;
+      return lw ? lw.charAt(0).toUpperCase() + lw.slice(1) : lw;
+    })
+    .join(" ");
+}
+
+// The display name for whatever was typed: aliases and diacritics collapse to
+// the curated key ("usa" → "United States", "Việt Nam" → "Vietnam"); an
+// unknown name is just title-cased as typed.
+export function canonicalName(name) {
+  return titleCase(keyFor(name));
 }

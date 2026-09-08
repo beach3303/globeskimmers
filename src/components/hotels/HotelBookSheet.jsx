@@ -6,6 +6,10 @@
 // invented tiers), the traveler picks a plan, and that plan's offerId + labels
 // feed the existing prebook flow. Hotels without rates[] (old cache/edge)
 // start on "form" with the flattened cheapest rate — exactly the old behavior.
+// A caller that already knows the plan (Smart Packages' priced choice) passes
+// initialOfferId: when it matches a rate in rates[] the sheet opens on "form"
+// with that rate preselected, "‹ Change room" still available; otherwise it is
+// ignored and the sheet opens exactly as it would without it.
 // The card form itself is Nuitée's Payment SDK on a page served by OUR worker,
 // opened in the same in-app sheet Viator uses; when that sheet closes we ask
 // the worker whether the session booked. Card data never touches the app, and
@@ -16,7 +20,7 @@
 // gate (App.jsx), never on share cards or web pages.
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { X } from "lucide-react";
+import { X, CheckCircle2 } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { useAuth } from "@/lib/AuthContext";
 import { openPartnerAndWait } from "@/lib/openPartner";
@@ -48,8 +52,18 @@ const splitRoomName = (s) => {
   if (m && /\b(bed|beds|suite|studio|room)\b/i.test(m[1]) && m[1].length <= 44) return { bed: m[1], rest: m[2] };
   return { bed: p, rest: null };
 };
+// The worker's own bed phrase (rate.room.bedLabel, e.g. "1 King") leads when
+// present; the supplier's room name still shows underneath — its tail when the
+// name split cleanly, else the whole name — so nothing the supplier said is
+// hidden. Without a bedLabel the split heuristic above stands alone.
+const roomLines = (name, bedLabel) => {
+  const s = splitRoomName(name);
+  if (!bedLabel) return s;
+  const rest = s.rest || (s.bed && s.bed.toLowerCase() !== String(bedLabel).toLowerCase() ? s.bed : null);
+  return { bed: String(bedLabel), rest };
+};
 
-export default function HotelBookSheet({ hotel, checkin, checkout, adults, children, dest, onClose }) {
+export default function HotelBookSheet({ hotel, checkin, checkout, adults, children, dest, onClose, initialOfferId = null }) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const meta = user?.user_metadata || {};
@@ -61,14 +75,19 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
   // ── Room choice (Wave 4) ───────────────────────────────────────────────
   // The search hotel MAY carry rates[]: every purchasable plan for this stay,
   // same field names as the flattened top-level rate —
-  //   { offerId, roomName, board, price, currency?, freeCancellation, cancelBy, maxOccupancy? }
-  // (supplier spellings name/boardName tolerated). Anything without an offerId
-  // and price can't be booked and is dropped.
+  //   { offerId, roomName, board, price, currency?, freeCancellation, cancelBy, maxOccupancy?,
+  //     room?: { bedLabel? }, boardLabel? }
+  // (supplier spellings name/boardName tolerated). room.bedLabel ("1 King") and
+  // boardLabel ("Breakfast included") are optional worker-derived display
+  // strings — shown only when present, never built here. Anything without an
+  // offerId and price can't be booked and is dropped.
   const rates = useMemo(() => (Array.isArray(hotel.rates) ? hotel.rates : [])
     .map((r) => (r && r.offerId != null && r.price != null) ? {
       offerId: r.offerId, roomName: r.roomName || r.name || null, board: r.board || r.boardName || null,
       price: r.price, currency: r.currency || hotel.currency || "USD",
       freeCancellation: !!r.freeCancellation, cancelBy: r.cancelBy || null, maxOccupancy: r.maxOccupancy ?? null,
+      room: r.room?.bedLabel ? { bedLabel: String(r.room.bedLabel) } : null,
+      boardLabel: typeof r.boardLabel === "string" && r.boardLabel.trim() ? r.boardLabel.trim() : null,
     } : null)
     .filter(Boolean)
     .sort((a, b) => a.price - b.price), [hotel]);
@@ -87,19 +106,25 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
       const alt = !cheapest.freeCancellation ? g.rates.find((x) => x.freeCancellation) : null;
       g.plans = alt ? [cheapest, alt] : [cheapest];
       g.occ = g.rates.reduce((m, x) => Math.max(m, x.maxOccupancy || 0), 0) || null;
+      g.bedLabel = g.rates.find((x) => x.room?.bedLabel)?.room.bedLabel || null;   // the room's worker bed phrase, when any plan carries one
     }
     return out;
   }, [rates]);
   const hasRoomChoice = rates.length > 1;
-  const [sel, setSel] = useState(null);         // the traveler's chosen rate (from rates[])
+  // Deep link: initialOfferId (compared as a string) preselects its rate and
+  // skips the room picker. No match → null → today's behavior, untouched.
+  const preset = initialOfferId != null ? rates.find((r) => String(r.offerId) === String(initialOfferId)) || null : null;
+  const [sel, setSel] = useState(preset);       // the traveler's chosen rate (from rates[])
   const [allRooms, setAllRooms] = useState(false); // "More rooms" disclosure open
   // The rate being bought: chosen > cheapest-from-rates > the flattened legacy
   // fields (no-rates[] fallback — identical to pre-Wave-4 behavior).
   const rate = sel || rates[0] || {
     offerId: hotel.offerId, roomName: hotel.roomName, board: hotel.board, price: hotel.price,
     currency: hotel.currency, freeCancellation: hotel.freeCancellation, cancelBy: hotel.cancelBy,
+    room: hotel.room?.bedLabel ? { bedLabel: String(hotel.room.bedLabel) } : null,
+    boardLabel: typeof hotel.boardLabel === "string" && hotel.boardLabel.trim() ? hotel.boardLabel.trim() : null,
   };
-  const [stage, setStage] = useState(hasRoomChoice ? "rooms" : "form"); // rooms · form · prebooking · ready · paying · booked · failed · pending · unknown
+  const [stage, setStage] = useState(hasRoomChoice && !preset ? "rooms" : "form"); // rooms · form · prebooking · ready · paying · booked · failed · pending · unknown
   const [pre, setPre] = useState(null);         // /hotels/nuitee/prebook response
   const [err, setErr] = useState(null);
   const [booking, setBooking] = useState(null);
@@ -178,6 +203,12 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
   const price = pre?.price ?? rate.price;
   const cur = pre?.currency || rate.currency || "USD";
   const room = pre?.room || { name: rate.roomName, board: rate.board, refundable: rate.freeCancellation, cancelBy: rate.cancelBy };
+  // Display strings for the SAME offer: the worker's prebook room wins when it
+  // carries them, else the chosen search rate's (bed configuration and board
+  // don't change between search and prebook for one offerId — price and
+  // cancellation can, and those come from pre.room / pre.price above).
+  const bedLabel = pre?.room?.bedLabel || rate.room?.bedLabel || null;
+  const boardLabel = pre?.room?.boardLabel || rate.boardLabel || null;
   const field = (label, k, type = "text", auto) => (
     <label className="flex flex-col gap-1">
       <span className="text-[calc(11.5px*var(--fs))] font-semibold" style={{ color: INK2 }}>{label}</span>
@@ -201,7 +232,9 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
             rooms stage, where the room cards themselves carry this. */}
         {stage !== "rooms" && (
         <div className="rounded-[16px] p-3.5 mt-3" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
-          {room?.name && <div className="text-[calc(13.5px*var(--fs))] font-semibold" style={{ color: INK }}><b>{splitRoomName(room.name).bed}</b>{splitRoomName(room.name).rest ? ` · ${splitRoomName(room.name).rest}` : ""}{room.board ? <span style={{ color: INK2, fontWeight: 500 }}> · {room.board}</span> : null}</div>}
+          {(room?.name || bedLabel) && (() => { const l = roomLines(room?.name, bedLabel); const bd = boardLabel || room?.board; return (
+            <div className="text-[calc(13.5px*var(--fs))] font-semibold" style={{ color: INK }}><b style={{ fontFamily: SERIF, fontSize: fs(15.5), fontWeight: 700 }}>{l.bed}</b>{l.rest ? ` · ${l.rest}` : ""}{bd ? <span style={{ color: INK2, fontWeight: 500 }}> · {bd}</span> : null}</div>
+          ); })()}
           <div className="text-[calc(12.5px*var(--fs))] mt-1" style={{ color: room?.refundable ? OK : BAD }}>
             {room?.refundable ? `Free cancellation${room.cancelBy ? ` until ${fmtDate(String(room.cancelBy).slice(0, 10))}` : ""}` : "Non-refundable"}
           </div>
@@ -225,8 +258,8 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
                 <div key={g.name} className="rounded-[16px] p-3.5" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
                   <div className="flex items-baseline justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="text-[calc(19px*var(--fs))] font-bold leading-snug" style={{ fontFamily: SERIF, color: INK }}>{splitRoomName(g.name).bed}</div>
-                      {splitRoomName(g.name).rest ? <div className="mt-0.5 text-[calc(12px*var(--fs))] leading-snug" style={{ color: INK2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{splitRoomName(g.name).rest}</div> : null}
+                      <div className="text-[calc(19px*var(--fs))] font-bold leading-snug" style={{ fontFamily: SERIF, color: INK }}>{roomLines(g.name, g.bedLabel).bed}</div>
+                      {roomLines(g.name, g.bedLabel).rest ? <div className="mt-0.5 text-[calc(12px*var(--fs))] leading-snug" style={{ color: INK2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{roomLines(g.name, g.bedLabel).rest}</div> : null}
                     </div>
                     {g.occ ? <span className="flex-none font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase" style={{ color: INK2 }}>Sleeps {g.occ}</span> : null}
                   </div>
@@ -244,7 +277,7 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
                           className="w-full flex items-center gap-3 rounded-[12px] px-3 py-2.5 text-left"
                           style={{ background: "#FBF8F1", border: `1.5px solid ${RULE}`, fontFamily: "inherit" }}>
                           <span className="flex-1 min-w-0">
-                            {r.board && <span className="block text-[calc(12.5px*var(--fs))] font-semibold" style={{ color: INK }}>{r.board}</span>}
+                            {(r.boardLabel || r.board) && <span className="block text-[calc(12.5px*var(--fs))] font-semibold" style={{ color: INK }}>{r.boardLabel || r.board}</span>}
                             <span className="block text-[calc(11.5px*var(--fs))]" style={{ color: r.freeCancellation ? OK : INK2 }}>{line}</span>
                           </span>
                           <span className="flex-none font-mono font-bold text-[calc(14px*var(--fs))]" style={{ color: INK }}>{money(r.price, r.currency)}</span>
@@ -356,7 +389,7 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
 
         {stage === "booked" && booking && (
           <>
-            <div className="text-[calc(17px*var(--fs))] font-extrabold mt-4" style={{ color: OK }}>✅ You're booked</div>
+            <div className="flex items-center gap-2 text-[calc(17px*var(--fs))] font-extrabold mt-4" style={{ color: OK }}><CheckCircle2 size={20} strokeWidth={2.25} aria-hidden="true" /><span>You're booked</span></div>
             <div className="rounded-[14px] p-3 mt-2 text-[calc(13px*var(--fs))]" style={{ background: "#fff", border: `1px solid ${RULE}`, color: INK }}>
               <div className="flex justify-between"><span style={{ color: INK2 }}>Booking ID</span><b>{booking.bookingId}</b></div>
               {booking.hotelConfirmationCode && <div className="flex justify-between mt-1"><span style={{ color: INK2 }}>Hotel confirmation</span><b>{booking.hotelConfirmationCode}</b></div>}
