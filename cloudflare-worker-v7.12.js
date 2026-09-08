@@ -14474,7 +14474,11 @@ OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
     "ideal": 4,
     "why": "..."
   },
-  "knownFor": ["snorkeling", "ATV dunes", "street food"]
+  "knownFor": ["snorkeling", "ATV dunes", "street food"],
+  "stayAreas": [
+    { "name": "Makati", "why": "Business district; walkable malls and restaurants, most hotel choice" },
+    { "name": "Bonifacio Global City", "why": "Newer, planned, quiet at night; good for families" }
+  ]
 }
 
 FIELD RULES:
@@ -14484,6 +14488,7 @@ FIELD RULES:
 - daysNeeded.min: integer — minimum days that make the trip worth it. daysNeeded.ideal: integer >= min — a comfortable trip length. Constraint: 1 <= min <= ideal <= 21.
 - daysNeeded.why: <= 120 chars — account for rest after flights + seeing the top 3-6 sights.
 - knownFor: 3 to 6 SHORT activity strings travelers actually come for (like "snorkeling", "ATV dunes", "street food"), each <= 40 chars, lowercase unless a proper noun.
+- stayAreas: 3 to 5 neighbourhoods / districts / towns where travelers ACTUALLY stay at this destination, best-known first. name <= 40 chars (the real place name, as a hotel search would use it); why <= 90 chars — character, who it suits, what is walkable or how central it is. Only areas you are confident exist and are used for lodging. NO prices, costs, "cheap", "budget", or "free". If unsure of 3, return an empty list [].
 
 Return JSON only.`;
 }
@@ -14527,12 +14532,24 @@ function validateDestIntel(raw) {
     if (!Array.isArray(kf)) return null;
     const knownFor = kf.map((s) => str(s, 40)).filter(Boolean).slice(0, 6);
     if (knownFor.length < 3) return null;
-    return { about, bestTime: { months, why: btWhy }, daysNeeded: { min, ideal, why: dnWhy }, knownFor };
+    // stayAreas (optional): {name <= 40, why <= 90} clipped via str(), MONEY-
+    // guarded, deduped by name, at most 5. Fewer than 3 survivors OMITS the
+    // field — never the whole intel — so a thin list can't sink best-time.
+    const seenArea = new Set();
+    const stayAreas = (Array.isArray(raw.stayAreas) ? raw.stayAreas : []).map((a) => {
+      const name = str(a && a.name, 40), why = str(a && a.why, 90);
+      if (!name || !why || MONEY.test(name) || MONEY.test(why)) return null;
+      const k = name.toLowerCase();
+      if (seenArea.has(k)) return null;
+      seenArea.add(k);
+      return { name, why };
+    }).filter(Boolean).slice(0, 5);
+    return { about, bestTime: { months, why: btWhy }, daysNeeded: { min, ideal, why: dnWhy }, knownFor, ...(stayAreas.length >= 3 ? { stayAreas } : {}) };
   } catch { return null; }
 }
 
 // Shared core — the standalone route AND /package/draft's inline intel both
-// land here, so they share one KV cache ('destintel:v2:<slug>'). Only
+// land here, so they share one KV cache ('destintel:v3:<slug>'). Only
 // available:true results are cached: a transient model failure must not pin
 // { available: false } for 90 days.
 async function destinationIntel(env, ctx, { name, country, lat, lng, debug }) {
@@ -14542,7 +14559,7 @@ async function destinationIntel(env, ctx, { name, country, lat, lng, debug }) {
   const fail = (stage) => (debug ? { ...unavailable, stage } : unavailable);
   const slug = destIntelSlug(name, country);
   if (!slug || !env.ANTHROPIC_API_KEY) return unavailable;
-  const ck = `destintel:v2:${slug}`;  // v2: schema grew an `about` intro — stale v1 rows lack it
+  const ck = `destintel:v3:${slug}`;  // v3: schema grew `stayAreas` (v2 rows lack it; v2 grew `about`)
   const cached = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null) : null;
   if (cached && cached.available === true) return { ...cached, _cache: 'hit' };
   const coords = (Number.isFinite(lat) && Number.isFinite(lng)) ? `\nAPPROXIMATE COORDINATES: ${lat.toFixed(3)}, ${lng.toFixed(3)}` : '';
@@ -14562,7 +14579,7 @@ async function destinationIntel(env, ctx, { name, country, lat, lng, debug }) {
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 900,    // headroom for the added ~600-char `about` intro
+          max_tokens: 1200,   // headroom for the ~600-char `about` intro + up to 5 stayAreas
           temperature: 0.2,   // planning facts, not prose — keep it near-deterministic
           system: buildDestinationIntelSystemPrompt(),
           messages: [{ role: 'user', content: userContent }]
@@ -14684,16 +14701,340 @@ function attractionTourHint(attractions, tours) {
   });
 }
 
+// ── Smart Packages: quality bar + hotel content normalisers ─────────────────
+// The composer's hotel ladder is a QUALITY ladder — supplier-side star class +
+// guest-score floors on the same /hotels/nuitee/search call — never a facility
+// ladder. LiteAPI facility filters are OR-semantic and return a DIFFERENT,
+// cheaper page of hotels (verified live 2026-09-08, Makati: the facility page
+// led with a $178 3-star while the unfiltered page held Peninsula / Conrad /
+// Seda 9.2 / Lanson Place 9.8), so they never proved A/C or breakfast per
+// hotel AND they pushed the city's best hotels out of the pool. The first
+// pass with >= 2 priced hotels wins; pass 3 is the unfiltered city page and
+// its roles say so ('best_available', not 'best_value').
+const PACKAGE_QUALITY_LADDER = [
+  { pass: 1, minStars: 4, minRating: 8.5 },
+  { pass: 2, minStars: 3, minRating: 8.0 },
+  { pass: 3, minStars: 0, minRating: 0 },
+];
+
+// Two honest choices from ONE pool. reviewScore 0/null = unknown (LiteAPI
+// sends 0 for unrated hotels — Solaire, Grand Hyatt live). topPick = highest
+// known score, ties → more stars, then lower price. bestValue = lowest price
+// among the OTHER hotels whose known score clears the pass floor, else the
+// lowest price among the others. Value choice FIRST = the pre-decided default
+// (Smart Packages two-choice rule). Returns [] for an empty pool, one entry
+// when the pool holds a single priced hotel.
+function packageHotelTwoChoice(hotels, bar) {
+  const pool = (Array.isArray(hotels) ? hotels : []).filter((h) => h && typeof h.price === 'number' && Number.isFinite(h.price) && h.price > 0);
+  if (!pool.length) return [];
+  const score = (h) => (typeof h.reviewScore === 'number' && Number.isFinite(h.reviewScore) && h.reviewScore > 0) ? h.reviewScore : null;
+  const stars = (h) => (typeof h.stars === 'number' && Number.isFinite(h.stars)) ? h.stars : 0;
+  // Identity for "the other hotels": supplier id, else name+price so an id-less
+  // pool can never collapse two hotels into one.
+  const key = (h) => String(h.hotelId ?? h.id ?? `${h.name || ''}|${h.price}`);
+  const byQuality = (a, b) => {
+    const sa = score(a) ?? -1, sb = score(b) ?? -1;
+    if (sa !== sb) return sb - sa;
+    if (stars(a) !== stars(b)) return stars(b) - stars(a);
+    return a.price - b.price;
+  };
+  const topPick = [...pool].sort(byQuality)[0];
+  const others = pool.filter((h) => key(h) !== key(topPick));
+  const floor = (bar && Number.isFinite(bar.minRating)) ? bar.minRating : 0;
+  const cleared = others.filter((h) => score(h) != null && score(h) >= floor);
+  const bestValue = (cleared.length ? cleared : others).sort((a, b) => a.price - b.price)[0] || null;
+  const valueRole = (bar && bar.pass < 3) ? 'best_value' : 'best_available';
+  // When the top-rated hotel is also the cheapest (or no dearer than the
+  // value candidate) it dominates on both axes: it takes the value slot, and
+  // the second slot goes to the next-best-rated other hotel as an honest
+  // RUNNER-UP — never a pricier, lower-rated hotel wearing the value label.
+  if (bestValue && topPick.price <= bestValue.price) {
+    const runner = [...others].sort(byQuality)[0] || null;
+    const out = [{ hotel: topPick, role: valueRole }];
+    if (runner) out.push({ hotel: runner, role: 'runner_up' });
+    return out;
+  }
+  const out = [];
+  if (bestValue) out.push({ hotel: bestValue, role: valueRole });
+  out.push({ hotel: topPick, role: bestValue ? 'top_pick' : valueRole });
+  return out;
+}
+
+// Bed-type normaliser: supplier strings ('Extra-large double bed (Super-king
+// size)', 'Twin bed') → the labels the bed chooser shows. Unknown types keep
+// their supplier wording (minus a trailing 'bed') — never a guess.
+function packageBedType(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  const t = s.toLowerCase();
+  if (/super[- ]?king|extra[- ]?large/.test(t)) return 'Super king';
+  if (/\bking\b/.test(t)) return 'King';
+  if (/\bqueen\b/.test(t)) return 'Queen';
+  if (/\bsofa\b|\bcouch\b/.test(t)) return 'Sofa bed';
+  if (/\bbunk\b/.test(t)) return 'Bunk bed';
+  if (/\bdouble\b|\bfull\b/.test(t)) return 'Double';
+  if (/\btwin\b/.test(t)) return 'Twin';
+  if (/\bsingle\b/.test(t)) return 'Single';
+  const kept = s.replace(/\s*\bbeds?\b\s*$/i, '').trim().slice(0, 24);
+  return kept ? kept[0].toUpperCase() + kept.slice(1) : null;
+}
+// bedTypes[] → [{ qty, type, size }] (supplier quantity; a missing quantity
+// counts as 1, a zero is dropped).
+function packageBeds(bedTypes) {
+  return (Array.isArray(bedTypes) ? bedTypes : []).map((b) => {
+    const type = packageBedType(b && (b.bedType ?? b.type ?? b.name));
+    if (!type) return null;
+    const q = b.quantity == null ? 1 : Number(b.quantity);
+    if (!Number.isFinite(q) || q <= 0) return null;
+    const size = b.bedSize ? String(b.bedSize).trim().slice(0, 40) : '';
+    return { qty: Math.round(q), type, size: size || null };
+  }).filter(Boolean);
+}
+// '1 King', '2 Queens', '1 Super king + 1 Sofa bed' — real beds first, sofa
+// beds after, in supplier order. Empty → null.
+const PACKAGE_BED_PLURAL = { 'Sofa bed': 'Sofa beds', 'Bunk bed': 'Bunk beds' };
+function packageBedLabel(beds) {
+  const list = Array.isArray(beds) ? beds : [];
+  if (!list.length) return null;
+  const isSofa = (b) => b.type === 'Sofa bed';
+  const part = (b) => `${b.qty} ${b.qty === 1 ? b.type : (PACKAGE_BED_PLURAL[b.type] || `${b.type}s`)}`;
+  return [...list.filter((b) => !isSofa(b)), ...list.filter(isSofa)].map(part).join(' + ');
+}
+
+// Canonical amenity tags from supplier facility STRINGS only (hotelFacilities[]
+// strings or facilities[].name). One regex per tag over the lowercased name;
+// 'no / not / without' phrasings are skipped. Breakfast is deliberately NOT a
+// hotel tag — it is per-rate board (see packageRateBoard), never a hotel-level
+// promise.
+const PACKAGE_FACILITY_TAGS = [
+  ['ac', /\bair[- ]?condition(ing|ed)\b/],
+  ['pool', /\b(swimming|outdoor|indoor|rooftop|infinity|heated|plunge|private) pool\b|\bpool with (a )?view\b/],
+  // 'Free WiFi' is its own fact; plain 'WiFi available' says nothing about
+  // price, so it is a different tag with a different label.
+  ['free_wifi', /\bfree wi-?fi\b|\bcomplimentary wi-?fi\b/],
+  ['wifi', /\bwi-?fi\b|\bwireless internet\b/],
+  ['gym', /\bfitness (center|centre|facilities|room|club)\b|\bgym\b/],
+  ['spa', /\bspa\b(?![- ]?(bath|tub))/],
+  ['restaurant', /\brestaurant\b/],
+  ['bar', /\bbar\b/],
+  ['airport_shuttle', /\bairport (shuttle|transfer|pick[- ]?up|drop[- ]?off)\b/],
+  ['parking', /\bparking\b/],
+  ['room_service', /\broom service\b/],
+  ['family_rooms', /\bfamily rooms?\b/],
+  ['pets', /\bpets? allowed\b|\bpet[- ]friendly\b/],
+];
+// Room-level tags from roomAmenities[].name (the founder's ask: fridge,
+// microwave, kitchenette, A/C … per room, not per hotel).
+const PACKAGE_ROOM_TAGS = [
+  ['fridge', /\b(mini[- ]?fridge|refrigerator|fridge)\b/],
+  ['microwave', /\bmicrowave\b/],
+  ['kitchenette', /\bkitchen(ette)?\b/],
+  ['ac', /\bair[- ]?condition(ing|ed)\b/],
+  ['tv', /\btv\b|\btelevision\b/],
+  ['safe', /\bsafety deposit box\b|\bsafe\b/],
+  ['coffee', /\bcoffee\b|\btea maker\b|\bkettle\b/],
+  ['minibar', /\bmini[- ]?bar\b/],
+  ['bath', /\bbath(tub)?\b(?! or shower)/],
+  ['shower', /(?<!\bor )\bshower\b(?! cap)/],   // 'Bath or shower' claims neither
+  ['balcony', /\bbalcony\b/],
+  ['washer', /\bwash(ing|er)\b/],
+];
+// A facility phrased with a limit or a charge is not a benefit we may claim:
+// 'Air conditioning in public areas only', 'Refrigerator (on request)',
+// 'WiFi (additional charge)' all skip tagging entirely.
+const PACKAGE_TAG_NEGATIVE = /\b(no|not|without)\b|\bpublic areas\b|\bnot in all rooms\b|\bon request\b|\badditional charge\b|\bextra charge\b|\bsurcharge\b|\bchargeable\b/;
+function packageTags(rules, names, cap) {
+  const out = [];
+  for (const raw of Array.isArray(names) ? names : []) {
+    const name = String((raw && typeof raw === 'object') ? (raw.name ?? raw.facility ?? '') : (raw ?? '')).toLowerCase().trim();
+    if (!name || PACKAGE_TAG_NEGATIVE.test(name)) continue;
+    for (const [tag, re] of rules) if (!out.includes(tag) && re.test(name)) out.push(tag);
+    if (out.length >= cap) break;
+  }
+  return out.slice(0, cap);
+}
+
+// Board → breakfast fact + honest label, from the rate's OWN board field only.
+// Codes (RO/BI/HB/FB/AI) or the supplier's boardName ('Breakfast Included',
+// 'Half Board'). Room-only or a 'breakfast not included' phrasing → false/null.
+function packageRateBoard(rate) {
+  const code = String(rate?.boardType || rate?.board || '').trim().toUpperCase();
+  const t = `${rate?.boardType || ''} ${rate?.board || ''}`.toLowerCase();
+  if (/\b(no|not|without|excluded?)\b/.test(t)) return { breakfast: false, boardLabel: null };
+  if (code === 'AI' || /all[- ]?inclusive/.test(t)) return { breakfast: true, boardLabel: 'All inclusive' };
+  if (code === 'FB' || /full[- ]?board|all meals/.test(t)) return { breakfast: true, boardLabel: 'All meals' };
+  if (code === 'HB' || /half[- ]?board/.test(t)) return { breakfast: true, boardLabel: 'Half board' };   // breakfast + one main meal — which one is the hotel's call
+  if (code === 'BI' || /breakfast/.test(t)) return { breakfast: true, boardLabel: 'Breakfast included' };
+  return { breakfast: false, boardLabel: null };
+}
+
+// /data/hotel normalisers. Placeholder room photos ('room-placeh' urls) are
+// dropped; galleries are deduped by url; description is the supplier's HTML
+// stripped, whitespace-collapsed and clipped at a word boundary.
+const PACKAGE_PLACEHOLDER_PHOTO = /room-placeh/i;
+const packagePhoto = (url, hd) => ({ url, hd: hd || url });
+const packageIsTrue = (v) => v === true || /^true$/i.test(String(v ?? ''));
+function packageStripHtml(html, cap) {
+  const text = String(html || '')
+    .replace(/<br\s*\/?>|<\/(p|div|li|h[1-6])>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ').trim();
+  if (!text) return null;
+  if (text.length <= cap) return text;
+  const cut = text.slice(0, cap);
+  const sp = cut.lastIndexOf(' ');
+  return (sp > cap * 0.6 ? cut.slice(0, sp) : cut).replace(/[,;:\s]+$/, '');
+}
+function packageHotelPhotos(images, cap) {
+  const list = (Array.isArray(images) ? images : []).filter((i) => i && typeof i.url === 'string' && i.url && !PACKAGE_PLACEHOLDER_PHOTO.test(i.url));
+  const seen = new Set(), out = [];
+  for (const img of [...list.filter((i) => packageIsTrue(i.defaultImage)), ...list.filter((i) => !packageIsTrue(i.defaultImage))]) {
+    if (seen.has(img.url)) continue;
+    seen.add(img.url);
+    out.push(packagePhoto(img.url, img.urlHd || img.hd_url || null));
+    if (out.length >= cap) break;
+  }
+  return out;
+}
+function packageRoom(r) {
+  const beds = packageBeds(r.bedTypes);
+  const size = Number(r.roomSizeSquare);
+  const unit = String(r.roomSizeUnit || '').toLowerCase();
+  const sizeSqm = Number.isFinite(size) && size > 0 ? Math.round(/f(oo|ee)?t/.test(unit) ? size * 0.0929 : size) : null;
+  const raw = (Array.isArray(r.photos) ? r.photos : []).filter((p) => p && typeof p.url === 'string' && p.url && !PACKAGE_PLACEHOLDER_PHOTO.test(p.url));
+  const seen = new Set(), photos = [];
+  for (const p of [...raw.filter((p) => packageIsTrue(p.mainPhoto)), ...raw.filter((p) => !packageIsTrue(p.mainPhoto))]) {
+    if (seen.has(p.url)) continue;
+    seen.add(p.url);
+    photos.push(packagePhoto(p.url, p.hd_url || p.hdUrl || null));
+    if (photos.length >= 6) break;
+  }
+  const name = String(r.roomName || r.name || '').trim().slice(0, 120) || null;
+  const sleeps = Number(r.maxOccupancy);
+  return {
+    id: r.id ?? null, name, bedLabel: packageBedLabel(beds), beds,
+    sleeps: Number.isFinite(sleeps) && sleeps > 0 ? Math.round(sleeps) : null,
+    sizeSqm, photos,
+    amenities: packageTags(PACKAGE_ROOM_TAGS, r.roomAmenities, 8),
+    isSuite: /suite/i.test(name || ''),
+  };
+}
+
+// Merge /data/hotel static content into ONE choice — every field additive. A
+// null detail leaves the choice unenriched (enriched:false, no photos/rooms
+// keys) and the frontend self-hides. Rates ALWAYS get breakfast/boardLabel
+// (from their own board field) and room:null unless their mappedRoomId equals
+// a rooms[].id under a loose string compare — the link is never assumed.
+function packageHotelEnrich(choice, detail) {
+  const d = (detail && typeof detail === 'object' && !Array.isArray(detail)) ? detail : null;
+  const roomList = d && Array.isArray(d.rooms) ? d.rooms.filter((r) => r && typeof r === 'object').map(packageRoom) : [];
+  const byId = new Map(roomList.filter((r) => r.id != null).map((r) => [String(r.id), r]));
+  const rates = (Array.isArray(choice.rates) ? choice.rates : []).map((rt) => {
+    const room = (rt && rt.mappedRoomId != null) ? (byId.get(String(rt.mappedRoomId)) || null) : null;
+    return {
+      ...rt, ...packageRateBoard(rt),
+      room: room ? { id: room.id, bedLabel: room.bedLabel, sizeSqm: room.sizeSqm, photo: room.photos[0]?.url || null, isSuite: room.isSuite } : null,
+    };
+  });
+  const out = { ...choice, ...packageRateBoard(choice), rates, enriched: !!d };
+  if (!d) return out;
+  // Rooms a rate links to ship first (so the room picker always finds them),
+  // then supplier order, capped at 12.
+  const linked = rates.map((rt) => rt.room && byId.get(String(rt.room.id))).filter(Boolean);
+  const rooms = [...new Set([...linked, ...roomList])].slice(0, 12);
+  const cnt = Number(d.reviewCount), rating = Number(d.rating), starRating = Number(d.starRating);
+  const times = (d.checkinCheckoutTimes && typeof d.checkinCheckoutTimes === 'object') ? d.checkinCheckoutTimes : {};
+  const clock = (v) => { const s = String(v ?? '').trim(); return s ? s.slice(0, 20) : null; };
+  const chain = String(d.chain || '').trim();
+  return {
+    ...out,
+    reviewCount: (Number.isFinite(cnt) && cnt > 0) ? Math.round(cnt) : (out.reviewCount ?? null),
+    reviewScore: (typeof out.reviewScore === 'number' && out.reviewScore > 0) ? out.reviewScore : ((Number.isFinite(rating) && rating > 0) ? rating : (out.reviewScore ?? null)),
+    stars: (typeof out.stars === 'number' && out.stars > 0) ? out.stars : ((Number.isFinite(starRating) && starRating > 0) ? starRating : (out.stars ?? null)),
+    photos: packageHotelPhotos(d.hotelImages, 24),
+    description: packageStripHtml(d.hotelDescription, 380),
+    checkinTime: clock(times.checkin_start), checkoutTime: clock(times.checkout),
+    amenities: packageTags(PACKAGE_FACILITY_TAGS, [...(Array.isArray(d.hotelFacilities) ? d.hotelFacilities : []), ...(Array.isArray(d.facilities) ? d.facilities : [])], 12),
+    rooms,
+    ...(chain && !/not available/i.test(chain) ? { chain: chain.slice(0, 60) } : {}),
+  };
+}
+
+// ── Smart Packages: stay-area geocode ────────────────────────────────────────
+// "Which part of the city?" — ONE Google places:searchText (same request shape
+// as /search-location, biased to a 25 km circle around the destination point),
+// KV-cached 180 days per destination+area (a district does not move); a
+// confirmed miss is cached 1 day as { miss:true } so a typo can't re-bill.
+// Keeps the first result within STAY_AREA_MAX_MI of the destination. Returns
+// { name, lat, lng } or null — the composer then reports stayAreaDropped
+// instead of guessing a point.
+const STAY_AREA_MAX_MI = 20;
+async function geocodeStayArea(env, ctx, { area, destName, country, lat, lng }) {
+  const a = String(area || '').trim().slice(0, 60);
+  const dest = String(destName || '').trim().slice(0, 120);
+  if (!a || !env.GOOGLE_API_KEY || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  // Keyed on the destination's coordinates too: 'Cartagena' + 'Old Town' is
+  // one slug for Colombia and Spain, and a cached point from the wrong city
+  // would price the wrong city's hotels. The read also re-checks distance.
+  const ck = `stayarea:v1:${destIntelSlug(dest, '') || 'x'}:${lat.toFixed(1)},${lng.toFixed(1)}:${destIntelSlug(a, '') || 'x'}`;
+  const kv = env.GLOBESKIMMERS_KV;
+  const cached = kv ? await kv.get(ck, { type: 'json' }).catch(() => null) : null;
+  if (cached && typeof cached === 'object') {
+    if (cached.miss) return null;
+    if (Number.isFinite(cached.lat) && Number.isFinite(cached.lng) && haversineMilesLoc(lat, lng, cached.lat, cached.lng) <= STAY_AREA_MAX_MI) return cached;
+  }
+  let found = null, answered = false;
+  try {
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': 'places.displayName,places.location,places.types' },
+      body: JSON.stringify({
+        textQuery: `${a}, ${dest}${country ? `, ${String(country).trim().slice(0, 80)}` : ''}`,
+        locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: 25000 } },
+        maxResultCount: 5,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data && !data.error) {
+        answered = true;
+        for (const p of Array.isArray(data.places) ? data.places : []) {
+          const pl = p && p.location;
+          if (!pl || !Number.isFinite(pl.latitude) || !Number.isFinite(pl.longitude)) continue;
+          if ((p.types || []).includes('country')) continue;
+          if (haversineMilesLoc(lat, lng, pl.latitude, pl.longitude) > STAY_AREA_MAX_MI) continue;
+          found = { name: String(p.displayName?.text || a).trim().slice(0, 60) || a, lat: pl.latitude, lng: pl.longitude };
+          break;
+        }
+      }
+    }
+  } catch { found = null; }
+  // Only a real answer is cached — a transient Google failure must not pin a
+  // miss for a day.
+  if (kv && (found || answered)) {
+    const put = kv.put(ck, JSON.stringify(found || { miss: true }), { expirationTtl: found ? 180 * 24 * 3600 : 24 * 3600 }).catch(() => {});
+    if (ctx && ctx.waitUntil) ctx.waitUntil(put); else await put;
+  }
+  return found;
+}
+
 // ── Smart Packages: draft composer (foundation) ──────────────────────────────
 // POST /package/draft — compose a PRICED, sandbox-safe package draft from live
 // components and persist it in package_orders. NO payment anywhere: booking
-// stays per-component. Hotels come back as TWO honest choices (cheapest +
-// best-reviewed within 1.6× the cheapest total); tours and the event are
-// OPTIONS with their own prices — the per-choice totals carry the stay only,
-// so nothing the user didn't pick is ever rolled into a number.
-// Wave A additions (all additive): multi-room + child-age occupancies, the
-// A/C-always + breakfast-preferred hotel ladder with honest degrade notes,
+// stays per-component. Hotels come back as TWO honest choices from ONE
+// quality-barred pool (value pick first, top pick second — see
+// packageHotelTwoChoice); tours and the event are OPTIONS with their own
+// prices — the per-choice totals carry the stay only, so nothing the user
+// didn't pick is ever rolled into a number.
+// Wave A additions (all additive): multi-room + child-age occupancies,
 // owned-D1 "what you'll see" attractions, and inline destination intel.
+// Quality-bar wave (all additive): the star/score ladder replaces the facility
+// ladder, each choice is enriched from /data/hotel (photos, rooms, beds,
+// amenities, description, check-in times), rates link to rooms and carry
+// breakfast facts, and an optional body.stayArea re-centres the hotel search
+// on a geocoded district (draft.stayArea) or is dropped out loud
+// (draft.stayAreaDropped).
 async function handlePackageDraft(request, env, ctx) {
   try {
     const b = await request.json().catch(() => ({}));
@@ -14723,6 +15064,10 @@ async function handlePackageDraft(request, env, ctx) {
     const rooms = Math.min(Math.max(parseInt(b.rooms, 10) || 1, 1), Math.min(Math.max(adults, 1), 4));
     const destName = String(b.destName || '').trim().slice(0, 120);
     const interestQuery = String(b.interestQuery || '').trim().slice(0, 80);
+    // Stay area (additive): "which part of the city?" — free text, geocoded
+    // below; country only sharpens the geocode query, never the intel key.
+    const stayArea = String(b.stayArea || '').trim().slice(0, 60);
+    const country = String(b.country || '').trim().slice(0, 80);
     // Wave B: persist:false → dry-run (the /package/estimate tease). Same
     // fully-priced draft — hotels, tours, event, attractions, intel — but no
     // package_orders row and sid:null. Anything except an explicit false
@@ -14736,27 +15081,55 @@ async function handlePackageDraft(request, env, ctx) {
     const post = (path, payload) => new Request(`${origin}${path}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
-    // A/C DOCTRINE + breakfast preference — an honest-degrade ladder through
-    // the existing Wave-5 facility machinery: (1) A/C + breakfast, (2) A/C
-    // only, (3) unfiltered. The first pass with >= 2 hotels wins (the
-    // two-choice UI needs two); what got dropped is said out loud via
-    // acNote/breakfastNote below, mirroring filtersDropped style. Each pass
-    // is the same 20-min-KV-cached Nuitée call — no Google, $0.
-    const searchHotels = (facilities) => handleNuiteeSearch(post('/hotels/nuitee/search', {
-      latitude: lat, longitude: lng, checkin, checkout, adults, children,
+    // QUALITY ladder (PACKAGE_QUALITY_LADDER): (1) 4★+ & 8.5+, (2) 3★+ & 8.0+,
+    // (3) unfiltered — supplier-side star/score floors on the SAME 20-min-KV-
+    // cached Nuitée call, so every pass draws from the city's better hotels
+    // instead of the facility-filtered cheap page. The first pass with >= 2
+    // priced hotels wins (the two-choice UI needs two). A pass whose quality
+    // params the supplier rejected (filtersDropped) is the unfiltered page and
+    // is labelled pass 3 — never relabelled as a quality pass. No Google, $0.
+    const searchHotels = (opts = {}) => handleNuiteeSearch(post('/hotels/nuitee/search', {
+      latitude: opts.latitude ?? lat, longitude: opts.longitude ?? lng, checkin, checkout, adults, children,
       ...(childrenAges.length ? { childrenAges } : {}), ...(rooms > 1 ? { rooms } : {}),
-      ...(facilities.length ? { facilities } : {}),
+      ...(opts.radiusKm ? { radiusKm: opts.radiusKm } : {}),
+      ...(opts.minStars ? { minStars: opts.minStars } : {}),
+      ...(opts.minRating ? { minRating: opts.minRating } : {}),
     }), env, ctx).then((r) => r.json()).catch(() => null);
-    const hotelLadder = async () => {
-      let out = null;
-      for (const facilities of [['air conditioning', 'breakfast'], ['air conditioning'], []]) {
-        out = await searchHotels(facilities);
-        if (Array.isArray(out?.hotels) && out.hotels.length >= 2) break;
+    const pricedCount = (out) => (Array.isArray(out?.hotels) ? out.hotels : []).filter((h) => h && typeof h.price === 'number' && h.price > 0).length;
+    const qualityLadder = async (geo = {}) => {
+      const unfiltered = PACKAGE_QUALITY_LADDER[PACKAGE_QUALITY_LADDER.length - 1];
+      let out = null, bar = unfiltered, keep = null;
+      for (const step of PACKAGE_QUALITY_LADDER) {
+        out = await searchHotels({ ...geo, minStars: step.minStars, minRating: step.minRating });
+        bar = step;
+        const applied = Array.isArray(out?.filtersApplied) ? out.filtersApplied : [];
+        // Only a page WITH hotels can prove the filters were dropped; an empty
+        // or errored pass says nothing and the ladder simply moves on.
+        const served = Array.isArray(out?.hotels) && out.hotels.length > 0;
+        const held = step.pass === unfiltered.pass || !served || (applied.includes(`stars:${step.minStars}+`) && applied.includes(`rating:${step.minRating}+`));
+        if (!held) { bar = unfiltered; break; }   // supplier served the unfiltered page — later passes would too
+        if (pricedCount(out) >= 2) break;
+        if (pricedCount(out) >= 1 && !keep) keep = { data: out, bar: step };
       }
-      return out;
+      // Pass 3 came back empty/errored but an earlier pass had one priced hotel: serve that, honestly labelled.
+      return (pricedCount(out) < 1 && keep) ? keep : { data: out, bar };
     };
-    const [hotelData, tourData, eventData, attractionsRaw, intel] = await Promise.all([
-      hotelLadder(),
+    // Stay area (optional): re-centre the hotel search on the geocoded district
+    // — one 4 km ring, then the whole destination. (A 3-then-6 ring pair
+    // serialised up to nine supplier calls on a cold cache and brushed the
+    // client's 25 s timeout.) Geocode first (one KV-cached Google call)
+    // because the ladder needs its point.
+    const STAY_AREA_RADIUS_KM = 4;
+    const areaHit = stayArea ? await geocodeStayArea(env, ctx, { area: stayArea, destName, country, lat, lng }) : null;
+    const hotelPlan = async () => {
+      if (areaHit) {
+        const r = await qualityLadder({ latitude: areaHit.lat, longitude: areaHit.lng, radiusKm: STAY_AREA_RADIUS_KM });
+        if (pricedCount(r.data) >= 2) return { ...r, radiusKm: STAY_AREA_RADIUS_KM };
+      }
+      return { ...(await qualityLadder()), radiusKm: null };
+    };
+    const [hotelPlanOut, tourData, eventData, attractionsRaw, intel] = await Promise.all([
+      hotelPlan(),
       interestQuery
         ? handleViatorProducts(post('/viator/products', { name: interestQuery, lat, lng, city: destName, count: 5 }), env)
             .then((r) => r.json()).catch(() => null)
@@ -14771,22 +15144,30 @@ async function handlePackageDraft(request, env, ctx) {
     ]);
 
     // HOTELS — the package's backbone. No hotels → no draft (honest, never fabricated).
+    const hotelData = hotelPlanOut.data;
     const hotels = Array.isArray(hotelData?.hotels) ? hotelData.hotels : [];
     if (!hotels.length) return jsonResponse({ ok: false, reason: 'no_hotels', detail: hotelData?.reason || null });
     const nights = hotelData.nights || nuiteeNights(checkin, checkout);
-    const cheapest = hotels[0]; // handleNuiteeSearch sorts cheapest-first
-    const cap = cheapest.price * 1.6;
-    let best = null;
-    for (const h of hotels) {
-      if (h.price > cap || typeof h.reviewScore !== 'number') continue;
-      if (!best || h.reviewScore > best.reviewScore) best = h;
-    }
-    const secondIsBest = !!(best && best.hotelId !== cheapest.hotelId);
-    const second = secondIsBest ? best : (hotels.find((h) => h.hotelId !== cheapest.hotelId) || null);
+    const bar = hotelPlanOut.bar || PACKAGE_QUALITY_LADDER[2];
+    const picks = packageHotelTwoChoice(hotels, bar);
+    if (!picks.length) return jsonResponse({ ok: false, reason: 'no_hotels', detail: 'unpriced' });
+    // ENRICH the <= 2 choices from /data/hotel (parallel; 14-day KV; $0). A
+    // null detail leaves that choice unenriched — nothing is invented for it.
+    const details = await Promise.all(picks.map((p) => nuiteeHotelDetails(env, ctx, p.hotel.hotelId).catch(() => null)));
     const toChoice = (h, role) => ({ role, ...h, stayTotal: h.price ?? Math.round(h.nightly * nights * 100) / 100 });   // h.price IS the bookable stay total; derive only if absent
-    const hotelChoices = [toChoice(cheapest, 'cheapest')];
-    if (second) hotelChoices.push(toChoice(second, secondIsBest ? 'best_reviewed' : 'second_cheapest'));
-    const currency = cheapest.currency || hotelData.currency || 'USD';
+    const hotelChoices = picks.map((p, i) => {
+      const c = packageHotelEnrich(toChoice(p.hotel, p.role), details[i]);
+      // Stay-area semantics: distance is 'from <area>', measured from the
+      // geocoded district point (even when the pool fell back to the whole
+      // destination — the label says what the number is).
+      if (areaHit && typeof c.lat === 'number' && typeof c.lng === 'number') {
+        c.distanceMiles = Math.round(haversineMilesLoc(areaHit.lat, areaHit.lng, c.lat, c.lng) * 10) / 10;
+        c.distanceFrom = areaHit.name;
+      }
+      return c;
+    });
+    const anchor = hotelChoices[0];   // the pre-decided default (best_value / best_available)
+    const currency = anchor.currency || hotelData.currency || 'USD';
 
     // TOURS — priced options only (top 2). Never auto-added to a total.
     const tours = (Array.isArray(tourData?.products) ? tourData.products : [])
@@ -14813,20 +15194,44 @@ async function handlePackageDraft(request, env, ctx) {
     // matches by name token; otherwise no free/ticketed claim at all.
     const attractions = attractionTourHint(attractionsRaw, tours);
 
-    // Honest filter notes — read from the WINNING pass's filtersApplied (the
-    // search itself may also have dropped a facility it couldn't resolve, so
-    // the response, not the request, is the truth).
+    // Honest notes PER CHOICE, from supplier facts only: A/C is confirmed by
+    // the hotel's facility list or the base rate's linked room amenities;
+    // breakfast by the base rate's own board. Anything else is said out loud,
+    // never assumed. Each choice carries its own notes (the card the traveler
+    // selects is the one the note must describe); the top-level acNote /
+    // breakfastNote stay = the first choice's for older clients.
     const filtersApplied = Array.isArray(hotelData.filtersApplied) ? hotelData.filtersApplied : [];
-    const acNote = filtersApplied.includes('air conditioning')
-      ? null : 'Air conditioning could not be confirmed for these hotels';
-    const breakfastNote = filtersApplied.includes('breakfast')
-      ? null : 'Breakfast could not be confirmed for these hotels';
+    const notesFor = (c) => {
+      const baseRoom = c.rates?.[0]?.room ? (c.rooms || []).find((r) => String(r.id) === String(c.rates[0].room.id)) : null;
+      const acConfirmed = (c.amenities || []).includes('ac') || !!(baseRoom && (baseRoom.amenities || []).includes('ac'));
+      return {
+        acNote: acConfirmed ? null
+          : (c.enriched ? 'Air conditioning is not listed among this hotel\'s facilities' : 'Air conditioning could not be confirmed for this hotel'),
+        breakfastNote: c.breakfast === true ? null
+          : ((c.rates || []).some((r) => r.breakfast)
+            ? 'Breakfast is not included in the base rate — a breakfast-included rate is available at this hotel'
+            : 'Breakfast is not included in the base rate'),
+      };
+    };
+    for (const c of hotelChoices) Object.assign(c, notesFor(c));
+    const { acNote, breakfastNote } = hotelChoices[0] ? notesFor(hotelChoices[0]) : { acNote: null, breakfastNote: null };
+    const stayAreas = (intel && Array.isArray(intel.stayAreas) && intel.stayAreas.length) ? intel.stayAreas : null;
 
     const draft = {
-      destName: destName || cheapest.city || '', checkin, checkout, nights,
+      destName: destName || anchor.city || '', checkin, checkout, nights,
       party: { adults, children, rooms, ...(childrenAges.length ? { childrenAges } : {}) },
       hotelChoices, tours, event, currency, env: nuiteeEnv(env),
       filtersApplied,
+      // Which rung of the quality ladder the pool came from + how big it was.
+      qualityBar: { pass: bar.pass, minStars: bar.minStars, minRating: bar.minRating, poolSize: pricedCount(hotelData) },
+      // Stay area: the geocoded district the search was re-centred on
+      // (radiusKm 4; null = the area held < 2 hotels and the pool is
+      // destination-wide, distances still measured from the area) — or the
+      // request's area text when it could not be geocoded.
+      ...(areaHit ? { stayArea: { name: areaHit.name, lat: areaHit.lat, lng: areaHit.lng, radiusKm: hotelPlanOut.radiusKm } } : {}),
+      ...(stayArea && !areaHit ? { stayAreaDropped: stayArea } : {}),
+      // Intel's stayAreas copied onto the draft for clients that read only the draft.
+      ...(stayAreas ? { stayAreas } : {}),
       ...(acNote ? { acNote } : {}),
       ...(breakfastNote ? { breakfastNote } : {}),
       attractions,
@@ -14839,7 +15244,7 @@ async function handlePackageDraft(request, env, ctx) {
     // capture already recorded these hotels, and a sid that was never stored
     // must not appear in price_history meta.
     const sid = persist ? crypto.randomUUID().replace(/-/g, '') : null;
-    const corridor = `${(destName || cheapest.city || '').toLowerCase()}|${(cheapest.country || '').toLowerCase()}`;
+    const corridor = `${(destName || anchor.city || '').toLowerCase()}|${(anchor.country || '').toLowerCase()}`;
     let persisted = false;
     if (persist && env.DB) {
       const now = Date.now();
@@ -14979,7 +15384,7 @@ async function handlePackageEstimate(request, env, ctx) {
       body: JSON.stringify({ destLat: lat, destLng: lng, checkin, checkout, adults: 2, destName: name, persist: false }),
     }), env, ctx).then((r) => r.json()).catch(() => null);
     const cheapest = draftRes && draftRes.ok && draftRes.draft && Array.isArray(draftRes.draft.hotelChoices)
-      ? draftRes.draft.hotelChoices[0] : null;   // composer sorts cheapest-first; [0] is role 'cheapest'
+      ? draftRes.draft.hotelChoices[0] : null;   // [0] is the composer's pre-decided default (role best_value / best_available) — a real bookable stay total
     const stayTotal = cheapest ? (cheapest.stayTotal ?? cheapest.price) : null;
     if (!cheapest || typeof stayTotal !== 'number' || !Number.isFinite(stayTotal) || stayTotal <= 0) {
       return jsonResponse({ ok: true, available: false, reason: (draftRes && draftRes.reason) || 'draft_failed' });
@@ -16569,7 +16974,8 @@ async function handleDealsList(request, env, ctx) {
   try {
     if (env.GLOBESKIMMERS_KV) {
       const cached = await env.GLOBESKIMMERS_KV.get(DEAL_LIST_CACHE_KEY, { type: 'json' }).catch(() => null);
-      if (cached) return jsonResponse(cached);
+      // A deal can expire inside the cache TTL — filter on the way out too.
+      if (cached) return jsonResponse({ ...cached, deals: (Array.isArray(cached.deals) ? cached.deals : []).filter((x) => !dealEndsPast(x && x.ends)) });
     }
     let deals = [];
     if (env.DB) {
