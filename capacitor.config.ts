@@ -16,10 +16,11 @@ const config: CapacitorConfig = {
     // canvas) so there's no jarring color shift when the React tree
     // mounts.
     //
-    // launchAutoHide=true means Capacitor dismisses the splash on its
-    // own after launchShowDuration; if we ever need to dismiss it
-    // manually (e.g. after auth handshake completes), flip this to
-    // false and call SplashScreen.hide() from React.
+    // launchAutoHide=false: the splash stays up until it is hidden
+    // explicitly — by Capgo once a cold-start OTA install has finished
+    // (CapacitorUpdater.autoSplashscreen below), and by src/main.jsx the
+    // moment React mounts, as a belt-and-braces so a splash can never
+    // outlive the app it covers.
     //
     // launchFadeOutDuration smooths the transition so the splash
     // doesn't disappear with a snap; subtle but noticeably more
@@ -30,7 +31,7 @@ const config: CapacitorConfig = {
     // FIT_CENTER leaves grey bars on tall devices.
     SplashScreen: {
       launchShowDuration: 2000,
-      launchAutoHide: true,
+      launchAutoHide: false,
       launchFadeOutDuration: 300,
       backgroundColor: '#0A1015',
       androidScaleType: 'CENTER_CROP',
@@ -65,8 +66,23 @@ const config: CapacitorConfig = {
     // this is how the updater knows which cloud app / channel to pull
     // bundles from. Pair with CapacitorUpdater.notifyAppReady() in
     // src/main.jsx or updates auto-roll-back on next launch.
+    //
+    // autoUpdate 'onLaunch': a COLD start checks Capgo, downloads any
+    // newer bundle and applies it right away behind the splash, so the
+    // first open after an upload already shows the new build. (The
+    // default 'atBackground' downloads on one open and applies on the
+    // next, which reads as "the update never arrives".) Foreground
+    // resumes keep the gentle behaviour — never a mid-session reload.
+    // autoSplashscreen hides the splash once the install is done or no
+    // update is pending; the timeout lets a slow cellular download fall
+    // back to installing on the next launch instead of holding the user.
+    // These are NATIVE settings: they ship in an Xcode / store build, not
+    // over the air.
     CapacitorUpdater: {
       appId: 'com.globeskimmers.app',
+      autoUpdate: 'onLaunch',
+      autoSplashscreen: true,
+      autoSplashscreenTimeout: 8000,
     },
   },
 };
