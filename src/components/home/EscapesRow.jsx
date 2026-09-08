@@ -23,6 +23,23 @@ const SCHEMA = { type: "object", properties: { day_trips: { type: "array", items
 const dayTripPrompt = (p) => `List the best day trips a traveler can take from ${p}: 3-6 trips, each with name, distance_or_time (e.g. "1.5h by train"), why it's worth it, how_to_get_there (short), and needs_car (boolean — true if realistically only doable with a car).${HONESTY(p)}`;
 
 const INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
+const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+
+// Mono travel tag ("TRAIN 1.5H" / "DRIVE 2H" / "BUS 45MIN") built ONLY from
+// fields the AI already returned: the mode word comes from distance_or_time's
+// own wording when it names one (train/bus/ferry/…), needs_car otherwise, and
+// the duration is echoed from that same string — never invented. Anything
+// unparseable falls back to the verbatim string after the mode word.
+function travelTag(t) {
+  const s = String(t.distance_or_time || "").trim();
+  const m = /\b(train|bus|ferry|boat|metro|tram)\b/i.exec(s);
+  const mode = m ? m[1].toUpperCase() : (t.needs_car ? "DRIVE" : "TRANSIT");
+  const h = /(\d+(?:[.,]\d+)?)\s*(?:h\b|hr|hour)/i.exec(s);
+  if (h) return `${mode} ${h[1].replace(",", ".")}H`;
+  const min = /(\d+)\s*min/i.exec(s);
+  if (min) return `${mode} ${min[1]}MIN`;
+  return s ? `${mode} · ${s.toUpperCase()}` : mode;
+}
 
 export default function EscapesRow({ onAction, wide = false }) {
   const { getActiveLocation } = useLocation();
@@ -85,9 +102,8 @@ export default function EscapesRow({ onAction, wide = false }) {
               className={`flex-none ${wide ? "w-[210px]" : "w-[186px]"} rounded-2xl overflow-hidden text-left`}
               style={{ background: "#fff", border: `1px solid ${EDGE}`, boxShadow: "0 8px 20px -16px rgba(22,17,13,.4)" }}
             >
-              <div className="px-3 pt-2.5 pb-1 flex items-center gap-1.5" style={{ background: "linear-gradient(135deg,#E9F5F1,#D6ECE5)" }}>
-                <span style={{ fontSize: 15 }}>{t.needs_car ? "🚗" : "🚆"}</span>
-                <span className="text-[calc(11px*var(--fs))] font-semibold truncate" style={{ color: "#15645A" }}>{t.distance_or_time || (t.needs_car ? "Drive" : "Transit")}</span>
+              <div className="px-3 pt-2.5 pb-1.5" style={{ background: "linear-gradient(135deg,#E9F5F1,#D6ECE5)" }}>
+                <span className="block truncate uppercase tracking-[0.08em] text-[calc(10px*var(--fs))] font-semibold" style={{ fontFamily: MONO, color: "#15645A" }}>{travelTag(t)}</span>
               </div>
               <div className="p-3">
                 <div className="font-serif leading-[1.12] text-[calc(16px*var(--fs))]" style={{ color: INK, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{t.name}</div>

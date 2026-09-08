@@ -8,17 +8,19 @@ import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 
 const INK = "#16302B", SUB = "#71827D", EDGE = "#E6DFD0";
+const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
-function itemEmoji(cat, partner) {
+// Mono text chip per booking kind (Passport Standard — no emoji).
+function itemLabel(cat, partner) {
   const c = (cat || "").toLowerCase(), p = (partner || "").toLowerCase();
-  if (/hotel|stay/.test(c) || ["stay22", "booking", "agoda"].includes(p)) return "🏨";
-  if (/event|concert|ticket|show|theatre|theater|game|sport/.test(c) || ["ticketmaster", "vividseats", "fever", "stubhub"].includes(p)) return "🎫";
-  if (/car|rental/.test(c) || p === "discovercars") return "🚗";
-  if (/transfer|ride|pickup|shuttle/.test(c) || ["welcomepickups", "kiwitaxi"].includes(p)) return "🚕";
-  if (/esim|sim|data|internet/.test(c) || p === "airalo") return "📶";
-  if (/storage|luggage|bag/.test(c) || p === "radicalstorage") return "🧳";
-  if (/shop/.test(c)) return "🛍️";
-  return "🎟️";
+  if (/hotel|stay/.test(c) || ["stay22", "booking", "agoda"].includes(p)) return "HOTEL";
+  if (/event|concert|ticket|show|theatre|theater|game|sport/.test(c) || ["ticketmaster", "vividseats", "fever", "stubhub"].includes(p)) return "EVENT";
+  if (/car|rental/.test(c) || p === "discovercars") return "CAR";
+  if (/transfer|ride|pickup|shuttle/.test(c) || ["welcomepickups", "kiwitaxi"].includes(p)) return "RIDE";
+  if (/esim|sim|data|internet/.test(c) || p === "airalo") return "ESIM";
+  if (/storage|luggage|bag/.test(c) || p === "radicalstorage") return "BAGS";
+  if (/shop/.test(c)) return "SHOP";
+  return "TOUR";
 }
 
 export default function MyTripCard({ wide = false }) {
@@ -42,7 +44,9 @@ export default function MyTripCard({ wide = false }) {
   if (!items.length) return null;
 
   const n = items.length;
-  const chips = Array.from(new Set(items.slice(0, 10).map((it) => itemEmoji(it.category, it.partner)))).slice(0, 5);
+  // Text chips are wider than the old emoji were — cap at 3 so the serif title
+  // keeps its room on a narrow phone.
+  const chips = Array.from(new Set(items.slice(0, 10).map((it) => itemLabel(it.category, it.partner)))).slice(0, 3);
 
   return (
     <div className={wide ? "pb-3" : "px-4 pb-3"}>
@@ -52,15 +56,23 @@ export default function MyTripCard({ wide = false }) {
           className="w-full text-left rounded-2xl p-3.5 bg-white flex items-center gap-3 transition-colors hover:bg-black/[0.02]"
           style={{ border: `1px solid ${EDGE}`, boxShadow: "0 8px 20px -16px rgba(22,17,13,.4)" }}
         >
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-none text-[22px]" style={{ background: "#EAE0FA" }}>🧳</div>
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-none font-serif text-[20px]" style={{ background: "#EAE0FA", color: INK }}>T</div>
           <div className="min-w-0 flex-1">
             <div className="font-serif text-[calc(17px*var(--fs))] leading-tight" style={{ color: INK }}>Your trip</div>
             <div className="text-[calc(12px*var(--fs))] mt-0.5" style={{ color: SUB }}>
               {n} confirmed {n === 1 ? "booking" : "bookings"}
             </div>
           </div>
-          <div className="flex-none flex items-center gap-1 text-[16px]" aria-hidden="true">
-            {chips.map((c, i) => <span key={i}>{c}</span>)}
+          <div className="flex-none flex items-center gap-1">
+            {chips.map((c) => (
+              <span
+                key={c}
+                className="px-1.5 py-0.5 rounded uppercase tracking-[0.08em] leading-none text-[calc(8.5px*var(--fs))] font-semibold"
+                style={{ fontFamily: MONO, color: SUB, border: `1px solid ${EDGE}` }}
+              >
+                {c}
+              </span>
+            ))}
           </div>
         </button>
       </div>

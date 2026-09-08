@@ -1,36 +1,29 @@
 // EventsRow — "Events in {city}" (the Demand Radar's first surface).
 //
-// Real, DATED concerts / sports / theatre / comedy from Ticketmaster Discovery in a
-// photo-led rail, with bookable Viator experiences in their own clearly-labelled
-// sub-rail below ("EXPERIENCES NEARBY") — never mixed into the dated windows, so
-// "Tonight (3)" is always three real dated events. One /events/search worker call
-// (TM + Viator only, NO Google spend), cached 6h; the worker returns ~35 days of
-// events so the time-window chips (Tonight · This weekend · This week · This month)
-// are populated — travelers can PLAN, not just see tonight. Grouping is pure
-// client-side off the one cached payload. A tap records an attributed click
-// (affiliate_clicks → "My Trip") then opens the partner. Renders nothing until
-// there's something on, so the home feed never shows an empty shell.
+// Real, DATED concerts / sports / theatre / comedy from Ticketmaster Discovery
+// in a photo-led rail. ONLY the dated rail lives here — the bookable Viator
+// experiences moved to their own component (ExperiencesRow), which also owns
+// the shared /events/search client cache both components read, so mounting
+// both still costs one worker call (TM + Viator, NO Google spend, cached 6h).
+// The worker returns ~35 days of events so the time-window chips (Tonight ·
+// This weekend · This week · This month) are populated — travelers can PLAN,
+// not just see tonight. Grouping is pure client-side off the one cached
+// payload. A tap records an attributed click (affiliate_clicks → "My Trip")
+// then opens Ticketmaster. Renders nothing when there are no dated events, so
+// the home feed never shows an empty shell.
 //
-// Contract consumed ({ events, experiences }):
-//   events[]:      { id, name, image, date (localDate), time (localTime, optional),
-//                    endDate/endTime (optional — only when TM reports a real,
-//                    non-approximate end; people with kids/work want "when it ends"),
-//                    venue, city, category, fromPrice, currency, url }
-//   experiences[]: { id, title, image, city (optional), fromPrice, currency, url }
-//                  (code/thumbnail also accepted — pre-v4 field names)
-//   destination:   Viator destination name the experiences were scoped to (optional)
-//   destinationMi: straight-line miles to that destination (optional) — gates the
-//                  "EXPERIENCES NEARBY" vs "WORTH THE DRIVE" framing below
-// Time and per-experience city are read defensively — a card shows date-only when
-// the payload carries no time (never an invented one), and falls back to the base
-// city for experiences.
+// Contract consumed ({ events }):
+//   events[]: { id, name, image, date (localDate), time (localTime, optional),
+//               endDate/endTime (optional — only when TM reports a real,
+//               non-approximate end; people with kids/work want "when it ends"),
+//               venue, city, category, fromPrice, currency, url }
+// Time is read defensively — a card shows date-only when the payload carries
+// no time (never an invented one).
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "@/components/location/LocationContext";
-import { callWorker } from "@/lib/callWorker";
-import { ROUTE } from "@/lib/workerRoutes";
+import { fetchEventsSearch } from "@/components/home/ExperiencesRow";
 import { getPrimaryStay } from "@/lib/savedLocations";
 import { trackAffiliateClick } from "@/lib/affiliate";
-import { viatorProductLink, viatorSearchLink } from "@/lib/viator";
 import { openPartner } from "@/lib/openPartner";
 import { logDiscover } from "@/lib/logDiscover";
 import { localISODate } from "@/lib/localDate";
@@ -61,7 +54,7 @@ const fmtTime = (t) => {
 
 export default function EventsRow({ wide = false }) {
   const { getActiveLocation } = useLocation();
-  const [payload, setPayload] = useState(null); // { events, exps, destName }
+  const [payload, setPayload] = useState(null); // { events }
   const [tick, setTick] = useState(0);
   const [sel, setSel] = useState("weekend"); // default to a plan-ahead window, not "today"
 
@@ -95,7 +88,9 @@ export default function EventsRow({ wide = false }) {
     if (!city && !Number.isFinite(lat)) { setPayload(null); return; }
     (async () => {
       try {
-        const { data } = await callWorker(ROUTE.searchEvents, { city, latitude: lat, longitude: lng, cityName: city });
+        // Shared client cache (ExperiencesRow owns it) — one /events/search
+        // call per base even with ExperiencesRow mounted in the same stack.
+        const { data } = await fetchEventsSearch({ city, latitude: lat, longitude: lng, cityName: city });
         if (cancelled) return;
         const seen = new Set();
         const keep = (name, url) => { const k = (name || "").toLowerCase(); if (!name || !url || seen.has(k)) return false; seen.add(k); return true; };
@@ -112,16 +107,8 @@ export default function EventsRow({ wide = false }) {
             venue: e.venue || "", city: e.city || "", cat: e.category,
             fromPrice: e.fromPrice, currency: e.currency, url: e.url,
           }));
-        const exps = (data?.experiences || [])
-          .filter((p) => keep(p.title, p.url))
-          .map((p) => ({
-            id: p.id || p.code || p.url, name: p.title, image: p.image || p.thumbnail,
-            city: p.city || "", fromPrice: p.fromPrice, currency: p.currency, url: p.url,
-          }));
-        const destName = data?.destination || data?.destinationName || "";
-        const destMi = Number.isFinite(data?.destinationMi) ? data.destinationMi : null;
-        setPayload({ events, exps, destName, destMi });
-        if (events.length || exps.length) logDiscover("event_view", { city, country, count: events.length + exps.length });
+        setPayload({ events });
+        if (events.length) logDiscover("event_view", { city, country, count: events.length });
       } catch { if (!cancelled) setPayload(null); }
     })();
     return () => { cancelled = true; };
@@ -155,9 +142,8 @@ export default function EventsRow({ wide = false }) {
   // DATED events only — an undated TM row (flex/ongoing "admission" pass) or a
   // past localDate would make the window counts dishonest, so both are dropped.
   const events = payload.events.filter((x) => x.dateObj && x.dateObj >= W.startToday);
-  const exps = payload.exps;
-  // Self-hide: nothing dated AND nothing bookable → no row at all.
-  if (!events.length && !exps.length) return null;
+  // Self-hide: nothing dated → no row at all (ExperiencesRow stands on its own).
+  if (!events.length) return null;
 
   const datedIn = (w) => events.filter((e) => inWindow(e.dateObj, w)).length;
   const hasTonight = events.some((e) => ymd(e.dateObj) === W.todayKey);
@@ -179,7 +165,6 @@ export default function EventsRow({ wide = false }) {
   // switching Tonight/Weekend/Week/Month.
   windowEvents.sort((x, y) => x.dateObj.getTime() - y.dateObj.getTime());
   const shownEvents = windowEvents.slice(0, 12);
-  const shownExps = exps.slice(0, 8);
 
   const cityIn = city ? ` in ${city}` : "";
   const EMPTY = {
@@ -199,12 +184,11 @@ export default function EventsRow({ wide = false }) {
     return "";
   };
 
-  const open = async (it, kind) => {
-    logDiscover("event_tap", { name: it.name, category: it.cat || kind, window: sel, city, country, partner: kind === "event" ? "ticketmaster" : "viator" });
+  const open = async (it) => {
+    logDiscover("event_tap", { name: it.name, category: it.cat || "event", window: sel, city, country, partner: "ticketmaster" });
     let url = it.url;
     try {
-      if (kind === "event") url = await trackAffiliateClick({ partner: "ticketmaster", targetUrl: it.url, category: "event", productName: it.name, destCity: city, destCountry: country });
-      else url = await trackAffiliateClick({ partner: "viator", targetUrl: viatorProductLink(it.url) || viatorSearchLink(it.name), category: "event", productName: it.name, destCity: city, destCountry: country });
+      url = await trackAffiliateClick({ partner: "ticketmaster", targetUrl: it.url, category: "event", productName: it.name, destCity: city, destCountry: country });
     } catch { /* fall back to raw url */ }
     openPartner(url || it.url);
   };
@@ -214,7 +198,6 @@ export default function EventsRow({ wide = false }) {
   // Photo-led sizing: the photo sells the night out, so cards are wide and the
   // image is a tall 4:3 — the text stays modest (the photo is what got bigger).
   const cardW = wide ? "w-[320px]" : "w-[300px]";
-  const expW = wide ? "w-[264px]" : "w-[252px]";
 
   return (
     <div className={wide ? "pb-3" : "px-4 pb-3"}>
@@ -254,7 +237,7 @@ export default function EventsRow({ wide = false }) {
                 const dateLine = timePart ? `${datePart} · ${timePart}` : datePart; // date-only when the payload has no time
                 const placeLine = [it.venue, it.city].filter(Boolean).join(" · ");
                 return (
-                  <button key={"event" + it.id} onClick={() => open(it, "event")} className={`flex-none ${cardW} rounded-2xl overflow-hidden text-left bg-white`} style={{ border: `1px solid ${EDGE}`, boxShadow: "0 8px 20px -16px rgba(22,17,13,.4)" }}>
+                  <button key={"event" + it.id} onClick={() => open(it)} className={`flex-none ${cardW} rounded-2xl overflow-hidden text-left bg-white`} style={{ border: `1px solid ${EDGE}`, boxShadow: "0 8px 20px -16px rgba(22,17,13,.4)" }}>
                     <div className="relative w-full" style={{ aspectRatio: "4 / 3", background: "linear-gradient(135deg,#E7C7A0,#C98A2E)" }}>
                       {it.image
                         ? <img src={it.image} alt="" loading="lazy" className="w-full h-full object-cover" />
@@ -279,43 +262,6 @@ export default function EventsRow({ wide = false }) {
           </>
         )}
 
-        {/* Experiences sub-rail — bookable-any-day Viator products, honestly
-            separated from the dated events (they are NOT tonight's events). */}
-        {shownExps.length > 0 && (
-          <div className={events.length ? "mt-3" : ""}>
-            {/* "Nearby" only when it's true: same city, or within ~12 mi. A farther
-                catalog (Viator has none for many suburbs) is framed honestly as a
-                day-trip — "WORTH THE DRIVE · Santa Monica · ~29 MI", never "nearby". */}
-            {(() => {
-              const sameCity = !!payload.destName && !!city && payload.destName.trim().toLowerCase() === city.trim().toLowerCase();
-              const isNear = sameCity || !payload.destName || (payload.destMi != null && payload.destMi <= 12);
-              return (
-                <div className="flex items-baseline gap-2 mb-1.5 px-0.5">
-                  <span className="text-[calc(10.5px*var(--fs))] font-semibold tracking-[0.08em]" style={{ fontFamily: MONO, color: SUB }}>{isNear ? "EXPERIENCES NEARBY" : "WORTH THE DRIVE"}</span>
-                  {(payload.destName || city) && <span className="font-serif text-[calc(14px*var(--fs))]" style={{ color: INK }}>{payload.destName || city}</span>}
-                  {!isNear && payload.destMi != null && <span className="text-[calc(10.5px*var(--fs))]" style={{ fontFamily: MONO, color: SUB }}>~{payload.destMi} mi</span>}
-                </div>
-              );
-            })()}
-            <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
-              {shownExps.map((it) => (
-                <button key={"exp" + it.id} onClick={() => open(it, "exp")} className={`flex-none ${expW} rounded-2xl overflow-hidden text-left bg-white`} style={{ border: `1px solid ${EDGE}`, boxShadow: "0 8px 20px -16px rgba(22,17,13,.4)" }}>
-                  <div className="relative w-full" style={{ aspectRatio: "4 / 3", background: "linear-gradient(135deg,#E7C7A0,#C98A2E)" }}>
-                    {it.image
-                      ? <img src={it.image} alt="" loading="lazy" className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center font-serif text-[30px]" style={{ color: "rgba(255,255,255,0.85)" }}>{(it.name || "?").charAt(0)}</div>}
-                  </div>
-                  <div className="p-3">
-                    <div className="font-serif leading-[1.14] text-[calc(15px*var(--fs))]" style={{ color: INK, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{it.name}</div>
-                    {(it.city || payload.destName || city) && <div className="text-[calc(10.5px*var(--fs))] mt-1 truncate" style={{ fontFamily: MONO, color: SUB }}>{it.city || payload.destName || city}</div>}
-                    {Number.isFinite(it.fromPrice) && <div className="text-[calc(11px*var(--fs))] mt-1 font-semibold" style={{ fontFamily: MONO, color: INK }}>from {fmtPrice(it.fromPrice, it.currency)}</div>}
-                    <div className="text-[calc(10px*var(--fs))] mt-1.5 font-semibold" style={{ color: SUB }}>View & book · Viator</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

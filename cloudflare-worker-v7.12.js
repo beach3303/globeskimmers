@@ -6210,6 +6210,15 @@ async function handleAttractionsNearby(request, env, ctx) {
     return jsonResponse({ error: 'latitude and longitude required' }, 400);
   }
 
+  // Opt-in (body.includeCityTemp === true): current temp at the searched
+  // coords, °F — the DreamShelf data line. $0 via destTempsF's 3h-KV
+  // Open-Meteo path; started here so it runs concurrently with the D1 query.
+  // Opt-in keeps the hot ThingsToDo cold-load path (and the internal
+  // /attractions/nearby self-calls in home-rows assembly) round-trip-free.
+  const cityTempPromise = body.includeCityTemp === true
+    ? destTempsF(env, [[latitude, longitude]]).then((t) => t[0] ?? null).catch(() => null)
+    : Promise.resolve(null);
+
   // Bounding box prefilter. 1° lat ≈ 111 km; longitude width shrinks
   // toward the poles by cos(lat). The box is a CHEAP indexed query
   // (uses the indexed lat/lng columns); we re-rank by true great-circle
@@ -6354,6 +6363,8 @@ async function handleAttractionsNearby(request, env, ctx) {
     source: 'd1',
     tookMs: Date.now() - startedAt,
     attractions: within,
+    // Additive; null unless the request opted in via includeCityTemp: true.
+    cityTempF: await cityTempPromise,
   });
 }
 
@@ -6393,6 +6404,41 @@ const HOME_SEASONAL_DESTINATIONS = {
   spring:   ['Amsterdam, Netherlands', 'Kyoto, Japan', 'Paris, France', 'Marrakech, Morocco', 'Lisbon, Portugal', 'Charleston, USA'],
   fall:     ['Kyoto, Japan', 'Munich, Germany', 'Tuscany, Italy', 'Seoul, South Korea', 'Vermont, USA', 'Quebec City, Canada'],
   tropical: ['Bali, Indonesia', 'Phuket, Thailand', 'Tulum, Mexico', 'Maldives', 'Boracay, Philippines', 'Cairns, Australia'],
+};
+
+// Approximate [lat, lng] for every HOME_SEASONAL_DESTINATIONS entry, keyed by
+// the exact string above. Feeds the whereToNext cards' lat/lng + live tempF
+// (Open-Meteo, $0) so the Home dream rail can show a real "right now" data
+// line. Region-scale entries use a well-known representative point (noted).
+// A missing key degrades gracefully — the card ships lat/lng/tempF = null.
+const HOME_SEASONAL_COORDS = {
+  'Santorini, Greece':      [36.39, 25.46],    // Thira (Fira)
+  'Amalfi Coast, Italy':    [40.63, 14.60],    // Amalfi town
+  'Barcelona, Spain':       [41.39, 2.17],
+  'Maui, Hawaii':           [20.80, -156.33],  // island center
+  'Nice, France':           [43.70, 7.27],
+  'Dubrovnik, Croatia':     [42.65, 18.09],
+  'Zermatt, Switzerland':   [46.02, 7.75],
+  'Kyoto, Japan':           [35.01, 135.77],
+  'Vienna, Austria':        [48.21, 16.37],
+  'Reykjavik, Iceland':     [64.15, -21.94],
+  'Quebec City, Canada':    [46.81, -71.21],
+  'Lapland, Finland':       [66.50, 25.73],    // Rovaniemi
+  'Amsterdam, Netherlands': [52.37, 4.90],
+  'Paris, France':          [48.86, 2.35],
+  'Marrakech, Morocco':     [31.63, -8.01],
+  'Lisbon, Portugal':       [38.72, -9.14],
+  'Charleston, USA':        [32.78, -79.93],   // Charleston, SC
+  'Munich, Germany':        [48.14, 11.58],
+  'Tuscany, Italy':         [43.77, 11.25],    // Florence
+  'Seoul, South Korea':     [37.57, 126.98],
+  'Vermont, USA':           [44.26, -72.58],   // Montpelier
+  'Bali, Indonesia':        [-8.65, 115.22],   // Denpasar
+  'Phuket, Thailand':       [7.88, 98.39],
+  'Tulum, Mexico':          [20.21, -87.47],
+  'Maldives':               [4.17, 73.51],     // Malé
+  'Boracay, Philippines':   [11.97, 121.92],
+  'Cairns, Australia':      [-16.92, 145.77],
 };
 
 const HOME_DAYPART_ROW = {
@@ -6487,6 +6533,56 @@ async function getWikiPhotoByQid(env, qid) {
   } catch { return null; }
 }
 
+// Current temperature (°F, integer) for up to 8 [lat, lng] pairs — $0 rule:
+// Open-Meteo only (free, no key), same API the masthead forecast uses
+// (handleWeatherForecast). All KV misses go out as ONE batched request —
+// Open-Meteo accepts comma-separated latitude/longitude lists and returns an
+// array of results in the same order. Per-coordinate KV cache (1-decimal
+// rounding, ~11km cells) at 3h: warm calls are pure KV reads. Returns an array
+// the same length as `points`; any failure (bad point, fetch error, missing
+// KV) yields null in that slot — never throws.
+async function destTempsF(env, points) {
+  const pts = (Array.isArray(points) ? points : []).slice(0, 8);
+  const out = new Array(pts.length).fill(null);
+  try {
+    const kv = env.GLOBESKIMMERS_KV;
+    const keys = pts.map((p) =>
+      // p[x] != null guards matter: Number(null) === 0, and an unmapped
+      // destination would otherwise fetch (0°,0°) — open ocean — as its "NOW" temp.
+      Array.isArray(p) && p[0] != null && p[1] != null && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1]))
+        ? `temp:v1:${roundCoordinate(Number(p[0]), 1)}:${roundCoordinate(Number(p[1]), 1)}`
+        : null
+    );
+    const hits = await Promise.all(keys.map((k) => (k && kv ? kv.get(k).catch(() => null) : Promise.resolve(null))));
+    const missIdx = [];
+    hits.forEach((h, i) => {
+      const n = h == null ? NaN : Number(h);
+      if (Number.isFinite(n)) out[i] = Math.round(n);
+      else if (keys[i]) missIdx.push(i);
+    });
+    if (missIdx.length > 0) {
+      const lats = missIdx.map((i) => Number(pts[i][0])).join(',');
+      const lngs = missIdx.map((i) => Number(pts[i][1])).join(',');
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lngs}` +
+        `&current=temperature_2m&temperature_unit=fahrenheit`;
+      const res = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (res.ok) {
+        const d = await res.json();
+        const arr = Array.isArray(d) ? d : [d];   // single-point requests return a bare object
+        for (let j = 0; j < missIdx.length; j++) {
+          const i = missIdx[j];
+          const t = Number(arr[j]?.current?.temperature_2m);
+          if (Number.isFinite(t)) {
+            out[i] = Math.round(t);
+            if (kv && keys[i]) await kv.put(keys[i], String(out[i]), { expirationTtl: 3 * 60 * 60 }).catch(() => {});
+          }
+        }
+      }
+    }
+  } catch { /* leave nulls — the data line just doesn't render */ }
+  return out;
+}
+
 // Build the global "Where to next" inspiration row from Openverse destination
 // photos. No API key needed now (free) — returns null only if too few resolve.
 async function buildWhereToNextRow(env, seasonKey, ctx) {
@@ -6506,10 +6602,17 @@ async function buildWhereToNextRow(env, seasonKey, ctx) {
     } catch { /* fall through to Openverse */ }
     if (!photo) photo = await fetchOpenversePhoto(env, dest, ctx);
     if (photo?.url) {
-      cards.push({ id: `esc_${dest}`, name, whyVisit: dest, photoUrl: photo.url, photographer: photo.photographer, credit: photo.credit, creditLink: photo.link });
+      // Additive: lat/lng from the curated coords map (null when unmapped) so
+      // the client can deep-link SmartPackages / compute flight-time lines.
+      const coords = HOME_SEASONAL_COORDS[dest] || null;
+      cards.push({ id: `esc_${dest}`, name, whyVisit: dest, photoUrl: photo.url, photographer: photo.photographer, credit: photo.credit, creditLink: photo.link, lat: coords ? coords[0] : null, lng: coords ? coords[1] : null });
     }
   }
   if (cards.length < 3) return null;
+  // Live "right now" temp per destination — one batched Open-Meteo call for
+  // all KV-cold cards ($0, 3h KV). Unmapped/failed cards carry tempF = null.
+  const temps = await destTempsF(env, cards.map((c) => [c.lat, c.lng]));
+  cards.forEach((c, i) => { c.tempF = temps[i]; });
   return { key: 'whereToNext', title: 'Where to next ✈️', subtitle: 'Dreaming of your next trip', seeAll: { action: 'Things to Do' }, cards };
 }
 
@@ -6638,7 +6741,7 @@ async function handleHomeRows(request, env, ctx) {
   // key make the homepage reshuffle across the day.
   const rLat = Math.round(latitude * 10) / 10;
   const rLng = Math.round(longitude * 10) / 10;
-  const cacheKey = `homerows_v3_${rLat}_${rLng}_${dayPart}_${weatherBucket}`;   // v3: deduped pool + P18-by-QID photos (v2 bundles carried Openverse-only art + repeats)
+  const cacheKey = `homerows_v4_${rLat}_${rLng}_${dayPart}_${weatherBucket}`;   // v4: whereToNext cards carry lat/lng/tempF (v3 bundles lack them; v3: deduped pool + P18-by-QID photos)
 
   const cachedBundle = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
   if (cachedBundle && Array.isArray(cachedBundle.rows)) {

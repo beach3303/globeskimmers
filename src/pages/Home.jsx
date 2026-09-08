@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { MapPin, Cloud, ChevronRight } from "lucide-react";
+import { MapPin, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -16,6 +16,13 @@ import EventsRow from "../components/home/EventsRow";
 import DealRadarRow from "../components/home/DealRadarRow";
 import MyTripCard from "../components/home/MyTripCard";
 import WishlistCard from "../components/home/WishlistCard";
+// Extracted by the sibling rebuild task: Dreamer's Corner (ex-HomeRows
+// whereToNext branch) and Experiences (ex-EventsRow Viator sub-rail).
+// fetchHomeRows is DreamersCorner's shared /home/rows client cache — Home
+// reads PackageHero's backdrop card through it, so the three consumers
+// (DreamersCorner, HomeRows, PackageHero) cost ONE network call per location.
+import DreamersCorner, { fetchHomeRows } from "../components/home/DreamersCorner";
+import ExperiencesRow from "../components/home/ExperiencesRow";
 import AllServicesSheet from "../components/home/AllServicesSheet";
 import { getTravelMode } from "@/lib/homeContext";
 import { TEAL_DEEP, IVORY, IVORY_2 } from "../components/redesign/constants";
@@ -37,7 +44,7 @@ import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
 import DestinationStrip from "@/components/search/DestinationStrip";
 import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
 
-// Translation mapping for greetings — shown next to "Hello 👋"
+// Translation mapping for greetings — shown next to the mono "Hello" kicker
 // when the active location's country has a non-English primary language.
 const HELLO_TRANSLATIONS = {
   'Spain': { greeting: 'hola', lang: 'Spanish' },
@@ -518,11 +525,43 @@ export default function HomePage() {
     navigate(createPageUrl('PerfectDay'));
   };
 
-  // Smart-Package entry — the dream stack's quiet trip-composer card.
+  // Smart-Package entry — now the photo-led PackageHero at the top of the
+  // DREAM & PLAN zone (both stacks). Same analytics event as before.
   const openSmartPackage = () => {
     trackEvent('feature_used', { feature_name: 'smart_package_entry' });
     navigate(createPageUrl('SmartPackages'));
   };
+
+  // First Dreamer's Corner card — feeds PackageHero's photo backdrop + mono
+  // destination hint. Read through fetchHomeRows (DreamersCorner's shared,
+  // TTL'd client cache over POST /home/rows), so this is a cache hit whenever
+  // DreamersCorner/HomeRows have already asked for the same 0.1°-rounded
+  // location. Null (→ gold-gradient hero) when there's no location, no
+  // whereToNext row, or the fetch fails — all silent.
+  const [dreamerCard, setDreamerCard] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    const loc = getActiveLocation();
+    const latitude = loc?.coordinates?.latitude;
+    const longitude = loc?.coordinates?.longitude;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) { setDreamerCard(null); return; }
+    (async () => {
+      try {
+        const { data, error } = await fetchHomeRows({
+          latitude,
+          longitude,
+          cityName: loc?.address?.city || '',
+          countryName: loc?.address?.country || '',
+        });
+        if (cancelled) return;
+        const rows = !error && Array.isArray(data?.rows) ? data.rows : [];
+        const wtn = rows.find((r) => r?.key === 'whereToNext' && Array.isArray(r.cards) && r.cards.length > 0);
+        setDreamerCard(wtn?.cards?.[0] || null);
+      } catch { if (!cancelled) setDreamerCard(null); }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationMode, selectedLocation, currentGpsLocation]);
 
   // ── Journey-state: adapt which Discover sections LEAD, by context ──────────
   // home/discovery (you're based here) → escapes/plan first; on a trip
@@ -613,10 +652,12 @@ export default function HomePage() {
   // card; chips are kept compact and right-aligned so the flag stays visible.
   const flagActive = !!(showHomeFlag && homeFlagUrl);
 
-  // Clock stack under the hero. The hero shows the SELECTED/active place; these
-  // subtle labeled rows add: 📍 where you physically are (only when you've
-  // navigated away) and 🏠 your home (when toggled). Only rows whose timezone
-  // differs from the hero — and from each other — are kept, so nothing repeats.
+  // Clock info. The hero shows the SELECTED/active place; these add where you
+  // physically are (only when you've navigated away) and your home (when
+  // toggled). Only rows whose timezone differs from the hero — and from each
+  // other — are kept, so nothing repeats. On the phone these FOLD into
+  // masthead line 2 as plain text (no emoji); the `icon` field survives only
+  // for HomeTablet, whose clockRows contract is unchanged.
   const activeTz = timezone;
   const rawClockRows = [];
   if (physicalTz && physicalTz !== activeTz) {
@@ -636,6 +677,10 @@ export default function HomePage() {
       timeText: formatLocalTime(currentTime, r.tz),
       tempText: r.temp ? (tempUnit === 'C' ? `${r.temp.celsius}°C` : `${r.temp.fahrenheit}°F`) : null,
     }));
+
+  // The three-zone spine is IDENTICAL in both journey stacks; the only thing
+  // journeyMode still gates on the phone is the DreamShelf (dream stack only).
+  const isDreamStack = !["domestic", "international", "discovery"].includes(journeyMode);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -680,13 +725,14 @@ export default function HomePage() {
           card's, just reflowed. */}
       <div className="px-4 pt-2 pb-3">
         <div className="max-w-md mx-auto">
-          {/* LINE 1 — mono "Hello 👋" kicker (+ local greeting) flowing into
-              the serif name (italic) and "in {city}" (regular serif) as one
-              wrappable line; the quiet mono passport line (→ Passport) and
-              FontScaleButton share the far right. */}
+          {/* LINE 1 — mono "Hello" kicker (no wave — emoji-free masthead; the
+              local-language greeting word stays) flowing into the serif name
+              (italic) and "in {city}" (regular serif) as one wrappable line;
+              the quiet mono passport line (→ Passport) and FontScaleButton
+              share the far right. */}
           <div className="flex items-start justify-between gap-2">
             <p className="flex-1 min-w-0 leading-snug">
-              <span className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))]" style={{ color: '#736657' }}>Hello 👋</span>
+              <span className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))]" style={{ color: '#736657' }}>Hello</span>
               {localGreeting && (
                 <span className="font-serif italic text-[calc(14px*var(--fs))]" style={{ color: TEAL_DEEP }}>
                   {' '}{localGreeting.charAt(0).toUpperCase() + localGreeting.slice(1)}
@@ -719,25 +765,34 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* LINE 2 — date · temp toggle (°C/°F, same handler) · location pill
-              ("Change" opens LocationModePicker). flex-wrap so the larger text
-              steps (text-size glasses) reflow onto extra lines instead of crowding. */}
-          <div className="mt-2 flex items-center justify-between gap-x-2 gap-y-2 flex-wrap">
-            <div className="flex items-center gap-1.5 text-[calc(12px*var(--fs))] font-medium" style={{ color: '#3A3128' }}>
-              <span className="whitespace-nowrap">{formatLocalDate(currentTime, timezone)}</span>
+          {/* LINE 2 — date · temp toggle (plain "72°F" text, °C/°F on tap —
+              the Cloud glyph is gone) · the clock stack's surviving info folded
+              in as muted "{place} {time}" segments (emoji-free; rows whose
+              timezone matches the hero were already dropped upstream; folded
+              rows drop their date for compactness — the time carries the
+              signal) · location pill ("Change" opens LocationModePicker).
+              MASTHEAD IS HARD-CAPPED AT 2 LINES: no flex-wrap — long segments
+              truncate instead of reflowing. */}
+          <div className="mt-2 flex items-center gap-x-2">
+            <div className="flex items-center gap-1.5 min-w-0 text-[calc(12px*var(--fs))] font-medium" style={{ color: '#3A3128' }}>
+              <span className="whitespace-nowrap flex-none">{formatLocalDate(currentTime, timezone)}</span>
               {weatherInfo && Number.isFinite(weatherInfo.celsius) && Number.isFinite(weatherInfo.fahrenheit) && (
                 <>
-                  <span style={{ opacity: 0.4 }}>·</span>
-                  <button onClick={toggleTempUnit} className="inline-flex items-center gap-1 whitespace-nowrap">
-                    <Cloud size={13} color={TEAL_DEEP} strokeWidth={2} />
+                  <span className="flex-none" style={{ opacity: 0.4 }}>·</span>
+                  <button onClick={toggleTempUnit} className="whitespace-nowrap flex-none">
                     {tempUnit === 'C' ? `${weatherInfo.celsius}°C` : `${weatherInfo.fahrenheit}°F`}
                   </button>
                 </>
               )}
+              {clockRows.map((r) => (
+                <span key={r.key} className="truncate min-w-0" style={{ color: '#8A93A6' }}>
+                  {'· '}{r.label} {r.timeText}{r.tempText ? ` ${r.tempText}` : ''}
+                </span>
+              ))}
             </div>
             <button
               onClick={() => setShowLocationPicker(true)}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 max-w-full min-w-0"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 flex-none max-w-[55%] min-w-0"
               style={{ background: '#F7F4EC' }}
             >
               <MapPin size={14} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
@@ -748,35 +803,32 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Clock stack — subtle labeled rows under the hero. 📍 your physical
-          location (when you've navigated elsewhere) and 🏠 home (when toggled),
-          each: place · day,date · time · temp. Only timezones that differ from
-          the hero (and each other) appear. Sits between the greeting card and
-          Money Exchange. */}
-      {clockRows.length > 0 && (
-        <div className="px-5 pb-3 -mt-1">
-          {/* Fixed 11.5px — intentionally NOT scaled by --fs, so the text-size
-              eyeglass does not enlarge these subtle rows. */}
-          <div className="max-w-md mx-auto flex flex-col gap-1">
-            {clockRows.map((r) => (
-              <div key={r.key} className="flex items-center justify-between gap-2 text-[11.5px] font-medium" style={{ color: '#8A93A6' }}>
-                <span className="flex items-center gap-1 whitespace-nowrap min-w-0"><span>{r.icon}</span><span className="uppercase tracking-wide truncate">{r.label}</span></span>
-                <span className="flex items-center gap-2 whitespace-nowrap flex-shrink-0">
-                  <span>{r.dateText}</span>
-                  <span>{r.timeText}</span>
-                  {r.tempText && <span>{r.tempText}</span>}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* SMART-SEARCH SPINE — one search that routes into the right world.
+          The search bar is the hinge between the masthead and the three zones,
+          not a zone itself: it sits ABOVE the first zone kicker, with the
+          DestinationStrip glued directly underneath it. */}
+      <SmartSearchBar onOpen={() => setShowSearch(true)} />
+      {destSearch && !destDismissed && (
+        <DestinationStrip place={destSearch} onAction={handleQuickAction} onDismiss={() => setDestDismissed(true)} />
       )}
 
-      {/* SMART-SEARCH SPINE — one search that routes into the right world. */}
-      <SmartSearchBar onOpen={() => setShowSearch(true)} />
+      {/* THE THREE-ZONE HOME — one spine, identical in BOTH journey stacks
+          (getTravelMode now gates only the DreamShelf, which stays a dream-
+          stack exclusive). Every row renders NOTHING when its data allows
+          nothing, so the zones self-compact:
+            NEARBY NOW  — finder chips → today's answer → stamps (+ planner
+              entry) → dated events → top spots (HomeRows, nearby keys only);
+            DREAM & PLAN — PackageHero → Dreamer's Corner → dream shelf
+              (dream stack) → experiences → deal radar → escapes;
+            YOUR TRIP   — stay anchor → my trip → wishlist.
+          VibeBundles + WhereToStay stay OFF Home — the planner and the
+          FindAHotel flow own them next. */}
 
-      {/* FINDER CHIPS — one stable horizontal row of five quiet pills directly
-          under the search bar (replaces BOTH old tile grids). Same set in every
+      {/* ── ZONE 1: NEARBY NOW ─────────────────────────────────────────── */}
+      <ZoneKicker label="NEARBY NOW" />
+
+      {/* FINDER CHIPS — one stable horizontal row of five quiet pills at the
+          top of the zone (replaces BOTH old tile grids). Same set in every
           journey mode (never shuffled); "All services" opens the sheet with
           every destination the old grids offered. */}
       <div className="px-4 pb-3">
@@ -794,52 +846,56 @@ export default function HomePage() {
           />
         </div>
       </div>
-      {destSearch && !destDismissed && (
-        <DestinationStrip place={destSearch} onAction={handleQuickAction} onDismiss={() => setDestDismissed(true)} />
-      )}
 
-      {/* DISCOVER — living sections below the chips (each renders NOTHING when
-          there's no coverage, and all re-center as the user moves). Two stable
-          stacks, capped and mode-correct — getTravelMode decides which:
-            nearby (domestic/international/discovery): today's answer card →
-              stamps → events → planner entry → top spots, then the trip
-              anchors (self-hiding);
-            home/planning: the dream shelf (self-hiding — when it renders,
-              HomeRows drops to second) → escapes → events → planner entry,
-              then the trip anchors.
-          VibeBundles + WhereToStay moved OFF Home — the planner and the
-          FindAHotel flow own them next. */}
-      {["domestic", "international", "discovery"].includes(journeyMode) ? (
-        <>
-          <TodayCard onAction={handleQuickAction} />
-          <StampsNearYou onAction={handleQuickAction} />
-          <EventsRow />
-          <DealRadarRow />
-          <PerfectDayCard city={cityName} onOpen={openPerfectDay} />
-          <HomeRows onAction={handleQuickAction} />
-          <StayAnchor />
-          <MyTripCard />
-          <WishlistCard />
-        </>
-      ) : (
-        <>
-          <DreamShelf
-            latitude={activeLocation?.coordinates?.latitude}
-            longitude={activeLocation?.coordinates?.longitude}
-            cityName={cityName}
-            onOpenActivity={openDreamActivity}
-          />
-          <HomeRows onAction={handleQuickAction} />
-          <EscapesRow onAction={handleQuickAction} />
-          <EventsRow />
-          <DealRadarRow />
-          <PerfectDayCard city={cityName} onOpen={openPerfectDay} />
-          <SmartPackageCard onOpen={openSmartPackage} />
-          <WishlistCard />
-          <MyTripCard />
-          <StayAnchor />
-        </>
+      <TodayCard onAction={handleQuickAction} />
+      <StampsNearYou onAction={handleQuickAction} />
+      {/* TODO(sibling merge): a sibling task is folding the PerfectDay entry
+          into StampsNearYou as its footer line. That contract isn't visible in
+          the repo yet, so the standalone card stays mounted here (directly
+          after StampsNearYou, per the rebuild spec). Once StampsNearYou
+          carries the footer, DELETE this mount + the PerfectDayCard component
+          below — openPerfectDay (and its feature_used analytics) moves with
+          it, never dies. */}
+      <PerfectDayCard city={cityName} onOpen={openPerfectDay} />
+      {/* EventsRow: dated happenings only, now — the undated Viator
+          experiences sub-rail moved to ExperiencesRow in DREAM & PLAN. */}
+      <EventsRow />
+      {/* HomeRows: nearby keys only (trending/dayPart/nearYou/seasonal) — the
+          whereToNext branch is extracted to DreamersCorner below. */}
+      <HomeRows onAction={handleQuickAction} />
+
+      {/* ── ZONE 2: DREAM & PLAN ───────────────────────────────────────── */}
+      <ZoneKicker label="DREAM & PLAN" />
+
+      {/* PackageHero — photo-led Smart-Packages doorway, TOP of the zone in
+          both stacks. Backdrop borrows the first Dreamer's Corner photo when
+          the shared rows cache has it; gold gradient otherwise. */}
+      <PackageHero card={dreamerCard} onOpen={openSmartPackage} />
+      {/* DreamersCorner contract (per the extracted component): self-fetching
+          via its shared fetchHomeRows cache; optional onAction renders the
+          worker row's "See all →" (whereToNext.seeAll.action = Things to Do). */}
+      <DreamersCorner onAction={handleQuickAction} />
+      {isDreamStack && (
+        <DreamShelf
+          latitude={activeLocation?.coordinates?.latitude}
+          longitude={activeLocation?.coordinates?.longitude}
+          cityName={cityName}
+          cityTempF={weatherInfo?.fahrenheit ?? null}
+          onOpenActivity={openDreamActivity}
+        />
       )}
+      {/* ExperiencesRow contract (per the extracted component): self-fetching
+          via its shared fetchEventsSearch cache (primary stay → active
+          location base, same as EventsRow); no required props on phone. */}
+      <ExperiencesRow />
+      <DealRadarRow />
+      <EscapesRow onAction={handleQuickAction} />
+
+      {/* ── ZONE 3: YOUR TRIP ──────────────────────────────────────────── */}
+      <ZoneKicker label="YOUR TRIP" />
+      <StayAnchor />
+      <MyTripCard />
+      <WishlistCard />
 
       {/* Bottom clearance for the FloatingNav pill. Home no longer mounts an
           ad banner and the pill is no longer lifted here (Layout passes
@@ -920,29 +976,83 @@ function PerfectDayCard({ city, onOpen }) {
   );
 }
 
-// ── SmartPackageCard — quiet Smart-Package entry (dream stack) ─────────────
-// Same register as PerfectDayCard: serif headline + mono subtitle + chevron,
-// navigating into the SmartPackages composer. Needs no city — the composer
-// resolves its own destination — so it always renders.
-function SmartPackageCard({ onOpen }) {
+// ── ZoneKicker — full-width mono zone marker ───────────────────────────────
+// The three-zone Home's section labels ("NEARBY NOW" / "DREAM & PLAN" /
+// "YOUR TRIP") in the house kicker register (mono, 10.5px·--fs, 0.08em
+// tracking, #736657), with a hairline rule filling the rest of the width so
+// the marker reads full-bleed across the column.
+function ZoneKicker({ label }) {
+  return (
+    <div className="px-4 pt-1 pb-2">
+      <div className="max-w-md mx-auto flex items-center gap-3">
+        <span
+          className="flex-none font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] font-semibold whitespace-nowrap"
+          style={{ color: '#736657' }}
+        >
+          {label}
+        </span>
+        <span aria-hidden className="flex-1 h-px" style={{ background: '#E6DFD0' }} />
+      </div>
+    </div>
+  );
+}
+
+// ── PackageHero — photo-led Smart-Packages doorway (both stacks) ───────────
+// Replaces the quiet SmartPackageCard text row at the top of DREAM & PLAN.
+// Full-width card: backdrop is the first Dreamer's Corner card's photo when
+// available (else the house gold gradient), scrimmed for legibility; serif
+// "Build a full trip" + the standing mono subtitle + a mono destination hint
+// (the card's "City, Country") when we have one; teal CTA. The whole card is
+// one button → SmartPackages (onOpen carries the smart_package_entry event).
+function PackageHero({ card, onOpen }) {
+  const photoUrl = card?.photoUrl || null;
+  const hint = card?.whyVisit || null; // "City, Country" from the whereToNext row
+  const credit = card?.photographer || card?.credit || null;
   return (
     <div className="px-4 pb-3">
       <div className="max-w-md mx-auto">
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={onOpen}
-          className="w-full flex items-center justify-between gap-3 rounded-2xl p-4 text-left"
-          style={{ background: IVORY_2, border: '1px solid #E6DFD0' }}
+          className="relative w-full overflow-hidden rounded-2xl text-left"
+          style={{ border: '1px solid #E6DFD0', boxShadow: '0 8px 20px -16px rgba(22,17,13,.4)' }}
         >
-          <div className="min-w-0">
-            <div className="font-serif text-[calc(19px*var(--fs))] leading-tight truncate" style={{ color: '#16110D' }}>
+          {/* Backdrop — dreamer photo or the house gold gradient. */}
+          <div
+            aria-hidden
+            className="absolute inset-0"
+            style={
+              photoUrl
+                ? { backgroundImage: `url(${photoUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                : { background: 'linear-gradient(135deg,#E7C7A0,#C98A2E)' }
+            }
+          />
+          {/* Scrim — keeps the white type honest on any photo. */}
+          <div aria-hidden className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(22,17,13,0.10) 0%, rgba(22,17,13,0.66) 100%)' }} />
+          <div className="relative p-4 pt-14">
+            {hint && (
+              <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] font-semibold truncate" style={{ color: 'rgba(255,252,247,0.85)' }}>
+                Dreaming of {hint}?
+              </div>
+            )}
+            <div className="font-serif text-[calc(24px*var(--fs))] leading-tight mt-0.5" style={{ color: '#FFFCF7' }}>
               Build a full trip
             </div>
-            <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] mt-1" style={{ color: '#736657' }}>
+            <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] mt-1" style={{ color: 'rgba(255,252,247,0.85)' }}>
               Hotel · things to do · one plan
             </div>
+            <div className="mt-3 inline-flex items-center gap-1 rounded-full px-3.5 py-2" style={{ background: '#17A38F' }}>
+              <span className="text-[calc(11.5px*var(--fs))] font-semibold" style={{ color: '#FFFCF7' }}>Start planning</span>
+              <ChevronRight size={14} color="#FFFCF7" strokeWidth={2.5} />
+            </div>
           </div>
-          <ChevronRight size={18} color="#736657" strokeWidth={2} className="flex-none" />
+          {/* Photo credit — required courtesy for Commons/Openverse imagery;
+              text only (the card is a single button, so no nested link). */}
+          {photoUrl && credit && (
+            <span className="absolute bottom-1.5 right-3 text-[9px]" style={{ color: 'rgba(255,252,247,0.65)' }}>
+              {credit}
+            </span>
+          )}
         </motion.button>
       </div>
     </div>

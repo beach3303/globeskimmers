@@ -129,7 +129,7 @@ export default function StampsNearYou({ onAction, wide = false }) {
       <div className={wide ? "" : "max-w-md mx-auto"}>
         <div className="flex items-baseline justify-between mb-2 px-0.5 gap-3">
           <div className="min-w-0">
-            <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1]" style={{ color: "#16302B" }}>Stamps near your stay 🛂</div>
+            <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1]" style={{ color: "#16302B" }}>Stamps near your stay</div>
             <div className="text-[calc(12px*var(--fs))] mt-0.5" style={{ color: "#71827D" }}>Collect these as you explore</div>
           </div>
           <button

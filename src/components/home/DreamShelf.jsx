@@ -18,9 +18,12 @@
 // onOpenActivity — Home still owns what opening means (same openStamp/
 // full-page pattern as the nearby rail).
 import { useEffect, useState } from "react";
+import { useLocation } from "@/components/location/LocationContext";
 import { callWorker } from "@/lib/callWorker";
 import { listPassport } from "@/lib/passport";
 import { stampArtUrl } from "@/lib/stampArt";
+import { haversineKm } from "@/lib/homeContext";
+import { estFlightHours, MIN_FLIGHT_MILES, KM_TO_MI } from "@/lib/flightTime";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 import DreamGallery from "@/components/home/DreamGallery";
 import { logDiscover } from "@/lib/logDiscover";
@@ -106,7 +109,11 @@ function DreamCard({ item, collected, onOpen }) {
   );
 }
 
-export default function DreamShelf({ latitude, longitude, cityName, onOpenActivity }) {
+// `cityTempF` is OPTIONAL: the dreamed city's current temperature in °F, when
+// the mounting page already holds it (Home fetches /weather-forecast for the
+// active location in dream mode). No temp passed → that fragment just hides.
+export default function DreamShelf({ latitude, longitude, cityName, cityTempF = null, onOpenActivity }) {
+  const { currentGpsLocation } = useLocation();
   const [items, setItems] = useState([]);
   const [earnedIds, setEarnedIds] = useState(() => new Set());
   const [galleryItem, setGalleryItem] = useState(null); // raw attraction row the dream browser is open for
@@ -146,6 +153,22 @@ export default function DreamShelf({ latitude, longitude, cityName, onOpenActivi
   const earned = items.filter((it) => earnedIds.has(String(it.id))).length;
   const city = String(cityName || "").trim();
 
+  // "72°F NOW · ~9H FLIGHT (EST)" — the dreamed city's live temp (optional
+  // cityTempF prop) and a rough flight estimate from where the user PHYSICALLY
+  // is (GPS fix; null in navigate mode until Home's silent fetch fills it).
+  // Each fragment hides without its datum; under MIN_FLIGHT_MILES no flight
+  // fragment at all — nobody flies to the town next door. The whole line is
+  // skipped silently when both are missing.
+  const gpsLat = currentGpsLocation?.coordinates?.latitude;
+  const gpsLng = currentGpsLocation?.coordinates?.longitude;
+  const dataFrags = [];
+  if (Number.isFinite(cityTempF)) dataFrags.push(`${Math.round(cityTempF)}°F NOW`);
+  if (Number.isFinite(gpsLat) && Number.isFinite(gpsLng)) {
+    const mi = haversineKm(gpsLat, gpsLng, latitude, longitude) * KM_TO_MI;
+    if (mi >= MIN_FLIGHT_MILES) dataFrags.push(`~${estFlightHours(mi)}H FLIGHT (EST)`);
+  }
+  const dataLine = dataFrags.length ? dataFrags.join(" · ") : null;
+
   // First touch is the photo-immersion gallery; "View details" inside it
   // routes through the original onOpenActivity handoff.
   const openDream = (item) => {
@@ -161,6 +184,11 @@ export default function DreamShelf({ latitude, longitude, cityName, onOpenActivi
             {city ? `${city} · ` : ""}{earned} of {items.length}
           </div>
           <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1] mt-0.5" style={{ color: INK }}>Dream shelf</div>
+          {dataLine && (
+            <div className="font-mono uppercase tracking-[0.08em] text-[calc(10px*var(--fs))] mt-1" style={{ color: MUTED }}>
+              {dataLine}
+            </div>
+          )}
         </div>
         <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
           {items.map((it) => (

@@ -13,6 +13,8 @@ import EventsRow from '@/components/home/EventsRow';
 import MyTripCard from '@/components/home/MyTripCard';
 import WishlistCard from '@/components/home/WishlistCard';
 import VibeBundles from '@/components/home/VibeBundles';
+import DreamersCorner from '@/components/home/DreamersCorner';
+import ExperiencesRow from '@/components/home/ExperiencesRow';
 import SmartSearchBar from '@/components/search/SmartSearchBar';
 import SmartSearchOverlay from '@/components/search/SmartSearchOverlay';
 import DestinationStrip from '@/components/search/DestinationStrip';
@@ -62,14 +64,18 @@ export default function HomeTablet({
   destinationSearch = null, onDismissDestination,
 }) {
   const ORDER = {
-    home: ["escapes", "rows", "stamps"], discovery: ["rows", "escapes", "stamps"],
-    domestic: ["stamps", "rows", "escapes"], international: ["stamps", "rows", "escapes"],
-    planning: ["rows", "escapes", "stamps"],
+    home: ["dreamers", "escapes", "rows", "experiences", "stamps"], discovery: ["rows", "dreamers", "escapes", "experiences", "stamps"],
+    domestic: ["stamps", "rows", "dreamers", "experiences", "escapes"], international: ["stamps", "rows", "dreamers", "experiences", "escapes"],
+    planning: ["dreamers", "rows", "escapes", "experiences", "stamps"],
   };
   const SEC = {
     rows: <HomeRows key="rows" wide onAction={onAction} />,
     stamps: <StampsNearYou key="stamps" wide onAction={onAction} />,
     escapes: <EscapesRow key="escapes" wide onAction={onAction} />,
+    // Extracted from HomeRows/EventsRow on phone — without these mounts the
+    // tablet silently loses Dreamer's Corner AND every bookable experience.
+    dreamers: <DreamersCorner key="dreamers" wide onAction={onAction} />,
+    experiences: <ExperiencesRow key="experiences" wide />,
   };
   const discoverOrder = ORDER[journeyMode] || ["rows", "stamps", "escapes"];
   const [showSearch, setShowSearch] = useState(false);

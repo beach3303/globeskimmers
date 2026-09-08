@@ -7,19 +7,15 @@
 // deals are found on official airline pages and the details live on THEIRS —
 // tapping a card records an attributed click (partner 'airline-direct' — no
 // commission today; service over commission) then opens the airline's own page
-// via openPartner. When a deal names a destination, a second quiet action hands
-// it to Smart Packages as router state — without coords, so SmartPackages
-// degrades to its typed search (its contract discards a dest with no finite
-// lat/lng). Renders nothing when there are no deals, so the home feed never
-// shows an empty shell.
+// via openPartner. Building a trip from a deal is NOT this row's job — the
+// DREAM-zone hero owns that CTA. Renders nothing when there are no deals, so
+// the home feed never shows an empty shell.
 //
 // Contract consumed ({ deals }):
 //   deals[]: { id, airline, url, headline, detail, destName, ends }
 //   `ends` is a verbatim string from the airline's page — rendered as-is,
 //   never reformatted (we don't parse dates we don't own).
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { createPageUrl } from "@/utils";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { trackAffiliateClick } from "@/lib/affiliate";
@@ -31,7 +27,6 @@ const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 const CLAMP2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };
 
 export default function DealRadarRow() {
-  const navigate = useNavigate();
   const [deals, setDeals] = useState([]);
 
   useEffect(() => {
@@ -63,13 +58,6 @@ export default function DealRadarRow() {
     openPartner(url || d.url);
   };
 
-  const buildTrip = (d) => {
-    logDiscover("deal_build", { destName: d.destName });
-    // No coords on a scraped fare sale — SmartPackages discards a dest without
-    // finite lat/lng and degrades to its typed destination search (by contract).
-    navigate(createPageUrl("SmartPackages"), { state: { dest: { name: d.destName, country: "", lat: undefined, lng: undefined } } });
-  };
-
   return (
     <div className="px-4 pb-3">
       <div className="max-w-md mx-auto">
@@ -90,11 +78,6 @@ export default function DealRadarRow() {
                 {d.ends && <div className="text-[calc(11px*var(--fs))] mt-1 font-semibold" style={{ fontFamily: MONO, color: INK }}>{/^ends?\b/i.test(d.ends) ? d.ends : `Ends ${d.ends}`}</div>}
                 <div className="text-[calc(10px*var(--fs))] mt-1.5 font-semibold" style={{ color: SUB }}>See the sale · {d.airline}</div>
               </button>
-              {d.destName && (
-                <button onClick={() => buildTrip(d)} className="block w-full text-left px-3 py-2" style={{ borderTop: `1px solid ${EDGE}` }}>
-                  <span className="text-[calc(11px*var(--fs))] font-semibold" style={{ fontFamily: MONO, color: TEAL }}>Build my trip</span>
-                </button>
-              )}
             </div>
           ))}
         </div>
