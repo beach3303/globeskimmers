@@ -14432,17 +14432,31 @@ async function packageDraftAttractions(env, lat, lng) {
 // shares a meaningful name token with the attraction do we say 'tours
 // available'. Everything else says NOTHING about free/ticketed — we don't
 // know, and we never guess.
-const TOUR_HINT_STOPWORDS = new Set(['tour', 'tours', 'city', 'with', 'from', 'ticket', 'tickets', 'entry', 'private', 'guided', 'experience', 'day', 'half', 'full', 'walking', 'skip', 'line', 'admission']);
+const TOUR_HINT_STOPWORDS = new Set(['tour', 'tours', 'city', 'with', 'from', 'ticket', 'tickets', 'entry', 'private', 'guided', 'experience', 'day', 'half', 'full', 'walking', 'skip', 'line', 'admission', 'tower', 'bridge', 'castle', 'palace', 'museum']);
 function attractionTourHint(attractions, tours) {
   if (!attractions.length || !tours.length) return attractions;
   const tokenize = (s) => new Set(String(s || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
     .split(/[^a-z0-9]+/).filter((t) => t.length >= 4 && !TOUR_HINT_STOPWORDS.has(t)));
   const tourTokens = tours.map((t) => tokenize(t.title));
+  // A tour may HINT many attractions but PRICE at most one — the fuzzy match
+  // was safe for "tours available", but attaching the same price to two cards
+  // both double-counts the sum and mislabels one of them.
+  const pricedTours = new Set();
   return attractions.map((a) => {
     const at = [...tokenize(a.name)];
-    return tourTokens.some((tt) => at.some((tok) => tt.has(tok)))
-      ? { ...a, ticketedHint: 'tours available' }
-      : a;
+    const idx = tourTokens.findIndex((tt) => at.some((tok) => tt.has(tok)));
+    if (idx === -1) return a;
+    // Wave B (additive): carry THAT matched tour's REAL price fields alongside
+    // the hint — never a derived or guessed number. A tour without a usable
+    // price yields tourPrice/tourCurrency null; ticketedHint is unchanged.
+    const t = tours[idx];
+    const priced = typeof t.price === 'number' && Number.isFinite(t.price) && t.price > 0 && !pricedTours.has(idx);
+    if (priced) pricedTours.add(idx);
+    return {
+      ...a, ticketedHint: 'tours available',
+      tourPrice: priced ? t.price : null,
+      tourCurrency: priced ? (t.currency || 'USD') : null,
+    };
   });
 }
 
@@ -14485,6 +14499,11 @@ async function handlePackageDraft(request, env, ctx) {
     const rooms = Math.min(Math.max(parseInt(b.rooms, 10) || 1, 1), Math.min(Math.max(adults, 1), 4));
     const destName = String(b.destName || '').trim().slice(0, 120);
     const interestQuery = String(b.interestQuery || '').trim().slice(0, 80);
+    // Wave B: persist:false → dry-run (the /package/estimate tease). Same
+    // fully-priced draft — hotels, tours, event, attractions, intel — but no
+    // package_orders row and sid:null. Anything except an explicit false
+    // persists exactly as before.
+    const persist = b.persist !== false;
     const user = await gbUser(request, env).catch(() => null); // optional attribution, like prebook
 
     // Components via the existing handlers (internal Requests, the handleHomeRows
@@ -14591,10 +14610,14 @@ async function handlePackageDraft(request, env, ctx) {
 
     // PERSIST — package_orders (cloudflare-worker/sql/07_package_orders.sql).
     // Missing DB binding degrades to an unpersisted (still fully priced) draft.
-    const sid = crypto.randomUUID().replace(/-/g, '');
+    // A persist:false dry-run skips this whole block: no sid, no row, and no
+    // package-attributed price_history either — the search layer's own ambient
+    // capture already recorded these hotels, and a sid that was never stored
+    // must not appear in price_history meta.
+    const sid = persist ? crypto.randomUUID().replace(/-/g, '') : null;
     const corridor = `${(destName || cheapest.city || '').toLowerCase()}|${(cheapest.country || '').toLowerCase()}`;
     let persisted = false;
-    if (env.DB) {
+    if (persist && env.DB) {
       const now = Date.now();
       persisted = await env.DB.prepare(
         'insert into package_orders (sid, user_id, status, env, corridor, created, updated, data) values (?,?,?,?,?,?,?,?)'
@@ -14603,7 +14626,7 @@ async function handlePackageDraft(request, env, ctx) {
     }
 
     // Ambient capture for the two surfaced hotel choices (fire-and-forget).
-    recordPriceHistory(env, ctx, hotelChoices.map((h) => ({
+    if (persist) recordPriceHistory(env, ctx, hotelChoices.map((h) => ({
       // Same corridor keying as handleNuiteeSearch's ambient capture (city|country) so one stay never fragments across corridors.
       corridor: `${(h.city || '').toLowerCase()}|${(h.country || '').toLowerCase()}`, component: 'hotel', productId: h.hotelId, price: h.nightly, currency: h.currency,
       meta: { checkin, nights, adults, children, role: h.role, package: sid },
@@ -14632,6 +14655,130 @@ async function handlePackageGet(request, env) {
     try { draft = JSON.parse(row.data); } catch { /* corrupt data row → draft:null, status still honest */ }
     return jsonResponse({ ok: true, sid, status, env: row.env, corridor: row.corridor, created: row.created, updated: row.updated, draft });
   } catch (e) { return jsonResponse({ ok: false, error: e.message }, 500); }
+}
+
+// ── Smart Packages: living-room estimate tease (Wave B) ──────────────────────
+// POST /package/estimate { name, country?, lat, lng } — one round trip that
+// turns a dream destination into an honestly-priced anchor: destination intel
+// picks the dates (next best-time month, ideal trip length), the REAL draft
+// pipeline dry-run-prices the cheapest hotel for exactly those dates, and the
+// response says out loud what the number covers. splitFour is PLAIN ARITHMETIC
+// (stayTotal / 4) — the frontend frames it as "if you split it", never a
+// payment promise. No intel → no estimate: a made-up "best time" next to a
+// real price would be a guess wearing a number. Every failure here is a 200
+// { ok:false | available:false } — callWorker can't read non-2xx bodies.
+const PACKAGE_ESTIMATE_TTL_SECONDS = 6 * 60 * 60;  // estimates go stale with prices
+
+const MONTH_LABELS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+// Month indices (0–11) mentioned in a free-form best-time string ("May–June &
+// September", "Dec-Feb", "late April to early June"), in listed order,
+// deduped. Full names or >=3-letter abbreviations ("Sept"); en/em-dash,
+// hyphen and "to/through/thru/until" all join ranges, which expand
+// month-by-month with Dec–Feb wrap; "&" / "," / "and" fall away as plain
+// separators. Returns [] when nothing parses — the caller must handle that.
+function monthTokens(str) {
+  const M = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+  const s = String(str || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .replace(/[–—]/g, '-').replace(/\b(?:to|through|thru|until)\b/g, '-');
+  const idx = (w) => MONTH_LABELS.findIndex((m) => m.toLowerCase().startsWith(w));
+  const out = [];
+  const push = (i) => { if (i >= 0 && !out.includes(i)) out.push(i); };
+  for (const m of s.matchAll(new RegExp(`\\b${M}\\b(?:\\s*-\\s*\\b${M}\\b)?`, 'g'))) {
+    const a = idx(m[1]);
+    if (a < 0) continue;
+    const b = m[2] ? idx(m[2]) : -1;
+    if (b < 0) { push(a); continue; }
+    for (let k = a; ; k = (k + 1) % 12) { push(k); if (k === b) break; }
+  }
+  return out;
+}
+
+// The estimate's check-in instant (UTC ms): the soonest FUTURE 14th among the
+// listed months. A month whose 14th is behind us — including the current
+// month once the 14th arrives — wraps to next year, so "use the next listed
+// month instead" falls out of the min() naturally. Null when the list is
+// empty (caller falls back to a generic 21-day lead). UTC date math only,
+// like the Nuitée date handling.
+function packageEstimateCheckin(monthIdxs, nowMs) {
+  const d = new Date(nowMs);
+  const y = d.getUTCFullYear(), cm = d.getUTCMonth(), day = d.getUTCDate();
+  let best = null;
+  for (const mi of monthIdxs) {
+    const yy = (mi < cm || (mi === cm && day >= 14)) ? y + 1 : y;
+    const t = Date.UTC(yy, mi, 14);
+    if (best == null || t < best) best = t;
+  }
+  return best;
+}
+
+async function handlePackageEstimate(request, env, ctx) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const name = String(b.name || '').trim().slice(0, 120);
+    const country = String(b.country || '').trim().slice(0, 80);
+    const lat = parseFloat(b.lat), lng = parseFloat(b.lng);
+    if (!name) return jsonResponse({ ok: false, reason: 'name_required' });
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      return jsonResponse({ ok: false, reason: 'coords_required' });
+    }
+
+    // (a) Intel anchor — same helper and 90-day KV cache as /destination/intel
+    // and the inline draft call. Unavailable intel = no estimate, honestly.
+    const intel = await destinationIntel(env, ctx, { name, country, lat, lng });
+    if (!intel.available) return jsonResponse({ ok: true, available: false, guidance: intel.guidance || DEST_INTEL_GUIDANCE });
+
+    // (b) Auto-dates from the best-time window.
+    const DAY = 86400000;
+    const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
+    const picked = packageEstimateCheckin(monthTokens(intel.bestTime && intel.bestTime.months), Date.now());
+    const checkinMs = picked != null ? picked : Date.now() + 21 * DAY;  // window unparseable → generic 21-day lead; still real, bookable dates
+    const checkin = iso(checkinMs);
+    const nights = Math.min(Math.max(parseInt(intel.daysNeeded && intel.daysNeeded.ideal, 10) || 4, 2), 10);
+    const checkout = iso(checkinMs + nights * DAY);
+    // "Best in {month}" is an INTEL claim — when the best-time window had no
+    // parseable month (e.g. "Year-round"), the generic-lead date must not be
+    // dressed up as one. monthLabel null → the tease drops the "Best in" prefix.
+    const monthLabel = picked != null ? MONTH_LABELS[new Date(checkinMs).getUTCMonth()] : null;
+
+    // (e) 6h KV cache, keyed by destination slug + the check-in month priced.
+    const ck = `pkgest:v1:${destIntelSlug(name, country)}:${checkin.slice(0, 7).replace('-', '')}`;
+    const cached = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(ck, { type: 'json' }).catch(() => null) : null;
+    if (cached && cached.ok === true && cached.available === true) return jsonResponse({ ...cached, _cache: 'hit' });
+
+    // (c) Price through the REAL draft pipeline, dry-run (persist:false, no
+    // row, no sid), party of 2, no interest query — one internal call so the
+    // hotel ladder, caching and honesty notes stay in exactly one place.
+    const origin = new URL(request.url).origin;
+    const draftRes = await handlePackageDraft(new Request(`${origin}/package/draft`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ destLat: lat, destLng: lng, checkin, checkout, adults: 2, destName: name, persist: false }),
+    }), env, ctx).then((r) => r.json()).catch(() => null);
+    const cheapest = draftRes && draftRes.ok && draftRes.draft && Array.isArray(draftRes.draft.hotelChoices)
+      ? draftRes.draft.hotelChoices[0] : null;   // composer sorts cheapest-first; [0] is role 'cheapest'
+    const stayTotal = cheapest ? (cheapest.stayTotal ?? cheapest.price) : null;
+    if (!cheapest || typeof stayTotal !== 'number' || !Number.isFinite(stayTotal) || stayTotal <= 0) {
+      return jsonResponse({ ok: true, available: false, reason: (draftRes && draftRes.reason) || 'draft_failed' });
+    }
+
+    // (d) HONESTY LAW: stayTotal is the supplier's bookable total for this
+    // exact stay; splitFour is arithmetic on it and nothing more; `includes`
+    // states what the number covers.
+    const out = {
+      ok: true, available: true,
+      monthLabel, checkin, checkout, nights,
+      party: { adults: 2 },
+      hotel: { name: cheapest.name || 'Hotel', stayTotal, currency: cheapest.currency || draftRes.draft.currency || 'USD' },
+      splitFour: Math.round(stayTotal / 4 * 100) / 100,
+      intel: { bestTime: intel.bestTime, daysNeeded: intel.daysNeeded, knownFor: intel.knownFor, guidance: intel.guidance || DEST_INTEL_GUIDANCE },
+      includes: 'hotel only — tours and tickets priced separately',
+    };
+    if (env.GLOBESKIMMERS_KV) {
+      const put = env.GLOBESKIMMERS_KV.put(ck, JSON.stringify(out), { expirationTtl: PACKAGE_ESTIMATE_TTL_SECONDS }).catch(() => {});
+      if (ctx) ctx.waitUntil(put); else await put;
+    }
+    return jsonResponse({ ...out, _cache: 'miss' });
+  } catch (e) { return jsonResponse({ ok: false, error: e.message }); }
 }
 
 // ── Stripe (Wave 1 — GlobeSkimmers-as-merchant package checkout) ─────────────
@@ -15843,6 +15990,8 @@ export default {
       // Smart Packages (priced drafts only — NO payment; booking stays per-component)
       if (pathname === '/package/draft' && request.method === 'POST') return await handlePackageDraft(request, env, ctx);
       if (pathname === '/package/get' && request.method === 'POST') return await handlePackageGet(request, env);
+      // Living-room estimate tease (Wave B) — intel-dated, dry-run-priced cheapest hotel + split-four arithmetic; failures are 200s
+      if (pathname === '/package/estimate' && request.method === 'POST') return await handlePackageEstimate(request, env, ctx);
       // Destination planning intel (Wave A) — Anthropic + KV only, hard-validated, always carries the verify-locally guidance line
       if (pathname === '/destination/intel' && request.method === 'POST') return await handleDestinationIntel(request, env, ctx);
       // Stripe payments (Wave 1 — GlobeSkimmers as merchant; hotel stay total of a priced package)

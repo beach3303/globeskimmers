@@ -4,7 +4,9 @@
 //   S1 INPUTS  — destination (prefilled from router state { dest } when the
 //                Dream answer card sends a GROUNDED destination with coords;
 //                otherwise resolved via the owned search-location route),
-//                date range + party (FindAHotel's picker/stepper patterns),
+//                date range (seedable from router-state checkin/checkout when
+//                the sender includes valid future dates) + party (FindAHotel's
+//                picker/stepper patterns),
 //                an optional interest line, one teal "Compose my package".
 //   S2 DRAFT   — POST /package/draft → the worker's two-choice draft:
 //                exactly the two hotel choices the draft returns (pre-decided
@@ -18,9 +20,11 @@
 //                absent (old worker, cached drafts) and absent renders nothing.
 //   S3 FAIL    — ok:false reasons render one designed FinderEmptyState card.
 //
-// Doctrine notes: totals are never fabricated — the bold figure is the hotel
-// stay total only, and tours/tickets say "booked separately at the prices
-// shown". ONE teal primary per surface: the compose button demotes to a quiet
+// Doctrine notes: totals are never fabricated — the estimate figure is the
+// selected hotel's stay total plus only picked attractions carrying a real
+// supplier tour price in the hotel's own currency; every other pick is
+// labeled "priced at booking" and currencies are never silently converted.
+// ONE teal primary per surface: the compose button demotes to a quiet
 // ivory button the moment a draft (or fail card) is on screen. Selection uses
 // the stamp-red ring, never a second teal. Flights are not in v1 — no origin
 // or cabin fields are faked here.
@@ -194,7 +198,25 @@ export default function SmartPackages() {
   const [destResults, setDestResults] = useState([]);
   const [destSearching, setDestSearching] = useState(false);
 
-  const [range, setRange] = useState();       // { from: Date, to: Date } | undefined
+  // Dates — { from: Date, to: Date } | undefined. Optionally prefilled from
+  // router state (the gallery tease sends checkin/checkout beside dest): both
+  // must be valid yyyy-MM-dd, checkout after checkin, and check-in not in the
+  // past — anything else is discarded and the calendar starts empty exactly as
+  // today. A valid pair seeds the range the same way a user tap would; the
+  // calendar stays fully editable.
+  const [range, setRange] = useState(() => {
+    const parseIsoDay = (s) => {
+      if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+      const [y, m, d] = s.split("-").map(Number);
+      const dt = new Date(y, m - 1, d); // local midnight — same day math as DayPicker
+      return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d ? dt : null;
+    };
+    const from = parseIsoDay(routerState?.checkin);
+    const to = parseIsoDay(routerState?.checkout);
+    if (!from || !to || !(to > from)) return undefined;
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    return from < t0 ? undefined : { from, to };
+  });
   const [dateOpen, setDateOpen] = useState(false);
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
@@ -328,6 +350,43 @@ export default function SmartPackages() {
     .filter((a, i) => picks[attrKey(a, i)])
     .map((a) => a?.name)
     .filter(Boolean);
+
+  // RUNNING ESTIMATE — pure client arithmetic, recomputed every render from
+  // the CURRENT draft + selections (a recompose swaps the draft and resets
+  // picks, so the block follows along with no extra wiring). A picked
+  // attraction is summed only when the worker attached a real supplier price
+  // (tourPrice/tourCurrency) AND its currency equals the hotel's — a
+  // mismatched or missing price is counted, honestly, as "priced at booking";
+  // nothing is ever silently converted. Old workers send neither field and
+  // every pick lands in the unpriced bucket.
+  const estCurrency = chosen?.currency || draft?.currency || "USD";
+  const estBase = Number(chosen?.stayTotal ?? chosen?.price);
+  // Tour prices are Viator PER-TRAVELER from-rates; the hotel total covers the
+  // whole party — so each priced pick multiplies by the party's adults, or the
+  // sum quietly understates and mislabels a party-level figure.
+  const estAdults = Math.max(1, Number(draft?.party?.adults) || adults || 2);
+  let pricedPicks = 0, unpricedPicks = 0, pickedTourSum = 0;
+  attractions.forEach((a, i) => {
+    if (!picks[attrKey(a, i)]) return;
+    const p = Number(a?.tourPrice);
+    if (Number.isFinite(p) && p > 0 && a?.tourCurrency === estCurrency) {
+      pricedPicks += 1; pickedTourSum += p * estAdults;
+    } else {
+      unpricedPicks += 1;
+    }
+  });
+  const estTotal = Number.isFinite(estBase) ? Math.round((estBase + pickedTourSum) * 100) / 100 : null;
+  const estDisplay = money(estTotal ?? (chosen?.stayTotal ?? chosen?.price), estCurrency);
+  const estNights = chosen?.nights || draft?.nights;
+  // Inclusion line — three honest cases: no picks → hotel + nights; priced
+  // picks → what's actually inside the figure; any unpriced picks append the
+  // priced-at-booking count.
+  const inclusionLine = [
+    pricedPicks > 0
+      ? `hotel + ${pricedPicks} tour${pricedPicks === 1 ? "" : "s"} (from-rates × ${estAdults})`
+      : `hotel · ${estNights} night${estNights === 1 ? "" : "s"}`,
+    unpricedPicks > 0 ? `${unpricedPicks} pick${unpricedPicks === 1 ? "" : "s"} priced at booking` : null,
+  ].filter(Boolean).join(" · ");
   // "See tours" on a ticketed card — Wave A has no attraction booking, so this
   // hands off to Viator search for the attraction name through the same
   // payout-wrapped path every tour link uses (never a raw URL).
@@ -629,6 +688,14 @@ export default function SmartPackages() {
                               ~{mi >= 10 ? Math.round(mi) : Math.round(mi * 10) / 10} mi away
                             </div>
                           )}
+                          {/* Real supplier price when the worker matched a tour
+                              (tourPrice/tourCurrency are additive — absent on
+                              old workers, and the card renders as before). */}
+                          {Number.isFinite(Number(a?.tourPrice)) && Number(a.tourPrice) > 0 && a?.tourCurrency ? (
+                            <div className="font-mono font-semibold text-[calc(10px*var(--fs))] mt-1" style={{ color: INK }}>
+                              from {money(Number(a.tourPrice), a.tourCurrency)}
+                            </div>
+                          ) : null}
                           {a?.ticketedHint && (
                             <div className="flex items-center justify-between gap-1 mt-1">
                               <span className="font-mono text-[calc(9px*var(--fs))] uppercase tracking-[0.08em]" style={{ color: SUB }}>tours available</span>
@@ -693,18 +760,27 @@ export default function SmartPackages() {
               </div>
             )}
 
-            {/* TOTAL — hotel only, never a fabricated grand total */}
+            {/* RUNNING ESTIMATE — the live figure: selected hotel's stay total
+                plus only the picked attractions whose supplier tour price is in
+                the hotel's own currency. The inclusion line says exactly what
+                is inside; everything else is "priced at booking". Reacts
+                instantly to the hotel-choice ring and every pick toggle. */}
             {chosen && (
               <div className="mt-4 rounded-2xl px-4 py-4" style={{ background: IVORY_2, border: `1px solid ${EDGE}` }}>
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: SUB }}>Trip total</span>
-                  <span className="font-bold text-[calc(20px*var(--fs))]" style={{ color: INK, fontVariantNumeric: "tabular-nums" }}>
-                    {money(chosen.stayTotal ?? chosen.price, chosen.currency || draft.currency)}
+                  <span className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: SUB }}>Trip estimate</span>
+                  <span style={{ fontFamily: SERIF, fontSize: fs(22), color: INK, fontVariantNumeric: "tabular-nums" }}>
+                    {estDisplay ? `≈ ${estDisplay}` : ""}
                   </span>
                 </div>
-                <div className="text-[calc(11.5px*var(--fs))] mt-1.5 leading-snug" style={{ color: INK2 }}>
-                  Hotel total. Tours and tickets are booked separately at the prices shown.
+                <div className="font-mono text-[calc(10.5px*var(--fs))] mt-1.5 leading-snug" style={{ color: SUB }}>
+                  {inclusionLine}
                 </div>
+                {Number.isFinite(estTotal) && estTotal > 0 && (
+                  <div className="font-mono text-[calc(10.5px*var(--fs))] mt-1 leading-snug" style={{ color: SUB }}>
+                    ~{money(estTotal / 4, estCurrency)} × 4 if you split it
+                  </div>
+                )}
               </div>
             )}
 

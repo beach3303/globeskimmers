@@ -16,7 +16,16 @@
 //
 // The CTA hands { name, city, country, lat, lng } to /SmartPackages via the
 // EXACT router-state mechanism SmartSearchOverlay already uses — one handoff,
-// not two.
+// not two. When a price tease is on screen (below) the same handoff ALSO
+// carries { checkin, checkout } so the composer opens pre-dated.
+//
+// Price tease: POST /package/estimate { name, country, lat, lng } →
+// { ok, available, monthLabel, checkin, checkout, nights, party,
+//   hotel: { name, stayTotal, currency }, splitFour, intel, includes }.
+// Fetched lazily ONCE per destination (only when dest has finite coords),
+// cached per destKey, never blocking photos. Every field is read defensively:
+// available:false or any missing rendered field → no tease, gallery unchanged.
+// The split-by-four line is arithmetic framing only — never a payment promise.
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -58,6 +67,45 @@ function normalizePhoto(p) {
 // Six shimmer blocks at staggered heights — masonry-shaped loading, no spinner.
 const SHIMMER_H = [180, 236, 204, 160, 224, 188];
 
+// Nuitee money register — currency symbol, 2dp only when the amount has cents.
+const money = (amt, cur) => {
+  if (!Number.isFinite(amt)) return "";
+  const digits = Number.isInteger(amt) ? 0 : 2;
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: cur || "USD",
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(amt);
+  } catch {
+    return `${Math.round(amt * 100) / 100} ${cur || ""}`.trim();
+  }
+};
+
+// Validate /package/estimate into exactly what the tease renders/emits, or
+// null. Strict on purpose: a partial estimate renders NOTHING new — the
+// gallery must stay exactly as-is rather than show a broken pitch.
+function normalizeEstimate(d) {
+  if (!d || d.ok !== true || d.available !== true) return null;
+  const monthLabel = typeof d.monthLabel === "string" ? d.monthLabel.trim() : "";
+  const isDay = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const checkin = isDay(d.checkin) ? d.checkin : "";
+  const checkout = isDay(d.checkout) ? d.checkout : "";
+  const nights = Number(d.nights);
+  const stayTotal = Number(d.hotel?.stayTotal);
+  const currency = typeof d.hotel?.currency === "string" && d.hotel.currency ? d.hotel.currency : "";
+  const splitFour = Number(d.splitFour);
+  // monthLabel is OPTIONAL: the worker sends null when the best-time window had
+  // no parseable month (e.g. "Year-round") — the tease then simply drops the
+  // "Best in" prefix rather than inventing a month or losing the whole pitch.
+  if (!checkin || !checkout || !(checkout > checkin)) return null;
+  if (!Number.isFinite(nights) || nights < 1) return null;
+  if (!Number.isFinite(stayTotal) || stayTotal <= 0 || !currency) return null;
+  if (!Number.isFinite(splitFour) || splitFour <= 0) return null;
+  return { monthLabel, checkin, checkout, nights: Math.round(nights), stayTotal, currency, splitFour };
+}
+
 export default function DreamGallery({ open, onClose, dest, onView, viewLabel = "View details" }) {
   const navigate = useNavigate();
   const [active, setActive] = useState("");
@@ -71,9 +119,19 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
   // the list shrinks underneath (an image erroring out of `failed`).
   const [lightboxIdx, setLightboxIdx] = useState(null);
   const [failed, setFailed] = useState(() => new Set());
+  // { [destKey]: { status: 'loading'|'done', est: normalized|null } } — kept
+  // across destination swaps so each destination is estimated at most once
+  // per mount. done+null = tried, nothing showable (gallery stays as-is).
+  const [estimates, setEstimates] = useState({});
+  const teaseLoggedRef = useRef(new Set());
 
   const name = dest?.name ? String(dest.name) : "";
   const destKey = name ? `${name}|${dest?.country || ""}` : "";
+  // Same strictness as SmartPackages' own reader — real numbers only, no
+  // string coercion. No coords → the estimate fetch is skipped entirely.
+  const hasCoords = Number.isFinite(dest?.lat) && Number.isFinite(dest?.lng);
+  const estSlot = estimates[destKey];
+  const est = estSlot?.status === "done" ? estSlot.est : null;
 
   // Current bucket's photos — derived BEFORE the effects so the keyboard
   // handler below can step through them.
@@ -169,6 +227,31 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
     return () => { cancelled = true; };
   }, [open, active, destKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Lazy price-tease estimate — once per destination, coords required, and
+  // fully parallel to the photo fetches (photos never wait on it).
+  useEffect(() => {
+    if (!open || !name || !hasCoords) return;
+    if (estimates[destKey]) return; // already loading or loaded
+    let cancelled = false;
+    setEstimates((m) => ({ ...m, [destKey]: { status: "loading", est: null } }));
+    (async () => {
+      const body = { name, country: dest?.country ? String(dest.country) : "", lat: dest.lat, lng: dest.lng };
+      const res = await callWorker(ROUTE.packageEstimate, body);
+      if (cancelled) return;
+      const normalized = res.error ? null : normalizeEstimate(res.data);
+      setEstimates((m) => ({ ...m, [destKey]: { status: "done", est: normalized } }));
+    })();
+    return () => { cancelled = true; };
+  }, [open, destKey, hasCoords]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // One view event per shown estimate — keyed by destKey so a bucket switch
+  // or reopen of the same destination never re-fires it.
+  useEffect(() => {
+    if (!open || !est || teaseLoggedRef.current.has(destKey)) return;
+    teaseLoggedRef.current.add(destKey);
+    logDiscover("dream_tease_view", { place_name: name, total: est.stayTotal, currency: est.currency });
+  }, [open, est, destKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // A vanished list (every image erroring into `failed`) must also CLEAR the
   // lightbox index — the render clamp only hides it, leaving a stale index that
   // swallows one Escape and pops the lightbox open uninvited on the next
@@ -199,12 +282,15 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
 
   const buildTrip = () => {
     logDiscover("dream_gallery_build_trip", { place_name: name, country });
+    if (est) logDiscover("dream_tease_build", { place_name: name, total: est.stayTotal, currency: est.currency });
     // Same router-state handoff SmartSearchOverlay uses — SmartPackages reads
     // routerState.dest and checks Number.isFinite(lat/lng) itself, so missing
-    // coords degrade to its own typed search, never a crash.
-    navigate(createPageUrl("SmartPackages"), {
-      state: { dest: { name, city: dest?.city, country: dest?.country, lat: dest?.lat, lng: dest?.lng } },
-    });
+    // coords degrade to its own typed search, never a crash. With a tease on
+    // screen the estimate's dates ride along so the composer opens pre-dated;
+    // without one the state is byte-for-byte what it was before.
+    const state = { dest: { name, city: dest?.city, country: dest?.country, lat: dest?.lat, lng: dest?.lng } };
+    if (est) { state.checkin = est.checkin; state.checkout = est.checkout; }
+    navigate(createPageUrl("SmartPackages"), { state });
     onClose?.();
   };
 
@@ -307,6 +393,25 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
           )}
         </div>
       </div>
+
+      {/* Price tease — the honest sales pitch, only when a real estimate came
+          back whole. Hotel-only money, split-by-four as plain arithmetic
+          framing (never a payment product we don't control). */}
+      {est && (
+        <div className="flex-none px-4 pt-3 pb-2.5" style={{ background: IVORY_2, borderTop: `1px solid ${EDGE}` }}>
+          <div className="max-w-md mx-auto">
+            <div className="font-serif text-[calc(16px*var(--fs))] leading-tight" style={{ color: INK }}>
+              Want to take this vacation?
+            </div>
+            <div className="font-mono text-[calc(12px*var(--fs))] mt-1 leading-snug" style={{ color: INK }}>
+              {est.monthLabel ? `Best in ${est.monthLabel} · roughly` : "Roughly"} {money(est.stayTotal, est.currency)} for two · {est.nights} night{est.nights === 1 ? "" : "s"}
+            </div>
+            <div className="font-mono text-[calc(11.5px*var(--fs))] mt-0.5 leading-snug" style={{ color: SUB }}>
+              ~{money(est.splitFour, est.currency)} × 4 if you split it · hotel only — tours and tickets priced separately
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sticky bottom CTA — the whole sheet lands here. */}
       <div className="flex-none px-4 pt-3 bg-white" style={{ borderTop: `1px solid ${EDGE}`, paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))" }}>
