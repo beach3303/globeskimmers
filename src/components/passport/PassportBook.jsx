@@ -88,14 +88,43 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
           <AirportStamp iata={stamp.entity_id} city={stamp.city} country={stamp.country} countryCode={stamp.country} date={stamp.visited_on} width={airportW} />
         </div>
       ) : isCity ? (
-        // A city / place visit — a fat, borderless ink line (differs from the
-        // bordered iconic art and the rectangular airport arrival stamp).
+        // A city / place visit (everything minted by "Stamp a place"). This
+        // branch used to be text-only and silently DROPPED the engraved art
+        // and the typographic stamp that the detail sheet shows — a curated
+        // "Lake Louise" engraving never reached the keepsake page. Now it gets
+        // the same art-or-typographic treatment as an iconic place, with the
+        // "Visited / I was here @" typography kept as the caption.
         <div className="flex flex-col items-center text-center" style={{ maxWidth: airportW, padding: "0 6px" }}>
-          <div style={{ fontFamily: SANS, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".012em", color: cityInk, fontSize: fs(21), lineHeight: 1.08 }}>
-            Visited {stamp.city || stamp.name}{stamp.country ? `, ${stamp.country}` : ""}
-          </div>
-          {venue && <div style={{ fontFamily: SERIF, fontStyle: "italic", color: cityInk, fontSize: fs(17), marginTop: 5, lineHeight: 1.1 }}>I was here @ {venue}</div>}
-          {bigDate && <div style={{ fontFamily: MONO, color: cityInk, opacity: 0.7, fontSize: fs(11.5), letterSpacing: ".03em", marginTop: 6 }}>{bigDate}</div>}
+          {showArt ? (
+            <img src={art} alt={stamp.name} loading="lazy" onError={() => setArtFail(true)} style={{ width: artW, height: artW, objectFit: "contain" }} />
+          ) : (
+            // No bespoke art yet → the typographic stamp (carries its own name,
+            // date and "I was here!" strike). Auto-upgrades when a PNG lands on R2.
+            <TypographicStamp
+              name={stamp.name} city={stamp.city} region={stamp.region}
+              country={stamp.country} date={stamp.visited_on}
+              entityId={stamp.entity_id || stamp.id} width={artW} overprint
+            />
+          )}
+          {showArt ? (
+            // Under the engraving: the full caption.
+            <>
+              <div style={{ fontFamily: SANS, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".012em", color: cityInk, fontSize: fs(15), lineHeight: 1.08, marginTop: 8 }}>
+                Visited {stamp.city || stamp.name}{stamp.country ? `, ${stamp.country}` : ""}
+              </div>
+              {venue && <div style={{ fontFamily: SERIF, fontStyle: "italic", color: cityInk, fontSize: fs(17), marginTop: 4, lineHeight: 1.1 }}>I was here @ {venue}</div>}
+              {bigDate && <div style={{ fontFamily: MONO, color: cityInk, opacity: 0.7, fontSize: fs(11.5), letterSpacing: ".03em", marginTop: 6 }}>{bigDate}</div>}
+            </>
+          ) : (
+            // The typographic stamp already says the name + date + "I was
+            // here!" — only add the city context when the stamp is a specific
+            // spot within a city (e.g. LAKE LOUISE → "Visited Banff, Canada").
+            venue && stamp.city && (
+              <div style={{ fontFamily: MONO, color: cityInk, opacity: 0.75, fontSize: fs(11.5), letterSpacing: ".04em", textTransform: "uppercase", marginTop: 8 }}>
+                Visited {stamp.city}{stamp.country ? `, ${stamp.country}` : ""}
+              </div>
+            )
+          )}
         </div>
       ) : (
         <div className="flex flex-col items-center">
