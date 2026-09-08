@@ -63,4 +63,7 @@ export const ROUTE = {
   // Deal Radar — airline fare-sale list for the Home row
   dealsList: 'deals/list',
 
+  // Trips — post-stay feedback prompt on past bookings
+  tripFeedback: 'trip/feedback',
+
 };

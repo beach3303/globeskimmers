@@ -1200,6 +1200,7 @@ const ANALYTICS_QUERIES = {
       ROUND(COALESCE(SUM(commission), 0), 2) AS commission
     FROM affiliate_clicks
     WHERE ts >= strftime('%s','now','-30 days')
+      AND (intent IS NULL OR intent != 'sandbox')
     GROUP BY partner
     ORDER BY clicks DESC
   `,
@@ -1236,11 +1237,12 @@ const ANALYTICS_QUERIES = {
         WHERE ts >= strftime('%s','now','-30 days') AND session_id IS NOT NULL) AS sessions,
       (SELECT COUNT(DISTINCT session_id) FROM events
         WHERE ts >= strftime('%s','now','-30 days')
-        AND event_type IN ('discover_select','home_row_card_tap','directions_tap','event_tap','right_now_tap','escape_card_tap','where_to_stay_area_tap','wishlist_add')) AS engaged_sessions,
+        AND event_type IN ('discover_select','home_row_card_tap','directions_tap','event_tap','right_now_tap','escape_card_tap','where_to_stay_area_tap','wishlist_add','deal_tap','dream_gallery_open','dream_gallery_build_trip','dream_tease_build','dream_shelf_tap','dreamer_corner_anywhere','event_window','exp_view')) AS engaged_sessions,
       (SELECT COUNT(DISTINCT session_id) FROM affiliate_clicks
         WHERE ts >= strftime('%s','now','-30 days') AND session_id IS NOT NULL) AS click_sessions,
       (SELECT COUNT(DISTINCT session_id) FROM affiliate_clicks
-        WHERE ts >= strftime('%s','now','-30 days') AND converted = 1) AS booked_sessions
+        WHERE ts >= strftime('%s','now','-30 days') AND converted = 1
+        AND (intent IS NULL OR intent != 'sandbox')) AS booked_sessions
   `,
   affiliate_clicks_by_intent_30d: `
     SELECT COALESCE(intent,'(unknown)') AS intent,
@@ -1248,6 +1250,7 @@ const ANALYTICS_QUERIES = {
       SUM(CASE WHEN converted = 1 THEN 1 ELSE 0 END) AS conversions
     FROM affiliate_clicks
     WHERE ts >= strftime('%s','now','-30 days')
+      AND (intent IS NULL OR intent != 'sandbox')
     GROUP BY intent ORDER BY clicks DESC
   `,
   // ── Affiliate REVENUE by partner (filled once /aff/import backfills conversions) ──
@@ -1262,6 +1265,7 @@ const ANALYTICS_QUERIES = {
       ROUND(SUM(CASE WHEN converted = 1 THEN COALESCE(commission,0) ELSE 0 END), 2) AS commission
     FROM affiliate_clicks
     WHERE ts >= strftime('%s','now','-90 days')
+      AND (intent IS NULL OR intent != 'sandbox')
     GROUP BY partner, currency ORDER BY commission DESC, clicks DESC
   `,
   // ── RETENTION COHORTS — the make-or-break metric for an episodic-travel app,
@@ -2336,6 +2340,95 @@ const ANALYTICS_QUERIES = {
     ORDER BY taps DESC
     LIMIT 100
   `,
+
+  // ── Demand intel v2 (11_demand_intel.sql era) ────────────────────────────
+  // These query the RAW events table on purpose: events are kept 180 days (the
+  // nightly analyticsRollup trims older rows after compacting them into
+  // events_daily), so a 30/90-day window is always fully covered by raw rows.
+  // events_daily exists for long-horizon retention, not for these dashboards.
+  //
+  // Where people are browsing, by destination — card-level taps + views that
+  // carry the logDiscover {city,country} context. Deliberately excludes
+  // home_rows_view (one per Home render; discover_top_destinations covers it).
+  demand_top_browsed_30d: `
+    SELECT COALESCE(json_extract(payload,'$.city'),'') AS city,
+      COALESCE(json_extract(payload,'$.country'),'') AS country,
+      COUNT(*) AS actions,
+      COUNT(DISTINCT session_id) AS sessions
+    FROM events
+    WHERE event_type IN ('home_row_card_tap','discover_select','event_tap','event_view','right_now_tap','escape_card_tap','escape_view','today_card_tap','deal_tap','deal_view','exp_view','where_to_stay_view','where_to_stay_area_tap','dream_gallery_open','dream_tease_view','dream_shelf_tap','home_stamp_tap')
+      AND ts >= strftime('%s','now','-30 days')
+      AND (IFNULL(json_extract(payload,'$.city'),'') <> '' OR IFNULL(json_extract(payload,'$.country'),'') <> '')
+    GROUP BY city, country
+    ORDER BY actions DESC
+    LIMIT 40
+  `,
+  // What people type into search (src/lib/logSearch.js: {category, query}).
+  // query is null for pure category browses — only real typed queries rank.
+  demand_top_searches_30d: `
+    SELECT json_extract(payload,'$.query') AS query,
+      COALESCE(json_extract(payload,'$.category'),'') AS category,
+      COUNT(*) AS searches
+    FROM events
+    WHERE event_type = 'search'
+      AND IFNULL(json_extract(payload,'$.query'),'') <> ''
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY query, category
+    ORDER BY searches DESC
+    LIMIT 40
+  `,
+  // Attention time by surface + place. Emitters shipped with this wave:
+  // DreamGallery (per-gallery session) and SmartPackages (page dwell) — both
+  // send the payload contract {ms, surface, place_name}.
+  demand_dwell_30d: `
+    SELECT COALESCE(json_extract(payload,'$.surface'),'(unknown)') AS surface,
+      COALESCE(json_extract(payload,'$.place_name'),'') AS place,
+      COUNT(*) AS dwells,
+      SUM(COALESCE(json_extract(payload,'$.ms'),0)) AS total_ms
+    FROM events
+    WHERE event_type = 'dwell'
+      AND ts >= strftime('%s','now','-30 days')
+    GROUP BY surface, place
+    ORDER BY total_ms DESC
+    LIMIT 40
+  `,
+  // Where the MONEY is going — real conversions only (sandbox test bookings
+  // are tagged intent='sandbox' by nuiteeRecordBooking and excluded here).
+  demand_bookings_by_country_90d: `
+    SELECT COALESCE(dest_country,'(unknown)') AS country, partner,
+      COUNT(*) AS bookings,
+      ROUND(COALESCE(SUM(commission),0), 2) AS commission
+    FROM affiliate_clicks
+    WHERE converted = 1
+      AND (intent IS NULL OR intent != 'sandbox')
+      AND ts >= strftime('%s','now','-90 days')
+    GROUP BY country, partner
+    ORDER BY bookings DESC
+    LIMIT 40
+  `,
+  // Package tier mix. HONEST PLACEHOLDER until flight tiers exist: today
+  // package_orders holds hotel-stay drafts, so "tier" is just the order status
+  // lifecycle. paid_test (Stripe TEST-mode) is its own bucket — a test key must
+  // never inflate a founder revenue metric (same doctrine as the sandbox filter).
+  demand_tier_mix_90d: `
+    SELECT CASE WHEN status = 'paid_test' THEN 'test (not revenue)' WHEN status LIKE 'paid%' THEN 'paid' ELSE status END AS tier,
+      COUNT(*) AS orders
+    FROM package_orders
+    WHERE created >= strftime('%s','now','-90 days') * 1000
+    GROUP BY tier
+    ORDER BY orders DESC
+  `,
+  // Post-stay feedback (trip_feedback, 11_demand_intel.sql; written by the
+  // public POST /trip/feedback). Admin-gated like every /analytics-query type.
+  trip_feedback_recent: `
+    SELECT created, rating, problems, hotel_name, city, country, checkout
+    FROM trip_feedback
+    ORDER BY created DESC
+    LIMIT 50
+  `,
+  // booking_ref deliberately NOT selected: the page never renders it, and it
+  // joins 1:1 to affiliate_clicks.user_id — omitting it keeps the response
+  // as anonymous as the page claims.
 
   // ── Growth & retention ────────────────────────────────────────────────────
   // Unique active users use COALESCE(user_id, session_id) so anonymous devices
@@ -15399,6 +15492,85 @@ async function handleAffiliateMine(request, env) {
   } catch (e) { return jsonResponse({ items: [], error: e.message }, 500); }
 }
 
+// ── POST /trip/feedback — post-stay rating from the Trips page ─────────────
+// Public (auth optional, like /aff/click: gbUser attributes when signed in,
+// never gates). Body: { bookingRef?, rating (int 1..5, required), problems?,
+// hotelName?, city?, country?, checkout? }. Persists to trip_feedback
+// (11_demand_intel.sql); read back via /analytics-query?type=trip_feedback_recent.
+// Every business outcome is a 200 — { ok:true } or { ok:false, reason } — so
+// the frontend can show a soft message without a thrown fetch.
+// Rate-limit-lite: one submission per (user, or hashed anon IP) + bookingRef
+// per 30 days, tracked in KV; dupes come back { ok:false, reason:'already_left' }.
+async function handleTripFeedback(request, env) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const rating = Number(body?.rating);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return jsonResponse({ ok: false, reason: 'bad_rating' });
+    }
+    if (!env.DB) return jsonResponse({ ok: false, reason: 'no_db_binding' });
+    // Sanitize: trim, strip control chars, cap length. Empty string -> null.
+    const clean = (v, max) => {
+      if (v === undefined || v === null) return null;
+      const s = String(v).replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, max);
+      return s || null;
+    };
+    const bookingRef = clean(body.bookingRef, 80);
+    const problems = clean(body.problems, 1000);
+    const hotelName = clean(body.hotelName, 200);
+    const city = clean(body.city, 120);
+    const country = clean(body.country, 120);
+    // checkout only kept when it looks like a date — never store free text here.
+    const checkoutRaw = clean(body.checkout, 10);
+    const checkout = checkoutRaw && /^\d{4}-\d{2}-\d{2}$/.test(checkoutRaw) ? checkoutRaw : null;
+
+    const user = await gbUser(request, env).catch(() => null); // attribution is optional
+    // Dupe guard: keyed on who (user id, else hashed connecting IP — the raw
+    // IP is never stored) + the booking. KV-less deploys skip the guard
+    // gracefully rather than blocking feedback.
+    let dupeKey = null, dailyKey = null;
+    if (env.GLOBESKIMMERS_KV) {
+      const who = user?.id || `ip:${request.headers.get('CF-Connecting-IP') || 'unknown'}`;
+      dupeKey = `tripfb:v1:${await sha256Hex(`${who}|${bookingRef || 'none'}`)}`;
+      const seen = await env.GLOBESKIMMERS_KV.get(dupeKey).catch(() => null);
+      if (seen) return jsonResponse({ ok: false, reason: 'already_left' });
+      // Daily cap per identity: varying bookingRef must not grant unlimited
+      // writes into a table that renders on the founder's decision page.
+      dailyKey = `tripfbday:v1:${await sha256Hex(who)}:${new Date().toISOString().slice(0, 10)}`;
+      const todayCount = parseInt(await env.GLOBESKIMMERS_KV.get(dailyKey).catch(() => null), 10) || 0;
+      if (todayCount >= 5) return jsonResponse({ ok: false, reason: 'rate_limited' });
+      await env.GLOBESKIMMERS_KV.put(dailyKey, String(todayCount + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
+    }
+
+    try {
+      await env.DB.prepare(
+        `INSERT INTO trip_feedback (id, booking_ref, user_id, rating, problems, hotel_name, city, country, checkout)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        crypto.randomUUID(),
+        bookingRef,
+        user?.id || null,
+        rating,
+        problems,
+        hotelName,
+        city,
+        country,
+        checkout
+      ).run();
+    } catch {
+      // Table not applied yet (run cloudflare-worker/sql/11_demand_intel.sql)
+      // or transient D1 trouble — soft-fail, never break the Trips page.
+      return jsonResponse({ ok: false, reason: 'insert_failed' });
+    }
+    if (dupeKey) {
+      await env.GLOBESKIMMERS_KV.put(dupeKey, '1', { expirationTtl: 30 * 86400 }).catch(() => {});
+    }
+    return jsonResponse({ ok: true });
+  } catch (e) {
+    return jsonResponse({ ok: false, error: e.message }, 500);
+  }
+}
+
 // Conversion IMPORT — closes the affiliate money loop. Admin-only. Ingests a
 // network's conversion report (exported from the partner dashboard, or later an
 // automated per-network pull) and joins on OUR SubID to mark the matching click
@@ -15876,6 +16048,43 @@ async function dealRadarSweep(env, ctx) {
   return results;
 }
 
+// ── Nightly analytics rollup + raw-event retention (cron; 11_demand_intel.sql) ──
+// Step 1 compacts YESTERDAY's raw events into events_daily — one row per UTC
+// day × event_type × payload city/country (missing/NULL → ''), INSERT OR
+// REPLACE on the PK, so re-running the same day recomputes identical rows:
+// idempotent. Step 2 trims raw events older than 180 days (their aggregate
+// signal now lives in events_daily). D1/SQLite DELETE takes no bare LIMIT, so
+// each batch deletes via a rowid subselect; 5 batches × 5000 rows bounds one
+// cron tick — a bigger backlog just drains over successive nights.
+// A failed night leaves NO gap as long as raw rows still exist: the demand
+// queries read raw events (180-day window), and a missed day can be replayed
+// manually before its raw rows age out.
+async function analyticsRollup(env) {
+  if (!env.DB) return;
+  // Yesterday, UTC. The cron fires at 15:00 UTC, so yesterday is always a
+  // complete day (ts is server-issued epoch seconds — see handleLogEvent).
+  const day = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const dayStart = Math.floor(Date.parse(`${day}T00:00:00Z`) / 1000);
+  await env.DB.prepare(
+    `INSERT OR REPLACE INTO events_daily (day, event_type, city, country, n)
+     SELECT ?, event_type,
+       COALESCE(json_extract(payload,'$.city'), '') AS city,
+       COALESCE(json_extract(payload,'$.country'), '') AS country,
+       COUNT(*) AS n
+     FROM events
+     WHERE ts >= ? AND ts < ?
+     GROUP BY event_type, city, country`
+  ).bind(day, dayStart, dayStart + 86400).run();
+  const cutoff = Math.floor(Date.now() / 1000) - 180 * 86400;
+  for (let i = 0; i < 5; i++) {
+    const r = await env.DB.prepare(
+      `DELETE FROM events WHERE rowid IN
+         (SELECT rowid FROM events WHERE ts < ? LIMIT 5000)`
+    ).bind(cutoff).run();
+    if (((r && r.meta && r.meta.changes) || 0) < 5000) break; // backlog drained
+  }
+}
+
 // GET /deals/list — public (same auth stance as /events/search: browse data,
 // no identity). Fresh promos only: active AND seen by a sweep within 7 days —
 // a page we can no longer read goes quiet instead of advertising stale sales.
@@ -15967,6 +16176,7 @@ export default {
       if (pathname === '/aff/click' && request.method === 'POST') return await handleAffiliateClick(request, env, ctx);
       if (pathname === '/aff/mine' && request.method === 'POST') return await handleAffiliateMine(request, env);
       if (pathname === '/aff/import' && request.method === 'POST') return await handleAffiliateImport(request, env);
+      if (pathname === '/trip/feedback' && request.method === 'POST') return await handleTripFeedback(request, env);
       if (pathname === '/saves/pull' && request.method === 'POST') return await handleSavesPull(request, env);
       if (pathname === '/saves/push' && request.method === 'POST') return await handleSavesPush(request, env);
       if (pathname === '/viator/match' && request.method === 'POST') return await handleViatorMatch(request, env);
@@ -16110,6 +16320,14 @@ export default {
     } catch (_e) {
       // swallow — sweep trouble is invisible to the API surface; the next
       // day's cron (or POST /deals/sweep) simply tries again
+    }
+    // Nightly demand-intel rollup + 180-day raw-event retention. Its OWN
+    // try/catch: rollup trouble can never dent the sweep above or the cron.
+    try {
+      await analyticsRollup(env);
+    } catch (_e) {
+      // swallow — INSERT OR REPLACE makes any day safely replayable while its
+      // raw events (kept 180d) still exist; a failed night costs nothing yet
     }
   }
 };

@@ -39,6 +39,15 @@ const BATCH_DELAY_MS = 200;
 const STORAGE_KEY = 'gs_session_id';
 const ANON_KEY = 'gs_anon_id';
 
+// Dev guard — `npm run dev` talks to the PRODUCTION worker (WORKER_URL is
+// hardcoded; there is no staging), so without this every local browse session
+// pollutes the live D1 events table. In dev every send is a no-op (one
+// console.debug notice on the first attempted event). Vite statically
+// replaces import.meta.env.DEV, so production builds see `false` here —
+// zero behavior change shipped.
+const IS_DEV = !!import.meta.env?.DEV;
+let devNoticeShown = false;
+
 let pendingBatch = [];
 let batchTimer = null;
 
@@ -115,6 +124,14 @@ async function flushBatch() {
  */
 export function logEvent(eventType, payload = {}, page = null) {
   if (!eventType) return;
+  if (IS_DEV) {
+    // Nothing is queued, so flushBatch/flushEvents stay no-ops too.
+    if (!devNoticeShown) {
+      devNoticeShown = true;
+      try { console.debug('[analytics] dev — events not sent'); } catch { /* noop */ }
+    }
+    return;
+  }
   try {
     pendingBatch.push({
       event_type: eventType,

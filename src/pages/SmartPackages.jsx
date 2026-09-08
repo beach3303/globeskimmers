@@ -38,6 +38,7 @@ import { DayPicker } from "react-day-picker";
 import { format } from "date-fns";
 import "react-day-picker/dist/style.css";
 import { callWorker } from "@/lib/callWorker";
+import { useDwell } from "@/lib/useDwell";
 import { viatorProductLink, viatorSearchLink } from "@/lib/viator";
 import { ROUTE } from "@/lib/workerRoutes";
 import { trackAffiliateClick } from "@/lib/affiliate";
@@ -244,6 +245,12 @@ export default function SmartPackages() {
   const checkin = range?.from ? format(range.from, "yyyy-MM-dd") : "";
   const checkout = range?.to ? format(range.to, "yyyy-MM-dd") : "";
   const hasCoords = Number.isFinite(dest?.lat) && Number.isFinite(dest?.lng);
+  // Page-level dwell — one 'dwell' event per visit (foreground ms, >= 2s,
+  // capped at 10 min); dest is read at report time, so it reflects the
+  // destination the user ended on, null if none was ever chosen.
+  // place_name (not `dest`) — the demand_dwell_30d report groups on $.place_name;
+  // a divergent key silently collapses this surface into place=''.
+  useDwell("smart_packages", { place_name: dest?.name || null });
   const canCompose = hasCoords && !!checkin && !!checkout && checkout > checkin;   // ISO string compare — same-day stays disabled, matching the worker's checkout<=checkin 400
   const hasResult = !!draft || !!fail; // demotes the compose button to quiet ivory
   // Founder-only test lane while Stripe is in test mode — the page reads no URL

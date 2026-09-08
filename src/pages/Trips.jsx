@@ -37,7 +37,14 @@ const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const ED_MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const ED_INK = "#16110D", ED_INK3 = "#736657";
 const ED_RULE = "rgba(22,17,13,.10)";
+const STAMP_RED = "#B0472F"; // warm passport-ink red (same as Passport)
 const DAY_MS = 86400000;
+
+// Past-trip feedback — asked once per booking, never nags: a submit OR a
+// dismissal is remembered on-device per bookingRef and the prompt stays gone.
+const fbKey = (ref) => `gs_trip_fb_${ref}`;
+const readFbState = (ref) => { try { return localStorage.getItem(fbKey(ref)); } catch { return null; } };
+const writeFbState = (ref, v) => { try { localStorage.setItem(fbKey(ref), v); } catch { /* ignore */ } };
 
 const TABS = [
   { id: "dreaming", label: "Dreaming" },
@@ -367,11 +374,16 @@ export default function TripsPage() {
                   </h2>
                   <div className="flex flex-col gap-2.5">
                     {past.map((r) => (
-                      <BookedRow
-                        key={r.it.key} r={r} fs={fs} t={t} muted
-                        display={isCancelled(r) ? "cancelled" : "completed"}
-                        onOpen={() => setDetail(r.it)}
-                      />
+                      <div key={r.it.key}>
+                        <BookedRow
+                          r={r} fs={fs} t={t} muted
+                          display={isCancelled(r) ? "cancelled" : "completed"}
+                          onOpen={() => setDetail(r.it)}
+                        />
+                        {/* Completed stays only (never cancelled — they didn't stay):
+                            a compact once-per-booking feedback ask under the card. */}
+                        {!isCancelled(r) && r.dated && <TripFeedbackPrompt r={r} fs={fs} t={t} />}
+                      </div>
                     ))}
                   </div>
                 </>
@@ -530,6 +542,130 @@ function BookedRow({ r, fs, t, display, caption, microcopy, muted, onOpen }) {
         </div>
       )}
     </button>
+  );
+}
+
+// Compact once-per-booking feedback ask, rendered as a quiet sub-card under a
+// completed past stay (BookedRow is itself a <button>, so the prompt must be a
+// sibling, never a child). Five text-★ buttons (stamp-red when selected), an
+// optional one-line problems input, a quiet send. Submit or dismiss persists
+// per bookingRef in localStorage so the ask never nags; a worker "already_left"
+// gets the same thanks line (idempotent UX).
+function TripFeedbackPrompt({ r, fs, t }) {
+  const it = r.it;
+  const bookingRef = it.product_id || it.key;
+  const [phase, setPhase] = useState(() => {
+    const s = readFbState(bookingRef);
+    return s === "done" ? "thanks" : s === "dismissed" ? "hidden" : "ask";
+  });
+  const [rating, setRating] = useState(0);
+  const [problems, setProblems] = useState("");
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState(null);
+
+  if (!bookingRef || phase === "hidden") return null;
+
+  const dismiss = () => { writeFbState(bookingRef, "dismissed"); setPhase("hidden"); };
+
+  const submit = async () => {
+    if (!rating || sending) return;
+    setSending(true);
+    setErr(null);
+    // checkout as YYYY-MM-DD: prefer the row's real column; else re-format the
+    // parsed local ms (parseYMD built it from local parts, so local out too).
+    let checkout = it.checkout || null;
+    if (!checkout && r.checkout) {
+      const d = new Date(r.checkout);
+      checkout = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+    // The worker answers business outcomes as 200 { ok, reason } — only
+    // transport trouble surfaces as `error` (callWorker never throws).
+    const { data: resp } = await callWorker(ROUTE.tripFeedback, {
+      bookingRef,
+      rating,
+      problems: problems.trim() || null,
+      hotelName: r.name || it.product_name || null,
+      city: it.dest_city || null,
+      country: it.dest_country || null,
+      checkout,
+    });
+    setSending(false);
+    // "already_left" = they rated this stay before — same thanks, idempotent.
+    if (!resp?.ok && resp?.reason !== "already_left") {
+      setErr("Couldn't send — check your connection and try again.");
+      return;
+    }
+    writeFbState(bookingRef, "done");
+    setPhase("thanks");
+  };
+
+  return (
+    <div className="mx-2 mt-1.5 rounded-[14px] px-4 py-3" style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}>
+      {phase === "thanks" ? (
+        <p className="uppercase font-semibold text-center" style={{ fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".08em", color: ED_INK3 }}>
+          Thanks — this shapes where we send travelers.
+        </p>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-2">
+            <p className="italic" style={{ fontFamily: ED_SERIF, fontSize: t(fs(16), fs(15)), color: ED_INK }}>
+              How was your stay?
+            </p>
+            <button
+              onClick={dismiss}
+              aria-label="Dismiss"
+              className="w-7 h-7 rounded-full flex items-center justify-center flex-none transition-colors hover:bg-black/5"
+              style={{ background: "transparent", border: "none", color: ED_INK3, fontSize: fs(15), lineHeight: 1 }}
+            >
+              ×
+            </button>
+          </div>
+          <div className="flex gap-0.5 mt-1.5" role="radiogroup" aria-label="Rate your stay from 1 to 5 stars">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                onClick={() => setRating(n)}
+                role="radio"
+                aria-checked={rating === n}
+                aria-label={`${n} star${n === 1 ? "" : "s"}`}
+                className="transition-transform active:scale-90"
+                style={{ background: "transparent", border: "none", padding: "2px 4px", fontSize: fs(22), lineHeight: 1, color: n <= rating ? STAMP_RED : "rgba(22,17,13,.18)", cursor: "pointer" }}
+              >
+                ★
+              </button>
+            ))}
+          </div>
+          <input
+            value={problems}
+            onChange={(e) => setProblems(e.target.value)}
+            maxLength={140}
+            placeholder="Anything go wrong? (optional)"
+            className="w-full mt-2 rounded-lg px-3 py-2"
+            style={{ border: `1px solid ${ED_RULE}`, background: IVORY, fontSize: fs(13), color: ED_INK, outline: "none" }}
+          />
+          <div className="flex items-center gap-3 mt-2">
+            <button
+              onClick={submit}
+              disabled={!rating || sending}
+              className="uppercase font-semibold px-3.5 py-1.5 rounded-full transition-colors"
+              style={{
+                fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".08em",
+                background: rating ? ED_INK : "transparent",
+                color: rating ? IVORY : ED_INK3,
+                border: `1px solid ${rating ? ED_INK : ED_RULE}`,
+                opacity: sending ? 0.6 : 1,
+                cursor: rating ? "pointer" : "default",
+              }}
+            >
+              {sending ? "Sending…" : "Send"}
+            </button>
+            {err && (
+              <span style={{ fontFamily: ED_MONO, fontSize: fs(9.5), color: STAMP_RED }}>{err}</span>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

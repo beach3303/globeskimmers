@@ -33,6 +33,7 @@ import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { createPageUrl } from "@/utils";
 import { logDiscover } from "@/lib/logDiscover";
+import { flushEvents } from "@/lib/analytics";
 import { TEAL_DEEP, IVORY_2 } from "@/components/redesign/constants";
 
 const INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
@@ -204,6 +205,53 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
 
   useEffect(() => {
     if (open && name) logDiscover("dream_gallery_open", { place_name: name, country: dest?.country || "" });
+  }, [open, destKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Dwell — foreground ms per gallery session, measured open → close (or
+  // dest-change / unmount / pagehide, whichever ends the session first).
+  // Inline rather than useDwell(): the hook times mount→unmount, but this
+  // sheet stays mounted while closed (`open` prop), so the session must be
+  // scoped to the [open, destKey] effect instead. Semantics are identical to
+  // useDwell: monotonic clock, paused while document.hidden, reported at most
+  // once per session, only when >= 2s, clamped at 10 min. Payload carries the
+  // place name and ms only — no PII.
+  useEffect(() => {
+    if (!open || !name) return;
+    const now = () =>
+      (typeof performance !== "undefined" && typeof performance.now === "function")
+        ? performance.now()
+        : Date.now();
+    let accum = 0;
+    let startedAt = document.hidden ? null : now();
+    let reported = false;
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (startedAt != null) { accum += now() - startedAt; startedAt = null; }
+      } else if (startedAt == null) {
+        startedAt = now();
+      }
+    };
+    const report = () => {
+      if (reported) return;
+      reported = true;
+      let total = accum;
+      if (startedAt != null) { total += now() - startedAt; startedAt = null; }
+      const ms = Math.min(Math.round(total), 600000);
+      if (ms >= 2000) {
+        logDiscover("dwell", { surface: "dream_gallery", ms, place_name: name, country: dest?.country || "" });
+        // Same tab-close rescue as useDwell: the module-level pagehide flush
+        // runs before this report queues — force-flush or the event is lost.
+        try { flushEvents(); } catch { /* non-fatal */ }
+      }
+    };
+    const onPageHide = () => report();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+      report();
+    };
   }, [open, destKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lazy per-bucket fetch — first select only; results (including honest

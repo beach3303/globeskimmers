@@ -246,6 +246,13 @@ export default function AdminAnalytics() {
             <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} /> Refresh
           </button>
         </div>
+        {/* Quiet link to the founder-readable demand brief (same data, plain language). */}
+        <button
+          onClick={() => navigate(createPageUrl('DemandReport'))}
+          style={{ marginTop: 10, background: 'transparent', border: 'none', padding: 0, color: 'rgba(255,255,255,0.85)', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+        >
+          Demand Report →
+        </button>
       </div>
 
       <div style={{ padding: 14 }}>
