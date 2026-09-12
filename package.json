@@ -121,5 +121,11 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.2",
     "vite": "^6.1.0"
+  },
+  "allowScripts": {
+    "esbuild@0.25.10": true,
+    "sharp@0.32.6": true,
+    "fsevents@2.3.3": true,
+    "core-js@3.46.0": true
   }
 }
