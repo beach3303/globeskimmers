@@ -54,7 +54,8 @@ const HIGHLIGHT_RULES = {
     // GREEN — positives
     { pattern: /\b(clean|spotless|well[- ]maintained|tidy)\b/gi, bg: '#D1FAE5', color: '#065F46' },
     { pattern: /\b(free to use|free of charge|free for use|no fee|no charge)\b/gi, bg: '#D1FAE5', color: '#065F46' },
-    { pattern: /\b(accessible|barrier[- ]free|wheelchair[- ]accessible|ADA[- ]compliant)\b/gi, bg: '#D1FAE5', color: '#065F46' },
+    // (accessibility phrases are deliberately NOT highlighted: AI copy can't
+    //  verify them, and green reads as confirmed)
     // ORANGE — friction
     { pattern: /\b(need to (?:order|buy|purchase|pay)|purchase required|customers? only|for customers?|paying customers?|requires purchase|small fee|fee required|paid|coin[- ]operated|requires payment)\b/gi, bg: '#FED7AA', color: '#9A3412' },
     { pattern: /\b(stairs?|staircase|steps?(?:\s+up)?|no elevator|walk up)\b/gi, bg: '#FED7AA', color: '#9A3412' },

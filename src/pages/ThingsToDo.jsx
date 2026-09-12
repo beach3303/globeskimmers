@@ -66,7 +66,6 @@ const PROP_TAGS=[
   {key:"isAccessible",     icon:"♿",label:"Accessible",      color:"#1565C0",bg:"#E3F2FD"},
   {key:"isBudgetFriendly", icon:"💰",label:"Budget Friendly", color:"#059669",bg:"#D1FAE5"},
   {key:"isGoodForCouples", icon:"💑",label:"Great for Couples",color:"#DB2777",bg:"#FCE7F3"},
-  {key:"isSeniorFriendly", icon:"🧓",label:"Senior Friendly", color:"#0891B2",bg:"#E0F2FE"},
   {key:"isPetFriendly",    icon:"🐾",label:"Pet Friendly",    color:"#059669",bg:"#D1FAE5"},
   // Audience tags introduced for the Phase 4 query restructure:
   // - groups: bachelor/bachelorette/large-party venues

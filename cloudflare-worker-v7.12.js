@@ -2706,7 +2706,7 @@ async function handleLabelPhotos(request, env) {
 
 const AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days
 
-const AI_DETAILS_PROMPT_VERSION = 'v8';  // v7 -> v8: added practical.tipping (service charge / cover charge / tip norms). Surfaces the #1 traveler-anxiety cluster ("money surprises") directly in the Practical row instead of relying on it accidentally landing in goodToKnow.
+const AI_DETAILS_PROMPT_VERSION = 'v9';  // v8 -> v9: accessibility claims are never asserted by AI copy ("ADA compliant", "accessible room guaranteed", "wheelchair-friendly"…) — only what the place lists or Google reports. v7 -> v8: added practical.tipping (service charge / cover charge / tip norms). Surfaces the #1 traveler-anxiety cluster ("money surprises") directly in the Practical row instead of relying on it accidentally landing in goodToKnow.
 
 function buildAIDetailsSystemPrompt(kind) {
   const safeKind = ['restaurant', 'coffee', 'attraction', 'restroom', 'atm'].includes(kind) ? kind : 'restaurant';
@@ -2801,6 +2801,7 @@ KIND: ${safeKind}
 VOICE RULES (ABSOLUTE — these are inviolable):
 - DO NOT write ANYTHING that would deter a customer from trying the business. The app shows these notes publicly; negative content creates legal/reputational risk.
 - FORBIDDEN words/phrases: "inconsistent", "complaints", "issues", "concerns", "problems", "poor", "rude", "disappointed", "frustrating", "unreliable", "complained", "service issues", "quality concerns", "questionable", "lacking", "subpar", "stay away", "avoid", "skip", "don't go".
+- ACCESSIBILITY CLAIMS: never write "ADA compliant", "accessible room(s) guaranteed", "wheelchair-friendly", "fully accessible", "assistance booked" or "your ticket reflects your disability". State accessibility ONLY as something the place itself lists or Google reports (e.g. "wheelchair-accessible entrance reported"); otherwise write "accessibility not confirmed".
 - DO NOT cite specific reviewer complaints. If reviewers said something negative, OMIT it entirely. Do not paraphrase a complaint as a "factual note".
 - DO mention factual planning info that helps the visit go better: busy hours (framed neutrally as "weekend dinner is the busiest window" not "long waits"), customer favorites, best time to visit, what to order, language tips, payment methods, parking notes (positive framing only).
 - ALWAYS lead with what people love.
@@ -3184,6 +3185,7 @@ KIND: attraction
 VOICE RULES (ABSOLUTE):
 - DO NOT write ANYTHING that would deter a traveler from visiting. Content is public.
 - FORBIDDEN words/phrases: "inconsistent", "complaints", "issues", "concerns", "problems", "poor", "rude", "disappointed", "frustrating", "unreliable", "questionable", "lacking", "subpar", "stay away", "avoid", "skip", "don't go".
+- ACCESSIBILITY CLAIMS: never write "ADA compliant", "accessible room(s) guaranteed", "wheelchair-friendly", "fully accessible", "assistance booked" or "your ticket reflects your disability". State accessibility ONLY as something the place itself lists or Google reports (e.g. "wheelchair-accessible entrance reported"); otherwise write "accessibility not confirmed".
 - DO mention factual planning info that helps the visit go better.
 - ALWAYS lead with what people love.
 
@@ -3965,6 +3967,7 @@ CORE PRINCIPLE — this is INFRASTRUCTURE, not a business we're protecting from 
 - We do NOT editorialize or attack operators. We DO surface risk signals (skimmer reports, outdoor location after dark, no cameras).
 
 FORBIDDEN words/phrases (still no inflammatory language): "rip-off", "scam", "garbage", "trash", "stay away" — these are emotional, not informative. Use neutral terms: "high fee compared to nearby ATMs", "outdoor location — use caution at night", "reports of card-skimming incidents — be cautious".
+ACCESSIBILITY CLAIMS: never write "ADA compliant", "wheelchair-friendly" or "fully accessible". State accessibility ONLY as Google reports it (e.g. "wheelchair-accessible entrance reported"); otherwise "accessibility not confirmed".
 
 HONESTY RULES (CRITICAL):
 - For every renderable field, set its source tier in "_sources":
@@ -6521,14 +6524,6 @@ async function handleAttractionsNearby(request, env, ctx) {
 // day-part so the homepage reshuffles through the day regardless.
 const HOME_ROWS_TTL_SECONDS = 6 * 60 * 60;
 
-const HOME_SEASONAL_ROWS = {
-  summer:   { title: 'Made for summer',     subtitle: 'Sun-soaked spots to explore' },
-  winter:   { title: 'Cozy up this season', subtitle: 'Warm, memorable places nearby' },
-  spring:   { title: 'Fresh-air season',    subtitle: 'Get out and wander' },
-  fall:     { title: 'Golden-season picks', subtitle: 'Crisp days, great walks' },
-  tropical: { title: 'Tropical anytime',    subtitle: 'Year-round adventures' },
-};
-
 // Static, hemisphere-correct destination lists for the global "Where to next"
 // inspiration row (Unsplash-powered). Curated; free to expand later.
 const HOME_SEASONAL_DESTINATIONS = {
@@ -6572,15 +6567,6 @@ const HOME_SEASONAL_COORDS = {
   'Maldives':               [4.17, 73.51],     // Malé
   'Boracay, Philippines':   [11.97, 121.92],
   'Cairns, Australia':      [-16.92, 145.77],
-};
-
-const HOME_DAYPART_ROW = {
-  earlyMorning: { title: 'Start your morning',  subtitle: 'Ease into the day nearby' },
-  morning:      { title: 'Good morning nearby', subtitle: 'Worth an early look' },
-  midday:       { title: 'Midday around you',   subtitle: 'Great for right now' },
-  afternoon:    { title: 'This afternoon',      subtitle: 'Make the most of it' },
-  evening:      { title: 'Tonight nearby',      subtitle: 'Where the evening takes you' },
-  lateNight:    { title: 'Still worth a look',  subtitle: 'Late-night nearby' },
 };
 
 const HOME_WEATHER_ACCENT = { hot: 'It’s hot out', cold: 'Bundle up', rain: 'Rainy-day picks', mild: 'Nice out' };
@@ -6934,9 +6920,11 @@ async function handleHomeRows(request, env, ctx) {
   // Trending row — most-tapped places (last 7d, from home_row_card_tap events)
   // that are ALSO nearby (intersect ranked place_ids with the local pool → geo-
   // scoped without fragile city-string matching). Leads when present; silently
-  // skipped until there's enough data (cold-start). At scale, add a city filter
-  // to the query for perf. Reads env.DB (events D1); result is cached with the
-  // bundle (6hr), so it's one query per tile per day-part, not per request.
+  // skipped until there's enough data (cold-start). The title says what the
+  // data IS — tapped places near you — never "Trending in {city}": the tap
+  // payload's city is the CARD's city (Six Flags rows say "Valencia"), so a
+  // city-string filter would silently empty the row. Reads env.DB (events
+  // D1); result is cached with the bundle (6hr), one query per tile per day-part.
   if (env.DB) {
     try {
       const q = await env.DB.prepare(
@@ -6958,8 +6946,8 @@ async function handleHomeRows(request, env, ctx) {
       if (trendingCards.length >= 4) {
         rows.push({
           key: 'trending',
-          title: cityName ? `Trending in ${cityName}` : 'Trending near you',
-          subtitle: 'What travelers are loving now',
+          title: 'Trending near you',
+          subtitle: 'Most-tapped nearby this week',
           seeAll: { action: 'Things to Do' },
           cards: trendingCards,
         });
@@ -6974,26 +6962,25 @@ async function handleHomeRows(request, env, ctx) {
   const used = new Set(rows.flatMap((r) => r.cards.map((c) => String(c.id))));
   const claim = (cards) => { for (const c of cards) used.add(String(c.id)); return cards; };
 
-  // Row 1 — day-part row, rotated so morning vs evening opens differ visibly.
+  // Row 1 — rotated by day-part so morning vs evening opens differ visibly.
+  // The rotation is NOT a time-of-day filter, so the title no longer claims
+  // one ("Tonight nearby" put a daytime lab under an evening banner). It says
+  // the two things we do know: the city, and the weather when we have it.
   const order = ['earlyMorning', 'morning', 'midday', 'afternoon', 'evening', 'lateNight'];
   const off = pool.length ? (Math.max(0, order.indexOf(dayPart)) % pool.length) : 0;
   const rotated = pool.slice(off).concat(pool.slice(0, off));
-  const dp = HOME_DAYPART_ROW[dayPart] || HOME_DAYPART_ROW.midday;
   const wAccent = HOME_WEATHER_ACCENT[weatherBucket];
   const dpCards = claim(take(rotated.filter((a) => !used.has(String(a.id))), 10));
-  if (dpCards.length) rows.push({ key: 'dayPart', title: dp.title, subtitle: wAccent ? `${wAccent} · ${dp.subtitle}` : dp.subtitle, seeAll: { action: 'Things to Do' }, cards: dpCards });
+  if (dpCards.length) rows.push({ key: 'dayPart', title: cityName ? `Around ${cityName}` : 'Around you', subtitle: wAccent || 'Worth a look', seeAll: { action: 'Things to Do' }, cards: dpCards });
 
   // Row 2 — nearest to you now.
   const nearest = [...pool].sort((a, b) => (a.distanceMiles ?? 1e9) - (b.distanceMiles ?? 1e9));
   const nearCards = claim(take(nearest.filter((a) => !used.has(String(a.id))), 10));
   if (nearCards.length) rows.push({ key: 'nearYou', title: 'Near you now', subtitle: 'Closest to where you are', seeAll: { action: 'Things to Do' }, cards: nearCards });
 
-  // Row 3 — seasonal (client-passed season = hemisphere-correct).
-  const seasonCfg = HOME_SEASONAL_ROWS[seasonKey];
-  if (seasonCfg) {
-    const seasonCards = claim(take(pool.filter((a) => !used.has(String(a.id))), 10));
-    if (seasonCards.length) rows.push({ key: 'seasonal', title: seasonCfg.title, subtitle: seasonCfg.subtitle, seeAll: { action: 'Things to Do' }, cards: seasonCards });
-  }
+  // (The former "seasonal" row is gone: it was whatever the rows above left
+  // in the pool, labelled from the calendar — "Golden-season picks" on a
+  // 99°F day. seasonKey still drives the Where-to-next destinations below.)
 
   // Where to next — global Creative-Commons inspiration (Openverse), a nice closer.
   const wtn = await buildWhereToNextRow(env, seasonKey, ctx);
@@ -7322,7 +7309,9 @@ function rrProcessPlace(place, latitude, longitude, country, countryData) {
     isDirty: rrScore(combinedText, RR_PROPERTY_SIGNALS.dirty) > 0,
     hasSquat: !RR_NO_SQUAT_COUNTRIES.includes(country) && (rrScore(combinedText, RR_PROPERTY_SIGNALS.squat) > 0 || countryData.expectSquat),
     hasBidet: rrScore(combinedText, RR_PROPERTY_SIGNALS.bidet) > 0 || countryData.expectBidet,
-    isAccessible: rrScore(combinedText, RR_PROPERTY_SIGNALS.accessible) > 0 || place.accessibilityOptions?.wheelchairAccessibleEntrance,
+    // Google's own field, only when explicitly true — never inferred from review text
+    // (a review saying "not wheelchair accessible" used to score as accessible).
+    isAccessible: place.accessibilityOptions?.wheelchairAccessibleEntrance === true,
     hasFamily: rrScore(combinedText, RR_PROPERTY_SIGNALS.family) > 0,
     hasPaper: rrScore(combinedText, RR_PROPERTY_SIGNALS.paper) > 0 || (countryData.expectPaper && rrScore(combinedText, RR_PROPERTY_SIGNALS.noPaper) === 0),
     noPaper: rrScore(combinedText, RR_PROPERTY_SIGNALS.noPaper) > 0 || !countryData.expectPaper,
@@ -8383,9 +8372,7 @@ const GA_SIG = {
   adventure:   ['adventure','thrill','extreme','adrenaline','exciting','challenging'],
   cultural:    ['cultural','traditional','authentic','local','historic','heritage'],
   budget:      ['free','cheap','affordable','budget','inexpensive','worth every penny'],
-  accessibility:['wheelchair','accessible','disabled','ada','mobility'],
   couples:     ['romantic','date','couples','honeymoon','anniversary','intimate','perfect for couples'],
-  seniors:     ['senior','elderly','easy walk','gentle','leisurely','no stairs','slow pace'],
   petFriendly: ['dog friendly','pet friendly','dogs allowed','pets welcome','bring your dog'],
   groups:      ['group friendly','perfect for groups','large groups','group activity','team building','party','bachelorette','bachelor party','group rate','group discount'],
   singles:     ['solo traveler','solo travelers','solo friendly','meet people','meet new people','hostel','social hostel','make friends','singles welcome'],
@@ -8759,9 +8746,9 @@ async function handleActivities(request, env, ctx) {
           isIndoor: gaSc(txt, GA_SIG.indoor) > 0, hasGuidedTour: gaSc(txt, GA_SIG.guided) > 0,
           isBucketList: gaSc(txt, GA_SIG.bucket) > 0, isHiddenGem: gaSc(txt, GA_SIG.hidden) > 0,
           isPhotoWorthy: gaSc(txt, GA_SIG.photo) > 1, isAdventure: gaSc(txt, GA_SIG.adventure) > 0,
-          isCultural: gaSc(txt, GA_SIG.cultural) > 1, isAccessible: gaSc(txt, GA_SIG.accessibility) > 0,
+          isCultural: gaSc(txt, GA_SIG.cultural) > 1, isAccessible: p.accessibilityOptions?.wheelchairAccessibleEntrance === true,
           isBudgetFriendly: gaSc(txt, GA_SIG.budget) > 0, isGoodForCouples: gaSc(txt, GA_SIG.couples) > 0,
-          isSeniorFriendly: gaSc(txt, GA_SIG.seniors) > 0, isPetFriendly: gaSc(txt, GA_SIG.petFriendly) > 0,
+          isSeniorFriendly: false /* retired: a life-stage label, and it was text-inferred */, isPetFriendly: gaSc(txt, GA_SIG.petFriendly) > 0,
           isGoodForGroups: gaSc(txt, GA_SIG.groups) > 0,
           isGoodForSingles: gaSc(txt, GA_SIG.singles) > 0,
           isGoodForTeens: gaSc(txt, GA_SIG.teens) > 0,
@@ -15217,6 +15204,18 @@ async function handlePackageDraft(request, env, ctx) {
     const { acNote, breakfastNote } = hotelChoices[0] ? notesFor(hotelChoices[0]) : { acNote: null, breakfastNote: null };
     const stayAreas = (intel && Array.isArray(intel.stayAreas) && intel.stayAreas.length) ? intel.stayAreas : null;
 
+    // CAVEATS — one list, one severity each, built ONLY from signals already on
+    // this draft (nothing new is inferred). info = a quiet line · caution = the
+    // amber line, can't be missed · serious = the app asks "Still book?" once
+    // before money moves. Nothing produces `serious` yet; the mobility and tour
+    // waves will. The legacy fields (qualityBar, stayArea, stayAreaDropped,
+    // acNote…) stay exactly as they are, so clients that predate this list work.
+    const caveats = [];
+    if (Number(bar.pass) === 3) caveats.push({ severity: 'caution', code: 'quality_bar_missed', text: 'Few top-rated hotels here for these dates — showing the best available', source: 'per LiteAPI' });
+    if (stayArea && !areaHit) caveats.push({ severity: 'caution', code: 'stay_area_dropped', text: `Couldn't place ${stayArea} on the map — showing the whole city`, source: 'per Google' });
+    if (areaHit && hotelPlanOut.radiusKm == null) caveats.push({ severity: 'caution', code: 'stay_area_widened', text: `Few hotels in ${areaHit.name} for these dates — showing the whole city, distances measured from ${areaHit.name}`, source: 'per LiteAPI' });
+    if (Array.isArray(tours) && !tours.length) caveats.push({ severity: 'info', code: 'no_tours', text: 'No bookable tours found for these dates — the hotel is still priced', source: 'per Viator' });
+
     const draft = {
       destName: destName || anchor.city || '', checkin, checkout, nights,
       party: { adults, children, rooms, ...(childrenAges.length ? { childrenAges } : {}) },
@@ -15235,6 +15234,7 @@ async function handlePackageDraft(request, env, ctx) {
       ...(acNote ? { acNote } : {}),
       ...(breakfastNote ? { breakfastNote } : {}),
       attractions,
+      caveats,
     };
 
     // PERSIST — package_orders (cloudflare-worker/sql/07_package_orders.sql).

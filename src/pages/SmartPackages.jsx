@@ -64,6 +64,7 @@ const INK = "#16110D", SUB = "#736657", EDGE = "#E6DFD0", INK2 = "#6B7280";
 const STAMP = "#B0472F"; // selection ring — teal stays on the one primary
 const ACCENT = TEAL_DEEP, ACCENT_BG = "#E4F1EF"; // the refundable-green (OK) now lives in HotelChoiceCard / RoomChooserSheet
 const AMBER = "#B45309"; // honest-notes register — FindAHotel's dropped-filters line
+const RUST = "#B0472F";  // serious-caveat register — the stamp red; the one colour that stops the flow
 const fs = (n) => `calc(${n}px*var(--fs))`;
 
 // Same Intl money as HotelBookSheet — whole units, real currency code.
@@ -264,6 +265,10 @@ export default function SmartPackages() {
   const [roomSheet, setRoomSheet] = useState(null); // choiceIdx | null — RoomChooserSheet open for that choice
   const [stayAreaSel, setStayAreaSel] = useState(""); // "" = Anywhere; else a draft.stayAreas[].name sent as body.stayArea
   const [bookSheet, setBookSheet] = useState(null); // the choice being booked (opens HotelBookSheet)
+  // Serious caveats stop the flow ONCE: the sheet asks "Still book?", a yes is
+  // remembered for this draft, and nothing asks again.
+  const [stillBook, setStillBook] = useState(null); // { items, proceed } while the sheet is up
+  const ackSidRef = useRef(null);
   const [testBusy, setTestBusy] = useState(false);  // founder-only Stripe test checkout in flight
   const [testErr, setTestErr] = useState(null);     // its error reason — quiet inline line only
   const resultRef = useRef(null);
@@ -573,6 +578,24 @@ export default function SmartPackages() {
     setTestBusy(false);
   };
 
+  // ONE caveat list (Wave 0 #6). The worker sends draft.caveats; a draft from
+  // before that field is rebuilt from the legacy fields, so nothing that showed
+  // before goes quiet. Severity picks the register; `serious` also gates money.
+  const caveats = (() => {
+    if (!draft) return [];
+    if (Array.isArray(draft.caveats)) return draft.caveats.filter((c) => c && typeof c.text === "string" && c.text);
+    const out = [];
+    if (Number(draft.qualityBar?.pass) === 3) out.push({ severity: "caution", code: "quality_bar_missed", text: "Few top-rated hotels here for these dates — showing the best available" });
+    if (typeof draft.stayAreaDropped === "string" && draft.stayAreaDropped) out.push({ severity: "caution", code: "stay_area_dropped", text: `Couldn’t place ${draft.stayAreaDropped} on the map — showing the whole city` });
+    if (draft.stayArea?.name && draft.stayArea.radiusKm == null) out.push({ severity: "caution", code: "stay_area_widened", text: `Few hotels in ${draft.stayArea.name} for these dates — showing the whole city, distances measured from ${draft.stayArea.name}` });
+    return out;
+  })();
+  const seriousCaveats = caveats.filter((c) => c.severity === "serious");
+  // Wraps every money-moving action: serious caveats → the sheet, once per draft.
+  const gate = (proceed) => {
+    if (seriousCaveats.length && ackSidRef.current !== (sid || "draft")) { setStillBook({ items: seriousCaveats, proceed }); return; }
+    proceed();
+  };
   const partyLine = draft
     ? [
         `${fmtDate(draft.checkin)} → ${fmtDate(draft.checkout)}`,
@@ -790,15 +813,15 @@ export default function SmartPackages() {
             <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] mt-1" style={{ color: SUB }}>
               {partyLine}{draft.env === "sandbox" ? " · SANDBOX" : ""}
             </div>
-            {/* The worker could not geocode the picked area — say so, honestly. */}
-            {typeof draft.stayAreaDropped === "string" && draft.stayAreaDropped && (
-              <div className="font-mono text-[calc(11px*var(--fs))] mt-2 leading-snug" style={{ color: AMBER }}>
-                Couldn&rsquo;t place {draft.stayAreaDropped} on the map — showing the whole city
-              </div>
-            )}
-            {draft.stayArea?.name && draft.stayArea.radiusKm == null && (
-              <div className="font-mono text-[calc(11px*var(--fs))] mt-2 leading-snug" style={{ color: AMBER }}>
-                Few hotels in {draft.stayArea.name} for these dates — showing the whole city, distances measured from {draft.stayArea.name}
+            {/* CAVEATS — one list, one register per severity: info quiet, caution
+                amber, serious stamp-red (plus the Still-book sheet before money moves). */}
+            {caveats.length > 0 && (
+              <div className="mt-2 flex flex-col gap-1.5">
+                {caveats.map((c, i) => (
+                  <div key={c.code || i} className="font-mono text-[calc(11px*var(--fs))] leading-snug" style={{ color: c.severity === "serious" ? RUST : c.severity === "caution" ? AMBER : SUB }}>
+                    {c.text}{c.source ? <span style={{ opacity: 0.7 }}> · {c.source}</span> : null}
+                  </div>
+                ))}
               </div>
             )}
 
@@ -864,13 +887,7 @@ export default function SmartPackages() {
               const scope = draft.stayArea?.name && draft.stayArea.radiusKm != null ? `near ${draft.stayArea.name}` : `in ${city}`;
               const stars = Number.isFinite(Number(qb.minStars)) ? Number(qb.minStars) : (pass === 2 ? 3 : 4);
               const rating = Number.isFinite(Number(qb.minRating)) ? Number(qb.minRating).toFixed(1) : (pass === 2 ? "8.0" : "8.5");
-              if (pass === 3) {
-                return (
-                  <div className="font-mono text-[calc(11px*var(--fs))] mt-2.5 px-1 leading-snug" style={{ color: AMBER }}>
-                    Few top-rated hotels here for these dates — showing the best available
-                  </div>
-                );
-              }
+              if (pass === 3) return null;   // said once, in the caveats list at the top
               if (pass === 1) {
                 return (
                   <div className="font-mono text-[calc(10px*var(--fs))] mt-2.5 px-1 leading-snug" style={{ color: SUB }}>
@@ -1033,7 +1050,7 @@ export default function SmartPackages() {
             {/* PRIMARY — the one teal: hand the selected choice to the existing checkout */}
             {chosen && (
               <>
-                <button onClick={() => setBookSheet(chosen)}
+                <button onClick={() => gate(() => setBookSheet(chosen))}
                   className="w-full py-4 rounded-[16px] font-bold text-white text-[calc(16px*var(--fs))] mt-4"
                   style={{ background: ACCENT }}>
                   Book this hotel
@@ -1045,7 +1062,7 @@ export default function SmartPackages() {
                     needs sid (the server-side order this draft is priced under). */}
                 {stripeTest && sid && (
                   <>
-                    <button onClick={testCheckout} disabled={testBusy}
+                    <button onClick={() => gate(testCheckout)} disabled={testBusy}
                       className="w-full py-3 rounded-[12px] mt-3 font-mono text-[calc(10px*var(--fs))] tracking-[0.14em] uppercase font-semibold"
                       style={{ background: "#FFFFFF", color: SUB, border: `1px dashed ${EDGE}`, opacity: testBusy ? 0.6 : 1 }}>
                       {testBusy ? "Starting test checkout…" : "Test package checkout · Stripe"}
@@ -1080,6 +1097,27 @@ export default function SmartPackages() {
               <DayPicker mode="range" selected={range} onSelect={setRange} numberOfMonths={1} disabled={{ before: todayStart }} />
             </div>
             <button onClick={() => setDateOpen(false)} className="w-full mt-1 py-3 rounded-[14px] font-bold text-white text-[calc(14px*var(--fs))]" style={{ background: ACCENT }}>Done</button>
+          </div>
+        </div>
+      )}
+
+      {/* STILL BOOK? — serious caveats stop the flow once, before money moves. */}
+      {stillBook && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center" style={{ background: "rgba(22,17,13,0.55)" }} role="dialog" aria-modal="true" aria-label="Before you book">
+          <div className="w-full max-w-md rounded-t-[20px] px-5 pt-5 pb-8" style={{ background: "#FFFCF7" }}>
+            <div className="font-mono uppercase tracking-[0.12em] text-[calc(10px*var(--fs))] font-semibold" style={{ color: RUST }}>Before you book</div>
+            <div className="mt-1.5" style={{ fontFamily: SERIF, fontSize: fs(22), color: INK, lineHeight: 1.1 }}>Still book?</div>
+            <div className="mt-3 flex flex-col gap-2">
+              {stillBook.items.map((c, i) => (
+                <div key={c.code || i} className="text-[calc(13.5px*var(--fs))] leading-snug" style={{ color: INK }}>
+                  {c.text}{c.source ? <span className="font-mono text-[calc(10.5px*var(--fs))]" style={{ color: SUB }}> · {c.source}</span> : null}
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 flex gap-2">
+              <button onClick={() => setStillBook(null)} className="flex-1 py-3.5 rounded-[14px] font-semibold text-[calc(14px*var(--fs))]" style={{ background: "#FFFFFF", color: INK, border: `1px solid ${EDGE}` }}>Go back</button>
+              <button onClick={() => { ackSidRef.current = sid || "draft"; const proceed = stillBook.proceed; setStillBook(null); proceed(); }} className="flex-1 py-3.5 rounded-[14px] font-semibold text-white text-[calc(14px*var(--fs))]" style={{ background: RUST }}>Still book</button>
+            </div>
           </div>
         </div>
       )}
