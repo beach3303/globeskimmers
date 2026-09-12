@@ -719,7 +719,7 @@ export default function SmartPackages() {
           <div className="h-px" style={{ background: "#F5F0E8" }} />
           <Stepper label="Rooms" value={rooms} setValue={setRooms} min={1} max={Math.min(adults, 4)} />
           <div className="text-[calc(10.5px*var(--fs))] -mt-1 pb-3 leading-snug" style={{ color: INK2 }}>
-            4 travelers can be two couples — pick the rooms you actually want.
+            Pick the rooms your group actually needs.
           </div>
         </div>
 
