@@ -75,3 +75,32 @@ Pick ONE channel per brand:
 - **Direct:** Viator, Discover Cars, GetYourGuide (optional), Airalo (Impact), Wise (Partnerize), Go City (Partnerize), Blacklane (FlexOffers/CJ), Daytrip (email).
 - **Via Travelpayouts:** Booking, Agoda, Welcome Pickups, Kiwitaxi, Aviasales, Tiqets.
 Don't join, e.g., Viator both direct and via TP.
+
+---
+
+## 4. IN-APP BOOKING PROGRAMS — researched 2026-09-09 (primary sources; see per-item notes)
+
+**Goal:** fill the My Trips ledger automatically by booking inside the app, and earn more than a link-out.
+
+### Viator — request **"Full + Booking access"** (NOT Merchant)
+- **What it is:** the affiliate tier that lets us sell tours in-app while **Viator stays merchant of record** — Viator's hosted payment iframe charges the card, Viator pays the supplier, carries card fees/chargebacks, emails the voucher, handles cancellations/refunds and customer service. We earn the standard **8% of retail**, net of cancellations, paid the month after the tour runs (bank ≥$50 on/before the 7th working day; PayPal weekly). No deposit, no fee.
+- **Merchant API (rejected for now):** we'd collect money at net rates, but Viator requires a pre-booking deposit sized to projected sales, proof of support infrastructure, first-line customer support, automated cancellation handling and a qualification call. Worse trade than 8% at our volume.
+- [ ] **Apply:** partners.viator.com → **Tools → Affiliate API** (`/developer-api/keys`, the page that granted full-access on 2026-08-31) → request **Full + Booking**. (partnerhelp article 107: "Once Basic API access has been granted, you will be able to request Full or Full + Booking access from the same page.")
+- [ ] **Same day, email `affiliateapi@tripadvisor.com`:** affiliate P00311514, full-access keys since 2026-08-31, live iOS app (App Store id 6753154199), globeskimmers.io; requesting Full + Booking with Viator's hosted payment iframe, Viator as MoR. Ask: (a) approval timeline, (b) does the payment iframe work on an https page inside a native iOS WebView, (c) is a new production key issued after certification.
+- [ ] **Verification + Finance:** identity verification complete, payout method attached. Booking access later requires a PCI-DSS attestation (Partner Program Terms §9.6) — the iframe keeps card data off our servers.
+- [ ] **Build in sandbox** (`api.sandbox.viator.com/partner`): `/availability/check` → `/bookings/cart/hold` (paymentDataSubmissionMode VIATOR_FORM + hostingUrl) → payment iframe → `/bookings/cart/book` → `/bookings/status`; booking questions; voucher handling. Then **certification** (back-end + front-end forms to affiliateapi@tripadvisor.com; "a couple of days" per feedback round).
+- Sources: docs.viator.com/partner-api/affiliate-bookings/technical/ · partnerresources.viator.com/travel-commerce/levels-of-access/ · partnerhelp articles 69, 68, 103, 107, 112, 114, 156.
+- UNVERIFIED: approval SLA and criteria for Full + Booking; whether our account's rate differs from 8% (Terms B-3.3 defers to the portal — check Finance).
+
+### Ticketmaster — the Partner API is NOT attainable now; join the affiliate program (it is the stated on-ramp)
+- **Partner / Commerce API** (in-app ticket sales): Ticketmaster docs — "not an open API and is restricted to companies with whom Ticketmaster has existing, official distribution relationships"; FAQ — "typically restricted to a select few business partners." No self-serve application. Revisit in ~6 months with tracked affiliate sales. (Contact if ever pitching: the "Become a partner" form on developer.ticketmaster.com/partners/ or devportalinquiry@ticketmaster.com.)
+- [ ] **Create an Impact partner account** — app.impact.com → "Sign up as a Partner" → verify property globeskimmers.io, add the App Store listing, logo, description.
+- [ ] **Apply to the Ticketmaster Global Affiliate Program** — start at developer.ticketmaster.com/partners/distribution-partners/affiliate-sign-up/ (links into Impact). Eligibility per Ticketmaster: "websites and apps capable of bringing distinct and unique audiences." Applies to all markets by default.
+- [ ] **On approval:** paste the **Impact Publisher ID** into Edit Profile at developer-account.ticketmaster.com — Discovery API URLs then carry tracking automatically. Worker must pass the API's `url` through untouched. Add `ticketmaster` to `AFF_SUBID_PARAM` only if Impact needs a sub-id param (check the contract).
+- [ ] **Record the per-market commission from the contracts inside Impact** — the only authoritative source (directories say ~1%; UNVERIFIED). No commission on presales or the first 24h after a public on-sale (Ticketmaster FAQ).
+- **No marketplace gives a new partner in-app checkout:** SeatGeek redirects by design; StubHub International requires checkout on viagogo; Tiqets' Booking API needs ~200 orders/month.
+
+### Same week, low effort
+- [ ] **Tiqets affiliate** — tiqets.com/en/partner-program/sign-up-form → self-serve Content/Availability API; the **Booking API** (true in-app checkout for attractions/shows) opens at ~200 orders/month — start accruing now.
+- [ ] **P1 Travel** (official football/F1/tennis hospitality) — Partnerize, via p1travel.com/en/partnerships/affiliate-programme. UK football: never link unofficial resale (CJPOA 1994 s.166).
+- [ ] Optional resale rows for concerts/US sports, labelled as resale: Vivid Seats (Impact, ~6% per directories), StubHub US (Partnerize, ~4%), SeatGeek (developer.seatgeek.com client_id + `aid`, ~1%).
