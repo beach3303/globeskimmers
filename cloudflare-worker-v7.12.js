@@ -2471,6 +2471,92 @@ const ANALYTICS_QUERIES = {
   `,
 };
 
+// ── WEBSITE CONTACT FORM ──────────────────────────────────────────────────
+// POST /contact from globeskimmers.io (travelers, partners, investors, press).
+// Stored in the events D1 (table created lazily, so no manual SQL step) and
+// read back by the admin page through POST /admin/contact. Rate-limited per
+// IP in KV (5 per hour); a filled honeypot field is accepted and dropped.
+const CONTACT_WHO = ['traveler', 'partner', 'investor', 'press', 'other'];
+const CONTACT_TABLE_SQL = `CREATE TABLE IF NOT EXISTS contact_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at TEXT NOT NULL,
+  who TEXT NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  company TEXT,
+  message TEXT NOT NULL,
+  page TEXT,
+  ip_hash TEXT,
+  user_agent TEXT,
+  handled INTEGER NOT NULL DEFAULT 0
+)`;
+
+// sha256Hex() is the worker's existing helper (defined once, above).
+
+async function handleContactSubmit(request, env) {
+  try {
+    if (!env.DB) return jsonResponse({ ok: false, reason: 'unavailable' }, 200);
+    // A full form is well under 6 KB; refuse oversized bodies before buffering them.
+    if (Number(request.headers.get('Content-Length') || 0) > 16384) return jsonResponse({ ok: false, reason: 'bad_request' }, 200);
+    let body;
+    try { body = await request.json(); } catch { return jsonResponse({ ok: false, reason: 'bad_request' }, 200); }
+    const str = (v, max) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max);
+    const name = str(body.name, 120);
+    const email = str(body.email, 200).toLowerCase();
+    const company = str(body.company, 160);
+    const message = String(body.message == null ? '' : body.message).trim().slice(0, 4000);
+    const who = CONTACT_WHO.includes(String(body.who || '').toLowerCase()) ? String(body.who).toLowerCase() : 'other';
+    const page = str(body.page, 200);
+    // Honeypot: real visitors never see the `website` field. Say ok, store nothing.
+    if (str(body.website, 50)) return jsonResponse({ ok: true }, 200);
+    if (!name || !message) return jsonResponse({ ok: false, reason: 'missing_fields' }, 200);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return jsonResponse({ ok: false, reason: 'bad_email' }, 200);
+    if (message.length < 10) return jsonResponse({ ok: false, reason: 'too_short' }, 200);
+
+    const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('x-forwarded-for') || '';
+    const ipHash = ip ? (await sha256Hex(ip)).slice(0, 32) : null;
+    if (env.GLOBESKIMMERS_KV && ipHash) {
+      const key = `contact:rl:${ipHash}`;
+      const n = parseInt((await env.GLOBESKIMMERS_KV.get(key).catch(() => null)) || '0', 10) || 0;
+      if (n >= 5) return jsonResponse({ ok: false, reason: 'rate_limited' }, 200);
+      await env.GLOBESKIMMERS_KV.put(key, String(n + 1), { expirationTtl: 60 * 60 }).catch(() => {});
+    }
+    await env.DB.prepare(CONTACT_TABLE_SQL).run();
+    await env.DB.prepare(
+      'INSERT INTO contact_messages (created_at, who, name, email, company, message, page, ip_hash, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(new Date().toISOString(), who, name, email, company || null, message, page || null, ipHash, str(request.headers.get('User-Agent'), 300) || null).run();
+    return jsonResponse({ ok: true }, 200);
+  } catch (e) {
+    console.error('contact submit failed', e?.message || e);
+    return jsonResponse({ ok: false, reason: 'error' }, 200);
+  }
+}
+
+// POST /admin/contact {limit?, handledToo?} → the newest messages; {markHandled: id}
+// flips one to handled. Admin-only (Supabase session + ADMIN_EMAILS_WORKER).
+async function handleAdminContact(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  try {
+    if (!env.DB) return jsonResponse({ error: 'DB not configured', messages: [] }, 500);
+    await env.DB.prepare(CONTACT_TABLE_SQL).run();
+    const body = await request.json().catch(() => ({}));
+    const markId = parseInt(body?.markHandled, 10);
+    if (Number.isFinite(markId)) {
+      await env.DB.prepare('UPDATE contact_messages SET handled = 1 WHERE id = ?').bind(markId).run();
+    }
+    const limit = Math.min(200, Math.max(1, parseInt(body?.limit, 10) || 50));
+    const where = body?.handledToo ? '' : 'WHERE handled = 0';
+    const { results } = await env.DB.prepare(
+      `SELECT id, created_at, who, name, email, company, message, page, handled FROM contact_messages ${where} ORDER BY id DESC LIMIT ?`
+    ).bind(limit).all();
+    const { results: totals } = await env.DB.prepare('SELECT COUNT(*) AS total, SUM(CASE WHEN handled = 0 THEN 1 ELSE 0 END) AS open FROM contact_messages').all();
+    return jsonResponse({ messages: results || [], total: totals?.[0]?.total || 0, open: totals?.[0]?.open || 0 });
+  } catch (e) {
+    return jsonResponse({ error: e?.message || 'Failed', messages: [] }, 500);
+  }
+}
+
 // Admin gate — verify the caller's Supabase JWT + confirm they're an admin.
 // Returns null when authorized, or a Response to return otherwise. Mirrors
 // handleAdminUserStats so /analytics-query is no longer world-readable (it exposes
@@ -17142,6 +17228,8 @@ export default {
       if (pathname === '/log-event' && request.method === 'POST') return await handleLogEvent(request, env);
       if (pathname === '/delete-account' && request.method === 'POST') return await handleDeleteAccount(request, env);
       if (pathname === '/admin-user-stats') return await handleAdminUserStats(request, env);
+      if (pathname === '/contact' && request.method === 'POST') return await handleContactSubmit(request, env);
+      if (pathname === '/admin/contact' && request.method === 'POST') return await handleAdminContact(request, env);
       if (pathname === '/analytics-query') return await handleAnalyticsQuery(request, env);
       if (pathname.startsWith('/places/details/')) return await handlePlaceDetails(request, env);
       if (pathname === '/places/photo') return await handlePhotoProxy(request, env);

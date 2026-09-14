@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { callWorker } from '@/lib/callWorker';
 import { createPageUrl } from '@/utils';
-import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap, Users, UserCheck } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap, Users, UserCheck, Mail } from 'lucide-react';
 import { isAdminEmail } from '@/lib/admins';
 
 const COLORS = {
@@ -82,6 +82,15 @@ export default function AdminAnalytics() {
   const [data, setData] = useState(null);
   const [userStats, setUserStats] = useState(null); // real Supabase-profiles aggregates
   const [generatedAt, setGeneratedAt] = useState(null);
+  // Messages sent from the website's contact form (worker /admin/contact).
+  const [inbox, setInbox] = useState({ messages: [], open: 0, total: 0, error: null });
+
+  const loadInbox = async (markHandled) => {
+    try {
+      const { data: ib, error: ie } = await callWorker('admin/contact', markHandled ? { markHandled } : {});
+      setInbox({ messages: ib?.messages || [], open: ib?.open || 0, total: ib?.total || 0, error: ie || ib?.error || null });
+    } catch (e) { setInbox({ messages: [], open: 0, total: 0, error: e?.message || 'Failed' }); }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -108,6 +117,7 @@ export default function AdminAnalytics() {
         const { data: us, error: ue } = await callWorker('admin-user-stats', {});
         setUserStats(ue ? null : us);
       } catch { setUserStats(null); }
+      await loadInbox();
       setGeneratedAt(new Date().toISOString());
     } catch (e) {
       setError(e?.message || 'Failed to load analytics');
@@ -342,6 +352,22 @@ export default function AdminAnalytics() {
               <KpiCard icon={Activity} label="Stickiness" value={`${stickiness}%`} color={COLORS.green} />
               <KpiCard icon={Sparkles} label="Taps/session" value={avgRowsTaps} color={COLORS.accent} />
             </div>
+
+            <Section title={`✉️ Website messages — ${inbox.open} open`} icon={Mail} empty={inbox.error ? `Couldn't load messages: ${inbox.error}` : inbox.messages.length === 0 ? 'No messages from globeskimmers.io yet. The contact form stores them here.' : null}>
+              {inbox.messages.map((m) => (
+                <div key={m.id} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border || '#eee'}` }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
+                    <span style={{ fontWeight: 700, color: COLORS.dark }}>{m.name}</span>
+                    <a href={`mailto:${m.email}`} style={{ color: COLORS.accent }}>{m.email}</a>
+                    {m.company && <span style={{ color: COLORS.gray }}>{m.company}</span>}
+                    <span style={{ color: COLORS.gray, textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.06em' }}>{m.who}</span>
+                    <span style={{ color: COLORS.gray, marginLeft: 'auto' }}>{String(m.created_at || '').slice(0, 16).replace('T', ' ')}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: COLORS.dark, whiteSpace: 'pre-wrap', marginTop: 6 }}>{m.message}</div>
+                  <button type="button" onClick={() => loadInbox(m.id)} style={{ marginTop: 6, fontSize: 12, color: COLORS.accent, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>Mark handled</button>
+                </div>
+              ))}
+            </Section>
 
             <Section title="Active users per day (30d)" icon={Eye} empty={activeByDay.length === 0 ? 'No active-user data yet.' : null}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 100 }}>
