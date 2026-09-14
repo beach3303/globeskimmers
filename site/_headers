@@ -1,0 +1,11 @@
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+/img/*
+  Cache-Control: public, max-age=604800
+/app-ads.txt
+  Cache-Control: public, max-age=3600
+  Content-Type: text/plain; charset=utf-8

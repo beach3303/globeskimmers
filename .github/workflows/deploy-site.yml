@@ -1,0 +1,28 @@
+name: Deploy website
+
+# The public website (site/ → the globeskimmers-site Worker). Its own workflow
+# so a copy edit never redeploys the API worker (deploy-workers.yml is not
+# path-conditioned per job).
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'site/**'
+      - 'wrangler-site.toml'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-site:
+    name: Deploy globeskimmers-site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy static assets to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy --config wrangler-site.toml

@@ -1,0 +1,6 @@
+# Paths the old Base44 site served on globeskimmers.io — kept alive so store
+# listings, emails and bookmarks don't break after the switch.
+/privacy      /legal/privacy  301
+/terms        /legal/terms    301
+/coming-soon  /               301
+/thank-you    /               301

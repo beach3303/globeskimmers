@@ -1,0 +1,20 @@
+# globeskimmers-site — the public website (globeskimmers.io), served as static
+# assets from a Worker. No script, no bindings: everything under site/ is
+# uploaded as-is. Deployed by .github/workflows/deploy-site.yml on every push to
+# main that touches site/** or this file.
+#
+# Custom domains (globeskimmers.io, www.globeskimmers.io) are attached in the
+# Cloudflare dashboard: Workers & Pages → globeskimmers-site → Settings →
+# Domains & Routes → Add custom domain. Cloudflare writes the DNS records itself;
+# the Google Workspace MX and the SPF TXT on the apex are untouched.
+#
+# No `routes` key on purpose: declaring one makes wrangler overwrite the
+# dashboard-managed domains on every deploy. Once the domains are attached, add
+# `workers_dev = false` so the site stops answering on the workers.dev URL too.
+name = "globeskimmers-site"
+compatibility_date = "2025-06-01"
+
+[assets]
+directory = "./site"
+html_handling = "auto-trailing-slash"
+not_found_handling = "404-page"

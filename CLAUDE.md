@@ -39,6 +39,7 @@ Repo conventions: **one logical change per commit; show the diff before committi
 | Target | Trigger | Notes |
 |---|---|---|
 | **Cloudflare Workers** | **Automatic** — push to `main` touching `wrangler.toml`, `wrangler-tts.toml`, `cloudflare-worker-*.js`, or `globeskimmers-tts-worker.js` | `.github/workflows/deploy-workers.yml`, jobs `deploy-api` + `deploy-tts`. `workflow_dispatch` also available. Only credential is the repo secret `CLOUDFLARE_API_TOKEN` — **no local Cloudflare login needed to ship a worker.** |
+| **Website** (`site/` → `globeskimmers-site` Worker, static assets) | **Automatic** — push to `main` touching `site/**` or `wrangler-site.toml` | `.github/workflows/deploy-site.yml`. Same `CLOUDFLARE_API_TOKEN`. The custom domains `globeskimmers.io` / `www.` are attached in the Cloudflare dashboard (Workers & Pages → globeskimmers-site → Domains & Routes), not in config. `site/app-ads.txt` must stay byte-identical to what AdMob verified. The contact form posts to the API worker's `/contact`; messages show under Admin Portal → Website messages. |
 | **Native app** | Manual | `npm run cap:ios` / `npm run cap:android`, then Xcode/Android Studio. Capgo OTA for live updates. No frontend CI exists in this repo. |
 | **Supabase migrations** | **Automatic** — push to `main` touching `supabase/migrations/**` | `.github/workflows/deploy-migrations.yml`, gated on the `production` environment so it can require approval. Locally: `npm run db:new` → `db:plan` → `db:push`. See `supabase/README.md`. The ~30 older `scripts/**/*.sql` were applied by hand and are historical — do not replay them. |
 | **D1 SQL** | Manual | `npx wrangler d1 execute <db> --file=… --remote`. |
@@ -48,6 +49,8 @@ Repo conventions: **one logical change per commit; show the diff before committi
 **Provision Cloudflare bindings before pushing a `wrangler.toml` that references them.** Every CI deploy failure to date had this cause: a D1/R2 binding declared in config but not yet created, which fails the whole worker deploy.
 
 Docs that still say "the Mac must run `wrangler deploy`" (`docs/MOBILE_HANDOFF.md`, the **Activate:** rows in `docs/BUILD_TEST_CHECKLIST.md`) predate the Action and are obsolete **for the worker step only** — the SQL steps in those same rows are still required and still manual.
+
+The website is a plain directory: no build step, no lint scope, no Vite involvement (Vite's root `index.html` is the app, `site/index.html` is the site). Edit the HTML directly and let the Action ship it.
 
 Two things cannot be deployed from this repo at all: the `globeskimmers-airport-cache` worker (called from `src/pages/Transportation.jsx`, but no source and no wrangler config exist here), and Capgo bundles.
 

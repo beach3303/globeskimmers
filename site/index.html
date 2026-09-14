@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Globeskimmers</title>
+<meta name="description" content="Abroad, Globeskimmers finds food, coffee, restrooms, ATMs, shops and sights near you. At home, it builds your trip: hotels, tours and flight prices.">
+<link rel="canonical" href="https://globeskimmers.io/">
+<link rel="icon" href="/img/icon-64.png" sizes="64x64">
+<link rel="apple-touch-icon" href="/img/icon-192.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Globeskimmers">
+<meta property="og:title" content="Globeskimmers — Find what you need abroad. Plan the whole trip from home">
+<meta property="og:description" content="Abroad, Globeskimmers finds food, coffee, restrooms, ATMs, shops and sights near you. At home, it builds your trip: hotels, tours and flight prices.">
+<meta property="og:url" content="https://globeskimmers.io/">
+<meta property="og:image" content="https://globeskimmers.io/img/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="apple-itunes-app" content="app-id=6753154199">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --ground: #FFFCF7;
+  --panel: #F7F4EC;
+  --paper: #FFFFFF;
+  --ink: #16110D;
+  --ink-2: #3A3128;
+  --ink-3: #736657;
+  --rule: rgba(22, 17, 13, .10);
+  --rule-2: rgba(22, 17, 13, .22);
+  --teal: #0E7C73;
+  --teal-2: #14B5A6;
+  --teal-soft: rgba(14, 124, 115, .10);
+  --on-teal: #FFFFFF;
+  --stamp: #B0472F;
+  --stamp-soft: rgba(176, 71, 47, .08);
+  --food: #E63946;
+  --stay: #1F5BD6;
+  --dream: #D4861A;
+  --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --sans: "Inter Tight", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --phone-shadow: 0 30px 60px -30px rgba(22, 17, 13, .45), 0 2px 0 rgba(22, 17, 13, .06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0A1015; --panel: #111B22; --paper: #0D161C;
+    --ink: #EFE8DC; --ink-2: #CEC4B5; --ink-3: #978D7E;
+    --rule: rgba(239, 232, 220, .10); --rule-2: rgba(239, 232, 220, .22);
+    --teal: #57BFB3; --teal-2: #2DD4BF; --teal-soft: rgba(87, 191, 179, .13); --on-teal: #0A1015;
+    --stamp: #E68A71; --stamp-soft: rgba(230, 138, 113, .10);
+    --food: #FF6B76; --stay: #6E9BFF; --dream: #F0B25A;
+    --phone-shadow: 0 30px 60px -30px rgba(0, 0, 0, .8), 0 2px 0 rgba(255, 255, 255, .04);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0A1015; --panel: #111B22; --paper: #0D161C;
+  --ink: #EFE8DC; --ink-2: #CEC4B5; --ink-3: #978D7E;
+  --rule: rgba(239, 232, 220, .10); --rule-2: rgba(239, 232, 220, .22);
+  --teal: #57BFB3; --teal-2: #2DD4BF; --teal-soft: rgba(87, 191, 179, .13); --on-teal: #0A1015;
+  --stamp: #E68A71; --stamp-soft: rgba(230, 138, 113, .10);
+  --food: #FF6B76; --stay: #6E9BFF; --dream: #F0B25A;
+  --phone-shadow: 0 30px 60px -30px rgba(0, 0, 0, .8), 0 2px 0 rgba(255, 255, 255, .04);
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+body { margin: 0; background: var(--ground); color: var(--ink); font: 400 16px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+a { color: var(--teal); text-underline-offset: 3px; }
+img { max-width: 100%; display: block; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; border-radius: 4px; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+.kicker { font: 500 11px/1.2 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+
+/* masthead */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0; }
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+.brand img { width: 34px; height: 34px; border-radius: 9px; }
+.brand span { font: 400 22px/1 var(--serif); letter-spacing: -.01em; }
+.top nav { display: flex; gap: 22px; font-size: 14px; }
+.top nav a { color: var(--ink-2); text-decoration: none; white-space: nowrap; }
+.top nav a:hover { color: var(--teal); }
+@media (max-width: 700px) { .top nav { display: none; } }
+
+/* hero */
+.hero { padding: 52px 0 24px; }
+.hero h1 { font: 400 clamp(38px, 6vw, 64px)/1.04 var(--serif); letter-spacing: -.015em; margin: 14px 0 18px; max-width: 100%; text-wrap: balance; }
+.hero h1 em { color: var(--teal); white-space: nowrap; }
+.lede { margin: 0; max-width: 34em; font-size: 19px; line-height: 1.45; color: var(--ink-2); text-wrap: pretty; }
+.cta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 28px; }
+.badge { display: inline-block; height: 52px; }
+.badge img { height: 52px; width: auto; }
+.android { display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--rule-2); color: var(--ink-2); font-size: 14px; text-decoration: none; background: transparent; }
+.android b { font-weight: 600; color: var(--ink); }
+.android .soon { font: 500 10.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); border: 1px dashed var(--rule-2); border-radius: 999px; padding: 5px 7px 4px; }
+.cta .free { font: 12px/1.5 var(--mono); color: var(--ink-3); }
+
+/* the two situations */
+.modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 40px; }
+@media (max-width: 720px) { .modes { grid-template-columns: 1fr; } }
+.mode { padding: 22px 24px 18px; border-radius: 18px; background: var(--panel); border-top: 3px solid var(--hue); }
+.mode.here { --hue: var(--teal); }
+.mode.plan { --hue: var(--dream); }
+.mode .kicker { color: var(--hue); }
+.mode h2 { font: 400 32px/1.08 var(--serif); margin: 8px 0 12px; }
+.mode ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.mode li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; padding: 9px 0; border-top: 1px solid var(--rule); font-size: 15.5px; color: var(--ink-2); }
+.mode li::before { content: ""; width: 6px; height: 6px; margin-top: 9px; border-radius: 50%; background: var(--hue); }
+
+/* phones */
+.phones { position: relative; margin: 20px -24px 0; padding: 40px 24px 8px; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.phones::-webkit-scrollbar { display: none; }
+@media (hover: hover) and (pointer: fine) { .phones { scrollbar-width: thin; } .phones::-webkit-scrollbar { display: block; height: 6px; } }
+.rail { display: flex; gap: 24px; align-items: flex-end; width: max-content; margin: 0 auto; padding: 0 8px 26px; }
+.phone { flex: none; width: 224px; margin: 0; }
+.phone:nth-child(2) { transform: translateY(-22px); }
+.phone:nth-child(3) { transform: translateY(-6px); }
+.phone:nth-child(4) { transform: translateY(-28px); }
+.frame { position: relative; border-radius: 34px; background: var(--ink); padding: 9px; box-shadow: var(--phone-shadow); }
+.frame::before { content: ""; position: absolute; left: 50%; top: 16px; width: 74px; height: 22px; margin-left: -37px; border-radius: 12px; background: #0A0A0A; z-index: 2; }
+.screen { width: 100%; aspect-ratio: 390 / 844; border-radius: 27px; overflow: hidden; background: #FFFCF7; }
+.screen img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.screen .await { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; padding: 18px; gap: 6px; background: repeating-linear-gradient(-45deg, #FFFCF7 0 10px, #F7F4EC 10px 20px); color: #736657; font: 12px/1.45 var(--mono); }
+.screen .await b { color: #16110D; font: 400 24px/1.05 var(--serif); }
+.phone figcaption { margin-top: 12px; font-size: 13.5px; color: var(--ink-2); text-align: center; }
+.phone figcaption b { display: block; font-weight: 600; color: var(--ink); }
+@media (max-width: 700px) { .phone { width: 200px; } .rail { gap: 18px; padding-bottom: 20px; } }
+
+/* sections */
+.doors { padding: 56px 0 8px; }
+.doors-head { display: grid; grid-template-columns: 1fr; gap: 6px; max-width: 60ch; }
+.doors-head h2 { font: 400 clamp(32px, 4.6vw, 44px)/1.05 var(--serif); margin: 8px 0 0; text-wrap: balance; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 44px; margin-top: 22px; }
+@media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+.door { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 0 16px; padding: 24px 0; border-top: 1px solid var(--rule); }
+.door .line { width: 3px; height: 100%; border-radius: 2px; background: var(--hue, var(--teal)); }
+.door .kicker { color: var(--hue, var(--teal)); }
+.door h3 { font: 400 26px/1.12 var(--serif); margin: 8px 0 8px; text-wrap: balance; }
+.door p { margin: 0; max-width: 42em; color: var(--ink-2); font-size: 15.5px; }
+.door.food { --hue: var(--food); } .door.stay { --hue: var(--stay); } .door.pkg { --hue: var(--teal); } .door.dream { --hue: var(--dream); } .door.passport { --hue: var(--stamp); }
+.door.passport { grid-column: 1 / -1; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: start; }
+.stamp { align-self: center; justify-self: end; font: 500 11px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--stamp); border: 1.5px solid var(--stamp); border-radius: 6px; padding: 12px 14px; transform: rotate(-6deg); text-align: center; background: var(--stamp-soft); white-space: nowrap; }
+.stamp b { display: block; font: 400 20px/1 var(--serif); letter-spacing: 0; text-transform: none; margin-bottom: 4px; }
+@media (max-width: 720px) { .door.passport { grid-template-columns: 14px minmax(0, 1fr); } .stamp { grid-column: 2; justify-self: start; margin-top: 14px; } }
+
+/* honesty band */
+.honest { margin: 52px 0 0; padding: 30px 32px; border-radius: 22px; background: var(--panel); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px 32px; align-items: center; }
+.honest blockquote { margin: 0; font: 400 clamp(24px, 3.4vw, 32px)/1.2 var(--serif); color: var(--ink); text-wrap: balance; max-width: 22em; }
+.honest .src { display: flex; flex-wrap: wrap; gap: 8px; max-width: 240px; }
+.honest .src span { font: 500 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--teal); background: var(--teal-soft); border-radius: 999px; padding: 6px 9px 5px; }
+@media (max-width: 720px) { .honest { grid-template-columns: 1fr; padding: 24px 22px; } }
+
+/* virtual passport */
+.vp { padding: 76px 0 8px; scroll-margin-top: 16px; }
+.vp-top { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 36px 56px; align-items: center; }
+@media (max-width: 820px) { .vp-top { grid-template-columns: 1fr; } }
+.vp-head { max-width: 62ch; }
+.vp-cover { position: relative; display: flex; flex-direction: column; align-items: center; padding: 18px 0 6px; perspective: 1600px; }
+.vp-cover::before { content: ""; position: absolute; top: 50%; left: 50%; width: 440px; height: 440px; max-width: 110%; margin: -240px 0 0 -220px; border-radius: 50%; background: radial-gradient(circle, rgba(214, 166, 74, .30) 0%, rgba(14, 124, 115, .12) 45%, transparent 70%); pointer-events: none; }
+.book { position: relative; width: min(290px, 68vw); aspect-ratio: 562 / 900; transform: rotateY(-22deg) rotateX(7deg) rotateZ(2.5deg); transform-style: preserve-3d; transition: transform .8s cubic-bezier(.2, .7, .2, 1); }
+.book:hover { transform: rotateY(-7deg) rotateX(2deg) rotateZ(0deg); }
+.book .pages { position: absolute; top: 1.6%; bottom: 1.6%; left: 3%; right: -10px; border-radius: 4px 12px 12px 4px; background: repeating-linear-gradient(90deg, #FBF6EC 0 2px, #E4D7BD 2px 3px); transform: translateZ(-12px); box-shadow: 0 34px 56px -26px rgba(7, 27, 51, .65); }
+.book .cover { position: relative; display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 5px 13px 13px 5px; box-shadow: 0 44px 70px -34px rgba(7, 27, 51, .85), 0 0 0 1px rgba(214, 166, 74, .28); }
+.book::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 16px; border-radius: 5px 0 0 5px; background: linear-gradient(90deg, rgba(255, 255, 255, .16), rgba(0, 0, 0, .32)); pointer-events: none; }
+.cover-cap { position: relative; margin: 30px 0 0; font: 12px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+@media (prefers-reduced-motion: reduce) { .book { transition: none; } }
+.vp-head .kicker { color: var(--stamp); }
+.vp-head h2 { font: 400 clamp(34px, 5vw, 52px)/1.04 var(--serif); margin: 10px 0 12px; text-wrap: balance; }
+.vp-head h2 em { color: var(--stamp); }
+.vp-head p { margin: 0; color: var(--ink-2); font-size: 17px; max-width: 40em; }
+.ways { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 28px; }
+@media (max-width: 960px) { .ways { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .ways { grid-template-columns: 1fr; } }
+.way.memories { border-top-color: var(--dream); }
+.way.memories .kicker { color: var(--dream); }
+.way { padding: 18px 20px; border-radius: 16px; background: var(--panel); border-top: 3px solid var(--stamp); }
+.way .kicker { color: var(--stamp); }
+.way h3 { font: 400 24px/1.1 var(--serif); margin: 8px 0 6px; }
+.way p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+.arrival { display: block; width: 72%; max-width: 250px; margin: 2px auto 6px; color: #243E6C; transform: rotate(-4deg); }
+.spread { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 840px; margin: 36px auto 0; padding: 10px; border-radius: 20px; background: #0C2B50; box-shadow: 0 40px 70px -40px rgba(12, 43, 80, .6); }
+.pp-page { position: relative; overflow: hidden; min-height: 380px; padding: 22px 24px 58px; background: #FBF6EC; color: #243447; }
+.pp-page.l { border-radius: 12px 0 0 12px; box-shadow: inset -16px 0 24px -20px rgba(0, 0, 0, .4); }
+.pp-page.r { border-radius: 0 12px 12px 0; box-shadow: inset 16px 0 24px -20px rgba(0, 0, 0, .4); padding-bottom: 40px; }
+.pp-band { display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 8px; background: #0C2B50; color: #D6A64A; font: 500 10.5px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+.pp-title { font: 400 32px/1.02 var(--serif); color: #0C2B50; margin: 18px 0 14px; }
+.pp-title i { color: #B0472F; }
+.pp-fields { display: grid; gap: 10px; }
+.pp-field { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid #EADFC9; }
+.pp-field span { font: 500 10.5px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: #66717D; }
+.pp-field b { font: 400 22px/1 var(--serif); color: #243447; }
+.pp-stamps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; align-items: start; }
+.pstamp { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.pstamp:nth-child(1) { transform: rotate(-5deg); }
+.pstamp:nth-child(2) { transform: rotate(4deg) translateY(12px); }
+.pstamp img { width: 100%; max-width: 150px; aspect-ratio: 1; object-fit: contain; mix-blend-mode: multiply; }
+.pstamp .was { font: italic 400 20px/1 var(--serif); color: #B0472F; margin-top: 2px; }
+.pstamp .when { font: 400 19px/1.1 var(--serif); color: #B0472F; }
+.pstamp .gps { margin-top: 7px; padding: 5px 8px 4px; border-radius: 999px; background: #2E6B4E; color: #FFFFFF; font: 500 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.spread-note { margin: 12px 0 0; text-align: center; font: 12px/1.5 var(--mono); color: var(--ink-3); }
+@media (max-width: 680px) {
+  .spread { grid-template-columns: 1fr; }
+  .pp-page.l { border-radius: 12px 12px 0 0; box-shadow: none; }
+  .pp-page.r { border-radius: 0 0 12px 12px; box-shadow: none; border-top: 1px dashed #EADFC9; padding-bottom: 44px; }
+}
+.wall-intro { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 24px; margin: 64px 0 0; padding-top: 22px; border-top: 1px solid var(--rule); }
+.wall-intro h3 { font: 400 clamp(28px, 3.8vw, 38px)/1.08 var(--serif); margin: 0; }
+.wall-intro p { margin: 0; color: var(--ink-3); font-size: 15px; max-width: 34em; }
+.wall { display: grid; gap: 30px; margin-top: 26px; }
+.wall-row h4 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px; font: 500 11px/1.2 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.wall-row h4 b { font: 400 24px/1 var(--serif); letter-spacing: 0; text-transform: none; font-weight: 400; color: var(--ink); }
+.wall-rail { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 156px)); gap: 16px; justify-content: start; }
+.wstamp { margin: 0; text-align: center; }
+.wstamp .art { padding: 8px; border-radius: 16px; background: #FBF6EC; box-shadow: 0 1px 0 rgba(22, 17, 13, .05), 0 16px 26px -20px rgba(22, 17, 13, .4); transition: transform .25s ease; }
+.wstamp img { width: 100%; aspect-ratio: 1; object-fit: contain; transform: rotate(var(--r, -2deg)); mix-blend-mode: multiply; }
+.wstamp:hover .art { transform: translateY(-4px); }
+.wstamp figcaption { margin-top: 9px; font-size: 13.5px; font-weight: 600; line-height: 1.25; color: var(--ink); }
+.wstamp figcaption span { display: block; margin-top: 3px; font: 400 11px/1.4 var(--mono); color: var(--ink-3); }
+@media (max-width: 900px) {
+  .wall-rail { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; scrollbar-width: none; }
+  .wall-rail::-webkit-scrollbar { display: none; }
+  .wstamp { flex: 0 0 136px; scroll-snap-align: start; }
+}
+.quote { margin: 72px auto 0; max-width: 760px; text-align: center; }
+.quote blockquote { margin: 0; font: italic 400 clamp(32px, 5vw, 54px)/1.08 var(--serif); color: var(--ink); text-wrap: balance; }
+.quote figcaption { margin-top: 14px; font: 12px/1.5 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.vp-cta { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px 16px; margin-top: 28px; }
+.vp-cta span { font-size: 15px; color: var(--ink-2); }
+
+/* contact */
+.contact { padding: 72px 0 24px; }
+.contact-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 32px 56px; }
+@media (max-width: 760px) { .contact-grid { grid-template-columns: 1fr; } }
+.contact h2 { font: 400 clamp(32px, 4.6vw, 44px)/1.05 var(--serif); margin: 8px 0 12px; text-wrap: balance; }
+.contact p { color: var(--ink-2); max-width: 36em; margin: 0 0 14px; }
+.contact .mail { font-size: 17px; }
+.form { display: grid; gap: 14px; padding: 22px; border-radius: 18px; background: var(--paper); border: 1px solid var(--rule); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 480px) { .row2 { grid-template-columns: 1fr; } }
+.field { display: grid; gap: 6px; }
+.field label { font: 500 11px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.field input, .field select, .field textarea { width: 100%; height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--rule-2); background: var(--ground); color: var(--ink); }
+.field textarea { height: 132px; padding: 10px 12px; resize: vertical; }
+.field select { appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%); background-position: calc(100% - 18px) 19px, calc(100% - 13px) 19px; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 34px; }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.send { display: inline-flex; align-items: center; justify-content: center; height: 48px; padding: 0 22px; border-radius: 10px; border: 0; cursor: pointer; font-weight: 600; font-size: 15px; color: var(--on-teal); background: linear-gradient(135deg, var(--teal) 0%, var(--teal-2) 100%); }
+.send[disabled] { opacity: .6; cursor: progress; }
+.status { min-height: 22px; font-size: 14px; color: var(--ink-2); }
+.status.ok { color: var(--teal); }
+.status.err { color: var(--stamp); }
+.fine { font: 12px/1.6 var(--mono); color: var(--ink-3); }
+
+/* footer */
+footer { margin-top: 56px; padding: 26px 0 48px; border-top: 1px solid var(--rule); }
+.foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px 24px; align-items: baseline; }
+.foot .tag { font: 400 20px/1.2 var(--serif); color: var(--ink); }
+.foot .tag i { color: var(--teal); }
+.foot nav { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13.5px; }
+.foot nav a { color: var(--ink-2); text-decoration: none; }
+.foot nav a:hover { text-decoration: underline; }
+.foot .legal { width: 100%; font: 12px/1.7 var(--mono); color: var(--ink-3); }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="/"><img src="/img/icon-192.png" alt="" width="34" height="34"><span>Globeskimmers</span></a>
+    <nav aria-label="Sections"><a href="#inside">Inside the app</a><a href="#passport">Virtual Passport</a><a href="#contact">Partners &amp; investors</a><a href="#contact">Contact</a></nav>
+  </header>
+
+  <section class="hero">
+    <div class="kicker">Travel app · iOS · Android coming soon</div>
+    <h1>Find what you need <em>abroad.</em><br>Plan the whole trip <em>from home.</em></h1>
+    <p class="lede">Globeskimmers is a travel concierge in your pocket. In another country, it finds what&#x27;s around you. At home, type where you dream of going and it builds the trip, ready to book now or save for later.</p>
+    <div class="cta">
+      <a class="badge" href="https://apps.apple.com/us/app/globeskimmers/id6753154199" aria-label="Download on the App Store"><img src="/img/app-store-badge.svg" alt="Download on the App Store" height="52"></a>
+      <a class="android" href="#contact"><b>Android</b><span class="soon">coming soon</span></a>
+      <span class="free">Free on the App Store</span>
+    </div>
+    <div class="modes"><article class="mode here"><div class="kicker">When you&#x27;re already there</div><h2>Find it nearby</h2><ul><li>Restaurants, street food and coffee</li><li>Restrooms, ATMs and money exchange</li><li>Groceries, malls and souvenirs</li><li>Attractions, tours and events</li><li>A hotel for tonight</li><li>Rental cars and airport transfers</li></ul></article><article class="mode plan"><div class="kicker">When you&#x27;re planning from home</div><h2>Build the trip</h2><ul><li>Type where you want to go</li><li>Two great hotels at real rates, booked in the app</li><li>The attractions there, with tours to book before you go</li><li>Recent flight prices by month, with a link to book</li><li>Rental cars and airport transfers for arrival</li><li>Save anything for later</li></ul></article></div>
+  </section>
+
+  <section class="phones" id="inside" aria-label="Screens from the app">
+    <div class="rail">
+      <figure class="phone"><div class="frame"><div class="screen"><div class="await"><b>Home</b>Screenshot goes here</div></div></div><figcaption><b>Near you now</b>Home, wherever you are</figcaption></figure>
+      <figure class="phone"><div class="frame"><div class="screen"><div class="await"><b>Book a hotel</b>Screenshot goes here</div></div></div><figcaption><b>Book the stay</b>Real rates, booked in the app</figcaption></figure>
+      <figure class="phone"><div class="frame"><div class="screen"><div class="await"><b>Smart Packages</b>Screenshot goes here</div></div></div><figcaption><b>Smart Packages</b>Two great hotels, side by side</figcaption></figure>
+      <figure class="phone"><div class="frame"><div class="screen"><div class="await"><b>Virtual Passport</b>Screenshot goes here</div></div></div><figcaption><b>Virtual Passport</b>Stamps you actually earned</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="doors">
+    <div class="doors-head">
+      <div class="kicker">What's inside</div>
+      <h2>What the app does today.</h2>
+    </div>
+    <div class="grid">
+      <article class="door food"><span class="line"></span><div><div class="kicker">Near you now</div><h3>The mundane, sorted nearest first</h3><p>Places to eat, coffee, ATMs, restrooms, convenience stores, money exchange, shopping and things to do, ordered by distance from wherever you stand, plus events and ways to get around. Search restaurants by the dish, not the category: every match carries a plain tier, and when nothing nearby fits, the app says so. Basic phrases with audio, cultural notes and a camera that reads a price tag or a menu cover the moments a map can&#x27;t.</p></div></article>
+      <article class="door stay"><span class="line"></span><div><div class="kicker">Book the stay</div><h3>Real rates, booked inside the app</h3><p>With exact dates, member rates come from Nuitée, named on screen, and that booking completes without leaving the app. Other stays hand off to Booking, Expedia or Agoda through Stay22, and the app says so. Every confirmed stay lands in My Trip beside your other bookings.</p></div></article>
+      <article class="door pkg"><span class="line"></span><div><div class="kicker">Smart Packages</div><h3>Two great hotels, side by side</h3><p>Name a destination and dates. We start with four-star hotels that guests rate 8.5 or higher, then show you two side by side: the best value and the top-rated one, with tours to match and a trip estimate that shows what it covers. We&#x27;ll let you know if A/C or breakfast isn&#x27;t included, and when a room with breakfast is available. Flights aren&#x27;t included yet. You book those separately.</p></div></article>
+      <article class="door dream"><span class="line"></span><div><div class="kicker">Dream and plan</div><h3>Sales from the source, galleries for later</h3><p>Deal Radar reads cruise, car and airline sales from the brands&#x27; own pages and keeps their wording and end date as written; tap one and you land on their page, not ours. Dreamer&#x27;s Corner holds credited photo galleries of places you haven&#x27;t booked yet, with Smart Packages a tap away.</p></div></article>
+    </div>
+
+    <div class="honest">
+      <blockquote>A middling match is called middling. Ratings carry Google&#x27;s name. Every booking names its partner. Accessibility is never guessed.</blockquote>
+      <div class="src" aria-label="Sources are always labelled"><span>per Google</span><span>per Viator</span><span>per LiteAPI</span><span>Globeskimmers</span></div>
+    </div>
+  </section>
+
+  <section class="vp" id="passport">
+    <div class="vp-top">
+    <div class="vp-head">
+      <div class="kicker">Virtual Passport</div>
+      <h2>Collect the world, <em>one stamp</em> at a time.</h2>
+      <p>Every Globeskimmers account comes with a Virtual Passport. Land at an airport, reach a famous place, or cross into a new country, and the app offers you a stamp dated the day you were there. Add your own photos to each stamp and it becomes a travel album too, a book of places and the moments you had there.</p>
+    </div>
+    <div class="vp-cover">
+      <div class="book">
+        <div class="pages" aria-hidden="true"></div>
+        <img class="cover" src="/img/passport-cover.jpg" width="562" height="900" alt="The Globeskimmers Virtual Passport: a navy booklet with a gold border, the Earth, and the words My Virtual Passport">
+      </div>
+      <p class="cover-cap">Every account gets one</p>
+    </div>
+    </div>
+
+    <div class="ways">
+      <div class="way"><div class="kicker">Airports</div><h3>An arrival stamp</h3><p>Land somewhere new and stamp the airport, with its code, city and date, like the real thing.</p></div>
+      <div class="way"><div class="kicker">Famous places</div><h3>A landmark stamp</h3><p>Stand at a famous place with GPS on and its illustrated stamp goes in, verified by your location.</p></div>
+      <div class="way"><div class="kicker">Countries</div><h3>A border stamp</h3><p>Cross into a new country and it joins your passport, so the count of countries keeps climbing.</p></div>
+      <div class="way memories"><div class="kicker">Memories</div><h3>A travel album</h3><p>Pin your own photos to each stamp and tag the friend who was there, so every page keeps the moment, not just the place.</p></div>
+    </div>
+
+    <div class="spread" aria-label="A sample Virtual Passport spread">
+      <div class="pp-page l">
+        <div class="pp-band"><span>Virtual Passport</span><span>Globeskimmers</span></div>
+        <div class="pp-title">Your name <i>here</i></div>
+        <div class="pp-fields">
+          <div class="pp-field"><span>Home country</span><b>Philippines</b></div>
+          <div class="pp-field"><span>Countries explored</span><b>6</b></div>
+          <div class="pp-field"><span>Stamps collected</span><b>9</b></div>
+        </div>
+      </div>
+      <div class="pp-page r">
+        <svg class="arrival" viewBox="0 0 340 224" role="img" aria-label="Arrival stamp: Manila MNL, Philippines, 14 SEP 2026"><defs><symbol id="gsk-plane" viewBox="-12 -12 24 24"><path fill="currentColor" d="M0,-11 C0.6,-11 1,-9.5 1,-7.5 L1,-4 L11,2 L11,4 L1,1 L0.6,7 L4,10 L4,11.5 L0,10.5 L-4,11.5 L-4,10 L-0.6,7 L-1,1 L-11,4 L-11,2 L-1,-4 L-1,-7.5 C-1,-9.5 -0.6,-11 0,-11 Z"/></symbol><path id="gsk-arcT" d="M84,112 A86,86 0 0 1 256,112"/><path id="gsk-arcB" d="M88,112 A82,82 0 0 0 252,112"/><filter id="gsk-worn" x="-16%" y="-16%" width="132%" height="132%"><feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.6" result="d"/><feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" seed="11" result="g"/><feColorMatrix in="g" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.5 1.28" result="m"/><feComposite in="d" in2="m" operator="in"/></filter></defs><g filter="url(#gsk-worn)" font-family="Georgia, 'Times New Roman', serif" font-weight="700" fill="currentColor"><circle cx="170" cy="112" r="98" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="170" cy="112" r="86" fill="none" stroke="currentColor" stroke-width="1.3"/><text font-size="12" letter-spacing="2.5"><textPath href="#gsk-arcT" startOffset="50%" text-anchor="middle">IMMIGRATION · MANILA</textPath></text><text font-size="11" letter-spacing="3"><textPath href="#gsk-arcB" startOffset="50%" text-anchor="middle">★ PHILIPPINES · ARRIVAL ★</textPath></text><use href="#gsk-plane" x="160" y="62" width="20" height="20"/><text x="170" y="118" text-anchor="middle" font-size="30" letter-spacing="2">MNL</text><rect x="124" y="126" width="92" height="19" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><text x="170" y="139" text-anchor="middle" font-size="11.5" letter-spacing="1.5">14 SEP 2026</text></g></svg>
+        <div class="pp-stamps">
+          <div class="pstamp"><img src="/img/stamps/chocolate-hills.jpg" alt="Chocolate Hills stamp" width="176" height="176"><div class="was">I was here!</div><div class="when">Mar 8, 2026</div><div class="gps">Verified by GPS</div></div>
+          <div class="pstamp"><img src="/img/stamps/mount-fuji.jpg" alt="Mount Fuji stamp" width="176" height="176"><div class="was">I was here!</div><div class="when">Apr 2, 2026</div><div class="gps">Verified by GPS</div></div>
+        </div>
+      </div>
+    </div>
+    <p class="spread-note">A sample page. Yours fills with the places you actually go, and the photos you took there.</p>
+
+    <div class="wall-intro">
+      <h3>Stamps waiting for you</h3>
+      <p>Hundreds of famous places on every continent have their own stamp. Here are 31 to start with.</p>
+    </div>
+    <div class="wall"><div class="wall-row"><h4><b>Asia</b>6 stamps</h4><div class="wall-rail" style="--n:6"><figure class="wstamp" style="--r:-3deg"><div class="art"><img src="/img/stamps/mount-fuji.jpg" alt="Mount Fuji stamp" loading="lazy" width="156" height="156"></div><figcaption>Mount Fuji<span>Japan</span></figcaption></figure><figure class="wstamp" style="--r:2deg"><div class="art"><img src="/img/stamps/taj-mahal.jpg" alt="Taj Mahal stamp" loading="lazy" width="156" height="156"></div><figcaption>Taj Mahal<span>Agra, India</span></figcaption></figure><figure class="wstamp" style="--r:-1.5deg"><div class="art"><img src="/img/stamps/great-wall-of-china.jpg" alt="Great Wall of China stamp" loading="lazy" width="156" height="156"></div><figcaption>Great Wall of China<span>Beijing, China</span></figcaption></figure><figure class="wstamp" style="--r:3deg"><div class="art"><img src="/img/stamps/angkor-wat.jpg" alt="Angkor Wat stamp" loading="lazy" width="156" height="156"></div><figcaption>Angkor Wat<span>Siem Reap, Cambodia</span></figcaption></figure><figure class="wstamp" style="--r:-2.5deg"><div class="art"><img src="/img/stamps/ha-long-bay.jpg" alt="Ha Long Bay stamp" loading="lazy" width="156" height="156"></div><figcaption>Ha Long Bay<span>Vietnam</span></figcaption></figure><figure class="wstamp" style="--r:1.5deg"><div class="art"><img src="/img/stamps/marina-bay-sands.jpg" alt="Marina Bay Sands stamp" loading="lazy" width="156" height="156"></div><figcaption>Marina Bay Sands<span>Singapore</span></figcaption></figure></div></div><div class="wall-row"><h4><b>The Philippines</b>4 stamps</h4><div class="wall-rail" style="--n:4"><figure class="wstamp" style="--r:-3deg"><div class="art"><img src="/img/stamps/chocolate-hills.jpg" alt="Chocolate Hills stamp" loading="lazy" width="156" height="156"></div><figcaption>Chocolate Hills<span>Bohol</span></figcaption></figure><figure class="wstamp" style="--r:2deg"><div class="art"><img src="/img/stamps/banaue-rice-terraces.jpg" alt="Banaue Rice Terraces stamp" loading="lazy" width="156" height="156"></div><figcaption>Banaue Rice Terraces<span>Ifugao</span></figcaption></figure><figure class="wstamp" style="--r:-1.5deg"><div class="art"><img src="/img/stamps/el-nido.jpg" alt="El Nido stamp" loading="lazy" width="156" height="156"></div><figcaption>El Nido<span>Palawan</span></figcaption></figure><figure class="wstamp" style="--r:3deg"><div class="art"><img src="/img/stamps/boracay.jpg" alt="Boracay stamp" loading="lazy" width="156" height="156"></div><figcaption>Boracay<span>Aklan</span></figcaption></figure></div></div><div class="wall-row"><h4><b>Europe</b>6 stamps</h4><div class="wall-rail" style="--n:6"><figure class="wstamp" style="--r:-3deg"><div class="art"><img src="/img/stamps/eiffel-tower.jpg" alt="Eiffel Tower stamp" loading="lazy" width="156" height="156"></div><figcaption>Eiffel Tower<span>Paris, France</span></figcaption></figure><figure class="wstamp" style="--r:2deg"><div class="art"><img src="/img/stamps/colosseum.jpg" alt="Colosseum stamp" loading="lazy" width="156" height="156"></div><figcaption>Colosseum<span>Rome, Italy</span></figcaption></figure><figure class="wstamp" style="--r:-1.5deg"><div class="art"><img src="/img/stamps/santorini.jpg" alt="Santorini stamp" loading="lazy" width="156" height="156"></div><figcaption>Santorini<span>Greece</span></figcaption></figure><figure class="wstamp" style="--r:3deg"><div class="art"><img src="/img/stamps/sagrada-familia.jpg" alt="Sagrada Família stamp" loading="lazy" width="156" height="156"></div><figcaption>Sagrada Família<span>Barcelona, Spain</span></figcaption></figure><figure class="wstamp" style="--r:-2.5deg"><div class="art"><img src="/img/stamps/neuschwanstein-castle.jpg" alt="Neuschwanstein Castle stamp" loading="lazy" width="156" height="156"></div><figcaption>Neuschwanstein Castle<span>Bavaria, Germany</span></figcaption></figure><figure class="wstamp" style="--r:1.5deg"><div class="art"><img src="/img/stamps/big-ben.jpg" alt="Big Ben stamp" loading="lazy" width="156" height="156"></div><figcaption>Big Ben<span>London, United Kingdom</span></figcaption></figure></div></div><div class="wall-row"><h4><b>The Americas</b>6 stamps</h4><div class="wall-rail" style="--n:6"><figure class="wstamp" style="--r:-3deg"><div class="art"><img src="/img/stamps/statue-of-liberty.jpg" alt="Statue of Liberty stamp" loading="lazy" width="156" height="156"></div><figcaption>Statue of Liberty<span>New York, USA</span></figcaption></figure><figure class="wstamp" style="--r:2deg"><div class="art"><img src="/img/stamps/golden-gate-bridge.jpg" alt="Golden Gate Bridge stamp" loading="lazy" width="156" height="156"></div><figcaption>Golden Gate Bridge<span>San Francisco, USA</span></figcaption></figure><figure class="wstamp" style="--r:-1.5deg"><div class="art"><img src="/img/stamps/grand-canyon.jpg" alt="Grand Canyon stamp" loading="lazy" width="156" height="156"></div><figcaption>Grand Canyon<span>Arizona, USA</span></figcaption></figure><figure class="wstamp" style="--r:3deg"><div class="art"><img src="/img/stamps/niagara-falls.jpg" alt="Niagara Falls stamp" loading="lazy" width="156" height="156"></div><figcaption>Niagara Falls<span>Ontario, Canada</span></figcaption></figure><figure class="wstamp" style="--r:-2.5deg"><div class="art"><img src="/img/stamps/christ-the-redeemer.jpg" alt="Christ the Redeemer stamp" loading="lazy" width="156" height="156"></div><figcaption>Christ the Redeemer<span>Rio de Janeiro, Brazil</span></figcaption></figure><figure class="wstamp" style="--r:1.5deg"><div class="art"><img src="/img/stamps/machu-picchu.jpg" alt="Machu Picchu stamp" loading="lazy" width="156" height="156"></div><figcaption>Machu Picchu<span>Cusco, Peru</span></figcaption></figure></div></div><div class="wall-row"><h4><b>Africa and the Middle East</b>6 stamps</h4><div class="wall-rail" style="--n:6"><figure class="wstamp" style="--r:-3deg"><div class="art"><img src="/img/stamps/pyramids-of-giza.jpg" alt="Pyramids of Giza stamp" loading="lazy" width="156" height="156"></div><figcaption>Pyramids of Giza<span>Giza, Egypt</span></figcaption></figure><figure class="wstamp" style="--r:2deg"><div class="art"><img src="/img/stamps/petra.jpg" alt="Petra stamp" loading="lazy" width="156" height="156"></div><figcaption>Petra<span>Jordan</span></figcaption></figure><figure class="wstamp" style="--r:-1.5deg"><div class="art"><img src="/img/stamps/burj-khalifa.jpg" alt="Burj Khalifa stamp" loading="lazy" width="156" height="156"></div><figcaption>Burj Khalifa<span>Dubai, UAE</span></figcaption></figure><figure class="wstamp" style="--r:3deg"><div class="art"><img src="/img/stamps/table-mountain.jpg" alt="Table Mountain stamp" loading="lazy" width="156" height="156"></div><figcaption>Table Mountain<span>Cape Town, South Africa</span></figcaption></figure><figure class="wstamp" style="--r:-2.5deg"><div class="art"><img src="/img/stamps/victoria-falls.jpg" alt="Victoria Falls stamp" loading="lazy" width="156" height="156"></div><figcaption>Victoria Falls<span>Zambia</span></figcaption></figure><figure class="wstamp" style="--r:1.5deg"><div class="art"><img src="/img/stamps/mount-kilimanjaro.jpg" alt="Mount Kilimanjaro stamp" loading="lazy" width="156" height="156"></div><figcaption>Mount Kilimanjaro<span>Tanzania</span></figcaption></figure></div></div><div class="wall-row"><h4><b>Oceania</b>3 stamps</h4><div class="wall-rail" style="--n:3"><figure class="wstamp" style="--r:-3deg"><div class="art"><img src="/img/stamps/sydney-opera-house.jpg" alt="Sydney Opera House stamp" loading="lazy" width="156" height="156"></div><figcaption>Sydney Opera House<span>Sydney, Australia</span></figcaption></figure><figure class="wstamp" style="--r:2deg"><div class="art"><img src="/img/stamps/uluru.jpg" alt="Uluru stamp" loading="lazy" width="156" height="156"></div><figcaption>Uluru<span>Northern Territory, Australia</span></figcaption></figure><figure class="wstamp" style="--r:-1.5deg"><div class="art"><img src="/img/stamps/milford-sound.jpg" alt="Milford Sound stamp" loading="lazy" width="156" height="156"></div><figcaption>Milford Sound<span>Fiordland, New Zealand</span></figcaption></figure></div></div></div>
+
+    <figure class="quote">
+      <blockquote>Life is either a daring adventure or nothing.</blockquote>
+      <figcaption>Helen Keller · Let Us Have Faith, 1940</figcaption>
+    </figure>
+    <div class="vp-cta">
+      <a class="badge" href="https://apps.apple.com/us/app/globeskimmers/id6753154199" aria-label="Download on the App Store"><img src="/img/app-store-badge.svg" alt="Download on the App Store" height="52"></a>
+      <span>Start your Virtual Passport. Free on iPhone.</span>
+    </div>
+  </section>
+
+  <section class="contact" id="contact">
+    <div class="contact-grid">
+      <div>
+        <div class="kicker">Partners · investors · press · travelers</div>
+        <h2>For partners and investors</h2>
+        <p>Globeskimmers is built and run by one founder, Maiza Simeon. It is free and ad-supported, runs on an owned worldwide places database with Google as a paid fallback, books hotels through Nuitée, hands tours to Viator, and takes a commission on those bookings and referrals. Hotels, tour operators and affiliate networks that want to be listed honestly, and investors who want to see how it runs, can write directly.</p>
+        <p class="mail">Write to <a href="mailto:founder@globeskimmers.io">founder@globeskimmers.io</a>, or use the form.</p>
+        <p class="fine">Maiza Simeon, founder. Replies come from the founder, not a queue.</p>
+      </div>
+      <form class="form" id="contact-form" novalidate>
+        <div class="row2">
+          <div class="field"><label for="f-who">I am a</label><select id="f-who" name="who"><option value="traveler">Traveler</option><option value="partner">Partner (hotel, tours, network)</option><option value="investor">Investor</option><option value="press">Press</option><option value="other">Something else</option></select></div>
+          <div class="field"><label for="f-name">Name</label><input id="f-name" name="name" autocomplete="name" required maxlength="120"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="f-email">Email</label><input id="f-email" name="email" type="email" autocomplete="email" required maxlength="200"></div>
+          <div class="field"><label for="f-company">Company <span style="text-transform:none;letter-spacing:0">(optional)</span></label><input id="f-company" name="company" autocomplete="organization" maxlength="160"></div>
+        </div>
+        <div class="field"><label for="f-message">Message</label><textarea id="f-message" name="message" required minlength="10" maxlength="4000"></textarea></div>
+        <div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px"><button class="send" type="submit">Send</button><span class="status" id="contact-status" role="status" aria-live="polite"></span></div>
+        <p class="fine" style="margin:0">Your message is stored on our Cloudflare account with a hashed IP address and your browser type, and read by the Globeskimmers team. See the <a href="/legal/privacy">privacy policy</a>.</p>
+      </form>
+    </div>
+  </section>
+
+  <footer>
+    <div class="foot">
+      <div class="tag">Rest is not the reward. <i>It&#x27;s the plan.</i></div>
+      <nav aria-label="Legal"><a href="/legal/privacy">Privacy</a><a href="/legal/terms">Terms</a><a href="/delete-account/">Delete your account</a><a href="https://apps.apple.com/us/app/globeskimmers/id6753154199">App Store</a></nav>
+      <div class="legal">© 2026 Globeskimmers · Maiza Simeon · founder@globeskimmers.io</div>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var API = "https://globeskimmers-api.maizasimeon.workers.dev";
+  var form = document.getElementById("contact-form");
+  var status = document.getElementById("contact-status");
+  if (!form) return;
+  function say(text, cls) { status.textContent = text; status.className = "status" + (cls ? " " + cls : ""); }
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!form.reportValidity()) return;
+    var btn = form.querySelector(".send");
+    var payload = {};
+    new FormData(form).forEach(function (v, k) { payload[k] = v; });
+    payload.page = location.pathname;
+    btn.disabled = true; say("Sending…");
+    fetch(API + "/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok) { form.reset(); say("Sent. Thank you — you'll hear back from the founder.", "ok"); return; }
+        var why = d && d.reason;
+        if (why === "rate_limited") say("That's a few messages in a row. Please try again in an hour, or email founder@globeskimmers.io.", "err");
+        else if (why === "bad_email") say("That email address doesn't look right.", "err");
+        else if (why === "too_short" || why === "missing_fields") say("Please add your name and a message of at least a sentence.", "err");
+        else say("Couldn't send just now. Email founder@globeskimmers.io instead.", "err");
+      })
+      .catch(function () { say("Couldn't send just now. Email founder@globeskimmers.io instead.", "err"); })
+      .then(function () { btn.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>
