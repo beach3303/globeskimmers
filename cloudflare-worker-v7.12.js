@@ -15657,9 +15657,31 @@ async function handlePackageCheckout(request, env) {
     const choices = Array.isArray(draft?.hotelChoices) ? draft.hotelChoices : [];
     const idx = Math.min(Math.max(parseInt(b.choice, 10) || 0, 0), Math.max(choices.length - 1, 0));
     const chosen = choices[idx] || null;
-    const stayTotal = (chosen && typeof chosen.stayTotal === 'number' && Number.isFinite(chosen.stayTotal) && chosen.stayTotal > 0) ? chosen.stayTotal : null;
+    // The PICKED room plan. The traveler may have chosen a pricier rate in the
+    // room chooser; b.offerId is only a pointer into the draft's own persisted
+    // rates[] — the amount is read from D1, never from the client. An offerId
+    // the draft doesn't know → refuse. Never fall back to the base rate: that
+    // silent fallback was the undercharge this fixes.
+    const offerId = typeof b.offerId === 'string' ? b.offerId.trim().slice(0, 8000) : '';
+    let pickedRate = null;
+    if (offerId && chosen && String(chosen.offerId || '') !== offerId) {
+      pickedRate = (Array.isArray(chosen.rates) ? chosen.rates : []).find((r) => r && String(r.offerId) === offerId) || null;
+      if (!pickedRate) return jsonResponse({ ok: false, reason: 'rate_not_found' });
+    }
+    const pickedTotal = pickedRate ? pickedRate.price : (chosen ? chosen.stayTotal : null);
+    const stayTotal = (typeof pickedTotal === 'number' && Number.isFinite(pickedTotal) && pickedTotal > 0) ? pickedTotal : null;
     if (stayTotal == null) return jsonResponse({ ok: false, reason: 'no_priced_total' });
-    const currency = String(chosen.currency || draft.currency || 'USD').toUpperCase();
+    const currency = String((pickedRate && pickedRate.currency) || chosen.currency || draft.currency || 'USD').toUpperCase();
+    // What is being paid for — stored on the order (the booking step reads the
+    // offerId from here) and shown on the pay page. Never trusted from the client.
+    const picked = {
+      choice: idx, hotelId: chosen.hotelId || null, hotelName: chosen.name || 'Hotel',
+      offerId: pickedRate ? pickedRate.offerId : (chosen.offerId || null),
+      roomName: (pickedRate ? pickedRate.roomName : chosen.roomName) || null,
+      board: (pickedRate ? pickedRate.board : chosen.board) || null,
+      checkin: draft.checkin || null, checkout: draft.checkout || null, nights: draft.nights || null,
+      stayTotal, currency,
+    };
     if (!/^[A-Z]{3}$/.test(currency) || STRIPE_NON2DEC.has(currency)) {
       return jsonResponse({ ok: false, reason: 'unsupported_currency', currency });
     }
@@ -15680,8 +15702,16 @@ async function handlePackageCheckout(request, env) {
           return jsonResponse({ ok: false, reason: 'already_paid' });
         }
         if (prev.status !== 'canceled') {
-          // Alive and unpaid → hand back the SAME payment session instead of a new charge.
-          return jsonResponse({ ok: true, pid: prior.pid, url: `${new URL(request.url).origin}/package/pay?pid=${prior.pid}`, amount, currency, customerAttached: false, reused: true });
+          if (Number(prev.amount) === amount && String(prev.currency || '').toUpperCase() === currency) {
+            // Alive, unpaid, SAME total → hand back the same payment session instead of a new charge.
+            return jsonResponse({ ok: true, pid: prior.pid, url: `${new URL(request.url).origin}/package/pay?pid=${prior.pid}`, amount, currency, customerAttached: false, reused: true, picked });
+          }
+          // Alive, unpaid, DIFFERENT total (the traveler changed rooms since) →
+          // cancel it and mint a fresh one below. If Stripe won't cancel it
+          // (e.g. mid-processing) we refuse rather than risk two live intents.
+          const cx = await stripeApi(env, 'POST', `/payment_intents/${prior.intent_id}/cancel`, {});
+          if (!cx || cx.error || cx.status !== 'canceled') return jsonResponse({ ok: false, reason: 'stripe_error', detail: 'prior_intent_uncancelable' });
+          await env.DB.prepare("update stripe_payments set status = 'canceled', updated = datetime('now') where pid = ?").bind(prior.pid).run().catch(() => {});
         }
       } else {
         // Can't verify the prior intent right now — refusing to mint beats risking a double charge.
@@ -15714,6 +15744,9 @@ async function handlePackageCheckout(request, env) {
       'automatic_payment_methods[enabled]': 'true',
       description: `GlobeSkimmers package ${orderId}`,
       'metadata[order_id]': orderId,
+      'metadata[choice]': String(idx),
+      'metadata[hotel]': String(picked.hotelName).slice(0, 500),
+      ...(picked.roomName ? { 'metadata[room]': String(picked.roomName).slice(0, 500) } : {}),
       ...(customerId ? { customer: customerId } : {}),
     });
     if (pi.error || !pi.id || !pi.client_secret) {
@@ -15725,9 +15758,13 @@ async function handlePackageCheckout(request, env) {
     ).bind(pid, pi.id, pi.client_secret, orderId, user?.id || null, amount, currency, 'created')
       .run().then(() => true).catch(() => false);
     if (!saved) return jsonResponse({ ok: false, reason: 'persist_failed' });
+    // The pick rides on the order row: /package/pay names it, and the booking
+    // step after payment reads picked.offerId from here — not from the phone.
+    await env.DB.prepare('update package_orders set data = ?, updated = ? where sid = ?')
+      .bind(JSON.stringify({ ...draft, picked }), Date.now(), orderId).run().catch(() => {});
     const origin = new URL(request.url).origin;
     // NOTHING sensitive: the client_secret stays in D1 + the pay page it renders.
-    return jsonResponse({ ok: true, pid, url: `${origin}/package/pay?pid=${pid}`, amount, currency, customerAttached: !!customerId });
+    return jsonResponse({ ok: true, pid, url: `${origin}/package/pay?pid=${pid}`, amount, currency, customerAttached: !!customerId, picked });
   } catch { return jsonResponse({ ok: false, reason: 'error' }); }
 }
 
@@ -15746,9 +15783,20 @@ async function handlePackagePay(request, env) {
   const pk = env.STRIPE_PUBLISHABLE_KEY || '';
   if (!pk) return nuiteeHtml('Payments not configured', '<p class="wordmark">GlobeSkimmers</p><h1>Payments are not fully configured yet</h1><p class="sub">Card entry needs one more server setting before it can go live. Nothing was charged — please try again later.</p>');
   const money = nuiteeMoney(row.amount / 100, row.currency);
+  // Name the thing being paid for (hotel · room · dates) from the order's
+  // stored pick — the same record the amount came from. Absent → order id only.
+  let pickedLine = '';
+  try {
+    const ord = row.order_id ? await env.DB.prepare('select data from package_orders where sid = ?').bind(row.order_id).first() : null;
+    const pk = ord && ord.data ? (JSON.parse(ord.data).picked || null) : null;
+    if (pk && pk.hotelName) {
+      const dates = (pk.checkin && pk.checkout) ? ` · ${nuiteeEsc(pk.checkin)} → ${nuiteeEsc(pk.checkout)}` : '';
+      pickedLine = `<div class="row"><span>Stay</span><span>${nuiteeEsc(pk.hotelName)}${pk.roomName ? ' · ' + nuiteeEsc(pk.roomName) : ''}${dates}</span></div>`;
+    }
+  } catch { /* recap stays minimal */ }
   const totalLine = nuiteeEsc(money);
   const testMode = pk.startsWith('pk_test_');
-  const recap = `<div class="card"><p class="hname">Package checkout</p><div class="row"><span>Order</span><span class="mono">${nuiteeEsc(row.order_id || pid)}</span></div><div class="row tot"><span>Total</span><span class="mono">${totalLine}</span></div></div>`;
+  const recap = `<div class="card"><p class="hname">Package checkout</p>${pickedLine}<div class="row"><span>Order</span><span class="mono">${nuiteeEsc(row.order_id || pid)}</span></div><div class="row tot"><span>Total</span><span class="mono">${totalLine}</span></div></div>`;
   const lock = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="flex:none;margin-top:2px"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
   const cfg = JSON.stringify({
     pk, clientSecret: row.client_secret,

@@ -569,7 +569,11 @@ export default function SmartPackages() {
   const testCheckout = async () => {
     if (!sid || testBusy) return;
     setTestBusy(true); setTestErr(null);
-    const { data, error } = await callWorker(ROUTE.packageCheckout, { orderId: sid });
+    // choice + offerId are POINTERS into the server's stored draft; the worker
+    // prices the picked room from D1 and refuses an offerId it doesn't know.
+    const { data, error } = await callWorker(ROUTE.packageCheckout, {
+      orderId: sid, choice: selIdx, ...(selRate?.offerId ? { offerId: selRate.offerId } : {}),
+    });
     if (data?.url) {
       await openPartnerAndWait(data.url);
     } else {
