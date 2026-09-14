@@ -140,7 +140,9 @@ export default function HomePage() {
   const [physicalTz, setPhysicalTz] = useState(null);
   const [physicalLabel, setPhysicalLabel] = useState('');
   const [showHomeFlag, setShowHomeFlag] = useState(false);
-  const [homeFlagUrl, setHomeFlagUrl] = useState(null);
+  // Lowercase ISO-2 of the home country while the flag toggle is on and the
+  // country resolves; both flag image URLs are derived from it at render.
+  const [homeFlagCode, setHomeFlagCode] = useState(null);
   // Masthead passport count — null while loading; null and 0 both render the
   // quiet "PASSPORT →" (never a fake count, never a bare zero).
   const [passportTotal, setPassportTotal] = useState(null);
@@ -324,23 +326,24 @@ export default function HomePage() {
       // Home-country FLAG overlay — gated by show_home_flag toggle in Settings.
       // Independent of show_home_country_info (which only controls the time
       // chip). User can show the flag whether they're at home or abroad.
-      // Show the home-country flag as the greeting-card background when the user
-      // turned the "Show Home Country Flag" toggle ON (Settings) AND has a home
-      // country whose flag we can resolve. Both come from the Supabase profile, so
+      // Show the home-country flag (iPad: the greeting-card background; phone: a
+      // small badge beside the greeting name) when the user turned the "Show Home
+      // Country Flag" toggle ON (Settings) AND has a home country whose flag we
+      // can resolve. Both come from the Supabase profile, so
       // it works on native. The flag updates immediately after a Settings save
       // (refreshProfile → new profile → this effect re-runs).
       if (userData.show_home_flag && userData.home_country) {
         const homeCode = countryCode(userData.home_country);
         if (homeCode) {
-          setHomeFlagUrl(`https://flagcdn.com/w640/${homeCode.toLowerCase()}.png`);
+          setHomeFlagCode(homeCode.toLowerCase());
           setShowHomeFlag(true);
         } else {
           setShowHomeFlag(false);
-          setHomeFlagUrl(null);
+          setHomeFlagCode(null);
         }
       } else {
         setShowHomeFlag(false);
-        setHomeFlagUrl(null);
+        setHomeFlagCode(null);
       }
 
       const activeLocation = getActiveLocation();
@@ -648,10 +651,29 @@ export default function HomePage() {
     || activeLocation?.address?.city
     || (activeLocation?.coordinates ? 'Detecting your location…' : 'Set location');
 
-  // Flag-background greeting card: active when the Show Home Country Flag toggle
-  // is on and we can resolve the home country's flag. The flag fills the whole
-  // card; chips are kept compact and right-aligned so the flag stays visible.
+  // Home-country flag: active when the Show Home Country Flag toggle is on and
+  // the home country resolves to a flag. iPad fills its greeting card with the
+  // w640 image. Phone shows a small h80 badge beside the greeting name — the
+  // phone's flag card was collapsed on 2026-09-03 (search above the fold), which
+  // had left the Settings toggle doing nothing on phone.
+  const homeFlagUrl = homeFlagCode ? `https://flagcdn.com/w640/${homeFlagCode}.png` : null;
+  const homeFlagBadgeUrl = homeFlagCode ? `https://flagcdn.com/h80/${homeFlagCode}.png` : null;
   const flagActive = !!(showHomeFlag && homeFlagUrl);
+  // Phone badge: sized to the serif name, scaled with the font setting, seated on
+  // the text baseline. A hairline drop-shadow edge follows the flag's own shape
+  // (no empty box around Nepal's pennant) and keeps white-field flags (Japan,
+  // South Korea) visible on the ivory masthead. A failed image load hides itself
+  // instead of a broken glyph (keyed by URL so a later country change remounts it).
+  const flagBadge = flagActive && homeFlagBadgeUrl ? (
+    <img
+      key={homeFlagBadgeUrl}
+      src={homeFlagBadgeUrl}
+      alt={`${profile?.home_country || 'Home country'} flag`}
+      className="inline-block align-baseline mx-1 rounded-[3px]"
+      style={{ height: 'calc(15px * var(--fs))', width: 'auto', filter: 'drop-shadow(0 0 0.5px rgba(22,17,13,.6))' }}
+      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+    />
+  ) : null;
 
   // Clock info. The hero shows the SELECTED/active place; these add where you
   // physically are (only when you've navigated away) and your home (when
@@ -721,7 +743,8 @@ export default function HomePage() {
       {/* COMPACT HERO HEADER ----------------------------------------------
           Replaces the 330px flag greeting card: one serif greeting line with
           the glasses kept on the right, then a date · temp · location row.
-          No fixed height, no flag layers — the search bar now sits well
+          No fixed height, no flag layers (the home flag, when toggled on, is
+          a small badge beside the name) — the search bar now sits well
           within the first viewport. Every handler/data field below is the
           card's, just reflowed. */}
       <div className="px-4 pt-2 pb-3">
@@ -741,7 +764,11 @@ export default function HomePage() {
               )}
               {getFirstName() && (
                 <span className="font-serif italic text-[calc(22px*var(--fs))]" style={{ color: TEAL_DEEP }}>
-                  {' '}{getFirstName()}
+                  {/* nowrap keeps the flag on the name's line, so a wrap can never
+                      strand it before "in {city}" as if it were that city's (an
+                      inline-block still let it drop to a line of its own at larger
+                      text sizes). */}
+                  {' '}<span className="whitespace-nowrap">{getFirstName()}{flagBadge}</span>
                 </span>
               )}
               {cityName && (
