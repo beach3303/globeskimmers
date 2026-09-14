@@ -799,3 +799,11 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - OTA bundle **1.0.2609122024** uploaded to production. Home-row bundles are cached 6h — old titles may linger on already-cached tiles until expiry.
 - **Activate:** none (worker auto-deployed). Native: the OTA cadence fix still needs ONE Xcode run before bundles apply automatically on cold start.
 - NEXT (launch bar, in order): checkout `offerId` fix (money) → new Home (canvas) → My Trips Ledger A → mobility profile.
+
+## 2026-09-13 — CHECKOUT PRICES THE PICKED ROOM (the launch-bar money fix)
+- Bug: /package/checkout charged `hotelChoices[0].stayTotal` — the FIRST hotel's BASE room — whatever the traveler picked; the composer sent only `{orderId}` (no choice, no room). A pricier room chosen in RoomChooserSheet would have been undercharged.
+- Worker (fcd89a8, deployed ✓): composer sends `choice` + the picked rate's `offerId` as POINTERS; the worker prices that rate from the draft persisted in D1 (`rates[].price`, whole-stay total) — an unknown offerId → `rate_not_found`, never a silent fallback to the base price. Prior unpaid intent reused only when amount+currency match; otherwise cancelled first (refuse with `prior_intent_uncancelable` if Stripe won't). The pick {choice, hotelId, hotelName, offerId, roomName, board, checkin, checkout, nights, stayTotal, currency} is written onto package_orders.data.picked (the booking step reads offerId from HERE) and into intent metadata (choice/hotel/room); /package/pay shows "Stay · hotel · room · checkin → checkout" above the total.
+- Gates: node --check ✓ eslint ✓ build ✓ boot-check ✓.
+- LIVE RECEIPTS (Manila Oct 4–10, persist:true, sid 29959962…): A choice 1 base → amount 72527 USD (Lanson Place · Superior Twin · 725.27) ✓ · B choice 1 + Superior Room offerId → 78882 USD (788.82) ✓, and A's live 72527 intent was cancelled + re-minted (amount changed) ✓ · C bogus offerId → `rate_not_found` ✓. Test-mode intents, harmless.
+- Still owned by the founder before real money: Nuitée Commission/Payout, Stripe live keys (`STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` via wrangler secret put) — the code adapts; `paid_test` never counts as revenue.
+- Frontend half rides the next OTA bundle (founder-only ?stripetest=1 lane only).
