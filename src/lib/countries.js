@@ -216,9 +216,47 @@ const ALIASES = {
 
 const NAME_TO_CODE = COUNTRIES.reduce((m, c) => { m[c.name] = c.code; return m; }, {});
 
+// Loose matching key. Google's place data (home-city picks, GPS country) spells
+// some countries differently from COUNTRIES — "Czechia", "Türkiye", "Côte
+// d'Ivoire", "Myanmar (Burma)", "The Bahamas", "Bosnia & Herzegovina", "St
+// Lucia" — and those used to resolve to no flag. keepParens=false also drops a
+// "(…)" suffix; it's tried second so "Congo (DRC)" can still match its own key.
+function looseKey(name, keepParens) {
+  let k = String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  k = k.replace(/[\u2018\u2019]/g, "'");
+  k = keepParens ? k.replace(/[()]/g, " ") : k.replace(/\(.*?\)/g, " ");
+  k = k.replace(/&/g, " and ").replace(/[^a-z0-9' -]/g, " ").replace(/\s+/g, " ").trim();
+  k = k.replace(/^the /, "").replace(/\bst /g, "saint ");
+  return k;
+}
+
+// Spellings and territories COUNTRIES/ALIASES don't cover. Territories have
+// their own flag even though the Settings picker doesn't list them.
+const EXTRA_SPELLINGS = {
+  "turkiye": "TR", "cabo verde": "CV", "swaziland": "SZ", "macedonia": "MK",
+  "burma": "MM", "east timor": "TL", "holy see": "VA", "vatican": "VA",
+  "congo": "CG", "republic of the congo": "CG", "congo republic": "CG",
+  "congo drc": "CD", "dr congo": "CD", "democratic republic of congo": "CD",
+  "saint vincent and grenadines": "VC", "lao pdr": "LA",
+  "puerto rico": "PR", "hong kong": "HK", "taiwan": "TW", "macau": "MO", "macao": "MO",
+  "palestine": "PS", "kosovo": "XK",
+};
+
+const LOOSE_TO_CODE = (() => {
+  const m = {};
+  const add = (label, code) => { const key = looseKey(label, true); if (key && !(key in m)) m[key] = code; };
+  COUNTRIES.forEach((c) => add(c.name, c.code));
+  Object.entries(ALIASES).forEach(([name, list]) => { const code = NAME_TO_CODE[name]; if (code) list.forEach((a) => add(a, code)); });
+  Object.entries(EXTRA_SPELLINGS).forEach(([label, code]) => add(label, code));
+  return m;
+})();
+
 // name → ISO-2 code (lowercased by callers for flagcdn URLs). null if unknown.
+// Exact canonical name first, then the loose key, then the loose key without a
+// "(…)" suffix.
 export function countryCode(name) {
-  return name ? (NAME_TO_CODE[name] || null) : null;
+  if (!name) return null;
+  return NAME_TO_CODE[name] || LOOSE_TO_CODE[looseKey(name, true)] || LOOSE_TO_CODE[looseKey(name, false)] || null;
 }
 
 // Returns COUNTRIES filtered by `query` (matches name OR an alias like "USA").
@@ -231,7 +269,10 @@ export function searchCountries(query) {
     list = COUNTRIES.filter((c) => {
       if (c.name.toLowerCase().includes(q)) return true;
       const al = ALIASES[c.name];
-      return al ? al.some((a) => a.includes(q) || q.includes(a)) : false;
+      // One-way: the typed text must be part of an alias ("us" → "usa"). The old
+      // reverse check let "australia" match the alias "us" and pinned United
+      // States above Australia, Austria, Russia, Belarus, Cyprus, Mauritius.
+      return al ? al.some((a) => a.includes(q)) : false;
     });
   }
   const us = list.find((c) => c.name === "United States");

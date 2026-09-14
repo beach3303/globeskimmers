@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { searchHomeCities, resolveHomePlace } from "@/lib/homePlace";
+import { searchCountries, countryCode } from "@/lib/countries";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2 } from "lucide-react";
@@ -416,6 +417,12 @@ export default function SettingsPage() {
   const [cityResults, setCityResults] = useState([]);
   const [citySearching, setCitySearching] = useState(false);
   const [cityResolving, setCityResolving] = useState(false);
+  // Home COUNTRY picker (drives the home flag). Picking a home city still fills
+  // the country in (last pick wins, visible in this row right above); the
+  // traveler can then choose a different country here.
+  const homeCountryBoxRef = useRef(null);
+  const [homeCountryOpen, setHomeCountryOpen] = useState(false);
+  const [homeCountryQuery, setHomeCountryQuery] = useState("");
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -490,6 +497,15 @@ export default function SettingsPage() {
     return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("touchstart", onDoc); };
   }, [countryOpen]);
 
+  // Close the home-COUNTRY list when tapping outside it.
+  useEffect(() => {
+    if (!homeCountryOpen) return;
+    const onDoc = (e) => { if (homeCountryBoxRef.current && !homeCountryBoxRef.current.contains(e.target)) setHomeCountryOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("touchstart", onDoc);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("touchstart", onDoc); };
+  }, [homeCountryOpen]);
+
   // Debounced home-city search while the picker is open.
   useEffect(() => {
     if (!countryOpen) return;
@@ -517,6 +533,16 @@ export default function SettingsPage() {
     setCountryQuery("");
     setCityResults([]);
     persist({ home_city: place.city, home_country: place.country, home_lat: place.latitude, home_lng: place.longitude, home_timezone: place.timezone });
+  };
+
+  // Pick the home COUNTRY directly (the flag). Leaves the home city and its
+  // coordinates/timezone untouched. Always saves: a city pick's own save may
+  // still be in flight, so the loaded profile can be stale.
+  const pickHomeCountry = (name) => {
+    setHomeCountry(name);
+    setHomeCountryOpen(false);
+    setHomeCountryQuery("");
+    persist({ home_country: name });
   };
 
   // Auto-save a PARTIAL profile update. Every editable control calls this on
@@ -578,7 +604,40 @@ export default function SettingsPage() {
   // and ~1024 centered column; phone gets a phone-tuned, compact variant in the
   // existing single max-w-md column. All state / handlers are shared.
   // ════════════════════════════════════════════════════════════════════════
-  const homeCityLabel = homeCity ? (homeCountry ? `${homeCity}, ${homeCountry}` : homeCity) : (homeCountry || "");
+  // The country now has its own row, so the city field shows just the city.
+  const homeCityLabel = homeCity || "";
+  const homeCountryCode = countryCode(homeCountry);
+  const countryMatches = homeCountryOpen ? searchCountries(homeCountryQuery) : [];
+  const homeCountryDropdown = (
+      <div className="relative w-full" ref={homeCountryBoxRef} style={{ minWidth: isTablet ? 280 : 0 }}>
+        <button type="button" onClick={() => setHomeCountryOpen((o) => !o)} disabled={cityResolving} aria-expanded={homeCountryOpen} className="w-full flex items-center justify-between text-left" style={{ height: 48, padding: "0 16px", borderRadius: 14, border: `1px solid ${ED_RULE}`, background: "#fff", opacity: cityResolving ? 0.6 : 1 }}>
+          <span className="flex items-center gap-2 min-w-0">
+            {homeCountryCode && (
+              <img key={homeCountryCode} src={`https://flagcdn.com/h40/${homeCountryCode.toLowerCase()}.png`} alt="" className="flex-none rounded-[2px]" style={{ height: 14, width: "auto", filter: "drop-shadow(0 0 0.5px rgba(22,17,13,.6))" }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+            )}
+            <span className="truncate" style={{ fontSize: fs(15), color: homeCountry ? ED_INK : ED_INK3 }}>{homeCountry || "Select your home country"}</span>
+          </span>
+          <ChevronDown className="w-5 h-5 flex-shrink-0" style={{ color: ED_INK3 }} />
+        </button>
+        {homeCountryOpen && (
+          <div className="absolute z-30 mt-1 w-full overflow-hidden" style={{ borderRadius: 14, border: `1px solid ${ED_RULE}`, background: "#fff", boxShadow: "0 16px 40px -20px rgba(22,17,13,.45)" }}>
+            <div className="flex items-center gap-2" style={{ padding: "10px 14px", borderBottom: `1px solid ${ED_RULE}` }}>
+              <Search className="w-4 h-4 flex-shrink-0" style={{ color: ED_INK3 }} />
+              <input autoFocus value={homeCountryQuery} onChange={(e) => setHomeCountryQuery(e.target.value)} placeholder="Type a country (e.g. Philippines, USA)…" className="flex-1 outline-none bg-transparent" style={{ fontSize: fs(14), color: ED_INK }} />
+            </div>
+            <div className="max-h-[260px] overflow-y-auto">
+              {countryMatches.map((c) => (
+                <button key={c.code} type="button" onClick={() => pickHomeCountry(c.name)} className="w-full text-left flex items-center justify-between" style={{ padding: "10px 16px", background: c.code === homeCountryCode ? "#F7F4EC" : "transparent" }}>
+                  <span style={{ fontSize: fs(14), color: ED_INK }}>{c.name}</span>
+                  {c.code === homeCountryCode && <Check className="w-4 h-4 flex-shrink-0" style={{ color: TEAL_DEEP }} />}
+                </button>
+              ))}
+              {countryMatches.length === 0 && (<div style={{ padding: "12px 16px", fontSize: fs(13), color: ED_INK3 }}>No country matches.</div>)}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   const countryDropdown = (
       <div className="relative w-full" ref={countryBoxRef} style={{ minWidth: isTablet ? 280 : 0 }}>
         <button type="button" onClick={() => setCountryOpen((o) => !o)} className="w-full flex items-center justify-between text-left" style={{ height: 48, padding: "0 16px", borderRadius: 14, border: `1px solid ${ED_RULE}`, background: "#fff" }}>
@@ -673,13 +732,16 @@ export default function SettingsPage() {
             <EdRow isTablet={isTablet} step={fontStep} icon={User} iconBg={CAT.culture.ink} title="First Name" desc="Used to greet you across the app"
               control={{ below: true, node: <Input type="text" value={firstName} onFocus={() => { firstNameFocused.current = true; }} onBlur={() => { firstNameFocused.current = false; const v = firstName.trim(); if (v !== (profile?.first_name || "")) persist({ first_name: v }); }} onChange={(e) => setFirstName(e.target.value)} placeholder="Enter your first name" className="h-12 rounded-xl" style={{ borderColor: ED_RULE }} /> }}
             />
-            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.restroom.ink} title="Home City" desc="Sets your home flag & accurate local time"
+            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.restroom.ink} title="Home Country" desc={homeCity ? "Sets your home flag" : "Sets your home flag · add a home city for exact home time"}
+              control={{ below: true, node: homeCountryDropdown }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.money.ink} title="Home City" desc="Sets your local time & fills in your country"
               control={{ below: true, node: countryDropdown }}
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.transit.ink} title="Show Home Country Time" desc="Display home country time on home page"
               control={{ node: <EdToggle on={showHomeCountryInfo} onClick={() => { const next = !showHomeCountryInfo; setShowHomeCountryInfo(next); persist({ show_home_country_info: next }); }} label="Toggle home country time" /> }}
             />
-            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.weather.ink} title="Show Home Country Flag" desc="Display your flag on the home page card"
+            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.weather.ink} title="Show Home Country Flag" desc="Display your flag on the home page"
               control={{ node: <EdToggle on={showHomeFlag} onClick={() => { const next = !showHomeFlag; setShowHomeFlag(next); persist({ show_home_flag: next }); }} label="Toggle home country flag" /> }}
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="When I open the app" desc="Where Globeskimmers starts each time"

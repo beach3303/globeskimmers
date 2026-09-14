@@ -16,6 +16,8 @@
 // Everything here is free to compute — no API calls. Weights are plain tables so
 // they're easy to tune.
 
+import { countryCode } from '@/lib/countries';
+
 // ── Category catalog (single source of truth) ────────────────────────────
 // `action` is the exact label handleQuickAction() routes on. emoji/title/catKey
 // mirror the existing Home tiles so any UI built on this matches the design.
@@ -49,6 +51,13 @@ export const MODES = ['home', 'domestic', 'international', 'planning', 'discover
 
 const norm = (s) => String(s || '').trim().toLowerCase();
 
+// Same country? Compare ISO codes when both names resolve (GPS says "Czechia",
+// the Settings picker says "Czech Republic"); otherwise compare the names.
+const sameCountryAs = (a, b) => {
+  const ca = countryCode(a), cb = countryCode(b);
+  return ca && cb ? ca === cb : norm(a) === norm(b);
+};
+
 // Great-circle distance in km (used to tell "same city as home" from "another
 // city in the same country" when we have coordinates for both).
 export function haversineKm(aLat, aLng, bLat, bLng) {
@@ -74,12 +83,17 @@ export function getTravelMode({
   if (!present) return 'planning';
   if (!homeCountry && !homeCity && !Number.isFinite(homeLat)) return 'discovery';
 
-  const sameCountry = homeCountry && activeCountry ? norm(activeCountry) === norm(homeCountry) : null;
+  // Home coordinates win: within ~60km of the home city is 'home' whatever the
+  // country names say. home_country is chosen separately in Settings (it drives
+  // the flag), so it need not be the home city's country.
+  const dist = haversineKm(activeLat, activeLng, homeLat, homeLng);
+  if (dist != null && dist <= sameCityKm) return 'home';
+
+  const sameCountry = homeCountry && activeCountry ? sameCountryAs(activeCountry, homeCountry) : null;
   if (sameCountry === false) return 'international';
 
   // Same (or unknown) country → decide home vs domestic.
-  const dist = haversineKm(activeLat, activeLng, homeLat, homeLng);
-  if (dist != null) return dist <= sameCityKm ? 'home' : 'domestic';
+  if (dist != null) return 'domestic';
   if (homeCity && activeCity) return norm(activeCity) === norm(homeCity) ? 'home' : 'domestic';
   // Same country but can't resolve the city → assume home (don't fake new-city
   // essentials). If country was also unknown, this is our best neutral guess.

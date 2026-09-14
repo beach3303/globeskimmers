@@ -21,8 +21,10 @@ export const HOME_COUNTRY_TIMEZONES = {
   'India': 'Asia/Kolkata', 'China': 'Asia/Shanghai',
 };
 
+// null (never a guessed 'UTC') for countries outside the map: Home then hides
+// the home clock instead of showing a wrong time labelled with the country.
 export function homeTimezoneForCountry(name) {
-  return HOME_COUNTRY_TIMEZONES[name] || 'UTC';
+  return HOME_COUNTRY_TIMEZONES[name] || null;
 }
 
 // Search cities/places for the home picker. Reuses the Worker's search-location
