@@ -838,3 +838,9 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Website verified on globeskimmers-site.maizasimeon.workers.dev after the pin: /privacy, /terms, /coming-soon → 301 to the new paths; five security headers present; /_redirects now 404 (no longer served as a file); the phone menu CSS is in the live page. Domain still not attached (Launch Ledger N7).
 - OTA bundle **1.0.2609210433** uploaded; Capgo production channel confirmed on it at 04:36Z. Device apply not yet verified: founder cold-opens the app twice, then checks that Home has two zones (Nearby now · Dream and plan) and that My Trip shows "Where are you staying?" with no dismiss button.
 - **Activate:** none.
+
+## 2026-09-20 — HOME: "A perfect day in {city}" card removed (founder: "also remove the thing that says perfect day in 'city'")
+- Commit 9a324f0, pushed. The mount, its openPerfectDay handler and the local PerfectDayCard component left Home.jsx (45 lines). The Perfect Day planner page stays reachable from the smart search's dream answer ("Plan a perfect day", DreamAnswerCard → SmartSearchOverlay).
+- Gates: eslint ✓, npm run build ✓ (built bundle no longer contains the card text), boot-check ✓.
+- OTA bundle **1.0.2609210442** uploaded to the production channel. Device apply not yet verified: founder cold-opens twice and checks Home has no Perfect day card.
+- **Activate:** none.
