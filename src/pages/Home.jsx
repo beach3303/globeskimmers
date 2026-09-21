@@ -6,24 +6,22 @@ import { createPageUrl } from "@/utils";
 import { trackEvent } from "../Layout";
 import { useLocation, isLocationAskSnoozedToday, snoozeLocationAskToday, readOpenBehavior } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
-import HomeRows from "../components/home/HomeRows";
 import StampsNearYou from "../components/home/StampsNearYou";
 import DreamShelf from "../components/home/DreamShelf";
-import StayAnchor from "../components/home/StayAnchor";
-import EscapesRow from "../components/home/EscapesRow";
 import TodayCard from "../components/home/TodayCard";
 import EventsRow from "../components/home/EventsRow";
 import DealRadarRow from "../components/home/DealRadarRow";
-import MyTripCard from "../components/home/MyTripCard";
-import WishlistCard from "../components/home/WishlistCard";
 import WanderlustLine from "../components/home/WanderlustLine";
-// Extracted by the sibling rebuild task: Dreamer's Corner (ex-HomeRows
-// whereToNext branch) and Experiences (ex-EventsRow Viator sub-rail).
 // fetchHomeRows is DreamersCorner's shared /home/rows client cache — Home
-// reads PackageHero's backdrop card through it, so the three consumers
-// (DreamersCorner, HomeRows, PackageHero) cost ONE network call per location.
+// reads PackageHero's backdrop card through it, so both consumers
+// (DreamersCorner, PackageHero) cost ONE network call per location.
+// CLUTTER CUT (founder, 2026-09-20): HomeRows (Near you now / Around the
+// city today / In the city), ExperiencesRow ("Worth the drive"), EscapesRow
+// ("Trips & escapes") and the YOUR TRIP zone (StayAnchor, MyTripCard,
+// WishlistCard) no longer mount on the phone Home. StayAnchor + WishlistCard
+// moved to MyTrip.jsx; the spot rows get a new home in the next slice.
+// HomeTablet still mounts its own set — untouched, tabled.
 import DreamersCorner, { fetchHomeRows } from "../components/home/DreamersCorner";
-import ExperiencesRow from "../components/home/ExperiencesRow";
 import AllServicesSheet from "../components/home/AllServicesSheet";
 import { getTravelMode } from "@/lib/homeContext";
 import { TEAL_DEEP, IVORY, IVORY_2 } from "../components/redesign/constants";
@@ -840,17 +838,18 @@ export default function HomePage() {
         <DestinationStrip place={destSearch} onAction={handleQuickAction} onDismiss={() => setDestDismissed(true)} />
       )}
 
-      {/* THE THREE-ZONE HOME — one spine, identical in BOTH journey stacks
-          (getTravelMode now gates only the DreamShelf, which stays a dream-
-          stack exclusive). Every row renders NOTHING when its data allows
-          nothing, so the zones self-compact:
+      {/* THE TWO-ZONE HOME (founder clutter cut, 2026-09-20) — one spine,
+          identical in BOTH journey stacks (getTravelMode now gates only the
+          DreamShelf, which stays a dream-stack exclusive). Every row renders
+          NOTHING when its data allows nothing, so the zones self-compact:
             NEARBY NOW  — finder chips → today's answer → stamps (+ planner
-              entry) → dated events → top spots (HomeRows, nearby keys only);
+              entry) → dated events;
             DREAM & PLAN — PackageHero → Dreamer's Corner → dream shelf
-              (dream stack) → experiences → deal radar → escapes;
-            YOUR TRIP   — stay anchor → my trip → wishlist.
-          VibeBundles + WhereToStay stay OFF Home — the planner and the
-          FindAHotel flow own them next. */}
+              (dream stack) → deal radar.
+          Gone from Home: the spot rows (HomeRows — to be re-homed on the
+          Nearby surface), "Worth the drive" (ExperiencesRow), "Trips &
+          escapes" (EscapesRow), and the YOUR TRIP zone, which now lives only
+          on the My Trip page. VibeBundles + WhereToStay stay OFF Home. */}
 
       {/* ── ZONE 1: NEARBY NOW ─────────────────────────────────────────── */}
       <ZoneKicker label="NEARBY NOW" />
@@ -885,12 +884,9 @@ export default function HomePage() {
           below — openPerfectDay (and its feature_used analytics) moves with
           it, never dies. */}
       <PerfectDayCard city={cityName} onOpen={openPerfectDay} />
-      {/* EventsRow: dated happenings only, now — the undated Viator
-          experiences sub-rail moved to ExperiencesRow in DREAM & PLAN. */}
+      {/* EventsRow: dated happenings only. The undated Viator experiences
+          sub-rail ("Worth the drive") left Home in the 2026-09-20 cut. */}
       <EventsRow />
-      {/* HomeRows: nearby keys only (trending/dayPart/nearYou/seasonal) — the
-          whereToNext branch is extracted to DreamersCorner below. */}
-      <HomeRows onAction={handleQuickAction} />
 
       {/* ── ZONE 2: DREAM & PLAN ───────────────────────────────────────── */}
       <ZoneKicker label="DREAM & PLAN" />
@@ -912,18 +908,7 @@ export default function HomePage() {
           onOpenActivity={openDreamActivity}
         />
       )}
-      {/* ExperiencesRow contract (per the extracted component): self-fetching
-          via its shared fetchEventsSearch cache (primary stay → active
-          location base, same as EventsRow); no required props on phone. */}
-      <ExperiencesRow />
       <DealRadarRow />
-      <EscapesRow onAction={handleQuickAction} />
-
-      {/* ── ZONE 3: YOUR TRIP ──────────────────────────────────────────── */}
-      <ZoneKicker label="YOUR TRIP" />
-      <StayAnchor />
-      <MyTripCard />
-      <WishlistCard />
 
       {/* A quiet daily travel quote to close the scroll — encouragement, never
           a sales line. Copyright-safe (public-domain authors + originals). */}

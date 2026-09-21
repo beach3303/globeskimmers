@@ -21,7 +21,10 @@ const INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
 const SNOOZE_KEY = "gs_stay_prompt_snooze";
 const todayStr = () => { try { return new Date().toISOString().slice(0, 10); } catch { return "x"; } };
 
-export default function StayAnchor() {
+// `persistent` (My Trip page): the prompt never hides behind the daily
+// "Not now" snooze and shows no dismiss button — on that page it is a
+// setting, not a nudge. Home used the snoozing form until the 2026-09-20 cut.
+export default function StayAnchor({ persistent = false }) {
   const { getCurrentLocation, switchToNavigateMode } = useLocation();
   const [stay, setStay] = useState(() => getPrimaryStay());
   const [step, setStep] = useState(null); // null (collapsed) | 'type' | 'place' | 'done'
@@ -65,7 +68,7 @@ export default function StayAnchor() {
   const typeLabel = (STAY_TYPES.find((t) => t.id === type) || STAY_TYPES[0]).label;
 
   // Hidden: no stay set, collapsed, and dismissed for today.
-  if (!stay && step === null && snoozed) return null;
+  if (!persistent && !stay && step === null && snoozed) return null;
 
   return (
     <div className="px-4 pb-2">
@@ -86,7 +89,7 @@ export default function StayAnchor() {
         )}
 
         {/* COMPACT — prompt (no stay yet) */}
-        {!stay && step === null && !snoozed && (
+        {!stay && step === null && (persistent || !snoozed) && (
           <div className="flex items-center gap-1 rounded-xl px-3 py-2.5" style={{ background: "#fff", border: `1px dashed ${TEAL}` }}>
             <button onClick={() => setStep("type")} className="flex items-center gap-2 flex-1 min-w-0 text-left">
               <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: TEAL }} />
@@ -95,7 +98,7 @@ export default function StayAnchor() {
                 <span className="block text-[calc(11.5px*var(--fs))]" style={{ color: SUB }}>Re-center the app on your neighborhood ›</span>
               </span>
             </button>
-            <button onClick={dismiss} aria-label="Not now" className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ color: SUB }}><X className="w-4 h-4" /></button>
+            {!persistent && <button onClick={dismiss} aria-label="Not now" className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ color: SUB }}><X className="w-4 h-4" /></button>}
           </div>
         )}
 

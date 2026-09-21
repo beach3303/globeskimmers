@@ -16,6 +16,8 @@ import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { useIsTablet } from "@/lib/useIsTablet";
 import BookingDetailSheet, { StatusChip, partnerLabel, fmtDate } from "@/components/trips/BookingDetailSheet";
+import StayAnchor from "@/components/home/StayAnchor";
+import WishlistCard from "@/components/home/WishlistCard";
 
 // Editorial design tokens (shared with SavedLocations / PlacesToEat).
 const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
@@ -161,6 +163,16 @@ export default function MyTripPage() {
         <p className="uppercase mt-2 font-semibold" style={{ fontFamily: ED_MONO, fontSize: t(fs(10.5), fs(10)), letterSpacing: "0.16em", color: ED_INK3 }}>
           Your bookings so far
         </p>
+      </div>
+
+      {/* YOUR STAY + SAVED — moved here from Home (founder, 2026-09-20: "keep
+          Your trip strictly inside the Your Trip page"). StayAnchor is the only
+          place a traveler sets the base that Stamps near your stay and the
+          events row re-center on, so it lives here now and never snoozes away.
+          WishlistCard renders nothing until something is saved. */}
+      <div className="pt-2">
+        <StayAnchor persistent />
+        <WishlistCard />
       </div>
 
       <div className={`${colWrap} mx-auto px-4 pb-16 pt-4`}>
