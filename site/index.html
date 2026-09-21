@@ -84,7 +84,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .top nav { display: flex; gap: 22px; font-size: 14px; }
 .top nav a { color: var(--ink-2); text-decoration: none; white-space: nowrap; }
 .top nav a:hover { color: var(--teal); }
-@media (max-width: 700px) { .top nav { display: none; } }
+@media (max-width: 700px) {
+  .top { flex-wrap: wrap; gap: 14px; padding: 16px 0 4px; }
+  .top nav { display: grid; grid-template-columns: auto auto; gap: 8px; width: 100%; max-width: 440px; font-size: 14px; }
+  .top nav a { display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 44px; padding: 0 13px 0 15px; border-radius: 12px; background: var(--panel); border: 1px solid var(--rule); color: var(--ink); font-weight: 600; letter-spacing: -.005em; -webkit-tap-highlight-color: transparent; transition: background-color .15s ease, border-color .15s ease; }
+  .top nav a::after { content: "\2193"; content: "\2193" / ""; font: 500 13px/1 var(--mono); color: var(--teal); }
+  .top nav a:active { background: var(--teal-soft); border-color: var(--teal); }
+}
+@media (max-width: 350px) { .top nav { grid-template-columns: 1fr; } }
 
 /* hero */
 .hero { padding: 52px 0 24px; }
@@ -94,15 +101,25 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 28px; }
 .badge { display: inline-block; height: 52px; }
 .badge img { height: 52px; width: auto; }
-.android { display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--rule-2); color: var(--ink-2); font-size: 14px; text-decoration: none; background: transparent; }
-.android b { font-weight: 600; color: var(--ink); }
-.android .soon { font: 500 10.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); border: 1px dashed var(--rule-2); border-radius: 999px; padding: 5px 7px 4px; }
-.cta .free { font: 12px/1.5 var(--mono); color: var(--ink-3); }
+.android { display: inline-flex; flex-direction: column; justify-content: center; gap: 4px; width: 156px; height: 52px; padding: 0 16px; border-radius: 9px; border: 1px solid var(--rule-2); color: var(--ink); text-decoration: none; background: transparent; -webkit-tap-highlight-color: transparent; }
+.android:hover { border-color: var(--ink-3); }
+.android .soon { font: 500 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+.android b { font: 600 20px/1 var(--sans); letter-spacing: -.01em; color: var(--ink); }
+.cta .free { flex-basis: 100%; font: 12px/1.5 var(--mono); color: var(--ink-3); }
+@media (max-width: 560px) {
+  .hero { padding: 34px 0 20px; }
+  .hero h1 { font-size: clamp(40px, 12vw, 52px); line-height: 1.02; margin: 12px 0 16px; }
+  .hero h1 em { display: block; }
+  .hero h1 br { display: none; }
+  .lede { font-size: 17.5px; line-height: 1.5; }
+  .cta { margin-top: 24px; }
+}
 
 /* the two situations */
 .modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 40px; }
 @media (max-width: 720px) { .modes { grid-template-columns: 1fr; } }
-.mode { padding: 22px 24px 18px; border-radius: 18px; background: var(--panel); border-top: 3px solid var(--hue); }
+.mode { padding: 22px 24px 18px; border-radius: 18px; background: var(--panel); }
+.mode::before { content: ""; display: block; width: 28px; height: 3px; border-radius: 3px; background: var(--hue); margin: 2px 0 14px; }
 .mode.here { --hue: var(--teal); }
 .mode.plan { --hue: var(--dream); }
 .mode .kicker { color: var(--hue); }
@@ -128,7 +145,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .screen .await b { color: #16110D; font: 400 24px/1.05 var(--serif); }
 .phone figcaption { margin-top: 12px; font-size: 13.5px; color: var(--ink-2); text-align: center; }
 .phone figcaption b { display: block; font-weight: 600; color: var(--ink); }
-@media (max-width: 700px) { .phone { width: 200px; } .rail { gap: 18px; padding-bottom: 20px; } }
+@media (max-width: 700px) { .phones { scroll-snap-type: x mandatory; } .phone { width: 200px; scroll-snap-align: center; } .rail { gap: 18px; padding-bottom: 20px; } }
 
 /* sections */
 .doors { padding: 56px 0 8px; }
@@ -175,9 +192,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .ways { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 28px; }
 @media (max-width: 960px) { .ways { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .ways { grid-template-columns: 1fr; } }
-.way.memories { border-top-color: var(--dream); }
+.way.memories { --hue: var(--dream); }
 .way.memories .kicker { color: var(--dream); }
-.way { padding: 18px 20px; border-radius: 16px; background: var(--panel); border-top: 3px solid var(--stamp); }
+.way { --hue: var(--stamp); padding: 18px 20px; border-radius: 16px; background: var(--panel); }
+.way::before { content: ""; display: block; width: 24px; height: 3px; border-radius: 3px; background: var(--hue); margin: 2px 0 12px; }
 .way .kicker { color: var(--stamp); }
 .way h3 { font: 400 24px/1.1 var(--serif); margin: 8px 0 6px; }
 .way p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
@@ -238,9 +256,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .contact h2 { font: 400 clamp(32px, 4.6vw, 44px)/1.05 var(--serif); margin: 8px 0 12px; text-wrap: balance; }
 .contact p { color: var(--ink-2); max-width: 36em; margin: 0 0 14px; }
 .contact .mail { font-size: 17px; }
-.form { display: grid; gap: 14px; padding: 22px; border-radius: 18px; background: var(--paper); border: 1px solid var(--rule); }
+.form { display: grid; gap: 14px; padding: 22px; border-radius: 18px; background: var(--paper); border: 1px solid var(--rule); scroll-margin-top: 16px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-@media (max-width: 480px) { .row2 { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .row2 { grid-template-columns: 1fr; } .send { width: 100%; } }
 .field { display: grid; gap: 6px; }
 .field label { font: 500 11px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
 .field input, .field select, .field textarea { width: 100%; height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--rule-2); background: var(--ground); color: var(--ink); }
@@ -270,7 +288,7 @@ footer { margin-top: 56px; padding: 26px 0 48px; border-top: 1px solid var(--rul
 <div class="wrap">
   <header class="top">
     <a class="brand" href="/"><img src="/img/icon-192.png" alt="" width="34" height="34"><span>Globeskimmers</span></a>
-    <nav aria-label="Sections"><a href="#inside">Inside the app</a><a href="#passport">Virtual Passport</a><a href="#contact">Partners &amp; investors</a><a href="#contact">Contact</a></nav>
+    <nav aria-label="Sections"><a href="#inside">Inside the app</a><a href="#passport">Virtual Passport</a><a href="#contact">Partners &amp; investors</a><a href="#contact-form">Contact</a></nav>
   </header>
 
   <section class="hero">
@@ -279,7 +297,7 @@ footer { margin-top: 56px; padding: 26px 0 48px; border-top: 1px solid var(--rul
     <p class="lede">Globeskimmers is a travel concierge in your pocket. In another country, it finds what&#x27;s around you. At home, type where you dream of going and it builds the trip, ready to book now or save for later.</p>
     <div class="cta">
       <a class="badge" href="https://apps.apple.com/us/app/globeskimmers/id6753154199" aria-label="Download on the App Store"><img src="/img/app-store-badge.svg" alt="Download on the App Store" height="52"></a>
-      <a class="android" href="#contact"><b>Android</b><span class="soon">coming soon</span></a>
+      <a class="android" href="#contact" aria-label="Android app coming soon"><span class="soon">Coming soon on</span><b>Android</b></a>
       <span class="free">Free on the App Store</span>
     </div>
     <div class="modes"><article class="mode here"><div class="kicker">When you&#x27;re already there</div><h2>Find it nearby</h2><ul><li>Restaurants, street food and coffee</li><li>Restrooms, ATMs and money exchange</li><li>Groceries, malls and souvenirs</li><li>Attractions, tours and events</li><li>A hotel for tonight</li><li>Rental cars and airport transfers</li></ul></article><article class="mode plan"><div class="kicker">When you&#x27;re planning from home</div><h2>Build the trip</h2><ul><li>Type where you want to go</li><li>Two great hotels at real rates, booked in the app</li><li>The attractions there, with tours to book before you go</li><li>Recent flight prices by month, with a link to book</li><li>Rental cars and airport transfers for arrival</li><li>Save anything for later</li></ul></article></div>

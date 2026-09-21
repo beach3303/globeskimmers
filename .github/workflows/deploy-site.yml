@@ -25,4 +25,7 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Without a pin the action installs Wrangler 3.90.0, which uploads
+          # site/_redirects and site/_headers as plain files instead of applying them.
+          wranglerVersion: '4.131.2'
           command: deploy --config wrangler-site.toml
