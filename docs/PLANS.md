@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-09-20
+Last updated: 2026-09-21
 
 ## Build queue, in order
 
@@ -24,7 +24,8 @@ Last updated: 2026-09-20
      the Your Trip page. Home gets a smart search bar that interviews people about what they
      need, a Nearby services button, and probably an Explore button. Claude audits everything
      first, then proposes. Navan comparison requested the same day.
-   - **Slice 1 shipped 2026-09-20** (0655a8e, update 1.0.2609210433): Worth the drive, Trips and escapes, the spot rows and the Your trip zone left Home; the stay setter and saved items moved to My Trip. Next: the audit proposal (Navan study, inventory, interviewing search bar, Nearby and Explore buttons) for the founder's approval, then slice 2.
+   - **Slice 0 shipped 2026-09-20** (0655a8e + 9a324f0, update 1.0.2609210442): Worth the drive, Trips and escapes, the spot rows, the Your trip zone and the Perfect Day card left Home; the stay setter and saved items moved to My Trip.
+   - **Proposal delivered 2026-09-21:** https://claude.ai/code/artifact/cd56623a-c57f-42a2-a291-36541dace4cd — one bar that asks (five questions at most), two doors (Nearby services = the existing sheet retitled and mode-ordered; Explore = a thin new page for the moved rows), four blocks (Build a full trip, Places to dream about, Stamps near your stay, Events compact). Eight slices, none touching the worker; slices 1 to 3 about six working days. **Waiting on the founder's 18 answers** (each has a recommended default; “go with the defaults” starts slices 1 to 3). Built by the home-simplify workflow (wf_beff322a-5e6): 4 research agents, 3 designs, 2 judges, 2 writers, 3 skeptics; the skeptics' corrections are applied on the page.
    - Earlier status, kept for the record: plan drafted against the canvas. Reviewers found blockers, so **revise before writing code**: compute "away" from the stay itself (keyed on locationMode, the mode flips when "Around my hotel" switches to navigate); every slice must ship on its own (no empty Plan it toggle); keep DestinationStrip; keep a way to set and clear the primary stay; don't gate the body on bookings loading; the Your-trip card drops past stays.
 2. **My Trips Ledger A** (G116): one record per booking (trip_items), Add a booking (form plus paste), a prompt when the traveler returns from a partner site, per-partner manage links, hotel phone. Spec: https://claude.ai/code/artifact/50256292-130d-4c34-ab35-cf2436dad91e. Then Ledger B (G118): on-trip Home reads the ledger, trip grouping and timeline, forward-your-email. Later: calendar export and the what's-missing nudge (N6).
 3. **Mobility profile** (G119 with N2). Label **"Mobility needs"**, awaiting the founder's OK (G110). Helper: "Wheelchair, mobility scooter, walker, limited walking, or help with transfers." Choices: None · Walks short distances, avoids stairs · Uses a cane or walker · Uses a manual wheelchair · Uses a power wheelchair · Uses a mobility scooter. A separate "Needs help with transfers" checkbox and a caregiver toggle, "I'm traveling as a caregiver or companion." Avoid special needs, handicapped, wheelchair-bound, differently abled. "PWD" only in Philippines tips and as a search synonym. Same wave: accessible-hotel rung, child ages, two rooms, Ask-the-hotel email. Then tours that tell the truth (G120, N3), the step-free chip and briefs (N4), the accessible van concierge (N5). Brief: Car-to-Door, https://claude.ai/code/artifact/0b957900-b0e4-44d0-9f01-09d0c1a935c3
@@ -79,5 +80,6 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 - Global Stamp Atlas: https://claude.ai/code/artifact/d49af076-9c43-4742-b0ba-5c44b1a40e8e
 - The Passport Standard: https://claude.ai/code/artifact/d501e554-4e86-4b1a-be4c-ae5f43c97328
 - Landing page preview: https://claude.ai/code/artifact/a8854364-b319-4e45-bdf7-2fb96c874a86
+- Home, simplified (the Home proposal, 2026-09-21): https://claude.ai/code/artifact/cd56623a-c57f-42a2-a291-36541dace4cd
 - Traveler scenarios, what real trips demand: docs/TRAVELER_SCENARIOS.md
 - Shipped receipts: the bottom of docs/BUILD_TEST_CHECKLIST.md
