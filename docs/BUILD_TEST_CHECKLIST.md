@@ -832,3 +832,9 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Gates: eslint ✓ (Home.jsx, MyTrip.jsx, StayAnchor.jsx), npm run build ✓, boot-check ✓. Component files untouched (HomeTablet still mounts them).
 - Audit workflow home-simplify (wf_beff322a-5e6) running in parallel: Navan study, full Home inventory, search/finders, first-time user, three designs, judges, skeptics → founder proposal page.
 - **Activate:** push (no worker files, so no deploy run) + Capgo OTA upload on the founder's word; then the founder cold-opens the app twice and checks Home and My Trip.
+
+## 2026-09-20 — HOME CUT SHIPPED + WEBSITE FIX LIVE (founder: "push")
+- Pushed a3cdab8..d86449b (0655a8e Home cut · 9412e93 site phone menu + Wrangler 4 pin · 698202e privacy line · d86449b docs). Deploy website run 35561436493 ✓; no worker files, so no worker deploy.
+- Website verified on globeskimmers-site.maizasimeon.workers.dev after the pin: /privacy, /terms, /coming-soon → 301 to the new paths; five security headers present; /_redirects now 404 (no longer served as a file); the phone menu CSS is in the live page. Domain still not attached (Launch Ledger N7).
+- OTA bundle **1.0.2609210433** uploaded; Capgo production channel confirmed on it at 04:36Z. Device apply not yet verified: founder cold-opens the app twice, then checks that Home has two zones (Nearby now · Dream and plan) and that My Trip shows "Where are you staying?" with no dismiss button.
+- **Activate:** none.
