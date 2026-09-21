@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Read these, in order — they describe what is actually true today:
 
+0. **`docs/PLANS.md`** — the founder's agreed plans: the build queue in order, open decisions, dated reminders. Update it the same day a plan changes.
 1. **`docs/PRODUCT_AUDIT_2026-08.md`** — the current work queue (Tier 1 delivery → Tier 2 trust → Tier 3 engagement). The "Progress" block at the top lists what has already shipped.
 2. **The bottom of `docs/BUILD_TEST_CHECKLIST.md`** — append-only, newest last. The only place that distinguishes *committed* from *actually deployed/activated*; per-item **Activate:** lines list SQL that still needs running.
 3. **`docs/ROADMAP.md`** — longer-horizon priorities.

@@ -148,9 +148,9 @@ mailto:founder@globeskimmers.io
 ## Marketing URL (optional but recommended)
 
 ```
-https://globeskimmers.com
+https://globeskimmers.io
 ```
-*If you don't have a marketing site yet, leave blank — Apple/Google accept that. Or point at a simple one-page landing built with Notion / Carrd / similar in 30 min.*
+*The landing page lives in `site/` and serves globeskimmers.io once the domain is attached in Cloudflare. Globeskimmers owns globeskimmers.io only: globeskimmers.com belongs to someone else, so don't use it.*
 
 ---
 

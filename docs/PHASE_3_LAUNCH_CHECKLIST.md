@@ -85,7 +85,7 @@ Recommended screen order for screenshots:
 | Field | Status |
 |---|---|
 | Support email | ⏳ needed (probably maizasimeon@gmail.com or a dedicated alias) |
-| Marketing URL | ⏳ optional but recommended (https://globeskimmers.com or similar) |
+| Marketing URL | ⏳ optional but recommended (https://globeskimmers.io; globeskimmers.com is not ours) |
 | App Store category | "Travel" (primary) — confirm |
 | Play Store category | "Travel & Local" — confirm |
 | Age rating | ⏳ Apple's 17-question form + Google's IARC questionnaire |
