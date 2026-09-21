@@ -521,12 +521,6 @@ export default function HomePage() {
     }
   };
 
-  // Planner entry — both Discover stacks carry the quiet PerfectDay card.
-  const openPerfectDay = () => {
-    trackEvent('feature_used', { feature_name: 'perfect_day_entry' });
-    navigate(createPageUrl('PerfectDay'));
-  };
-
   // Smart-Package entry — now the photo-led PackageHero at the top of the
   // DREAM & PLAN zone (both stacks). Same analytics event as before.
   const openSmartPackage = () => {
@@ -876,14 +870,6 @@ export default function HomePage() {
 
       <TodayCard onAction={handleQuickAction} />
       <StampsNearYou onAction={handleQuickAction} />
-      {/* TODO(sibling merge): a sibling task is folding the PerfectDay entry
-          into StampsNearYou as its footer line. That contract isn't visible in
-          the repo yet, so the standalone card stays mounted here (directly
-          after StampsNearYou, per the rebuild spec). Once StampsNearYou
-          carries the footer, DELETE this mount + the PerfectDayCard component
-          below — openPerfectDay (and its feature_used analytics) moves with
-          it, never dies. */}
-      <PerfectDayCard city={cityName} onOpen={openPerfectDay} />
       {/* EventsRow: dated happenings only. The undated Viator experiences
           sub-rail ("Worth the drive") left Home in the 2026-09-20 cut. */}
       <EventsRow />
@@ -959,37 +945,6 @@ function FinderChip({ label, accent = false, onClick }) {
     >
       {label}
     </motion.button>
-  );
-}
-
-// ── PerfectDayCard — quiet planner entry (both Discover stacks) ────────────
-// One serif headline + one mono subtitle + a chevron, navigating into the
-// PerfectDay planner. Ivory, no photo, no teal — this card is navigation, not
-// the screen's primary action. Hides without a named city (the planner
-// composes a day around one).
-function PerfectDayCard({ city, onOpen }) {
-  if (!city) return null;
-  return (
-    <div className="px-4 pb-3">
-      <div className="max-w-md mx-auto">
-        <motion.button
-          whileTap={{ scale: 0.98 }}
-          onClick={onOpen}
-          className="w-full flex items-center justify-between gap-3 rounded-2xl p-4 text-left"
-          style={{ background: IVORY_2, border: '1px solid #E6DFD0' }}
-        >
-          <div className="min-w-0">
-            <div className="font-serif text-[calc(19px*var(--fs))] leading-tight truncate" style={{ color: '#16110D' }}>
-              A perfect day in {city}
-            </div>
-            <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] mt-1" style={{ color: '#736657' }}>
-              Pick a few stamps · get a full-day plan
-            </div>
-          </div>
-          <ChevronRight size={18} color="#736657" strokeWidth={2} className="flex-none" />
-        </motion.button>
-      </div>
-    </div>
   );
 }
 
