@@ -5,6 +5,8 @@
 /coming-soon  /               301
 /thank-you    /               301
 
-# One address: the www name redirects to the plain domain (both are custom
-# domains on this Worker since 2026-09-21).
-https://www.globeskimmers.io/* https://globeskimmers.io/:splat 301
+# www.globeskimmers.io is a second custom domain on this Worker and serves the
+# same site. A www-to-plain redirect cannot live here: Workers static assets
+# accept only relative paths in _redirects (deploy error 100324, 2026-09-21).
+# Every page declares https://globeskimmers.io as canonical; a Cloudflare
+# Redirect Rule in the dashboard can add the 301 later if wanted.
