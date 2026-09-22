@@ -55,9 +55,8 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 - globeskimmers.com (M1): never ours. The founder owns globeskimmers.io only (confirmed 2026-09-14). The .com sits in the registry redemption period at Domain Esta Aqui, LLC (Network Solutions / SnapNames group) and likely deletes around 2026-09-20. Decide whether to backorder it at a drop-catch service (DropCatch, SnapNames, GoDaddy) before then, or let it go. Nothing in the app, website or store listing depends on it.
 - Approve "Mobility needs" and its choices (G110).
 - Approve flights sold at cost, covered by the hotel commission (N9).
-- Set the Nuitée commission and payout (G11); hotel bookings earn nothing until then. Then one real low-value booking and cancel (G12).
+- One real low-value booking with free cancellation, then cancel it in the Nuitée dashboard (G12): check the card statement, the confirmation email, the My Trips row and the refund. The commission (G11) was set 2026-09-21: 12% default markup, which is 10.71% of what the guest pays. Nuitée's live check on 92 rates put the selling price at $364.72 against a $374.50 market reference. Payout goes weekly to the attached bank account, after each guest checks out.
 - Pick a weather source licensed for commercial use (N10): a paid Open-Meteo plan (the free plan is non-commercial, and the app already uses it for live temperatures) or Copernicus ERA5 records with attribution.
-- Run `npx wrangler login` on the laptop (G70).
 - Email records for founder@globeskimmers.io (N8): no DMARC record, no DKIM record at Google's default selector, and SPF lists IONOS but not Google.
 - AdMob test mode at launch (G77); the "Book a Hotel" rename; share the Virtual Passport link.
 
