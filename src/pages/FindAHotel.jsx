@@ -117,6 +117,7 @@ export default function FindAHotel() {
   const [cityQuery, setCityQuery] = useState("");
   const [cityResults, setCityResults] = useState([]);
   const [citySearching, setCitySearching] = useState(false);
+  const [citySearched, setCitySearched] = useState(""); // the query behind cityResults (empty until a search lands)
   const [pickedCity, setPickedCity] = useState(null); // a searchLocation result
 
   const [goal, setGoal] = useState("area");
@@ -247,14 +248,19 @@ export default function FindAHotel() {
 
   const searchCities = async () => {
     const q = cityQuery.trim(); if (!q) return;
-    setCitySearching(true); setCityResults([]);
+    setCitySearching(true); setCityResults([]); setCitySearched("");
+    let results = [];
     try {
       const { data } = await callWorker(ROUTE.searchLocation, { query: q });
-      setCityResults(Array.isArray(data?.results) ? data.results : []);
-    } catch { setCityResults([]); }
+      results = Array.isArray(data?.results) ? data.results : [];
+    } catch { results = []; }
     setCitySearching(false);
+    // One match is the destination — no second tap to confirm what the traveler
+    // just typed (the card's ✕ undoes it). Several → an explicit "choose one".
+    if (results.length === 1) { pickCity(results[0]); return; }
+    setCityResults(results); setCitySearched(q);
   };
-  const pickCity = (r) => { setPickedCity(r); setCityResults([]); setCityQuery(""); };
+  const pickCity = (r) => { setPickedCity(r); setCityResults([]); setCityQuery(""); setCitySearched(""); };
 
   // Resolve the search location from the active goal → {lat,lng} or {address}.
   const locParams = () => {
@@ -432,8 +438,11 @@ export default function FindAHotel() {
                 </form>
                 {cityResults.length > 0 && (
                   <div className="mt-2 rounded-[14px] overflow-hidden" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC" }}>
+                    <div className="px-4 pt-3 pb-1 font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{ color: "#94A3B8" }}>
+                      {`${cityResults.length} matches · tap the one you mean`}
+                    </div>
                     {cityResults.slice(0, 6).map((r, i) => (
-                      <button key={r.placeId || i} onClick={() => pickCity(r)} className="w-full text-left px-4 py-3 flex items-center gap-3" style={{ borderTop: i ? "1px solid #F5F0E8" : "none" }}>
+                      <button key={r.placeId || i} onClick={() => pickCity(r)} className="w-full text-left px-4 py-3 flex items-center gap-3" style={{ borderTop: "1px solid #F5F0E8" }}>
                         <MapPin size={15} color={ACCENT} strokeWidth={2} className="flex-none" />
                         <div className="min-w-0">
                           <div className="font-semibold text-[calc(14px*var(--fs))] truncate" style={{ color: ED_INK }}>{r.placeName || r.city}</div>
@@ -441,6 +450,11 @@ export default function FindAHotel() {
                         </div>
                       </button>
                     ))}
+                  </div>
+                )}
+                {citySearched && !citySearching && cityResults.length === 0 && (
+                  <div className="mt-2 px-4 py-3 rounded-[14px] text-[calc(13px*var(--fs))]" style={{ background: "#FFFFFF", border: "1px solid #F0E9DC", color: INK2 }}>
+                    {`No place found for “${citySearched}”. Try the city name, or add the country.`}
                   </div>
                 )}
               </>
