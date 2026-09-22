@@ -16282,6 +16282,218 @@ async function handleNuiteeBooking(request, env, ctx) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// Free-cancellation deadline → epoch ms, or NaN. LiteAPI states cancelTime in
+// the policy's own `timezone` field: a value carrying an explicit offset / Z
+// is exact; an offset-less wall-clock time (or a date-only value, read as the
+// END of that day) is resolved in that zone via Intl, UTC when the zone is
+// missing or invalid. The app (BookingDetailSheet.jsx resolveDeadlineMs) runs
+// the same logic so the button and this gate agree.
+const NUITEE_CANCEL_MARGIN_MS = 30 * 60 * 1000;
+function nuiteeDeadlineMs(value, timezone) {
+  const str = String(value || '').trim();
+  if (!str) return NaN;
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2})?$/i.exec(str);
+  if (!m) return Date.parse(str);
+  const hasTime = m[4] != null;
+  const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], hasTime ? +m[4] : 23, hasTime ? +m[5] : 59, hasTime ? +(m[6] || 0) : 59);
+  if (!Number.isFinite(wall)) return NaN;
+  if (m[7]) {
+    const o = m[7].toUpperCase();
+    const off = o === 'Z' ? 0 : (o[0] === '-' ? -1 : 1) * (Number(o.slice(1, 3)) * 60 + Number(o.slice(-2))) * 60000;
+    return wall - off;
+  }
+  let fmt = null;
+  try {
+    fmt = timezone ? new Intl.DateTimeFormat('en-US', { timeZone: String(timezone), hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : null;
+  } catch { fmt = null; }
+  if (!fmt) return wall;
+  // Wall-clock in the zone at a UTC instant; the offset is refined once so a
+  // deadline sitting on a DST switch still resolves to the right hour.
+  const zoneWall = (ms) => {
+    const p = {};
+    for (const { type, value: v } of fmt.formatToParts(new Date(ms))) p[type] = v;
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
+  };
+  let utc = wall - (zoneWall(wall) - wall);
+  utc = wall - (zoneWall(utc) - utc);
+  return Number.isFinite(utc) ? utc : NaN;
+}
+
+// POST /hotels/nuitee/cancel {bookingId} — cancels a stay the signed-in user
+// booked through us. Honesty gate first: LiteAPI's PUT /bookings/{id} cancels
+// a non-refundable or past-deadline booking too, but as CANCELLED_WITH_CHARGES
+// (the guest still pays). The app must never trigger that, so we only forward
+// the cancel when the live record says refundable (RFN) and a resolvable
+// free-cancel deadline is still at least NUITEE_CANCEL_MARGIN_MS away — an
+// unknown deadline fails CLOSED; everything else is a 409 the app explains.
+// The gate is our reading of the record, not the supplier's: if the supplier
+// still charges (its clock, its policy), the response says so (charged:true)
+// and the app must never present it as a clean refund. The D1 row + session
+// are updated BEFORE responding — Trips re-reads /aff/mine on the way back
+// and must already see 'cancelled'.
+//   200 { status:'cancelled', charged:false, nuiteeStatus:'CANCELLED', refundAmount, cancellationFee, currency, cancelledAt }
+//   200 { status:'cancelled', charged:true,  nuiteeStatus:'CANCELLED_WITH_CHARGES', ... } — cancelled, guest still charged
+//   200 { status:'cancelled', already:true }         — idempotent repeat
+//   409 { error:'not_cancellable' | 'non_refundable' | 'past_deadline' | 'deadline_unknown' }
+//   502 { error:'cancel_failed' }                     — LiteAPI refused / timed out / answered with a non-cancelled status
+async function handleNuiteeCancel(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env).catch(() => null);
+    if (!user) return jsonResponse({ needsAuth: true }, 401);
+    const b = await request.json().catch(() => ({}));
+    const bookingId = String(b.bookingId || '').trim().slice(0, 80);
+    if (!bookingId) return jsonResponse({ error: 'bookingId required' }, 400);
+    // Ownership = the confirmed row nuiteeRecordBooking wrote for this user.
+    // subid is the row's primary key for the status write-back below.
+    let own = null;
+    if (env.DB) {
+      own = await env.DB.prepare("select subid, session_id, status from affiliate_clicks where partner='nuitee' and product_id = ? and user_id = ? limit 1").bind(bookingId, user.id).first().catch(() => null);
+    }
+    if (!own) return jsonResponse({ error: 'not_found' }, 404);
+    // Idempotent: a second tap (or a retry after a dropped response) is a no-op.
+    if ((own.status || '').toLowerCase() === 'cancelled') return jsonResponse({ status: 'cancelled', already: true });
+
+    // Pre-check against the live record — never trust our own row for the
+    // policy, and pick up cancellations made outside the app.
+    const pre = await fetch(`${NUITEE_BOOK}/bookings/${encodeURIComponent(bookingId)}`, { headers: nuiteeHeaders(env) });
+    const pd = await pre.json().catch(() => ({}));
+    if (!pre.ok || !pd?.data) return jsonResponse({ error: 'lookup_failed', status: pre.status }, 502);
+    const k = pd.data;
+    if (k.status === 'CANCELLED') {
+      // Already cancelled upstream (dashboard / hotel) — sync our row and say so.
+      if (env.DB) await env.DB.prepare("update affiliate_clicks set status='cancelled', converted=0 where subid = ?").bind(own.subid).run().catch(() => {});
+      return jsonResponse({ status: 'cancelled', already: true, cancelledAt: k.cancelledAt || null });
+    }
+    if (k.status !== 'CONFIRMED') return jsonResponse({ error: 'not_cancellable', nuiteeStatus: k.status || null }, 409);
+
+    // Policy gate. Deadline = lastFreeCancellationDate, else the earliest
+    // cancelPolicyInfos cancelTime (the first fee window opening), resolved in
+    // that policy's timezone. RFN is required first; a missing/unparsable
+    // deadline fails CLOSED (the app hides the button on the same reading), and
+    // the margin keeps a tap seconds before the cutoff from reaching LiteAPI
+    // after it.
+    const tag = k.cancellationPolicies?.refundableTag;
+    const policyInfos = Array.isArray(k.cancellationPolicies?.cancelPolicyInfos) ? k.cancellationPolicies.cancelPolicyInfos : [];
+    const policyTimes = policyInfos.map((p) => p?.cancelTime).filter(Boolean).sort();
+    const policyTz = policyInfos.find((p) => p?.cancelTime === policyTimes[0])?.timezone || policyInfos.find((p) => p?.timezone)?.timezone || null;
+    const deadline = k.lastFreeCancellationDate || policyTimes[0] || null;
+    if (tag !== 'RFN') return jsonResponse({ error: 'non_refundable' }, 409);
+    const deadlineMs = nuiteeDeadlineMs(deadline, policyTz);
+    if (!Number.isFinite(deadlineMs)) return jsonResponse({ error: 'deadline_unknown' }, 409);
+    if (Date.now() >= deadlineMs - NUITEE_CANCEL_MARGIN_MS) return jsonResponse({ error: 'past_deadline', cancelBy: deadline }, 409);
+
+    // The cancel itself. ?timeout caps how long LiteAPI waits on the supplier.
+    const res = await fetch(`${NUITEE_BOOK}/bookings/${encodeURIComponent(bookingId)}?timeout=10`, { method: 'PUT', headers: nuiteeHeaders(env) });
+    const text = await res.text().catch(() => '');
+    let d = null;
+    try { d = JSON.parse(text); } catch { d = null; }
+    if (!res.ok || !d?.data) return jsonResponse({ error: 'cancel_failed', status: res.status, detail: (text || '').slice(0, 300) }, 502);
+    const c = d.data;
+    // Only the two statuses LiteAPI documents for a cancel mean the booking is
+    // gone. Anything else in a 2xx (e.g. a CONFIRMED echo on a supplier
+    // timeout) leaves the hotel holding the stay — D1 stays untouched and the
+    // app is told the cancel did not happen.
+    const cStatus = String(c.status || '').toUpperCase();
+    if (cStatus !== 'CANCELLED' && cStatus !== 'CANCELLED_WITH_CHARGES') {
+      return jsonResponse({ error: 'cancel_failed', status: res.status, nuiteeStatus: c.status || null }, 502);
+    }
+    const charged = cStatus === 'CANCELLED_WITH_CHARGES';
+    const cancelledAt = new Date().toISOString();
+
+    // Record it — awaited, not waitUntil'd, because the app lists again right
+    // after this returns. Each write is isolated: a D1 hiccup must not turn a
+    // cancel that DID happen upstream into an error the user then retries.
+    // CANCELLED_WITH_CHARGES is still a cancelled booking (recorded the same
+    // way) — it is reported as-is with charged:true, never softened.
+    if (env.DB) {
+      try { await env.DB.prepare("update affiliate_clicks set status='cancelled', converted=0 where subid = ?").bind(own.subid).run(); } catch { /* row sync failed; /hotels/nuitee/booking write-through repairs it on the next read */ }
+      if (own.session_id) {
+        try {
+          const s = await nuiteeSessGet(env, own.session_id);
+          if (s) {
+            s.status = 'cancelled';
+            s.cancelled = { at: cancelledAt, status: c.status || null, refund_amount: c.refund_amount ?? null, cancellation_fee: c.cancellation_fee ?? null, currency: c.currency || null };
+            if (s.booking) s.booking.status = c.status || 'CANCELLED';
+            await nuiteeSessPut(env, s);
+          }
+        } catch { /* session is a support/debug record; the affiliate row above is what the app reads */ }
+      }
+    }
+    return jsonResponse({
+      status: 'cancelled', charged, nuiteeStatus: cStatus,
+      refundAmount: c.refund_amount ?? null, cancellationFee: c.cancellation_fee ?? null,
+      currency: c.currency || k.currency || null, cancelledAt,
+    });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /hotels/nuitee/webhook — Nuitée Connect → us. Registered in their
+// dashboard (Developer tools → Webhooks) with an Authentication Token that
+// arrives verbatim in the `authorization` header — there is no signature, so
+// the token IS the auth: the NUITEE_WEBHOOK_TOKEN secret, compared in constant
+// time. Envelope: { event_id, event_name, request, response, sandbox } where
+// request and response are STRINGIFIED JSON. We act on booking.cancel and
+// booking.refund (a stay cancelled in their dashboard, by the hotel or by
+// support must read as cancelled in the app without waiting for a detail
+// read) and file the hotel's own confirmation number when
+// booking.book.hotelConfirmationNumber lands. Dedup on event_id (KV, 30d).
+// Always 200 once authenticated — a non-2xx makes Nuitée retry, and nothing
+// here is worth a retry storm.
+async function handleNuiteeWebhook(request, env, ctx) {
+  const secret = env.NUITEE_WEBHOOK_TOKEN;
+  if (!secret) return jsonResponse({ error: 'webhook not configured' }, 503);
+  const auth = String(request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  if (!nuiteeTokenEqual(auth, secret)) return jsonResponse({ error: 'unauthorized' }, 401);
+  let ev = null;
+  try { ev = await request.json(); } catch { return jsonResponse({ ok: false, reason: 'bad_json' }); }
+  const eventId = String(ev?.event_id || '').slice(0, 120);
+  const name = String(ev?.event_name || '').slice(0, 80);
+  const parse = (v) => { if (v == null) return null; if (typeof v === 'object') return v; try { return JSON.parse(String(v)); } catch { return null; } };
+  const resp = parse(ev?.response);
+  const data = resp?.data && typeof resp.data === 'object' ? resp.data : resp;
+  const bookingId = String(data?.bookingId || parse(ev?.request)?.bookingId || '').trim().slice(0, 80);
+  if (eventId && env.GLOBESKIMMERS_KV) {
+    const ck = `nuitee:wh:${eventId}`;
+    if (await env.GLOBESKIMMERS_KV.get(ck).catch(() => null)) return jsonResponse({ ok: true, duplicate: true });
+    if (ctx) ctx.waitUntil(env.GLOBESKIMMERS_KV.put(ck, '1', { expirationTtl: 30 * 24 * 3600 }).catch(() => {}));
+  }
+  if (!bookingId || !env.DB) return jsonResponse({ ok: true, ignored: true });
+  try {
+    if (name === 'booking.cancel' || name === 'booking.refund') {
+      // Same write the in-app cancel makes: cancelled ⇒ not converted.
+      await env.DB.prepare("update affiliate_clicks set status='cancelled', converted=0 where partner='nuitee' and product_id = ?").bind(bookingId).run();
+      const row = await env.DB.prepare("select session_id from affiliate_clicks where partner='nuitee' and product_id = ? limit 1").bind(bookingId).first().catch(() => null);
+      if (row?.session_id) {
+        const s = await nuiteeSessGet(env, row.session_id);
+        if (s && s.status !== 'cancelled') {
+          s.status = 'cancelled';
+          s.cancelled = { at: new Date().toISOString(), via: name, status: data?.status || null, refund_amount: data?.refund_amount ?? data?.amountRefunded ?? null, cancellation_fee: data?.cancellation_fee ?? null, currency: data?.currency || null };
+          if (s.booking) s.booking.status = data?.status || 'CANCELLED';
+          await nuiteeSessPut(env, s);
+        }
+      }
+      return jsonResponse({ ok: true, applied: name });
+    }
+    if (name === 'booking.book.hotelConfirmationNumber') {
+      const hcn = String(data?.hotelConfirmationCode || data?.hotelConfirmationNumber || '').trim().slice(0, 80);
+      const row = hcn ? await env.DB.prepare("select session_id from affiliate_clicks where partner='nuitee' and product_id = ? limit 1").bind(bookingId).first().catch(() => null) : null;
+      if (row?.session_id) {
+        const s = await nuiteeSessGet(env, row.session_id);
+        if (s?.booking && !s.booking.hotelConfirmationCode) { s.booking.hotelConfirmationCode = hcn; await nuiteeSessPut(env, s); }
+      }
+      return jsonResponse({ ok: true, applied: hcn ? name : 'noop' });
+    }
+  } catch { /* acknowledged either way — the detail read's write-through is the fallback */ }
+  return jsonResponse({ ok: true, ignored: true });
+}
+function nuiteeTokenEqual(a, b) {
+  const enc = new TextEncoder();
+  const x = enc.encode(String(a)), y = enc.encode(String(b));
+  if (!x.byteLength || x.byteLength !== y.byteLength) return false;
+  try { return crypto.subtle.timingSafeEqual(x, y); }
+  catch { let d = 0; for (let i = 0; i < x.length; i++) d |= x[i] ^ y[i]; return d === 0; }
+}
+
 async function handleAffiliateClick(request, env, ctx) {
   try {
     if (!env.DB) return jsonResponse({ error: 'analytics DB not configured' }, 500);
@@ -17288,6 +17500,7 @@ export default {
       if (pathname === '/hotels/nuitee/status' && request.method === 'POST') return await handleNuiteeStatus(request, env);
       if (pathname === '/hotels/nuitee/booking' && request.method === 'POST') return await handleNuiteeBooking(request, env, ctx);
       if (pathname === '/hotels/nuitee/cancel' && request.method === 'POST') return await handleNuiteeCancel(request, env, ctx);
+      if (pathname === '/hotels/nuitee/webhook' && request.method === 'POST') return await handleNuiteeWebhook(request, env, ctx);
       if (pathname === '/hotels/nuitee/checkout' && request.method === 'GET') return await handleNuiteeCheckout(request, env);
       if (pathname === '/hotels/nuitee/return' && request.method === 'GET') return await handleNuiteeReturn(request, env);
       // Smart Packages (priced drafts only — NO payment; booking stays per-component)
