@@ -22,6 +22,20 @@
 // A quiet Share action (src/lib/shareBooking.js) shares a REDACTED summary —
 // never the reference, amounts, or holder contacts.
 //
+// Cancel (in-app rows only) — decided ONLY from the live Nuitée payload:
+// status CONFIRMED + refundableTag RFN + a free-cancellation deadline that
+// resolves (in the policy's own timezone) to at least CANCEL_MARGIN_MS ahead.
+// Anything else (non-refundable, past or within the margin of the deadline,
+// unparseable date, payload missing) renders a plain statement or nothing —
+// never a button we can't vouch for. The action is a quiet text link →
+// inline confirm card → POST /hotels/nuitee/cancel { bookingId }; on success
+// the chip flips to Cancelled, the parent is told via
+// onStatusChange(bookingId, "cancelled"), and the sheet stays open. The done
+// line states only what the cancel response carried: a refund amount when
+// one is stated, or "Cancelled with charges" (+ the fee) when the supplier
+// still charged (charged:true) — that path gets the error toast, never a
+// refund sentence.
+//
 // HONEST-UX (non-negotiable, same as MyTrip): a tap is NOT a booking. The
 // status vocabulary is Started / Confirmed / Completed / Cancelled — never
 // "Booked" as a status. The shared display helpers (partnerLabel / fmtDate /
@@ -143,19 +157,90 @@ function partySize(rooms) {
   return n > 0 ? `${n} ${n === 1 ? "guest" : "guests"}` : null;
 }
 
-// Verbatim cancellation line from Nuitée's cancellationPolicies — the same
-// reading the worker's checkout page uses (refundableTag RFN + earliest
-// cancelTime). No tag → no line.
-function cancellationLine(cp) {
+// Free-cancellation deadline from the live payload: Nuitée's explicit
+// lastFreeCancellationDate, else the earliest cancelPolicyInfos[].cancelTime.
+// Null when the payload carries neither — the caller then shows no action.
+// ONE source of truth: the policy line, the button gate and the deadline
+// lines all read this value.
+function cancelDeadline(bk) {
+  if (!bk || typeof bk !== "object") return null;
+  const infos = bk.cancellationPolicies?.cancelPolicyInfos;
+  const earliest = (Array.isArray(infos) ? infos : []).map((c) => c && c.cancelTime).filter(Boolean).sort()[0] || null;
+  return bk.lastFreeCancellationDate || earliest || null;
+}
+
+// The timezone Nuitée states the deadline in — the earliest policy's, else the
+// first policy carrying one. Null when none is stated.
+function cancelDeadlineZone(bk) {
+  const infos = bk?.cancellationPolicies?.cancelPolicyInfos;
+  const list = Array.isArray(infos) ? infos.filter((c) => c && typeof c === "object") : [];
+  const earliest = list.map((c) => c.cancelTime).filter(Boolean).sort()[0] || null;
+  return list.find((c) => c.cancelTime === earliest)?.timezone || list.find((c) => c.timezone)?.timezone || null;
+}
+
+// Verbatim cancellation line from Nuitée's cancellationPolicies (refundableTag
+// RFN + the same deadline the button gates on). No tag → no line.
+function cancellationLine(bk) {
+  const cp = bk?.cancellationPolicies;
   if (!cp || typeof cp !== "object" || !cp.refundableTag) return null;
   if (cp.refundableTag === "RFN") {
-    const by = (cp.cancelPolicyInfos || []).map((c) => c && c.cancelTime).filter(Boolean).sort()[0] || null;
+    const by = cancelDeadline(bk);
     return `Free cancellation${by ? ` until ${String(by).slice(0, 10)}` : ""}`;
   }
   return "Non-refundable";
 }
 
-export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClose, fs, t }) {
+// Deadline → epoch ms, or NaN. Same logic as the worker's nuiteeDeadlineMs so
+// the button and the /hotels/nuitee/cancel gate agree: a value with an explicit
+// offset / Z is exact; an offset-less wall-clock (or a date-only value, read as
+// the END of that day) is resolved in the policy's timezone via Intl, UTC when
+// the zone is missing or invalid — never the device's zone.
+function resolveDeadlineMs(value, timezone) {
+  const str = String(value || "").trim();
+  if (!str) return NaN;
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2})?$/i.exec(str);
+  if (!m) return Date.parse(str);
+  const hasTime = m[4] != null;
+  const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], hasTime ? +m[4] : 23, hasTime ? +m[5] : 59, hasTime ? +(m[6] || 0) : 59);
+  if (!Number.isFinite(wall)) return NaN;
+  if (m[7]) {
+    const o = m[7].toUpperCase();
+    const off = o === "Z" ? 0 : (o[0] === "-" ? -1 : 1) * (Number(o.slice(1, 3)) * 60 + Number(o.slice(-2))) * 60000;
+    return wall - off;
+  }
+  let fmt = null;
+  try {
+    fmt = timezone ? new Intl.DateTimeFormat("en-US", { timeZone: String(timezone), hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : null;
+  } catch { fmt = null; }
+  if (!fmt) return wall;
+  const zoneWall = (ms) => {
+    const p = {};
+    for (const { type, value: v } of fmt.formatToParts(new Date(ms))) p[type] = v;
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
+  };
+  let utc = wall - (zoneWall(wall) - wall);
+  utc = wall - (zoneWall(utc) - utc); // second pass settles a DST-edge deadline
+  return Number.isFinite(utc) ? utc : NaN;
+}
+
+// The button is hidden this close to the cutoff. Wider than the worker's own
+// 30-minute gate on purpose: the app must never offer a cancel the worker will
+// refuse a moment later.
+const CANCEL_MARGIN_MS = 60 * 60 * 1000;
+
+// "120.00 USD" — the one money format this sheet uses. Null unless BOTH a
+// finite amount and a currency exist (never "120 null").
+function fmtMoney(amount, currency) {
+  return amount != null && Number.isFinite(Number(amount)) && currency
+    ? `${Number(amount).toFixed(2)} ${currency}` : null;
+}
+
+// step: idle | confirm | busy | done. On done: already (a repeat / cancelled
+// upstream), charged (supplier still charged — CANCELLED_WITH_CHARGES), fee and
+// refund as "120.00 USD" strings ONLY when the response stated an amount > 0.
+const CANCEL_IDLE = { step: "idle", already: false, charged: false, fee: null, refund: null };
+
+export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClose, onStatusChange, fs, t }) {
   const isOpen = !!booking;
   useDismissable(isOpen, onClose);
   // "Get Directions" sheet for the stay address — the exact MapAppSelector every
@@ -166,6 +251,21 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
 
   const inApp = !!booking && (booking.partner || "").toLowerCase() === "nuitee";
   const bookingId = inApp && booking.product_id ? String(booking.product_id) : null;
+
+  // Cancel flow state — reset whenever the sheet closes or the booking changes
+  // (same discipline as showMap: nothing leaks into the next booking).
+  const [cancelUi, setCancelUi] = useState(CANCEL_IDLE);
+  useEffect(() => { setCancelUi(CANCEL_IDLE); }, [isOpen, bookingId]);
+  // The booking currently on screen, readable after an await: a late cancel
+  // response for stay A must never paint stay B's sheet. Also the parent's
+  // latest onStatusChange, for the async paths below.
+  const shownId = useRef(bookingId);
+  shownId.current = bookingId;
+  const onStatusChangeRef = useRef(onStatusChange);
+  onStatusChangeRef.current = onStatusChange;
+  const tellParent = (id, status) => {
+    if (typeof onStatusChangeRef.current === "function") onStatusChangeRef.current(id, status);
+  };
 
   // Live Nuitée record, cached per bookingId for the life of the page:
   //   bookingId -> { booking } | { failed: true }.
@@ -188,8 +288,14 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
         ...prev,
         [bookingId]: !error && data?.booking ? { booking: data.booking } : { failed: true },
       }));
+      // Cancelled outside the app (Nuitée dashboard, the hotel, support): the
+      // sheet shows CANCELLED, so the row behind it must agree right now — not
+      // after the worker's background write-through and a fresh /aff/mine.
+      if (!error && data?.booking?.status === "CANCELLED" && (booking?.status || "").toLowerCase() !== "cancelled") {
+        tellParent(bookingId, "cancelled");
+      }
     })();
-  }, [isOpen, bookingId]); // nuiteeDetails/inflight are read as guards, not triggers
+  }, [isOpen, bookingId]); // nuiteeDetails/inflight/booking are read as guards, not triggers
 
   if (!booking) return null;
 
@@ -213,9 +319,33 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
   const holderName = bk?.holder
     ? [bk.holder.firstName, bk.holder.lastName].filter(Boolean).join(" ") || null
     : null;
-  const cancelLine = cancellationLine(bk?.cancellationPolicies);
-  const paidAmount = bk && bk.price != null && Number.isFinite(Number(bk.price)) && bk.currency
-    ? `${Number(bk.price).toFixed(2)} ${bk.currency}` : null;
+  // Status for the chip + mono line: "cancelled" ONLY from a cancel that just
+  // succeeded here or Nuitée's own record saying CANCELLED — else the row's.
+  const effectiveStatus = cancelUi.step === "done" || bk?.status === "CANCELLED" ? "cancelled" : it.status;
+  const isCancelledNow = effectiveStatus === "cancelled";
+  // The policy line is meaningless once the stay is cancelled — the cancel
+  // block below states the cancelled facts instead.
+  const cancelLine = isCancelledNow ? null : cancellationLine(bk);
+  const paidAmount = fmtMoney(bk?.price, bk?.currency);
+
+  // ---- Cancellability — from the LIVE payload only (never the /aff/mine row) ----
+  const liveConfirmed = bk?.status === "CONFIRMED";
+  const refundableTag = bk?.cancellationPolicies?.refundableTag || null;
+  const deadline = cancelDeadline(bk);
+  const deadlineMs = resolveDeadlineMs(deadline, cancelDeadlineZone(bk));
+  const deadlineDate = deadline ? String(deadline).slice(0, 10) : null; // same YYYY-MM-DD the policy line uses
+  const deadlineValid = Number.isFinite(deadlineMs);
+  const deadlineAhead = deadlineValid && deadlineMs > Date.now() + CANCEL_MARGIN_MS;
+  // Unparseable deadline → no button (honest fallback), no line either.
+  const canCancel = !isCancelledNow && liveConfirmed && refundableTag === "RFN" && deadlineAhead;
+  const nonRefundable = !isCancelledNow && liveConfirmed && refundableTag === "NRFN";
+  const refundableLive = !isCancelledNow && liveConfirmed && refundableTag === "RFN" && deadlineValid;
+  const deadlinePassed = refundableLive && deadlineMs <= Date.now();
+  // Still free to cancel, but inside the margin — the app won't offer it.
+  const deadlineClosing = refundableLive && !deadlinePassed && !deadlineAhead;
+  // Already-cancelled facts — ONLY what Nuitée's record carries.
+  const cancelledOn = bk?.cancelledAt ? String(bk.cancelledAt).slice(0, 10) : null;
+  const refundedAmount = Number(bk?.amountRefunded) > 0 ? fmtMoney(bk.amountRefunded, bk.currency) : null;
   // Address: Nuitée's live hotel record first, else the stay fields the worker
   // merged from the prebook session (Wave 3). Coords come the same way — only
   // ever real values; MapAppSelector uses them as a fallback destination.
@@ -230,8 +360,55 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
 
   // Partner rows: booked-tap date only. Nuitée rows: real stay dates.
   const monoLine = inApp
-    ? [stayDates, statusLabel(it.status)].filter(Boolean).join(" · ")
-    : [`Booked via ${partnerLabel(it.partner)}`, fmtDate(it.ts), statusLabel(it.status)].filter(Boolean).join(" · ");
+    ? [stayDates, statusLabel(effectiveStatus)].filter(Boolean).join(" · ")
+    : [`Booked via ${partnerLabel(it.partner)}`, fmtDate(it.ts), statusLabel(effectiveStatus)].filter(Boolean).join(" · ");
+
+  // POST /hotels/nuitee/cancel { bookingId }. callWorker never throws; on a
+  // non-2xx it returns { data: null, error: <body.error | "HTTP <status>"> }
+  // (src/lib/callWorker.js) — so 409 bodies arrive as their error code only
+  // (no cancelBy), and the 401 { needsAuth } body arrives as "HTTP 401".
+  const runCancel = async () => {
+    if (!bookingId || cancelUi.step === "busy") return;
+    setCancelUi({ ...CANCEL_IDLE, step: "busy" });
+    const { data, error } = await callWorker("hotels/nuitee/cancel", { bookingId });
+    // The sheet is dismissible while busy: if another stay (or none) is on
+    // screen now, the record and the parent are still updated for THIS id,
+    // but nothing is painted or toasted on the other stay's sheet.
+    const stillShown = shownId.current === bookingId;
+    if (!error && data?.status === "cancelled") {
+      const already = !!data.already;
+      // Amounts stated only from the cancel response itself, and only when it
+      // stated a positive one — "0.00 USD refund" is not a refund.
+      const currency = data.currency || bk?.currency;
+      const charged = !already && (data.charged === true || data.nuiteeStatus === "CANCELLED_WITH_CHARGES" || Number(data.cancellationFee) > 0);
+      const fee = charged && Number(data.cancellationFee) > 0 ? fmtMoney(data.cancellationFee, currency) : null;
+      const refund = !already && Number(data.refundAmount) > 0 ? fmtMoney(data.refundAmount, currency) : null;
+      if (stillShown) setCancelUi({ step: "done", already, charged, fee, refund });
+      // Keep the cached live record truthful for a reopen on this page: the
+      // status Nuitée now holds (+ its cancelledAt when the response carried
+      // one). amountRefunded is NOT set — a promised refund isn't a refunded one.
+      setNuiteeDetails((prev) => {
+        const cur = prev[bookingId]?.booking;
+        if (!cur) return prev;
+        return { ...prev, [bookingId]: { booking: { ...cur, status: "CANCELLED", ...(data.cancelledAt ? { cancelledAt: data.cancelledAt } : {}) } } };
+      });
+      if (stillShown && !already) showToast(charged ? "Cancelled with charges" : "Stay cancelled", charged ? "error" : "success");
+      tellParent(bookingId, "cancelled");
+      return;
+    }
+    if (!stillShown) return;
+    // Error — keep the confirm card open so the traveler can retry or keep the stay.
+    setCancelUi({ ...CANCEL_IDLE, step: "confirm" });
+    const code = error || data?.error || null;
+    let msg;
+    if (code === "non_refundable") msg = "This rate is non-refundable, so it can't be cancelled for a refund.";
+    else if (code === "past_deadline") msg = "Free cancellation has ended, or is too close to its cutoff to cancel from the app.";
+    else if (code === "deadline_unknown") msg = "The free-cancellation deadline couldn't be confirmed, so this stay can't be cancelled from the app.";
+    else if (code === "not_cancellable") msg = "This stay can't be cancelled from the app.";
+    else if (code === "HTTP 401" || code === "needsAuth" || code === "unauthorized") msg = "Sign in again to cancel.";
+    else msg = "Couldn't reach the booking partner. Try again in a moment.";
+    showToast(msg, "error");
+  };
 
   const copyRef = async () => {
     try {
@@ -258,6 +435,10 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
     ["Stay dates", stayDates],
     ...rooms.map((r, i) => [rooms.length > 1 ? `Room ${i + 1}` : "Room", r]),
     ["Holder", holderName],
+    // The property's own number, only when Nuitée's record carries one — a tap dials it.
+    ["Hotel phone", bk?.hotelPhone
+      ? <a href={`tel:${String(bk.hotelPhone).replace(/[^\d+]/g, "")}`} style={{ color: TEAL_DEEP, textDecoration: "underline" }}>{bk.hotelPhone}</a>
+      : null],
     ["Destination", destination],
     ["Booked", fmtDate(it.ts) || null],
   ].filter(([, v]) => !!v);
@@ -283,7 +464,7 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
             {/* Header — status + partner kicker, same vocabulary as the list */}
             <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: ED_RULE }}>
               <div className="flex items-center gap-2 flex-wrap">
-                <StatusChip status={it.status} fs={fs} />
+                <StatusChip status={effectiveStatus} fs={fs} />
                 <span className="uppercase font-semibold" style={{ fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".06em", color: accent }}>
                   {partnerLabel(it.partner)}
                 </span>
@@ -415,6 +596,84 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
                         </p>
                       )
                     )
+                  )}
+
+                  {/* ── Cancellation — one of: just-cancelled line · already-cancelled
+                      facts · quiet cancel action / confirm card · non-refundable ·
+                      deadline passed · nothing (payload missing or unparseable). */}
+                  {!fetching && cancelUi.step === "done" && (
+                    <p className="mt-4 px-1" style={{ fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".04em", color: "#B02525", lineHeight: 1.6 }}>
+                      {cancelUi.already
+                        ? "Already cancelled with Nuitée"
+                        : cancelUi.charged
+                          ? `Cancelled with charges${cancelUi.fee ? ` · ${cancelUi.fee} cancellation fee` : ""}${cancelUi.refund ? ` · ${cancelUi.refund} refunded` : ""}`
+                          : `Cancelled${cancelUi.refund ? ` · ${cancelUi.refund} refund to your card` : ""}`}
+                    </p>
+                  )}
+                  {!fetching && cancelUi.step !== "done" && isCancelledNow && (
+                    <p className="mt-4 px-1" style={{ fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".04em", color: "#B02525", lineHeight: 1.6 }}>
+                      Cancelled{cancelledOn ? ` on ${cancelledOn}` : ""}{refundedAmount ? ` · ${refundedAmount} refunded` : ""}
+                    </p>
+                  )}
+                  {!fetching && canCancel && (cancelUi.step === "idle") && (
+                    <div className="mt-4 px-1">
+                      <button
+                        onClick={() => setCancelUi({ ...CANCEL_IDLE, step: "confirm" })}
+                        className="font-semibold uppercase transition-colors hover:bg-black/5 rounded-full -mx-2 px-2 py-1"
+                        style={{ fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: ".08em", color: "#B02525" }}
+                      >
+                        Cancel this stay
+                      </button>
+                      <p className="mt-1" style={{ fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".04em", color: ED_INK3, lineHeight: 1.6 }}>
+                        Need different dates? Cancel, then book again — stays booked in the app can't be changed.
+                      </p>
+                    </div>
+                  )}
+                  {!fetching && canCancel && (cancelUi.step === "confirm" || cancelUi.step === "busy") && (
+                    <div className="mt-4 p-3 rounded-[14px]" style={{ background: "#FBE0E0", border: `1px solid ${ED_RULE}` }}>
+                      <div className="uppercase font-semibold" style={{ fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".07em", color: "#B02525" }}>
+                        Cancel this stay?
+                      </div>
+                      <p className="mt-1" style={{ fontFamily: ED_MONO, fontSize: fs(11.5), color: ED_INK, overflowWrap: "anywhere" }}>
+                        {[title, stayDates].filter(Boolean).join(" · ")}
+                      </p>
+                      <p className="mt-2" style={{ fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: ".03em", color: ED_INK3, lineHeight: 1.6 }}>
+                        Free cancellation applies — the refund goes back through Nuitée, who charged your card. The amount is confirmed when the cancellation goes through; timing depends on your bank.
+                      </p>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          onClick={() => setCancelUi(CANCEL_IDLE)}
+                          disabled={cancelUi.step === "busy"}
+                          className="flex-1 py-2.5 rounded-full font-semibold uppercase transition-transform active:scale-95 disabled:opacity-60"
+                          style={{ background: "#FFFFFF", color: ED_INK, border: `1px solid ${ED_RULE}`, fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: ".07em" }}
+                        >
+                          Keep stay
+                        </button>
+                        <button
+                          onClick={runCancel}
+                          disabled={cancelUi.step === "busy"}
+                          className="flex-1 py-2.5 rounded-full font-semibold uppercase transition-transform active:scale-95 disabled:opacity-60"
+                          style={{ background: "#B02525", color: "#FFFFFF", fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: ".07em" }}
+                        >
+                          {cancelUi.step === "busy" ? "Cancelling…" : "Yes, cancel"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {!fetching && nonRefundable && (
+                    <p className="mt-4 px-1" style={{ fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".04em", color: ED_INK3, lineHeight: 1.6 }}>
+                      Non-refundable — this stay can't be cancelled for a refund.
+                    </p>
+                  )}
+                  {!fetching && deadlinePassed && (
+                    <p className="mt-4 px-1" style={{ fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".04em", color: ED_INK3, lineHeight: 1.6 }}>
+                      Free cancellation ended {deadlineDate}.
+                    </p>
+                  )}
+                  {!fetching && deadlineClosing && (
+                    <p className="mt-4 px-1" style={{ fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".04em", color: ED_INK3, lineHeight: 1.6 }}>
+                      Free cancellation ends {deadlineDate} — too close to the cutoff to cancel from the app.
+                    </p>
                   )}
                 </>
               )}

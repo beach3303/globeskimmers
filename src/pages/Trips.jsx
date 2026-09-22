@@ -448,6 +448,11 @@ export default function TripsPage() {
       <BookingDetailSheet
         booking={detail}
         onClose={() => setDetail(null)}
+        // A cancel that succeeded in the sheet flips the row's status here, so
+        // the row sinks to Past (isCancelled) without a refetch.
+        onStatusChange={(id, status) => setItems((prev) => prev.map((it) =>
+          (it.partner || "").toLowerCase() === "nuitee" && String(it.product_id) === String(id) ? { ...it, status } : it
+        ))}
         fs={fs}
         t={t}
       />

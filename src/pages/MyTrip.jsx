@@ -294,6 +294,11 @@ export default function MyTripPage() {
         booking={detail?.it || null}
         accent={detail?.accent || TEAL_DEEP}
         onClose={() => setDetail(null)}
+        // A cancel that succeeded in the sheet flips the row's status here; this
+        // page lists confirmed rows only, so the stay leaves the list on close.
+        onStatusChange={(id, status) => setItems((prev) => prev.map((it) =>
+          (it.partner || "").toLowerCase() === "nuitee" && String(it.product_id) === String(id) ? { ...it, status } : it
+        ))}
         fs={fs}
         t={t}
       />

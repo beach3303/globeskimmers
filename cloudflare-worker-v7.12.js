@@ -16219,7 +16219,7 @@ async function handleNuiteeStatus(request, env) {
 
 // POST /hotels/nuitee/booking {bookingId} — full details for My Trips; only the
 // user who booked it (KV ownership record) can read it.
-async function handleNuiteeBooking(request, env) {
+async function handleNuiteeBooking(request, env, ctx) {
   try {
     const user = await gbUser(request, env).catch(() => null);
     if (!user) return jsonResponse({ needsAuth: true }, 401);
@@ -16232,8 +16232,8 @@ async function handleNuiteeBooking(request, env) {
     // ordering — same degrade pattern as handleLogEvent's anon_id.
     let own = null;
     if (env.DB) {
-      own = await env.DB.prepare("select session_id, checkin, checkout from affiliate_clicks where partner='nuitee' and product_id = ? and user_id = ? limit 1").bind(bookingId, user.id).first().catch(() => null);
-      if (!own) own = await env.DB.prepare("select session_id from affiliate_clicks where partner='nuitee' and product_id = ? and user_id = ? limit 1").bind(bookingId, user.id).first().catch(() => null);
+      own = await env.DB.prepare("select session_id, status, checkin, checkout from affiliate_clicks where partner='nuitee' and product_id = ? and user_id = ? limit 1").bind(bookingId, user.id).first().catch(() => null);
+      if (!own) own = await env.DB.prepare("select session_id, status from affiliate_clicks where partner='nuitee' and product_id = ? and user_id = ? limit 1").bind(bookingId, user.id).first().catch(() => null);
     }
     if (!own) return jsonResponse({ error: 'not_found' }, 404);
     // Stay fields captured at prebook time (address/pin/photo/room label) live in
@@ -16245,6 +16245,16 @@ async function handleNuiteeBooking(request, env) {
     const d = await res.json().catch(() => ({}));
     if (!res.ok || !d?.data) return jsonResponse({ error: 'lookup_failed', status: res.status }, 502);
     const k = d.data;
+    // Write-through: a booking cancelled outside the app (Nuitée dashboard, the
+    // hotel, support) only shows up here, on the next detail read. Sync the
+    // affiliate_clicks row so /aff/mine sinks it to "Past" instead of keeping
+    // it listed as Confirmed. Background, best-effort — the response already
+    // carries the live status either way.
+    // converted=0 follows the /aff/import convention (cancelled ⇒ not converted)
+    // so /aff/mine and the revenue queries read the row the same way.
+    if (k.status === 'CANCELLED' && (own.status || '').toLowerCase() !== 'cancelled' && env.DB && ctx) {
+      ctx.waitUntil(env.DB.prepare("update affiliate_clicks set status='cancelled', converted=0 where partner='nuitee' and product_id = ? and user_id = ?").bind(bookingId, user.id).run().catch(() => {}));
+    }
     return jsonResponse({ booking: {
       bookingId: k.bookingId, status: k.status, hotelConfirmationCode: k.hotelConfirmationCode || null,
       hotel: k.hotel || null,
@@ -16252,6 +16262,16 @@ async function handleNuiteeBooking(request, env) {
       checkout: k.checkout || sess?.checkout || own.checkout || null,
       price: k.price, currency: k.currency,
       holder: k.holder || null, rooms: k.bookedRooms || k.rooms || [], cancellationPolicies: k.cancellationPolicies || null, createdAt: k.createdAt,
+      // Cancellation facts, straight from the Nuitée record — null when absent,
+      // never inferred. lastFreeCancellationDate is what the app's Cancel button
+      // gates on; the refund trio only exists once a cancellation went through.
+      lastFreeCancellationDate: k.lastFreeCancellationDate || null,
+      cancelledAt: k.cancelledAt || null,
+      refundedAt: k.refundedAt || null,
+      amountRefunded: (k.amountRefunded != null && Number.isFinite(Number(k.amountRefunded))) ? Number(k.amountRefunded) : null,
+      refundType: k.refundType || null,
+      // The property's own contact, when Nuitée's check-in instructions carry it.
+      hotelPhone: k.checkinInstructions?.propertyContact?.phone || null,
       // Wave 3 stay fields from the prebook session — null when the row predates them.
       address: sess?.address || null,
       lat: sess?.lat ?? null, lng: sess?.lng ?? null,
@@ -16340,7 +16360,11 @@ async function handleAffiliateMine(request, env) {
       if (!g.checkin && r.checkin) { g.checkin = r.checkin; g.checkout = r.checkout || null; }
       g.taps += 1;
       if (r.ts > g.ts) { g.ts = r.ts; g.target_url = r.target_url || g.target_url; }
-      // Strongest status wins: confirmed > cancelled > started.
+      // Strongest status wins: confirmed > cancelled > started. A partner
+      // group can hold a cancelled tap-row AND a later real booking of the same
+      // product, and the live one must win. Every cancel write (import and the
+      // Nuitée cancel/write-through) sets converted=0 with status='cancelled',
+      // so a cancelled Nuitée stay (one row per booking) never reads confirmed.
       const s = (r.status || '').toLowerCase();
       if (r.converted === 1 || s === 'confirmed') {
         g.status = 'confirmed';
@@ -17262,7 +17286,8 @@ export default {
       if (pathname === '/hotels/nuitee/hotel' && request.method === 'POST') return await handleNuiteeHotel(request, env, ctx);
       if (pathname === '/hotels/nuitee/prebook' && request.method === 'POST') return await handleNuiteePrebook(request, env);
       if (pathname === '/hotels/nuitee/status' && request.method === 'POST') return await handleNuiteeStatus(request, env);
-      if (pathname === '/hotels/nuitee/booking' && request.method === 'POST') return await handleNuiteeBooking(request, env);
+      if (pathname === '/hotels/nuitee/booking' && request.method === 'POST') return await handleNuiteeBooking(request, env, ctx);
+      if (pathname === '/hotels/nuitee/cancel' && request.method === 'POST') return await handleNuiteeCancel(request, env, ctx);
       if (pathname === '/hotels/nuitee/checkout' && request.method === 'GET') return await handleNuiteeCheckout(request, env);
       if (pathname === '/hotels/nuitee/return' && request.method === 'GET') return await handleNuiteeReturn(request, env);
       // Smart Packages (priced drafts only — NO payment; booking stays per-component)
