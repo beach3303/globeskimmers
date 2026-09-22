@@ -80,5 +80,6 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 - The Passport Standard: https://claude.ai/code/artifact/d501e554-4e86-4b1a-be4c-ae5f43c97328
 - Landing page preview: https://claude.ai/code/artifact/a8854364-b319-4e45-bdf7-2fb96c874a86
 - Home, simplified (the Home proposal, 2026-09-21): https://claude.ai/code/artifact/cd56623a-c57f-42a2-a291-36541dace4cd
+- Founder kit for Launchhouse Atlanta (pitches, prep-app answers, LinkedIn; fact-checked): docs/FOUNDER_KIT_2026-09.md
 - Traveler scenarios, what real trips demand: docs/TRAVELER_SCENARIOS.md
 - Shipped receipts: the bottom of docs/BUILD_TEST_CHECKLIST.md
