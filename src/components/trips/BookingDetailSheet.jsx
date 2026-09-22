@@ -33,6 +33,7 @@ import { X, Copy, ExternalLink, Share2, Navigation } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { openPartner } from "@/lib/openPartner";
 import { shareBooking } from "@/lib/shareBooking";
+import { prettyRoom } from "@/lib/roomName";
 import { useDismissable } from "@/lib/dismissStack";
 import { showToast } from "@/components/Toast";
 import MapAppSelector from "@/components/MapAppSelector";

@@ -24,6 +24,7 @@ import { X, CheckCircle2 } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { useAuth } from "@/lib/AuthContext";
 import { openPartnerAndWait } from "@/lib/openPartner";
+import { prettyRoom } from "@/lib/roomName";
 import { createPageUrl } from "@/utils";
 import { TEAL_DEEP } from "@/components/redesign/constants";
 
@@ -41,8 +42,6 @@ const splitName = (full) => {
   return p.length > 1 ? { first: p.slice(0, -1).join(" "), last: p[p.length - 1] } : { first: p[0] || "", last: "" };
 };
 const fmtDate = (iso) => { const d = new Date(`${iso}T12:00:00Z`); return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }); };
-const prettyRoom = (s) => String(s || "").replace(/\s*,\s*/g, " · ").replace(/\s+/g, " ").trim()
-  .toLowerCase().replace(/(^|[\s·(\/-])([a-z])/g, (m, p, c) => p + c.toUpperCase()).replace(/\bWifi\b/g, "WiFi");   // display-only: tame supplier ALL-CAPS comma-runs
 // The bed configuration is the decision; everything after it is supplier
 // boilerplate. Split the prettified name at the first separator when the head
 // reads like a bed phrase ("1 King Bed", "2 Queen Beds", "Studio Suite ...").
