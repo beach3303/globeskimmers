@@ -4,3 +4,7 @@
 /terms        /legal/terms    301
 /coming-soon  /               301
 /thank-you    /               301
+
+# One address: the www name redirects to the plain domain (both are custom
+# domains on this Worker since 2026-09-21).
+https://www.globeskimmers.io/* https://globeskimmers.io/:splat 301

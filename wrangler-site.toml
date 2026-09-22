@@ -9,10 +9,13 @@
 # the Google Workspace MX and the SPF TXT on the apex are untouched.
 #
 # No `routes` key on purpose: declaring one makes wrangler overwrite the
-# dashboard-managed domains on every deploy. Once the domains are attached, add
-# `workers_dev = false` so the site stops answering on the workers.dev URL too.
+# dashboard-managed domains on every deploy. Both domains were attached on
+# 2026-09-21, so the workers.dev and preview URLs are switched off below: the
+# site answers only on globeskimmers.io (www redirects there via _redirects).
 name = "globeskimmers-site"
 compatibility_date = "2025-06-01"
+workers_dev = false
+preview_urls = false
 
 [assets]
 directory = "./site"
