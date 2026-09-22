@@ -6,9 +6,23 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-09-21
+Last updated: 2026-09-22
 
 ## Build queue, in order
+
+**Hotel lane, agreed 2026-09-22 — runs now, while item 1 waits on the founder's answers.**
+In this order: (a) **booking emails** from GlobeSkimmers via Resend (confirmation, cancellation,
+the hotel's own confirmation number when it arrives later) — Nuitée sends none; From
+bookings@globeskimmers.io, replies to founder@, a copy to founder@; never card digits; refund
+timing stated as "typically 5–10 business days, depending on your bank". (b) **Amenity chips**
+in Find a hotel: pool, beachfront/private beach, pets allowed, spa, family rooms, wheelchair
+accessible, plus 4★+ and 8+ guest rating. (c) **Board chips**: half board, full board,
+all-inclusive (all meals plus drinks and snacks). (d) **Cancel a non-refundable stay with the
+penalty shown** — founder, 2026-09-22: "honesty is good". Booking.com's practice: allow it, state
+the charge first. The app shows "Cancel anyway — no refund; you'll still be charged X" and an
+explicit confirm; an unknown deadline still blocks. (e) **Hotel-type chips** (resort, apartment,
+hostel) after a one-off pull of Nuitée's type list. (f) **More than one room** per booking
+(fixes a latent price bug first: a two-room offer would show one room's price).
 
 1. **New phone Home, built to the Home canvas** (G115). Founder, 2026-09-14: "first is the new home."
    Canvas: https://claude.ai/code/artifact/06c2973f-3e2e-47d2-a4c1-b1a7510706ec
@@ -55,9 +69,9 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 - globeskimmers.com (M1): never ours. The founder owns globeskimmers.io only (confirmed 2026-09-14). The .com sits in the registry redemption period at Domain Esta Aqui, LLC (Network Solutions / SnapNames group) and likely deletes around 2026-09-20. Decide whether to backorder it at a drop-catch service (DropCatch, SnapNames, GoDaddy) before then, or let it go. Nothing in the app, website or store listing depends on it.
 - Approve "Mobility needs" and its choices (G110).
 - Approve flights sold at cost, covered by the hotel commission (N9).
-- One real low-value booking with free cancellation, then cancel it in the Nuitée dashboard (G12): check the card statement, the confirmation email, the My Trips row and the refund. The commission (G11) was set 2026-09-21: 12% default markup, which is 10.71% of what the guest pays. Nuitée's live check on 92 rates put the selling price at $364.72 against a $374.50 market reference. Payout goes weekly to the attached bank account, after each guest checks out.
+- One real low-value booking with free cancellation, then cancel it in the Nuitée dashboard (G12): **done 2026-09-22** — Kawada Hotel, Dec 10–11, $117.83, booking PDdzItYUt, cancelled in the dashboard. No confirmation email arrived (Nuitée sends none; that is why the email build is first). Still to check: the refund on the card statement, and that the My Trips row reads Cancelled after one open. The commission (G11) was set 2026-09-21: 12% default markup, which is 10.71% of what the guest pays. Nuitée's live check on 92 rates put the selling price at $364.72 against a $374.50 market reference. Payout goes weekly to the attached bank account, after each guest checks out.
 - Pick a weather source licensed for commercial use (N10): a paid Open-Meteo plan (the free plan is non-commercial, and the app already uses it for live temperatures) or Copernicus ERA5 records with attribution.
-- Email records for founder@globeskimmers.io (N8): no DMARC record, no DKIM record at Google's default selector, and SPF lists IONOS but not Google.
+- Email records for founder@globeskimmers.io (N8): **partly done 2026-09-22** — Resend's sending records are live (DKIM at resend._domainkey, the send/rsend CNAMEs, DMARC `p=none`) and the domain is Verified in Resend; Resend's "Enable Receiving" stays off (it would replace Google's mail record). Still open for Google's own mail: no DKIM at Google's selector, and the root SPF lists IONOS but not Google.
 - AdMob test mode at launch (G77); the "Book a Hotel" rename; share the Virtual Passport link.
 
 ## Dated reminders
