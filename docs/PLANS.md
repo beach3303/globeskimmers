@@ -44,10 +44,9 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 
 ## Website (globeskimmers.io)
 
-- Deployed 2026-09-14 (48e1c81, 1d1e3b0, a3cdab8) to the globeskimmers-site Worker, live at https://globeskimmers-site.maizasimeon.workers.dev. Pages, app-ads.txt and the contact route verified.
+- Deployed 2026-09-14 (48e1c81, 1d1e3b0, a3cdab8) to the globeskimmers-site Worker. **Live on https://globeskimmers.io since 2026-09-21**: the founder attached globeskimmers.io and www in Cloudflare; pages, redirects, app-ads.txt and security headers verified on the real domain. Test addresses switched off (9d766af). www serves the same site; the platform rejects host redirects in _redirects, so a www→plain 301 would be a Cloudflare Redirect Rule if ever wanted.
 - Redirects for old addresses and the security headers failed at first because the GitHub action installed Wrangler 3.90.0. Fixed 2026-09-20 by pinning Wrangler 4.131.2 (9412e93); verified live on the test address.
 - Phone layout (founder request, 2026-09-14, live 2026-09-20): on phones the four sections become a menu under the logo (Inside the app, Virtual Passport, Partners & investors, Contact); the headline stacks so each teal phrase gets its own line; the App Store and Android badges are the same size; cards use a short color marker instead of a bent top edge.
-- The founder attaches globeskimmers.io and www in Cloudflare (N7). Then set `workers_dev = false` in wrangler-site.toml.
 - Copy decisions: headline "Find what you need abroad. Plan the whole trip from home." Hotels: "Two great hotels, side by side" (never "pick" or "rules"). Flights: "Flights aren't included yet. You book those separately." Quote: Helen Keller (the Jackie Chan line couldn't be verified). Always "Virtual Passport".
 - Follow-ups (N15): real app screenshots after the new Home ships; update the flights lines in site/index.html when flights join packages; show the founder's real passport once shared; upload the updated privacy page to R2 after `npx wrangler login`.
 
@@ -58,7 +57,7 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 - Approve flights sold at cost, covered by the hotel commission (N9).
 - Set the Nuitée commission and payout (G11); hotel bookings earn nothing until then. Then one real low-value booking and cancel (G12).
 - Pick a weather source licensed for commercial use (N10): a paid Open-Meteo plan (the free plan is non-commercial, and the app already uses it for live temperatures) or Copernicus ERA5 records with attribution.
-- Attach globeskimmers.io in Cloudflare (N7); run `npx wrangler login` on the laptop (G70).
+- Run `npx wrangler login` on the laptop (G70).
 - Email records for founder@globeskimmers.io (N8): no DMARC record, no DKIM record at Google's default selector, and SPF lists IONOS but not Google.
 - AdMob test mode at launch (G77); the "Book a Hotel" rename; share the Virtual Passport link.
 

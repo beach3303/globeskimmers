@@ -844,3 +844,10 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Gates: eslint ✓, npm run build ✓ (built bundle no longer contains the card text), boot-check ✓.
 - OTA bundle **1.0.2609210442** uploaded to the production channel. Device apply not yet verified: founder cold-opens twice and checks Home has no Perfect day card.
 - **Activate:** none.
+
+## 2026-09-21 — WEBSITE LIVE ON globeskimmers.io (founder attached the domains; Claude verified)
+- Founder, in the Cloudflare dashboard (zone and Worker in the same account, Maizasimeon@gmail): deleted the two Base44 A records (globeskimmers.io and www → 216.24.57.1, proxied), kept MX smtp.google.com, the SPF TXT, the auth CNAME to Supabase and the IONOS/verification leftovers; added custom domains globeskimmers.io and www.globeskimmers.io to globeskimmers-site (Domains tab → Add Domain → pick the zone → subdomain empty, then www).
+- Verified on the real domain: / 200 title Globeskimmers with the new headline; /privacy, /terms, /coming-soon → 301; /legal/privacy, /legal/terms, /delete-account/, /sitemap.xml, /robots.txt 200; app-ads.txt byte-identical to what AdMob verified; five security headers. www.globeskimmers.io serves the same site (200, same title).
+- Follow-up commits: 8aa865d (workers_dev = false, preview_urls = false, plus a www→apex rule in _redirects) FAILED to deploy: Workers static assets accept only relative paths in _redirects (API error 100324 "Only relative URLs are allowed", run 35678325097). 9d766af removed the rule; run 35678482387 ✓. Test addresses now 404 (globeskimmers-site.maizasimeon.workers.dev and the preview wildcard). Pages declare https://globeskimmers.io canonical; a www→apex 301 can be added later as a Cloudflare Redirect Rule in the dashboard if wanted.
+- Registrar facts: IONOS SE is the registrar (expires 2027-06-21); Cloudflare runs the DNS (remy/magnolia.ns.cloudflare.com). Launch Ledger N7 and G79 ticked.
+- **Activate:** none. Still open for the domain: N8 email records (SPF lists IONOS not Google; no DKIM at google._domainkey; no DMARC).
