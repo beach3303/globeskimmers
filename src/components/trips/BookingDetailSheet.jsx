@@ -559,7 +559,7 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
                       )}
                       {!bk && (
                         <p className="pt-2 mt-1 border-t" style={{ borderColor: ED_RULE, fontFamily: ED_MONO, fontSize: fs(10), letterSpacing: ".04em", color: ED_INK3 }}>
-                          Confirmation emailed
+                          Live details unavailable — quote the reference above to the hotel.
                         </p>
                       )}
                     </div>

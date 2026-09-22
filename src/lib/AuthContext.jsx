@@ -147,6 +147,18 @@ export const AuthProvider = ({ children }) => {
     // 3) Native OAuth callback: catch globeskimmers://auth/callback, exchange code.
     if (Capacitor.isNativePlatform()) {
       App.addListener('appUrlOpen', async ({ url }) => {
+        // Checkout hand-back: the worker's "Booking confirmed" page links to
+        // globeskimmers://trips (window.close() is a no-op inside the in-app
+        // browser). Close the sheet and land on the Trips tab, where the new
+        // stay already sits under BOOKED.
+        if (url && /^globeskimmers:\/\/trips(\?|$)/.test(url)) {
+          try { await Browser.close(); } catch { /* no-op on Android */ }
+          try {
+            window.history.pushState({}, '', '/Trips');
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          } catch { /* ignore */ }
+          return;
+        }
         // Passport buddy-tag claim: globeskimmers://passport/claim?token=… →
         // stash the token + route to the Passport page (which shows the claim card).
         if (url && url.includes('passport/claim')) {

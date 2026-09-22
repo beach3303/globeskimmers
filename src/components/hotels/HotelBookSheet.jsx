@@ -394,7 +394,7 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
               {booking.hotelConfirmationCode && <div className="flex justify-between mt-1"><span style={{ color: INK2 }}>Hotel confirmation</span><b>{booking.hotelConfirmationCode}</b></div>}
               <div className="flex justify-between mt-1"><span style={{ color: INK2 }}>Paid</span><b>{money(booking.price ?? price, booking.currency || cur)}</b></div>
             </div>
-            <div className="text-[calc(12px*var(--fs))] mt-2" style={{ color: INK2 }}>Confirmation email sent to {holder.email}. This stay is now in My Trips.</div>
+            <div className="text-[calc(12px*var(--fs))] mt-2" style={{ color: INK2 }}>This stay is now in My Trips — keep the Booking ID; it is what the hotel needs.</div>
             <button onClick={() => navigate(createPageUrl("MyTrip"))} className="w-full py-3.5 rounded-[14px] font-bold text-white text-[calc(15px*var(--fs))] mt-3" style={{ background: OK, fontFamily: "inherit" }}>View in My Trips</button>
           </>
         )}

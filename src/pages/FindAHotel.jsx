@@ -644,7 +644,7 @@ export default function FindAHotel() {
         {inApp && inApp.length > 0 && !inAppBusy && (
           <div className="mt-4">
             <div className="flex items-center justify-between mb-2 px-1">
-              <span className="font-bold text-[calc(14px*var(--fs))]" style={{ color: ED_INK }}>🔐 Book in the app · {inApp.length} stays</span>
+              <span className="font-bold text-[calc(14px*var(--fs))]" style={{ color: ED_INK }}>🔐 Book in the app · {inApp.length} {inApp.length === 1 ? "stay" : "stays"}</span>
               <span className="text-[calc(11.5px*var(--fs))]" style={{ color: INK2 }}>{inAppMeta?.nights} night{inAppMeta?.nights === 1 ? "" : "s"}{inAppMeta?.env === "sandbox" ? " · SANDBOX" : ""}</span>
             </div>
             <div className="flex flex-col gap-2.5">

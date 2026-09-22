@@ -275,7 +275,6 @@ export default function MyTripPage() {
                             {inApp && (
                               <div className="mt-1.5" style={{ fontFamily: ED_MONO, fontSize: fs(10.5), letterSpacing: ".04em", color: ED_INK3, lineHeight: 1.6 }}>
                                 {it.product_id && <div>Booking ref {it.product_id}</div>}
-                                <div>Confirmation emailed</div>
                               </div>
                             )}
                           </div>
