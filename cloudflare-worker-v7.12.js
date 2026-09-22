@@ -14184,6 +14184,307 @@ function nuiteeHtml(title, body) {
     { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY' } });
 }
 
+// ── Guest emails via Resend ──────────────────────────────────────────────────
+// Nuitée sends the guest nothing, so the confirmation and the cancellation
+// notice are ours. One transport (sendEmail), three templates, one
+// orchestrator (nuiteeSendBookingEmail) that owns the honesty rules:
+//   • every line states only what the session / cancel record carries — no
+//     card digits (LiteAPI never exposes them), no refund sentence without a
+//     stated amount, no "emailed" claim unless Resend accepted the message;
+//   • sandbox sessions never send (test bookings carry throwaway addresses);
+//   • one message per booking per kind: the session's `emails` record is the
+//     first guard (claimed BEFORE the send, so a page reload or a webhook
+//     retry cannot race a second copy), Resend's Idempotency-Key the second.
+// From / Reply-To / BCC follow the founder's 2026-09-22 decision; the BCC is
+// the founder's own copy of every guest message. Wrangler vars EMAIL_FROM,
+// EMAIL_REPLY_TO and EMAIL_BCC override (EMAIL_BCC = "" switches the copy off).
+const EMAIL_FROM = 'GlobeSkimmers <bookings@globeskimmers.io>';
+const EMAIL_REPLY_TO = 'founder@globeskimmers.io';
+const EMAIL_BCC = 'founder@globeskimmers.io';
+const EMAIL_TIMEOUT_MS = 8000;        // Resend call abort
+const EMAIL_PAGE_WAIT_MS = 4000;      // how long the confirmation page waits for the send before saying "sending"
+const EMAIL_HOTEL_LOOKUP_MS = 3000;   // address/phone lookup budget on the hot path
+const EMAIL_PER_USER_PER_DAY = 6;     // abuse cap: a signed-in user can't turn bookings@ into a relay
+// One plain mailbox: exactly one @, no separators a comma-joined "a@b,c@d"
+// list could smuggle in, ≤254 chars (the holder regex at prebook is looser).
+const nuiteeEmailAddressOk = (a) => typeof a === 'string' && a.length <= 254 && (a.match(/@/g) || []).length === 1 && /^[^\s,;<>"()]+@[^\s,;<>"()]+\.[^\s,;<>"()]+$/.test(a);
+async function sendEmail(env, { to, subject, html, text, idempotencyKey, tag, headers: extraHeaders }) {
+  const key = env.RESEND_API_KEY;
+  if (!key) return { ok: false, error: 'not_configured' };
+  const rcpt = String(to || '').trim();
+  if (!nuiteeEmailAddressOk(rcpt)) return { ok: false, error: 'bad_recipient' };
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` };
+  if (idempotencyKey) headers['Idempotency-Key'] = String(idempotencyKey).slice(0, 256);
+  const body = {
+    from: env.EMAIL_FROM || EMAIL_FROM, to: [rcpt],
+    reply_to: env.EMAIL_REPLY_TO || EMAIL_REPLY_TO,
+    subject: String(subject || '').replace(/[\r\n]+/g, ' ').slice(0, 200),
+    html: String(html || ''), text: String(text || ''),
+  };
+  const bcc = String(env.EMAIL_BCC === undefined ? EMAIL_BCC : env.EMAIL_BCC).trim();
+  if (bcc && bcc.toLowerCase() !== rcpt.toLowerCase()) body.bcc = [bcc];
+  if (tag) body.tags = [{ name: 'kind', value: String(tag).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) }];
+  if (extraHeaders && typeof extraHeaders === 'object') body.headers = extraHeaders;
+  try {
+    const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(EMAIL_TIMEOUT_MS) });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d?.id) return { ok: true, id: String(d.id) };
+    return { ok: false, error: String(d?.name || d?.message || `http_${res.status}`).slice(0, 120), status: res.status };
+  } catch (e) {
+    return { ok: false, error: (e?.name === 'TimeoutError' || e?.name === 'AbortError') ? 'timeout' : 'network' };
+  }
+}
+// "Thu, Dec 10, 2026" from a YYYY-MM-DD stay date, rendered in UTC so a
+// date-only value never slips a day in the reader's zone.
+function nuiteeEmailDate(d, opts) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '').trim());
+  if (!m) return String(d || '');
+  try { return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', ...(opts || { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) }).format(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]))); }
+  catch { return `${m[1]}-${m[2]}-${m[3]}`; }
+}
+// "Dec 10–11, 2026" · "Dec 30, 2026 – Jan 2, 2027" — the subject-line range.
+function nuiteeEmailRange(ci, co) {
+  const a = /^(\d{4})-(\d{2})/.exec(String(ci || '')), b = /^(\d{4})-(\d{2})/.exec(String(co || ''));
+  if (!a || !b) return [ci, co].filter(Boolean).join(' → ');
+  if (a[1] === b[1] && a[2] === b[2]) return `${nuiteeEmailDate(ci, { month: 'short', day: 'numeric' })}–${nuiteeEmailDate(co, { day: 'numeric' })}, ${a[1]}`;
+  return `${nuiteeEmailDate(ci, { month: 'short', day: 'numeric', year: 'numeric' })} – ${nuiteeEmailDate(co, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
+// Inline-styled shell (mail clients drop <style>), 520px, the checkout page's
+// editorial palette. `body` is already-escaped HTML.
+function nuiteeEmailShell(title, body) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${nuiteeEsc(title)}</title></head><body style="margin:0;padding:0;background:#FFFCF7;"><div style="max-width:520px;margin:0 auto;padding:24px 18px 40px;font-family:Georgia,'Times New Roman',Times,serif;color:#16110D;font-size:15px;line-height:1.5;"><p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#736657;margin:0 0 18px;">GlobeSkimmers</p>${body}<p style="font-size:12px;color:#736657;line-height:1.5;margin:26px 0 0;border-top:1px solid rgba(22,17,13,.12);padding-top:12px;">Sent by GlobeSkimmers for your booking with Nuitée Travel Ltd, our booking partner and the merchant of record. Reply to this email to reach us.</p></div></body></html>`;
+}
+const nuiteeEmailRow = (k, v, mono) => (v == null || v === '' ? '' : `<tr><td style="padding:5px 0;color:#736657;font-size:14px;vertical-align:top;white-space:nowrap;">${nuiteeEsc(k)}</td><td style="padding:5px 0 5px 14px;text-align:right;font-size:14px;${mono ? "font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;" : ''}">${v}</td></tr>`);
+const nuiteeEmailCard = (rows) => `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#FFFFFF;border:1px solid rgba(22,17,13,.12);border-radius:14px;padding:12px 16px;margin:14px 0;border-collapse:separate;">${rows.join('')}</table>`;
+const nuiteeEmailP = (s, muted) => `<p style="margin:0 0 12px;${muted ? 'color:#736657;font-size:13.5px;' : ''}">${s}</p>`;
+// What a guest hands the front desk. The LiteAPI Booking ID means nothing to
+// a hotel: they know their own confirmation number, else the guest's name and
+// dates (and the supplier reference, when Nuitée passed one on).
+const nuiteeEmailDeskLine = (bk) => (bk?.hotelConfirmationCode
+  ? `At the front desk, give your name and the hotel confirmation number ${nuiteeEsc(bk.hotelConfirmationCode)}.`
+  : `The hotel's own confirmation number isn't in yet; if the hotel issues one, we'll email it. Until then the hotel can find your reservation by your name and dates${bk?.supplierBookingId ? `, or by supplier reference ${nuiteeEsc(bk.supplierBookingId)}` : ''}.`);
+// "Free cancellation until Tue, Dec 8, 2026, 10:00 (GMT)" — the time and zone
+// are printed only when the policy stated them (LiteAPI: GMT unless listed).
+function nuiteeEmailDeadline(cancelBy, tz) {
+  const str = String(cancelBy || '').trim();
+  if (!str) return null;
+  const m = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}))?/.exec(str);
+  if (!m) return str;
+  return `${nuiteeEmailDate(m[1])}${m[2] ? `, ${m[2]} (${String(tz || 'GMT').replace(/[^A-Za-z0-9_+\-/]/g, '')})` : ''}`;
+}
+const nuiteeEmailTripsLink = (bookingId) => `<p style="margin:16px 0 0;"><a href="globeskimmers://trips?booking=${encodeURIComponent(String(bookingId || ''))}" style="display:inline-block;padding:12px 18px;border-radius:12px;background:#0E7C73;color:#FFFFFF;font-weight:700;text-decoration:none;">Open in My Trips</a></p><p style="margin:8px 0 0;font-size:12.5px;color:#736657;">If the button does nothing on this device, open the GlobeSkimmers app and go to My Trips.</p>`;
+function nuiteeEmailConfirmation(s, hotel) {
+  const bk = s.booking || {};
+  const name = bk.hotelName || s.hotelName || hotel?.name || 'Your hotel';
+  const ci = bk.checkin || s.checkin, co = bk.checkout || s.checkout;
+  const nights = nuiteeNights(ci, co);
+  const dates = `${nuiteeEmailDate(ci)} → ${nuiteeEmailDate(co)} · ${nights} night${nights === 1 ? '' : 's'}`;
+  const paid = nuiteeMoney(bk.price ?? s.price, bk.currency || s.currency);
+  const room = s.roomName ? [nuiteePrettyRoom(s.roomName), s.board].filter(Boolean).join(' · ') : (s.roomLabel || null);
+  const adults = Number(s.adults) || 0, children = Number(s.children) || 0;
+  const guests = adults ? `${adults} adult${adults === 1 ? '' : 's'}${children ? `, ${children} child${children === 1 ? '' : 'ren'}` : ''}` : null;
+  const holder = [s.holder?.firstName, s.holder?.lastName].filter(Boolean).join(' ') || null;
+  const country = hotel?.country ? (String(hotel.country).length === 2 ? String(hotel.country).toUpperCase() : String(hotel.country)) : null;
+  const address = hotel ? [hotel.address, hotel.city, country].filter(Boolean).join(', ') : (s.address || null);
+  const phone = hotel?.phone ? String(hotel.phone) : null;
+  const t = hotel?.checkinCheckoutTimes || {};
+  const times = [t.checkin_start ? `from ${t.checkin_start}` : null, t.checkout ? `out by ${t.checkout}` : null].filter(Boolean).join(' · ') || null;
+  const deadline = s.refundable ? nuiteeEmailDeadline(s.cancelBy, s.cancelTz) : null;
+  const cxl = s.refundable ? `Free cancellation${deadline ? ` until ${deadline}` : ''} — cancel from My Trips` : 'Non-refundable — cancelling this rate does not refund it';
+  const bookedOn = bk.createdAt ? nuiteeEmailDate(String(bk.createdAt).slice(0, 10)) : null;
+  // LiteAPI's book answer is CONFIRMED for nearly every supplier; anything else
+  // (PENDING…) is "received", never "confirmed" — the app's status is the truth.
+  const confirmed = String(bk.status || '').toUpperCase() === 'CONFIRMED';
+  const heading = confirmed ? 'Your stay is confirmed' : 'Your booking is received';
+  const subject = `${confirmed ? 'Confirmed' : 'Booking received'}: ${name} · ${nuiteeEmailRange(ci, co)}`;
+  const statusLine = confirmed ? null : 'Nuitée has your booking; the hotel has not confirmed it yet. My Trips shows the current status.';
+  const idLine = 'The Booking ID is what Nuitée and we use — quote it in any message about this stay.';
+  const html = nuiteeEmailShell(subject, [
+    `<h1 style="font-size:24px;font-weight:400;letter-spacing:-.01em;margin:0 0 4px;">${nuiteeEsc(heading)}</h1>`,
+    nuiteeEmailP(`<b>${nuiteeEsc(name)}</b>`),
+    statusLine ? nuiteeEmailP(nuiteeEsc(statusLine)) : '',
+    nuiteeEmailCard([
+      nuiteeEmailRow('Booking ID', `<b>${nuiteeEsc(bk.bookingId)}</b>`, true),
+      nuiteeEmailRow('Hotel confirmation', bk.hotelConfirmationCode ? `<b>${nuiteeEsc(bk.hotelConfirmationCode)}</b>` : null, true),
+      nuiteeEmailRow('Dates', nuiteeEsc(dates)),
+      nuiteeEmailRow('Check-in / out', times ? nuiteeEsc(times) : null),
+      nuiteeEmailRow('Room', room ? nuiteeEsc(room) : null),
+      nuiteeEmailRow('Guests', guests ? nuiteeEsc(guests) : null),
+      nuiteeEmailRow('Name on the booking', holder ? nuiteeEsc(holder) : null),
+      nuiteeEmailRow('Address', address ? nuiteeEsc(address) : null),
+      nuiteeEmailRow('Hotel phone', phone ? `<a href="tel:${nuiteeEsc(phone.replace(/[^\d+]/g, ''))}" style="color:#0E7C73;">${nuiteeEsc(phone)}</a>` : null),
+      nuiteeEmailRow('Booked on', bookedOn ? nuiteeEsc(bookedOn) : null),
+      nuiteeEmailRow('Paid', `<b>${nuiteeEsc(paid)}</b>`),
+    ]),
+    nuiteeEmailP(`${nuiteeEsc(paid)} was charged by Nuitée Travel Ltd, the merchant of record — Nuitée is the name on your card statement.`, true),
+    nuiteeEmailP(`<span style="color:${s.refundable ? '#2E7D46' : '#C2392F'};">${nuiteeEsc(cxl)}</span>`),
+    nuiteeEmailP(nuiteeEmailDeskLine(bk)),
+    nuiteeEmailP(nuiteeEsc(idLine), true),
+    nuiteeEmailP('Need different dates? Stays booked in the app can\'t be changed — cancel (where free cancellation applies) and book again.', true),
+    nuiteeEmailTripsLink(bk.bookingId),
+  ].join(''));
+  const text = [
+    heading, name, '',
+    statusLine,
+    statusLine ? '' : null,
+    `Booking ID: ${bk.bookingId}`,
+    bk.hotelConfirmationCode ? `Hotel confirmation: ${bk.hotelConfirmationCode}` : null,
+    `Dates: ${dates}`,
+    times ? `Check-in / out: ${times}` : null,
+    room ? `Room: ${room}` : null,
+    guests ? `Guests: ${guests}` : null,
+    holder ? `Name on the booking: ${holder}` : null,
+    address ? `Address: ${address}` : null,
+    phone ? `Hotel phone: ${phone}` : null,
+    bookedOn ? `Booked on: ${bookedOn}` : null,
+    `Paid: ${paid} — charged by Nuitée Travel Ltd, the merchant of record (Nuitée is the name on your card statement)`,
+    cxl,
+    '',
+    nuiteeEmailDeskLine(bk).replace(/<[^>]+>/g, '').replace(/&#39;/g, '\'').replace(/&amp;/g, '&'),
+    idLine,
+    'Need different dates? Stays booked in the app can\'t be changed — cancel (where free cancellation applies) and book again.',
+    '',
+    'Open the GlobeSkimmers app → My Trips to see or cancel this stay.',
+    '',
+    'Sent by GlobeSkimmers for your booking with Nuitée Travel Ltd, our booking partner and the merchant of record. Reply to this email to reach us.',
+  ].filter((l) => l !== null).join('\n');
+  return { subject, html, text };
+}
+// The money sentence states only what the cancel record carries. `c` is the
+// session's `cancelled` record: {status, refund_amount, cancellation_fee, currency}.
+function nuiteeEmailCancellation(s, c) {
+  const bk = s.booking || {};
+  const name = bk.hotelName || s.hotelName || 'Your hotel';
+  const ci = bk.checkin || s.checkin, co = bk.checkout || s.checkout;
+  const cur = c?.currency || bk.currency || s.currency;
+  const paid = nuiteeMoney(bk.price ?? s.price, bk.currency || s.currency);
+  const fee = Number(c?.cancellation_fee) > 0 ? nuiteeMoney(Number(c.cancellation_fee), cur) : null;
+  const refund = Number(c?.refund_amount) > 0 ? nuiteeMoney(Number(c.refund_amount), cur) : null;
+  const charged = String(c?.status || '').toUpperCase() === 'CANCELLED_WITH_CHARGES' || !!fee;
+  const when = c?.at ? nuiteeEmailDate(String(c.at).slice(0, 10)) : null;
+  // An absent amount is unknown, never zero: the sentence names the amount
+  // only when Nuitée stated one, and otherwise says who sets it.
+  let money;
+  if (charged) {
+    money = fee
+      ? `This cancellation carried a ${fee} fee.${refund ? ` ${refund} goes back to the card Nuitée charged.` : ' Any refund is set by Nuitée and goes to the card it charged.'}`
+      : `Nuitée reports this cancellation carried charges.${refund ? ` ${refund} goes back to the card Nuitée charged.` : ' Any refund is set by Nuitée and goes to the card it charged.'}`;
+  } else {
+    money = refund
+      ? `${refund} goes back to the card Nuitée charged.`
+      : 'Nuitée refunds the card it charged; Nuitée confirms the amount.';
+  }
+  const timing = 'Refunds usually show within 5–10 business days, depending on your bank. If nothing has appeared by then, reply to this email with your Booking ID.';
+  const subject = `Cancelled: ${name} · ${nuiteeEmailRange(ci, co)}`;
+  const html = nuiteeEmailShell(subject, [
+    `<h1 style="font-size:24px;font-weight:400;letter-spacing:-.01em;margin:0 0 4px;">Your stay is cancelled</h1>`,
+    nuiteeEmailP(`<b>${nuiteeEsc(name)}</b>`),
+    nuiteeEmailCard([
+      nuiteeEmailRow('Booking ID', `<b>${nuiteeEsc(bk.bookingId)}</b>`, true),
+      nuiteeEmailRow('Dates', nuiteeEsc(`${nuiteeEmailDate(ci)} → ${nuiteeEmailDate(co)}`)),
+      nuiteeEmailRow('Cancelled', when ? nuiteeEsc(when) : null),
+      nuiteeEmailRow('Originally paid', nuiteeEsc(paid)),
+      nuiteeEmailRow('Cancellation fee', fee ? nuiteeEsc(fee) : null),
+      nuiteeEmailRow('Refund', refund ? `<b>${nuiteeEsc(refund)}</b>` : null),
+    ]),
+    nuiteeEmailP(nuiteeEsc(money)),
+    nuiteeEmailP(nuiteeEsc(timing), true),
+    nuiteeEmailTripsLink(bk.bookingId),
+  ].join(''));
+  const text = [
+    'Your stay is cancelled', name, '',
+    `Booking ID: ${bk.bookingId}`,
+    `Dates: ${nuiteeEmailDate(ci)} → ${nuiteeEmailDate(co)}`,
+    when ? `Cancelled: ${when}` : null,
+    `Originally paid: ${paid}`,
+    fee ? `Cancellation fee: ${fee}` : null,
+    refund ? `Refund: ${refund}` : null,
+    '', money, timing,
+    '',
+    'Sent by GlobeSkimmers for your booking with Nuitée Travel Ltd, our booking partner and the merchant of record. Reply to this email to reach us.',
+  ].filter((l) => l !== null).join('\n');
+  return { subject, html, text };
+}
+// Follow-up when the hotel's own confirmation number lands after the
+// confirmation email went out without one (webhook booking.book.hotelConfirmationNumber).
+function nuiteeEmailHotelCode(s, code) {
+  const bk = s.booking || {};
+  if (!code) return null;
+  const name = bk.hotelName || s.hotelName || 'Your hotel';
+  const ci = bk.checkin || s.checkin, co = bk.checkout || s.checkout;
+  const subject = `Hotel confirmation number for ${name} · ${nuiteeEmailRange(ci, co)}`;
+  const html = nuiteeEmailShell(subject, [
+    `<h1 style="font-size:24px;font-weight:400;letter-spacing:-.01em;margin:0 0 4px;">The hotel has confirmed your stay</h1>`,
+    nuiteeEmailP(`<b>${nuiteeEsc(name)}</b>`),
+    nuiteeEmailCard([
+      nuiteeEmailRow('Hotel confirmation', `<b>${nuiteeEsc(code)}</b>`, true),
+      nuiteeEmailRow('Booking ID', nuiteeEsc(bk.bookingId), true),
+      nuiteeEmailRow('Dates', nuiteeEsc(`${nuiteeEmailDate(ci)} → ${nuiteeEmailDate(co)}`)),
+    ]),
+    nuiteeEmailP('At the front desk, give your name and this hotel confirmation number. Keep the Booking ID too — it is what Nuitée and we use.'),
+    nuiteeEmailTripsLink(bk.bookingId),
+  ].join(''));
+  const text = [
+    'The hotel has confirmed your stay', name, '',
+    `Hotel confirmation: ${code}`, `Booking ID: ${bk.bookingId}`, `Dates: ${nuiteeEmailDate(ci)} → ${nuiteeEmailDate(co)}`, '',
+    'At the front desk, give your name and this hotel confirmation number. Keep the Booking ID too — it is what Nuitée and we use.',
+    '', 'Sent by GlobeSkimmers for your booking with Nuitée Travel Ltd, our booking partner and the merchant of record. Reply to this email to reach us.',
+  ].join('\n');
+  return { subject, html, text };
+}
+// Per-user daily cap (KV counter; a race between two of a user's own sends
+// is harmless). Null user (sandbox / curl) shares one 'anon' bucket.
+async function nuiteeEmailAllow(env, userId) {
+  if (!env.GLOBESKIMMERS_KV) return true;
+  const k = `nuitee:mail:${userId || 'anon'}:${new Date().toISOString().slice(0, 10)}`;
+  const n = Number(await env.GLOBESKIMMERS_KV.get(k).catch(() => 0)) || 0;
+  if (n >= EMAIL_PER_USER_PER_DAY) return false;
+  await env.GLOBESKIMMERS_KV.put(k, String(n + 1), { expirationTtl: 2 * 24 * 3600 }).catch(() => {});
+  return true;
+}
+// kind: 'confirmation' | 'cancellation' | 'hotel_code'. Returns the session's
+// emails[kind] record: {id, at, to[, withCode, confirmed]} on success ·
+// {error, at, to} · {skipped, at} · or the existing record when one was
+// already claimed. Every write is a json_set PATCH of `$.emails.<kind>` (never
+// a whole-row put: the caller may hold a stale `s` for seconds), and the claim
+// lands BEFORE the network call (see the section comment). extra.hotel may be
+// a promise started earlier (the return page prefetches while booking).
+async function nuiteeSendBookingEmail(env, ctx, s, kind, extra = {}) {
+  if (!s || !s.sid) return null;
+  if (!s.emails || typeof s.emails !== 'object') s.emails = {};
+  const prior = s.emails[kind];
+  if (prior && (prior.id || prior.attemptedAt || prior.skipped)) return prior;
+  const at = new Date().toISOString();
+  const to = String(s.holder?.email || '').trim();
+  const record = async (rec) => { s.emails[kind] = rec; await nuiteeSessPatch(env, s.sid, { [`$.emails.${kind}`]: rec }); return rec; };
+  if (s.env === 'sandbox') return record({ skipped: 'sandbox', at });
+  if (!nuiteeEmailAddressOk(to)) return record({ skipped: to ? 'bad_address' : 'no_email', at });
+  if (!env.RESEND_API_KEY) return record({ skipped: 'not_configured', at });
+  if (!(await nuiteeEmailAllow(env, s.user_id))) return record({ skipped: 'rate_limited', at, to });
+  await record({ attemptedAt: at, to });
+  let tpl = null;
+  try {
+    if (kind === 'confirmation') {
+      let hotel = null;
+      const lookup = extra.hotel !== undefined ? Promise.resolve(extra.hotel) : (s.hotelId ? nuiteeHotelDetails(env, ctx, s.hotelId) : Promise.resolve(null));
+      hotel = await Promise.race([
+        lookup.catch(() => null),
+        new Promise((resolve) => setTimeout(() => resolve(null), EMAIL_HOTEL_LOOKUP_MS)),
+      ]);
+      tpl = nuiteeEmailConfirmation(s, hotel && typeof hotel === 'object' ? hotel : null);
+    } else if (kind === 'cancellation') tpl = nuiteeEmailCancellation(s, extra.cancel || s.cancelled || {});
+    else if (kind === 'hotel_code') tpl = nuiteeEmailHotelCode(s, extra.code);
+  } catch { tpl = null; }
+  if (!tpl) return record({ error: 'template', at, to });
+  const bookingId = s.booking?.bookingId || s.sid;
+  const key = `nuitee-${bookingId}-${kind}`;
+  // X-Entity-Ref-ID keeps Gmail from threading the cancellation under the confirmation.
+  const r = await sendEmail(env, { to, ...tpl, idempotencyKey: key, tag: kind, headers: { 'X-Entity-Ref-ID': key } });
+  return record(r.ok
+    ? { id: r.id, at, to, ...(kind === 'confirmation' ? { withCode: !!s.booking?.hotelConfirmationCode, confirmed: String(s.booking?.status || '').toUpperCase() === 'CONFIRMED' } : {}) }
+    : { error: r.error, at, to });
+}
+
 // Sessions live in D1 (strongly consistent), NOT KV: KV caches reads at the edge
 // for up to 60s, so a status check that ran before the booking kept answering
 // "pending" after it (measured, sandbox session C). Pending sessions expire
@@ -14202,6 +14503,43 @@ async function nuiteeSessPut(env, s) {
   const now = Date.now();
   await env.DB.prepare('insert or replace into nuitee_sessions (sid, user_id, status, env, created, updated, data) values (?,?,?,?,?,?,?)')
     .bind(s.sid, s.user_id || null, s.status || 'pending', s.env || null, s.created || now, now, JSON.stringify(s)).run().catch(() => {});
+}
+// Patch named JSON paths in place (SQLite json_set / json_remove — missing
+// parents are created) instead of replacing the row: a handler that holds `s`
+// in memory for seconds (book → email) must not overwrite what a webhook wrote
+// meanwhile (the hotel's confirmation number, a cancellation). `patches` is
+// { '$.emails.confirmation': value } — a null value removes the path. Paths
+// are code constants, never input. `status` also sets the status column.
+async function nuiteeSessPatch(env, sid, patches, status) {
+  if (!env.DB || !sid) return false;
+  const sets = [], removes = [], binds = [];
+  for (const [path, v] of Object.entries(patches || {})) {
+    if (!/^\$(\.[A-Za-z_][A-Za-z0-9_]*)+$/.test(path)) continue;
+    if (v === null || v === undefined) removes.push(`'${path}'`);
+    else { sets.push(`'${path}', json(?)`); binds.push(JSON.stringify(v)); }
+  }
+  let expr = 'data';
+  if (sets.length) expr = `json_set(${expr}, ${sets.join(', ')})`;
+  if (removes.length) expr = `json_remove(${expr}, ${removes.join(', ')})`;
+  const cols = [`data = ${expr}`, 'updated = ?']; binds.push(Date.now());
+  if (status) { cols.push('status = ?'); binds.push(status); }
+  binds.push(sid);
+  const r = await env.DB.prepare(`update nuitee_sessions set ${cols.join(', ')} where sid = ?`).bind(...binds).run().catch(() => null);
+  return !!r;
+}
+// Exactly one request may run the booking for a session. The return page is a
+// GET the browser can repeat mid-call (reload, back-forward), and a second
+// /rates/book is refused as a duplicate — which used to end as a whole-row
+// 'failed' put over the first request's 'booked' row. The claim is a
+// conditional write; a 'booking' claim older than NUITEE_CLAIM_STALE_MS is
+// treated as abandoned (the worker died mid-call) and may be taken again.
+const NUITEE_CLAIM_STALE_MS = 2 * 60 * 1000;
+async function nuiteeSessClaimBooking(env, sid) {
+  if (!env.DB) return true;
+  const now = Date.now();
+  const r = await env.DB.prepare("update nuitee_sessions set status = 'booking', updated = ? where sid = ? and (status = 'pending' or (status = 'booking' and updated < ?))")
+    .bind(now, sid, now - NUITEE_CLAIM_STALE_MS).run().catch(() => null);
+  return !!(r && r.meta && r.meta.changes > 0);
 }
 
 // POST /hotels/nuitee/search — priced, bookable hotels around a point for exact
@@ -16006,6 +16344,8 @@ async function handleNuiteePrebook(request, env) {
       price: p.price, currency: p.currency, hotelId: p.hotelId, hotelName: String(b.hotelName || '').slice(0, 160),
       checkin: p.checkin, checkout: p.checkout, roomName: rate.name || null, board: rate.boardName || null,
       refundable: cp.refundableTag === 'RFN', cancelBy: (cp.cancelPolicyInfos || []).map((c) => c && c.cancelTime).filter(Boolean).sort()[0] || null,
+      // The zone the policy states its deadline in (LiteAPI: GMT unless listed) — the confirmation email prints it.
+      cancelTz: (cp.cancelPolicyInfos || []).find((c) => c && c.timezone)?.timezone || null,
       holder, adults: Math.min(Math.max(parseInt(b.adults, 10) || 2, 1), 8), children: Math.min(Math.max(parseInt(b.children, 10) || 0, 0), 6),
       dest_city: String(b.dest_city || '').slice(0, 120), dest_country: String(b.dest_country || '').slice(0, 80),
       // Stay fields from the search-result hotel object (Wave 3) — stored so
@@ -16081,13 +16421,28 @@ async function handleNuiteeCheckout(request, env) {
 // 'booked'/'failed' and a second visit only re-renders), writes the CONFIRMED
 // row My Trips reads, and shows the confirmation. Sandbox sessions without an
 // SDK transaction use Nuitée's simulated ACC_CREDIT_CARD path.
-async function handleNuiteeReturn(request, env) {
+async function handleNuiteeReturn(request, env, ctx) {
   const url = new URL(request.url);
   const sid = (url.searchParams.get('sid') || '').replace(/[^a-f0-9]/g, '');
-  const s = await nuiteeSessGet(env, sid);
+  let s = await nuiteeSessGet(env, sid);
   if (!s) return nuiteeHtml('Session expired', '<h1>We lost this checkout</h1><p class="sub">If you were charged, the booking still completes on Nuitée\'s side — check My Trips in a few minutes, or contact support with your card statement.</p>');
-  if (s.status === 'pending') {
+  let mailPending = false;
+  if (s.status === 'pending' || s.status === 'booking') {
+    // One writer: whoever wins the claim books; a concurrent or repeated GET
+    // re-reads the row and renders whatever the winner has produced so far.
+    if (await nuiteeSessClaimBooking(env, sid)) {
+      s.status = 'booking'; // the in-memory copy must carry the claim: nuiteeBookSession's attempts put writes the whole row
+    } else {
+      const fresh = await nuiteeSessGet(env, sid);
+      if (fresh && fresh.status !== 'pending' && fresh.status !== 'booking') s = fresh;
+      else return nuiteeHtml('Finishing your booking', `<p class="wordmark">GlobeSkimmers</p><h1>Finishing your booking</h1><p class="sub">Nuitée is confirming this stay — this page refreshes on its own.</p><meta http-equiv="refresh" content="3"><p class="note">Nothing more to pay. If this takes longer than a minute, open the app — My Trips shows the booking once it is confirmed.</p>`);
+    }
+  }
+  if (s.status === 'pending' || s.status === 'booking') {
     const simulate = url.searchParams.get('simulate') === '1' && s.env === 'sandbox';
+    // Hotel address/phone for the confirmation email, fetched (KV-cached, $0)
+    // while the booking call runs so it costs the page nothing.
+    const hotelP = s.hotelId && s.env !== 'sandbox' ? nuiteeHotelDetails(env, ctx, s.hotelId).catch(() => null) : Promise.resolve(null);
     const result = await nuiteeBookSession(env, s, { simulate });
     if (!result.ok && /payment not completed|not paid|unpaid|transaction/i.test(result.error || '')) {
       // Landed here before the card was charged (or without paying at all): NOT a
@@ -16096,6 +16451,7 @@ async function handleNuiteeReturn(request, env) {
       // session with a NEW prebook + payment transaction for the same offer and
       // stay pending — "Back to payment" here and "Reopen payment" in the app
       // then work. If the rate can't be re-confirmed, the session fails honestly.
+      s.status = 'pending'; // releases the booking claim on the put below
       const refreshed = await nuiteeRefreshPrebook(env, s).catch(() => false);
       if (!refreshed) {
         s.status = 'failed'; s.error = 'This rate could not be re-confirmed.';
@@ -16107,13 +16463,30 @@ async function handleNuiteeReturn(request, env) {
     s.booking = result.ok ? result.booking : null;
     s.error = result.ok ? null : result.error;
     await nuiteeSessPut(env, s);
-    if (result.ok) await nuiteeRecordBooking(env, s).catch(() => {});
+    if (result.ok) {
+      await nuiteeRecordBooking(env, s).catch(() => {});
+      // The page below states whether the confirmation email went out, so the
+      // send is awaited — for EMAIL_PAGE_WAIT_MS. Past that it carries on in
+      // the background (its own EMAIL_TIMEOUT_MS abort, its own D1 record) and
+      // the page says "sending"; the Trips sheet shows the outcome. Only the
+      // pending→booked transition sends: a reload never re-sends.
+      const sendP = nuiteeSendBookingEmail(env, ctx, s, 'confirmation', { hotel: hotelP }).catch(() => null);
+      const settled = await Promise.race([sendP, new Promise((resolve) => setTimeout(() => resolve(undefined), EMAIL_PAGE_WAIT_MS))]);
+      if (settled === undefined) { mailPending = true; if (ctx && ctx.waitUntil) ctx.waitUntil(sendP); }
+    }
   }
   if (s.status === 'booked') {
     const bk = s.booking;
     const nights = nuiteeNights(s.checkin, s.checkout);
+    const mail = s.emails?.confirmation || null;
+    // Each line only from the send's own record: an id (and whether that email
+    // said "confirmed" or "received"), an error, or a claim still in flight.
+    const mailLine = mail?.id ? ` ${mail.confirmed === false ? 'Booking email' : 'Confirmation'} sent to ${nuiteeEsc(mail.to)}.`
+      : mail?.error ? ` We couldn't send the confirmation email to ${nuiteeEsc(mail.to || '')} — this page and My Trips hold the details.`
+      : mailPending && mail?.attemptedAt ? ` We're sending your confirmation to ${nuiteeEsc(mail.to)} — My Trips shows when it has gone.`
+      : '';
     const codeRow = (label, val) => (val ? `<div class="row"><span>${label}</span><b class="mono" data-copy title="Tap to copy">${nuiteeEsc(val)}</b></div>` : '');
-    return nuiteeHtml('Booking confirmed', `<p class="wordmark">GlobeSkimmers</p><h1>Booking confirmed</h1><p class="sub">${nuiteeEsc(bk.hotelName || s.hotelName)}</p><div class="card">${codeRow('Booking ID', bk.bookingId)}${codeRow('Hotel confirmation', bk.hotelConfirmationCode)}<div class="row"><span>Dates</span><span class="mono">${nuiteeEsc(s.checkin)} → ${nuiteeEsc(s.checkout)} · ${nights} night${nights === 1 ? '' : 's'}</span></div>${s.roomName ? `<div class="row"><span>Room</span><span>${nuiteeEsc(nuiteePrettyRoom(s.roomName))}${s.board ? ` · ${nuiteeEsc(s.board)}` : ''}</span></div>` : ''}<div class="row tot"><span>Paid</span><span class="mono">${nuiteeEsc(nuiteeMoney(bk.price ?? s.price, bk.currency || s.currency))}</span></div></div><p class="cxl ${s.refundable ? 'ok' : 'bad'}">${s.refundable ? `Free cancellation${s.cancelBy ? ` until ${nuiteeEsc(String(s.cancelBy).slice(0, 10))}` : ''}` : 'Non-refundable'}</p><a class="btn" href="globeskimmers://trips?booking=${encodeURIComponent(String(bk.bookingId || ''))}" onclick="try{window.close()}catch(e){}">Return to GlobeSkimmers</a><p class="sub" style="margin-top:10px">Your booking is saved — tapping <b>Done</b> also brings you back.</p><p class="note">This stay is now in My Trips — keep the Booking ID above; it is what the hotel needs.${s.env === 'sandbox' ? ' <b>Sandbox booking — not a real reservation.</b>' : ''}</p><script>document.querySelectorAll('[data-copy]').forEach(function(el){el.addEventListener('click',function(){try{navigator.clipboard.writeText(el.textContent.trim());el.classList.add('copied');setTimeout(function(){el.classList.remove('copied');},1200);}catch(e){}});});</script>`);
+    return nuiteeHtml('Booking confirmed', `<p class="wordmark">GlobeSkimmers</p><h1>Booking confirmed</h1><p class="sub">${nuiteeEsc(bk.hotelName || s.hotelName)}</p><div class="card">${codeRow('Booking ID', bk.bookingId)}${codeRow('Hotel confirmation', bk.hotelConfirmationCode)}<div class="row"><span>Dates</span><span class="mono">${nuiteeEsc(s.checkin)} → ${nuiteeEsc(s.checkout)} · ${nights} night${nights === 1 ? '' : 's'}</span></div>${s.roomName ? `<div class="row"><span>Room</span><span>${nuiteeEsc(nuiteePrettyRoom(s.roomName))}${s.board ? ` · ${nuiteeEsc(s.board)}` : ''}</span></div>` : ''}<div class="row tot"><span>Paid</span><span class="mono">${nuiteeEsc(nuiteeMoney(bk.price ?? s.price, bk.currency || s.currency))}</span></div></div><p class="cxl ${s.refundable ? 'ok' : 'bad'}">${s.refundable ? `Free cancellation${s.cancelBy ? ` until ${nuiteeEsc(String(s.cancelBy).slice(0, 10))}` : ''}` : 'Non-refundable'}</p><a class="btn" href="globeskimmers://trips?booking=${encodeURIComponent(String(bk.bookingId || ''))}" onclick="try{window.close()}catch(e){}">Return to GlobeSkimmers</a><p class="sub" style="margin-top:10px">Your booking is saved — tapping <b>Done</b> also brings you back.</p><p class="note">This stay is now in My Trips — keep the Booking ID above; it is what the hotel needs.${mailLine}${s.env === 'sandbox' ? ' <b>Sandbox booking — not a real reservation.</b>' : ''}</p><script>document.querySelectorAll('[data-copy]').forEach(function(el){el.addEventListener('click',function(){try{navigator.clipboard.writeText(el.textContent.trim());el.classList.add('copied');setTimeout(function(){el.classList.remove('copied');},1200);}catch(e){}});});</script>`);
   }
   return nuiteeHtml('Booking not completed', `<h1>Booking not completed</h1><p class="sub">${nuiteeEsc(s.error || 'The hotel could not confirm this rate.')}</p><p class="note">If your card was charged, Nuitée refunds automatically when a booking fails to confirm. Go back to the app and try another room or hotel.</p>`);
 }
@@ -16213,7 +16586,11 @@ async function handleNuiteeStatus(request, env) {
     const s = await nuiteeSessGet(env, sid);
     if (!s) return jsonResponse({ status: 'expired' });
     if (s.user_id) { const user = await gbUser(request, env).catch(() => null); if (!user || user.id !== s.user_id) return jsonResponse({ status: 'forbidden' }, 403); }
-    return jsonResponse({ status: s.status, booking: s.status === 'booked' ? s.booking : null, error: s.error || null, env: s.env });
+    // emailedTo: the address Resend accepted the confirmation for — null until
+    // then, so the app never claims an email that did not go out.
+    // 'booking' (the return page's one-writer claim) is still pending to the app.
+    const mail = s.emails?.confirmation;
+    return jsonResponse({ status: s.status === 'booking' ? 'pending' : s.status, booking: s.status === 'booked' ? s.booking : null, error: s.error || null, env: s.env, emailedTo: mail?.id && mail.confirmed !== false ? (mail.to || s.holder?.email || null) : null });
   } catch (e) { return jsonResponse({ status: 'error', error: e.message }, 500); }
 }
 
@@ -16278,6 +16655,10 @@ async function handleNuiteeBooking(request, env, ctx) {
       thumbnail: sess?.thumbnail || null,
       // Prebook-confirmed room name wins; the search-result label is the fallback.
       roomLabel: (sess?.roomName ? [sess.roomName, sess.board].filter(Boolean).join(' · ') : null) || sess?.roomLabel || null,
+      // Emails Resend accepted for this booking — null otherwise (never a claim).
+      // A "Booking received" email (non-CONFIRMED book) is not a confirmation.
+      emailedTo: sess?.emails?.confirmation?.id && sess.emails.confirmation.confirmed !== false ? (sess.emails.confirmation.to || null) : null,
+      cancellationEmailedTo: sess?.emails?.cancellation?.id ? (sess.emails.cancellation.to || null) : null,
     } });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -16360,8 +16741,20 @@ async function handleNuiteeCancel(request, env, ctx) {
     if (!pre.ok || !pd?.data) return jsonResponse({ error: 'lookup_failed', status: pre.status }, 502);
     const k = pd.data;
     if (k.status === 'CANCELLED') {
-      // Already cancelled upstream (dashboard / hotel) — sync our row and say so.
+      // Already cancelled upstream (dashboard / hotel / a PUT whose answer we
+      // lost) — sync our row and say so. The notice goes out once if nothing
+      // (this handler, the webhook) has sent it yet.
       if (env.DB) await env.DB.prepare("update affiliate_clicks set status='cancelled', converted=0 where subid = ?").bind(own.subid).run().catch(() => {});
+      if (own.session_id) {
+        const s = await nuiteeSessGet(env, own.session_id).catch(() => null);
+        if (s && !s.emails?.cancellation) {
+          if (!s.cancelled) s.cancelled = { at: k.cancelledAt || new Date().toISOString(), status: 'CANCELLED', refund_amount: (k.amountRefunded != null && Number.isFinite(Number(k.amountRefunded))) ? Number(k.amountRefunded) : null, cancellation_fee: null, currency: k.currency || null };
+          if (s.booking) s.booking.status = 'CANCELLED';
+          await nuiteeSessPatch(env, s.sid, { '$.status': 'cancelled', '$.cancelled': s.cancelled, ...(s.booking ? { '$.booking.status': 'CANCELLED' } : {}) }, 'cancelled');
+          const mail = nuiteeSendBookingEmail(env, ctx, s, 'cancellation', { cancel: s.cancelled }).catch(() => null);
+          if (ctx && ctx.waitUntil) ctx.waitUntil(mail); else await mail;
+        }
+      }
       return jsonResponse({ status: 'cancelled', already: true, cancelledAt: k.cancelledAt || null });
     }
     if (k.status !== 'CONFIRMED') return jsonResponse({ error: 'not_cancellable', nuiteeStatus: k.status || null }, 409);
@@ -16382,12 +16775,19 @@ async function handleNuiteeCancel(request, env, ctx) {
     if (!Number.isFinite(deadlineMs)) return jsonResponse({ error: 'deadline_unknown' }, 409);
     if (Date.now() >= deadlineMs - NUITEE_CANCEL_MARGIN_MS) return jsonResponse({ error: 'past_deadline', cancelBy: deadline }, 409);
 
+    // Mark the intent BEFORE the PUT: LiteAPI's booking.cancel webhook can land
+    // before this PUT even returns, and the webhook must leave the cancellation
+    // email to this handler (which knows the amounts). Cleared on failure.
+    if (own.session_id) await nuiteeSessPatch(env, own.session_id, { '$.cancelIntent': { at: new Date().toISOString() } });
+    const clearIntent = () => { if (own.session_id) { const p = nuiteeSessPatch(env, own.session_id, { '$.cancelIntent': null }); if (ctx && ctx.waitUntil) ctx.waitUntil(p); } };
     // The cancel itself. ?timeout caps how long LiteAPI waits on the supplier.
-    const res = await fetch(`${NUITEE_BOOK}/bookings/${encodeURIComponent(bookingId)}?timeout=10`, { method: 'PUT', headers: nuiteeHeaders(env) });
+    let res;
+    try { res = await fetch(`${NUITEE_BOOK}/bookings/${encodeURIComponent(bookingId)}?timeout=10`, { method: 'PUT', headers: nuiteeHeaders(env) }); }
+    catch { clearIntent(); return jsonResponse({ error: 'cancel_failed', status: 0, detail: 'network' }, 502); }
     const text = await res.text().catch(() => '');
     let d = null;
     try { d = JSON.parse(text); } catch { d = null; }
-    if (!res.ok || !d?.data) return jsonResponse({ error: 'cancel_failed', status: res.status, detail: (text || '').slice(0, 300) }, 502);
+    if (!res.ok || !d?.data) { clearIntent(); return jsonResponse({ error: 'cancel_failed', status: res.status, detail: (text || '').slice(0, 300) }, 502); }
     const c = d.data;
     // Only the two statuses LiteAPI documents for a cancel mean the booking is
     // gone. Anything else in a 2xx (e.g. a CONFIRMED echo on a supplier
@@ -16395,6 +16795,7 @@ async function handleNuiteeCancel(request, env, ctx) {
     // app is told the cancel did not happen.
     const cStatus = String(c.status || '').toUpperCase();
     if (cStatus !== 'CANCELLED' && cStatus !== 'CANCELLED_WITH_CHARGES') {
+      clearIntent();
       return jsonResponse({ error: 'cancel_failed', status: res.status, nuiteeStatus: c.status || null }, 502);
     }
     const charged = cStatus === 'CANCELLED_WITH_CHARGES';
@@ -16414,7 +16815,15 @@ async function handleNuiteeCancel(request, env, ctx) {
             s.status = 'cancelled';
             s.cancelled = { at: cancelledAt, status: c.status || null, refund_amount: c.refund_amount ?? null, cancellation_fee: c.cancellation_fee ?? null, currency: c.currency || null };
             if (s.booking) s.booking.status = c.status || 'CANCELLED';
-            await nuiteeSessPut(env, s);
+            // Patch, not put: the webhook may have written meanwhile. The
+            // intent marker is left in place — the webhook's 10-minute window
+            // expires it — so a webhook landing between this write and the
+            // email claim below still leaves the notice to this handler.
+            await nuiteeSessPatch(env, s.sid, { '$.status': 'cancelled', '$.cancelled': s.cancelled, ...(s.booking ? { '$.booking.status': s.booking.status } : {}) }, 'cancelled');
+            // The cancellation notice — after the response, the app already
+            // shows its own done line from this same record.
+            const mail = nuiteeSendBookingEmail(env, ctx, s, 'cancellation', { cancel: s.cancelled }).catch(() => null);
+            if (ctx && ctx.waitUntil) ctx.waitUntil(mail); else await mail;
           }
         } catch { /* session is a support/debug record; the affiliate row above is what the app reads */ }
       }
@@ -16452,12 +16861,15 @@ async function handleNuiteeWebhook(request, env, ctx) {
   const resp = parse(ev?.response);
   const data = resp?.data && typeof resp.data === 'object' ? resp.data : resp;
   const bookingId = String(data?.bookingId || parse(ev?.request)?.bookingId || '').trim().slice(0, 80);
-  if (eventId && env.GLOBESKIMMERS_KV) {
-    const ck = `nuitee:wh:${eventId}`;
-    if (await env.GLOBESKIMMERS_KV.get(ck).catch(() => null)) return jsonResponse({ ok: true, duplicate: true });
-    if (ctx) ctx.waitUntil(env.GLOBESKIMMERS_KV.put(ck, '1', { expirationTtl: 30 * 24 * 3600 }).catch(() => {}));
-  }
-  if (!bookingId || !env.DB) return jsonResponse({ ok: true, ignored: true });
+  // Dedup on event_id — marked seen on the way OUT (ack), so an answer that
+  // asks Nuitée to retry does not also mark the event as handled.
+  const ck = eventId && env.GLOBESKIMMERS_KV ? `nuitee:wh:${eventId}` : null;
+  if (ck && await env.GLOBESKIMMERS_KV.get(ck).catch(() => null)) return jsonResponse({ ok: true, duplicate: true });
+  const ack = (body) => {
+    if (ck) { const p = env.GLOBESKIMMERS_KV.put(ck, '1', { expirationTtl: 30 * 24 * 3600 }).catch(() => {}); if (ctx && ctx.waitUntil) ctx.waitUntil(p); }
+    return jsonResponse(body);
+  };
+  if (!bookingId || !env.DB) return ack({ ok: true, ignored: true });
   try {
     if (name === 'booking.cancel' || name === 'booking.refund') {
       // Same write the in-app cancel makes: cancelled ⇒ not converted.
@@ -16469,22 +16881,47 @@ async function handleNuiteeWebhook(request, env, ctx) {
           s.status = 'cancelled';
           s.cancelled = { at: new Date().toISOString(), via: name, status: data?.status || null, refund_amount: data?.refund_amount ?? data?.amountRefunded ?? null, cancellation_fee: data?.cancellation_fee ?? null, currency: data?.currency || null };
           if (s.booking) s.booking.status = data?.status || 'CANCELLED';
-          await nuiteeSessPut(env, s);
+          await nuiteeSessPatch(env, s.sid, { '$.status': 'cancelled', '$.cancelled': s.cancelled, ...(s.booking ? { '$.booking.status': s.booking.status } : {}) }, 'cancelled');
+        }
+        // A stay cancelled in Nuitée's dashboard / by the hotel gets the same
+        // notice the in-app cancel sends. An in-app cancel (cancelIntent set
+        // moments before LiteAPI's PUT) is left to handleNuiteeCancel, which
+        // holds the amounts; the session record makes any repeat a no-op.
+        const intentMs = Date.parse(s?.cancelIntent?.at || '');
+        const inApp = Number.isFinite(intentMs) && Date.now() - intentMs < 10 * 60 * 1000;
+        if (s && !inApp) {
+          const mail = nuiteeSendBookingEmail(env, ctx, s, 'cancellation', { cancel: s.cancelled }).catch(() => null);
+          if (ctx && ctx.waitUntil) ctx.waitUntil(mail); else await mail;
         }
       }
-      return jsonResponse({ ok: true, applied: name });
+      return ack({ ok: true, applied: name });
     }
     if (name === 'booking.book.hotelConfirmationNumber') {
       const hcn = String(data?.hotelConfirmationCode || data?.hotelConfirmationNumber || '').trim().slice(0, 80);
       const row = hcn ? await env.DB.prepare("select session_id from affiliate_clicks where partner='nuitee' and product_id = ? limit 1").bind(bookingId).first().catch(() => null) : null;
+      // The number can land moments after the book call, before the return
+      // handler has written our row: ask for a retry instead of swallowing it
+      // (the event is NOT marked seen on this path).
+      if (hcn && !row) return jsonResponse({ ok: false, retry: true, reason: 'booking_not_recorded_yet' }, 503);
       if (row?.session_id) {
         const s = await nuiteeSessGet(env, row.session_id);
-        if (s?.booking && !s.booking.hotelConfirmationCode) { s.booking.hotelConfirmationCode = hcn; await nuiteeSessPut(env, s); }
+        if (s?.booking && !s.booking.hotelConfirmationCode) {
+          s.booking.hotelConfirmationCode = hcn;
+          // Patch: the return handler may still hold this session in memory
+          // while its confirmation email sends — a full put here would be lost.
+          await nuiteeSessPatch(env, s.sid, { '$.booking.hotelConfirmationCode': hcn });
+          // The confirmation email went out without the hotel's number (or
+          // predates emails) — send the short follow-up once.
+          if (!s.emails?.confirmation?.withCode && s.status !== 'cancelled') {
+            const mail = nuiteeSendBookingEmail(env, ctx, s, 'hotel_code', { code: hcn }).catch(() => null);
+            if (ctx && ctx.waitUntil) ctx.waitUntil(mail); else await mail;
+          }
+        }
       }
-      return jsonResponse({ ok: true, applied: hcn ? name : 'noop' });
+      return ack({ ok: true, applied: hcn ? name : 'noop' });
     }
   } catch { /* acknowledged either way — the detail read's write-through is the fallback */ }
-  return jsonResponse({ ok: true, ignored: true });
+  return ack({ ok: true, ignored: true });
 }
 function nuiteeTokenEqual(a, b) {
   const enc = new TextEncoder();
@@ -17502,7 +17939,7 @@ export default {
       if (pathname === '/hotels/nuitee/cancel' && request.method === 'POST') return await handleNuiteeCancel(request, env, ctx);
       if (pathname === '/hotels/nuitee/webhook' && request.method === 'POST') return await handleNuiteeWebhook(request, env, ctx);
       if (pathname === '/hotels/nuitee/checkout' && request.method === 'GET') return await handleNuiteeCheckout(request, env);
-      if (pathname === '/hotels/nuitee/return' && request.method === 'GET') return await handleNuiteeReturn(request, env);
+      if (pathname === '/hotels/nuitee/return' && request.method === 'GET') return await handleNuiteeReturn(request, env, ctx);
       // Smart Packages (priced drafts only — NO payment; booking stays per-component)
       if (pathname === '/package/draft' && request.method === 'POST') return await handlePackageDraft(request, env, ctx);
       if (pathname === '/package/get' && request.method === 'POST') return await handlePackageGet(request, env);

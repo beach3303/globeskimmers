@@ -555,6 +555,12 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
                           <p className="mt-0.5" style={{ fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".04em", color: ED_INK3 }}>
                             Nuitée is the name on your card statement.
                           </p>
+                          {/* Only when the worker recorded Resend's acceptance — never from an attempt. */}
+                          {bk?.emailedTo && (
+                            <p className="mt-0.5" style={{ fontFamily: ED_MONO, fontSize: fs(9.5), letterSpacing: ".04em", color: ED_INK3 }}>
+                              Confirmation emailed to {bk.emailedTo}
+                            </p>
+                          )}
                         </div>
                       )}
                       {!bk && (
@@ -612,7 +618,7 @@ export default function BookingDetailSheet({ booking, accent = TEAL_DEEP, onClos
                   )}
                   {!fetching && cancelUi.step !== "done" && isCancelledNow && (
                     <p className="mt-4 px-1" style={{ fontFamily: ED_MONO, fontSize: fs(11), letterSpacing: ".04em", color: "#B02525", lineHeight: 1.6 }}>
-                      Cancelled{cancelledOn ? ` on ${cancelledOn}` : ""}{refundedAmount ? ` · ${refundedAmount} refunded` : ""}
+                      Cancelled{cancelledOn ? ` on ${cancelledOn}` : ""}{refundedAmount ? ` · ${refundedAmount} refunded` : ""}{bk?.cancellationEmailedTo ? ` · notice emailed to ${bk.cancellationEmailedTo}` : ""}
                     </p>
                   )}
                   {!fetching && canCancel && (cancelUi.step === "idle") && (

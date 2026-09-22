@@ -171,7 +171,9 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           const { data } = await callWorker("hotels/nuitee/status", { sid: pre.sid });
-          if (data?.status === "booked") { setBooking(data.booking); setStage("booked"); return; }
+          // emailedTo arrives only once Resend accepted the confirmation — the
+          // "emailed" line below renders from that, never from the send attempt.
+          if (data?.status === "booked") { setBooking(data.emailedTo ? { ...data.booking, emailedTo: data.emailedTo } : data.booking); setStage("booked"); return; }
           if (data?.status === "failed") { setErr(data.error || "The hotel could not confirm this rate."); setStage("failed"); return; }
           last = data?.status === "pending" ? "pending" : null;
         } catch { last = null; }
@@ -395,6 +397,7 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
               <div className="flex justify-between mt-1"><span style={{ color: INK2 }}>Paid</span><b>{money(booking.price ?? price, booking.currency || cur)}</b></div>
             </div>
             <div className="text-[calc(12px*var(--fs))] mt-2" style={{ color: INK2 }}>This stay is now in My Trips — keep the Booking ID; it is what the hotel needs.</div>
+            {booking.emailedTo && <div className="text-[calc(12px*var(--fs))] mt-1" style={{ color: INK2 }}>Confirmation emailed to {booking.emailedTo}.</div>}
             <button onClick={() => navigate(createPageUrl("MyTrip"))} className="w-full py-3.5 rounded-[14px] font-bold text-white text-[calc(15px*var(--fs))] mt-3" style={{ background: OK, fontFamily: "inherit" }}>View in My Trips</button>
           </>
         )}
