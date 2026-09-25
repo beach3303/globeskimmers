@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-09-22
+Last updated: 2026-09-24
 
 ## Build queue, in order
 
@@ -68,7 +68,7 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 
 - globeskimmers.com (M1): never ours. The founder owns globeskimmers.io only (confirmed 2026-09-14). The .com sits in the registry redemption period at Domain Esta Aqui, LLC (Network Solutions / SnapNames group) and likely deletes around 2026-09-20. Decide whether to backorder it at a drop-catch service (DropCatch, SnapNames, GoDaddy) before then, or let it go. Nothing in the app, website or store listing depends on it.
 - Approve "Mobility needs" and its choices (G110).
-- Approve flights sold at cost, covered by the hotel commission (N9).
+- Flights (N9): **approved in principle 2026-09-24** — founder: "let's allow flight booking." Founder's hard requirements, same day: **GlobeSkimmers must earn on every flight** (so "at cost" is out), the traveler gets a **confirmation email** from bookings@globeskimmers.io, and the booking **lands in My Trips** with cancel — "mimic hotel booking". Still to choose from the requirements brief (in progress): the supplier — Nuitée's flights product (markup allowed, same dashboard and payment SDK as hotels) or Duffel (airline as merchant of record; whether a markup is permitted with its card payments is being verified). No flight booking code exists yet; the Duffel test token on the worker is unused.
 - One real low-value booking with free cancellation, then cancel it in the Nuitée dashboard (G12): **done 2026-09-22** — Kawada Hotel, Dec 10–11, $117.83, booking PDdzItYUt, cancelled in the dashboard. No confirmation email arrived (Nuitée sends none; that is why the email build is first). Still to check: the refund on the card statement, and that the My Trips row reads Cancelled after one open. The commission (G11) was set 2026-09-21: 12% default markup, which is 10.71% of what the guest pays. Nuitée's live check on 92 rates put the selling price at $364.72 against a $374.50 market reference. Payout goes weekly to the attached bank account, after each guest checks out.
 - Pick a weather source licensed for commercial use (N10): a paid Open-Meteo plan (the free plan is non-commercial, and the app already uses it for live temperatures) or Copernicus ERA5 records with attribution.
 - Email records for founder@globeskimmers.io (N8): **partly done 2026-09-22** — Resend's sending records are live (DKIM at resend._domainkey, the send/rsend CNAMEs, DMARC `p=none`) and the domain is Verified in Resend; Resend's "Enable Receiving" stays off (it would replace Google's mail record). Still open for Google's own mail: no DKIM at Google's selector, and the root SPF lists IONOS but not Google.
