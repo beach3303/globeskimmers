@@ -14,7 +14,7 @@
     "cap:ios": "npm run build && npx cap sync && npx cap open ios",
     "cap:android": "npm run build && npx cap sync && npx cap open android",
     "cap:all": "npm run build && npx cap sync && npx cap open ios && npx cap open android",
-    "ota": "npm run build && npx cap sync && npx @capgo/cli bundle upload --channel production --bundle \"1.0.$(date -u +%y%m%d%H%M)\"",
+    "ota": "npm run build && npx cap sync && CI=true npx @capgo/cli@8.68.1 bundle upload --channel production --bundle \"1.0.$(date -u +%y%m%d%H%M)\"",
     "assets": "npx @capacitor/assets generate --ios --android --iconBackgroundColor \"#FFFCF7\" --iconBackgroundColorDark \"#0F1419\" --splashBackgroundColor \"#FFFCF7\" --splashBackgroundColorDark \"#0F1419\"",
     "db:new": "supabase migration new",
     "db:push": "supabase db push",

@@ -93,6 +93,7 @@ npm run cap:ios      # build + sync both + open Xcode
 npm run cap:android  # build + sync both + open Android Studio
 npm run cap:all      # build + sync both + open Xcode AND Android Studio (a store release for both)
 npm run ota          # build + sync both + Capgo upload to the production channel, version 1.0.<UTC yymmddHHMM>
+                     #   CI=true + a pinned @capgo/cli: the CLI's interactive "Cloud Build · Onboarding" (an Appflow-migration wizard) hijacked the founder's upload on 2026-09-27
                      #   one Capgo bundle serves iOS and Android; Claude's upload is denied by the permission gate — the founder runs it
 npm run assets       # @capacitor/assets icon/splash generation
 ```
