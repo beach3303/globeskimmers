@@ -100,7 +100,15 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 
 - ~2026-12-09: regenerate the Sign in with Apple client secret (M3, 6-month limit).
 - ~2026-12-10: re-apply for Viator Full + Booking access (G34).
-- At first real revenue: Stripe Tax and an accountant conversation (G21).
+- Stripe Tax and an accountant conversation (G21) — **triggered 2026-09-27** (the Homewood
+  commission locks after checkout 09-28). Stripe → Settings → Tax reviewed with the founder:
+  head office address set (California); preset product category "General - Electronically
+  Supplied Services" (set at application, wrong for travel packages, left until the accountant
+  picks); no registration; automatic collection OFF and it must stay off — that toggle covers
+  Dashboard invoices/payment links only, the app's package checkout (PaymentIntents via API)
+  needs Stripe's Tax Calculation API wired in before the first sale (build item, Claude). Next:
+  the founder books the accountant with the brief (revenue streams, seven questions; California
+  Seller of Travel law added). Answers that change code/plans come back here.
 - Before 2,000 monthly users: upgrade the Capgo plan (G10).
 
 ## Where the plans live
