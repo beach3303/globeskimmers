@@ -14272,7 +14272,15 @@ function nuiteeEmailDeadline(cancelBy, tz) {
   if (!m) return str;
   return `${nuiteeEmailDate(m[1])}${m[2] ? `, ${m[2]} (${String(tz || 'GMT').replace(/[^A-Za-z0-9_+\-/]/g, '')})` : ''}`;
 }
-const nuiteeEmailTripsLink = (bookingId) => `<p style="margin:16px 0 0;"><a href="globeskimmers://trips?booking=${encodeURIComponent(String(bookingId || ''))}" style="display:inline-block;padding:12px 18px;border-radius:12px;background:#0E7C73;color:#FFFFFF;font-weight:700;text-decoration:none;">Open in My Trips</a></p><p style="margin:8px 0 0;font-size:12.5px;color:#736657;">If the button does nothing on this device, open the GlobeSkimmers app and go to My Trips.</p>`;
+// The email button goes through an https landing on our own domain
+// (site/open/trips.html): mail apps (Outlook, Gmail) ignore or strip a
+// custom-scheme href — the founder's 2026-09-26 tap did nothing — and a
+// Universal Link would need the Associated Domains entitlement, an AASA file
+// and a store release. The landing page's own button carries
+// globeskimmers://trips?booking=…, which the app's appUrlOpen handler routes
+// to the Trips tab.
+const nuiteeTripsUrl = (bookingId) => `https://globeskimmers.io/open/trips?booking=${encodeURIComponent(String(bookingId || ''))}`;
+const nuiteeEmailTripsLink = (bookingId) => `<p style="margin:16px 0 0;"><a href="${nuiteeTripsUrl(bookingId)}" style="display:inline-block;padding:12px 18px;border-radius:12px;background:#0E7C73;color:#FFFFFF;font-weight:700;text-decoration:none;">Open in My Trips</a></p><p style="margin:8px 0 0;font-size:12.5px;color:#736657;">If the button does nothing on this device, open the GlobeSkimmers app and go to My Trips.</p>`;
 function nuiteeEmailConfirmation(s, hotel) {
   const bk = s.booking || {};
   const name = bk.hotelName || s.hotelName || hotel?.name || 'Your hotel';
@@ -14344,7 +14352,7 @@ function nuiteeEmailConfirmation(s, hotel) {
     idLine,
     'Need different dates? Stays booked in the app can\'t be changed — cancel (where free cancellation applies) and book again.',
     '',
-    'Open the GlobeSkimmers app → My Trips to see or cancel this stay.',
+    `Open in My Trips: ${nuiteeTripsUrl(bk.bookingId)} (or open the GlobeSkimmers app → My Trips) to see or cancel this stay.`,
     '',
     'Sent by GlobeSkimmers for your booking with Nuitée Travel Ltd, our booking partner and the merchant of record. Reply to this email to reach us.',
   ].filter((l) => l !== null).join('\n');
@@ -14400,6 +14408,7 @@ function nuiteeEmailCancellation(s, c) {
     fee ? `Cancellation fee: ${fee}` : null,
     refund ? `Refund: ${refund}` : null,
     '', money, timing,
+    '', `Open in My Trips: ${nuiteeTripsUrl(bk.bookingId)}`,
     '',
     'Sent by GlobeSkimmers for your booking with Nuitée Travel Ltd, our booking partner and the merchant of record. Reply to this email to reach us.',
   ].filter((l) => l !== null).join('\n');
@@ -14428,6 +14437,7 @@ function nuiteeEmailHotelCode(s, code) {
     'The hotel has confirmed your stay', name, '',
     `Hotel confirmation: ${code}`, `Booking ID: ${bk.bookingId}`, `Dates: ${nuiteeEmailDate(ci)} → ${nuiteeEmailDate(co)}`, '',
     'At the front desk, give your name and this hotel confirmation number. Keep the Booking ID too — it is what Nuitée and we use.',
+    '', `Open in My Trips: ${nuiteeTripsUrl(bk.bookingId)}`,
     '', 'Sent by GlobeSkimmers for your booking with Nuitée Travel Ltd, our booking partner and the merchant of record. Reply to this email to reach us.',
   ].join('\n');
   return { subject, html, text };

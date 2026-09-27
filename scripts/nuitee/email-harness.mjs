@@ -82,7 +82,11 @@ ok(t.html.includes('Booked on') && t.html.includes('Tue, Sep 22, 2026'), 'booked
 ok(t.html.includes('or by supplier reference 14729602') && t.html.includes("isn't in yet"), 'desk line without hotel code names supplier ref');
 ok(t.text.includes("isn't in yet") && !/&#39;|&amp;/.test(t.text), 'text twin unescaped');
 ok(t.html.includes('The Booking ID is what Nuitée and we use'), 'booking id explainer');
-ok(t.html.includes('globeskimmers://trips?booking=PDdzItYUt') && t.html.includes('open the GlobeSkimmers app and go to My Trips'), 'deep link + text fallback');
+// The button is an https landing on our domain (mail apps ignore a custom-scheme
+// href); the landing page's own button carries globeskimmers://trips. Both twins
+// carry the link, and neither embeds the raw scheme.
+ok(t.html.includes('href="https://globeskimmers.io/open/trips?booking=PDdzItYUt"') && t.html.includes('open the GlobeSkimmers app and go to My Trips') && !t.html.includes('globeskimmers://'), 'trips landing link + text fallback');
+ok(t.text.includes('Open in My Trips: https://globeskimmers.io/open/trips?booking=PDdzItYUt'), 'text twin carries the landing link');
 ok(!forbidden.test(t.html) && !forbidden.test(t.text) && !/<style/.test(t.html), 'no forbidden copy / no style block');
 t = m.nuiteeEmailConfirmation(sess(), null);
 ok(!t.html.includes('Address') && !t.html.includes('Hotel phone') && !t.html.includes('Check-in / out'), 'no hotel rows without record');

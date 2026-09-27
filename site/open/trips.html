@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open in GlobeSkimmers</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Opens your booking in the GlobeSkimmers app.">
+<link rel="icon" href="/img/icon-64.png" sizes="64x64">
+<link rel="apple-touch-icon" href="/img/icon-192.png">
+<!-- Safari's Smart App Banner: "Open" when the app is installed, "View" (App
+     Store) when not. app-argument is filled in by the script below so the
+     banner's Open lands on the same booking. -->
+<meta name="apple-itunes-app" content="app-id=6753154199">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root { color-scheme: light; --ground: #FFFCF7; --ink: #16110D; --ink-3: #736657; --rule: rgba(22,17,13,.12); --teal: #0E7C73; --teal-deep: #0B645D; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ground); color: var(--ink); font-family: "Inter Tight", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+main { max-width: 440px; margin: 0 auto; padding: max(36px, env(safe-area-inset-top)) 20px 44px; text-align: center; }
+.wordmark { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 22px; }
+h1 { font-family: "Instrument Serif", "Iowan Old Style", Georgia, serif; font-weight: 400; font-size: 32px; letter-spacing: -.01em; line-height: 1.1; margin: 0 0 10px; }
+p { font-size: 15.5px; line-height: 1.5; color: var(--ink-3); margin: 0 0 8px; }
+.btn { display: block; width: 100%; margin: 22px auto 0; padding: 16px 18px; min-height: 54px; border-radius: 14px; text-decoration: none; font-weight: 700; font-size: 17px; background: var(--teal); color: #fff; }
+.btn:active { background: var(--teal-deep); }
+.btn.store { background: #fff; color: var(--ink); border: 1px solid var(--rule); margin-top: 10px; font-weight: 600; font-size: 15px; }
+.hint { font-size: 13px; margin-top: 12px; }
+.ref { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; color: var(--ink-3); margin-top: 26px; }
+.stores { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--rule); }
+.stores p { font-size: 13.5px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="wordmark">GlobeSkimmers</p>
+  <h1>Your stay is in My&nbsp;Trips</h1>
+  <p>Tap below to open it in the GlobeSkimmers app on this phone.</p>
+  <a class="btn" id="open" href="globeskimmers://trips">Open in GlobeSkimmers</a>
+  <p class="hint">Nothing happened? Open the GlobeSkimmers app and go to <b>Trips</b>.</p>
+  <p class="ref" id="ref" hidden></p>
+  <div class="stores">
+    <p>Don’t have the app on this device?</p>
+    <a class="btn store" href="https://apps.apple.com/us/app/globeskimmers/id6753154199">Download for iPhone</a>
+    <a class="btn store" href="https://play.google.com/store/apps/details?id=com.globeskimmers.app">Download for Android</a>
+  </div>
+</main>
+<script>
+(function () {
+  // The booking id rides the query string from the confirmation email and is
+  // handed to the app untouched apart from a strict character check — the app
+  // lands on the Trips tab either way.
+  var m = /[?&]booking=([^&#]*)/.exec(location.search);
+  var id = m ? decodeURIComponent(m[1]) : "";
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) id = "";
+  var scheme = "globeskimmers://trips" + (id ? "?booking=" + encodeURIComponent(id) : "");
+  var a = document.getElementById("open");
+  a.setAttribute("href", scheme);
+  if (id) { var r = document.getElementById("ref"); r.textContent = "Booking ID " + id; r.hidden = false; }
+  var banner = document.querySelector('meta[name="apple-itunes-app"]');
+  if (banner) banner.setAttribute("content", "app-id=6753154199, app-argument=" + scheme);
+  // On a phone the app is almost certainly installed (the email came from a
+  // booking made in it), so try the scheme once without waiting for a tap. A
+  // desktop mail client gets the button only — no "cannot open" alert there.
+  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+    setTimeout(function () { try { location.href = scheme; } catch (e) { /* the button remains */ } }, 250);
+  }
+})();
+</script>
+</body>
+</html>
