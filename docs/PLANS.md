@@ -29,6 +29,22 @@ same day (results-card lightbox, "N hotel photos" in the booking sheet, room thu
 picker); ships with the next push + OTA. Photos come only from the hotel's supplier; a room with no
 picture shows none.
 
+**Passport lane, founder asks 2026-09-26/27 (after the Georgia Aquarium stamp).** Built the same
+day, awaiting push + OTA + a native build: the booklet's Share button (branded image with
+Globeskimmers + "My Virtual Passport", preview, share sheet — the old flow silently failed);
+opening the Passport senses the attraction footprint or airport you are in and offers the stamp
+(several → pick one or close); tapping a stamp opens its options (add memory photos now or later,
+view them full screen with swipe and ×, delete a photo, solo page / shared page, delete the
+stamp, close). Solo pages need the passport_stamp_layout migration applied.
+**Next in this lane — movie filming-location stamps (founder, 2026-09-27):** a global set of
+spots people visit *because of a film* (not landmarks already in the top spots — no Eiffel
+Tower), each stamp saying "I was here!", the date, the spot, the film and year, the location and
+the scene, with the top two cast members and their roles ("people could brag about it"). The
+traveler's own photo leads: one photo open at a time with the stamp placed at the top or bottom
+so it never covers the iconic view, the second photo as a thumbnail; move and delete work as
+for every stamp. Research on data sources (Wikidata filming locations, ranking, licensing) is
+running; brief and seed plan to follow, then the founder picks the seed size.
+
 1. **New phone Home, built to the Home canvas** (G115). Founder, 2026-09-14: "first is the new home."
    Canvas: https://claude.ai/code/artifact/06c2973f-3e2e-47d2-a4c1-b1a7510706ec
    - Three states: I'm here at home, I'm here on a trip, Plan it. The mode picks itself; "on a trip" means away with a stay booked, not a third mode.
