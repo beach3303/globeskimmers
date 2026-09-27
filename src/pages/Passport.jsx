@@ -14,6 +14,10 @@ import AirportStamp from "@/components/passport/AirportStamp";
 import PassportBook from "@/components/passport/PassportBook";
 import { isAdminEmail } from "@/lib/admins";
 import { localISODate } from "@/lib/localDate";
+import { resizePhoto } from "@/lib/resizePhoto";
+import PhotoLightbox from "@/components/finder/PhotoLightbox";
+import NearbyStampPrompt from "@/components/passport/NearbyStampPrompt";
+import StampActions from "@/components/passport/StampActions";
 
 
 // ============================================================================
@@ -43,27 +47,6 @@ const fmtDate = (iso) => {
   try { return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
   catch { return iso; }
 };
-
-// Client-side resize → JPEG data URL (keeps payload small + drops EXIF/GPS).
-function resizePhoto(file, maxDim = 1280, quality = 0.82) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let { width, height } = img;
-      const scale = Math.min(1, maxDim / Math.max(width, height));
-      width = Math.max(1, Math.round(width * scale));
-      height = Math.max(1, Math.round(height * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = width; canvas.height = height;
-      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/jpeg", quality));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Could not read image")); };
-    img.src = url;
-  });
-}
 
 function VerifiedBadge({ verified }) {
   // Only a live GPS visit earns the ✓ (it's the only real proof of presence).
@@ -500,7 +483,7 @@ function PassportInner() {
   const [stamps, setStamps] = useState([]);
   const [stats, setStats] = useState({});
   const [tags, setTags] = useState([]);
-  const [lightbox, setLightbox] = useState(null); // { url, caption }
+  const [lightbox, setLightbox] = useState(null); // { photos:[{src}], index, title, credit } — the shared PhotoLightbox (swipe, ×)
 
   const [claim, setClaim] = useState(null); // { token, tag } from a shared invite link
 
@@ -575,6 +558,9 @@ function PassportInner() {
 
   // Booklet view: one swipeable page per country (like a real passport).
   const [openStampId, setOpenStampId] = useState(null);
+  // Tapping a stamp opens its OPTIONS sheet (photos, own page, delete…); the
+  // detail card behind "Details, date & tag a friend" is the old modal.
+  const [actionsId, setActionsId] = useState(null);
   // "See a sample passport" preview — sample stamps, view-only, never saved.
   const [preview, setPreview] = useState(false);
   const [showStampPlace, setShowStampPlace] = useState(false); // "Stamp a place" form
@@ -590,6 +576,14 @@ function PassportInner() {
   // The stamp open in the detail modal — re-derived from fresh data (auto-closes if deleted).
   const openStamp = openStampId ? stampsView.find((s) => s.id === openStampId) : null;
   useEffect(() => { if (openStampId && !stampsView.some((s) => s.id === openStampId)) setOpenStampId(null); }, [stampsView, openStampId]);
+  const actionsStamp = actionsId ? stampsView.find((s) => s.id === actionsId) : null;
+  useEffect(() => { if (actionsId && !stampsView.some((s) => s.id === actionsId)) setActionsId(null); }, [stampsView, actionsId]);
+  // Every memory photo of a stamp, in the lightbox's shape, opened at `index`.
+  const enlargeStampPhotos = (st, index) => {
+    const photos = (st.photos || []).map((p) => ({ src: p.photo_url }));
+    if (!photos.length) return;
+    setLightbox({ photos, index: Math.min(Math.max(index || 0, 0), photos.length - 1), title: `I was here! ${st.name}`, credit: st.visited_on ? fmtDate(st.visited_on) : null });
+  };
 
   return (
     <div className="min-h-screen" style={{ background: IVORY, fontFamily: SANS }}>
@@ -731,7 +725,7 @@ function PassportInner() {
               homeCountry={readOnly ? null : (profile?.home_country || null)}
               countries={statsView.countries || 0}
               totalStamps={stampsView.length}
-              onOpenStamp={(id) => setOpenStampId(id)}
+              onOpenStamp={(id) => ((readOnly || preview) ? setOpenStampId(id) : setActionsId(id))}
             />
             {!readOnly && isAuthenticated && !preview && (
               <div className="text-center mt-4">
@@ -752,7 +746,13 @@ function PassportInner() {
         <div onClick={() => setOpenStampId(null)} className="fixed inset-0 z-[9998] flex items-start justify-center p-4 overflow-y-auto"
           style={{ background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)" }}>
           <div onClick={(e) => e.stopPropagation()} className="w-full" style={{ maxWidth: 380, marginTop: 32, marginBottom: 40 }}>
-            <StampCard stamp={openStamp} onChanged={load} onEnlarge={(url) => setLightbox({ url, caption: openStamp.name, date: openStamp.visited_on })} fromName={holder} homeCity={profile?.home_city} readOnly={readOnly || preview} />
+            <StampCard stamp={openStamp} onChanged={load}
+              onEnlarge={(url) => {
+                const i = (openStamp.photos || []).findIndex((p) => p.photo_url === url);
+                if (i >= 0) enlargeStampPhotos(openStamp, i);
+                else setLightbox({ photos: [{ src: url }], index: 0, title: `I was here! ${openStamp.name}`, credit: openStamp.visited_on ? fmtDate(openStamp.visited_on) : null });
+              }}
+              fromName={holder} homeCity={profile?.home_city} readOnly={readOnly || preview} />
             <button onClick={() => setOpenStampId(null)} className="mt-2 w-full rounded-xl py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>Close</button>
           </div>
         </div>
@@ -761,19 +761,32 @@ function PassportInner() {
       {/* Stamp a place — manual city/spot visit stamp */}
       {showStampPlace && <StampPlaceModal onClose={() => setShowStampPlace(false)} onDone={() => { setShowStampPlace(false); load(); }} />}
 
-      {/* Photo lightbox */}
-      {lightbox && (
-        <div onClick={() => setLightbox(null)} className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-4"
-          style={{ background: "rgba(22,17,13,0.82)", backdropFilter: "blur(6px)" }}>
-          <img src={lightbox.url} alt="" style={{ width: "94vw", maxHeight: "80vh", objectFit: "contain", borderRadius: 14, border: "3px solid #fff" }} />
-          {(lightbox.caption || lightbox.date) && (
-            <div className="mt-3 text-center">
-              {lightbox.caption && <p style={{ color: "#fff", fontFamily: SERIF, fontSize: fs(20) }}>I was here! {lightbox.caption}</p>}
-              {lightbox.date && <p style={{ color: "rgba(255,255,255,.82)", fontFamily: MONO, fontSize: fs(12.5), marginTop: 3 }}>{fmtDate(lightbox.date)}</p>}
-            </div>
-          )}
-        </div>
+      {/* Stamp options — one tap on a stamp in the booklet */}
+      {actionsStamp && (
+        <StampActions
+          stamp={actionsStamp}
+          readOnly={readOnly || preview}
+          onClose={() => setActionsId(null)}
+          onChanged={load}
+          onDetails={() => { setActionsId(null); setOpenStampId(actionsStamp.id); }}
+          onEnlarge={(i) => enlargeStampPhotos(actionsStamp, i)}
+        />
       )}
+
+      {/* Where you are right now — an attraction or airport you can stamp */}
+      {!readOnly && !preview && isAuthenticated && !loading && (
+        <NearbyStampPrompt stamps={stamps} onStamped={async (id) => { await load(); if (id) setActionsId(id); }} />
+      )}
+
+      {/* Memory photos, full screen: swipe through, × or swipe down to close */}
+      <PhotoLightbox
+        photos={lightbox?.photos}
+        index={lightbox ? lightbox.index : null}
+        onClose={() => setLightbox(null)}
+        onIndexChange={(i) => setLightbox((l) => (l ? { ...l, index: i } : l))}
+        title={lightbox?.title}
+        credit={lightbox?.credit}
+      />
     </div>
   );
 }
