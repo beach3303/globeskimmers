@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-09-24
+Last updated: 2026-09-26
 
 ## Build queue, in order
 
@@ -23,6 +23,11 @@ the charge first. The app shows "Cancel anyway — no refund; you'll still be ch
 explicit confirm; an unknown deadline still blocks. (e) **Hotel-type chips** (resort, apartment,
 hostel) after a one-off pull of Nuitée's type list. (f) **More than one room** per booking
 (fixes a latent price bug first: a two-room offer would show one room's price).
+(g) **Hotel and room photos** — founder, 2026-09-26: "all we need is for users to be able to view
+room and hotel pictures … from the results, enlarge, scroll right and left, collapse". Built the
+same day (results-card lightbox, "N hotel photos" in the booking sheet, room thumbnails in the room
+picker); ships with the next push + OTA. Photos come only from the hotel's supplier; a room with no
+picture shows none.
 
 1. **New phone Home, built to the Home canvas** (G115). Founder, 2026-09-14: "first is the new home."
    Canvas: https://claude.ai/code/artifact/06c2973f-3e2e-47d2-a4c1-b1a7510706ec
@@ -73,6 +78,23 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 - Pick a weather source licensed for commercial use (N10): a paid Open-Meteo plan (the free plan is non-commercial, and the app already uses it for live temperatures) or Copernicus ERA5 records with attribution.
 - Email records for founder@globeskimmers.io (N8): **partly done 2026-09-22** — Resend's sending records are live (DKIM at resend._domainkey, the send/rsend CNAMEs, DMARC `p=none`) and the domain is Verified in Resend; Resend's "Enable Receiving" stays off (it would replace Google's mail record). Still open for Google's own mail: no DKIM at Google's selector, and the root SPF lists IONOS but not Google.
 - AdMob test mode at launch (G77); the "Book a Hotel" rename; share the Virtual Passport link.
+- **Saved cards / Settings → Methods to pay** (founder ask, 2026-09-26: save the card at checkout,
+  add / delete / default / optional backup card in Settings, add a card before any purchase).
+  Researched the same day (Claude memory: saved-cards-research). What the docs allow:
+  **hotels cannot use a card we save.** The hotel card form is Nuitée's own Stripe Elements page on
+  Nuitée's Stripe account; it has no "save my card" and accepts no token from us. The traveller's
+  saved card there is Apple Pay / Google Pay (already in the form; Apple Pay still needs Nuitée to
+  register our domain, ticket drafted 2026-09-21) and Stripe Link if Nuitée has it on. The one
+  documented way to put the charge on **our** Stripe (prebook `payment.useOwnSecretKey`) makes
+  GlobeSkimmers the merchant of record: refunds, chargebacks, Stripe fees, Stripe Tax and how we
+  then pay Nuitée are all ours, and the settlement side is undocumented. **Our own Stripe products**
+  (packages) can save cards the standard way (checkbox at pay, add via SetupIntent, list, delete,
+  default; "backup" is our own bookkeeping; card data stays in Stripe's iframe). Decision for the
+  founder: (1) ask Nuitée three questions (Apple Pay domain, is Link on, what useOwnSecretKey needs
+  and how settlement works) — recommended first; (2) build Methods to pay for our own Stripe checkout
+  when packages go live (≈4 days), not before, so the screen never lists cards that cannot pay for a
+  hotel; (3) only if the founder wants to be merchant of record for hotels, plan that as its own
+  project after Nuitée answers. Nothing built yet.
 
 ## Dated reminders
 
