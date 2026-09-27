@@ -119,17 +119,24 @@ export default function MyTripPage() {
     return () => { cancelled = true; };
   }, [attempt]);
 
-  // CONFIRMED ONLY (founder call, 2026-08-31 — reverses the 2026-08-24 change).
-  // My Trip is for things you actually booked: stays, tours, tickets, concerts.
-  // A tap on a partner link is not a booking and no longer appears here.
-  // "confirmed" is set by /aff/import from the partner's conversion report, so
-  // this list is only as current as the last import. The home card counts the
-  // same set and renders nothing at zero, so there is no "N items → empty page".
-  const bookings = items.filter((it) => (it.status || "").toLowerCase() === "confirmed");
+  // CONFIRMED rows (founder call, 2026-08-31 — reverses the 2026-08-24 change)
+  // plus CANCELLED ones (founder, 2026-09-26: a cancelled stay stays listed,
+  // marked Cancelled inside its card and muted, after the live ones — never
+  // silently gone; same rule Trips' BOOKED tab already follows). My Trip is for
+  // things you actually booked: a tap on a partner link is not a booking and
+  // never appears here. "confirmed" is set by /aff/import from the partner's
+  // conversion report (and by the in-app booking write), so this list is only
+  // as current as the last import. The home card counts confirmed rows only.
+  const bookings = items.filter((it) => ["confirmed", "cancelled"].includes((it.status || "").toLowerCase()));
+  const isCancelled = (it) => (it.status || "").toLowerCase() === "cancelled";
 
-  // Group into ordered sections.
+  // Group into ordered sections; within a section the cancelled rows sink to
+  // the bottom (stable sort keeps the worker's newest-first order otherwise).
   const grouped = SECTION_ORDER
-    .map((key) => ({ key, meta: SECTIONS[key], rows: bookings.filter((it) => sectionKeyFor(it.category, it.partner) === key) }))
+    .map((key) => ({
+      key, meta: SECTIONS[key],
+      rows: bookings.filter((it) => sectionKeyFor(it.category, it.partner) === key).sort((a, b) => Number(isCancelled(a)) - Number(isCancelled(b))),
+    }))
     .filter((g) => g.rows.length > 0);
 
   return (
@@ -217,7 +224,7 @@ export default function MyTripPage() {
             >
               <span className="text-[15px] leading-none mt-0.5">🧭</span>
               <p style={{ color: ED_INK3, fontSize: t(fs(12.5), fs(12)), lineHeight: 1.5 }}>
-                Everything here is <b style={{ color: "#0F7A50" }}>confirmed</b> by the partner you booked with. New bookings usually appear a day or two after you pay.
+                Everything here is <b style={{ color: "#0F7A50" }}>confirmed</b> by the partner you booked with; a cancelled stay stays listed, marked <b style={{ color: "#B02525" }}>Cancelled</b>. New bookings usually appear a day or two after you pay.
               </p>
             </div>
 
@@ -240,17 +247,20 @@ export default function MyTripPage() {
                     // target_url NULL, so there is nothing to reopen) lives there.
                     const inApp = (it.partner || "").toLowerCase() === "nuitee";
                     const canOpen = !inApp && !!it.target_url;
+                    // Cancelled: the chip reads Cancelled (red), the card is muted
+                    // and its accent bar goes grey — the card itself says so.
+                    const gone = isCancelled(it);
                     return (
                       <button
                         key={it.key}
                         onClick={() => setDetail({ it, accent: g.meta.accent })}
                         className="w-full text-left p-3.5 rounded-[16px] transition-colors hover:bg-black/[0.02]"
-                        style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: "0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)" }}
+                        style={{ background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: "0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)", opacity: gone ? 0.65 : 1 }}
                       >
                         <div className="flex items-start gap-3">
                           <div
                             className="w-1 self-stretch rounded-full flex-none"
-                            style={{ background: g.meta.accent, minHeight: 36 }}
+                            style={{ background: gone ? ED_INK3 : g.meta.accent, minHeight: 36 }}
                             aria-hidden="true"
                           />
                           <div className="min-w-0 flex-1">
@@ -293,8 +303,9 @@ export default function MyTripPage() {
         booking={detail?.it || null}
         accent={detail?.accent || TEAL_DEEP}
         onClose={() => setDetail(null)}
-        // A cancel that succeeded in the sheet flips the row's status here; this
-        // page lists confirmed rows only, so the stay leaves the list on close.
+        // A cancel that succeeded in the sheet (or one Nuitée's record reports)
+        // flips the row's status here: its chip reads Cancelled and the card
+        // mutes and sinks to the bottom of its section — it does not leave.
         onStatusChange={(id, status) => setItems((prev) => prev.map((it) =>
           (it.partner || "").toLowerCase() === "nuitee" && String(it.product_id) === String(id) ? { ...it, status } : it
         ))}
