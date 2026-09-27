@@ -36,15 +36,38 @@ opening the Passport senses the attraction footprint or airport you are in and o
 (several → pick one or close); tapping a stamp opens its options (add memory photos now or later,
 view them full screen with swipe and ×, delete a photo, solo page / shared page, delete the
 stamp, close). Solo pages need the passport_stamp_layout migration applied.
-**Next in this lane — movie filming-location stamps (founder, 2026-09-27):** a global set of
-spots people visit *because of a film* (not landmarks already in the top spots — no Eiffel
-Tower), each stamp saying "I was here!", the date, the spot, the film and year, the location and
-the scene, with the top two cast members and their roles ("people could brag about it"). The
-traveler's own photo leads: one photo open at a time with the stamp placed at the top or bottom
-so it never covers the iconic view, the second photo as a thumbnail; move and delete work as
-for every stamp. Research on data sources (Wikidata filming locations, ranking, licensing) is
-running; brief and seed plan to follow, then the founder picks the seed size.
-
+**Next in this lane — movie filming-location stamps (founder, 2026-09-27).** Spots people visit
+*because of a film* (not landmarks already in the top spots — no Eiffel Tower). Stamp copy: "I was
+here!" · date · spot · city, country · "The scene from <Film> (<Year>)" · one line on what happened
+· "<Actor> as <Role>" ×2, plus a short brag line for the shared image ("Filmed here: <Film>
+(<Year>)"). The traveler's own photo leads: one photo open at a time, the stamp pressed at the top
+or the bottom so it never covers the iconic view, a second photo as a thumbnail; move and delete
+as for every stamp. **Brief (research 2026-09-27, all counts live from Wikidata):**
+- Data: Wikidata "filming location" (P915, CC0) is the only worldwide open source with
+  coordinates — 23,449 films, 7,830 locations with coordinates, but mostly cities; the spot-level
+  set for famous films (≥40 Wikipedia editions) is **816 spots across 437 films**, skewed US/UK
+  (223/203; Asia, Africa, Latin America nearly empty). Several of the founder's own examples are
+  missing or city-level there (Rocky Steps, Café des 2 Moulins, Maya Bay, the Dubrovnik stairs),
+  so the seed is Wikidata **plus** hand-added spots. Fame = Wikipedia editions of the film ×
+  Wikipedia pageviews of the spot (free). Cast and roles from Wikidata (roles present on the
+  leads of most famous films); gaps filled from the film's Wikipedia credits in a review sheet.
+  TMDB would fill roles automatically but needs a written commercial agreement; IMDb data is
+  non-commercial only; movie-locations.com / Atlas of Wonders are read-only cross-checks.
+- Legal: titles, years, actor and character names are facts (nominative use — plain text, no
+  studio logos, never "official"); **stills and posters never** (copyright, and TMDB grants no
+  image rights). Photos = the traveler's own; a Wikimedia Commons photo of the place, credited,
+  may preview an unearned stamp.
+- Build: a `film_spots` table (D1) keyed to owned attractions (kind `scene`, footprint per spot:
+  stairs ~60 m, beach ~300 m) so the nearby prompt, Stamps near you and "I was here" work
+  unchanged; a movie layout of the typographic stamp; the photo-first page (automatic top/bottom
+  placement by which third of the photo is emptier, manual override in the stamp options); the
+  curation sheet. ≈ 8 working days after the seed: pipeline + curation 3, worker/D1 1, stamp +
+  page 3, QA 1.
+- **Decisions for the founder (defaults in bold):** seed size **400** (300–500, ceiling 800);
+  famous TV series included (**yes** — Game of Thrones, Breaking Bad); UNESCO-grade places that
+  already carry a top-spot stamp (Skellig Michael, Aït Benhaddou) **stay top-spot stamps** with a
+  film line added, not duplicated; TMDB commercial agreement **apply in parallel, don't wait**;
+  stamp placement **automatic with manual override**. "Go with the defaults" starts the seed.
 1. **New phone Home, built to the Home canvas** (G115). Founder, 2026-09-14: "first is the new home."
    Canvas: https://claude.ai/code/artifact/06c2973f-3e2e-47d2-a4c1-b1a7510706ec
    - Three states: I'm here at home, I'm here on a trip, Plan it. The mode picks itself; "on a trip" means away with a stay booked, not a third mode.
