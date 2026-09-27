@@ -24,7 +24,7 @@ import {
   ArrowLeft, MapPin, Minus, Plus, Search, X, Calendar as CalendarIcon,
   CircleParking, Croissant, Wifi, Snowflake, ShieldCheck, Dumbbell,
   Refrigerator, Microwave, PlaneTakeoff, BusFront,
-  SlidersHorizontal, ChevronDown, ChevronUp,
+  SlidersHorizontal, ChevronDown, ChevronUp, Images,
 } from "lucide-react";
 import { DayPicker } from "react-day-picker";
 import { format } from "date-fns";
@@ -35,6 +35,8 @@ import LocationModePicker from "@/components/location/LocationModePicker";
 import { trackAffiliateClick } from "@/lib/affiliate";
 import { openPartner } from "@/lib/openPartner";
 import HotelBookSheet from "@/components/hotels/HotelBookSheet";
+import PhotoLightbox from "@/components/finder/PhotoLightbox";
+import { fetchHotelPhotos } from "@/lib/hotelPhotos";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { logSearch } from "@/lib/logSearch";
@@ -147,6 +149,19 @@ export default function FindAHotel() {
   const [inAppBusy, setInAppBusy] = useState(false);
   const [inAppMeta, setInAppMeta] = useState(null); // {nights, env, checkin, checkout} — the OFFER's dates, from the search payload
   const [bookSheet, setBookSheet] = useState(null); // {...hotel, checkin, checkout} being booked (opens HotelBookSheet)
+  // Results-card lightbox (founder, 2026-09-26: enlarge a hotel's photos from
+  // the results, swipe left/right, close). The card's own photo shows at once
+  // as slide 1; the supplier gallery replaces it when /hotels/nuitee/photos
+  // answers — for the SAME hotel only, so a tap on another card in between
+  // wins. A hotel with no gallery keeps its one photo; nothing is invented.
+  const [gallery, setGallery] = useState(null); // { hotelId, title, photos: [{ src, hd }], index }
+  const openGallery = (h) => {
+    setGallery({ hotelId: h.hotelId, title: h.name, photos: h.thumbnail ? [{ src: h.thumbnail }] : [], index: 0 });
+    fetchHotelPhotos(h.hotelId).then((g) => {
+      if (!g || !g.photos.length) return;
+      setGallery((cur) => (cur && cur.hotelId === h.hotelId ? { ...cur, photos: g.photos, index: 0 } : cur));
+    });
+  };
 
   // Effective destination.
   const here = {
@@ -663,11 +678,16 @@ export default function FindAHotel() {
             </div>
             <div className="flex flex-col gap-2.5">
               {inApp.filter((h) => maxPrice == null || h.price <= maxPrice).slice(0, 12).map((h) => (
-                <button key={h.id} onClick={() => setBookSheet({ ...h, checkin: inAppMeta?.checkin || checkin, checkout: inAppMeta?.checkout || checkout })} className="w-full flex gap-3 p-2.5 rounded-[16px] text-left" style={{ background: "#FFFFFF", border: `1.5px solid ${ACCENT}55` }}>
+                <div key={h.id} className="w-full flex gap-3 p-2.5 rounded-[16px]" style={{ background: "#FFFFFF", border: `1.5px solid ${ACCENT}55` }}>
+                  {/* Two targets, both real buttons (never nested): the photo opens
+                      the supplier gallery; the rest of the card opens the room picker. */}
                   {h.thumbnail
-                    ? <img src={h.thumbnail} alt="" className="flex-none rounded-[12px] object-cover" style={{ width: 92, height: 92 }} />
+                    ? <button type="button" onClick={() => openGallery(h)} aria-label={`Photos of ${h.name}`} className="relative flex-none rounded-[12px] overflow-hidden" style={{ width: 92, height: 92, padding: 0, border: "none", background: ACCENT_BG }}>
+                        <img src={h.thumbnail} alt="" className="block w-full h-full object-cover" />
+                        <span aria-hidden="true" className="absolute flex items-center justify-center rounded-full" style={{ right: 5, bottom: 5, width: 22, height: 22, background: "rgba(22,17,13,.55)" }}><Images size={12} color="#fff" strokeWidth={2.2} /></span>
+                      </button>
                     : <div className="flex-none rounded-[12px] flex items-center justify-center" style={{ width: 92, height: 92, background: ACCENT_BG, fontSize: fs(30) }}>🏨</div>}
-                  <div className="flex-1 min-w-0 flex flex-col">
+                  <button type="button" onClick={() => setBookSheet({ ...h, checkin: inAppMeta?.checkin || checkin, checkout: inAppMeta?.checkout || checkout })} className="flex-1 min-w-0 flex flex-col text-left" style={{ background: "transparent", border: "none", padding: 0, fontFamily: "inherit" }}>
                     <div className="font-bold text-[calc(14px*var(--fs))] leading-snug" style={{ color: ED_INK, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{h.name}</div>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       {h.stars ? <span className="text-[calc(11.5px*var(--fs))]" style={{ color: "#E0922F" }}>{"★".repeat(Math.min(Math.round(h.stars), 5))}</span> : null}
@@ -690,8 +710,8 @@ export default function FindAHotel() {
                         {Array.isArray(h.rates) && (h.rates || []).filter((r) => r && r.offerId && r.price != null).length > 1 ? "See rooms" : "Book here"}
                       </span>
                     </div>
-                  </div>
-                </button>
+                  </button>
+                </div>
               ))}
             </div>
             <div className="text-[calc(10.5px*var(--fs))] mt-1.5 px-1 leading-snug" style={{ color: "#9AA0A6" }}>Member rates via Nuitée Connect · you pay securely in the app · GlobeSkimmers earns a share of each booking</div>
@@ -700,6 +720,14 @@ export default function FindAHotel() {
         {/* The sheet gets the OFFER's dates, snapshotted onto bookSheet when it was
             opened — so it stays correct even after the lists/meta are cleared. */}
         {bookSheet && <HotelBookSheet hotel={bookSheet} checkin={bookSheet.checkin} checkout={bookSheet.checkout} adults={adults} children={children} dest={dest} onClose={() => setBookSheet(null)} />}
+        <PhotoLightbox
+          photos={gallery?.photos}
+          index={gallery ? gallery.index : null}
+          onClose={() => setGallery(null)}
+          onIndexChange={(i) => setGallery((g) => (g ? { ...g, index: i } : g))}
+          title={gallery?.title}
+          credit="Photos from the hotel's supplier"
+        />
 
         {/* Native results — real hotels with live prices + attributed Book links */}
         {hotels && !hotelsBusy && (

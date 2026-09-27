@@ -18,7 +18,7 @@
 // no answer at all lands on "unknown", which never claims nothing was charged.
 // Prices here are Closed-User-Group rates: rendered only behind the sign-in
 // gate (App.jsx), never on share cards or web pages.
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { X, CheckCircle2 } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
@@ -27,6 +27,9 @@ import { openPartnerAndWait } from "@/lib/openPartner";
 import { prettyRoom } from "@/lib/roomName";
 import { createPageUrl } from "@/utils";
 import { TEAL_DEEP } from "@/components/redesign/constants";
+import PhotoLightbox from "@/components/finder/PhotoLightbox";
+import { RoomThumb } from "@/components/hotels/RoomChooserSheet";
+import { fetchHotelPhotos, roomPhotosFor } from "@/lib/hotelPhotos";
 
 // Passport Standard: one teal primary on the ivory sheet.
 const ACCENT = TEAL_DEEP, INK = "#16110D", INK2 = "#5F5546", RULE = "#F0E9DC", OK = "#2E7D46", BAD = "#C2392F";
@@ -85,6 +88,7 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
       offerId: r.offerId, roomName: r.roomName || r.name || null, board: r.board || r.boardName || null,
       price: r.price, currency: r.currency || hotel.currency || "USD",
       freeCancellation: !!r.freeCancellation, cancelBy: r.cancelBy || null, maxOccupancy: r.maxOccupancy ?? null,
+      mappedRoomId: r.mappedRoomId ?? null,   // the supplier's link to its /data/hotel room (photos)
       room: r.room?.bedLabel ? { bedLabel: String(r.room.bedLabel) } : null,
       boardLabel: typeof r.boardLabel === "string" && r.boardLabel.trim() ? r.boardLabel.trim() : null,
     } : null)
@@ -106,9 +110,22 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
       g.plans = alt ? [cheapest, alt] : [cheapest];
       g.occ = g.rates.reduce((m, x) => Math.max(m, x.maxOccupancy || 0), 0) || null;
       g.bedLabel = g.rates.find((x) => x.room?.bedLabel)?.room.bedLabel || null;   // the room's worker bed phrase, when any plan carries one
+      g.mappedRoomId = g.rates.find((x) => x.mappedRoomId != null)?.mappedRoomId ?? null;
     }
     return out;
   }, [rates]);
+  // Supplier photos (founder, 2026-09-26): the hotel gallery behind a "N hotel
+  // photos" line in the header, and each room's own pictures in the picker —
+  // matched by the rate's mappedRoomId, else its exact room name (src/lib/
+  // hotelPhotos.js). Fetched once per hotel per session; a hotel without
+  // pictures shows none — never a stock image.
+  const [gallery, setGallery] = useState(null);   // { photos, rooms } | null
+  const [lightbox, setLightbox] = useState(null); // { photos, index, title } | null
+  useEffect(() => {
+    let alive = true;
+    if (hotel?.hotelId) fetchHotelPhotos(hotel.hotelId).then((g) => { if (alive) setGallery(g); });
+    return () => { alive = false; };
+  }, [hotel?.hotelId]);
   const hasRoomChoice = rates.length > 1;
   // Deep link: initialOfferId (compared as a string) preselects its rate and
   // skips the room picker. No match → null → today's behavior, untouched.
@@ -225,9 +242,28 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
           <div className="min-w-0">
             <div className="font-bold text-[calc(17px*var(--fs))] leading-snug" style={{ color: INK }}>{hotel.name}</div>
             <div className="text-[calc(12.5px*var(--fs))] mt-0.5" style={{ color: INK2 }}>{fmtDate(ci)} → {fmtDate(co)} · {nights} night{nights === 1 ? "" : "s"} · {adults} adult{adults === 1 ? "" : "s"}{children ? ` · ${children} child${children === 1 ? "" : "ren"}` : ""}</div>
+            {gallery?.photos?.length > 0 && (
+              <button type="button" onClick={() => setLightbox({ photos: gallery.photos, index: 0, title: hotel.name })}
+                className="mt-1 text-[calc(12px*var(--fs))] font-semibold"
+                style={{ color: ACCENT, background: "none", border: "none", padding: 0, fontFamily: "inherit" }}>
+                {gallery.photos.length} hotel photo{gallery.photos.length === 1 ? "" : "s"} ›
+              </button>
+            )}
           </div>
           {!locked && <button onClick={onClose} aria-label="Close" className="flex-none rounded-full p-1.5" style={{ background: "#fff", border: `1px solid ${RULE}` }}><X size={18} color={INK} /></button>}
         </div>
+
+        {/* Photo viewer — portals to body above the sheet; rendered INSIDE the
+            sheet's inner div so its React-tree clicks stop here and never reach
+            the backdrop's onClose. */}
+        <PhotoLightbox
+          photos={lightbox?.photos}
+          index={lightbox ? lightbox.index : null}
+          onClose={() => setLightbox(null)}
+          onIndexChange={(i) => setLightbox((l) => (l ? { ...l, index: i } : l))}
+          title={lightbox?.title}
+          credit="Photos from the hotel's supplier"
+        />
 
         {/* Rate summary — what is being bought, in plain words. Hidden on the
             rooms stage, where the room cards themselves carry this. */}
@@ -255,14 +291,32 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
           <>
             <div className="text-[calc(13px*var(--fs))] font-bold mt-4 mb-2" style={{ color: INK }}>Choose your room</div>
             <div className="flex flex-col gap-2.5">
-              {(allRooms ? roomGroups : roomGroups.slice(0, 3)).map((g) => (
+              {(allRooms ? roomGroups : roomGroups.slice(0, 3)).map((g) => {
+                // This room's supplier photos, when the gallery links them to
+                // the rate; the 64px thumb and the "N photos" line open the
+                // lightbox scoped to this room. No match → no picture.
+                const lines = roomLines(g.name, g.bedLabel);
+                const photos = roomPhotosFor(gallery, g.mappedRoomId, g.name);
+                const openRoom = photos.length ? () => setLightbox({ photos, index: 0, title: `${hotel.name} — ${lines.bed}` }) : null;
+                return (
                 <div key={g.name} className="rounded-[16px] p-3.5" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
-                  <div className="flex items-baseline justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-[calc(19px*var(--fs))] font-bold leading-snug" style={{ fontFamily: SERIF, color: INK }}>{roomLines(g.name, g.bedLabel).bed}</div>
-                      {roomLines(g.name, g.bedLabel).rest ? <div className="mt-0.5 text-[calc(12px*var(--fs))] leading-snug" style={{ color: INK2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{roomLines(g.name, g.bedLabel).rest}</div> : null}
+                  <div className="flex items-start gap-3">
+                    {openRoom && <RoomThumb url={photos[0].src} name={lines.bed} onOpen={openRoom} />}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-[calc(19px*var(--fs))] font-bold leading-snug" style={{ fontFamily: SERIF, color: INK }}>{lines.bed}</div>
+                          {lines.rest ? <div className="mt-0.5 text-[calc(12px*var(--fs))] leading-snug" style={{ color: INK2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{lines.rest}</div> : null}
+                        </div>
+                        {g.occ ? <span className="flex-none font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase" style={{ color: INK2 }}>Sleeps {g.occ}</span> : null}
+                      </div>
+                      {photos.length > 1 && (
+                        <button type="button" onClick={openRoom} className="mt-1 text-[calc(11.5px*var(--fs))] font-semibold"
+                          style={{ color: ACCENT, background: "none", border: "none", padding: 0, fontFamily: "inherit" }}>
+                          {photos.length} photos ›
+                        </button>
+                      )}
                     </div>
-                    {g.occ ? <span className="flex-none font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase" style={{ color: INK2 }}>Sleeps {g.occ}</span> : null}
                   </div>
                   <div className="mt-2 flex flex-col gap-1.5">
                     {g.plans.map((r, i) => {
@@ -288,7 +342,8 @@ export default function HotelBookSheet({ hotel, checkin, checkout, adults, child
                     })}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
             {roomGroups.length > 3 && !allRooms && (
               <button onClick={() => setAllRooms(true)}

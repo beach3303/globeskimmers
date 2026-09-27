@@ -54,7 +54,7 @@ const money = (amt, cur) => {
 };
 
 // 64px supplier room photo; serif-initial tile when there is none or it fails.
-function RoomThumb({ url, name, onOpen }) {
+export function RoomThumb({ url, name, onOpen }) {
   const [broken, setBroken] = useState(false);
   const initial = (String(name || "").trim().charAt(0) || "?").toUpperCase();
   const tappable = typeof onOpen === "function";

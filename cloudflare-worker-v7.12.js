@@ -14630,6 +14630,29 @@ async function handleNuiteeHotel(request, env, ctx) {
   if (!hotel) return jsonResponse({ ok: false, reason: 'not_found' }, 200);
   return jsonResponse({ ok: true, hotel }, 200);
 }
+// POST /hotels/nuitee/photos { hotelId } → { ok, hotelId, name, photos, rooms }
+// — the supplier's hotel gallery and per-room photos for the results-card
+// lightbox and the room picker (founder ask 2026-09-26). Same KV-cached
+// /data/hotel record as /hotels/nuitee/hotel (a free static call, 14-day TTL),
+// trimmed to what a gallery needs — the full record carries descriptions,
+// facilities and every room. Hotel photos: default image first, deduped,
+// placeholders dropped, capped at 40 (packageHotelPhotos). Rooms keep id, name
+// and up to 6 photos (packageRoom) so the sheet can match a rate's
+// mappedRoomId — or, failing that, its exact room name — to a picture; rooms
+// without a photo are left out. Nothing is invented: a hotel with no images
+// answers ok:true with empty lists, and the app then shows no gallery.
+async function handleNuiteePhotos(request, env, ctx) {
+  let b = {};
+  try { b = await request.json(); } catch { b = {}; }
+  const hotel = await nuiteeHotelDetails(env, ctx, b?.hotelId);
+  if (!hotel) return jsonResponse({ ok: false, reason: 'not_found' }, 200);
+  const photos = packageHotelPhotos(hotel.hotelImages, 40);
+  const rooms = (Array.isArray(hotel.rooms) ? hotel.rooms : [])
+    .filter((r) => r && typeof r === 'object')
+    .map((r) => { const pr = packageRoom(r); return { id: pr.id, name: pr.name, photos: pr.photos }; })
+    .filter((r) => r.photos.length);
+  return jsonResponse({ ok: true, hotelId: String(hotel.id ?? b?.hotelId ?? ''), name: hotel.name || null, photos, rooms }, 200);
+}
 
 const nuiteeFacNorm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 // Alias fallbacks tried after the literal name, normalized ('gym' finds
@@ -17933,6 +17956,7 @@ export default {
       if (pathname === '/hotels/search' && request.method === 'POST') return await handleHotelSearch(request, env, ctx);
       if (pathname === '/hotels/nuitee/search' && request.method === 'POST') return await handleNuiteeSearch(request, env, ctx);
       if (pathname === '/hotels/nuitee/hotel' && request.method === 'POST') return await handleNuiteeHotel(request, env, ctx);
+      if (pathname === '/hotels/nuitee/photos' && request.method === 'POST') return await handleNuiteePhotos(request, env, ctx);
       if (pathname === '/hotels/nuitee/prebook' && request.method === 'POST') return await handleNuiteePrebook(request, env);
       if (pathname === '/hotels/nuitee/status' && request.method === 'POST') return await handleNuiteeStatus(request, env);
       if (pathname === '/hotels/nuitee/booking' && request.method === 'POST') return await handleNuiteeBooking(request, env, ctx);
