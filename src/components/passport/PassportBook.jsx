@@ -282,17 +282,22 @@ export default function PassportBook({
       if (s.kind === "city") return (110 + photosH) * 1.05; // short: a couple ink lines
       return (0.50 * pageW + 52 + photosH) * 1.03;
     };
+    // A stamp whose layout is 'solo' (founder, 2026-09-26: "move a stamp to a
+    // solo page") always gets a page of its own, and no later stamp back-fills
+    // that page. 'auto' (the default) packs as before.
     const packed = [];
     for (const s of (stamps || [])) {
       const h = estH(s);
+      const solo = s.layout === "solo";
       let placed = false;
-      for (const pg of packed) {
+      if (!solo) for (const pg of packed) {
+        if (pg.solo) continue;
         const cost = h + (pg.items.length ? GAP : 0);
         if (pg.used + cost <= USABLE) { pg.items.push(s); pg.used += cost; placed = true; break; }
       }
-      if (!placed) packed.push({ items: [s], used: h });
+      if (!placed) packed.push({ items: [s], used: h, solo });
     }
-    return packed.map((p, i) => ({ key: `pg-${i}`, stamps: p.items }));
+    return packed.map((p, i) => ({ key: `pg-${i}`, stamps: p.items, solo: p.solo }));
   }, [stamps, pageW]);
 
   const stampCount = bookPages.length;

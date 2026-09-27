@@ -13237,6 +13237,26 @@ async function handlePassportStampDate(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// POST /passport/stamp/layout { stamp_id, layout: 'auto' | 'solo' } — how the
+// booklet lays this stamp out: 'solo' = a page of its own, 'auto' = packed with
+// other stamps (the default). Founder ask 2026-09-26 ("move to solo page",
+// "move back to share a page"). The column lands with migration
+// 20260927200000_passport_stamp_layout.sql; until that is applied PostgREST
+// rejects the unknown column and the app says the option isn't ready.
+async function handlePassportStampLayout(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const stampId = String(b.stamp_id || '').replace(/[^0-9a-f-]/gi, '').slice(0, 40);
+    const layout = b.layout === 'solo' ? 'solo' : b.layout === 'auto' ? 'auto' : null;
+    if (!stampId || !layout) return jsonResponse({ error: 'stamp_id + layout (auto|solo) required' }, 400);
+    const r = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ layout, updated_at: new Date().toISOString() }) });
+    if (!r.ok) return jsonResponse({ ok: false, error: r.status === 400 ? 'Page layout isn\'t available yet — try again later' : 'update failed' });
+    return jsonResponse({ ok: true, layout });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // Delete a stamp (cascades photo rows) + purge its R2 objects.
 async function handlePassportDelete(request, env, ctx) {
   try {
@@ -18004,6 +18024,7 @@ export default {
       if (pathname === '/passport/list' && request.method === 'POST') return await handlePassportList(request, env);
       if (pathname === '/passport/photo' && request.method === 'POST') return await handlePassportPhotoUpload(request, env, ctx);
       if (pathname === '/passport/stamp/date' && request.method === 'POST') return await handlePassportStampDate(request, env);
+      if (pathname === '/passport/stamp/layout' && request.method === 'POST') return await handlePassportStampLayout(request, env);
       if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
       if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);
       if (pathname === '/passport/tag' && request.method === 'POST') return await handlePassportTag(request, env, ctx);

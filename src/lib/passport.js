@@ -39,6 +39,13 @@ export async function setStampDate(stamp_id, visited_on) {
   const { data, error } = await callWorker('passport/stamp/date', { stamp_id, visited_on });
   return { data, error };
 }
+// How the booklet lays the stamp out: 'solo' = a page of its own, 'auto' = packed
+// with other stamps. Resolves { data:{ok,layout} } or { error } — a worker-side
+// business refusal (column not migrated yet) arrives as data.ok === false.
+export async function setStampLayout(stamp_id, layout) {
+  const { data, error } = await callWorker('passport/stamp/layout', { stamp_id, layout });
+  return { data, error: error || (data && data.ok === false ? data.error || 'Could not change the page layout' : null) };
+}
 export async function deleteStamp(stamp_id) {
   const { data, error } = await callWorker('passport/stamp/delete', { stamp_id });
   return { data, error };
