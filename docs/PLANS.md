@@ -91,7 +91,7 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   (packages) can save cards the standard way (checkbox at pay, add via SetupIntent, list, delete,
   default; "backup" is our own bookkeeping; card data stays in Stripe's iframe). Decision for the
   founder: (1) ask Nuitée three questions (Apple Pay domain, is Link on, what useOwnSecretKey needs
-  and how settlement works) — recommended first; (2) build Methods to pay for our own Stripe checkout
+  and how settlement works) — **sent 2026-09-27**, awaiting Nuitée's reply; (2) build Methods to pay for our own Stripe checkout
   when packages go live (≈4 days), not before, so the screen never lists cards that cannot pay for a
   hotel; (3) only if the founder wants to be merchant of record for hotels, plan that as its own
   project after Nuitée answers. Nothing built yet.
