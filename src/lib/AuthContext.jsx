@@ -32,6 +32,7 @@ import {
   OAUTH_REDIRECT_TO,
 } from '@/lib/nativeAuth';
 import { callWorker } from '@/lib/callWorker';
+import { isCheckoutSheetOpen, closeCheckoutSheet } from '@/lib/openPartner';
 
 // sessionStorage flag set the moment the USER initiates a sign-in/sign-up, so we
 // can tell a fresh sign-in from a plain app-launch session restore. sessionStorage
@@ -147,12 +148,20 @@ export const AuthProvider = ({ children }) => {
     // 3) Native OAuth callback: catch globeskimmers://auth/callback, exchange code.
     if (Capacitor.isNativePlatform()) {
       App.addListener('appUrlOpen', async ({ url }) => {
-        // Checkout hand-back: the worker's "Booking confirmed" page links to
-        // globeskimmers://trips (window.close() is a no-op inside the in-app
-        // browser). Close the sheet and land on the Trips tab, where the new
-        // stay already sits under BOOKED.
+        // globeskimmers://trips arrives from two places:
+        //   • the worker's "Booking confirmed" page ("Return to GlobeSkimmers",
+        //     window.close() is a no-op inside the in-app browser) — while the
+        //     checkout sheet is up. Founder call 2026-09-26: Return lands where
+        //     Done lands, i.e. the booking sheet's "You're booked" — so just
+        //     dismiss the browser and settle the sheet's wait (Browser.close()
+        //     never emits browserFinished), no navigation;
+        //   • the confirmation email's "Open in My Trips" (via the
+        //     globeskimmers.io/open/trips landing) — no sheet is up, so land on
+        //     the Trips tab, where the stay sits under BOOKED.
         if (url && /^globeskimmers:\/\/trips(\?|$)/.test(url)) {
+          const fromCheckout = isCheckoutSheetOpen();
           try { await Browser.close(); } catch { /* no-op on Android */ }
+          if (fromCheckout) { closeCheckoutSheet(); return; }
           try {
             window.history.pushState({}, '', '/Trips');
             window.dispatchEvent(new PopStateEvent('popstate'));
