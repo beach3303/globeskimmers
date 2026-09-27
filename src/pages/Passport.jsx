@@ -16,7 +16,7 @@ import { isAdminEmail } from "@/lib/admins";
 import { localISODate } from "@/lib/localDate";
 import { resizePhoto } from "@/lib/resizePhoto";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
-import NearbyStampPrompt from "@/components/passport/NearbyStampPrompt";
+import NearbyStampPrompt, { NEARBY_KEY, nearbySensingOn } from "@/components/passport/NearbyStampPrompt";
 import StampActions from "@/components/passport/StampActions";
 
 
@@ -561,6 +561,29 @@ function PassportInner() {
   // Tapping a stamp opens its OPTIONS sheet (photos, own page, delete…); the
   // detail card behind "Details, date & tag a friend" is the old modal.
   const [actionsId, setActionsId] = useState(null);
+  // Nearby-stamp sensing switch (founder, 2026-09-27): same key as Settings →
+  // Virtual Passport, so either place turns the pop-up off. Flipping it on
+  // here remounts the prompt so it senses right away.
+  const [senseNearby, setSenseNearby] = useState(() => nearbySensingOn());
+  const toggleSenseNearby = () => {
+    const next = !senseNearby;
+    setSenseNearby(next);
+    try { localStorage.setItem(NEARBY_KEY, next ? "1" : "0"); } catch { /* ignore */ }
+    showToast(next ? "Nearby stamps: on" : "Nearby stamps: off", "success");
+  };
+  // On open, the view defaults to the full-size passport (founder, 2026-09-27):
+  // once the stamps have loaded, scroll the book's top to just under the app
+  // header. The page still scrolls up to the stats and share controls.
+  const bookRef = useRef(null);
+  const scrolledRef = useRef(false);
+  useEffect(() => {
+    if (loading || scrolledRef.current || !bookRef.current) return;
+    scrolledRef.current = true;
+    const el = bookRef.current;
+    const banner = document.querySelector(".gs-app-banner");
+    const top = el.getBoundingClientRect().top + window.scrollY - ((banner && banner.offsetHeight) || 0) - 6;
+    try { window.scrollTo({ top: Math.max(0, top), behavior: "auto" }); } catch { window.scrollTo(0, Math.max(0, top)); }
+  }, [loading]);
   // "See a sample passport" preview — sample stamps, view-only, never saved.
   const [preview, setPreview] = useState(false);
   const [showStampPlace, setShowStampPlace] = useState(false); // "Stamp a place" form
@@ -718,7 +741,7 @@ function PassportInner() {
           </div>
         ) : (
           /* THE BOOK — tap the cover to open, then flip through the pages */
-          <div className="mt-1 mb-2">
+          <div className="mt-1 mb-2" ref={bookRef}>
             <PassportBook
               stamps={bookStamps}
               holder={holder}
@@ -730,6 +753,15 @@ function PassportInner() {
             {!readOnly && isAuthenticated && !preview && (
               <div className="text-center mt-4">
                 <button onClick={() => setShowStampPlace(true)} className="rounded-full px-5 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>✍️ Stamp a place</button>
+                {/* Small switch — the same setting as Settings → Virtual Passport → Sense nearby stamps */}
+                <button type="button" onClick={toggleSenseNearby} role="switch" aria-checked={senseNearby} aria-label="Sense nearby stamps when the Passport opens"
+                  className="mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+                  style={{ background: "#fff", border: `1px solid ${RULE}`, color: INK3, fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".06em", textTransform: "uppercase" }}>
+                  <span aria-hidden="true" className="relative inline-block rounded-full" style={{ width: 28, height: 16, background: senseNearby ? TEAL_DEEP : "rgba(22,17,13,.18)", transition: "background .15s" }}>
+                    <span className="absolute top-[2px] rounded-full" style={{ width: 12, height: 12, background: "#fff", left: senseNearby ? 14 : 2, transition: "left .15s", boxShadow: "0 1px 2px rgba(0,0,0,.25)" }} />
+                  </span>
+                  Nearby stamps {senseNearby ? "on" : "off"}
+                </button>
               </div>
             )}
             {isDev && !readOnly && !preview && (
@@ -774,8 +806,8 @@ function PassportInner() {
       )}
 
       {/* Where you are right now — an attraction or airport you can stamp */}
-      {!readOnly && !preview && isAuthenticated && !loading && (
-        <NearbyStampPrompt stamps={stamps} onStamped={async (id) => { await load(); if (id) setActionsId(id); }} />
+      {!readOnly && !preview && isAuthenticated && !loading && senseNearby && (
+        <NearbyStampPrompt key="nearby" stamps={stamps} onStamped={async (id) => { await load(); if (id) setActionsId(id); }} />
       )}
 
       {/* Memory photos, full screen: swipe through, × or swipe down to close */}

@@ -407,6 +407,8 @@ export default function SettingsPage() {
   const [openBehavior, setOpenBehaviorState] = useState(() => readOpenBehavior()); // 'ask' | 'current' | 'continue'
   const [suggestArrivals, setSuggestArrivals] = useState(() => { try { return localStorage.getItem("pp_suggest_arrivals") !== "0"; } catch { return true; } });
   const [cityPrompt, setCityPrompt] = useState(() => { try { return localStorage.getItem("pp_city_prompt") !== "0"; } catch { return true; } });
+  // Nearby-stamp sensing on the Passport page (default ON; the page has its own small switch too).
+  const [suggestNearby, setSuggestNearby] = useState(() => { try { return localStorage.getItem("pp_suggest_nearby") !== "0"; } catch { return true; } });
 
   const { logout, deleteAccount, profile, user: authUser, refreshProfile, canRefresh } = useAuth(); // Supabase
   const countryBoxRef = useRef(null);
@@ -769,6 +771,9 @@ export default function SettingsPage() {
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="New-city pop-ups" desc="Offer a stamp when you arrive in — or open the app in — a new city or country. Turn off to never be prompted (you can still add stamps yourself)."
               control={{ node: <EdToggle on={cityPrompt} onClick={() => { const next = !cityPrompt; setCityPrompt(next); try { localStorage.setItem("pp_city_prompt", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle new-city pop-ups" /> }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Sense nearby stamps" desc="When you open your Passport, offer the attraction or airport you're standing in. Turn off to never see that pop-up (the Passport page has the same switch)."
+              control={{ node: <EdToggle on={suggestNearby} onClick={() => { const next = !suggestNearby; setSuggestNearby(next); try { localStorage.setItem("pp_suggest_nearby", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle nearby stamp sensing" /> }}
               last
             />
           </EdGroup>

@@ -24,6 +24,10 @@ const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13,.12)";
 const STAMP = "#B0472F", IVORY = "#FFFCF7";
 const KEY = "pp_nearby_dismissed";
+// The switch lives in Settings → Virtual Passport and on the Passport page
+// itself (default ON). Off → this component never takes a GPS fix.
+export const NEARBY_KEY = "pp_suggest_nearby";
+export const nearbySensingOn = () => { try { return localStorage.getItem(NEARBY_KEY) !== "0"; } catch { return true; } };
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 const readSet = () => { try { return new Set(JSON.parse(sessionStorage.getItem(KEY) || "[]")); } catch { return new Set(); } };
 const remember = (keys) => { try { const s = readSet(); keys.forEach((k) => s.add(k)); sessionStorage.setItem(KEY, JSON.stringify([...s])); } catch { /* ignore */ } };
@@ -49,6 +53,7 @@ export default function NearbyStampPrompt({ stamps, onStamped }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (!nearbySensingOn()) return;
       const pos = await getFix();
       if (!pos || cancelled) return;
       const lat = pos.coords.latitude, lng = pos.coords.longitude, acc = pos.coords.accuracy;
