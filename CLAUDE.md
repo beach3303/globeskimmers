@@ -88,9 +88,12 @@ npm run lint:fix     # ESLint auto-fix
 npm run typecheck    # tsc -p jsconfig.json — ~571 PRE-EXISTING errors; NOT a clean gate.
                      #   Compare before/after counts; never expect zero.
 npm run preview      # Preview production build
-npm run cap:sync     # build + npx cap sync
-npm run cap:ios      # build + sync ios + open Xcode
-npm run cap:android  # build + sync android + open Android Studio
+npm run cap:sync     # build + npx cap sync (BOTH platforms — founder rule 2026-09-27: iOS and Android always updated together)
+npm run cap:ios      # build + sync both + open Xcode
+npm run cap:android  # build + sync both + open Android Studio
+npm run cap:all      # build + sync both + open Xcode AND Android Studio (a store release for both)
+npm run ota          # build + sync both + Capgo upload to the production channel, version 1.0.<UTC yymmddHHMM>
+                     #   one Capgo bundle serves iOS and Android; Claude's upload is denied by the permission gate — the founder runs it
 npm run assets       # @capacitor/assets icon/splash generation
 ```
 
