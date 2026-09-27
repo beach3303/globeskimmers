@@ -104,7 +104,10 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   commission locks after checkout 09-28). Stripe → Settings → Tax reviewed with the founder:
   head office address set (California); preset product category "General - Electronically
   Supplied Services" (set at application, wrong for travel packages, left until the accountant
-  picks); no registration; automatic collection OFF and it must stay off — that toggle covers
+  picks); Locations "No live transactions" (Stripe never monitors the home state — California is
+  the accountant's call; hotel commissions arrive via Nuitée's own Stripe platform and never appear
+  on this page — use Nuitée → Payments → Earnings and the bank deposits instead); no registration;
+  automatic collection OFF and it must stay off — that toggle covers
   Dashboard invoices/payment links only, the app's package checkout (PaymentIntents via API)
   needs Stripe's Tax Calculation API wired in before the first sale (build item, Claude). Next:
   the founder books the accountant with the brief (revenue streams, seven questions; California
