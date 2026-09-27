@@ -417,25 +417,39 @@ export default function PassportBook({
   // Every failure says why — never silent.
   const activePageRef = useRef(null);
   const [sharing, setSharing] = useState(false);
-  const [preview, setPreview] = useState(null); // { url, blob, dataUrl }
+  // preview: { status: "rendering" } | { status: "ready", url, blob, dataUrl } | { status: "error", message }
+  // The overlay appears the instant Share is tapped (founder, 2026-09-27: the
+  // tap "did nothing" on the phone even with the new bundle), so a slow or
+  // failed render is visible on screen, not only in a toast.
+  const [preview, setPreview] = useState(null);
   const renderCurrentPage = useCallback(async () => {
-    const el = activePageRef.current;
-    if (!el || sharing) return;
+    if (sharing) return;
+    // The page element: the ref first, else the DOM marker (a forwarded ref
+    // that misses would otherwise make the button a silent no-op).
+    const el = activePageRef.current || (typeof document !== "undefined" ? document.querySelector("[data-pp-active-page]") : null);
+    if (!el) { setPreview({ status: "error", message: "The page isn't on screen yet — open the passport and try again." }); return; }
     setSharing(true);
+    setPreview({ status: "rendering" });
     try {
-      const pageCanvas = await html2canvas(el, { useCORS: true, backgroundColor: "#FBF6EC", scale: 2, logging: false });
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error("rendering took too long")), 25000));
+      const pageCanvas = await Promise.race([
+        html2canvas(el, { useCORS: true, backgroundColor: "#FBF6EC", scale: 2, logging: false, imageTimeout: 8000 }),
+        timeout,
+      ]);
       const canvas = brandShareCanvas(pageCanvas);
       const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
-      if (!blob) throw new Error("render failed");
-      setPreview({ url: URL.createObjectURL(blob), blob, dataUrl: canvas.toDataURL("image/png") });
-    } catch (e) { showToast(`Couldn't render this page${e?.message ? ` — ${e.message}` : ""}`, "error"); }
-    finally { setSharing(false); }
+      if (!blob) throw new Error("the image could not be encoded");
+      setPreview({ status: "ready", url: URL.createObjectURL(blob), blob, dataUrl: canvas.toDataURL("image/png") });
+    } catch (e) {
+      try { console.error("[passport share] render failed", e); } catch { /* ignore */ }
+      setPreview({ status: "error", message: e?.message || String(e) });
+    } finally { setSharing(false); }
   }, [sharing]);
   const closePreview = useCallback(() => {
     setPreview((p) => { if (p?.url) { try { URL.revokeObjectURL(p.url); } catch { /* ignore */ } } return null; });
   }, []);
   const shareRendered = useCallback(async () => {
-    if (!preview) return;
+    if (!preview || preview.status !== "ready") return;
     const text = "My Virtual Passport on Globeskimmers 🛂";
     try {
       if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("Share") && Capacitor.isPluginAvailable("Filesystem")) {
@@ -484,6 +498,7 @@ export default function PassportBook({
               <motion.div
                 key={page}
                 ref={activePageRef}
+                data-pp-active-page=""
                 custom={dir}
                 variants={pageVariants}
                 initial="enter"
@@ -577,17 +592,29 @@ export default function PassportBook({
         </div>
       )}
 
-      {/* Share preview — the branded image, then the sheet on a fresh tap */}
+      {/* Share preview — status on screen from the first tap: rendering → the
+          branded image (then the sheet on a fresh tap) → or the exact error. */}
       {preview && (
         <div onClick={closePreview} className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Share this page"
           style={{ background: "rgba(12,10,8,0.88)", backdropFilter: "blur(4px)" }}>
-          <img src={preview.url} alt="Your passport page, ready to share" onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: "92vw", maxHeight: "62vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 24px 60px -20px rgba(0,0,0,.6)" }} />
+          {preview.status === "ready" ? (
+            <img src={preview.url} alt="Your passport page, ready to share" onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: "92vw", maxHeight: "62vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 24px 60px -20px rgba(0,0,0,.6)" }} />
+          ) : (
+            <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[380px] rounded-[16px] px-5 py-6 text-center" style={{ background: PAPER, color: INK }}>
+              <div style={{ fontFamily: SERIF, fontSize: fs(22), lineHeight: 1.15 }}>{preview.status === "rendering" ? "Preparing your page…" : "Couldn't prepare this page"}</div>
+              <div className="mt-2" style={{ fontFamily: MONO, fontSize: fs(11.5), color: INK3, lineHeight: 1.5, wordBreak: "break-word" }}>
+                {preview.status === "rendering" ? "A few seconds — the stamps and photos are being drawn into one image." : preview.message}
+              </div>
+            </div>
+          )}
           <div className="w-full max-w-[380px] mt-4 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+            {preview.status === "ready" && (
             <button onClick={shareRendered} className="w-full rounded-xl py-3 font-bold flex items-center justify-center gap-2"
               style={{ background: STAMP, color: "#fff", fontSize: fs(15), border: "none" }}>
               <Share2 size={16} color="#fff" strokeWidth={2.2} /> Share to Instagram, Facebook, Snapchat, X…
             </button>
+            )}
             <button onClick={closePreview} className="w-full rounded-xl py-2.5 font-semibold"
               style={{ background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: fs(13.5), border: "1px solid rgba(255,255,255,0.25)" }}>
               Close
