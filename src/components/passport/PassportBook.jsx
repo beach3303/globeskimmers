@@ -238,6 +238,37 @@ function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW }) {
   );
 }
 
+// The shared image: the rendered page framed by a navy header that carries the
+// brand ("GLOBESKIMMERS" in gold) and the product name ("My Virtual Passport"),
+// and a footer with the site — founder, 2026-09-27: every share names both.
+// System fonts on purpose: the canvas has no access to the page's web fonts
+// until they are cached, and a fallback that renders is better than a blank.
+function brandShareCanvas(page) {
+  const W = page.width;
+  const header = Math.round(W * 0.19), footer = Math.round(W * 0.085);
+  const out = document.createElement("canvas");
+  out.width = W; out.height = header + page.height + footer;
+  const ctx = out.getContext("2d");
+  ctx.fillStyle = NAVY_DEEP; ctx.fillRect(0, 0, W, header);
+  ctx.fillStyle = NAVY; ctx.fillRect(0, header + page.height, W, footer);
+  ctx.drawImage(page, 0, header);
+  ctx.textAlign = "center";
+  ctx.fillStyle = GOLD;
+  ctx.font = `600 ${Math.round(W * 0.034)}px -apple-system, "Inter Tight", system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.round(W * 0.008)}px`; } catch { /* older engines */ }
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("G L O B E S K I M M E R S", W / 2, Math.round(header * 0.42));
+  try { ctx.letterSpacing = "0px"; } catch { /* ignore */ }
+  ctx.fillStyle = "#FBF6EC";
+  ctx.font = `${Math.round(W * 0.078)}px "Instrument Serif", "Iowan Old Style", Georgia, "Times New Roman", serif`;
+  ctx.fillText("My Virtual Passport", W / 2, Math.round(header * 0.84));
+  ctx.fillStyle = "rgba(251,246,236,0.85)";
+  ctx.font = `500 ${Math.round(W * 0.03)}px -apple-system, "Inter Tight", system-ui, sans-serif`;
+  ctx.textBaseline = "middle";
+  ctx.fillText("globeskimmers.io  ·  collect stamps where you go", W / 2, header + page.height + footer / 2);
+  return out;
+}
+
 // Blank ivory page — trailing fresh pages waiting for stamps.
 function EmptyCollectionPage({ coverH, pageNo, watermark }) {
   return <Paper coverH={coverH} pageNo={pageNo} watermark={watermark} />;
@@ -375,49 +406,62 @@ export default function PassportBook({
 
   const pageLabel = `Page ${page + 1} of ${total}`;
 
-  // Share the current page as an image → native share sheet (Messages, WhatsApp,
-  // Instagram, Snapchat, Facebook, LinkedIn, TikTok, Mail — whatever's installed).
+  // Share the current page as a branded image. Two taps on purpose: the first
+  // renders (html2canvas takes a moment, and WebKit only lets navigator.share
+  // run inside a user gesture — calling it after the render is why the button
+  // "did nothing" on the founder's phone, 2026-09-26); the preview's own Share
+  // button then hands the file to the native sheet (Instagram, Facebook,
+  // Snapchat, X, Messages — whatever is installed). A native build that carries
+  // @capacitor/share + @capacitor/filesystem goes through the plugin (always
+  // opens the sheet); otherwise the Web Share API; on the web a plain download.
+  // Every failure says why — never silent.
   const activePageRef = useRef(null);
   const [sharing, setSharing] = useState(false);
-  const shareCurrentPage = useCallback(async () => {
+  const [preview, setPreview] = useState(null); // { url, blob, dataUrl }
+  const renderCurrentPage = useCallback(async () => {
     const el = activePageRef.current;
     if (!el || sharing) return;
     setSharing(true);
     try {
-      const canvas = await html2canvas(el, { useCORS: true, backgroundColor: "#FBF6EC", scale: 2, logging: false });
-      // Baked-in brand watermark — every share markets the app.
-      try {
-        const ctx = canvas.getContext("2d");
-        const pad = Math.round(canvas.width * 0.03);
-        ctx.font = `600 ${Math.round(canvas.width * 0.036)}px -apple-system, system-ui, sans-serif`;
-        ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-        ctx.fillStyle = "rgba(11,43,80,0.5)";
-        ctx.fillText("Globeskimmers 🛂", canvas.width / 2, canvas.height - pad);
-      } catch { /* watermark best-effort */ }
+      const pageCanvas = await html2canvas(el, { useCORS: true, backgroundColor: "#FBF6EC", scale: 2, logging: false });
+      const canvas = brandShareCanvas(pageCanvas);
       const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
       if (!blob) throw new Error("render failed");
-      const file = new File([blob], "globeskimmers-passport.png", { type: "image/png" });
-      const data = { files: [file], title: "My Virtual Passport", text: "My Virtual Passport on Globeskimmers 🛂" };
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share(data);
-      } else if (typeof window !== "undefined" && !Capacitor.isNativePlatform()) {
-        // Web fallback (file-share unsupported): save the image.
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href = url; a.download = "globeskimmers-passport.png";
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-      } else if (navigator.clipboard) {
-        // Native WebView with no share sheet (Android has no navigator.share, and
-        // a blob: download is inert there — the tap used to do nothing). Hand the
-        // share text to the clipboard and SAY so; @capacitor/share isn't a dep.
-        try { await navigator.clipboard.writeText(data.text); showToast("Copied — paste it anywhere", "success"); }
-        catch { showToast("Sharing isn't available on this device", "error"); }
-      } else {
-        showToast("Sharing isn't available on this device", "error");
-      }
-    } catch { /* user cancelled or render failed — no-op */ }
+      setPreview({ url: URL.createObjectURL(blob), blob, dataUrl: canvas.toDataURL("image/png") });
+    } catch (e) { showToast(`Couldn't render this page${e?.message ? ` — ${e.message}` : ""}`, "error"); }
     finally { setSharing(false); }
   }, [sharing]);
+  const closePreview = useCallback(() => {
+    setPreview((p) => { if (p?.url) { try { URL.revokeObjectURL(p.url); } catch { /* ignore */ } } return null; });
+  }, []);
+  const shareRendered = useCallback(async () => {
+    if (!preview) return;
+    const text = "My Virtual Passport on Globeskimmers 🛂";
+    try {
+      if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("Share") && Capacitor.isPluginAvailable("Filesystem")) {
+        const { Filesystem, Directory } = await import("@capacitor/filesystem");
+        const { Share } = await import("@capacitor/share");
+        const base64 = String(preview.dataUrl).split(",")[1];
+        const w = await Filesystem.writeFile({ path: "globeskimmers-passport.png", data: base64, directory: Directory.Cache });
+        await Share.share({ title: "My Virtual Passport", text, files: [w.uri] });
+        closePreview(); return;
+      }
+      const file = new File([preview.blob], "globeskimmers-passport.png", { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "My Virtual Passport", text });
+        closePreview(); return;
+      }
+      if (!Capacitor.isNativePlatform()) {
+        const a = document.createElement("a"); a.href = preview.url; a.download = "globeskimmers-passport.png";
+        document.body.appendChild(a); a.click(); a.remove();
+        showToast("Image saved", "success"); return;
+      }
+      showToast("This version of the app can't share images yet — update it from the store", "error");
+    } catch (e) {
+      if (e?.name === "AbortError") return; // the traveler dismissed the sheet
+      showToast(`Couldn't share${e?.message ? ` — ${e.message}` : ""}`, "error");
+    }
+  }, [preview, closePreview]);
   const currentIsBlank = page > 0 && page - 1 >= stampCount;
 
   return (
@@ -514,12 +558,12 @@ export default function PassportBook({
           </button>
           {!currentIsBlank && (
             <button
-              onClick={shareCurrentPage} disabled={sharing}
+              onClick={renderCurrentPage} disabled={sharing}
               aria-label="Share this page"
               className="h-10 px-3 rounded-full flex items-center gap-1.5 disabled:opacity-50"
               style={{ background: "#fff", border: `1px solid ${PAPER_EDGE}`, color: INK, fontFamily: MONO, fontSize: fs(11), letterSpacing: ".04em" }}
             >
-              <Share2 size={14} color={STAMP} strokeWidth={2.2} /> {sharing ? "…" : "Share"}
+              <Share2 size={14} color={STAMP} strokeWidth={2.2} /> {sharing ? "Rendering…" : "Share"}
             </button>
           )}
           <button
@@ -530,6 +574,28 @@ export default function PassportBook({
           >
             <X size={14} color={GOLD} strokeWidth={2.4} /> Close
           </button>
+        </div>
+      )}
+
+      {/* Share preview — the branded image, then the sheet on a fresh tap */}
+      {preview && (
+        <div onClick={closePreview} className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Share this page"
+          style={{ background: "rgba(12,10,8,0.88)", backdropFilter: "blur(4px)" }}>
+          <img src={preview.url} alt="Your passport page, ready to share" onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "92vw", maxHeight: "62vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 24px 60px -20px rgba(0,0,0,.6)" }} />
+          <div className="w-full max-w-[380px] mt-4 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+            <button onClick={shareRendered} className="w-full rounded-xl py-3 font-bold flex items-center justify-center gap-2"
+              style={{ background: STAMP, color: "#fff", fontSize: fs(15), border: "none" }}>
+              <Share2 size={16} color="#fff" strokeWidth={2.2} /> Share to Instagram, Facebook, Snapchat, X…
+            </button>
+            <button onClick={closePreview} className="w-full rounded-xl py-2.5 font-semibold"
+              style={{ background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: fs(13.5), border: "1px solid rgba(255,255,255,0.25)" }}>
+              Close
+            </button>
+            <p className="text-center" style={{ fontFamily: MONO, fontSize: fs(10.5), color: "rgba(255,252,247,0.6)", letterSpacing: ".04em" }}>
+              Opens your phone&apos;s share sheet — pick a story, a post or a message.
+            </p>
+          </div>
         </div>
       )}
     </div>
