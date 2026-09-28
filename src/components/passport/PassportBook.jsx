@@ -311,6 +311,70 @@ const composeShare = async (pageCanvas, format) => {
   return { url: URL.createObjectURL(blob), blob, dataUrl: canvas.toDataURL("image/png") };
 };
 
+// Carousel posts (founder, 2026-09-28): slide 1 is the stamp page; each memory
+// photo on that page becomes its own 1080×1350 slide, cover-cropped (never
+// stretched), with a dark band along the bottom carrying a SOLID red "I was
+// here!", the place, city · country · date and the brand line — the top of
+// the photo stays clear for the view. Instagram takes up to 10 images.
+const MAX_PHOTO_SLIDES = 9;
+const loadImage = (src) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.crossOrigin = "anonymous";   // /pp-photo/ answers with CORS *, so the canvas stays exportable
+  const t = setTimeout(() => reject(new Error("a memory photo took too long to load")), 12000);
+  img.onload = () => { clearTimeout(t); resolve(img); };
+  img.onerror = () => { clearTimeout(t); reject(new Error("a memory photo couldn't be loaded")); };
+  img.src = src;
+});
+const slideDate = (iso) => {
+  if (!iso) return "";
+  try { return new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); } catch { return iso; }
+};
+async function photoSlide(src, stamp) {
+  const { W, H } = SHARE_FORMATS.post;
+  const img = await loadImage(src);
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = NAVY_DEEP; ctx.fillRect(0, 0, W, H);
+  const k = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+  const iw = img.naturalWidth * k, ih = img.naturalHeight * k;
+  ctx.drawImage(img, (W - iw) / 2, (H - ih) / 2, iw, ih);
+  const g = ctx.createLinearGradient(0, H * 0.6, 0, H);
+  g.addColorStop(0, "rgba(7,27,51,0)"); g.addColorStop(0.45, "rgba(7,27,51,0.64)"); g.addColorStop(1, "rgba(7,27,51,0.92)");
+  ctx.fillStyle = g; ctx.fillRect(0, H * 0.6, W, H * 0.4);
+  const serif = '"Instrument Serif", "Iowan Old Style", Georgia, "Times New Roman", serif';
+  const sans = '-apple-system, "Inter Tight", system-ui, sans-serif';
+  const pad = 64, maxW = W - pad * 2;
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  // brand line (bottom)
+  const brand = "G L O B E S K I M M E R S";
+  ctx.font = `600 24px ${sans}`; ctx.fillStyle = GOLD; ctx.fillText(brand, pad, H - 64);
+  const bw = ctx.measureText(brand).width;
+  ctx.font = `30px ${serif}`; ctx.fillStyle = "#FBF6EC"; ctx.fillText("·  My Virtual Passport", pad + bw + 14, H - 64);
+  // city · country · date
+  const where = [stamp?.city, stamp?.country].filter(Boolean).join(", ");
+  const line = [where, slideDate(stamp?.visited_on)].filter(Boolean).join("  ·  ");
+  ctx.font = `500 34px ${sans}`; ctx.fillStyle = "rgba(251,246,236,0.9)";
+  if (line) ctx.fillText(line, pad, H - 124, maxW);
+  // the place, shrunk to fit one line
+  let size = 66;
+  ctx.font = `${size}px ${serif}`;
+  const name = String(stamp?.name || "");
+  while (size > 38 && ctx.measureText(name).width > maxW) { size -= 2; ctx.font = `${size}px ${serif}`; }
+  ctx.fillStyle = "#FFFFFF"; ctx.fillText(name, pad, H - 184);
+  // solid red "I was here!" label
+  ctx.font = `italic 700 40px ${serif}`;
+  const lw = ctx.measureText("I was here!").width;
+  const ph = 60, pw = lw + 44, py = H - 184 - size - 22 - ph;
+  ctx.fillStyle = STAMP;
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(pad, py, pw, ph, 12); ctx.fill(); } else ctx.fillRect(pad, py, pw, ph);
+  ctx.fillStyle = "#FFFFFF"; ctx.fillText("I was here!", pad + 22, py + 43);
+  const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.92));
+  if (!blob) throw new Error("a slide could not be encoded");
+  return { blob, url: URL.createObjectURL(blob), dataUrl: c.toDataURL("image/jpeg", 0.92) };
+}
+const revokeSlides = (slides) => (slides || []).forEach((x) => { try { if (x?.url) URL.revokeObjectURL(x.url); } catch { /* ignore */ } });
+
 // Blank ivory page — trailing fresh pages waiting for stamps.
 function EmptyCollectionPage({ coverH, pageNo, watermark }) {
   return <Paper coverH={coverH} pageNo={pageNo} watermark={watermark} />;
@@ -482,38 +546,81 @@ export default function PassportBook({
         timeout,
       ]);
       const img = await composeShare(pageCanvas, "story");
-      setPreview({ status: "ready", format: "story", pageCanvas, ...img });
+      // The memory photos on THIS page, in page order — the carousel's slides 2+.
+      const pg = page >= 1 && page - 1 < bookPages.length ? bookPages[page - 1] : null;
+      const photos = pg ? pg.stamps.flatMap((st) => (st.photos || []).filter((ph) => ph && ph.photo_url).map((ph) => ({ src: ph.photo_url, stamp: st }))) : [];
+      setPreview({ status: "ready", format: "story", pageCanvas, photos, withPhotos: photos.length > 0, slides: null, slidesBusy: false, slideFailed: 0, ...img });
     } catch (e) {
       try { console.error("[passport share] render failed", e); } catch { /* ignore */ }
       setPreview({ status: "error", message: e?.message || String(e) });
     } finally { setSharing(false); }
-  }, [sharing]);
+  }, [sharing, page, bookPages]);
+  const slidesJob = useRef(0);
   const closePreview = useCallback(() => {
-    setPreview((p) => { if (p?.url) { try { URL.revokeObjectURL(p.url); } catch { /* ignore */ } } return null; });
+    slidesJob.current += 1; // cancels a slide build in flight
+    setPreview((p) => { if (p?.url) { try { URL.revokeObjectURL(p.url); } catch { /* ignore */ } } revokeSlides(p?.slides); return null; });
   }, []);
+  // Build the photo slides ahead of the Share tap: iOS only opens the sheet
+  // when share() runs inside the tap itself.
+  const buildSlides = useCallback(async (photos) => {
+    const job = ++slidesJob.current;
+    setPreview((p) => (p && p.status === "ready" ? { ...p, slidesBusy: true } : p));
+    const out = []; let failed = 0;
+    for (const ph of (photos || []).slice(0, MAX_PHOTO_SLIDES)) {
+      try { out.push(await photoSlide(ph.src, ph.stamp)); } catch { failed += 1; }
+    }
+    if (job !== slidesJob.current) { revokeSlides(out); return; }
+    setPreview((p) => {
+      if (!p || p.status !== "ready") { revokeSlides(out); return p; }
+      revokeSlides(p.slides);
+      return { ...p, slides: out, slideFailed: failed, slidesBusy: false };
+    });
+  }, []);
+  const toggleWithPhotos = useCallback(() => {
+    if (!preview || preview.status !== "ready") return;
+    const next = !preview.withPhotos;
+    setPreview((p) => ({ ...p, withPhotos: next }));
+    if (next && preview.format === "post" && !preview.slides && !preview.slidesBusy) buildSlides(preview.photos);
+  }, [preview, buildSlides]);
   // Story ↔ Post: re-frame the already-rendered page (no second html2canvas).
   const switchFormat = useCallback(async (format) => {
     if (!preview || preview.status !== "ready" || preview.format === format) return;
     try {
       const img = await composeShare(preview.pageCanvas, format);
       setPreview((p) => { if (p?.url) { try { URL.revokeObjectURL(p.url); } catch { /* ignore */ } } return { ...p, format, ...img }; });
+      if (format === "post" && preview.withPhotos && preview.photos?.length && !preview.slides && !preview.slidesBusy) buildSlides(preview.photos);
     } catch (e) { setPreview({ status: "error", message: e?.message || String(e) }); }
-  }, [preview]);
+  }, [preview, buildSlides]);
   const shareRendered = useCallback(async () => {
     if (!preview || preview.status !== "ready") return;
+    if (preview.format === "post" && preview.withPhotos && preview.slidesBusy) return; // slides still being drawn
+    const carousel = preview.format === "post" && preview.withPhotos ? (preview.slides || []) : [];
     const text = "My Virtual Passport on Globeskimmers 🛂";
     try {
       if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("Share") && Capacitor.isPluginAvailable("Filesystem")) {
         const { Filesystem, Directory } = await import("@capacitor/filesystem");
         const { Share } = await import("@capacitor/share");
-        const base64 = String(preview.dataUrl).split(",")[1];
-        const w = await Filesystem.writeFile({ path: `globeskimmers-passport-${preview.format || "story"}.png`, data: base64, directory: Directory.Cache });
-        await Share.share({ title: "My Virtual Passport", text, files: [w.uri] });
+        const uris = [];
+        const w = await Filesystem.writeFile({ path: `globeskimmers-passport-${preview.format || "story"}.png`, data: String(preview.dataUrl).split(",")[1], directory: Directory.Cache });
+        uris.push(w.uri);
+        for (let i = 0; i < carousel.length; i++) {
+          const ws = await Filesystem.writeFile({ path: `globeskimmers-passport-photo-${i + 1}.jpg`, data: String(carousel[i].dataUrl).split(",")[1], directory: Directory.Cache });
+          uris.push(ws.uri);
+        }
+        await Share.share({ title: "My Virtual Passport", text, files: uris });
         closePreview(); return;
       }
-      const file = new File([preview.blob], "globeskimmers-passport.png", { type: "image/png" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "My Virtual Passport", text });
+      // Files are built synchronously from blobs already in memory, so share()
+      // still runs inside the tap.
+      const files = [new File([preview.blob], `globeskimmers-passport-${preview.format || "story"}.png`, { type: "image/png" })]
+        .concat(carousel.map((x, i) => new File([x.blob], `globeskimmers-passport-photo-${i + 1}.jpg`, { type: "image/jpeg" })));
+      if (navigator.canShare && navigator.canShare({ files })) {
+        await navigator.share({ files, title: "My Virtual Passport", text });
+        closePreview(); return;
+      }
+      if (files.length > 1 && navigator.canShare && navigator.canShare({ files: [files[0]] })) {
+        await navigator.share({ files: [files[0]], title: "My Virtual Passport", text });
+        showToast("Your phone shared the stamp page only — add the photos from your camera roll", "error");
         closePreview(); return;
       }
       if (!Capacitor.isNativePlatform()) {
@@ -681,12 +788,40 @@ export default function PassportBook({
                 ))}
               </div>
             )}
-            {preview.status === "ready" && (
-            <button onClick={shareRendered} className="w-full rounded-xl py-3 font-bold flex items-center justify-center gap-2"
-              style={{ background: STAMP, color: "#fff", fontSize: fs(15), border: "none" }}>
-              <Share2 size={16} color="#fff" strokeWidth={2.2} /> Share to Instagram, Facebook, Snapchat, X…
-            </button>
+            {preview.status === "ready" && preview.format === "post" && preview.photos?.length > 0 && (
+              <div className="rounded-xl p-3" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)" }}>
+                <label className="flex items-center gap-2.5" style={{ color: "#fff", fontSize: fs(13.5), fontWeight: 600 }}>
+                  <input id="pp-share-with-photos" type="checkbox" checked={!!preview.withPhotos} onChange={toggleWithPhotos} style={{ width: 18, height: 18, accentColor: STAMP }} />
+                  Add my memory photos as slides 2–{1 + Math.min(MAX_PHOTO_SLIDES, preview.photos.length)}
+                </label>
+                {preview.withPhotos ? (
+                  <div className="flex gap-1.5 mt-2.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                    <img src={preview.url} alt="Slide 1: the stamp page" style={{ width: 44, height: 55, objectFit: "cover", borderRadius: 6, border: "1.5px solid #FBF6EC", flex: "none" }} />
+                    {preview.slidesBusy
+                      ? <span style={{ fontFamily: MONO, fontSize: fs(11), color: "rgba(255,252,247,0.75)", alignSelf: "center", paddingLeft: 4 }}>Preparing your photos…</span>
+                      : (preview.slides || []).map((x, i) => (
+                          <img key={i} src={x.url} alt={`Slide ${i + 2}: memory photo ${i + 1}`} style={{ width: 44, height: 55, objectFit: "cover", borderRadius: 6, border: "1px solid rgba(255,255,255,0.3)", flex: "none" }} />
+                        ))}
+                  </div>
+                ) : (
+                  <p style={{ color: "rgba(255,252,247,0.72)", fontSize: fs(12), marginTop: 6, lineHeight: 1.4 }}>Just the stamp page, with your photos as the thumbnails on it.</p>
+                )}
+                {preview.withPhotos && preview.slideFailed > 0 && (
+                  <p style={{ color: "#F3B2A5", fontSize: fs(12), marginTop: 6 }}>{preview.slideFailed} photo{preview.slideFailed === 1 ? "" : "s"} couldn&apos;t be added.</p>
+                )}
+              </div>
             )}
+            {preview.status === "ready" && (() => {
+              const busy = preview.format === "post" && preview.withPhotos && preview.slidesBusy;
+              const n = preview.format === "post" && preview.withPhotos ? 1 + (preview.slides || []).length : 1;
+              return (
+                <button onClick={shareRendered} disabled={busy} className="w-full rounded-xl py-3 font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+                  style={{ background: STAMP, color: "#fff", fontSize: fs(15), border: "none" }}>
+                  <Share2 size={16} color="#fff" strokeWidth={2.2} />
+                  {busy ? "Preparing your photos…" : n > 1 ? `Share post · ${n} images` : "Share to Instagram, Facebook, Snapchat, X…"}
+                </button>
+              );
+            })()}
             <button onClick={closePreview} className="w-full rounded-xl py-2.5 font-semibold"
               style={{ background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: fs(13.5), border: "1px solid rgba(255,255,255,0.25)" }}>
               Close
