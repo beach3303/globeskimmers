@@ -39,12 +39,14 @@ const hashStr = (s) => { let h = 0; const str = String(s || ""); for (let i = 0;
 const PAPER = "#FBF6EC", PAPER_EDGE = "#EADFC9";
 const NAVY = "#0C2B50", NAVY_DEEP = "#071B33", GOLD = "#D6A64A";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
-// Stamp width as a share of the page width. 0.50 until 2026-09-28; the founder
-// chose ink B and asked for the place name, "I was here!" and the date two to
-// three sizes larger — scaling the whole stamp 1.28× does exactly that (the
-// name is already fitted to the stamp's width, so only the stamp can grow).
-// On a phone this means one stamp per page, like a real passport page.
-const ART_FRAC = 0.64;
+// Stamp width as a share of the page width. 0.50 until 2026-09-28, when the
+// founder chose ink B and then "Updated B" from the mockups
+// (https://claude.ai/artifact/Hivj8DCxdPgkLV611bt17Y): the place name, "I was
+// here!" and the date two to three sizes above B. Scaling the whole stamp is
+// what does that — the name is already fitted to the stamp's width. On a
+// phone: name ≈ 39 px, strike ≈ 20 px, date ≈ 15 px; one stamp per page. The
+// shared Story and Post both draw from this page, so both follow.
+const ART_FRAC = 0.76;
 
 const KIND = {
   country: "🌍", city: "🏙️", airport: "✈️", icon: "🗽", wonder: "🏔️", attraction: "📍",
