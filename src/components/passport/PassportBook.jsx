@@ -172,8 +172,12 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
         </div>
       )}
 
-      {stamp.verified === "gps" && (
-        <span className="absolute" style={{ top: -6, right: isAirport ? 10 : 22, background: "#2E6B4E", color: "#fff", fontSize: 13, fontWeight: 700, width: 22, height: 22, borderRadius: 999, display: "grid", placeItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }}>✓</span>
+      {/* The ✓ sits on the stamp itself, never on the photos (founder,
+          2026-09-28), top-left so it never covers the red "I was here!".
+          Earned by GPS at the place, a photo's own location, or the place
+          recognised in a photo. */}
+      {(stamp.verified === "gps" || stamp.verified === "photo_loc" || stamp.verified === "photo_ai") && (
+        <span className="absolute" title={stamp.verified === "gps" ? "Verified visit" : "Verified by photo"} style={{ top: -6, left: isAirport ? 10 : 14, background: "#2E6B4E", color: "#fff", fontSize: 14, fontWeight: 700, width: 26, height: 26, borderRadius: 999, display: "grid", placeItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }}>✓</span>
       )}
     </button>
   );
@@ -376,22 +380,23 @@ async function photoSlide(src, stamp) {
 }
 // Share analytics (founder, 2026-09-28: per month, stamps vs shares per
 // platform, and story vs post vs message). iOS reports the app picked in the
-// share sheet (@capacitor/share → activityType); Android and the browser's Web
-// Share report nothing, so those land as "unknown". Pattern-matched so a share
-// extension's exact bundle id can drift without losing the platform.
+// share sheet (@capacitor/share → activityType: an iOS extension id, or on
+// Android the chosen app's package name); the browser's Web Share reports
+// nothing, so those land as "unknown". Pattern-matched so an exact id can
+// drift without losing the platform. Android Messenger is com.facebook.orca.
 const platformFromActivity = (a) => {
   const s = String(a || "").toLowerCase();
   if (!s) return null;
   if (s.includes("instagram")) return "instagram";
-  if (s.includes("messenger")) return "messenger";
+  if (s.includes("messenger") || s.includes("facebook.orca")) return "messenger";
   if (s.includes("facebook")) return "facebook";
   if (s.includes("whatsapp")) return "whatsapp";
   if (s.includes("musically") || s.includes("tiktok")) return "tiktok";
   if (s.includes("picaboo") || s.includes("snapchat")) return "snapchat";
   if (s.includes("tweetie") || s.includes("twitter")) return "x";
-  if (s.includes("activity.message")) return "messages";
-  if (s.includes("activity.mail")) return "mail";
-  if (s.includes("savetocameraroll")) return "saved";
+  if (s.includes("activity.message") || s.includes("apps.messaging") || s.includes("android.mms")) return "messages";
+  if (s.includes("activity.mail") || s.includes("android.gm")) return "mail";
+  if (s.includes("savetocameraroll") || s.includes("apps.photos")) return "saved";
   if (s.includes("copytopasteboard")) return "copied";
   return "other";
 };

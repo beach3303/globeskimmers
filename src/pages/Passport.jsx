@@ -6,7 +6,7 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
+import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
@@ -17,6 +17,7 @@ import { isAdminEmail } from "@/lib/admins";
 import { localISODate } from "@/lib/localDate";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { resizePhoto } from "@/lib/resizePhoto";
+import { readPhotoExif } from "@/lib/photoExif";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import NearbyStampPrompt, { NEARBY_KEY, nearbySensingOn } from "@/components/passport/NearbyStampPrompt";
 import StampActions from "@/components/passport/StampActions";
@@ -51,9 +52,12 @@ const fmtDate = (iso) => {
 };
 
 function VerifiedBadge({ verified }) {
-  // Only a live GPS visit earns the ✓ (it's the only real proof of presence).
-  // A photo is a memory, not verification; self-added shows no badge.
+  // Three proofs earn the ✓ (founder, 2026-09-28): the phone at the place,
+  // a photo whose own location tag puts you there, or the place recognised in
+  // your photo. A photo with no proof is a memory; self-added shows no badge.
   if (verified === "gps") return <Chip bg="#E7F3EA" color="#266A3B">✓ Verified visit</Chip>;
+  if (verified === "photo_loc") return <Chip bg="#E7F3EA" color="#266A3B">✓ Verified · photo location</Chip>;
+  if (verified === "photo_ai") return <Chip bg="#E7F3EA" color="#266A3B">✓ Verified · photo</Chip>;
   if (verified === "photo") return <Chip bg={IVORY_2} color={INK3}>📸 With photo</Chip>;
   return null;
 }
@@ -110,9 +114,10 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
     if (!file) return;
     setBusy(true);
     try {
+      const exif = await readPhotoExif(file);   // before resizing strips it
       const image = await resizePhoto(file);
-      const { error } = await uploadStampPhoto({ stamp_id: stamp.id, image, visited_on: stamp.visited_on || undefined });
-      if (error) showToast(error, "error"); else { showToast("Photo added 📸", "success"); onChanged(); }
+      const { data, error } = await uploadStampPhoto({ stamp_id: stamp.id, image, visited_on: stamp.visited_on || undefined, exif });
+      if (error) showToast(error, "error"); else { showToast(proofToast(data?.proof) || "Photo added 📸", "success"); onChanged(); }
     } catch (err) { showToast(err?.message || "Upload failed", "error"); }
     finally { setBusy(false); }
   };
@@ -396,8 +401,16 @@ function StampPlaceModal({ onClose, onDone }) {
       visited_on: dateVal, local_hour: new Date().getHours(), verified,
     });
     if (error || !data?.id) { setBusy(false); showToast(error || "Could not add stamp", "error"); return; }
-    for (const f of photos) { try { const image = await resizePhoto(f); await uploadStampPhoto({ stamp_id: data.id, image, visited_on: dateVal }); } catch { /* skip a bad photo */ } }
-    setBusy(false); showToast(data.verified === "gps" ? "✓ Verified — place stamped 🛂" : "Place stamped 🛂", "success"); onDone();
+    let proof = null;
+    for (const f of photos) {
+      try {
+        const exif = await readPhotoExif(f);   // before resizing strips it
+        const image = await resizePhoto(f);
+        const up = await uploadStampPhoto({ stamp_id: data.id, image, visited_on: dateVal, exif });
+        if (up?.data?.proof && !proof) proof = up.data.proof;
+      } catch { /* skip a bad photo */ }
+    }
+    setBusy(false); showToast(data.verified === "gps" ? "✓ Verified — place stamped 🛂" : (proofToast(proof) || "Place stamped 🛂"), "success"); onDone();
   };
 
   const inputStyle = { width: "100%", border: `1px solid ${RULE}`, borderRadius: 12, padding: "10px 12px", fontSize: fs(14), color: INK, fontFamily: SANS, background: "#fff" };

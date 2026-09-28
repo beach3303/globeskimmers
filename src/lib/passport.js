@@ -30,11 +30,23 @@ export async function listPassport() {
 
 // Attach a photo to a stamp (base64 data URL or bare base64). A photo on a
 // self-declared stamp upgrades it to ✓ (photo-proof); visited_on optional.
-export async function uploadStampPhoto({ stamp_id, image, caption, visited_on, content_type }) {
-  const { data, error } = await callWorker('passport/photo', { stamp_id, image, caption, visited_on, content_type });
+// exif: { lat, lng, taken_at } read from the ORIGINAL file (src/lib/photoExif.js)
+// — the worker's photo-location proof; never stored. Resolves data.proof =
+// 'photo_loc' | 'photo_ai' | null and data.verified = the stamp's new status.
+export async function uploadStampPhoto({ stamp_id, image, caption, visited_on, content_type, exif }) {
+  const { data, error } = await callWorker('passport/photo', { stamp_id, image, caption, visited_on, content_type, exif: exif || undefined });
   return { data, error };
 }
 
+// Place recognition on a stamp's existing memory photos → { verified, checked, match }.
+export async function checkStampPhotos(stamp_id) {
+  const { data, error } = await callWorker('passport/stamp/check-photos', { stamp_id });
+  return { data, error: error || (data && data.ok === false ? data.error || 'Could not check the photos' : null) };
+}
+// The three proofs that earn the green ✓ (gps, photo location, photo recognised).
+export const isVerified = (v) => v === 'gps' || v === 'photo_loc' || v === 'photo_ai';
+export const proofToast = (proof) => proof === 'photo_loc' ? "✓ Verified — your photo's location puts you there"
+  : proof === 'photo_ai' ? '✓ Verified — we recognised the place in your photo' : null;
 export async function setStampDate(stamp_id, visited_on) {
   const { data, error } = await callWorker('passport/stamp/date', { stamp_id, visited_on });
   return { data, error };

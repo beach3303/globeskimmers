@@ -7,9 +7,11 @@
 // Every write goes through src/lib/passport.js; onChanged() reloads the
 // passport so the booklet repacks (a solo stamp moves to its own page at once).
 import React, { useRef, useState } from "react";
-import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck } from "lucide-react";
+import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck, ScanSearch } from "lucide-react";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, uploadStampPhoto, deleteStamp, deleteStampPhoto, setStampLayout } from "@/lib/passport";
+import { addStamp, metersBetween, uploadStampPhoto, deleteStamp, deleteStampPhoto, setStampLayout, checkStampPhotos, isVerified, proofToast } from "@/lib/passport";
+import { readPhotoExif } from "@/lib/photoExif";
+import { logEvent } from "@/lib/analytics";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { countryCode } from "@/lib/countries";
 import { localISODate } from "@/lib/localDate";
@@ -55,16 +57,18 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
     e.target.value = "";
     if (!files.length) return;
     setBusy("photos");
-    let added = 0;
+    let added = 0, proof = null;
     for (const f of files) {
       try {
+        const exif = await readPhotoExif(f);   // before resizing strips it
+        logEvent("passport_photo_exif", { has_gps: !!(exif && exif.lat != null), has_time: !!(exif && exif.taken_at) }, "Passport");
         const image = await resizePhoto(f);
-        const { error } = await uploadStampPhoto({ stamp_id: stamp.id, image, visited_on: stamp.visited_on || undefined });
-        if (error) showToast(error, "error"); else added += 1;
+        const { data, error } = await uploadStampPhoto({ stamp_id: stamp.id, image, visited_on: stamp.visited_on || undefined, exif });
+        if (error) showToast(error, "error"); else { added += 1; if (data?.proof && !proof) proof = data.proof; }
       } catch (err) { showToast(err?.message || "Upload failed", "error"); }
     }
     setBusy(null);
-    if (added) { showToast(`${added} photo${added === 1 ? "" : "s"} added 📸`, "success"); onChanged?.(); }
+    if (added) { showToast(proofToast(proof) || `${added} photo${added === 1 ? "" : "s"} added 📸`, "success"); onChanged?.(); }
   };
   const removePhoto = async (photoId) => {
     const { error } = await deleteStampPhoto(photoId);
@@ -110,6 +114,17 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
     if (error) { showToast(error, "error"); return; }
     if (data?.verified === "gps") { showToast("✓ Verified — you're really here", "success"); onChanged?.(); }
     else showToast("Couldn't confirm your location (VPN or roaming?) — the stamp stays as it was", "error");
+  };
+  // Place recognition on photos already on the stamp (stored without their
+  // location tags, so recognition is the proof left for them).
+  const canCheckPhotos = !readOnly && photos.length > 0 && !isVerified(stamp.verified);
+  const checkPhotos = async () => {
+    setBusy("check");
+    const { data, error } = await checkStampPhotos(stamp.id);
+    setBusy(null);
+    if (error) { showToast(error, "error"); return; }
+    if (isVerified(data?.verified)) { showToast(proofToast("photo_ai"), "success"); onChanged?.(); }
+    else showToast("Your photos don't show the place clearly enough to verify it — Verify I'm here works next time you're there", "error");
   };
   const removeStamp = async () => {
     setBusy("delete");
@@ -174,6 +189,11 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
             <Row icon={busy === "verify" ? Loader2 : BadgeCheck} label="Verify I'm here"
               sub="Uses your location once to earn the green ✓ — works while you're at the place"
               onClick={verifyHere} disabled={busy === "verify"} />
+          )}
+          {canCheckPhotos && (
+            <Row icon={busy === "check" ? Loader2 : ScanSearch} label="Check my photos for proof"
+              sub="Looks for the place itself in your photos — selfies alone can't prove it"
+              onClick={checkPhotos} disabled={busy === "check"} />
           )}
           {!readOnly && (
             <Row icon={PencilLine} label="Details, date & tag a friend" sub="Set the real visit date, invite who you were with" onClick={onDetails} />

@@ -12924,7 +12924,13 @@ async function handleGuestbookPhotoServe(request, env) {
 // vs attraction mark); three earning paths — gps / photo-proof / self — where gps
 // and photo earn the ✓. See docs/PASSPORT_MEANING_MODEL.md.
 const PP_KINDS = ['country', 'city', 'airport', 'icon', 'wonder', 'attraction'];
-const PP_VERIFY_RANK = { self: 0, photo: 1, gps: 2 };
+// Verification strength (founder, 2026-09-28: three ways to earn the ✓). gps =
+// the phone was at the place; photo_loc = a photo's own location tag puts it
+// there on the visit date; photo_ai = the place is recognised in the photo;
+// photo = a memory photo, no proof; self = declared. Only the first three earn
+// the ✓. A re-stamp or a new photo never lowers a stamp's rank.
+const PP_VERIFY_RANK = { self: 0, photo: 1, photo_ai: 2, photo_loc: 3, gps: 4 };
+const PP_VERIFIED = new Set(['gps', 'photo_loc', 'photo_ai']);
 const ppDate = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? String(s) : null);
 const ppSlug = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
@@ -13033,7 +13039,7 @@ async function ppLoad(env, userId) {
     icons: out.filter((s) => s.kind === 'icon').length,
     wonders: out.filter((s) => s.kind === 'wonder').length,
     attractions: out.filter((s) => s.kind === 'attraction').length,
-    verified: out.filter((s) => s.verified === 'gps').length,
+    verified: out.filter((s) => PP_VERIFIED.has(s.verified)).length,
   };
   return { stamps: out, stats };
 }
@@ -13127,6 +13133,96 @@ async function handlePassportShareLanding(request, env) {
 // Private memory photos → no AI moderation (it's the user's own journal); the
 // client resizes to ~1280px JPEG (which also drops EXIF/GPS). Key is UUID-based
 // (unguessable) — private-by-obscurity, consistent with the guestbook serve path.
+// ── Photo proof (founder, 2026-09-28) ───────────────────────────────────────
+// 1) The photo's own location tag: the app reads GPS + DateTimeOriginal from
+//    the ORIGINAL file before it resizes (the upload itself carries no EXIF),
+//    and sends only {lat, lng, taken_at}; within 400 m of the stamp (airports
+//    3 km) and within 2 days of the visit date → 'photo_loc'. Not stored.
+// 2) Place recognition: Claude looks at the uploaded JPEG and says whether it
+//    shows THIS place (exterior, signage, a signature exhibit). Selfies and
+//    generic scenes come back "unsure" and earn nothing. yes + confidence ≥ 0.8
+//    → 'photo_ai'. Capped per traveler per day; skipped once a stamp already
+//    has a stronger proof. Model is one constant — Opus 5 by default; Haiku 4.5
+//    is the cheaper option the founder can pick (~0.2¢ vs ~1.3¢ a photo).
+const PP_VISION_MODEL = 'claude-opus-5';
+const PP_VISION_DAILY_CAP = 20;
+const PP_VISION_PROMPT = [
+  'You check whether a traveler\'s photo shows a specific place, for a travel passport stamp.',
+  'Answer "yes" only when the photo itself shows something that identifies THIS place: its exterior, its name or signage, a distinctive interior, exhibit or view known to be at this place.',
+  'Answer "unsure" for selfies, food, people, a generic room or a scene that could be at many places, even if it might be here.',
+  'Answer "no" when the photo clearly shows a different place.',
+  'confidence is a number from 0 to 1. reason is one short plain sentence.',
+].join(' ');
+const PP_VISION_SCHEMA = {
+  type: 'object',
+  properties: {
+    match: { type: 'string', enum: ['yes', 'no', 'unsure'] },
+    confidence: { type: 'number' },
+    reason: { type: 'string' },
+  },
+  required: ['match', 'confidence', 'reason'],
+  additionalProperties: false,
+};
+function ppBytesToB64(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+function ppPhotoLocProves(stamp, exif) {
+  if (!exif || !Number.isFinite(+stamp?.lat) || !Number.isFinite(+stamp?.lng)) return false;
+  const lat = +exif.lat, lng = +exif.lng;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return false;
+  const meters = haversineMilesLoc(+stamp.lat, +stamp.lng, lat, lng) * 1609.34;
+  if (meters > (stamp.kind === 'airport' ? 3000 : 400)) return false;
+  const d = String(exif.taken_at || '').slice(0, 10);
+  if (stamp.visited_on && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    if (Math.abs(Date.parse(d) - Date.parse(stamp.visited_on)) / 86400000 > 2) return false;
+  }
+  return true;
+}
+async function ppVisionAllowed(env, userId) {
+  if (!env.GLOBESKIMMERS_KV) return true;
+  const k = `pp:vision:${userId}:${new Date().toISOString().slice(0, 10)}`;
+  const n = Number(await env.GLOBESKIMMERS_KV.get(k).catch(() => 0)) || 0;
+  if (n >= PP_VISION_DAILY_CAP) return false;
+  await env.GLOBESKIMMERS_KV.put(k, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
+  return true;
+}
+// → { match, confidence, reason } or null (no key, timeout, refusal, bad JSON).
+async function ppRecognizePlace(env, bytes, mediaType, stamp) {
+  if (!env.ANTHROPIC_API_KEY || !stamp?.name) return null;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const where = [stamp.city, stamp.country].filter(Boolean).join(', ');
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', signal: ctrl.signal,
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'server-side-fallback-2026-07-01', 'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: PP_VISION_MODEL, max_tokens: 2048, fallbacks: 'default',
+        output_config: { effort: 'low', format: { type: 'json_schema', schema: PP_VISION_SCHEMA } },
+        system: PP_VISION_PROMPT,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: ppBytesToB64(bytes) } },
+          { type: 'text', text: `Place: ${stamp.name}${where ? `\nWhere: ${where}` : ''}` },
+        ] }],
+      }),
+    });
+    if (!res.ok) return null;
+    const d = await res.json().catch(() => null);
+    if (!d || d.stop_reason === 'refusal' || d.stop_reason === 'max_tokens') return null;
+    const text = (d.content || []).find((c) => c && c.type === 'text')?.text;
+    const v = text ? JSON.parse(text) : null;
+    if (!v || !['yes', 'no', 'unsure'].includes(v.match)) return null;
+    return { match: v.match, confidence: Math.max(0, Math.min(1, Number(v.confidence) || 0)), reason: String(v.reason || '').slice(0, 200) };
+  } catch { return null; }
+  finally { clearTimeout(t); }
+}
+const ppAiProves = (v) => !!v && v.match === 'yes' && v.confidence >= 0.8;
+
 async function handlePassportPhotoUpload(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -13135,7 +13231,7 @@ async function handlePassportPhotoUpload(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const stampId = String(b.stamp_id || '');
     if (!stampId) return jsonResponse({ error: 'stamp_id required' }, 400);
-    const sq = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}&select=id,verified`, {});
+    const sq = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}&select=id,verified,kind,name,city,country,lat,lng,visited_on`, {});
     const stamp = (sq.ok ? await sq.json() : [])[0];
     if (!stamp) return jsonResponse({ error: 'Stamp not found' }, 404);
 
@@ -13157,17 +13253,67 @@ async function handlePassportPhotoUpload(request, env, ctx) {
     const photoUrl = `${origin}/pp-photo/${key}`;
     await gbRest(env, 'passport_stamp_photos', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ stamp_id: stampId, user_id: user.id, photo_key: key, photo_url: photoUrl, caption: b.caption ? String(b.caption).slice(0, 200) : null }) });
 
-    // Photo-proof: a photo on a 'self' stamp earns the ✓; also set the date if given.
+    // Proof from this photo — location tag first (free), then recognition.
     const patch = {};
-    if (stamp.verified === 'self') patch.verified = 'photo';
     const visitedOn = ppDate(b.visited_on);
     if (visitedOn) patch.visited_on = visitedOn;
+    const rankOf = (v) => PP_VERIFY_RANK[v] ?? 0;
+    const forCheck = { ...stamp, visited_on: visitedOn || stamp.visited_on };
+    const exif = b.exif && typeof b.exif === 'object' ? b.exif : null;
+    let proof = null, ai = null;
+    if (rankOf(stamp.verified) < rankOf('photo_loc') && ppPhotoLocProves(forCheck, exif)) proof = 'photo_loc';
+    if (!proof && rankOf(stamp.verified) < rankOf('photo_ai') && mediaType === 'image/jpeg' && await ppVisionAllowed(env, user.id)) {
+      ai = await ppRecognizePlace(env, bytes, mediaType, stamp);
+      if (ppAiProves(ai)) proof = 'photo_ai';
+    }
+    const earned = proof || 'photo';
+    if (rankOf(earned) > rankOf(stamp.verified)) patch.verified = earned;
     if (Object.keys(patch).length) {
       patch.updated_at = new Date().toISOString();
       await gbRest(env, `passport_stamps?id=eq.${stampId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
     }
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_photo', { bytes: bytes.length }));
-    return jsonResponse({ key, url: photoUrl, verified: patch.verified || stamp.verified });
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_photo', { bytes: bytes.length, has_gps: !!(exif && Number.isFinite(+exif.lat)), has_time: !!(exif && exif.taken_at), proof, ai_match: ai?.match || null, ai_confidence: ai?.confidence ?? null }));
+    return jsonResponse({ key, url: photoUrl, verified: patch.verified || stamp.verified, proof, ai: ai ? { match: ai.match, confidence: ai.confidence } : null });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /passport/stamp/check-photos { stamp_id } — run place recognition on a
+// stamp's EXISTING memory photos (they were stored without their location
+// tags, so recognition is the only proof left for them). Stops at the first
+// photo that proves the visit; up to 3 photos; same daily cap.
+async function handlePassportCheckPhotos(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    if (!env.MEDIA) return jsonResponse({ error: 'Photo storage not configured' }, 500);
+    const b = await request.json().catch(() => ({}));
+    const stampId = String(b.stamp_id || '').replace(/[^0-9a-f-]/gi, '').slice(0, 40);
+    if (!stampId) return jsonResponse({ error: 'stamp_id required' }, 400);
+    const sq = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}&select=id,verified,kind,name,city,country`, {});
+    const stamp = (sq.ok ? await sq.json() : [])[0];
+    if (!stamp) return jsonResponse({ error: 'Stamp not found' }, 404);
+    const rankOf = (v) => PP_VERIFY_RANK[v] ?? 0;
+    if (rankOf(stamp.verified) >= rankOf('photo_ai')) return jsonResponse({ ok: true, verified: stamp.verified, checked: 0, already: true });
+    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=eq.${stampId}&user_id=eq.${user.id}&order=created_at.asc&select=photo_key&limit=3`, {});
+    const photos = pq.ok ? await pq.json() : [];
+    let checked = 0, best = null;
+    for (const ph of photos) {
+      if (!ph.photo_key || !/\.jpe?g$/i.test(ph.photo_key)) continue;
+      if (!(await ppVisionAllowed(env, user.id))) return jsonResponse({ ok: false, error: 'Daily photo check limit reached — try again tomorrow', checked });
+      const obj = await env.MEDIA.get(ph.photo_key).catch(() => null);
+      if (!obj) continue;
+      const bytes = new Uint8Array(await obj.arrayBuffer());
+      const v = await ppRecognizePlace(env, bytes, 'image/jpeg', stamp);
+      checked += 1;
+      if (v && (!best || v.confidence > best.confidence)) best = v;
+      if (ppAiProves(v)) {
+        await gbRest(env, `passport_stamps?id=eq.${stampId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ verified: 'photo_ai', updated_at: new Date().toISOString() }) });
+        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_photo_check', { checked, proof: 'photo_ai', ai_confidence: v.confidence }));
+        return jsonResponse({ ok: true, verified: 'photo_ai', checked, match: v.match, confidence: v.confidence });
+      }
+    }
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_photo_check', { checked, proof: null, ai_match: best?.match || null }));
+    return jsonResponse({ ok: true, verified: stamp.verified, checked, match: best?.match || null, reason: best?.reason || null });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -18090,6 +18236,7 @@ export default {
       if (pathname === '/passport/stamp/layout' && request.method === 'POST') return await handlePassportStampLayout(request, env);
       if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
       if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);
+      if (pathname === '/passport/stamp/check-photos' && request.method === 'POST') return await handlePassportCheckPhotos(request, env, ctx);
       if (pathname === '/passport/tag' && request.method === 'POST') return await handlePassportTag(request, env, ctx);
       if (pathname === '/passport/tags' && request.method === 'POST') return await handlePassportTagsList(request, env);
       if (pathname === '/passport/tag/respond' && request.method === 'POST') return await handlePassportTagRespond(request, env, ctx);
