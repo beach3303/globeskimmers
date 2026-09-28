@@ -6627,6 +6627,10 @@ async function handleAttractionsNearby(request, env, ctx) {
     return a.distanceKm - b.distanceKm;
   });
 
+  // Movie scene stamps: the film behind a spot rides along as `film`.
+  const films = await filmsForAttractions(env, within.map((r) => r.id));
+  for (const r of within) { const f = films.get(r.id); if (f) r.film = f; }
+
   // Phase B background seed trigger. When D1 has sparse coverage for
   // this region AND we have the city/country labels to identify it,
   // kick off a discovery+seed task that runs after the response. The
@@ -6953,6 +6957,28 @@ async function homeRowsPlanetPool(env, latitude, longitude) {
 
 // /attractions/get — one attraction row by id, for deep-linked / shared
 // ActivityDetail URLs (?id=...). Same graceful degradation as /attractions/nearby.
+// Film behind each attraction (film_scenes, cloudflare-worker/sql/13_film_scenes.sql).
+// Separate query so a missing table (not yet applied) never breaks the list —
+// it just means no film info. → Map(attraction_id → film).
+function filmFromRow(f) {
+  if (!f || !f.work_title) return null;
+  const cast = [[f.cast1, f.role1], [f.cast2, f.role2]].filter(([a]) => a).map(([actor, role]) => ({ actor, role: role || null }));
+  return { title: f.work_title, year: f.year ?? null, type: f.work_type || 'film', cast, scene: f.scene || null, alsoIn: f.also_in || null };
+}
+async function filmsForAttractions(env, ids) {
+  const out = new Map();
+  const list = (ids || []).filter(Boolean).slice(0, 200);
+  if (!env.ATTRACTIONS_DB || !list.length) return out;
+  try {
+    const rs = await env.ATTRACTIONS_DB.prepare(
+      `SELECT attraction_id, work_title, work_type, year, cast1, role1, cast2, role2, scene, also_in
+         FROM film_scenes WHERE attraction_id IN (${list.map(() => '?').join(',')})`
+    ).bind(...list).all();
+    for (const f of rs.results || []) { const film = filmFromRow(f); if (film) out.set(f.attraction_id, film); }
+  } catch { /* table not applied yet → no film info */ }
+  return out;
+}
+
 async function handleAttractionsGet(request, env) {
   if (!env.ATTRACTIONS_DB) return jsonResponse({ attraction: null, note: 'ATTRACTIONS_DB binding not present' });
   let body;
@@ -6968,6 +6994,7 @@ async function handleAttractionsGet(request, env) {
          FROM attractions WHERE id = ?1 LIMIT 1`
     ).bind(id).first();
     if (!row) return jsonResponse({ attraction: null }, 404);
+    const film = (await filmsForAttractions(env, [row.id])).get(row.id) || null;
     return jsonResponse({ attraction: {
       id: row.id, name: row.name, category: row.category, lat: row.lat, lng: row.lng,
       city: row.city || '', country: row.country, description: row.description || '',
@@ -6976,6 +7003,7 @@ async function handleAttractionsGet(request, env) {
       isMarquee: row.is_marquee === 1, freeToVisit: row.free_to_visit === 1,
       popularity: row.popularity ?? null, footprint_radius_m: row.footprint_radius_m ?? null,
       parentId: row.parent_id || null, tier: row.tier || 'page', qid: row.qid || null,
+      film,
     } });
   } catch (err) {
     console.error('attractions/get D1 query failed:', err?.message);
@@ -12939,13 +12967,15 @@ const ppSlug = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g
 async function ppUpsertStamp(env, row) {
   let existing = null;
   if (row.entity_id) {
-    const q = await gbRest(env, `passport_stamps?user_id=eq.${row.user_id}&kind=eq.${row.kind}&entity_id=eq.${encodeURIComponent(row.entity_id)}&select=id,verified`, {});
+    const q = await gbRest(env, `passport_stamps?user_id=eq.${row.user_id}&kind=eq.${row.kind}&entity_id=eq.${encodeURIComponent(row.entity_id)}&select=id,verified${row.meta ? ',meta' : ''}`, {});
     existing = (q.ok ? await q.json() : [])[0] || null;
   }
   if (existing) {
     const best = PP_VERIFY_RANK[row.verified] > PP_VERIFY_RANK[existing.verified] ? row.verified : existing.verified;
     const patch = { verified: best, updated_at: new Date().toISOString() };
     if (row.visited_on) patch.visited_on = row.visited_on;
+    // A re-stamp adds the film to an older stamp of the same place, never replaces one.
+    if (row.meta?.film && !existing.meta?.film) patch.meta = { ...(existing.meta || {}), film: row.meta.film };
     await gbRest(env, `passport_stamps?id=eq.${existing.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
     return { id: existing.id, updated: true, verified: best };
   }
@@ -12998,10 +13028,27 @@ async function handlePassportStamp(request, env, ctx) {
       }
     }
 
+    // Movie scene stamps keep their film (meta.film) — sanitized, never trusted
+    // for anything but display. Only set when present, so ordinary stamps never
+    // touch the meta column (safe even before its migration lands).
+    const cleanTxt = (v, n) => (v == null ? null : String(v).replace(/\s+/g, ' ').trim().slice(0, n) || null);
+    let film = null;
+    if (b.film && typeof b.film === 'object' && cleanTxt(b.film.title, 120)) {
+      const yr = Math.round(Number(b.film.year));
+      film = {
+        title: cleanTxt(b.film.title, 120),
+        year: yr >= 1880 && yr <= 2100 ? yr : null,
+        type: b.film.type === 'tv' ? 'tv' : 'film',
+        cast: (Array.isArray(b.film.cast) ? b.film.cast : []).slice(0, 2)
+          .map((c) => ({ actor: cleanTxt(c?.actor, 80), role: cleanTxt(c?.role, 80) })).filter((c) => c.actor),
+        scene: cleanTxt(b.film.scene, 240),
+      };
+    }
     const row = {
       user_id: user.id, kind, tier,
       entity_type: b.entity_type ? String(b.entity_type) : null,
       entity_id: entityId, name,
+      ...(film ? { meta: { film } } : {}),
       city: b.city ? String(b.city).slice(0, 120) : null,
       region: b.region ? String(b.region).slice(0, 120) : null,
       country: b.country ? String(b.country).slice(0, 120) : null,
