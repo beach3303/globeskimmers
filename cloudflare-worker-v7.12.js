@@ -1395,6 +1395,30 @@ const ANALYTICS_QUERIES = {
     FROM events WHERE event_type='passport_stamp' AND ts >= strftime('%s','now','-365 days')
     GROUP BY month ORDER BY month
   `,
+  // Passport shares (client 'passport_share' events, founder ask 2026-09-28):
+  // per month × platform × use. platform = the app iOS reported from the share
+  // sheet, else the destination picked in the preview, else 'unknown' (Android
+  // and browser shares don't say). use = 'message' for messaging apps, else the
+  // size picked in the preview (story / post).
+  passport_shares_by_month_12m: `
+    SELECT strftime('%Y-%m', ts, 'unixepoch') AS month,
+           COALESCE(NULLIF(json_extract(payload,'$.platform'),''),'unknown') AS platform,
+           CASE WHEN json_extract(payload,'$.platform') IN ('whatsapp','messages','messenger','mail') THEN 'message'
+                ELSE COALESCE(NULLIF(json_extract(payload,'$.format'),''),'unknown') END AS use,
+           COUNT(*) AS shares,
+           SUM(COALESCE(json_extract(payload,'$.images'),1)) AS images
+    FROM events WHERE event_type='passport_share' AND ts >= strftime('%s','now','-365 days')
+    GROUP BY month, platform, use ORDER BY month DESC, shares DESC
+  `,
+  passport_share_funnel_12m: `
+    SELECT strftime('%Y-%m', ts, 'unixepoch') AS month,
+           SUM(CASE WHEN event_type='passport_share_open' THEN 1 ELSE 0 END) AS previews,
+           SUM(CASE WHEN event_type='passport_share' THEN 1 ELSE 0 END) AS shared,
+           SUM(CASE WHEN event_type='passport_share_cancel' THEN 1 ELSE 0 END) AS cancelled
+    FROM events WHERE event_type IN ('passport_share_open','passport_share','passport_share_cancel')
+      AND ts >= strftime('%s','now','-365 days')
+    GROUP BY month ORDER BY month DESC
+  `,
   passport_by_year: `
     SELECT strftime('%Y', ts, 'unixepoch') AS year, COUNT(*) AS stamps
     FROM events WHERE event_type='passport_stamp'
@@ -2576,6 +2600,38 @@ async function requireAdmin(request, env) {
   const email = String(who?.email || '').trim().toLowerCase();
   if (!ADMIN_EMAILS_WORKER.includes(email)) return jsonResponse({ error: 'Forbidden' }, 403);
   return null; // authorized
+}
+
+// POST /admin/passport-monthly — stamps per month for the last 12 months from
+// the SOURCE OF TRUTH (Supabase passport_stamps.created_at), by kind. The D1
+// 'passport_stamp' events can't be trusted for history: the server logger lost
+// every one of them until 2026-09-28 (see gbLogEvent). Paged 1,000 rows at a
+// time (PostgREST's row cap), stopping at 50,000 — move to an RPC with GROUP BY
+// before stamps outgrow that.
+async function handleAdminPassportMonthly(request, env) {
+  try {
+    const denied = await requireAdmin(request, env);
+    if (denied) return denied;
+    const since = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 11, 1)).toISOString();
+    const months = new Map();
+    let offset = 0, total = 0;
+    for (let pageNo = 0; pageNo < 50; pageNo++) {
+      const q = await gbRest(env, `passport_stamps?select=created_at,kind&created_at=gte.${encodeURIComponent(since)}&order=created_at.asc&limit=1000&offset=${offset}`, {});
+      if (!q.ok) return jsonResponse({ error: `passport_stamps read failed (${q.status})` }, 502);
+      const rows = await q.json().catch(() => []);
+      for (const r of rows) {
+        const m = String(r.created_at || '').slice(0, 7);
+        if (!m) continue;
+        const x = months.get(m) || { month: m, stamps: 0, by_kind: {} };
+        x.stamps += 1; x.by_kind[r.kind || 'other'] = (x.by_kind[r.kind || 'other'] || 0) + 1;
+        months.set(m, x);
+      }
+      total += rows.length;
+      if (rows.length < 1000) break;
+      offset += 1000;
+    }
+    return jsonResponse({ since, total, months: Array.from(months.values()).sort((a, b) => (a.month < b.month ? 1 : -1)) });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
 async function handleAnalyticsQuery(request, env) {
@@ -17963,6 +18019,7 @@ export default {
       if (pathname === '/contact' && request.method === 'POST') return await handleContactSubmit(request, env);
       if (pathname === '/admin/contact' && request.method === 'POST') return await handleAdminContact(request, env);
       if (pathname === '/analytics-query') return await handleAnalyticsQuery(request, env);
+      if (pathname === '/admin/passport-monthly' && request.method === 'POST') return await handleAdminPassportMonthly(request, env);
       if (pathname.startsWith('/places/details/')) return await handlePlaceDetails(request, env);
       if (pathname === '/places/photo') return await handlePhotoProxy(request, env);
       if (pathname === '/places/dietary') return await handleDietarySearch(request, env);

@@ -105,12 +105,20 @@ export default function AdminAnalytics() {
       // Fan out over the live Worker /analytics-query route (one D1 query per
       // type), assembling the bundle the renderer expects. Native-safe via
       // callWorker — replaces the Base44 getAnalytics function (403s on device).
-      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'retention_cohorts_90d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'passport_by_day_kind_30d', 'passport_by_week_kind_12w', 'passport_by_month_kind_12m', 'passport_top_airports', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes', 'searches_by_city', 'search_categories_by_city', 'transfer_vs_rental', 'zero_results_by_city', 'smart_search_by_scope', 'smart_search_by_category', 'smart_search_top_places', 'wishlist_by_city_30d', 'wishlist_top_30d', 'wishlist_by_kind_30d', 'wishlist_cta_30d', 'directions_by_place_30d', 'persona_distribution_30d', 'affiliate_funnel_30d', 'affiliate_clicks_by_intent_30d'];
+      const TYPES = ['totals_7d', 'page_views_7d', 'event_type_breakdown_7d', 'top_zero_results', 'top_searches_7d', 'events_by_day_14d', 'ai_details_opens_by_day_14d', 'ai_details_per_session_7d', 'ai_details_paid_by_day_14d', 'ai_details_free_by_day_14d', 'ai_details_cost_per_session_7d', 'ai_details_cache_rate_7d', 'demand_by_city', 'trending_places', 'active_users', 'active_users_by_day_30d', 'retention_7d', 'retention_cohorts_90d', 'rows_per_session_7d', 'affiliate_by_partner_30d', 'affiliate_by_day_14d', 'affiliate_top_products_30d', 'affiliate_by_country_30d', 'passport_totals', 'passport_by_country', 'passport_by_city', 'passport_by_attraction', 'passport_by_day_30d', 'passport_by_month_12m', 'passport_shares_by_month_12m', 'passport_share_funnel_12m', 'passport_by_year', 'passport_countries_periods', 'passport_countries_by_month', 'passport_by_hour', 'passport_by_day_kind_30d', 'passport_by_week_kind_12w', 'passport_by_month_kind_12m', 'passport_top_airports', 'discover_top_destinations', 'discover_destinations_periods', 'discover_trending_foods', 'discover_hotel_areas', 'discover_escapes', 'searches_by_city', 'search_categories_by_city', 'transfer_vs_rental', 'zero_results_by_city', 'smart_search_by_scope', 'smart_search_by_category', 'smart_search_top_places', 'wishlist_by_city_30d', 'wishlist_top_30d', 'wishlist_by_kind_30d', 'wishlist_cta_30d', 'directions_by_place_30d', 'persona_distribution_30d', 'affiliate_funnel_30d', 'affiliate_clicks_by_intent_30d'];
       const pairs = await Promise.all(TYPES.map(async (type) => {
         const { data: qd, error: qe } = await callWorker(`analytics-query?type=${encodeURIComponent(type)}`, {});
         return [type, { results: qd?.results || [], error: qe || qd?.error || null }];
       }));
-      setData(Object.fromEntries(pairs));
+      // Stamps per month from passport_stamps itself (the D1 stamp events were
+      // lost until 2026-09-28 — see gbLogEvent in the worker). Non-fatal: the
+      // table falls back to the D1 events when this fails.
+      let passportTruth = null;
+      try {
+        const { data: pm } = await callWorker('admin/passport-monthly', {});
+        if (pm && Array.isArray(pm.months)) passportTruth = pm;
+      } catch { /* fallback below */ }
+      setData({ ...Object.fromEntries(pairs), passport_monthly_truth: passportTruth });
       // Real user metrics from Supabase profiles (service-role, admin-gated in
       // the Worker). Non-fatal: if it fails, the event analytics still render.
       try {
@@ -150,6 +158,31 @@ export default function AdminAnalytics() {
   const ppByDay = data?.passport_by_day_30d?.results || [];
   const ppByMonth = data?.passport_by_month_12m?.results || [];
   const ppByYear = data?.passport_by_year?.results || [];
+  // 🛂 Stamped vs shared, per month (founder ask 2026-09-28): stamps from
+  // 'passport_stamp', previews/shares/cancels from the share events, and each
+  // month's shares by platform split into story / post / message.
+  const ppShareRows = data?.passport_shares_by_month_12m?.results || [];
+  const ppShareFunnel = data?.passport_share_funnel_12m?.results || [];
+  const PLATFORM_LABEL = { instagram: 'Instagram', facebook: 'Facebook', messenger: 'Messenger', whatsapp: 'WhatsApp', tiktok: 'TikTok', snapchat: 'Snapchat', x: 'X', messages: 'Messages', mail: 'Mail', saved: 'Saved', copied: 'Copied', other: 'Other', unknown: 'Unknown' };
+  const ppShareMonths = (() => {
+    const byMonth = new Map();
+    const row = (m) => { if (!byMonth.has(m)) byMonth.set(m, { month: m, stamps: 0, previews: 0, shared: 0, cancelled: 0, platforms: new Map() }); return byMonth.get(m); };
+    const truth = data?.passport_monthly_truth?.months;
+    if (Array.isArray(truth)) truth.forEach((r) => { row(r.month).stamps = r.stamps || 0; });
+    else ppByMonth.forEach((r) => { row(r.month).stamps = r.stamps || 0; });
+    ppShareFunnel.forEach((r) => { const x = row(r.month); x.previews = r.previews || 0; x.shared = r.shared || 0; x.cancelled = r.cancelled || 0; });
+    ppShareRows.forEach((r) => {
+      const x = row(r.month);
+      if (!x.platforms.has(r.platform)) x.platforms.set(r.platform, { platform: r.platform, story: 0, post: 0, message: 0, other: 0 });
+      const p = x.platforms.get(r.platform);
+      const k = ['story', 'post', 'message'].includes(r.use) ? r.use : 'other';
+      p[k] += r.shares || 0;
+    });
+    return Array.from(byMonth.values())
+      .filter((m) => m.stamps || m.previews || m.shared)
+      .sort((a, b) => (a.month < b.month ? 1 : -1))
+      .map((m) => ({ ...m, platforms: Array.from(m.platforms.values()).sort((a, b) => (b.story + b.post + b.message + b.other) - (a.story + a.post + a.message + a.other)) }));
+  })();
   const ppCountriesPeriods = data?.passport_countries_periods?.results?.[0] || {};
   const ppCountriesByMonth = data?.passport_countries_by_month?.results || [];
   const ppByHour = data?.passport_by_hour?.results || [];
@@ -630,6 +663,41 @@ export default function AdminAnalytics() {
                 <div><b style={{ fontSize: 20 }}>{ppTotals.airport_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>✈️ Airports</div></div>
                 <div><b style={{ fontSize: 20 }}>{ppTotals.country_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Country stamps</div></div>
               </div>
+            </Section>
+
+            <Section title="🛂 Passport — stamped vs shared, per month" icon={Activity} empty={ppShareMonths.length === 0 ? 'Nothing yet — fills as travelers stamp and share passport pages.' : null}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 560, fontSize: 12.5, color: COLORS.dark, fontVariantNumeric: 'tabular-nums' }}>
+                  <thead>
+                    <tr>
+                      {['Month', 'Stamps', 'Previews', 'Shared', 'Cancelled', 'By platform — story · post · message'].map((h) => (
+                        <th key={h} style={{ textAlign: 'left', padding: '6px 8px', color: COLORS.gray, fontWeight: 600, fontSize: 11, borderBottom: '1px solid #eee' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ppShareMonths.map((m) => (
+                      <tr key={m.month} style={{ borderBottom: '1px solid #f3f3f3' }}>
+                        <td style={{ padding: '6px 8px', fontWeight: 600 }}>{m.month}</td>
+                        <td style={{ padding: '6px 8px' }}>{m.stamps}</td>
+                        <td style={{ padding: '6px 8px' }}>{m.previews}</td>
+                        <td style={{ padding: '6px 8px' }}>{m.shared}</td>
+                        <td style={{ padding: '6px 8px' }}>{m.cancelled}</td>
+                        <td style={{ padding: '6px 8px' }}>
+                          {m.platforms.length === 0 ? '—' : m.platforms.map((p) => (
+                            <span key={p.platform} style={{ display: 'inline-block', marginRight: 12, whiteSpace: 'nowrap' }}>
+                              <b>{PLATFORM_LABEL[p.platform] || p.platform}</b> {p.story} · {p.post} · {p.message}{p.other ? ` (+${p.other})` : ''}
+                            </span>
+                          ))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p style={{ fontSize: 11, color: COLORS.gray, marginTop: 8, lineHeight: 1.4 }}>
+                Platform is the app iPhone reports from the share sheet (store build with the share plugin). Android and browser shares can’t say where they went and show as Unknown. WhatsApp, Messages, Messenger and Mail count as messages; Instagram and Facebook use the size picked in the preview.
+              </p>
             </Section>
 
             <Section title="🛂 Stamps by country (all-time)" icon={Search} empty={ppByCountry.length === 0 ? 'No country stamps yet.' : null}>

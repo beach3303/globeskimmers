@@ -4,6 +4,7 @@ import html2canvas from "html2canvas";
 import { ChevronLeft, ChevronRight, X, Share2 } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { showToast } from "@/components/Toast";
+import { logEvent } from "@/lib/analytics";
 import { countryCode } from "@/lib/countries";
 import { stampArtUrl } from "@/lib/stampArt";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
@@ -373,6 +374,33 @@ async function photoSlide(src, stamp) {
   if (!blob) throw new Error("a slide could not be encoded");
   return { blob, url: URL.createObjectURL(blob), dataUrl: c.toDataURL("image/jpeg", 0.92) };
 }
+// Share analytics (founder, 2026-09-28: per month, stamps vs shares per
+// platform, and story vs post vs message). iOS reports the app picked in the
+// share sheet (@capacitor/share → activityType); Android and the browser's Web
+// Share report nothing, so those land as "unknown". Pattern-matched so a share
+// extension's exact bundle id can drift without losing the platform.
+const platformFromActivity = (a) => {
+  const s = String(a || "").toLowerCase();
+  if (!s) return null;
+  if (s.includes("instagram")) return "instagram";
+  if (s.includes("messenger")) return "messenger";
+  if (s.includes("facebook")) return "facebook";
+  if (s.includes("whatsapp")) return "whatsapp";
+  if (s.includes("musically") || s.includes("tiktok")) return "tiktok";
+  if (s.includes("picaboo") || s.includes("snapchat")) return "snapchat";
+  if (s.includes("tweetie") || s.includes("twitter")) return "x";
+  if (s.includes("activity.message")) return "messages";
+  if (s.includes("activity.mail")) return "mail";
+  if (s.includes("savetocameraroll")) return "saved";
+  if (s.includes("copytopasteboard")) return "copied";
+  return "other";
+};
+const shareMeta = (p) => ({
+  format: p?.format || "story",
+  mix: p?.format === "post" ? (p?.mix || "page") : "page",
+  photos_on_page: (p?.photos || []).length,
+  target: p?.target || null,
+});
 const revokeSlides = (slides) => (slides || []).forEach((x) => { try { if (x?.url) URL.revokeObjectURL(x.url); } catch { /* ignore */ } });
 
 // Blank ivory page — trailing fresh pages waiting for stamps.
@@ -550,6 +578,7 @@ export default function PassportBook({
       const pg = page >= 1 && page - 1 < bookPages.length ? bookPages[page - 1] : null;
       const photos = pg ? pg.stamps.flatMap((st) => (st.photos || []).filter((ph) => ph && ph.photo_url).map((ph) => ({ src: ph.photo_url, stamp: st }))) : [];
       setPreview({ status: "ready", format: "story", pageCanvas, photos, mix: photos.length > 0 ? "both" : "page", slides: null, slidesBusy: false, slideFailed: 0, ...img });
+      logEvent("passport_share_open", { photos_on_page: photos.length }, "Passport");
     } catch (e) {
       try { console.error("[passport share] render failed", e); } catch { /* ignore */ }
       setPreview({ status: "error", message: e?.message || String(e) });
@@ -615,7 +644,8 @@ export default function PassportBook({
           const ws = await Filesystem.writeFile({ path: `globeskimmers-passport-photo-${i + 1}.jpg`, data: String(carousel[i].dataUrl).split(",")[1], directory: Directory.Cache });
           uris.push(ws.uri);
         }
-        await Share.share({ title: "My Virtual Passport", text, files: uris });
+        const res = await Share.share({ title: "My Virtual Passport", text, files: uris });
+        logEvent("passport_share", { ...shareMeta(preview), images: uris.length, via: "app", activity: res?.activityType || null, platform: preview.target || platformFromActivity(res?.activityType) || "unknown" }, "Passport");
         closePreview(); return;
       }
       // Files are built synchronously from blobs already in memory, so share()
@@ -624,21 +654,25 @@ export default function PassportBook({
         .concat(carousel.map((x, i) => new File([x.blob], `globeskimmers-passport-photo-${i + 1}.jpg`, { type: "image/jpeg" })));
       if (navigator.canShare && navigator.canShare({ files })) {
         await navigator.share({ files, title: "My Virtual Passport", text });
+        logEvent("passport_share", { ...shareMeta(preview), images: files.length, via: "web", platform: preview.target || "unknown" }, "Passport");
         closePreview(); return;
       }
       if (files.length > 1 && navigator.canShare && navigator.canShare({ files: [files[0]] })) {
         await navigator.share({ files: [files[0]], title: "My Virtual Passport", text });
+        logEvent("passport_share", { ...shareMeta(preview), images: 1, via: "web", partial: true, platform: preview.target || "unknown" }, "Passport");
         showToast(includePage ? "Your phone shared the stamp page only — add the photos from your camera roll" : "Your phone shared the first photo only — add the rest from your camera roll", "error");
         closePreview(); return;
       }
       if (!Capacitor.isNativePlatform()) {
         const a = document.createElement("a"); a.href = preview.url; a.download = "globeskimmers-passport.png";
         document.body.appendChild(a); a.click(); a.remove();
+        logEvent("passport_share", { ...shareMeta(preview), images: 1, via: "download", platform: "saved" }, "Passport");
         showToast("Image saved", "success"); return;
       }
       showToast("This version of the app can't share images yet — update it from the store", "error");
     } catch (e) {
-      if (e?.name === "AbortError") return; // the traveler dismissed the sheet
+      // The traveler dismissed the sheet (web: AbortError; iOS plugin: "Share canceled").
+      if (e?.name === "AbortError" || /cancel/i.test(String(e?.message || ""))) { logEvent("passport_share_cancel", shareMeta(preview), "Passport"); return; }
       showToast(`Couldn't share${e?.message ? ` — ${e.message}` : ""}`, "error");
     }
   }, [preview, closePreview]);
