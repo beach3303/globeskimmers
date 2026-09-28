@@ -1,0 +1,90 @@
+{
+ "candidates": 1488,
+ "candidates_wikidata": 1356,
+ "candidates_curated": 132,
+ "spots_total": 1038,
+ "spots_eligible": 690,
+ "seed": 400,
+ "seed_wikidata": 301,
+ "seed_curated": 99,
+ "seed_curated_nonwest": 96,
+ "seed_non_us_uk": 198,
+ "seed_needs_roles": 65,
+ "seed_film_line_on_existing": 150,
+ "seed_tv": 49,
+ "quotas_met": true,
+ "spots_eligible_backed": 425,
+ "seed_backed": 400,
+ "seed_countries_top10": [
+  [
+   "GB",
+   105
+  ],
+  [
+   "US",
+   97
+  ],
+  [
+   "FR",
+   20
+  ],
+  [
+   "IN",
+   15
+  ],
+  [
+   "DE",
+   14
+  ],
+  [
+   "JP",
+   10
+  ],
+  [
+   "IT",
+   9
+  ],
+  [
+   "TR",
+   8
+  ],
+  [
+   "CA",
+   8
+  ],
+  [
+   "TN",
+   7
+  ]
+ ],
+ "excluded_reasons": [
+  [
+   "not_a_spot",
+   92
+  ],
+  [
+   "studio_backlot",
+   55
+  ],
+  [
+   "area_too_large",
+   40
+  ],
+  [
+   "class_ban",
+   26
+  ],
+  [
+   "demolished_or_closed",
+   15
+  ],
+  [
+   "no_country",
+   12
+  ],
+  [
+   "needs_spot_name",
+   10
+  ]
+ ]
+}
