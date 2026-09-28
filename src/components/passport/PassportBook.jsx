@@ -239,36 +239,69 @@ function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW }) {
   );
 }
 
-// The shared image: the rendered page framed by a navy header that carries the
-// brand ("GLOBESKIMMERS" in gold) and the product name ("My Virtual Passport"),
-// and a footer with the site — founder, 2026-09-27: every share names both.
-// System fonts on purpose: the canvas has no access to the page's web fonts
-// until they are cached, and a fallback that renders is better than a blank.
-function brandShareCanvas(page) {
-  const W = page.width;
-  const header = Math.round(W * 0.19), footer = Math.round(W * 0.085);
+// The shared image at Instagram's exact sizes (founder, 2026-09-28: the first
+// story needed shrinking by hand to show the header and footer, and a feed post
+// cropped it). Story 1080×1920: brand + "My Virtual Passport" and the footer sit
+// inside Instagram's safe area (its top bar covers ~11%, the reply bar ~12%).
+// Post 1080×1350 (4:5, the tallest feed size): the header drops to one small
+// line so the page — and "I was here!" — gets the height. The rendered page is
+// scaled to fit between them, never cropped. System fonts first on purpose:
+// the canvas can't wait for web fonts, and a fallback that renders beats a blank.
+export const SHARE_FORMATS = {
+  story: { W: 1080, H: 1920, label: "Story · 9:16" },
+  post: { W: 1080, H: 1350, label: "Post · 4:5" },
+};
+const SHARE_FOOTER = "collect stamps & memories where you go";
+function brandShareCanvas(page, format = "story") {
+  const { W, H } = SHARE_FORMATS[format] || SHARE_FORMATS.story;
   const out = document.createElement("canvas");
-  out.width = W; out.height = header + page.height + footer;
+  out.width = W; out.height = H;
   const ctx = out.getContext("2d");
-  ctx.fillStyle = NAVY_DEEP; ctx.fillRect(0, 0, W, header);
-  ctx.fillStyle = NAVY; ctx.fillRect(0, header + page.height, W, footer);
-  ctx.drawImage(page, 0, header);
-  ctx.textAlign = "center";
-  ctx.fillStyle = GOLD;
-  ctx.font = `600 ${Math.round(W * 0.034)}px -apple-system, "Inter Tight", system-ui, sans-serif`;
-  try { ctx.letterSpacing = `${Math.round(W * 0.008)}px`; } catch { /* older engines */ }
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText("G L O B E S K I M M E R S", W / 2, Math.round(header * 0.42));
-  try { ctx.letterSpacing = "0px"; } catch { /* ignore */ }
-  ctx.fillStyle = "#FBF6EC";
-  ctx.font = `${Math.round(W * 0.078)}px "Instrument Serif", "Iowan Old Style", Georgia, "Times New Roman", serif`;
-  ctx.fillText("My Virtual Passport", W / 2, Math.round(header * 0.84));
-  ctx.fillStyle = "rgba(251,246,236,0.85)";
-  ctx.font = `500 ${Math.round(W * 0.03)}px -apple-system, "Inter Tight", system-ui, sans-serif`;
-  ctx.textBaseline = "middle";
-  ctx.fillText("globeskimmers.io  ·  collect stamps where you go", W / 2, header + page.height + footer / 2);
+  const bg = ctx.createRadialGradient(W / 2, H * 0.2, 0, W / 2, H * 0.2, H * 0.95);
+  bg.addColorStop(0, "#12365F"); bg.addColorStop(0.7, NAVY_DEEP); bg.addColorStop(1, NAVY_DEEP);
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  const serif = '"Instrument Serif", "Iowan Old Style", Georgia, "Times New Roman", serif';
+  const sans = '-apple-system, "Inter Tight", system-ui, sans-serif';
+  const brand = "G L O B E S K I M M E R S";
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  let zoneTop, zoneBottom;
+  if (format === "post") {
+    // One line: GLOBESKIMMERS · My Virtual Passport
+    const bf = `600 ${Math.round(W * 0.026)}px ${sans}`, tf = `${Math.round(W * 0.046)}px ${serif}`;
+    ctx.font = bf; const bw = ctx.measureText(brand).width;
+    ctx.font = tf; const tw = ctx.measureText("My Virtual Passport").width;
+    const dot = W * 0.03, x0 = (W - (bw + dot + tw)) / 2, y = H * 0.068;
+    ctx.textAlign = "left";
+    ctx.font = bf; ctx.fillStyle = GOLD; ctx.fillText(brand, x0, y);
+    ctx.fillText("·", x0 + bw + dot * 0.35, y);
+    ctx.font = tf; ctx.fillStyle = "#FBF6EC"; ctx.fillText("My Virtual Passport", x0 + bw + dot, y);
+    ctx.textAlign = "center";
+    zoneTop = H * 0.10; zoneBottom = H * 0.91;
+    ctx.font = `500 ${Math.round(W * 0.027)}px ${sans}`; ctx.fillStyle = "rgba(251,246,236,0.9)";
+    ctx.fillText(`globeskimmers.io  ·  ${SHARE_FOOTER}`, W / 2, H * 0.962);
+  } else {
+    ctx.font = `600 ${Math.round(W * 0.036)}px ${sans}`; ctx.fillStyle = GOLD;
+    ctx.fillText(brand, W / 2, H * 0.148);
+    ctx.font = `${Math.round(W * 0.082)}px ${serif}`; ctx.fillStyle = "#FBF6EC";
+    ctx.fillText("My Virtual Passport", W / 2, H * 0.198);
+    zoneTop = H * 0.228; zoneBottom = H * 0.802;
+    ctx.font = `600 ${Math.round(W * 0.032)}px ${sans}`; ctx.fillStyle = "#FBF6EC";
+    ctx.fillText("globeskimmers.io", W / 2, H * 0.836);
+    ctx.font = `500 ${Math.round(W * 0.032)}px ${sans}`; ctx.fillStyle = "rgba(251,246,236,0.9)";
+    ctx.fillText(SHARE_FOOTER, W / 2, H * 0.862);
+  }
+  const zh = zoneBottom - zoneTop, zw = W * 0.9;
+  const k = Math.min(zh / page.height, zw / page.width);
+  const pw = page.width * k, ph = page.height * k;
+  ctx.drawImage(page, (W - pw) / 2, zoneTop + (zh - ph) / 2, pw, ph);
   return out;
 }
+const composeShare = async (pageCanvas, format) => {
+  const canvas = brandShareCanvas(pageCanvas, format);
+  const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+  if (!blob) throw new Error("the image could not be encoded");
+  return { url: URL.createObjectURL(blob), blob, dataUrl: canvas.toDataURL("image/png") };
+};
 
 // Blank ivory page — trailing fresh pages waiting for stamps.
 function EmptyCollectionPage({ coverH, pageNo, watermark }) {
@@ -437,10 +470,8 @@ export default function PassportBook({
         html2canvas(el, { useCORS: true, backgroundColor: "#FBF6EC", scale: 2, logging: false, imageTimeout: 8000 }),
         timeout,
       ]);
-      const canvas = brandShareCanvas(pageCanvas);
-      const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
-      if (!blob) throw new Error("the image could not be encoded");
-      setPreview({ status: "ready", url: URL.createObjectURL(blob), blob, dataUrl: canvas.toDataURL("image/png") });
+      const img = await composeShare(pageCanvas, "story");
+      setPreview({ status: "ready", format: "story", pageCanvas, ...img });
     } catch (e) {
       try { console.error("[passport share] render failed", e); } catch { /* ignore */ }
       setPreview({ status: "error", message: e?.message || String(e) });
@@ -449,6 +480,14 @@ export default function PassportBook({
   const closePreview = useCallback(() => {
     setPreview((p) => { if (p?.url) { try { URL.revokeObjectURL(p.url); } catch { /* ignore */ } } return null; });
   }, []);
+  // Story ↔ Post: re-frame the already-rendered page (no second html2canvas).
+  const switchFormat = useCallback(async (format) => {
+    if (!preview || preview.status !== "ready" || preview.format === format) return;
+    try {
+      const img = await composeShare(preview.pageCanvas, format);
+      setPreview((p) => { if (p?.url) { try { URL.revokeObjectURL(p.url); } catch { /* ignore */ } } return { ...p, format, ...img }; });
+    } catch (e) { setPreview({ status: "error", message: e?.message || String(e) }); }
+  }, [preview]);
   const shareRendered = useCallback(async () => {
     if (!preview || preview.status !== "ready") return;
     const text = "My Virtual Passport on Globeskimmers 🛂";
@@ -457,7 +496,7 @@ export default function PassportBook({
         const { Filesystem, Directory } = await import("@capacitor/filesystem");
         const { Share } = await import("@capacitor/share");
         const base64 = String(preview.dataUrl).split(",")[1];
-        const w = await Filesystem.writeFile({ path: "globeskimmers-passport.png", data: base64, directory: Directory.Cache });
+        const w = await Filesystem.writeFile({ path: `globeskimmers-passport-${preview.format || "story"}.png`, data: base64, directory: Directory.Cache });
         await Share.share({ title: "My Virtual Passport", text, files: [w.uri] });
         closePreview(); return;
       }
@@ -492,6 +531,16 @@ export default function PassportBook({
         {/* contact shadow */}
         <div aria-hidden style={{ position: "absolute", left: "8%", right: "8%", bottom: -10, height: 24, background: "radial-gradient(ellipse at center, rgba(0,0,0,.34), rgba(0,0,0,0) 70%)", filter: "blur(3px)", zIndex: 0 }} />
 
+        {/* × on the open book (founder, 2026-09-28): the Close button below can
+            sit behind the floating tab bar on some phones. Outside the page
+            element, so it never appears in a shared image. */}
+        {open && (
+          <button type="button" onClick={closeBook} aria-label="Close passport"
+            className="absolute flex items-center justify-center rounded-full"
+            style={{ top: 10, right: 10, zIndex: 5, width: 36, height: 36, background: "#fff", border: `1px solid ${PAPER_EDGE}`, boxShadow: "0 2px 8px rgba(0,0,0,.14)" }}>
+            <X size={18} color={INK} strokeWidth={2.4} />
+          </button>
+        )}
         {/* Interior pages (revealed beneath the opening cover) */}
         {open && (
           <div style={{ position: "absolute", inset: 0, transformStyle: "preserve-3d" }}>
@@ -610,6 +659,17 @@ export default function PassportBook({
             </div>
           )}
           <div className="w-full max-w-[380px] mt-4 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+            {preview.status === "ready" && (
+              <div className="flex gap-2" role="radiogroup" aria-label="Image size">
+                {Object.entries(SHARE_FORMATS).map(([id, f]) => (
+                  <button key={id} type="button" role="radio" aria-checked={preview.format === id} onClick={() => switchFormat(id)}
+                    className="flex-1 rounded-lg py-2 font-semibold"
+                    style={{ background: preview.format === id ? "#FBF6EC" : "rgba(255,255,255,0.1)", color: preview.format === id ? NAVY : "#fff", border: "1px solid rgba(255,255,255,0.25)", fontFamily: MONO, fontSize: fs(11.5), letterSpacing: ".04em" }}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {preview.status === "ready" && (
             <button onClick={shareRendered} className="w-full rounded-xl py-3 font-bold flex items-center justify-center gap-2"
               style={{ background: STAMP, color: "#fff", fontSize: fs(15), border: "none" }}>
