@@ -77,8 +77,9 @@ as for every stamp. **Brief (research 2026-09-27, all counts live from Wikidata)
   ~8 working days). **2026-09-28: founder said "go with the defaults" and approved the design
   ("beautiful work"). Built: slices 1–3 (data plumbing, Scene stamp, "Filmed here" surfaces;
   82f645a) and slice 4 (photo-first page with auto/above/below placement, film line on share
-  photo slides). Waiting on: the seed list (agent running), the founder's ~40-spot review, then
-  one data-load command + `npm run ota`.**
+  photo slides). Seed in (400 spots). Waiting on: the founder's 40-spot review
+  (https://claude.ai/artifact/3imzpvM5UHGArxyLvni2id), Claude's scene/cast pass, then two D1
+  commands + `npm run ota`.**
 **Share destinations + counts (founder, 2026-09-28):** share images sized for Instagram,
 Facebook, TikTok, Snapchat and X, story and post, every component inside each platform's safe
 area, text sized to Instagram's current look; also send by Facebook, WhatsApp, Messages and
