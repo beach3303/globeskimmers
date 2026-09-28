@@ -12739,11 +12739,17 @@ async function gbUser(request, env) {
     return u && u.id ? u : null;
   } catch { return null; }
 }
+// Server-side events. events.session_id is NOT NULL with no default, and this
+// insert used to omit it — so every server event (passport_stamp, guestbook
+// posts/photos/reports…) failed silently from launch until 2026-09-28, which
+// is why the admin passport sections read empty. session_id is now the
+// constant 'server'; page follows the event family.
 async function gbLogEvent(env, type, payload) {
   try {
     if (!env.DB) return;
-    await env.DB.prepare('insert into events (ts, event_type, page, payload) values (?,?,?,?)')
-      .bind(Math.floor(Date.now() / 1000), type, 'guestbook', JSON.stringify(payload)).run();
+    const page = String(type || '').startsWith('passport') ? 'Passport' : 'guestbook';
+    await env.DB.prepare('insert into events (ts, session_id, event_type, page, payload) values (?,?,?,?,?)')
+      .bind(Math.floor(Date.now() / 1000), 'server', type, page, JSON.stringify(payload)).run();
   } catch { /* admin signal is best-effort */ }
 }
 // Multilingual moderation: local slur regex (instant, always-on) + Claude Haiku
