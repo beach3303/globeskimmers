@@ -9,6 +9,7 @@ import { showToast } from "@/components/Toast";
 import { addStamp, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
+import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
 import PassportBook from "@/components/passport/PassportBook";
@@ -186,7 +187,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
           <TypographicStamp
             name={stamp.name} city={stamp.city} region={stamp.region}
             country={stamp.country} date={stamp.visited_on}
-            entityId={stamp.entity_id || stamp.id} width={138} overprint
+            entityId={stamp.entity_id || stamp.id} width={138} overprint strength={STAMP_INK_STRENGTH}
           />
         </div>
       )}

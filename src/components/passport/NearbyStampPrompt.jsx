@@ -15,6 +15,7 @@ import { resolveStampVariant } from "@/lib/stampVariants";
 import { countryCode } from "@/lib/countries";
 import { localISODate } from "@/lib/localDate";
 import { stampArtUrl } from "@/lib/stampArt";
+import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
 import { showToast } from "@/components/Toast";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
@@ -42,7 +43,7 @@ function PlaceArt({ name, city, country, id, width }) {
   const [fail, setFail] = useState(false);
   const art = stampArtUrl(name);
   if (art && !fail) return <img src={art} alt="" onError={() => setFail(true)} style={{ width, height: width, objectFit: "contain" }} />;
-  return <TypographicStamp name={name} city={city} country={country} entityId={id || name} width={width} />;
+  return <TypographicStamp name={name} city={city} country={country} entityId={id || name} width={width} strength={STAMP_INK_STRENGTH} />;
 }
 
 export default function NearbyStampPrompt({ stamps, onStamped }) {

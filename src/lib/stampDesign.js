@@ -85,3 +85,8 @@ export function stampInk(country) {
 export function typographicStampConfig({ entityId, name, country } = {}) {
   return { design: stampDesign(entityId, name), ink: stampInk(country) };
 }
+
+// Ink strength for every earned stamp (TypographicStamp `strength`): 0 = the
+// original worn look, 1–3 = the founder's mockups A, B, C (2026-09-28 — larger
+// frame text, lighter wear, a SOLID red "I was here!"). One place to change it.
+export const STAMP_INK_STRENGTH = 2;

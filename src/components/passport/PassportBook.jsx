@@ -6,6 +6,7 @@ import { Capacitor } from "@capacitor/core";
 import { showToast } from "@/components/Toast";
 import { countryCode } from "@/lib/countries";
 import { stampArtUrl } from "@/lib/stampArt";
+import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
 import AirportStamp from "@/components/passport/AirportStamp";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 
@@ -103,7 +104,7 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
             <TypographicStamp
               name={stamp.name} city={stamp.city} region={stamp.region}
               country={stamp.country} date={stamp.visited_on}
-              entityId={stamp.entity_id || stamp.id} width={artW} overprint
+              entityId={stamp.entity_id || stamp.id} width={artW} overprint strength={STAMP_INK_STRENGTH}
             />
           )}
           {showArt ? (
@@ -120,7 +121,7 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
             // here!" — only add the city context when the stamp is a specific
             // spot within a city (e.g. LAKE LOUISE → "Visited Banff, Canada").
             venue && stamp.city && (
-              <div style={{ fontFamily: MONO, color: cityInk, opacity: 0.75, fontSize: fs(11.5), letterSpacing: ".04em", textTransform: "uppercase", marginTop: 8 }}>
+              <div style={{ fontFamily: MONO, color: cityInk, opacity: 0.95, fontSize: fs(13), letterSpacing: ".04em", textTransform: "uppercase", marginTop: 8 }}>
                 Visited {stamp.city}{stamp.country ? `, ${stamp.country}` : ""}
               </div>
             )
@@ -142,7 +143,7 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
             <TypographicStamp
               name={stamp.name} city={stamp.city} region={stamp.region}
               country={stamp.country} date={stamp.visited_on}
-              entityId={stamp.entity_id || stamp.id} width={artW} overprint
+              entityId={stamp.entity_id || stamp.id} width={artW} overprint strength={STAMP_INK_STRENGTH}
             />
           )}
           {!showTypo && (<>

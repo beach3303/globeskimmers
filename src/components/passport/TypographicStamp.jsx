@@ -57,10 +57,32 @@ function Lines({ lines, size, mid, ls = 0, x = 150, anchor = "middle" }) {
   ));
 }
 
+// strength (founder, 2026-09-28, after the first Instagram story): the frame
+// text — VISITED, city · country, the date — read too small and too worn, and
+// "I was here!" too faint. 0 keeps the original worn look; 1–3 set the frame
+// text larger (capped to the stamp's width so long cities never overflow),
+// track it tighter, lighten the wear, and print the strike SOLID crimson.
+export const STAMP_STRENGTH = [
+  { size: 1,    track: 1,    wear: "-1.5 1.28", strike: 17, strikeWorn: true,  strikeOpacity: 0.85, rule: 1.2 },
+  { size: 1.25, track: 0.8,  wear: "-1.1 1.4",  strike: 20, strikeWorn: false, strikeOpacity: 1,    rule: 1.5 },
+  { size: 1.42, track: 0.7,  wear: "-0.85 1.4", strike: 22, strikeWorn: false, strikeOpacity: 1,    rule: 1.7 },
+  { size: 1.6,  track: 0.6,  wear: "-0.6 1.35", strike: 24, strikeWorn: false, strikeOpacity: 1,    rule: 1.9 },
+];
+
 export default function TypographicStamp({
   name, city, region, country, date, entityId,
-  width = 200, overprint = false, design, ink,
+  width = 200, overprint = false, design, ink, strength = 0,
 }) {
+  const S = STAMP_STRENGTH[Math.max(0, Math.min(STAMP_STRENGTH.length - 1, Number(strength) || 0))];
+  // Frame text size + tracking for this strength, never wider than `box`
+  // (Georgia bold caps ≈ 0.62em advance) and never smaller than the original.
+  const ft = (base, ls, str, box = 262) => {
+    const n = Math.max(1, String(str || "").length);
+    const track = ls * S.track;
+    const cap = (box - track * (n - 1)) / (n * 0.62);
+    const size = Math.max(Math.min(base, cap), Math.min(base * S.size, cap));
+    return { fontSize: +size.toFixed(2), letterSpacing: +track.toFixed(2) };
+  };
   const raw = useId();
   const uid = String(raw).replace(/:/g, "");
   const worn = `tw-${uid}`;
@@ -87,13 +109,13 @@ export default function TypographicStamp({
       return {
         name: <Lines lines={lines} size={size} mid={176} />,
         frame: (<>
-          <text x="150" y="70" textAnchor="middle" fontFamily={SERIF} fontSize="13" fontWeight="700" letterSpacing="1.6" fill="currentColor">★ ★ ★</text>
-          {TOP && <text x="150" y="100" textAnchor="middle" fontFamily={SERIF} fontSize="13.5" fontWeight="700" letterSpacing="5" fill="currentColor">{TOP}</text>}
+          <text x="150" y="70" textAnchor="middle" fontFamily={SERIF} {...ft(13, 1.6, `★ ★ ★`, 262)} fontWeight="700" fill="currentColor">★ ★ ★</text>
+          {TOP && <text x="150" y="100" textAnchor="middle" fontFamily={SERIF} {...ft(13.5, 5, `${TOP}`, 262)} fontWeight="700" fill="currentColor">{TOP}</text>}
           <path d="M64,114 L236,114" stroke="currentColor" strokeWidth="1.4" />
           <path d="M150,108 L156,114 L150,120 L144,114 Z" fill="currentColor" />
           <path d="M64,232 L236,232" stroke="currentColor" strokeWidth="2.6" />
-          {PLACE_LINE && <text x="150" y="252" textAnchor="middle" fontFamily={SERIF} fontSize="11.5" fontWeight="700" letterSpacing="3" fill="currentColor">{PLACE_LINE}</text>}
-          {dateStr && <text x="150" y="274" textAnchor="middle" fontFamily={SERIF} fontSize="13" fontWeight="700" letterSpacing="2.2" fill="currentColor">{dateStr}</text>}
+          {PLACE_LINE && <text x="150" y="252" textAnchor="middle" fontFamily={SERIF} {...ft(11.5, 3, `${PLACE_LINE}`, 262)} fontWeight="700" fill="currentColor">{PLACE_LINE}</text>}
+          {dateStr && <text x="150" y="274" textAnchor="middle" fontFamily={SERIF} {...ft(13, 2.2, `${dateStr}`, 262)} fontWeight="700" fill="currentColor">{dateStr}</text>}
         </>),
       };
     })(),
@@ -104,11 +126,11 @@ export default function TypographicStamp({
       return {
         name: <Lines lines={lines} size={size} mid={156} />,
         frame: (<>
-          {TOP && <text fontFamily={SERIF} fontSize="12.5" fontWeight="700" letterSpacing="3.2" fill="currentColor"><textPath href={`#${arcT}`} startOffset="50%" textAnchor="middle">{TOP}{REGION ? ` · ${REGION}` : ""}</textPath></text>}
-          <text fontFamily={SERIF} fontSize="11.5" fontWeight="700" letterSpacing="4.5" fill="currentColor"><textPath href={`#${arcB}`} startOffset="50%" textAnchor="middle">★ {CTRY || "VISITED"} ★</textPath></text>
+          {TOP && <text fontFamily={SERIF} {...ft(12.5, 3.2, `${TOP}${REGION ? ` · ${REGION}` : ""}`, 300)} fontWeight="700" fill="currentColor"><textPath href={`#${arcT}`} startOffset="50%" textAnchor="middle">{TOP}{REGION ? ` · ${REGION}` : ""}</textPath></text>}
+          <text fontFamily={SERIF} {...ft(11.5, 4.5, `★ ${CTRY || "VISITED"} ★`, 300)} fontWeight="700" fill="currentColor"><textPath href={`#${arcB}`} startOffset="50%" textAnchor="middle">★ {CTRY || "VISITED"} ★</textPath></text>
           {dateStr && <>
             <rect x="104" y="188" width="92" height="20" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
-            <text x="150" y="202" textAnchor="middle" fontFamily={SERIF} fontSize="11.5" fontWeight="700" letterSpacing="1.6" fill="currentColor">{dateStr}</text>
+            <text x="150" y="202" textAnchor="middle" fontFamily={SERIF} {...ft(11.5, 1.6, `${dateStr}`, 262)} fontWeight="700" fill="currentColor">{dateStr}</text>
           </>}
         </>),
       };
@@ -120,13 +142,13 @@ export default function TypographicStamp({
       return {
         name: <Lines lines={lines} size={size} mid={166} />,
         frame: (<>
-          {TOP && <text x="150" y="92" textAnchor="middle" fontFamily={SERIF} fontSize="12.5" fontWeight="700" letterSpacing="4.5" fill="currentColor">{TOP}</text>}
+          {TOP && <text x="150" y="92" textAnchor="middle" fontFamily={SERIF} {...ft(12.5, 4.5, `${TOP}`, 262)} fontWeight="700" fill="currentColor">{TOP}</text>}
           <path d="M40,110 L260,110" stroke="currentColor" strokeWidth="3.2" />
           <path d="M40,118 L260,118" stroke="currentColor" strokeWidth="1.2" />
           <path d="M40,206 L260,206" stroke="currentColor" strokeWidth="1.2" />
           <path d="M40,214 L260,214" stroke="currentColor" strokeWidth="3.2" />
-          {PLACE_LINE && <text x="150" y="238" textAnchor="middle" fontFamily={SERIF} fontSize="12" fontWeight="700" letterSpacing="2.6" fill="currentColor">{PLACE_LINE}</text>}
-          {dateStr && <text x="150" y="264" textAnchor="middle" fontFamily={SERIF} fontSize="13.5" fontWeight="700" letterSpacing="2.2" fill="currentColor">{dateStr}</text>}
+          {PLACE_LINE && <text x="150" y="238" textAnchor="middle" fontFamily={SERIF} {...ft(12, 2.6, `${PLACE_LINE}`, 262)} fontWeight="700" fill="currentColor">{PLACE_LINE}</text>}
+          {dateStr && <text x="150" y="264" textAnchor="middle" fontFamily={SERIF} {...ft(13.5, 2.2, `${dateStr}`, 262)} fontWeight="700" fill="currentColor">{dateStr}</text>}
         </>),
       };
     })(),
@@ -143,13 +165,13 @@ export default function TypographicStamp({
           <text key={i} x={150 + lsFor(l) / 2} y={top + i * step} textAnchor="middle" fontFamily={SERIF} fontSize={size} fontWeight="700" letterSpacing={lsFor(l)} fill="currentColor">{l}</text>
         )),
         frame: (<>
-          {TOP && <text x="150" y="78" textAnchor="middle" fontFamily={SERIF} fontSize="11.5" fontWeight="700" letterSpacing="4" fill="currentColor">{TOP}</text>}
+          {TOP && <text x="150" y="78" textAnchor="middle" fontFamily={SERIF} {...ft(11.5, 4, `${TOP}`, 262)} fontWeight="700" fill="currentColor">{TOP}</text>}
           <path d="M56,92 L244,92" stroke="currentColor" strokeWidth="1.3" />
           {lines.map((l, i) => (
             <path key={i} d={`M56,${top + i * step + 14} L244,${top + i * step + 14}`} stroke="currentColor" strokeWidth=".9" />
           ))}
-          <text x="150" y={top + (lines.length - 1) * step + 44} textAnchor="middle" fontFamily={SERIF} fontSize="11" fontWeight="700" letterSpacing="3" fill="currentColor">★ {CTRY || "VISITED"} ★</text>
-          {dateStr && <text x="150" y={top + (lines.length - 1) * step + 66} textAnchor="middle" fontFamily={SERIF} fontSize="12.5" fontWeight="700" letterSpacing="2.2" fill="currentColor">{dateStr}</text>}
+          <text x="150" y={top + (lines.length - 1) * step + 44} textAnchor="middle" fontFamily={SERIF} {...ft(11, 3, `★ ${CTRY || "VISITED"} ★`, 262)} fontWeight="700" fill="currentColor">★ {CTRY || "VISITED"} ★</text>
+          {dateStr && <text x="150" y={top + (lines.length - 1) * step + 66} textAnchor="middle" fontFamily={SERIF} {...ft(12.5, 2.2, `${dateStr}`, 262)} fontWeight="700" fill="currentColor">{dateStr}</text>}
         </>),
       };
     })(),
@@ -163,15 +185,17 @@ export default function TypographicStamp({
       return {
         name: <Lines lines={lines} size={size} mid={top + ((lines.length - 1) * step) / 2} x={46} anchor="start" />,
         frame: (<>
-          <text x="46" y="88" fontFamily={SERIF} fontSize="11" fontWeight="700" letterSpacing="3.4" fill="currentColor">VISITED</text>
+          <text x="46" y="88" fontFamily={SERIF} {...ft(11, 3.4, `VISITED`, 262)} fontWeight="700" fill="currentColor">VISITED</text>
           <path d="M46,100 L254,100" stroke="currentColor" strokeWidth="1.2" />
           <path d={`M46,${endY + 16} L254,${endY + 16}`} stroke="currentColor" strokeWidth="1.2" />
-          <text x="46" y={endY + 40} fontFamily={SERIF} fontSize="12" fontWeight="700" letterSpacing="2.6" fill="currentColor">{[CITY, CTRY].filter(Boolean).join(" · ")}</text>
+          <text x="46" y={endY + 40} fontFamily={SERIF} {...ft(12, 2.6, `${[CITY, CTRY].filter(Boolean).join(" · ")}`, 208)} fontWeight="700" fill="currentColor">{[CITY, CTRY].filter(Boolean).join(" · ")}</text>
           {dateStr && <>
-            <rect x="152" y={endY + 26} width="102" height="22" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <text x="203" y={endY + 41} textAnchor="middle" fontFamily={SERIF} fontSize="12" fontWeight="700" letterSpacing="1.4" fill="currentColor">{dateStr}</text>
+            {/* Date box stacked UNDER the city line (2026-09-28): side by side, a
+                long city ("BARCELONA · SPAIN") ran into the box even at the old size. */}
+            <rect x="46" y={endY + 50} width="112" height="22" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <text x="102" y={endY + 65} textAnchor="middle" fontFamily={SERIF} {...ft(12, 1.4, `${dateStr}`, 104)} fontWeight="700" fill="currentColor">{dateStr}</text>
           </>}
-          <path d={`M46,${endY + 70} L254,${endY + 70}`} stroke="currentColor" strokeWidth="3" />
+          <path d={`M46,${endY + (dateStr ? 86 : 60)} L254,${endY + (dateStr ? 86 : 60)}`} stroke="currentColor" strokeWidth="3" />
         </>),
       };
     })(),
@@ -182,14 +206,14 @@ export default function TypographicStamp({
       return {
         name: <Lines lines={lines} size={size} mid={192} />,
         frame: (<>
-          {TOP && <text x="150" y="96" textAnchor="middle" fontFamily={SERIF} fontSize="12" fontWeight="700" letterSpacing="4" fill="currentColor">{TOP}</text>}
+          {TOP && <text x="150" y="96" textAnchor="middle" fontFamily={SERIF} {...ft(12, 4, `${TOP}`, 262)} fontWeight="700" fill="currentColor">{TOP}</text>}
           <path d="M34,138 L104,138" stroke="currentColor" strokeWidth="2.4" />
           <path d="M196,138 L266,138" stroke="currentColor" strokeWidth="2.4" />
           <path d="M118,132 L124,138 L118,144 L112,138 Z" fill="currentColor" />
           <path d="M182,132 L188,138 L182,144 L176,138 Z" fill="currentColor" />
-          <text x="150" y="143" textAnchor="middle" fontFamily={SERIF} fontSize="12" fontWeight="700" letterSpacing="1" fill="currentColor">★</text>
+          <text x="150" y="143" textAnchor="middle" fontFamily={SERIF} {...ft(12, 1, `★`, 262)} fontWeight="700" fill="currentColor">★</text>
           <path d="M60,244 L240,244" stroke="currentColor" strokeWidth="2.6" />
-          <text x="150" y="266" textAnchor="middle" fontFamily={SERIF} fontSize="11" fontWeight="700" letterSpacing="2.4" fill="currentColor">{[PLACE_LINE, dateStr].filter(Boolean).join(" · ")}</text>
+          <text x="150" y="266" textAnchor="middle" fontFamily={SERIF} {...ft(11, 2.4, `${[PLACE_LINE, dateStr].filter(Boolean).join(" · ")}`, 262)} fontWeight="700" fill="currentColor">{[PLACE_LINE, dateStr].filter(Boolean).join(" · ")}</text>
         </>),
       };
     })(),
@@ -200,10 +224,10 @@ export default function TypographicStamp({
       return {
         name: <Lines lines={lines} size={size} mid={150} />,
         frame: (<>
-          {TOP && <text fontFamily={SERIF} fontSize="12" fontWeight="700" letterSpacing="3" fill="currentColor"><textPath href={`#${ovT}`} startOffset="50%" textAnchor="middle">{TOP}{CTRY ? ` · ${CTRY}` : ""}</textPath></text>}
-          <text fontFamily={SERIF} fontSize="11" fontWeight="700" letterSpacing="4.5" fill="currentColor"><textPath href={`#${ovB}`} startOffset="50%" textAnchor="middle">★ VISITED ★</textPath></text>
+          {TOP && <text fontFamily={SERIF} {...ft(12, 3, `${TOP}${CTRY ? ` · ${CTRY}` : ""}`, 300)} fontWeight="700" fill="currentColor"><textPath href={`#${ovT}`} startOffset="50%" textAnchor="middle">{TOP}{CTRY ? ` · ${CTRY}` : ""}</textPath></text>}
+          <text fontFamily={SERIF} {...ft(11, 4.5, `★ VISITED ★`, 300)} fontWeight="700" fill="currentColor"><textPath href={`#${ovB}`} startOffset="50%" textAnchor="middle">★ VISITED ★</textPath></text>
           <path d="M108,184 L192,184" stroke="currentColor" strokeWidth="1.3" />
-          {dateStr && <text x="150" y="204" textAnchor="middle" fontFamily={SERIF} fontSize="12" fontWeight="700" letterSpacing="1.8" fill="currentColor">{dateStr}</text>}
+          {dateStr && <text x="150" y="204" textAnchor="middle" fontFamily={SERIF} {...ft(12, 1.8, `${dateStr}`, 262)} fontWeight="700" fill="currentColor">{dateStr}</text>}
         </>),
       };
     })(),
@@ -214,10 +238,10 @@ export default function TypographicStamp({
       return {
         name: <Lines lines={lines} size={size} mid={155} />,
         frame: (<>
-          <text x="150" y="82" textAnchor="middle" fontFamily={SERIF} fontSize="10.5" fontWeight="700" letterSpacing="4" fill="currentColor">★ VISITED ★</text>
+          <text x="150" y="82" textAnchor="middle" fontFamily={SERIF} {...ft(10.5, 4, `★ VISITED ★`, 262)} fontWeight="700" fill="currentColor">★ VISITED ★</text>
           <path d="M78,198 L222,198" stroke="currentColor" strokeWidth="1.3" />
-          <text x="150" y="222" textAnchor="middle" fontFamily={SERIF} fontSize="12.5" fontWeight="700" letterSpacing="2.6" fill="currentColor">{[CITY, REGION || CTRY].filter(Boolean).join(" · ")}</text>
-          {dateStr && <text x="150" y="248" textAnchor="middle" fontFamily={SERIF} fontSize="11.5" fontWeight="700" letterSpacing="1.8" fill="currentColor">{dateStr}</text>}
+          <text x="150" y="222" textAnchor="middle" fontFamily={SERIF} {...ft(12.5, 2.6, `${[CITY, REGION || CTRY].filter(Boolean).join(" · ")}`, 262)} fontWeight="700" fill="currentColor">{[CITY, REGION || CTRY].filter(Boolean).join(" · ")}</text>
+          {dateStr && <text x="150" y="248" textAnchor="middle" fontFamily={SERIF} {...ft(11.5, 1.8, `${dateStr}`, 262)} fontWeight="700" fill="currentColor">{dateStr}</text>}
         </>),
       };
     })(),
@@ -237,7 +261,7 @@ export default function TypographicStamp({
           <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="2" seed="7" result="n" />
           <feDisplacementMap in="SourceGraphic" in2="n" scale="2.3" result="d" />
           <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" seed="11" result="g" />
-          <feColorMatrix in="g" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.5 1.28" result="m" />
+          <feColorMatrix in="g" type="matrix" values={`0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ${S.wear}`} result="m" />
           <feComposite in="d" in2="m" operator="in" />
         </filter>
       </defs>
@@ -249,11 +273,15 @@ export default function TypographicStamp({
           arc text up there, so theirs lands bottom-right instead. Off in a dense
           grid, on where one stamp is the whole screen. */}
       {overprint && (() => {
-        const pos = D === "rng" || D === "ovl" ? { x: 236, y: 258 } : { x: 234, y: 52 };
+        // Ring and Oval carry arc text up top, so their strike goes bottom-right;
+        // from strength 1 the bigger strike sits lower, in the corner outside
+        // the circle, clear of the bottom arc text.
+        const low = S.size > 1;
+        const pos = D === "rng" || D === "ovl" ? (low ? { x: 240, y: 280 } : { x: 236, y: 258 }) : { x: 234, y: 52 };
         return (
-          <g filter={`url(#${worn})`} opacity="0.85" style={{ color: "#B0472F" }} transform={`rotate(-14 ${pos.x} ${pos.y})`}>
-            <text x={pos.x} y={pos.y + 2} textAnchor="middle" fontFamily={SERIF} fontStyle="italic" fontSize="17" fontWeight="700" letterSpacing="0.5" fill="currentColor">I was here!</text>
-            <path d={`M${pos.x - 36},${pos.y + 10} L${pos.x + 36},${pos.y + 10}`} stroke="currentColor" strokeWidth="1.2" />
+          <g filter={S.strikeWorn ? `url(#${worn})` : undefined} opacity={S.strikeOpacity} style={{ color: "#B0472F" }} transform={`rotate(-14 ${pos.x} ${pos.y})`}>
+            <text x={pos.x} y={pos.y + 2} textAnchor="middle" fontFamily={SERIF} fontStyle="italic" fontSize={S.strike} fontWeight="700" letterSpacing="0.5" fill="currentColor">I was here!</text>
+            <path d={`M${pos.x - S.strike * 2.1},${pos.y + 10 + (S.strike - 17) * 0.35} L${pos.x + S.strike * 2.1},${pos.y + 10 + (S.strike - 17) * 0.35}`} stroke="currentColor" strokeWidth={S.rule} />
           </g>
         );
       })()}
