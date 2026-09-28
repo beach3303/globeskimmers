@@ -549,7 +549,7 @@ export default function PassportBook({
       // The memory photos on THIS page, in page order — the carousel's slides 2+.
       const pg = page >= 1 && page - 1 < bookPages.length ? bookPages[page - 1] : null;
       const photos = pg ? pg.stamps.flatMap((st) => (st.photos || []).filter((ph) => ph && ph.photo_url).map((ph) => ({ src: ph.photo_url, stamp: st }))) : [];
-      setPreview({ status: "ready", format: "story", pageCanvas, photos, withPhotos: photos.length > 0, slides: null, slidesBusy: false, slideFailed: 0, ...img });
+      setPreview({ status: "ready", format: "story", pageCanvas, photos, mix: photos.length > 0 ? "both" : "page", slides: null, slidesBusy: false, slideFailed: 0, ...img });
     } catch (e) {
       try { console.error("[passport share] render failed", e); } catch { /* ignore */ }
       setPreview({ status: "error", message: e?.message || String(e) });
@@ -576,11 +576,14 @@ export default function PassportBook({
       return { ...p, slides: out, slideFailed: failed, slidesBusy: false };
     });
   }, []);
-  const toggleWithPhotos = useCallback(() => {
-    if (!preview || preview.status !== "ready") return;
-    const next = !preview.withPhotos;
-    setPreview((p) => ({ ...p, withPhotos: next }));
-    if (next && preview.format === "post" && !preview.slides && !preview.slidesBusy) buildSlides(preview.photos);
+  // What a post carries (founder, 2026-09-28: "let the user choose between the
+  // slide 1 design or slide 2"): "page" = the stamp page with its photo
+  // thumbnails, "photos" = each memory photo full size with the I was here!
+  // band, "both" = the carousel, page first.
+  const chooseMix = useCallback((mix) => {
+    if (!preview || preview.status !== "ready" || preview.mix === mix) return;
+    setPreview((p) => ({ ...p, mix }));
+    if (mix !== "page" && preview.format === "post" && !preview.slides && !preview.slidesBusy) buildSlides(preview.photos);
   }, [preview, buildSlides]);
   // Story ↔ Post: re-frame the already-rendered page (no second html2canvas).
   const switchFormat = useCallback(async (format) => {
@@ -588,21 +591,26 @@ export default function PassportBook({
     try {
       const img = await composeShare(preview.pageCanvas, format);
       setPreview((p) => { if (p?.url) { try { URL.revokeObjectURL(p.url); } catch { /* ignore */ } } return { ...p, format, ...img }; });
-      if (format === "post" && preview.withPhotos && preview.photos?.length && !preview.slides && !preview.slidesBusy) buildSlides(preview.photos);
+      if (format === "post" && preview.mix !== "page" && preview.photos?.length && !preview.slides && !preview.slidesBusy) buildSlides(preview.photos);
     } catch (e) { setPreview({ status: "error", message: e?.message || String(e) }); }
   }, [preview, buildSlides]);
   const shareRendered = useCallback(async () => {
     if (!preview || preview.status !== "ready") return;
-    if (preview.format === "post" && preview.withPhotos && preview.slidesBusy) return; // slides still being drawn
-    const carousel = preview.format === "post" && preview.withPhotos ? (preview.slides || []) : [];
+    const mix = preview.format === "post" ? (preview.mix || "page") : "page";
+    if (mix !== "page" && preview.slidesBusy) return; // slides still being drawn
+    const carousel = mix !== "page" ? (preview.slides || []) : [];
+    // "My photos" posts the photo slides alone; if none could be drawn, the page goes instead.
+    const includePage = mix !== "photos" || !carousel.length;
     const text = "My Virtual Passport on Globeskimmers 🛂";
     try {
       if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("Share") && Capacitor.isPluginAvailable("Filesystem")) {
         const { Filesystem, Directory } = await import("@capacitor/filesystem");
         const { Share } = await import("@capacitor/share");
         const uris = [];
-        const w = await Filesystem.writeFile({ path: `globeskimmers-passport-${preview.format || "story"}.png`, data: String(preview.dataUrl).split(",")[1], directory: Directory.Cache });
-        uris.push(w.uri);
+        if (includePage) {
+          const w = await Filesystem.writeFile({ path: `globeskimmers-passport-${preview.format || "story"}.png`, data: String(preview.dataUrl).split(",")[1], directory: Directory.Cache });
+          uris.push(w.uri);
+        }
         for (let i = 0; i < carousel.length; i++) {
           const ws = await Filesystem.writeFile({ path: `globeskimmers-passport-photo-${i + 1}.jpg`, data: String(carousel[i].dataUrl).split(",")[1], directory: Directory.Cache });
           uris.push(ws.uri);
@@ -612,7 +620,7 @@ export default function PassportBook({
       }
       // Files are built synchronously from blobs already in memory, so share()
       // still runs inside the tap.
-      const files = [new File([preview.blob], `globeskimmers-passport-${preview.format || "story"}.png`, { type: "image/png" })]
+      const files = (includePage ? [new File([preview.blob], `globeskimmers-passport-${preview.format || "story"}.png`, { type: "image/png" })] : [])
         .concat(carousel.map((x, i) => new File([x.blob], `globeskimmers-passport-photo-${i + 1}.jpg`, { type: "image/jpeg" })));
       if (navigator.canShare && navigator.canShare({ files })) {
         await navigator.share({ files, title: "My Virtual Passport", text });
@@ -620,7 +628,7 @@ export default function PassportBook({
       }
       if (files.length > 1 && navigator.canShare && navigator.canShare({ files: [files[0]] })) {
         await navigator.share({ files: [files[0]], title: "My Virtual Passport", text });
-        showToast("Your phone shared the stamp page only — add the photos from your camera roll", "error");
+        showToast(includePage ? "Your phone shared the stamp page only — add the photos from your camera roll" : "Your phone shared the first photo only — add the rest from your camera roll", "error");
         closePreview(); return;
       }
       if (!Capacitor.isNativePlatform()) {
@@ -766,7 +774,9 @@ export default function PassportBook({
         <div onClick={closePreview} className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Share this page"
           style={{ background: "rgba(12,10,8,0.88)", backdropFilter: "blur(4px)" }}>
           {preview.status === "ready" ? (
-            <img src={preview.url} alt="Your passport page, ready to share" onClick={(e) => e.stopPropagation()}
+            <img src={(preview.format === "post" && preview.mix === "photos" && preview.slides?.[0]?.url) || preview.url}
+              alt={preview.format === "post" && preview.mix === "photos" && preview.slides?.length ? "Your first memory photo, ready to share" : "Your passport page, ready to share"}
+              onClick={(e) => e.stopPropagation()}
               style={{ maxWidth: "92vw", maxHeight: "62vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 24px 60px -20px rgba(0,0,0,.6)" }} />
           ) : (
             <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[380px] rounded-[16px] px-5 py-6 text-center" style={{ background: PAPER, color: INK }}>
@@ -790,30 +800,43 @@ export default function PassportBook({
             )}
             {preview.status === "ready" && preview.format === "post" && preview.photos?.length > 0 && (
               <div className="rounded-xl p-3" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)" }}>
-                <label className="flex items-center gap-2.5" style={{ color: "#fff", fontSize: fs(13.5), fontWeight: 600 }}>
-                  <input id="pp-share-with-photos" type="checkbox" checked={!!preview.withPhotos} onChange={toggleWithPhotos} style={{ width: 18, height: 18, accentColor: STAMP }} />
-                  Add my memory photos as slides 2–{1 + Math.min(MAX_PHOTO_SLIDES, preview.photos.length)}
-                </label>
-                {preview.withPhotos ? (
+                <div className="flex gap-1.5" role="radiogroup" aria-label="What to post">
+                  {[["page", "Stamp page"], ["photos", "My photos"], ["both", "Both"]].map(([id, label]) => (
+                    <button key={id} type="button" role="radio" aria-checked={preview.mix === id} onClick={() => chooseMix(id)}
+                      className="flex-1 rounded-lg py-2 font-semibold"
+                      style={{ background: preview.mix === id ? STAMP : "rgba(255,255,255,0.08)", color: "#fff", border: `1px solid ${preview.mix === id ? STAMP : "rgba(255,255,255,0.25)"}`, fontSize: fs(12.5) }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ color: "rgba(255,252,247,0.78)", fontSize: fs(12), marginTop: 8, lineHeight: 1.4 }}>
+                  {preview.mix === "page" ? "The stamp page, with your photos as the thumbnails on it."
+                    : preview.mix === "photos" ? "Each memory photo full size, with I was here!, the place and the date."
+                    : "A carousel: the stamp page first, then each photo full size."}
+                </p>
+                {preview.mix !== "page" && (
                   <div className="flex gap-1.5 mt-2.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-                    <img src={preview.url} alt="Slide 1: the stamp page" style={{ width: 44, height: 55, objectFit: "cover", borderRadius: 6, border: "1.5px solid #FBF6EC", flex: "none" }} />
+                    {preview.mix === "both" && (
+                      <img src={preview.url} alt="Slide 1: the stamp page" style={{ width: 44, height: 55, objectFit: "cover", borderRadius: 6, border: "1.5px solid #FBF6EC", flex: "none" }} />
+                    )}
                     {preview.slidesBusy
                       ? <span style={{ fontFamily: MONO, fontSize: fs(11), color: "rgba(255,252,247,0.75)", alignSelf: "center", paddingLeft: 4 }}>Preparing your photos…</span>
                       : (preview.slides || []).map((x, i) => (
-                          <img key={i} src={x.url} alt={`Slide ${i + 2}: memory photo ${i + 1}`} style={{ width: 44, height: 55, objectFit: "cover", borderRadius: 6, border: "1px solid rgba(255,255,255,0.3)", flex: "none" }} />
+                          <img key={i} src={x.url} alt={`Memory photo ${i + 1}`} style={{ width: 44, height: 55, objectFit: "cover", borderRadius: 6, border: "1px solid rgba(255,255,255,0.3)", flex: "none" }} />
                         ))}
                   </div>
-                ) : (
-                  <p style={{ color: "rgba(255,252,247,0.72)", fontSize: fs(12), marginTop: 6, lineHeight: 1.4 }}>Just the stamp page, with your photos as the thumbnails on it.</p>
                 )}
-                {preview.withPhotos && preview.slideFailed > 0 && (
+                {preview.mix !== "page" && preview.slideFailed > 0 && (
                   <p style={{ color: "#F3B2A5", fontSize: fs(12), marginTop: 6 }}>{preview.slideFailed} photo{preview.slideFailed === 1 ? "" : "s"} couldn&apos;t be added.</p>
                 )}
               </div>
             )}
             {preview.status === "ready" && (() => {
-              const busy = preview.format === "post" && preview.withPhotos && preview.slidesBusy;
-              const n = preview.format === "post" && preview.withPhotos ? 1 + (preview.slides || []).length : 1;
+              const post = preview.format === "post";
+              const mix = post ? (preview.mix || "page") : "page";
+              const busy = mix !== "page" && preview.slidesBusy;
+              const slides = mix !== "page" ? (preview.slides || []).length : 0;
+              const n = (mix === "photos" && slides ? 0 : 1) + slides;
               return (
                 <button onClick={shareRendered} disabled={busy} className="w-full rounded-xl py-3 font-bold flex items-center justify-center gap-2 disabled:opacity-60"
                   style={{ background: STAMP, color: "#fff", fontSize: fs(15), border: "none" }}>
