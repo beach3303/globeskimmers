@@ -39,6 +39,12 @@ const hashStr = (s) => { let h = 0; const str = String(s || ""); for (let i = 0;
 const PAPER = "#FBF6EC", PAPER_EDGE = "#EADFC9";
 const NAVY = "#0C2B50", NAVY_DEEP = "#071B33", GOLD = "#D6A64A";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
+// Stamp width as a share of the page width. 0.50 until 2026-09-28; the founder
+// chose ink B and asked for the place name, "I was here!" and the date two to
+// three sizes larger — scaling the whole stamp 1.28× does exactly that (the
+// name is already fitted to the stamp's width, so only the stamp can grow).
+// On a phone this means one stamp per page, like a real passport page.
+const ART_FRAC = 0.64;
 
 const KIND = {
   country: "🌍", city: "🏙️", airport: "✈️", icon: "🗽", wonder: "🏔️", attraction: "📍",
@@ -73,7 +79,7 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
     ? new Date(stamp.visited_on + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "";
   const photos = (stamp.photos || []).slice(0, 4);
-  const artW = Math.round(0.50 * pageW);
+  const artW = Math.round(ART_FRAC * pageW);
   const badgeW = Math.round(0.5 * pageW);
   const airportW = Math.round(0.82 * pageW);
   const thumbW = Math.round(0.185 * pageW);
@@ -344,8 +350,11 @@ export default function PassportBook({
       const rows = n > 0 ? Math.ceil(n / 2) : 0;
       const photosH = rows > 0 ? rows * thumbW + (rows - 1) * 8 + 14 : 0;
       if (s.kind === "airport") return (0.659 * airportW + 14 + photosH) * 1.03;
-      if (s.kind === "city") return (110 + photosH) * 1.05; // short: a couple ink lines
-      return (0.50 * pageW + 52 + photosH) * 1.03;
+      // City/place stamps render the same art-or-typographic stamp as iconic
+      // ones (plus a caption line), so they are estimated at the stamp's real
+      // height — the old 110px guess predates that and let pages overflow.
+      if (s.kind === "city") return (ART_FRAC * pageW + 46 + photosH) * 1.05;
+      return (ART_FRAC * pageW + 52 + photosH) * 1.03;
     };
     // A stamp whose layout is 'solo' (founder, 2026-09-26: "move a stamp to a
     // solo page") always gets a page of its own, and no later stamp back-fills
