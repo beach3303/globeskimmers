@@ -9,6 +9,8 @@ import { SHARE_TARGETS, targetById, shareUseLabel, composeShare, MAX_PHOTO_SLIDE
 import { countryCode } from "@/lib/countries";
 import { stampArtUrl } from "@/lib/stampArt";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
+import { isPhotoFirst } from "@/lib/passport";
+import { calmEdge } from "@/lib/photoEdge";
 import AirportStamp from "@/components/passport/AirportStamp";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 
@@ -59,6 +61,10 @@ const flagFor = (country) => {
   return String.fromCodePoint(...[...cc.toUpperCase()].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
 };
 
+// Photos on a page are cover-sized backgrounds, not <img object-fit>, because
+// html2canvas 1.4 (the share capture) ignores object-fit and would stretch
+// them; it does honour background-size: cover.
+const coverBg = (url) => ({ backgroundImage: `url("${String(url || "").replace(/"/g, "%22")}")`, backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat" });
 // A large stamp pressed onto the page, sized off the page width so heights are a
 // constant fraction across phones (lets pagination fit each page with no scroll).
 // Airport ≈ ⅓ page; iconic ≈ ½ page with "I was here!", a big ink date, and up
@@ -167,8 +173,8 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
       {photos.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12, width: thumbW * 2 + 8, marginLeft: "auto", marginRight: "auto" }}>
           {photos.map((p) => (
-            <img key={p.id} src={p.photo_url} alt="" loading="lazy"
-              style={{ width: thumbW, height: thumbW, objectFit: "cover", borderRadius: 10, border: `1px solid ${PAPER_EDGE}` }} />
+            <span key={p.id} role="img" aria-label="Memory photo"
+              style={{ display: "block", width: thumbW, height: thumbW, borderRadius: 10, border: `1px solid ${PAPER_EDGE}`, ...coverBg(p.photo_url) }} />
           ))}
         </div>
       )}
@@ -181,6 +187,87 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
         <span className="absolute" title={stamp.verified === "gps" ? "Verified visit" : "Verified by photo"} style={{ top: -6, left: isAirport ? 10 : 14, background: "#2E6B4E", color: "#fff", fontSize: 14, fontWeight: 700, width: 26, height: 26, borderRadius: 999, display: "grid", placeItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }}>✓</span>
       )}
     </button>
+  );
+}
+
+// The photo-first page for a scene stamp (founder, 2026-09-28): "one photo is
+// open at a time with the stamp at the top or bottom of the photo, depending on
+// making sure the stamp does not block the iconic photo". The second photo is
+// a thumbnail; tapping it swaps. The stamp only touches the photo's edge, on
+// the calmer edge of the open photo (calmEdge), unless the traveller pinned it
+// above or below from the stamp options (meta.stamp_pos). The scene and the
+// two leads print underneath. Always a page of its own.
+const clip = (t, n) => { const s = String(t || "").trim(); if (s.length <= n) return s; const cut = s.slice(0, n); return cut.slice(0, Math.max(cut.lastIndexOf(" "), n - 12)).replace(/[,.;:\s]+$/, "") + "…"; };
+function PhotoFirstToken({ stamp, onOpen, pageW }) {
+  const photos = (stamp.photos || []).filter((p) => p && p.photo_url).slice(0, 4);
+  const [cur, setCur] = useState(0);
+  const main = photos[cur % photos.length] || photos[0];
+  const next = photos.length > 1 ? photos[(cur + 1) % photos.length] : null;
+  const innerW = Math.round(pageW - 38);
+  const photoH = Math.round(0.72 * pageW); // the floor; the photo grows into any spare page height
+  const stampW = Math.round(0.5 * pageW);
+  const overlap = Math.round(0.07 * pageW);
+  const thumbW = Math.round(0.2 * pageW);
+  const pinned = stamp.meta?.stamp_pos === "top" || stamp.meta?.stamp_pos === "bottom" ? stamp.meta.stamp_pos : null;
+  const mainUrl = main ? main.photo_url : "";
+  const [auto, setAuto] = useState("bottom");
+  useEffect(() => {
+    let live = true;
+    if (!pinned && mainUrl) calmEdge(mainUrl, innerW, photoH).then((e) => { if (live) setAuto(e); });
+    return () => { live = false; };
+  }, [pinned, mainUrl, innerW, photoH]);
+  const pos = pinned || auto;
+  const film = stamp.meta?.film || {};
+  const cast = (film.cast || []).filter((c) => c && c.actor).slice(0, 2).map((c) => (c.role ? `${c.actor} as ${c.role}` : c.actor)).join(" · ");
+  const verified = stamp.verified === "gps" || stamp.verified === "photo_loc" || stamp.verified === "photo_ai";
+  const open = () => onOpen(stamp);
+  const photo = (
+    <div style={{ position: "relative", width: "100%", flex: "1 1 auto", minHeight: photoH, maxHeight: Math.round(1.05 * pageW), borderRadius: Math.round(0.035 * pageW), overflow: "hidden", background: "#E9E1D2" }}>
+      <div role="img" aria-label={`My photo at ${stamp.name}`} style={{ position: "absolute", inset: 0, ...coverBg(main.photo_url) }} />
+      {next && (
+        <button type="button" aria-label={`Show photo ${((cur + 1) % photos.length) + 1} of ${photos.length}`}
+          onClick={(e) => { e.stopPropagation(); setCur((c) => (c + 1) % photos.length); }}
+          style={{ position: "absolute", right: 10, [pos === "top" ? "bottom" : "top"]: 10, width: thumbW, height: thumbW, borderRadius: 9, overflow: "hidden", border: "3px solid #fff", boxShadow: "0 2px 8px rgba(0,0,0,.25)", padding: 0, background: "#fff" }}>
+          <span aria-hidden style={{ position: "absolute", inset: 0, ...coverBg(next.photo_url) }} />
+          <span style={{ position: "absolute", right: 4, bottom: 4, minWidth: 20, height: 20, padding: "0 5px", borderRadius: 999, background: "#fff", color: "#141A1F", fontFamily: MONO, fontSize: 11, display: "grid", placeItems: "center" }}>
+            {photos.length > 2 ? `${((cur + 1) % photos.length) + 1}/${photos.length}` : "2"}
+          </span>
+        </button>
+      )}
+    </div>
+  );
+  const stampEl = (
+    <div style={{ position: "relative", width: stampW, height: stampW, flex: "none", transform: "rotate(-3deg)", zIndex: 1, marginTop: pos === "top" ? 0 : -overlap, marginBottom: pos === "top" ? -overlap : 0 }}>
+      {/* Soft ivory discs so the stamp reads where it crosses the photo's
+          edge. Two flat fills stepped in alpha — no radial-gradient (html2canvas
+          1.4 then drew the whole page blank) and no box-shadow (it drew those
+          in the wrong place inside this rotated box). Measured 2026-09-28. */}
+      <div aria-hidden style={{ position: "absolute", inset: "6%", borderRadius: "50%", background: "rgba(251,246,236,.45)" }} />
+      <div aria-hidden style={{ position: "absolute", inset: "15%", borderRadius: "50%", background: "rgba(251,246,236,.6)" }} />
+      <div style={{ position: "relative" }}>
+        <TypographicStamp name={stamp.name} city={stamp.city} region={stamp.region} country={stamp.country} date={stamp.visited_on}
+          entityId={stamp.entity_id || stamp.id} width={stampW} overprint strength={STAMP_INK_STRENGTH} film={stamp.meta?.film || null} />
+      </div>
+      {verified && (
+        <span title={stamp.verified === "gps" ? "Verified visit" : "Verified by photo"} style={{ position: "absolute", top: 4, left: 4, background: "#2E6B4E", color: "#fff", fontSize: 13, fontWeight: 700, width: 26, height: 26, borderRadius: 999, display: "grid", placeItems: "center", border: "2px solid #fff" }}>✓</span>
+      )}
+    </div>
+  );
+  return (
+    <div role="button" tabIndex={0} aria-label={`Open stamp: ${stamp.name}`} onClick={open}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
+      style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", height: "100%", cursor: "pointer" }}>
+      {pos === "top" ? <>{stampEl}{photo}</> : <>{photo}{stampEl}</>}
+      <div style={{ textAlign: "center", padding: "6px 4px 0", maxWidth: "100%", flex: "none" }}>
+        {film.title && (
+          <div style={{ fontFamily: SERIF, fontSize: fs(21), color: INK, lineHeight: 1.1 }}>
+            The scene from <i>{film.title}</i>{film.year ? ` (${film.year})` : ""}
+          </div>
+        )}
+        {film.scene && <div style={{ fontFamily: SANS, fontSize: fs(12.5), color: "#3F4A52", lineHeight: 1.35, marginTop: 4 }}>{clip(film.scene, 120)}</div>}
+        {cast && <div style={{ fontFamily: MONO, fontSize: fs(10.5), color: "#2E6B4E", letterSpacing: ".02em", lineHeight: 1.4, marginTop: 5 }}>{cast}</div>}
+      </div>
+    </div>
   );
 }
 
@@ -246,9 +333,15 @@ function OwnershipPage({ holder, homeCountry, countries, totalStamps, coverH, pa
 function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW }) {
   return (
     <Paper coverH={coverH} pageNo={pageNo} watermark={watermark}>
-      <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: pg.stamps.length <= 1 ? "center" : "space-around", gap: 18, paddingTop: 12, paddingBottom: 22 }}>
-        {pg.stamps.map((s, j) => <StampToken key={s.id} stamp={s} idx={j} onOpen={() => onOpenStamp(s.id)} pageW={pageW} />)}
-      </div>
+      {pg.stamps.length === 1 && isPhotoFirst(pg.stamps[0]) ? (
+        <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 18 }}>
+          <PhotoFirstToken stamp={pg.stamps[0]} onOpen={() => onOpenStamp(pg.stamps[0].id)} pageW={pageW} />
+        </div>
+      ) : (
+        <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: pg.stamps.length <= 1 ? "center" : "space-around", gap: 18, paddingTop: 12, paddingBottom: 22 }}>
+          {pg.stamps.map((s, j) => <StampToken key={s.id} stamp={s} idx={j} onOpen={() => onOpenStamp(s.id)} pageW={pageW} />)}
+        </div>
+      )}
     </Paper>
   );
 }
@@ -337,7 +430,8 @@ export default function PassportBook({
     const packed = [];
     for (const s of (stamps || [])) {
       const h = estH(s);
-      const solo = s.layout === "solo";
+      // A scene stamp with photos is photo-first, which fills a page.
+      const solo = s.layout === "solo" || isPhotoFirst(s);
       let placed = false;
       if (!solo) for (const pg of packed) {
         if (pg.solo) continue;
@@ -451,7 +545,13 @@ export default function PassportBook({
     try {
       const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error("rendering took too long")), 25000));
       const pageCanvas = await Promise.race([
-        html2canvas(el, { useCORS: true, backgroundColor: "#FBF6EC", scale: 2, logging: false, imageTimeout: 8000 }),
+        // onclone drops the page's inset spine shadow from the copy that is
+        // drawn: html2canvas 1.4 paints an inset box-shadow as a dark fill
+        // over the whole page (measured 2026-09-28). The screen keeps it.
+        html2canvas(el, {
+          useCORS: true, backgroundColor: "#FBF6EC", scale: 2, logging: false, imageTimeout: 8000,
+          onclone: (doc) => { doc.querySelectorAll("[data-pp-active-page] *").forEach((n) => { if (n.style && /inset/.test(n.style.boxShadow || "")) n.style.boxShadow = "none"; }); },
+        }),
         timeout,
       ]);
       const img = await composeShare(pageCanvas, "story_meta");

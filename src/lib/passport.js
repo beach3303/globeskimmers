@@ -58,6 +58,17 @@ export async function setStampLayout(stamp_id, layout) {
   const { data, error } = await callWorker('passport/stamp/layout', { stamp_id, layout });
   return { data, error: error || (data && data.ok === false ? data.error || 'Could not change the page layout' : null) };
 }
+// Scene stamps with photos print photo-first; this pins the stamp above
+// ('top') or below ('bottom') the open photo, or hands it back to the app's
+// own pick ('auto').
+export async function setStampPos(stamp_id, stamp_pos) {
+  const { data, error } = await callWorker('passport/stamp/layout', { stamp_id, stamp_pos });
+  return { data, error: error || (data && data.ok === false ? data.error || 'Could not move the stamp' : null) };
+}
+// A scene stamp (it carries a film) with at least one memory photo gets the
+// photo-first page: one photo open, the second as a thumbnail, the stamp on
+// the photo's calmer edge. Always a page of its own.
+export const isPhotoFirst = (s) => !!(s && s.meta && s.meta.film && Array.isArray(s.photos) && s.photos.some((p) => p && p.photo_url));
 export async function deleteStamp(stamp_id) {
   const { data, error } = await callWorker('passport/stamp/delete', { stamp_id });
   return { data, error };

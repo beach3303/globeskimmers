@@ -7,9 +7,9 @@
 // Every write goes through src/lib/passport.js; onChanged() reloads the
 // passport so the booklet repacks (a solo stamp moves to its own page at once).
 import React, { useRef, useState } from "react";
-import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck, ScanSearch } from "lucide-react";
+import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck, ScanSearch, ArrowUpDown } from "lucide-react";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, uploadStampPhoto, deleteStamp, deleteStampPhoto, setStampLayout, checkStampPhotos, isVerified, proofToast } from "@/lib/passport";
+import { addStamp, metersBetween, uploadStampPhoto, deleteStamp, deleteStampPhoto, setStampLayout, setStampPos, isPhotoFirst, checkStampPhotos, isVerified, proofToast } from "@/lib/passport";
 import { readPhotoExif } from "@/lib/photoExif";
 import { logEvent } from "@/lib/analytics";
 import { stampRadiusFor } from "@/lib/stampRadius";
@@ -50,6 +50,10 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   const photos = Array.isArray(stamp.photos) ? stamp.photos : [];
   const room = Math.max(0, MAX_PHOTOS - photos.length);
   const solo = stamp.layout === "solo";
+  // A scene stamp with photos prints photo-first on a page of its own, so the
+  // page-sharing row gives way to where the stamp sits on the photo.
+  const photoFirst = isPhotoFirst(stamp);
+  const stampPos = stamp.meta?.stamp_pos === "top" || stamp.meta?.stamp_pos === "bottom" ? stamp.meta.stamp_pos : "auto";
   const place = [stamp.city, stamp.region, stamp.country].filter(Boolean).join(", ");
 
   const onPick = async (e) => {
@@ -80,6 +84,15 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
     setBusy(null);
     if (error) { showToast(error, "error"); return; }
     showToast(solo ? "This stamp now shares a page" : "This stamp has its own page", "success");
+    onChanged?.();
+  };
+  const movePos = async (next) => {
+    if (next === stampPos) return;
+    setBusy("pos");
+    const { error } = await setStampPos(stamp.id, next);
+    setBusy(null);
+    if (error) { showToast(error, "error"); return; }
+    showToast(next === "top" ? "The stamp sits above the photo" : next === "bottom" ? "The stamp sits below the photo" : "GlobeSkimmers picks the clear edge of each photo", "success");
     onChanged?.();
   };
   // "Verify I'm here" (founder, 2026-09-28): a stamp that isn't GPS-verified
@@ -173,13 +186,35 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
         <div className="flex flex-col gap-2 mt-3">
           {!readOnly && (
             <Row icon={busy === "photos" ? Loader2 : Plus} label={photos.length ? "Add more memory photos" : "Add memory photos"}
-              sub={room ? `Up to ${room} more · they print under the stamp` : "This stamp already holds 4 photos"}
+              sub={room ? (stamp.meta?.film ? `Up to ${room} more · your first photo opens full on the page` : `Up to ${room} more · they print under the stamp`) : "This stamp already holds 4 photos"}
               onClick={() => room && fileRef.current?.click()} disabled={busy === "photos" || !room} />
           )}
           {photos.length > 0 && (
             <Row icon={Images} label={`View photo${photos.length === 1 ? "" : "s"} (${photos.length})`} sub="Full screen — swipe through, tap × to close" onClick={() => onEnlarge?.(0)} />
           )}
-          {!readOnly && (
+          {!readOnly && photoFirst && (
+            <div className="w-full rounded-[14px] px-3.5 py-3" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
+              <div className="flex items-center gap-3">
+                <span className="flex-none w-9 h-9 rounded-full flex items-center justify-center" style={{ background: IVORY_2 }}>
+                  {busy === "pos" ? <Loader2 size={17} color={INK} strokeWidth={2.1} className="animate-spin" /> : <ArrowUpDown size={17} color={INK} strokeWidth={2.1} />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold" style={{ color: INK, fontSize: fs(14.5) }}>Where the stamp sits</span>
+                  <span className="block" style={{ color: INK3, fontSize: fs(11.5), lineHeight: 1.35, marginTop: 1 }}>So it never hides the view in your photo</span>
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 mt-2.5" role="radiogroup" aria-label="Where the stamp sits">
+                {[["auto", "Auto"], ["top", "Above photo"], ["bottom", "Below photo"]].map(([v, l]) => (
+                  <button key={v} type="button" role="radio" aria-checked={stampPos === v} disabled={busy === "pos"} onClick={() => movePos(v)}
+                    className="rounded-lg py-2 font-semibold disabled:opacity-60"
+                    style={{ fontSize: fs(12.5), fontFamily: "inherit", background: stampPos === v ? INK : IVORY, color: stampPos === v ? "#fff" : INK2, border: `1px solid ${stampPos === v ? INK : RULE}` }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {!readOnly && !photoFirst && (
             <Row icon={solo ? Columns2 : BookOpen}
               label={solo ? "Share a page with other stamps" : "Give this stamp its own page"}
               sub={solo ? "Back into the flow — it packs in beside other stamps" : "A solo page, nothing else on it"}

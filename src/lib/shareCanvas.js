@@ -124,7 +124,11 @@ export async function photoSlide(src, stamp, presetId = "post_4x5") {
   ctx.drawImage(img, (W - iw) / 2, (H - ih) / 2, iw, ih);
   const pad = 64, maxW = W - pad - Math.max(pad, P.right);
   // Text stack from the bottom up, above the platform's keep-clear band.
-  const brandY = H - P.bottom - 36, lineY = brandY - 62, nameY = lineY - 74;
+  // A scene stamp adds "The scene from Title (Year)" between the place and the
+  // city line (founder, 2026-09-28) — the title and year only, never a still.
+  const film = stamp?.meta?.film && stamp.meta.film.title ? stamp.meta.film : null;
+  const filmLine = film ? `The scene from ${film.title}${film.year ? ` (${film.year})` : ""}` : "";
+  const brandY = H - P.bottom - 36, lineY = brandY - 62, filmY = lineY - 58, nameY = (film ? filmY : lineY) - 74;
   const name = String(stamp?.name || "");
   let size = 72;
   ctx.font = `${size}px ${SHARE_SERIF}`;
@@ -144,6 +148,8 @@ export async function photoSlide(src, stamp, presetId = "post_4x5") {
   const line = [where, slideDate(stamp?.visited_on)].filter(Boolean).join("  ·  ");
   ctx.font = `500 40px ${SHARE_SANS}`; ctx.fillStyle = "rgba(251,246,236,0.92)";
   if (line) ctx.fillText(line, pad, lineY, maxW);
+  // the film, in gold italic under the place
+  if (filmLine) { ctx.font = `italic 42px ${SHARE_SERIF}`; ctx.fillStyle = GOLD; ctx.fillText(filmLine, pad, filmY, maxW); }
   // the place
   ctx.font = `${size}px ${SHARE_SERIF}`; ctx.fillStyle = "#FFFFFF"; ctx.fillText(name, pad, nameY);
   // solid red "I was here!"

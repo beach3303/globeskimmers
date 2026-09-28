@@ -13492,7 +13492,7 @@ async function handlePassportStampDate(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
-// POST /passport/stamp/layout { stamp_id, layout: 'auto' | 'solo' } — how the
+// POST /passport/stamp/layout { stamp_id, layout?: 'auto' | 'solo', stamp_pos?: 'top' | 'bottom' | 'auto' } — how the
 // booklet lays this stamp out: 'solo' = a page of its own, 'auto' = packed with
 // other stamps (the default). Founder ask 2026-09-26 ("move to solo page",
 // "move back to share a page"). The column lands with migration
@@ -13505,10 +13505,25 @@ async function handlePassportStampLayout(request, env) {
     const b = await request.json().catch(() => ({}));
     const stampId = String(b.stamp_id || '').replace(/[^0-9a-f-]/gi, '').slice(0, 40);
     const layout = b.layout === 'solo' ? 'solo' : b.layout === 'auto' ? 'auto' : null;
-    if (!stampId || !layout) return jsonResponse({ error: 'stamp_id + layout (auto|solo) required' }, 400);
-    const r = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ layout, updated_at: new Date().toISOString() }) });
+    // stamp_pos (founder, 2026-09-28): on a scene stamp's photo-first page the
+    // stamp sits above or below the photo. 'auto' lets the app pick the calmer
+    // edge of the open photo; 'top'/'bottom' is the traveller's override. It
+    // lives in meta beside the film, so the rest of meta is kept.
+    const pos = ['top', 'bottom', 'auto'].includes(b.stamp_pos) ? b.stamp_pos : null;
+    if (!stampId || (!layout && !pos)) return jsonResponse({ error: 'stamp_id + layout (auto|solo) or stamp_pos (top|bottom|auto) required' }, 400);
+    const patch = { updated_at: new Date().toISOString() };
+    if (layout) patch.layout = layout;
+    if (pos) {
+      const q = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}&select=meta`, {});
+      const cur = q.ok ? (await q.json())[0] : null;
+      if (!cur) return jsonResponse({ ok: false, error: 'Stamp not found' }, 404);
+      const meta = { ...(cur.meta && typeof cur.meta === 'object' ? cur.meta : {}) };
+      if (pos === 'auto') delete meta.stamp_pos; else meta.stamp_pos = pos;
+      patch.meta = Object.keys(meta).length ? meta : null;
+    }
+    const r = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
     if (!r.ok) return jsonResponse({ ok: false, error: r.status === 400 ? 'Page layout isn\'t available yet — try again later' : 'update failed' });
-    return jsonResponse({ ok: true, layout });
+    return jsonResponse({ ok: true, layout, stamp_pos: pos });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
