@@ -6,7 +6,7 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { addStamp, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
+import { addStamp, metersBetween, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
@@ -15,6 +15,7 @@ import AirportStamp from "@/components/passport/AirportStamp";
 import PassportBook from "@/components/passport/PassportBook";
 import { isAdminEmail } from "@/lib/admins";
 import { localISODate } from "@/lib/localDate";
+import { stampRadiusFor } from "@/lib/stampRadius";
 import { resizePhoto } from "@/lib/resizePhoto";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import NearbyStampPrompt, { NEARBY_KEY, nearbySensingOn } from "@/components/passport/NearbyStampPrompt";
@@ -343,6 +344,9 @@ function StampPlaceModal({ onClose, onDone }) {
   const [cc, setCc] = useState("");
   const [coords, setCoords] = useState(null);
   const [venue, setVenue] = useState("");
+  // The venue's OWN point and type, for the on-the-spot GPS check — `coords`
+  // keeps the city centre when the city was picked first.
+  const [venueSpot, setVenueSpot] = useState(null);
   const [dateVal, setDateVal] = useState(localISODate());
   const [results, setResults] = useState(null);
   const [searchFor, setSearchFor] = useState(null);
@@ -360,7 +364,7 @@ function StampPlaceModal({ onClose, onDone }) {
   };
   const pick = (r) => {
     if (searchFor === "city") { setCity(r.city || r.name); setCityQ(r.city || r.name); setCountry(r.country || ""); setCc(r.cc || ""); setCoords({ lat: r.lat, lng: r.lng }); }
-    else { setVenue(r.name); if (!city) { setCity(r.city || ""); setCityQ(r.city || ""); } if (!country) setCountry(r.country || ""); if (!cc) setCc(r.cc || ""); if (!coords) setCoords({ lat: r.lat, lng: r.lng }); }
+    else { setVenue(r.name); if (Number.isFinite(+r.lat) && Number.isFinite(+r.lng)) setVenueSpot({ lat: +r.lat, lng: +r.lng, category: r.category || r.type || null }); if (!city) { setCity(r.city || ""); setCityQ(r.city || ""); } if (!country) setCountry(r.country || ""); if (!cc) setCc(r.cc || ""); if (!coords) setCoords({ lat: r.lat, lng: r.lng }); }
     setResults(null); setSearchFor(null);
   };
   const onPickPhotos = (e) => { const f = [...(e.target.files || [])]; e.target.value = ""; setPhotos((p) => [...p, ...f].slice(0, 4)); };
@@ -370,16 +374,30 @@ function StampPlaceModal({ onClose, onDone }) {
     setBusy(true);
     const sl = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     const entity_id = `visit:${sl(cityName)}:${sl(venue)}:${dateVal}`;
+    // Verify on the spot (founder, 2026-09-28: the Georgia Aquarium stamp got no
+    // ✓ — this form never checked GPS). Only for a visit dated today, with a
+    // picked venue: one fix, within that venue's stamp radius → 'gps' (the
+    // worker still cross-checks the country and travel speed). A backfilled
+    // past trip stays self-declared; a photo is its memory.
+    let verified = "self";
+    const spot = venueSpot || null;
+    if (spot && dateVal === localISODate()) {
+      const pos = await new Promise((res) => {
+        if (!navigator.geolocation) return res(null);
+        navigator.geolocation.getCurrentPosition(res, () => res(null), { enableHighAccuracy: true, timeout: 7000, maximumAge: 60000 });
+      });
+      if (pos && metersBetween(pos.coords.latitude, pos.coords.longitude, spot.lat, spot.lng) <= stampRadiusFor({ name: venue, category: spot.category })) verified = "gps";
+    }
     const { data, error } = await addStamp({
       kind: "city", entity_type: "visit", entity_id,
       name: venue.trim() || cityName, city: cityName, region: null,
       country: country || null, cc: cc || undefined,
-      lat: coords?.lat ?? null, lng: coords?.lng ?? null,
-      visited_on: dateVal, local_hour: new Date().getHours(), verified: "self",
+      lat: spot?.lat ?? coords?.lat ?? null, lng: spot?.lng ?? coords?.lng ?? null,
+      visited_on: dateVal, local_hour: new Date().getHours(), verified,
     });
     if (error || !data?.id) { setBusy(false); showToast(error || "Could not add stamp", "error"); return; }
     for (const f of photos) { try { const image = await resizePhoto(f); await uploadStampPhoto({ stamp_id: data.id, image, visited_on: dateVal }); } catch { /* skip a bad photo */ } }
-    setBusy(false); showToast("Place stamped 🛂", "success"); onDone();
+    setBusy(false); showToast(data.verified === "gps" ? "✓ Verified — place stamped 🛂" : "Place stamped 🛂", "success"); onDone();
   };
 
   const inputStyle = { width: "100%", border: `1px solid ${RULE}`, borderRadius: 12, padding: "10px 12px", fontSize: fs(14), color: INK, fontFamily: SANS, background: "#fff" };

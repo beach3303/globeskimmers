@@ -7,9 +7,12 @@
 // Every write goes through src/lib/passport.js; onChanged() reloads the
 // passport so the booklet repacks (a solo stamp moves to its own page at once).
 import React, { useRef, useState } from "react";
-import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2 } from "lucide-react";
+import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck } from "lucide-react";
 import { showToast } from "@/components/Toast";
-import { uploadStampPhoto, deleteStamp, deleteStampPhoto, setStampLayout } from "@/lib/passport";
+import { addStamp, metersBetween, uploadStampPhoto, deleteStamp, deleteStampPhoto, setStampLayout } from "@/lib/passport";
+import { stampRadiusFor } from "@/lib/stampRadius";
+import { countryCode } from "@/lib/countries";
+import { localISODate } from "@/lib/localDate";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { useDismissable } from "@/lib/dismissStack";
 
@@ -75,6 +78,39 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
     showToast(solo ? "This stamp now shares a page" : "This stamp has its own page", "success");
     onChanged?.();
   };
+  // "Verify I'm here" (founder, 2026-09-28): a stamp that isn't GPS-verified
+  // can earn the ✓ while you're standing there — one fix, within the place's
+  // stamp radius (an airport's perimeter is wide, 3 km). The re-stamp upgrades
+  // it in place (gps > photo > self); the worker still cross-checks country and
+  // travel speed, so a VPN or a spoofed fix leaves it as it was.
+  const canVerify = !readOnly && stamp.verified !== "gps" && !!stamp.entity_id && Number.isFinite(+stamp.lat) && Number.isFinite(+stamp.lng) && (+stamp.lat !== 0 || +stamp.lng !== 0);
+  const verifyHere = async () => {
+    setBusy("verify");
+    const pos = await new Promise((res) => {
+      if (!navigator.geolocation) return res(null);
+      navigator.geolocation.getCurrentPosition(res, () => res(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
+    });
+    if (!pos) { setBusy(null); showToast("Turn on location for GlobeSkimmers to verify this stamp", "error"); return; }
+    const m = metersBetween(pos.coords.latitude, pos.coords.longitude, +stamp.lat, +stamp.lng);
+    const radius = stamp.kind === "airport" ? 3000 : stampRadiusFor({ name: stamp.name });
+    if (m > radius) {
+      setBusy(null);
+      showToast(`You're about ${m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`} from ${stamp.name} — verify while you're there`, "error");
+      return;
+    }
+    const c = String(stamp.country || "");
+    const cc = /^[A-Za-z]{2}$/.test(c) ? c.toUpperCase() : (countryCode(c) || undefined);
+    const { data, error } = await addStamp({
+      kind: stamp.kind, tier: stamp.tier, entity_type: stamp.entity_type, entity_id: stamp.entity_id,
+      name: stamp.name, city: stamp.city, region: stamp.region, country: stamp.country, cc,
+      lat: +stamp.lat, lng: +stamp.lng, visited_on: stamp.visited_on || localISODate(),
+      local_hour: new Date().getHours(), verified: "gps",
+    });
+    setBusy(null);
+    if (error) { showToast(error, "error"); return; }
+    if (data?.verified === "gps") { showToast("✓ Verified — you're really here", "success"); onChanged?.(); }
+    else showToast("Couldn't confirm your location (VPN or roaming?) — the stamp stays as it was", "error");
+  };
   const removeStamp = async () => {
     setBusy("delete");
     const { error } = await deleteStamp(stamp.id);
@@ -133,6 +169,11 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
               label={solo ? "Share a page with other stamps" : "Give this stamp its own page"}
               sub={solo ? "Back into the flow — it packs in beside other stamps" : "A solo page, nothing else on it"}
               onClick={toggleLayout} disabled={busy === "layout"} />
+          )}
+          {canVerify && (
+            <Row icon={busy === "verify" ? Loader2 : BadgeCheck} label="Verify I'm here"
+              sub="Uses your location once to earn the green ✓ — works while you're at the place"
+              onClick={verifyHere} disabled={busy === "verify"} />
           )}
           {!readOnly && (
             <Row icon={PencilLine} label="Details, date & tag a friend" sub="Set the real visit date, invite who you were with" onClick={onDetails} />
