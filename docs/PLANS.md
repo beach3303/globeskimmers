@@ -68,6 +68,19 @@ as for every stamp. **Brief (research 2026-09-27, all counts live from Wikidata)
   already carry a top-spot stamp (Skellig Michael, Aït Benhaddou) **stay top-spot stamps** with a
   film line added, not duplicated; TMDB commercial agreement **apply in parallel, don't wait**;
   stamp placement **automatic with manual override**. "Go with the defaults" starts the seed.
+  **Mockup 2026-09-28:** https://claude.ai/artifact/XBYyx5YZvfGfA8nxsFU7gs — the "scene" stamp
+  (film strip top and bottom, ★ FILMED HERE ★, the place in solid ink, FILM · YEAR, city · country
+  · date, solid red "I was here!"), the photo-first page (stamp touches only the photo's edge,
+  below or above; second photo as a tap-to-swap thumbnail; scene line and the two leads under
+  it), Story and carousel with the film line, and the to-do list (founder: the defaults, design
+  approval, optional TMDB application, a ~40-spot review, one data-load command + OTA; Claude:
+  ~8 working days). Waiting on "go with the defaults" + design approval.
+**Tabled 2026-09-28 — "who you were with" bubbles** (founder: "table the idea, hold the build"):
+small circles on a stamp with each friend's face, or first name + last initial; tap to see who
+you were there with. Only friends who accepted the tag appear. Data exists today: passport_tags
+(from_user_id, to_user_id, status accepted) on the tagger's side, passport_stamps.tagged_by on
+the friend's. Tags today copy the place and visit date only — the friend's stamp is self-verified
+and starts with no photos; they add their own. Needs profile photos before faces can show.
 1. **New phone Home, built to the Home canvas** (G115). Founder, 2026-09-14: "first is the new home."
    Canvas: https://claude.ai/code/artifact/06c2973f-3e2e-47d2-a4c1-b1a7510706ec
    - Three states: I'm here at home, I'm here on a trip, Plan it. The mode picks itself; "on a trip" means away with a stay booked, not a third mode.
