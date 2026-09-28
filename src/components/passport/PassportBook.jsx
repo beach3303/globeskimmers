@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, X, Share2 } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { showToast } from "@/components/Toast";
 import { logEvent } from "@/lib/analytics";
+import { SHARE_TARGETS, targetById, shareUseLabel, composeShare, MAX_PHOTO_SLIDES, photoSlide } from "@/lib/shareCanvas";
 import { countryCode } from "@/lib/countries";
 import { stampArtUrl } from "@/lib/stampArt";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
@@ -252,132 +253,6 @@ function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW }) {
   );
 }
 
-// The shared image at Instagram's exact sizes (founder, 2026-09-28: the first
-// story needed shrinking by hand to show the header and footer, and a feed post
-// cropped it). Story 1080×1920: brand + "My Virtual Passport" and the footer sit
-// inside Instagram's safe area (its top bar covers ~11%, the reply bar ~12%).
-// Post 1080×1350 (4:5, the tallest feed size): the header drops to one small
-// line so the page — and "I was here!" — gets the height. The rendered page is
-// scaled to fit between them, never cropped. System fonts first on purpose:
-// the canvas can't wait for web fonts, and a fallback that renders beats a blank.
-export const SHARE_FORMATS = {
-  story: { W: 1080, H: 1920, label: "Story · 9:16" },
-  post: { W: 1080, H: 1350, label: "Post · 4:5" },
-};
-const SHARE_FOOTER = "collect stamps & memories where you go";
-function brandShareCanvas(page, format = "story") {
-  const { W, H } = SHARE_FORMATS[format] || SHARE_FORMATS.story;
-  const out = document.createElement("canvas");
-  out.width = W; out.height = H;
-  const ctx = out.getContext("2d");
-  const bg = ctx.createRadialGradient(W / 2, H * 0.2, 0, W / 2, H * 0.2, H * 0.95);
-  bg.addColorStop(0, "#12365F"); bg.addColorStop(0.7, NAVY_DEEP); bg.addColorStop(1, NAVY_DEEP);
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  const serif = '"Instrument Serif", "Iowan Old Style", Georgia, "Times New Roman", serif';
-  const sans = '-apple-system, "Inter Tight", system-ui, sans-serif';
-  const brand = "G L O B E S K I M M E R S";
-  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-  let zoneTop, zoneBottom;
-  if (format === "post") {
-    // One line: GLOBESKIMMERS · My Virtual Passport
-    const bf = `600 ${Math.round(W * 0.026)}px ${sans}`, tf = `${Math.round(W * 0.046)}px ${serif}`;
-    ctx.font = bf; const bw = ctx.measureText(brand).width;
-    ctx.font = tf; const tw = ctx.measureText("My Virtual Passport").width;
-    const dot = W * 0.03, x0 = (W - (bw + dot + tw)) / 2, y = H * 0.068;
-    ctx.textAlign = "left";
-    ctx.font = bf; ctx.fillStyle = GOLD; ctx.fillText(brand, x0, y);
-    ctx.fillText("·", x0 + bw + dot * 0.35, y);
-    ctx.font = tf; ctx.fillStyle = "#FBF6EC"; ctx.fillText("My Virtual Passport", x0 + bw + dot, y);
-    ctx.textAlign = "center";
-    zoneTop = H * 0.10; zoneBottom = H * 0.91;
-    ctx.font = `500 ${Math.round(W * 0.027)}px ${sans}`; ctx.fillStyle = "rgba(251,246,236,0.9)";
-    ctx.fillText(`globeskimmers.io  ·  ${SHARE_FOOTER}`, W / 2, H * 0.962);
-  } else {
-    ctx.font = `600 ${Math.round(W * 0.036)}px ${sans}`; ctx.fillStyle = GOLD;
-    ctx.fillText(brand, W / 2, H * 0.148);
-    ctx.font = `${Math.round(W * 0.082)}px ${serif}`; ctx.fillStyle = "#FBF6EC";
-    ctx.fillText("My Virtual Passport", W / 2, H * 0.198);
-    zoneTop = H * 0.228; zoneBottom = H * 0.802;
-    ctx.font = `600 ${Math.round(W * 0.032)}px ${sans}`; ctx.fillStyle = "#FBF6EC";
-    ctx.fillText("globeskimmers.io", W / 2, H * 0.836);
-    ctx.font = `500 ${Math.round(W * 0.032)}px ${sans}`; ctx.fillStyle = "rgba(251,246,236,0.9)";
-    ctx.fillText(SHARE_FOOTER, W / 2, H * 0.862);
-  }
-  const zh = zoneBottom - zoneTop, zw = W * 0.9;
-  const k = Math.min(zh / page.height, zw / page.width);
-  const pw = page.width * k, ph = page.height * k;
-  ctx.drawImage(page, (W - pw) / 2, zoneTop + (zh - ph) / 2, pw, ph);
-  return out;
-}
-const composeShare = async (pageCanvas, format) => {
-  const canvas = brandShareCanvas(pageCanvas, format);
-  const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
-  if (!blob) throw new Error("the image could not be encoded");
-  return { url: URL.createObjectURL(blob), blob, dataUrl: canvas.toDataURL("image/png") };
-};
-
-// Carousel posts (founder, 2026-09-28): slide 1 is the stamp page; each memory
-// photo on that page becomes its own 1080×1350 slide, cover-cropped (never
-// stretched), with a dark band along the bottom carrying a SOLID red "I was
-// here!", the place, city · country · date and the brand line — the top of
-// the photo stays clear for the view. Instagram takes up to 10 images.
-const MAX_PHOTO_SLIDES = 9;
-const loadImage = (src) => new Promise((resolve, reject) => {
-  const img = new Image();
-  img.crossOrigin = "anonymous";   // /pp-photo/ answers with CORS *, so the canvas stays exportable
-  const t = setTimeout(() => reject(new Error("a memory photo took too long to load")), 12000);
-  img.onload = () => { clearTimeout(t); resolve(img); };
-  img.onerror = () => { clearTimeout(t); reject(new Error("a memory photo couldn't be loaded")); };
-  img.src = src;
-});
-const slideDate = (iso) => {
-  if (!iso) return "";
-  try { return new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); } catch { return iso; }
-};
-async function photoSlide(src, stamp) {
-  const { W, H } = SHARE_FORMATS.post;
-  const img = await loadImage(src);
-  const c = document.createElement("canvas");
-  c.width = W; c.height = H;
-  const ctx = c.getContext("2d");
-  ctx.fillStyle = NAVY_DEEP; ctx.fillRect(0, 0, W, H);
-  const k = Math.max(W / img.naturalWidth, H / img.naturalHeight);
-  const iw = img.naturalWidth * k, ih = img.naturalHeight * k;
-  ctx.drawImage(img, (W - iw) / 2, (H - ih) / 2, iw, ih);
-  const g = ctx.createLinearGradient(0, H * 0.6, 0, H);
-  g.addColorStop(0, "rgba(7,27,51,0)"); g.addColorStop(0.45, "rgba(7,27,51,0.64)"); g.addColorStop(1, "rgba(7,27,51,0.92)");
-  ctx.fillStyle = g; ctx.fillRect(0, H * 0.6, W, H * 0.4);
-  const serif = '"Instrument Serif", "Iowan Old Style", Georgia, "Times New Roman", serif';
-  const sans = '-apple-system, "Inter Tight", system-ui, sans-serif';
-  const pad = 64, maxW = W - pad * 2;
-  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-  // brand line (bottom)
-  const brand = "G L O B E S K I M M E R S";
-  ctx.font = `600 24px ${sans}`; ctx.fillStyle = GOLD; ctx.fillText(brand, pad, H - 64);
-  const bw = ctx.measureText(brand).width;
-  ctx.font = `30px ${serif}`; ctx.fillStyle = "#FBF6EC"; ctx.fillText("·  My Virtual Passport", pad + bw + 14, H - 64);
-  // city · country · date
-  const where = [stamp?.city, stamp?.country].filter(Boolean).join(", ");
-  const line = [where, slideDate(stamp?.visited_on)].filter(Boolean).join("  ·  ");
-  ctx.font = `500 34px ${sans}`; ctx.fillStyle = "rgba(251,246,236,0.9)";
-  if (line) ctx.fillText(line, pad, H - 124, maxW);
-  // the place, shrunk to fit one line
-  let size = 66;
-  ctx.font = `${size}px ${serif}`;
-  const name = String(stamp?.name || "");
-  while (size > 38 && ctx.measureText(name).width > maxW) { size -= 2; ctx.font = `${size}px ${serif}`; }
-  ctx.fillStyle = "#FFFFFF"; ctx.fillText(name, pad, H - 184);
-  // solid red "I was here!" label
-  ctx.font = `italic 700 40px ${serif}`;
-  const lw = ctx.measureText("I was here!").width;
-  const ph = 60, pw = lw + 44, py = H - 184 - size - 22 - ph;
-  ctx.fillStyle = STAMP;
-  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(pad, py, pw, ph, 12); ctx.fill(); } else ctx.fillRect(pad, py, pw, ph);
-  ctx.fillStyle = "#FFFFFF"; ctx.fillText("I was here!", pad + 22, py + 43);
-  const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.92));
-  if (!blob) throw new Error("a slide could not be encoded");
-  return { blob, url: URL.createObjectURL(blob), dataUrl: c.toDataURL("image/jpeg", 0.92) };
-}
 // Share analytics (founder, 2026-09-28: per month, stamps vs shares per
 // platform, and story vs post vs message). iOS reports the app picked in the
 // share sheet (@capacitor/share → activityType: an iOS extension id, or on
@@ -401,8 +276,9 @@ const platformFromActivity = (a) => {
   return "other";
 };
 const shareMeta = (p) => ({
-  format: p?.format || "story",
-  mix: p?.format === "post" ? (p?.mix || "page") : "page",
+  format: p?.use || "story",           // story | post | message (what the admin table splits by)
+  preset: p?.preset || null,
+  mix: p?.use !== "story" ? (p?.mix || "page") : "page",
   photos_on_page: (p?.photos || []).length,
   target: p?.target || null,
 });
@@ -578,11 +454,11 @@ export default function PassportBook({
         html2canvas(el, { useCORS: true, backgroundColor: "#FBF6EC", scale: 2, logging: false, imageTimeout: 8000 }),
         timeout,
       ]);
-      const img = await composeShare(pageCanvas, "story");
+      const img = await composeShare(pageCanvas, "story_meta");
       // The memory photos on THIS page, in page order — the carousel's slides 2+.
       const pg = page >= 1 && page - 1 < bookPages.length ? bookPages[page - 1] : null;
       const photos = pg ? pg.stamps.flatMap((st) => (st.photos || []).filter((ph) => ph && ph.photo_url).map((ph) => ({ src: ph.photo_url, stamp: st }))) : [];
-      setPreview({ status: "ready", format: "story", pageCanvas, photos, mix: photos.length > 0 ? "both" : "page", slides: null, slidesBusy: false, slideFailed: 0, ...img });
+      setPreview({ status: "ready", target: "instagram", use: "story", preset: "story_meta", pageCanvas, photos, mix: photos.length > 0 ? "both" : "page", slides: null, slidesPreset: null, slidesBusy: false, slideFailed: 0, ...img });
       logEvent("passport_share_open", { photos_on_page: photos.length }, "Passport");
     } catch (e) {
       try { console.error("[passport share] render failed", e); } catch { /* ignore */ }
@@ -596,43 +472,58 @@ export default function PassportBook({
   }, []);
   // Build the photo slides ahead of the Share tap: iOS only opens the sheet
   // when share() runs inside the tap itself.
-  const buildSlides = useCallback(async (photos) => {
+  const buildSlides = useCallback(async (photos, presetId, cap) => {
     const job = ++slidesJob.current;
     setPreview((p) => (p && p.status === "ready" ? { ...p, slidesBusy: true } : p));
     const out = []; let failed = 0;
-    for (const ph of (photos || []).slice(0, MAX_PHOTO_SLIDES)) {
-      try { out.push(await photoSlide(ph.src, ph.stamp)); } catch { failed += 1; }
+    for (const ph of (photos || []).slice(0, Math.max(0, Math.min(MAX_PHOTO_SLIDES, cap)))) {
+      try { out.push(await photoSlide(ph.src, ph.stamp, presetId)); } catch { failed += 1; }
     }
     if (job !== slidesJob.current) { revokeSlides(out); return; }
     setPreview((p) => {
       if (!p || p.status !== "ready") { revokeSlides(out); return p; }
       revokeSlides(p.slides);
-      return { ...p, slides: out, slideFailed: failed, slidesBusy: false };
+      return { ...p, slides: out, slidesPreset: presetId, slideFailed: failed, slidesBusy: false };
     });
   }, []);
+  // A share can carry several images only as a post or a message, and only
+  // where the destination takes more than one.
+  const carouselFor = (p) => !!p && p.use !== "story" && targetById(p.target).max > 1 && (p.photos || []).length > 0;
+  const needSlides = (p) => carouselFor(p) && p.mix !== "page" && (!p.slides || p.slidesPreset !== p.preset) && !p.slidesBusy;
   // What a post carries (founder, 2026-09-28: "let the user choose between the
   // slide 1 design or slide 2"): "page" = the stamp page with its photo
   // thumbnails, "photos" = each memory photo full size with the I was here!
   // band, "both" = the carousel, page first.
   const chooseMix = useCallback((mix) => {
     if (!preview || preview.status !== "ready" || preview.mix === mix) return;
+    const next = { ...preview, mix };
     setPreview((p) => ({ ...p, mix }));
-    if (mix !== "page" && preview.format === "post" && !preview.slides && !preview.slidesBusy) buildSlides(preview.photos);
+    if (needSlides(next)) buildSlides(next.photos, next.preset, targetById(next.target).max - (mix === "photos" ? 0 : 1));
   }, [preview, buildSlides]);
-  // Story ↔ Post: re-frame the already-rendered page (no second html2canvas).
-  const switchFormat = useCallback(async (format) => {
-    if (!preview || preview.status !== "ready" || preview.format === format) return;
+  // Destination + use → a preset; re-frame the already-rendered page (no second
+  // html2canvas). Photo slides are rebuilt when the shape changes: Instagram
+  // needs every carousel image in one shape.
+  const chooseTarget = useCallback(async (targetId, useWanted) => {
+    if (!preview || preview.status !== "ready") return;
+    const t = targetById(targetId);
+    const use = t.uses[useWanted] ? useWanted : (t.uses[preview.use] ? preview.use : Object.keys(t.uses)[0]);
+    const preset = t.uses[use];
+    if (t.id === preview.target && use === preview.use) return;
     try {
-      const img = await composeShare(preview.pageCanvas, format);
-      setPreview((p) => { if (p?.url) { try { URL.revokeObjectURL(p.url); } catch { /* ignore */ } } return { ...p, format, ...img }; });
-      if (format === "post" && preview.mix !== "page" && preview.photos?.length && !preview.slides && !preview.slidesBusy) buildSlides(preview.photos);
+      const img = preset === preview.preset ? null : await composeShare(preview.pageCanvas, preset);
+      const next = { ...preview, target: t.id, use, preset, ...(img || {}) };
+      setPreview((p) => {
+        if (img && p?.url) { try { URL.revokeObjectURL(p.url); } catch { /* ignore */ } }
+        return { ...p, target: t.id, use, preset, ...(img || {}) };
+      });
+      if (needSlides(next)) buildSlides(next.photos, preset, t.max - (next.mix === "photos" ? 0 : 1));
     } catch (e) { setPreview({ status: "error", message: e?.message || String(e) }); }
   }, [preview, buildSlides]);
   const shareRendered = useCallback(async () => {
     if (!preview || preview.status !== "ready") return;
-    const mix = preview.format === "post" ? (preview.mix || "page") : "page";
+    const mix = carouselFor(preview) ? (preview.mix || "page") : "page";
     if (mix !== "page" && preview.slidesBusy) return; // slides still being drawn
-    const carousel = mix !== "page" ? (preview.slides || []) : [];
+    const carousel = mix !== "page" && preview.slidesPreset === preview.preset ? (preview.slides || []) : [];
     // "My photos" posts the photo slides alone; if none could be drawn, the page goes instead.
     const includePage = mix !== "photos" || !carousel.length;
     const text = "My Virtual Passport on Globeskimmers 🛂";
@@ -642,7 +533,7 @@ export default function PassportBook({
         const { Share } = await import("@capacitor/share");
         const uris = [];
         if (includePage) {
-          const w = await Filesystem.writeFile({ path: `globeskimmers-passport-${preview.format || "story"}.png`, data: String(preview.dataUrl).split(",")[1], directory: Directory.Cache });
+          const w = await Filesystem.writeFile({ path: `globeskimmers-passport-${preview.preset || "story_meta"}.png`, data: String(preview.dataUrl).split(",")[1], directory: Directory.Cache });
           uris.push(w.uri);
         }
         for (let i = 0; i < carousel.length; i++) {
@@ -650,12 +541,12 @@ export default function PassportBook({
           uris.push(ws.uri);
         }
         const res = await Share.share({ title: "My Virtual Passport", text, files: uris });
-        logEvent("passport_share", { ...shareMeta(preview), images: uris.length, via: "app", activity: res?.activityType || null, platform: preview.target || platformFromActivity(res?.activityType) || "unknown" }, "Passport");
+        logEvent("passport_share", { ...shareMeta(preview), images: uris.length, via: "app", activity: res?.activityType || null, platform: platformFromActivity(res?.activityType) || preview.target || "unknown" }, "Passport");
         closePreview(); return;
       }
       // Files are built synchronously from blobs already in memory, so share()
       // still runs inside the tap.
-      const files = (includePage ? [new File([preview.blob], `globeskimmers-passport-${preview.format || "story"}.png`, { type: "image/png" })] : [])
+      const files = (includePage ? [new File([preview.blob], `globeskimmers-passport-${preview.preset || "story_meta"}.png`, { type: "image/png" })] : [])
         .concat(carousel.map((x, i) => new File([x.blob], `globeskimmers-passport-photo-${i + 1}.jpg`, { type: "image/jpeg" })));
       if (navigator.canShare && navigator.canShare({ files })) {
         await navigator.share({ files, title: "My Virtual Passport", text });
@@ -813,8 +704,8 @@ export default function PassportBook({
         <div onClick={closePreview} className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Share this page"
           style={{ background: "rgba(12,10,8,0.88)", backdropFilter: "blur(4px)" }}>
           {preview.status === "ready" ? (
-            <img src={(preview.format === "post" && preview.mix === "photos" && preview.slides?.[0]?.url) || preview.url}
-              alt={preview.format === "post" && preview.mix === "photos" && preview.slides?.length ? "Your first memory photo, ready to share" : "Your passport page, ready to share"}
+            <img src={(carouselFor(preview) && preview.mix === "photos" && preview.slidesPreset === preview.preset && preview.slides?.[0]?.url) || preview.url}
+              alt={carouselFor(preview) && preview.mix === "photos" && preview.slides?.length ? "Your first memory photo, ready to share" : "Your passport page, ready to share"}
               onClick={(e) => e.stopPropagation()}
               style={{ maxWidth: "92vw", maxHeight: "62vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 24px 60px -20px rgba(0,0,0,.6)" }} />
           ) : (
@@ -827,17 +718,28 @@ export default function PassportBook({
           )}
           <div className="w-full max-w-[380px] mt-4 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
             {preview.status === "ready" && (
-              <div className="flex gap-2" role="radiogroup" aria-label="Image size">
-                {Object.entries(SHARE_FORMATS).map(([id, f]) => (
-                  <button key={id} type="button" role="radio" aria-checked={preview.format === id} onClick={() => switchFormat(id)}
-                    className="flex-1 rounded-lg py-2 font-semibold"
-                    style={{ background: preview.format === id ? "#FBF6EC" : "rgba(255,255,255,0.1)", color: preview.format === id ? NAVY : "#fff", border: "1px solid rgba(255,255,255,0.25)", fontFamily: MONO, fontSize: fs(11.5), letterSpacing: ".04em" }}>
-                    {f.label}
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5" role="radiogroup" aria-label="Where to share" style={{ scrollbarWidth: "none" }}>
+                {SHARE_TARGETS.map((t) => (
+                  <button key={t.id} type="button" role="radio" aria-checked={preview.target === t.id} onClick={() => chooseTarget(t.id, preview.use)}
+                    className="flex-none rounded-full px-3 py-1.5 font-semibold"
+                    style={{ background: preview.target === t.id ? "#FBF6EC" : "rgba(255,255,255,0.1)", color: preview.target === t.id ? NAVY : "#fff", border: "1px solid rgba(255,255,255,0.25)", fontSize: fs(12.5) }}>
+                    {t.label}
                   </button>
                 ))}
               </div>
             )}
-            {preview.status === "ready" && preview.format === "post" && preview.photos?.length > 0 && (
+            {preview.status === "ready" && (
+              <div className="flex gap-2" role="radiogroup" aria-label="Share as">
+                {Object.keys(targetById(preview.target).uses).map((u) => (
+                  <button key={u} type="button" role="radio" aria-checked={preview.use === u} onClick={() => chooseTarget(preview.target, u)}
+                    className="flex-1 rounded-lg py-2 font-semibold"
+                    style={{ background: preview.use === u ? "#FBF6EC" : "rgba(255,255,255,0.1)", color: preview.use === u ? NAVY : "#fff", border: "1px solid rgba(255,255,255,0.25)", fontFamily: MONO, fontSize: fs(11.5), letterSpacing: ".04em" }}>
+                    {shareUseLabel(preview.target, u)}
+                  </button>
+                ))}
+              </div>
+            )}
+            {preview.status === "ready" && carouselFor(preview) && (
               <div className="rounded-xl p-3" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)" }}>
                 <div className="flex gap-1.5" role="radiogroup" aria-label="What to post">
                   {[["page", "Stamp page"], ["photos", "My photos"], ["both", "Both"]].map(([id, label]) => (
@@ -871,16 +773,16 @@ export default function PassportBook({
               </div>
             )}
             {preview.status === "ready" && (() => {
-              const post = preview.format === "post";
-              const mix = post ? (preview.mix || "page") : "page";
+              const mix = carouselFor(preview) ? (preview.mix || "page") : "page";
               const busy = mix !== "page" && preview.slidesBusy;
-              const slides = mix !== "page" ? (preview.slides || []).length : 0;
+              const slides = mix !== "page" && preview.slidesPreset === preview.preset ? (preview.slides || []).length : 0;
               const n = (mix === "photos" && slides ? 0 : 1) + slides;
+              const dest = `${targetById(preview.target).label} ${shareUseLabel(preview.target, preview.use)}`;
               return (
                 <button onClick={shareRendered} disabled={busy} className="w-full rounded-xl py-3 font-bold flex items-center justify-center gap-2 disabled:opacity-60"
                   style={{ background: STAMP, color: "#fff", fontSize: fs(15), border: "none" }}>
                   <Share2 size={16} color="#fff" strokeWidth={2.2} />
-                  {busy ? "Preparing your photos…" : n > 1 ? `Share post · ${n} images` : "Share to Instagram, Facebook, Snapchat, X…"}
+                  {busy ? "Preparing your photos…" : n > 1 ? `Share to ${dest} · ${n} images` : `Share to ${dest}`}
                 </button>
               );
             })()}
@@ -889,7 +791,7 @@ export default function PassportBook({
               Close
             </button>
             <p className="text-center" style={{ fontFamily: MONO, fontSize: fs(10.5), color: "rgba(255,252,247,0.6)", letterSpacing: ".04em" }}>
-              Opens your phone&apos;s share sheet — pick a story, a post or a message.
+              Sized for {targetById(preview.target).label}. Your phone&apos;s share sheet opens next — pick {targetById(preview.target).label} there.
             </p>
           </div>
         </div>
