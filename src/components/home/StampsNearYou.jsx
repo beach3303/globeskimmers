@@ -47,7 +47,7 @@ function StampChip({ item, wide, onOpen }) {
           // than a generic emoji, so an uncollected stamp still looks worth having.
           <TypographicStamp
             name={item.name} city={item.city} country={item.country}
-            entityId={item.id || item.name} width={size * 0.84}
+            entityId={item.id || item.name} width={size * 0.84} film={item.film || null}
           />
         )}
       </div>
@@ -115,6 +115,7 @@ export default function StampsNearYou({ onAction, wide = false }) {
         country: item.country || undefined,
         countryCode: item.countryCode || item.cc || undefined,
         footprint_radius_m: item.footprint_radius_m ?? item.footprintRadiusM ?? undefined,
+        film: item.film || undefined,   // movie scene spots: the film behind the place
       };
       sessionStorage.setItem("current_activity", JSON.stringify(activity));
       if (loc) sessionStorage.setItem("activity_location", JSON.stringify(loc));

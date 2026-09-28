@@ -168,6 +168,7 @@ export default function ActivityDetailPage() {
               free_to_visit: (row.freeToVisit ?? row.free_to_visit),
               footprint_radius_m: row.footprint_radius_m ?? undefined,
               typical_minutes: (row.typicalMinutes ?? row.typical_minutes) ?? undefined,
+              film: row.film || undefined,
             };
           }
         }
@@ -303,6 +304,7 @@ export default function ActivityDetailPage() {
       visited_on: localISODate(), // LOCAL date — UTC says "tomorrow" for an evening tap in the Americas
       local_hour: new Date().getHours(),
       verified,
+      ...(activity.film?.title ? { film: activity.film } : {}),   // movie scene stamp keeps its film
     });
     setStamping(false);
     if (error) { showToast(/sign in/i.test(error) ? 'Sign in to stamp your Virtual Passport' : 'Could not add stamp'); return; }
@@ -578,6 +580,22 @@ export default function ActivityDetailPage() {
                   <DollarSign className="w-4 h-4" />
                   <span>{getPriceDisplay(activity.price_level)}</span>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Movie scene spot: the film behind the place (plain text — no stills, no logos) */}
+          {activity.film?.title && (
+            <div className="rounded-2xl px-4 py-3 mb-3" style={{ background: '#F6F0E4', border: '1px solid rgba(22,17,13,.08)' }}>
+              <div className="uppercase" style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 'calc(10.5px*var(--fs))', letterSpacing: '.12em', color: '#B0472F' }}>★ Filmed here</div>
+              <div className="mt-1" style={{ fontFamily: '"Instrument Serif", Georgia, serif', fontSize: 'calc(19px*var(--fs))', color: '#16110D', lineHeight: 1.2 }}>
+                The scene from <i>{activity.film.title}</i>{activity.film.year ? ` (${activity.film.year})` : ''}
+              </div>
+              {activity.film.scene && <p className="mt-1 text-[calc(13.5px*var(--fs))] text-gray-700 leading-snug">{activity.film.scene}</p>}
+              {Array.isArray(activity.film.cast) && activity.film.cast.length > 0 && (
+                <p className="mt-1.5 text-[calc(12px*var(--fs))] text-gray-500" style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace' }}>
+                  {activity.film.cast.map((c) => (c.role ? `${c.actor} as ${c.role}` : c.actor)).join(' · ')}
+                </p>
               )}
             </div>
           )}

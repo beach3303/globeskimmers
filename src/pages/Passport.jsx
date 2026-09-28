@@ -193,7 +193,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
           <TypographicStamp
             name={stamp.name} city={stamp.city} region={stamp.region}
             country={stamp.country} date={stamp.visited_on}
-            entityId={stamp.entity_id || stamp.id} width={138} overprint strength={STAMP_INK_STRENGTH}
+            entityId={stamp.entity_id || stamp.id} width={138} overprint strength={STAMP_INK_STRENGTH} film={stamp.meta?.film || null}
           />
         </div>
       )}
@@ -218,6 +218,19 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
           </button>
         )}
       </div>
+
+      {/* Movie scene stamp: the film behind the place */}
+      {stamp.meta?.film?.title && (
+        <div className="mt-3 rounded-xl px-3 py-2.5" style={{ background: IVORY_2 }}>
+          <p style={{ fontFamily: SERIF, fontSize: fs(16), color: INK, lineHeight: 1.2 }}>The scene from <i>{stamp.meta.film.title}</i>{stamp.meta.film.year ? ` (${stamp.meta.film.year})` : ""}</p>
+          {stamp.meta.film.scene && <p style={{ color: INK2, fontSize: fs(12.5), lineHeight: 1.4, marginTop: 3 }}>{stamp.meta.film.scene}</p>}
+          {Array.isArray(stamp.meta.film.cast) && stamp.meta.film.cast.length > 0 && (
+            <p style={{ fontFamily: MONO, color: INK3, fontSize: fs(11), lineHeight: 1.45, marginTop: 4 }}>
+              {stamp.meta.film.cast.map((c) => (c.role ? `${c.actor} as ${c.role}` : c.actor)).join(" · ")}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* In-app delete confirm (no native dialog — reliable in the iOS WebView) */}
       {confirmDel && (

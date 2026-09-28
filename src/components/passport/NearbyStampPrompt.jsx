@@ -39,12 +39,13 @@ const getFix = () => new Promise((res) => {
 const ccOf = (a) => a?.countryCode || a?.cc || countryCode(a?.country) || (/^[A-Za-z]{2}$/.test(a?.country || "") ? a.country.toUpperCase() : undefined);
 const regionName = (cc) => { try { return new Intl.DisplayNames(["en"], { type: "region" }).of(cc) || cc; } catch { return cc; } };
 
-function PlaceArt({ name, city, country, id, width }) {
+function PlaceArt({ name, city, country, id, width, film }) {
   const [fail, setFail] = useState(false);
-  const art = stampArtUrl(name);
+  const art = film ? null : stampArtUrl(name);   // a film spot shows its Scene stamp
   if (art && !fail) return <img src={art} alt="" onError={() => setFail(true)} style={{ width, height: width, objectFit: "contain" }} />;
-  return <TypographicStamp name={name} city={city} country={country} entityId={id || name} width={width} strength={STAMP_INK_STRENGTH} />;
+  return <TypographicStamp name={name} city={city} country={country} entityId={id || name} width={width} strength={STAMP_INK_STRENGTH} film={film || null} />;
 }
+const filmLabel = (f) => (f && f.title ? `Filmed here: ${f.title}${f.year ? ` (${f.year})` : ""}` : null);
 
 export default function NearbyStampPrompt({ stamps, onStamped }) {
   const [fix, setFix] = useState(null);
@@ -106,6 +107,7 @@ export default function NearbyStampPrompt({ stamps, onStamped }) {
         name: v ? v.name : a.name, city: a.city || null, region: a.region || a.state || null, country: a.country || null, cc: ccOf(a),
         lat: Number.isFinite(+a.lat) ? +a.lat : null, lng: Number.isFinite(+a.lng) ? +a.lng : null,
         visited_on: localISODate(), local_hour: new Date().getHours(), verified: "gps",
+        ...(a.film ? { film: a.film } : {}),
       });
     }
     setBusy(null);
@@ -138,7 +140,9 @@ export default function NearbyStampPrompt({ stamps, onStamped }) {
           <div className="flex flex-col items-center mt-3">
             {one.kind === "airport"
               ? <AirportStamp iata={one.ap.iata} city={one.ap.city || one.ap.name} countryCode={one.ap.cc} date={localISODate()} width={240} />
-              : <PlaceArt name={one.name} city={one.a.city} country={one.a.country} id={one.a.id} width={150} />}
+              : <PlaceArt name={one.name} city={one.a.city} country={one.a.country} id={one.a.id} width={150} film={one.a.film} />}
+            {one.kind === "place" && filmLabel(one.a.film) && <p style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(15), color: INK, marginTop: 8, textAlign: "center" }}>{filmLabel(one.a.film)}</p>}
+            {one.kind === "place" && one.a.film?.scene && <p style={{ color: INK2, fontSize: fs(12.5), lineHeight: 1.4, marginTop: 4, textAlign: "center", maxWidth: 320 }}>{one.a.film.scene}</p>}
             {one.kind === "airport" && one.ap.cc && <p style={{ fontFamily: MONO, fontSize: fs(11), color: INK3, marginTop: 6 }}>{regionName(one.ap.cc)}</p>}
             {one.kind === "place" && one.meters != null && <p style={{ fontFamily: MONO, fontSize: fs(11), color: INK3, marginTop: 6 }}>{distance(one.meters)}</p>}
             <div className="flex gap-2 mt-4 w-full">
@@ -153,10 +157,11 @@ export default function NearbyStampPrompt({ stamps, onStamped }) {
                 <div className="flex-none flex items-center justify-center" style={{ width: 64, height: 64 }}>
                   {c.kind === "airport"
                     ? <span style={{ fontSize: 30 }} aria-hidden="true">✈️</span>
-                    : <PlaceArt name={c.name} city={c.a.city} country={c.a.country} id={c.a.id} width={60} />}
+                    : <PlaceArt name={c.name} city={c.a.city} country={c.a.country} id={c.a.id} width={60} film={c.a.film} />}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate" style={{ fontFamily: SERIF, fontSize: fs(17), color: INK, lineHeight: 1.15 }}>{c.name}</p>
+                  {c.kind === "place" && filmLabel(c.a.film) && <p className="truncate" style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(12.5), color: INK2, marginTop: 1 }}>{filmLabel(c.a.film)}</p>}
                   <p style={{ fontFamily: MONO, fontSize: fs(10.5), color: INK3, marginTop: 2 }}>{c.kind === "airport" ? "Airport · you're inside" : (distance(c.meters) || "Right here")}</p>
                 </div>
                 <button type="button" onClick={() => stampOne(c)} disabled={!!busy} className="flex-none rounded-lg px-3 py-2 font-bold" style={{ background: STAMP, color: "#fff", border: "none", fontSize: fs(12.5), fontFamily: "inherit" }}>{busy === c.key ? "…" : "Stamp"}</button>

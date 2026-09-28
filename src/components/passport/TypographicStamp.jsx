@@ -19,7 +19,8 @@ import { typographicStampConfig } from "@/lib/stampDesign";
 // ink, no fade. Airport stamps keep their all-over distress; this rule is for
 // destinations. Every design below returns { frame, name } to enforce it.
 //
-// Props: name, city, region, country, date, width, overprint, design, ink.
+// Props: name, city, region, country, date, width, overprint, design, ink,
+// strength (ink B = 2), film ({ title, year } → the Scene layout).
 // ============================================================================
 
 const SERIF = "Georgia, 'Times New Roman', serif";
@@ -71,7 +72,7 @@ export const STAMP_STRENGTH = [
 
 export default function TypographicStamp({
   name, city, region, country, date, entityId,
-  width = 200, overprint = false, design, ink, strength = 0,
+  width = 200, overprint = false, design, ink, strength = 0, film = null,
 }) {
   const S = STAMP_STRENGTH[Math.max(0, Math.min(STAMP_STRENGTH.length - 1, Number(strength) || 0))];
   // Frame text size + tracking for this strength, never wider than `box`
@@ -90,7 +91,9 @@ export default function TypographicStamp({
   const ovT = `toT-${uid}`, ovB = `toB-${uid}`;
 
   const cfg = typographicStampConfig({ entityId: entityId || name, name, country });
-  const D = design || cfg.design;
+  // A filming-location stamp always takes the Scene layout (founder-approved
+  // mockup, 2026-09-28): film strips top and bottom, ★ FILMED HERE ★.
+  const D = film && film.title ? "scn" : (design || cfg.design);
   const INK = ink || cfg.ink;
 
   const CITY = String(city || "").toUpperCase();
@@ -232,6 +235,43 @@ export default function TypographicStamp({
       };
     })(),
 
+    scn: (() => {
+      // Scene: film strip · ★ FILMED HERE ★ · the place (solid) · TITLE · YEAR ·
+      // CITY · COUNTRY · date · film strip. Two-line place names lift the top
+      // line so nothing collides.
+      const lines = wrapWords(name, 2);
+      const two = lines.length > 1;
+      const size = fitSize(lines, 226, two ? 27 : 35);
+      const perf = [37, 263].flatMap((y) => Array.from({ length: 12 }, (_, i) => <rect key={`${y}-${i}`} x={39 + i * 19} y={y} width="10" height="9" rx="2" fill="currentColor" />));
+      const title = String(film?.title || "").toUpperCase();
+      const filmLine = film?.year ? `${title} · ${film.year}` : title;
+      // Long titles wrap onto two lines, the year on the second, instead of
+      // shrinking to unreadable ("THE FELLOWSHIP / OF THE RING · 2001").
+      const wrapTitle = filmLine.length > 22;
+      const tl = wrapTitle ? wrapWords(title, 2) : [filmLine];
+      if (wrapTitle && tl.length === 1) tl.push("");
+      if (wrapTitle && film?.year) tl[tl.length - 1] = `${tl[tl.length - 1]} · ${film.year}`.replace(/^ · /, "");
+      const base = two ? 177 : 170;   // the rule under the place name
+      const yFilm = wrapTitle ? [base + 20, base + 37] : [base + (two ? 23 : 26)];
+      const yPlace = wrapTitle ? base + 55 : 221;
+      const yDate = wrapTitle ? base + 72 : 243;
+      const place = [CITY, CTRY].filter(Boolean).join(" · ");
+      return {
+        name: <Lines lines={lines} size={size} mid={two ? 147 : 146} />,
+        frame: (<>
+          <rect x="30" y="30" width="240" height="23" rx="3" fill="none" stroke="currentColor" strokeWidth="2.4" />
+          <rect x="30" y="256" width="240" height="23" rx="3" fill="none" stroke="currentColor" strokeWidth="2.4" />
+          {perf}
+          <text x="150" y={two ? 94 : 110} textAnchor="middle" fontFamily={SERIF} {...ft(15, 3.4, "★ FILMED HERE ★", 262)} fontWeight="700" fill="currentColor">★ FILMED HERE ★</text>
+          <path d={`M70,${two ? 103 : 120} L230,${two ? 103 : 120}`} stroke="currentColor" strokeWidth="1.5" />
+          <path d={`M70,${two ? 177 : 170} L230,${two ? 177 : 170}`} stroke="currentColor" strokeWidth="2.6" />
+          {tl.map((l, i) => l && <text key={i} x="150" y={yFilm[i]} textAnchor="middle" fontFamily={SERIF} {...ft(wrapTitle ? 16 : 21, wrapTitle ? 2 : 4, l, 236)} fontWeight="700" fill="currentColor">{l}</text>)}
+          {place && <text x="150" y={yPlace} textAnchor="middle" fontFamily={SERIF} {...ft(12, 1.2, place, 236)} fontWeight="700" fill="currentColor">{place}</text>}
+          {dateStr && <text x="150" y={yDate} textAnchor="middle" fontFamily={SERIF} {...ft(15, 2, dateStr, 236)} fontWeight="700" fill="currentColor">{dateStr}</text>}
+        </>),
+      };
+    })(),
+
     mrq: (() => {
       const lines = wrapWords(name, 2);
       const size = fitSize(lines, 236, 42);
@@ -277,11 +317,14 @@ export default function TypographicStamp({
         // from strength 1 the bigger strike sits lower, in the corner outside
         // the circle, clear of the bottom arc text.
         const low = S.size > 1;
-        const pos = D === "rng" || D === "ovl" ? (low ? { x: 240, y: 280 } : { x: 236, y: 258 }) : { x: 234, y: 52 };
+        const pos = D === "rng" || D === "ovl" ? (low ? { x: 240, y: 280 } : { x: 236, y: 258 })
+          : D === "scn" ? { x: 150, y: 73 }   // centred in the gap between the top film strip and FILMED HERE
+          : { x: 234, y: 52 };
+        const tilt = D === "scn" ? -5 : -14;
         return (
-          <g filter={S.strikeWorn ? `url(#${worn})` : undefined} opacity={S.strikeOpacity} style={{ color: "#B0472F" }} transform={`rotate(-14 ${pos.x} ${pos.y})`}>
+          <g filter={S.strikeWorn ? `url(#${worn})` : undefined} opacity={S.strikeOpacity} style={{ color: "#B0472F" }} transform={`rotate(${tilt} ${pos.x} ${pos.y})`}>
             <text x={pos.x} y={pos.y + 2} textAnchor="middle" fontFamily={SERIF} fontStyle="italic" fontSize={S.strike} fontWeight="700" letterSpacing="0.5" fill="currentColor">I was here!</text>
-            <path d={`M${pos.x - S.strike * 2.1},${pos.y + 10 + (S.strike - 17) * 0.35} L${pos.x + S.strike * 2.1},${pos.y + 10 + (S.strike - 17) * 0.35}`} stroke="currentColor" strokeWidth={S.rule} />
+            {D !== "scn" && <path d={`M${pos.x - S.strike * 2.1},${pos.y + 10 + (S.strike - 17) * 0.35} L${pos.x + S.strike * 2.1},${pos.y + 10 + (S.strike - 17) * 0.35}`} stroke="currentColor" strokeWidth={S.rule} />}
           </g>
         );
       })()}

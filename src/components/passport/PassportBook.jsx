@@ -114,7 +114,7 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
             <TypographicStamp
               name={stamp.name} city={stamp.city} region={stamp.region}
               country={stamp.country} date={stamp.visited_on}
-              entityId={stamp.entity_id || stamp.id} width={artW} overprint strength={STAMP_INK_STRENGTH}
+              entityId={stamp.entity_id || stamp.id} width={artW} overprint strength={STAMP_INK_STRENGTH} film={stamp.meta?.film || null}
             />
           )}
           {showArt ? (
@@ -153,7 +153,7 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
             <TypographicStamp
               name={stamp.name} city={stamp.city} region={stamp.region}
               country={stamp.country} date={stamp.visited_on}
-              entityId={stamp.entity_id || stamp.id} width={artW} overprint strength={STAMP_INK_STRENGTH}
+              entityId={stamp.entity_id || stamp.id} width={artW} overprint strength={STAMP_INK_STRENGTH} film={stamp.meta?.film || null}
             />
           )}
           {!showTypo && (<>
