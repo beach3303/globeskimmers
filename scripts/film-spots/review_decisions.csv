@@ -1,0 +1,41 @@
+spot_qid,spot_name,work_qid,work_title,decision,reason,rank
+Q120450702,"Supertree Grove, Gardens by the Bay",Q29588623,Crazy Rich Asians,merge:icon:Q630135,"The grove is inside Gardens by the Bay, which already has a stamp. Add the film to that stamp instead of a second one 200 m away.",342
+Q1072593,CHIJMES,Q29588623,Crazy Rich Asians,keep,A separate venue from the cathedral next door. The wedding scene was shot in its hall.,387
+Q952270,"Intrepid Sea, Air & Space Museum",Q212689,I Am Legend,merge:curated:united-states-new-york-uss-intrepid,"The museum is the USS Intrepid, which already has a stamp. Add the film there.",130
+Q909592,Washington Square Park,Q212689,I Am Legend,merge:curated:united-states-new-york-washington-square-arch,The arch stands in the park and already has a stamp. Add the film there.,131
+Q5544754,George Square,Q28196,World War Z,keep,"Glasgow's main square, a separate place from the City Chambers beside it.",242
+Q2593762,Café des 2 Moulins,Q484048,Amélie,keep,Amélie's café. It is a separate place from the Moulin Rouge 130 m away. You named this one.,107
+Q5610634,"Grosvenor Chapel, Mayfair",Q190588,Love Actually,keep,"The wedding at the start of Love Actually. It sits inside the Grosvenor Square stamp's circle, so both can be offered.",204
+Q1093941,Toronto City Hall,Q161400,Resident Evil: Apocalypse,keep,"A distinctive building, shown in the film as Raccoon City Hall.",250
+Q3389781,place Dalida,Q64584978,Emily in Paris,keep,"An Emily in Paris spot in Montmartre, separate from the Moulin de la Galette.",369
+Q3390301,Place de l'Estrapade,Q64584978,Emily in Paris,keep,"Emily's apartment square, one of the most visited Emily in Paris spots.",380
+Q4993391,Waverly Place,Q184342,Wizards of Waverly Place,drop,"The show is set on this street, but the sources do not show it was filmed here. A ""Filmed here"" stamp would be untrue.",266
+Q1766982,Westin Grand Berlin,Q156608,The Bourne Supremacy,drop,"A working hotel. The stamp would be a lobby, with little for a visitor to see.",298
+Q309436,Aït Benhaddou,Q23572,Game of Thrones,keep,"Already a stamp. It gains a Game of Thrones line, with Gladiator and Lawrence of Arabia listed as also filmed here.",1
+Q239935,City of Arts and Sciences,Q34316,Doctor Who,keep,Doctor Who filmed an episode here. It is the only work our sources confirm.,15
+Q235884,Chhatrapati Shivaji Maharaj Terminus,Q125076,Slumdog Millionaire,keep,"Already a stamp; gains the Slumdog Millionaire ""Jai Ho"" scene. The cast is being corrected.",21
+Q49148,Martha's Vineyard,Q189505,Jaws,keep,Already a stamp; gains Jaws.,33
+Q240711,Hotel Chelsea,Q484675,Léon: The Professional,keep,Famous in its own right. Léon lived here. The cast is being corrected.,46
+Q125006,Brooklyn Bridge,Q212689,I Am Legend,keep,Already a stamp; gains I Am Legend.,76
+Q185382,Trevi Fountain,Q18407,La Dolce Vita,keep,Already a stamp; gains La Dolce Vita's fountain scene.,82
+Q49117,University of Pennsylvania,Q204057,Philadelphia,drop,"The source sentence never mentions the film, and a university campus is a weak stamp.",97
+Q43473,Angkor Wat,Q1056853,In the Mood for Love,keep,Already a stamp; gains the final sequence of In the Mood for Love.,112
+Q1032254,Pangong Tso,Q229633,3 Idiots,keep,"The lake from the climax of 3 Idiots, a major trip for Indian travellers.",116
+Q216939,"Skala (fortified harbour), Essaouira",Q23572,Game of Thrones,keep,It stood in for Astapor in Game of Thrones.,2
+Q1496690,Gaztelugatxe,Q23572,Game of Thrones,keep,Dragonstone in Game of Thrones.,3
+Q192017,Monument Valley,Q103474,2001: A Space Odyssey,keep,"Already a stamp; gains 2001: A Space Odyssey, with Back to the Future Part III listed too.",14
+Q15523,Lake Como,Q181069,Star Wars: Episode II – Attack of the Clones,keep,Already a stamp; gains Attack of the Clones.,23
+Q1071445,Cheyenne Mountain,Q13417189,Interstellar,drop,"It is the story's setting (NASA's hidden base), not a filming location, and it is a closed military site.",25
+Q849143,Chott el Djerid,Q17738,Star Wars: Episode IV – A New Hope,keep,The salt flat of Tatooine in the first Star Wars film.,28
+Q285468,Hashima Island,Q4941,Skyfall,keep,Already a stamp; outside shots of the island appear in Skyfall.,32
+Q40729,Wadi Rum,Q228186,Lawrence of Arabia,keep,Already a stamp; gains Lawrence of Arabia. The leads are being corrected to Peter O'Toole.,39
+Q16888858,Yick Cheong Building,Q6151665,Transformers: Age of Extinction,keep,"The ""Monster Building"", a big photo spot, seen in Transformers: Age of Extinction.",200
+Q11664822,Suga Shrine stairs,Q21697406,Your Name,drop,"Your Name is animated: the stairs were drawn, not filmed, so ""Filmed here"" would be untrue. We can bring anime spots back later with a ""Seen on screen"" stamp.",386
+Q2124779,Spitzkoppe,Q103474,2001: A Space Odyssey,keep,Photos of its peaks became the backdrop of the Dawn of Man sequence in 2001.,51
+Q757166,Atlas Corporation Studios,Q207698,Kingdom of Heaven,keep,Already a stamp and open to visitors. It gains Kingdom of Heaven.,182
+Q1049842,Kilmainham Gaol,Q304074,In the Name of the Father,keep,Already a stamp (a museum now); gains In the Name of the Father.,306
+Q7973425,Water Wizz,Q121810,Grown Ups,drop,A small local water park; the film does not lift it to stamp level.,375
+Q28197238,Tú Làn Caves System,Q21203766,Kong: Skull Island,keep,Kong: Skull Island filmed at the cave entrance. The caves are an adventure-tour stop.,383
+Q3324477,Gunlom Falls,Q615254,Crocodile Dundee,keep,"In Kakadu, seen in Crocodile Dundee.",391
+Q7053028,Normandale Community College,Q300555,A Serious Man,drop,A community college campus; a weak stamp even with the film.,400
+Q59330112,Rinpung Dzong,Q1141873,Little Buddha,keep,Scenes of Little Buddha were filmed at the fortress in Paro.,384
