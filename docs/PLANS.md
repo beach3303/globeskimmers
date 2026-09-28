@@ -75,6 +75,14 @@ as for every stamp. **Brief (research 2026-09-27, all counts live from Wikidata)
   it), Story and carousel with the film line, and the to-do list (founder: the defaults, design
   approval, optional TMDB application, a ~40-spot review, one data-load command + OTA; Claude:
   ~8 working days). Waiting on "go with the defaults" + design approval.
+**Share destinations + counts (founder, 2026-09-28):** share images sized for Instagram,
+Facebook, TikTok, Snapchat and X, story and post, every component inside each platform's safe
+area, text sized to Instagram's current look; also send by Facebook, WhatsApp, Messages and
+Instagram message. Counts per month: stamped vs shared per platform, and story vs post vs
+message, stored and shown to admins — **built and live 2026-09-28** (Admin Analytics table;
+platform names on iPhone need the store build). Platform presets: research on current sizes and
+safe zones running, then the preview gets a "where" picker. Film scenes are sensed on Passport
+open like any stampable place (they join the owned attractions data).
 **Tabled 2026-09-28 — "who you were with" bubbles** (founder: "table the idea, hold the build"):
 small circles on a stamp with each friend's face, or first name + last initial; tap to see who
 you were there with. Only friends who accepted the tag appear. Data exists today: passport_tags
