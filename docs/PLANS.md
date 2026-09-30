@@ -36,8 +36,14 @@ in its own object. Brainstorm delivered: postcards (a dish/moment photo + dish n
 where + experience caption + a city POSTMARK, sent to friends — the feed is a mailbox),
 suitcase stickers (playful collectibles and creature/character art live on the profile's
 suitcase, never on stamps — this is also the cleaner Disney/aquarium art surface), trip
-pages later. Passport = proof · Postcards = moments · Stickers = personality. Awaiting the
-founder's pick before mockups.
+pages later. Passport = proof · Postcards = moments · Stickers = personality. Mockups delivered
+2026-09-29 (all private artifacts): suitcase stickers CrXq13WePxzqxjopKUtszS; postcards,
+mailbox feed, photo packet + public postcard rack, the full profile (suitcase banner,
+stats row with followers, Follow + ✉️ Postcard verbs, PASSPORT/POSTCARDS/SUITCASE/TAGGED
+tabs), and the event-night trio (factual ticket-stub stamp + tour-poster sticker +
+postcard) with the money (official sticker drops ~$2.5–20k anchors, demand reports,
+ticket affiliate later): Cd2qNnmp4BnuShfS1Rc9eV. Founder liked the suitcase; postcard
+metaphor pending their reaction.
 
 **The new build queue (founder, 2026-09-29):**
 1. Passport top priority: Stamps Near You with a first-run explainer (the Atlanta story:
