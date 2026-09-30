@@ -5,7 +5,7 @@ import { CAT, TEAL_DEEP } from '@/components/redesign/constants';
 import FontScaleButton from '@/components/a11y/FontScaleButton';
 import HomeRows from '@/components/home/HomeRows';
 import StampsNearYou from '@/components/home/StampsNearYou';
-import RightNowStrip from '@/components/home/RightNowStrip';
+import PassportHero from '@/components/home/PassportHero';
 import WishlistCard from '@/components/home/WishlistCard';
 import ExperiencesRow from '@/components/home/ExperiencesRow';
 import SmartSearchBar from '@/components/search/SmartSearchBar';
@@ -51,6 +51,7 @@ export default function HomeTablet({
   weatherInfo, tempUnit, toggleTempUnit, dateText, timeText,
   flagActive, homeFlagUrl, onLocation, onAction, clockRows = [], journeyMode = "discovery",
   destinationSearch = null, onDismissDestination,
+  passportTotal = null, nearestStamp = null,
 }) {
   const ORDER = {
     home: ["rows", "experiences", "stamps"], discovery: ["rows", "experiences", "stamps"],
@@ -192,6 +193,8 @@ export default function HomeTablet({
           match the Explore-More tile size — the default (and largest) size on
           iPad — and only grow a little in height as the text scale increases.
           Weather rides along as a 7th small tile (no longer full-width). ──── */}
+      <PassportHero wide total={passportTotal} nearest={nearestStamp} onOpen={() => onAction('Passport')} />
+
       <div className="grid grid-cols-3 gap-5 mt-6">
         {/* Money Exchange leads the grid (rides left with the 2026-09-29 pivot) */}
         <TabletTile cat={CAT.money} emoji="💱" title="Money Exchange" sub="Compare rates near you" onClick={() => onAction('Money Exchange')} />
@@ -204,7 +207,6 @@ export default function HomeTablet({
       {/* ── DISCOVER — living sections below the tiles (renders nothing on
              cold-start; re-centers as the user moves) ─────────────────── */}
       <div className="mt-9">
-        {journeyMode !== "planning" && <RightNowStrip wide onAction={onAction} />}
         {discoverOrder.map((k) => SEC[k])}
         <WishlistCard wide />
       </div>

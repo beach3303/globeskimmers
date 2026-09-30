@@ -16,6 +16,7 @@ import WanderlustLine from "../components/home/WanderlustLine";
 // moved to MyTrip.jsx; the spot rows get a new home in the next slice.
 // HomeTablet still mounts its own set — untouched, tabled.
 import AllServicesSheet from "../components/home/AllServicesSheet";
+import PassportHero from "../components/home/PassportHero";
 import { getTravelMode } from "@/lib/homeContext";
 import { TEAL_DEEP, IVORY, IVORY_2 } from "../components/redesign/constants";
 import { useAuth } from "@/lib/AuthContext";
@@ -677,6 +678,8 @@ export default function HomePage() {
           onAction={handleQuickAction}
           clockRows={clockRows}
           journeyMode={journeyMode}
+          passportTotal={passportTotal}
+          nearestStamp={nearestStamp}
           destinationSearch={destSearch && !destDismissed ? destSearch : null}
           onDismissDestination={() => setDestDismissed(true)}
         />
@@ -874,37 +877,6 @@ export default function HomePage() {
       {/* Arrival stamps — airport (domestic + international) + land/boat border crossings */}
       {profile?.onboarding_completed && !showWelcome && <AirportArrivalPrompt />}
       {profile?.onboarding_completed && !showWelcome && <BorderCrossingPrompt />}
-    </div>
-  );
-}
-
-// ── PassportHero — the passport-first doorway at the top of Home ───────────
-// Endowed progress, no guilt: a count when there is one, the nearest stamp
-// when known, and a warm zero state. One tap → Passport.
-function PassportHero({ total, nearest, onOpen }) {
-  const has = Number.isFinite(total) && total > 0;
-  const miles = nearest && Number.isFinite(nearest.miles) ? (nearest.miles < 10 ? nearest.miles.toFixed(1) : Math.round(nearest.miles)) : null;
-  return (
-    <div className="px-4 pb-4">
-      <button type="button" onClick={onOpen} aria-label="Open your Virtual Passport"
-        className="w-full max-w-md mx-auto block text-left rounded-2xl px-5 py-4"
-        style={{ background: '#FBF6EC', border: '1px solid #EADFC9', boxShadow: '0 10px 24px -20px rgba(22,17,13,.5)' }}>
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <div className="font-mono uppercase text-[calc(9.5px*var(--fs))] font-semibold" style={{ letterSpacing: '.2em', color: '#B0472F' }}>My Virtual Passport</div>
-            <div className="font-serif text-[calc(24px*var(--fs))] leading-[1.1] mt-1" style={{ color: '#16110D' }}>
-              {has ? `${total} stamp${total === 1 ? '' : 's'} collected` : 'Your first page is waiting'}
-            </div>
-            <div className="font-mono text-[calc(10.5px*var(--fs))] mt-1.5 truncate" style={{ letterSpacing: '.05em', color: '#736657' }}>
-              {nearest && nearest.name
-                ? `NEXT STAMP: ${String(nearest.name).toUpperCase()}${miles != null ? ` · ${miles} MI` : ''}`
-                : has ? 'OPEN THE BOOKLET · SHARE A PAGE' : 'STAMP YOUR HOME CITY TO BEGIN'}
-            </div>
-          </div>
-          <div aria-hidden className="flex-none w-12 h-12 rounded-xl flex items-center justify-center"
-            style={{ background: '#0C2B50', border: '1px solid #D6A64A', color: '#D6A64A', fontSize: 22 }}>🛂</div>
-        </div>
-      </button>
     </div>
   );
 }

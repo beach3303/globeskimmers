@@ -6,7 +6,7 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo } from "@/lib/passport";
+import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, listCitySets } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
@@ -591,6 +591,16 @@ function PassportInner() {
     } catch { /* dismissed */ }
   };
 
+  // City sets — the collection joy ("7 of 10 Atlanta icons"), no streaks.
+  const [citySets, setCitySets] = useState([]);
+  useEffect(() => {
+    if (readOnly || preview || !isAuthenticated || loading) return;
+    let gone = false;
+    (async () => { const { sets } = await listCitySets(); if (!gone) setCitySets(sets); })();
+    return () => { gone = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, readOnly, preview, isAuthenticated]);
+
   // The birthday stamp (founder queue #7): if today is the traveler's saved
   // MM-DD and this year's stamp doesn't exist yet, mint it quietly. Guarded by
   // localStorage so a failed mint retries at most once a day.
@@ -867,6 +877,20 @@ function PassportInner() {
                 </button>
               </div>
             )}
+            {/* City sets — quiet progress chips, never a guilt bar */}
+            {!readOnly && !preview && citySets.length > 0 && (
+              <div className="max-w-md mx-auto px-4 mt-6">
+                <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: "#8A5410" }}>City sets</div>
+                <div className="flex gap-1.5 flex-wrap mt-2">
+                  {citySets.map((cs) => (
+                    <span key={cs.city} className="rounded-full px-3 py-1.5" style={{ background: cs.have >= cs.total ? "#2E6B4E" : "#fff", color: cs.have >= cs.total ? "#fff" : INK2, border: `1px solid ${cs.have >= cs.total ? "#2E6B4E" : RULE}`, fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".05em" }}>
+                      {cs.city.toUpperCase()} · {cs.have} OF {cs.total}{cs.have >= cs.total ? " ✓" : ""}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* My luggage — the trunk of earned labels (founder, 2026-09-29:
                 passport keeps proof, the trunk keeps play). Derived from the
                 stamps above; the photo-real skin auto-upgrades from R2. */}

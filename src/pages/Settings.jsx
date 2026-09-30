@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { getHandle, setHandle, setAgeGate, getAgeInfo, setBirthday } from "@/lib/passport";
+import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
 import { useLocation, readOpenBehavior, writeOpenBehavior } from "@/components/location/LocationContext";
@@ -441,7 +442,17 @@ export default function SettingsPage() {
     }
     const { handle: h, error } = await setHandle(want);
     setHandleBusy(false);
-    if (error === "age_required") { setNeedYear(true); showToast("One thing first — the year you were born", "success"); return; }
+    if (error === "age_required") {
+      // Prefer the OS's Declared Age Range when the native build carries the
+      // plugin — no question asked, and the OS assertion is the stricter one.
+      const os = await readOsAgeRange();
+      const osYear = birthYearFromRange(os);
+      if (osYear) {
+        const { error: ageErr } = await setAgeGate(osYear);
+        if (!ageErr) { saveHandle(); return; }
+      }
+      setNeedYear(true); showToast("One thing first — the year you were born", "success"); return;
+    }
     if (error) { showToast(error, "error"); return; }
     setHandleState(h); setHandleDraft(h);
     showToast(`You're @${h}`, "success");

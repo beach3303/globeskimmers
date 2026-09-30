@@ -13,6 +13,7 @@ import { showToast } from "@/components/Toast";
 import { countryCode } from "@/lib/countries";
 import { listPassport, getHandle, getSocialProfile, setSocialProfile, getShareLink, setAgeGate, socialFollow, setAvatar } from "@/lib/passport";
 import Luggage from "@/components/passport/Luggage";
+import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
@@ -119,7 +120,15 @@ export default function ProfilePage() {
     const next = !share.is_public;
     const { data, error } = await getShareLink(next);
     setShareBusy(false);
-    if (error === "age_required") { setNeedYear(true); showToast("One thing first — the year you were born", "success"); return; }
+    if (error === "age_required") {
+      const os = await readOsAgeRange();
+      const osYear = birthYearFromRange(os);
+      if (osYear) {
+        const { error: ageErr } = await setAgeGate(osYear);
+        if (!ageErr) { setShareBusy(false); toggleShare(); return; }
+      }
+      setNeedYear(true); showToast("One thing first — the year you were born", "success"); return;
+    }
     if (error) { showToast(error, "error"); return; }
     setShare({ is_public: !!data.is_public, url: data.url || null });
     showToast(data.is_public ? "Your passport is public — anyone with the link can view it" : "Back to private", "success");

@@ -14054,6 +14054,49 @@ async function handleSocialFeed(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// ── City sets (2026-09-30): "7 of 10 Atlanta icons" ────────────────────────
+// Collection joy without streaks: for each city the traveler has stamped, how
+// many of its STAMPABLE icons (the same rule Stamps-near-you uses) they hold.
+// Top 12 icons per city define the set; cities with fewer icons use what
+// exists. Derived on request — no new tables.
+async function handlePassportSets(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    if (!env.ATTRACTIONS_DB) return jsonResponse({ sets: [] });
+    const q = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&select=city,country,entity_id,kind`, {});
+    const stamps = q.ok ? await q.json() : [];
+    const byCity = new Map();
+    for (const st of stamps) {
+      const c = (st.city || '').trim();
+      if (!c || st.kind === 'airport' || st.kind === 'country') continue;
+      const k = c.toLowerCase();
+      if (!byCity.has(k)) byCity.set(k, { city: c, country: (st.country || '').trim(), have: new Set() });
+      if (st.entity_id) byCity.get(k).have.add(String(st.entity_id));
+    }
+    const cities = [...byCity.values()].slice(0, 8);
+    const sets = [];
+    for (const c of cities) {
+      try {
+        const rs = await env.ATTRACTIONS_DB.prepare(
+          `SELECT id FROM attractions
+            WHERE city = ?1 COLLATE NOCASE
+              AND (tier IS NULL OR tier != 'secret')
+              AND coalesce(founder_scope, scope) IN ('world','national','regional')
+            ORDER BY is_marquee DESC, (popularity IS NULL) ASC, popularity DESC, rating DESC
+            LIMIT 12`
+        ).bind(c.city).all();
+        const ids = (rs.results || []).map((r) => String(r.id));
+        if (ids.length < 3) continue;
+        const have = ids.filter((id) => c.have.has(id)).length;
+        sets.push({ city: c.city, country: c.country, have, total: ids.length });
+      } catch { /* one city failing never kills the list */ }
+    }
+    sets.sort((a, b) => (b.have / b.total) - (a.have / a.total));
+    return jsonResponse({ sets });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // ── Social P0 (2026-09-29): blocks + usernames ──────────────────────────────
 async function gbBlockedEither(env, a, b) {
   if (!a || !b) return false;
@@ -18864,6 +18907,7 @@ export default {
       if (pathname === '/passport/stamp/date' && request.method === 'POST') return await handlePassportStampDate(request, env);
       if (pathname === '/passport/stamp/layout' && request.method === 'POST') return await handlePassportStampLayout(request, env);
       if (pathname === '/social/handle' && request.method === 'POST') return await handleSocialHandle(request, env, ctx);
+      if (pathname === '/passport/sets' && request.method === 'POST') return await handlePassportSets(request, env);
       if (pathname === '/social/block' && request.method === 'POST') return await handleSocialBlock(request, env, ctx);
       if (pathname === '/social/age' && request.method === 'POST') return await handleSocialAge(request, env, ctx);
       if (pathname === '/social/profile' && request.method === 'POST') return await handleSocialProfile(request, env, ctx);

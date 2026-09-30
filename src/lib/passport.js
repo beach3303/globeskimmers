@@ -114,6 +114,11 @@ export async function setAgeGate(birth_year) {
   const { data, error } = await callWorker('social/age', { birth_year });
   return { set: !!data?.set, tier: data?.tier || null, error: error || data?.error || null };
 }
+// City sets: "5 of 10 Atlanta icons" — derived server-side, no streaks.
+export async function listCitySets() {
+  const { data, error } = await callWorker('passport/sets', {});
+  return { sets: data?.sets || [], error };
+}
 // Social profile v1 (worker-moderated door): read, or patch any of
 // { display_name, bio, favorites, dreams } — favorites/dreams ≤3 {name,country}.
 export async function getSocialProfile() {

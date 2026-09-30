@@ -112,6 +112,11 @@ HomeRows uses). KEPT by name: the daily travel quote (WanderlustLine) and the dr
 Home is now: masthead → passport hero → search → NEARBY NOW (chips, stamps row) → dream
 shelf → quote. Site door copy no longer names the removed rows.
 
+**Store first (founder, 2026-09-30): partnerships are SKIPPED until the whole app is
+finished and deployed to BOTH stores.** The Georgia Aquarium pitch and every outreach item
+waits. Build focus: close every remaining OTA-able item so the founder's single native
+session (docs/NATIVE_BUILD_CHECKLIST.md) ships the finished product with no follow-up.
+
 **"BUILD ALL" (founder, 2026-09-29 late): the queue below is greenlit end-to-end.** Slices
 1–4 shipped the same night (onboarding v2 + explainer, Home passport hero, hero-stamp share
 renderer + lying-S strips + denser booklet, Social P0 handles/two-question claim/blocks —
