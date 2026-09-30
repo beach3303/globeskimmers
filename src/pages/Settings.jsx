@@ -5,7 +5,7 @@ import { searchHomeCities, resolveHomePlace } from "@/lib/homePlace";
 import { searchCountries, countryCode } from "@/lib/countries";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2 } from "lucide-react";
+import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2 } from "lucide-react";
 import ContactUsModal from "../components/ContactUsModal";
 import RefreshAccessModal from "../components/RefreshAccessModal";
 import { ADMIN_EMAILS } from "@/lib/admins";
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import { getHandle, setHandle } from "@/lib/passport";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
 import { useLocation, readOpenBehavior, writeOpenBehavior } from "@/components/location/LocationContext";
@@ -409,6 +410,22 @@ export default function SettingsPage() {
   const [cityPrompt, setCityPrompt] = useState(() => { try { return localStorage.getItem("pp_city_prompt") !== "0"; } catch { return true; } });
   // Nearby-stamp sensing on the Passport page (default ON; the page has its own small switch too).
   const [suggestNearby, setSuggestNearby] = useState(() => { try { return localStorage.getItem("pp_suggest_nearby") !== "0"; } catch { return true; } });
+  // Username (Social P0, 2026-09-29): claimed through the worker, 2 changes a
+  // month. Empty until the traveler picks one; the social layer needs it.
+  const [handle, setHandleState] = useState("");
+  const [handleDraft, setHandleDraft] = useState("");
+  const [handleBusy, setHandleBusy] = useState(false);
+  useEffect(() => { (async () => { const { handle: h } = await getHandle(); if (h) { setHandleState(h); setHandleDraft(h); } })(); }, []);
+  const saveHandle = async () => {
+    const want = handleDraft.trim().toLowerCase();
+    if (!want || want === handle) return;
+    setHandleBusy(true);
+    const { handle: h, error } = await setHandle(want);
+    setHandleBusy(false);
+    if (error) { showToast(error, "error"); return; }
+    setHandleState(h); setHandleDraft(h);
+    showToast(`You're @${h}`, "success");
+  };
 
   const { logout, deleteAccount, profile, user: authUser, refreshProfile, canRefresh } = useAuth(); // Supabase
   const countryBoxRef = useRef(null);
@@ -774,6 +791,23 @@ export default function SettingsPage() {
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Sense nearby stamps" desc="When you open your Passport, offer the attraction or airport you're standing in. Turn off to never see that pop-up (the Passport page has the same switch)."
               control={{ node: <EdToggle on={suggestNearby} onClick={() => { const next = !suggestNearby; setSuggestNearby(next); try { localStorage.setItem("pp_suggest_nearby", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle nearby stamp sensing" /> }}
+              last={false}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={AtSign} iconBg={CAT.culture.ink} title="Username" desc="Your @name for tagging and, soon, followers. Letters, numbers and underscore; you can change it twice a month."
+              control={{ below: true, node: (
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1 flex items-center rounded-xl px-3 h-12" style={{ border: `1px solid ${ED_RULE}`, background: '#fff' }}>
+                    <span style={{ color: ED_INK3, fontWeight: 700 }}>@</span>
+                    <input value={handleDraft} onChange={(e) => setHandleDraft(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20))}
+                      placeholder="yourname" aria-label="Username" autoCapitalize="none" autoCorrect="off"
+                      className="flex-1 outline-none bg-transparent pl-1" style={{ fontSize: 15 }} />
+                  </div>
+                  <button type="button" onClick={saveHandle} disabled={handleBusy || !handleDraft.trim() || handleDraft.trim() === handle}
+                    className="h-12 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>
+                    {handleBusy ? 'Saving…' : handle ? 'Change' : 'Claim'}
+                  </button>
+                </div>
+              ) }}
               last
             />
           </EdGroup>

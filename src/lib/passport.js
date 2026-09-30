@@ -91,9 +91,23 @@ export async function getTagByToken(token) {
   return { tag: data?.tag || null, error };
 }
 // Claim a shared tag (recipient signed in): accept → stamp on my passport.
-export async function claimTag(token, action) {
-  const { data, error } = await callWorker('passport/tag/claim', { token, action });
+export async function claimTag(token, action, presence) {
+  const { data, error } = await callWorker('passport/tag/claim', { token, action, presence });
   return { data, error };
+}
+// Block the tagger behind an invite (silent: their invites just "expire").
+export async function blockTagger(token) {
+  const { data, error } = await callWorker('social/block', { token });
+  return { data, error };
+}
+// Username: read (no args) or claim/change. 3–20 [a-z0-9_], 2 changes/30 days.
+export async function getHandle() {
+  const { data, error } = await callWorker('social/handle', {});
+  return { handle: data?.handle || null, error };
+}
+export async function setHandle(handle) {
+  const { data, error } = await callWorker('social/handle', { handle });
+  return { handle: data?.handle || null, error: error || data?.error || null };
 }
 // My incoming pending tags (the passive "Tagged you" inbox — email path).
 export async function listTags() {

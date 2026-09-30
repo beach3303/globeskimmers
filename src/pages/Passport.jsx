@@ -6,7 +6,7 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
+import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
@@ -590,13 +590,23 @@ function PassportInner() {
     } catch { /* dismissed */ }
   };
 
-  const respondClaim = async (action) => {
+  // Two-question claim (2026-09-29): 1) were you there together? 2) add the
+  // stamp? Presence feeds combined albums and "with @x"; the stamp is separate.
+  const [claimPresence, setClaimPresence] = useState(null); // null → question 1
+  const respondClaim = async (action, presence) => {
     if (!claim) return;
-    const { error } = await claimTag(claim.token, action);
+    const { error } = await claimTag(claim.token, action, presence);
     try { sessionStorage.removeItem("pp_claim_token"); } catch { /* ignore */ }
-    setClaim(null);
+    setClaim(null); setClaimPresence(null);
     if (error) showToast(error, "error");
-    else { showToast(action === "accept" ? "Added to your Virtual Passport 🛂" : "Declined", "success"); load(); }
+    else { showToast(action === "accept" ? "Added to your Virtual Passport 🛂" : presence ? "Noted — no stamp added" : "Declined", "success"); load(); }
+  };
+  const blockClaim = async () => {
+    if (!claim) return;
+    const { error } = await blockTagger(claim.token);
+    try { sessionStorage.removeItem("pp_claim_token"); } catch { /* ignore */ }
+    setClaim(null); setClaimPresence(null);
+    showToast(error || "Blocked — they can't tag you again", error ? "error" : "success");
   };
 
   const holder = readOnly ? (viewHolder || "A traveler") : (profile?.first_name || profile?.display_name || "Traveler");
@@ -738,11 +748,22 @@ function PassportInner() {
               <b>{claim.tag.from_name || "A friend"}</b> tagged you at <b>{claim.tag.name}</b>
               {[claim.tag.city, claim.tag.country].filter(Boolean).length ? ` · ${[claim.tag.city, claim.tag.country].filter(Boolean).join(", ")}` : ""}
             </p>
-            <p style={{ color: INK3, fontSize: fs(12), marginTop: 1 }}>Add this stamp to your Virtual Passport?</p>
-            <div className="flex gap-2 mt-3">
-              <button onClick={() => respondClaim("decline")} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13.5) }}>Decline</button>
-              <button onClick={() => respondClaim("accept")} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>Allow ✓</button>
-            </div>
+            {claimPresence === null ? (<>
+              <p style={{ color: INK3, fontSize: fs(12), marginTop: 1 }}>Were you there with {claim.tag.from_name || "them"}?</p>
+              <div className="flex gap-2 mt-3">
+                <button onClick={() => respondClaim("decline", false)} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13.5) }}>No, I wasn&apos;t</button>
+                <button onClick={() => setClaimPresence(true)} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>Yes, I was ✓</button>
+              </div>
+            </>) : (<>
+              <p style={{ color: INK3, fontSize: fs(12), marginTop: 1 }}>Add this stamp to your Virtual Passport?</p>
+              <div className="flex gap-2 mt-3">
+                <button onClick={() => respondClaim("decline", true)} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13.5) }}>Not this one</button>
+                <button onClick={() => respondClaim("accept", true)} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>Add the stamp ✓</button>
+              </div>
+            </>)}
+            <button onClick={blockClaim} className="w-full text-center mt-2.5" style={{ background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
+              Don&apos;t know them? Block this person
+            </button>
           </div>
         )}
 

@@ -13577,6 +13577,73 @@ async function handlePassportPhotoDelete(request, env, ctx) {
 // (kept only for the passive inbox path when the tagger knows it).
 const PP_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.globeskimmers.app';
 const PP_IOS_URL = 'https://apps.apple.com/us/app/globeskimmers/id6753154199';
+// ── Social P0 (2026-09-29): blocks + usernames ──────────────────────────────
+async function gbBlockedEither(env, a, b) {
+  if (!a || !b) return false;
+  try {
+    const q = await gbRest(env, `user_blocks?or=(and(user_id.eq.${a},blocked_user_id.eq.${b}),and(user_id.eq.${b},blocked_user_id.eq.${a}))&select=user_id&limit=1`, {});
+    return q.ok && (await q.json()).length > 0;
+  } catch { return false; }
+}
+
+// POST /social/block { token } — block the tagger behind an invite. Silent:
+// their pending invites to you die as "expired"; they are never told.
+async function handleSocialBlock(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const token = String(b.token || '').replace(/[^a-f0-9]/gi, '');
+    let target = String(b.user_id || '').replace(/[^0-9a-f-]/gi, '') || null;
+    if (!target && token) {
+      const q = await gbRest(env, `passport_tags?token=eq.${token}&select=from_user_id`, {});
+      target = (q.ok ? await q.json() : [])[0]?.from_user_id || null;
+    }
+    if (!target || target === user.id) return jsonResponse({ error: 'Nothing to block' }, 400);
+    await gbRest(env, 'user_blocks', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ user_id: user.id, blocked_user_id: target }) });
+    // Their pending invites to me die quietly.
+    await gbRest(env, `passport_tags?from_user_id=eq.${target}&to_user_id=eq.${user.id}&status=eq.pending`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'declined', revoked_at: new Date().toISOString() }) });
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_block', {}));
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /social/handle {} reads mine; { handle } claims/changes it.
+// ^[a-z0-9_]{3,20}$, unique (case-insensitive), 2 changes per 30 days, the old
+// handle is released by the overwrite. Worker-side so moderation has one door.
+const HANDLE_RESERVED = new Set(['admin', 'administrator', 'globeskimmers', 'globeskimmer', 'support', 'help', 'official', 'staff', 'mod', 'moderator', 'root', 'system', 'passport', 'maiza', 'founder', 'api', 'null', 'undefined', 'me', 'you', 'user', 'test']);
+async function handleSocialHandle(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const q = await gbRest(env, `passport_shares?user_id=eq.${user.id}&select=handle,handle_changed_at,handle_changes,slug,is_public`, {});
+    const mine = (q.ok ? await q.json() : [])[0] || null;
+    if (b.handle === undefined) return jsonResponse({ handle: mine?.handle || null });
+    const want = String(b.handle || '').toLowerCase().trim();
+    if (!/^[a-z0-9_]{3,20}$/.test(want)) return jsonResponse({ error: '3–20 characters: letters, numbers, underscore' }, 400);
+    if (HANDLE_RESERVED.has(want) || /^gs_/.test(want)) return jsonResponse({ error: 'That name is reserved' }, 400);
+    if (mine?.handle && mine.handle.toLowerCase() === want) return jsonResponse({ handle: mine.handle });
+    // 2 changes per rolling 30 days (the first claim is free).
+    if (mine?.handle) {
+      const within = mine.handle_changed_at && (Date.now() - Date.parse(mine.handle_changed_at)) < 30 * 864e5;
+      const used = within ? (mine.handle_changes || 0) : 0;
+      if (used >= 2) return jsonResponse({ error: 'You can change your username again next month' }, 429);
+      var changes = used + 1;
+    }
+    const taken = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(want)}&select=user_id&limit=1`, {});
+    const owner = (taken.ok ? await taken.json() : [])[0];
+    if (owner && owner.user_id !== user.id) return jsonResponse({ error: 'That username is taken' }, 409);
+    const patch = { handle: want, handle_changed_at: new Date().toISOString(), handle_changes: typeof changes === 'number' ? changes : 0, updated_at: new Date().toISOString() };
+    let w;
+    if (mine) w = await gbRest(env, `passport_shares?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
+    else w = await gbRest(env, 'passport_shares', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, slug: crypto.randomUUID().replace(/-/g, '').slice(0, 12), is_public: false, ...patch }) });
+    if (!w.ok) return jsonResponse({ error: w.status === 409 ? 'That username is taken' : 'Could not save the username' }, w.status === 409 ? 409 : 502);
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_handle_set', {}));
+    return jsonResponse({ handle: want });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handlePassportTag(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -13611,6 +13678,11 @@ async function handlePassportTag(request, env, ctx) {
       name: stamp.name, city: stamp.city, region: stamp.region, country: stamp.country,
       lat: stamp.lat, lng: stamp.lng, visited_on: stamp.visited_on,
     };
+    // A blocked pair never exchanges invites — but the tagger is never
+    // told: the invite "sends" and simply expires on the other side.
+    if (row.to_user_id && await gbBlockedEither(env, user.id, row.to_user_id)) {
+      return jsonResponse({ ok: true, token: row.token || null, muted: true });
+    }
     const ins = await gbRest(env, 'passport_tags', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!ins.ok) return jsonResponse({ error: 'Could not create invite', details: await ins.text().catch(() => '') }, 502);
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag', { is_user: !!toUserId, via: 'link' }));
@@ -13640,11 +13712,16 @@ async function handlePassportTagClaim(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const token = String(b.token || '').replace(/[^a-f0-9]/gi, '');
     const accept = b.action === 'accept';
+    // Two-question claim (2026-09-29): presence ("were you there together?")
+    // is separate from the stamp decision. Older app versions send action only;
+    // presence then mirrors the stamp answer.
+    const presence = typeof b.presence === 'boolean' ? b.presence : accept;
     if (!token) return jsonResponse({ error: 'token required' }, 400);
     const tq = await gbRest(env, `passport_tags?token=eq.${token}&status=eq.pending&select=*`, {});
     const tag = (tq.ok ? await tq.json() : [])[0];
     if (!tag) return jsonResponse({ error: 'This invite was already used or has expired.' }, 404);
     if (tag.from_user_id === user.id) return jsonResponse({ error: "That's your own tag 🙂" }, 400);
+    if (await gbBlockedEither(env, user.id, tag.from_user_id)) return jsonResponse({ error: 'This invite was already used or has expired.' }, 404);
     if (accept) {
       let exists = null;
       if (tag.entity_id) {
@@ -13661,7 +13738,7 @@ async function handlePassportTagClaim(request, env, ctx) {
         await gbRest(env, 'passport_stamps', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
       }
     }
-    await gbRest(env, `passport_tags?token=eq.${token}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: accept ? 'accepted' : 'declined', to_user_id: user.id, responded_at: new Date().toISOString() }) });
+    await gbRest(env, `passport_tags?token=eq.${token}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: accept ? 'accepted' : 'declined', presence, to_user_id: user.id, responded_at: new Date().toISOString() }) });
     if (ctx) {
       ctx.waitUntil(gbLogEvent(env, 'passport_tag_claim', { accept }));
       if (accept) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind: tag.kind, country: tag.country, city: tag.city, name: tag.name, verified: 'self', via: 'tag' }));
@@ -18304,6 +18381,8 @@ export default {
       if (pathname === '/passport/photo' && request.method === 'POST') return await handlePassportPhotoUpload(request, env, ctx);
       if (pathname === '/passport/stamp/date' && request.method === 'POST') return await handlePassportStampDate(request, env);
       if (pathname === '/passport/stamp/layout' && request.method === 'POST') return await handlePassportStampLayout(request, env);
+      if (pathname === '/social/handle' && request.method === 'POST') return await handleSocialHandle(request, env, ctx);
+      if (pathname === '/social/block' && request.method === 'POST') return await handleSocialBlock(request, env, ctx);
       if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
       if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);
       if (pathname === '/passport/stamp/check-photos' && request.method === 'POST') return await handlePassportCheckPhotos(request, env, ctx);
