@@ -93,7 +93,13 @@ Dead on arrival: BeenStamp and TrekStamp (apps with those exact names exist). Re
 domains are snap-uppable — register favorites BEFORE deliberating long; trademark
 clearance (USPTO/EUIPO) is a lawyer step before committing; the app's bundle id
 com.globeskimmers.app is LOCKED but the display name, store listing and domain can all
-change. No verdict yet.
+change. No verdict yet. Founder's leanings so far: StampNomad, HereStamp, Stampsy (taken). Fun round
+2026-09-30 added five more verified-available: **Stampsies · Stampzee · Stampaloo · StampAhoy ·
+StampYay** (plus earlier: StampAtlast, Atlastamp, StampVoyage, StampChase, StampRoam,
+StampNomad, StampTrove, StampOrbit, HereStamp, Stampfari, WentMark, Stampolo, StampMile,
+HereWent, WhereWent — 20 available in all). Catchiest taken ones (buy/lawyer path):
+Stamply, StampChamp, StampCamp, Stamperoo, Stampito. Deliberately avoided: "Stampy"
+(a famous Minecraft YouTuber owns that word culturally).
 
 **Home cut, 2026-09-30 (founder): "remove dream and plan, dreamer's corner, deal radar."**
 Done same day: the DREAM & PLAN kicker, DreamersCorner and DealRadarRow are off Home (phone
