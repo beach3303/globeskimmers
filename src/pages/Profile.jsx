@@ -11,7 +11,7 @@ import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
 import { countryCode } from "@/lib/countries";
-import { listPassport, getHandle, getSocialProfile, setSocialProfile, getShareLink, setAgeGate, socialFollow } from "@/lib/passport";
+import { listPassport, getHandle, getSocialProfile, setSocialProfile, getShareLink, setAgeGate, socialFollow, setAvatar } from "@/lib/passport";
 import Luggage from "@/components/passport/Luggage";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 
@@ -44,6 +44,19 @@ export default function ProfilePage() {
   const [share, setShare] = useState({ is_public: false, url: null });
   const [shareBusy, setShareBusy] = useState(false);
   const [counts, setCounts] = useState({ followers: null, following: null });
+  const [avatar, setAvatarUrl] = useState(null);
+  const avatarRef = React.useRef(null);
+  const pickAvatar = async (e) => {
+    const f = e.target.files?.[0]; e.target.value = "";
+    if (!f) return;
+    try {
+      const { resizePhoto } = await import("@/lib/resizePhoto");
+      const img = await resizePhoto(f, 512);
+      const { url, error } = await setAvatar(img);
+      if (error) { showToast(error, "error"); return; }
+      setAvatarUrl(url); showToast("Looking good", "success");
+    } catch (err) { showToast(err?.message || "Couldn't read that photo", "error"); }
+  };
   const [needYear, setNeedYear] = useState(false);
   const [yearDraft, setYearDraft] = useState("");
 
@@ -56,6 +69,7 @@ export default function ProfilePage() {
       setHandle(h.handle);
       const p = sp.profile || {};
       setName(p.display_name || profile?.first_name || "");
+      setAvatarUrl(p.avatar || null);
       setBio(p.bio || "");
       setFavorites(Array.isArray(p.favorites) ? p.favorites : []);
       const d = Array.isArray(p.dreams) ? p.dreams.map((x) => x.name) : [];
@@ -132,9 +146,14 @@ export default function ProfilePage() {
       <div className="max-w-md mx-auto px-4 pt-6">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <div className="flex-none w-16 h-16 rounded-full flex items-center justify-center" style={{ background: STAMP, color: "#FFF6EC", fontFamily: SERIF, fontSize: fs(26) }}>
-            {(name || "T").slice(0, 1).toUpperCase()}
-          </div>
+          <button type="button" onClick={() => avatarRef.current?.click()} aria-label="Change your photo"
+            className="flex-none w-16 h-16 rounded-full flex items-center justify-center overflow-hidden"
+            style={{ background: STAMP, color: "#FFF6EC", fontFamily: SERIF, fontSize: fs(26), border: 0, padding: 0 }}>
+            {avatar
+              ? <img src={avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : (name || "T").slice(0, 1).toUpperCase()}
+          </button>
+          <input ref={avatarRef} type="file" accept="image/*" className="hidden" onChange={pickAvatar} />
           <div className="min-w-0 flex-1">
             <input value={name} onChange={(e) => setName(e.target.value.slice(0, 40))} placeholder="Your name"
               aria-label="Display name"

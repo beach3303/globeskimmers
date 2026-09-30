@@ -13671,7 +13671,8 @@ async function handleSocialProfile(request, env, ctx) {
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
     const mine = await gbSocialProfile(env, user.id);
-    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year };
+    const origin = new URL(request.url).origin;
+    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null };
     if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined) {
       return jsonResponse({ profile: pick(mine) || null });
     }
@@ -13729,6 +13730,52 @@ async function handleAdminReports(request, env) {
     const q = await gbRest(env, `content_reports?status=eq.${status}&order=created_at.desc&limit=100&select=*`, {});
     return jsonResponse({ reports: q.ok ? await q.json() : [] });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// ── Avatar (2026-09-30): the face on the profile ────────────────────────────
+// Moderated synchronously at upload, fail-closed (an avatar is public by
+// nature). Served from /av-photo/ by unguessable key; replacing deletes the
+// old object.
+async function handleSocialAvatar(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    let data = String(b.image || ''); let mediaType = 'image/jpeg';
+    const m = data.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.*)$/i);
+    if (m) { mediaType = m[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : m[1].toLowerCase(); data = m[2]; }
+    if (!data) return jsonResponse({ error: 'No image' }, 400);
+    let bytes;
+    try { bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0)); } catch { return jsonResponse({ error: 'Bad image data' }, 400); }
+    if (bytes.length > 2 * 1024 * 1024) return jsonResponse({ error: 'Photo too large' }, 400);
+    const verdict = await gbModeratePhoto(env, ppBytesToB64(bytes), mediaType);
+    if (!verdict || !verdict.allow) return jsonResponse({ error: "That photo can't be an avatar" }, 422);
+    const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
+    const key = `av/${crypto.randomUUID()}.${ext}`;
+    await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
+    const mine = await gbSocialProfile(env, user.id);
+    const w = mine
+      ? await gbRest(env, `social_profiles?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ avatar_key: key, updated_at: new Date().toISOString() }) })
+      : await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, avatar_key: key }) });
+    if (!w.ok) { if (ctx) ctx.waitUntil(env.MEDIA.delete(key).catch(() => {})); return jsonResponse({ error: 'Could not save' }, 502); }
+    if (mine?.avatar_key && ctx) ctx.waitUntil(env.MEDIA.delete(mine.avatar_key).catch(() => {}));
+    const origin = new URL(request.url).origin;
+    return jsonResponse({ url: `${origin}/av-photo/${key}` });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+async function handleAvatarServe(request, env) {
+  try {
+    if (!env.MEDIA) return new Response('Not found', { status: 404 });
+    const key = decodeURIComponent(new URL(request.url).pathname.replace(/^\/av-photo\//, ''));
+    if (!key || key.includes('..') || !key.startsWith('av/')) return new Response('Bad key', { status: 400 });
+    const obj = await env.MEDIA.get(key);
+    if (!obj) return new Response('Not found', { status: 404 });
+    const headers = new Headers();
+    headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/jpeg');
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    headers.set('Access-Control-Allow-Origin', '*');
+    return new Response(obj.body, { headers });
+  } catch { return new Response('Error', { status: 500 }); }
 }
 
 // ── Postcards (2026-09-30): sent, not posted ────────────────────────────────
@@ -18763,6 +18810,7 @@ export default {
       // Passport (personal, private)
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
       if (pathname.startsWith('/pc-photo/') && request.method === 'GET') return await handlePostcardPhotoServe(request, env);
+      if (pathname.startsWith('/av-photo/') && request.method === 'GET') return await handleAvatarServe(request, env);
       if (pathname === '/airport-at' && request.method === 'GET') return await handleAirportAt(request, env);
       if (pathname === '/place-search' && request.method === 'GET') return await handlePlaceSearch(request, env);
       if (pathname.startsWith('/stamp-art/') && request.method === 'GET') return await handleStampArtServe(request, env);
@@ -18779,6 +18827,7 @@ export default {
       if (pathname === '/social/follow' && request.method === 'POST') return await handleSocialFollow(request, env, ctx);
       if (pathname === '/social/feed' && request.method === 'POST') return await handleSocialFeed(request, env);
       if (pathname === '/postcards/send' && request.method === 'POST') return await handlePostcardSend(request, env, ctx);
+      if (pathname === '/social/avatar' && request.method === 'POST') return await handleSocialAvatar(request, env, ctx);
       if (pathname === '/admin/reports' && request.method === 'POST') return await handleAdminReports(request, env);
       if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
       if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);

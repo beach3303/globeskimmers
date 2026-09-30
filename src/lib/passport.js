@@ -151,6 +151,11 @@ export async function sendPostcard({ image, message, place_name, city, country, 
   const { data, error } = await callWorker('postcards/send', { image, message, place_name, city, country, meta, to_handle });
   return { data, error: error || data?.error || null };
 }
+// Avatar: moderated at upload, fail-closed; resolves the serving URL.
+export async function setAvatar(image) {
+  const { data, error } = await callWorker('social/avatar', { image });
+  return { url: data?.url || null, error: error || data?.error || null };
+}
 // Report a shared passport (Apple 1.2's report door).
 export async function reportShared({ slug, kind, ref, reason, note }) {
   const { data, error } = await callWorker('social/report', { slug, kind, ref, reason, note });
