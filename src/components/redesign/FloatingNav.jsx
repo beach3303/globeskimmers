@@ -37,12 +37,6 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
   const path = location.pathname.toLowerCase();
   const detectActive = () => {
     if (active) return active;
-    if (
-      path.includes('trips') ||
-      path.includes('mytrip') ||
-      path.includes('wishlist') ||
-      path.includes('savedlocations')
-    ) return 'trips';
     if (path.includes('passport')) return 'passport';
     if (path.includes('settings')) return 'settings';
     if (path === '/' || path.includes('home')) return 'home';

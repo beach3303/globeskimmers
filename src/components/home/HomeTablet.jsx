@@ -195,8 +195,7 @@ export default function HomeTablet({
           iPad — and only grow a little in height as the text scale increases.
           Weather rides along as a 7th small tile (no longer full-width). ──── */}
       <div className="grid grid-cols-3 gap-5 mt-6">
-        {/* Book a Ride + Money Exchange lead the grid (Money Exchange is no longer a hero) */}
-        <TabletTile cat={{ ink: '#2563EB' }} emoji="🚗" title="Book a Ride" sub="Cars · transfers · rides" onClick={() => onAction('Get A Ride')} />
+        {/* Money Exchange leads the grid (rides left with the 2026-09-29 pivot) */}
         <TabletTile cat={CAT.money} emoji="💱" title="Money Exchange" sub="Compare rates near you" onClick={() => onAction('Money Exchange')} />
         {FEATURES.map((f) => (
           <TabletTile key={f.title} cat={f.cat} emoji={f.emoji} title={f.title} sub={f.sub} onClick={() => onAction(f.action)} />

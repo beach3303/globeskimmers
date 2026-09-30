@@ -25,7 +25,7 @@ const STARTERS = [
   { n: "02", emoji: "🏨", title: "Search near my hotel or address", sub: "Measure everything from where you’re staying.", bg: "#0F8A82" },
   { n: "03", emoji: "✈️", title: "Plan around an airport or destination", sub: "Scout essentials before you even land.", bg: "#3F49D4" },
   { n: "04", emoji: "🍽️", title: "Find food, coffee, ATMs & restrooms nearby", sub: "The daily essentials, wherever you point the map.", bg: "#D8443C" },
-  { n: "05", emoji: "🚌", title: "Public transportation info & options", sub: "Routes, schedules & transit from any spot.", bg: "#D4861A" },
+  { n: "05", emoji: "🛂", title: "Your Virtual Passport", sub: "Collect beautiful stamps where you go — verified.", bg: "#D4861A" },
 ];
 
 // First-launch welcome splash, shown BEFORE the location selector.

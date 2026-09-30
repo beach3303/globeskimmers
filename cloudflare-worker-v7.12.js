@@ -13139,7 +13139,12 @@ async function handlePassportPublic(request, env) {
     if (!share || !share.is_public) return jsonResponse({ private: true });
     const holder = await ppHolder(env, share.user_id);
     const { stamps, stats } = await ppLoad(env, share.user_id);
-    return jsonResponse({ holder, stamps, stats });
+    // A shared booklet renders names, dates, art and photos — never the exact
+    // coordinates of every visit (privacy audit 2026-09-29: select=* leaked
+    // full-precision lat/lng of the owner's whole history to anyone with the
+    // slug). City + country stay; the numbers go.
+    const shared = stamps.map(({ lat, lng, ...rest }) => rest);
+    return jsonResponse({ holder, stamps: shared, stats });
   } catch (e) { return jsonResponse({ error: e.message, private: true }, 500); }
 }
 

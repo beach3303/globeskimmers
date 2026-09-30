@@ -88,7 +88,7 @@ const FINDER_CHIPS = [
   { label: 'Eat', action: 'Places to Eat' },
   { label: 'Coffee', action: 'Coffee' },
   { label: 'Things to do', action: 'Things to Do' },
-  { label: 'Hotels', action: 'Find a Hotel' },
+  { label: 'Restrooms', action: 'Restroom' },
 ];
 
 // Module-scoped so it survives Home re-mounts within one app session: the
