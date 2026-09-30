@@ -13046,7 +13046,7 @@ async function handlePassportStamp(request, env, ctx) {
     }
     // The page-one home-city stamp (onboarding "make your passport") marks
     // itself origin:true — the app renders it as the cover page, not a brag.
-    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}) };
+    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}) };
     const row = {
       user_id: user.id, kind, tier,
       entity_type: b.entity_type ? String(b.entity_type) : null,
@@ -13636,8 +13636,19 @@ async function handleSocialAge(request, env, ctx) {
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
     const mine = await gbSocialProfile(env, user.id);
-    if (b.birth_year === undefined) return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null });
-    if (mine?.birth_year) return jsonResponse({ set: true, tier: mine.social_tier, locked: true });
+    // birth_md ('MM-DD') is the birthday-stamp date — editable anytime, never
+    // locked (only the YEAR locks; md alone reveals no age).
+    if (b.birth_md !== undefined && b.birth_year === undefined) {
+      const md = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(String(b.birth_md)) ? String(b.birth_md) : null;
+      if (!md && b.birth_md !== null) return jsonResponse({ error: 'Use MM-DD' }, 400);
+      const w = mine
+        ? await gbRest(env, `social_profiles?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ birth_md: md, updated_at: new Date().toISOString() }) })
+        : await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, birth_md: md }) });
+      if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
+      return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null, birth_md: md });
+    }
+    if (b.birth_year === undefined) return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null, birth_md: mine?.birth_md || null });
+    if (mine?.birth_year) return jsonResponse({ set: true, tier: mine.social_tier, locked: true, birth_md: mine?.birth_md || null });
     const country = request.headers.get('cf-ipcountry') || '';
     const tier = socialTierFor(b.birth_year, country);
     if (!tier) return jsonResponse({ error: 'Enter the year you were born' }, 400);

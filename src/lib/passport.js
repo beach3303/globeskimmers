@@ -135,6 +135,16 @@ export async function socialFeed() {
   const { data, error } = await callWorker('social/feed', {});
   return { rows: data?.rows || [], error };
 }
+// Birthday (MM-DD, editable; only the YEAR locks): read via getAgeGate's
+// birth_md; set here. The Passport mints the birthday stamp on the day.
+export async function setBirthday(birth_md) {
+  const { data, error } = await callWorker('social/age', { birth_md });
+  return { birth_md: data?.birth_md ?? null, error: error || data?.error || null };
+}
+export async function getAgeInfo() {
+  const { data, error } = await callWorker('social/age', {});
+  return { set: !!data?.set, tier: data?.tier || null, birth_md: data?.birth_md || null, error };
+}
 // Report a shared passport (Apple 1.2's report door).
 export async function reportShared({ slug, kind, ref, reason, note }) {
   const { data, error } = await callWorker('social/report', { slug, kind, ref, reason, note });

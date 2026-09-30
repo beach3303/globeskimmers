@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
-import { getHandle, setHandle, setAgeGate } from "@/lib/passport";
+import { getHandle, setHandle, setAgeGate, getAgeInfo, setBirthday } from "@/lib/passport";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
 import { useLocation, readOpenBehavior, writeOpenBehavior } from "@/components/location/LocationContext";
@@ -416,6 +416,15 @@ export default function SettingsPage() {
   const [handleDraft, setHandleDraft] = useState("");
   const [handleBusy, setHandleBusy] = useState(false);
   useEffect(() => { (async () => { const { handle: h } = await getHandle(); if (h) { setHandleState(h); setHandleDraft(h); } })(); }, []);
+  // Birthday (MM-DD only — the year lives behind the locked age gate). Saving
+  // it earns the yearly birthday stamp; the passport mints it on the day.
+  const [bMonth, setBMonth] = useState(""); const [bDay, setBDay] = useState("");
+  useEffect(() => { (async () => { const { birth_md } = await getAgeInfo(); if (birth_md) { setBMonth(birth_md.slice(0, 2)); setBDay(birth_md.slice(3, 5)); } })(); }, []);
+  const saveBirthday = async () => {
+    if (!bMonth || !bDay) return;
+    const { error } = await setBirthday(`${bMonth}-${bDay}`);
+    showToast(error || "Saved — your birthday stamp arrives on the day 🎂", error ? "error" : "success");
+  };
   // The worker answers 'age_required' until the birth year is set (it locks
   // after the first write; under-13 and AU-under-16 accounts get no social).
   const [needYear, setNeedYear] = useState(false);
@@ -822,6 +831,35 @@ export default function SettingsPage() {
                     className="h-12 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>
                     {handleBusy ? 'Saving…' : handle ? 'Change' : 'Claim'}
                   </button>
+                </div>
+              ) }}
+              last={false}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={Check} iconBg={CAT.todo.ink} title="My birthday" desc="Month and day only — it earns your birthday stamp every year. Your birth year stays private behind the age gate."
+              control={{ below: true, node: (
+                <div className="flex gap-2 items-center">
+                  <select value={bMonth} onChange={(e) => setBMonth(e.target.value)} aria-label="Birthday month" className="h-12 rounded-xl px-2" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 14 }}>
+                    <option value="">Month</option>
+                    {["01","02","03","04","05","06","07","08","09","10","11","12"].map((m, i) => <option key={m} value={m}>{["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][i]}</option>)}
+                  </select>
+                  <select value={bDay} onChange={(e) => setBDay(e.target.value)} aria-label="Birthday day" className="h-12 rounded-xl px-2" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 14 }}>
+                    <option value="">Day</option>
+                    {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((d) => <option key={d} value={d}>{Number(d)}</option>)}
+                  </select>
+                  <button type="button" onClick={saveBirthday} disabled={!bMonth || !bDay} className="h-12 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>Save</button>
+                </div>
+              ) }}
+              last
+            />
+          </EdGroup>
+
+          {/* Privacy — the promise, in the app where it belongs */}
+          <EdGroup kicker="Privacy" isTablet={isTablet}>
+            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.culture.ink} title="Our promise" desc="Your stamps and photos are yours. We never sell your photos or your location history, and we never show ads to kids. Shared passports never reveal exact locations, and photos only appear to others after review."
+              control={{ below: true, node: (
+                <div className="flex gap-2">
+                  <a href="https://globeskimmers.io/legal/privacy" target="_blank" rel="noreferrer" className="flex-1 h-11 rounded-xl flex items-center justify-center font-semibold" style={{ border: `1px solid ${ED_RULE}`, color: ED_INK, fontSize: 13.5, textDecoration: 'none', background: '#fff' }}>Privacy policy</a>
+                  <a href="https://globeskimmers.io/legal/terms" target="_blank" rel="noreferrer" className="flex-1 h-11 rounded-xl flex items-center justify-center font-semibold" style={{ border: `1px solid ${ED_RULE}`, color: ED_INK, fontSize: 13.5, textDecoration: 'none', background: '#fff' }}>Terms</a>
                 </div>
               ) }}
               last

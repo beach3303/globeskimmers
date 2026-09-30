@@ -6,7 +6,7 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
+import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
@@ -590,6 +590,33 @@ function PassportInner() {
       else if (navigator.clipboard) { await navigator.clipboard.writeText(share.url); showToast("Link copied", "success"); }
     } catch { /* dismissed */ }
   };
+
+  // The birthday stamp (founder queue #7): if today is the traveler's saved
+  // MM-DD and this year's stamp doesn't exist yet, mint it quietly. Guarded by
+  // localStorage so a failed mint retries at most once a day.
+  useEffect(() => {
+    if (readOnly || preview || !isAuthenticated || loading) return;
+    let gone = false;
+    (async () => {
+      const now = new Date();
+      const md = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const guard = `pp_bday_try_${now.getFullYear()}`;
+      try { if (localStorage.getItem(guard) === md) return; } catch { /* fine */ }
+      const { birth_md } = await getAgeInfo();
+      if (gone || !birth_md || birth_md !== md) return;
+      const entity = `birthday:${now.getFullYear()}`;
+      if (stamps.some((s) => s.entity_id === entity)) return;
+      try { localStorage.setItem(guard, md); } catch { /* fine */ }
+      const { error } = await addStamp({
+        kind: "city", entity_type: "birthday", entity_id: entity,
+        name: "My Birthday", city: profile?.home_city || undefined, country: profile?.home_country || undefined,
+        visited_on: now.toISOString().slice(0, 10), verified: "self", birthday: true,
+      });
+      if (!error) { showToast("🎂 Happy birthday — this year's stamp is yours", "success"); load(); }
+    })();
+    return () => { gone = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, readOnly, preview, isAuthenticated]);
 
   // Two-question claim (2026-09-29): 1) were you there together? 2) add the
   // stamp? Presence feeds combined albums and "with @x"; the stamp is separate.
