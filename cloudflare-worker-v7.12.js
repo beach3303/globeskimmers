@@ -13161,7 +13161,7 @@ async function handlePassportShare(request, env) {
         // Fail-closed photo moderation the moment the journal becomes public:
         // unchecked photos get reviewed in the background; the public
         // serializer only ever shows status 'ok'.
-        const pq = await gbRest(env, `passport_stamp_photos?user_id=eq.${user.id}&mod_status=is.null&select=id,photo_key&limit=40`, {});
+        const pq = await gbRest(env, `passport_stamp_photos?user_id=eq.${user.id}&mod_status=is.null&select=id,photo_key&limit=80`, {});
         const pending = pq.ok ? await pq.json() : [];
         if (pending.length && env.MEDIA) {
           const job = (async () => {
