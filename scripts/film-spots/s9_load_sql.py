@@ -16,7 +16,9 @@ Corrections, applied in order when the files exist:
                           (drop_not_filmed_here | drop_weak_evidence drop it)
   2. review_decisions.csv - keep | drop | merge:<attraction_id>, the founder's
                           review of review_40.csv (merge = film line on that
-                          existing stamp instead of a new spot)
+                          existing stamp instead of a new spot) plus Claude's
+                          calls on the rows the scene pass flagged `check`
+  3. spot_fixes.csv     - field corrections by spot (today: city)
 Rows are matched on (spot_qid or spot_name, work_qid).
 A spot that appears for several works keeps the highest-scoring work; the
 others join its also_in line.
@@ -108,14 +110,19 @@ def main():
     ap.add_argument("--seed", default=os.path.join(HERE, "seed_400.csv"))
     ap.add_argument("--overlay", default=os.path.join(HERE, "scenes_roles.csv"))
     ap.add_argument("--decisions", default=os.path.join(HERE, "review_decisions.csv"))
+    ap.add_argument("--fixes", default=os.path.join(HERE, "spot_fixes.csv"))
     ap.add_argument("--out", default=os.path.join(HERE, "data", "load_film_scenes.sql"))
     a = ap.parse_args()
     rows = read_csv(a.seed)
     overlay = {key(o): o for o in read_csv(a.overlay)}
     decisions = {key(d): (d.get("decision") or "").strip() for d in read_csv(a.decisions)}
+    fixes = {(f.get("spot_qid") or f.get("spot_name")): f for f in read_csv(a.fixes)}   # e.g. a wrong city label
 
     kept, dropped = [], []
     for r in rows:
+        fx = fixes.get(r.get("spot_qid") or r.get("spot_name"))
+        if fx and (fx.get("city") or "").strip():
+            r["city"] = fx["city"].strip()
         o = overlay.get(key(r))
         if o:
             for f in ("scene", "cast1", "role1", "cast2", "role2"):
