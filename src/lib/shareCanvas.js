@@ -111,6 +111,27 @@ const slideDate = (iso) => {
   if (!iso) return "";
   try { return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); } catch { return iso; }
 };
+// Word-wrap `text` to `maxLines` lines that fit `maxW` at the context's current
+// font; the last line gets an ellipsis when the text runs on.
+function wrapText(ctx, text, maxW, maxLines) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  for (let i = 0; i < words.length; i++) {
+    const next = line ? `${line} ${words[i]}` : words[i];
+    if (ctx.measureText(next).width <= maxW || !line) { line = next; continue; }
+    lines.push(line); line = words[i];
+    if (lines.length === maxLines) { line = ""; break; }
+  }
+  if (line && lines.length < maxLines) lines.push(line);
+  if (lines.length === maxLines && (line || lines.join(" ").length < text.length)) {
+    let last = lines[maxLines - 1];
+    while (last && ctx.measureText(`${last}…`).width > maxW) last = last.replace(/\s*\S+$/, "");
+    lines[maxLines - 1] = `${last}…`;
+  }
+  return lines;
+}
+
 export async function photoSlide(src, stamp, presetId = "post_4x5") {
   const P = SHARE_PRESETS[presetId] || SHARE_PRESETS.post_4x5;
   const { W, H } = P;
@@ -128,7 +149,13 @@ export async function photoSlide(src, stamp, presetId = "post_4x5") {
   // city line (founder, 2026-09-28) — the title and year only, never a still.
   const film = stamp?.meta?.film && stamp.meta.film.title ? stamp.meta.film : null;
   const filmLine = film ? `The scene from ${film.title}${film.year ? ` (${film.year})` : ""}` : "";
-  const brandY = H - P.bottom - 36, lineY = brandY - 62, filmY = lineY - 58, nameY = (film ? filmY : lineY) - 74;
+  // The scene itself, at most two lines (founder, 2026-09-29: "include the context").
+  ctx.font = `400 38px ${SHARE_SANS}`;
+  const sceneLines = film && film.scene ? wrapText(ctx, String(film.scene), maxW, 2) : [];
+  const brandY = H - P.bottom - 36, lineY = brandY - 62;
+  const sceneY = lineY - 54;                                   // baseline of the LAST scene line
+  const filmY = (sceneLines.length ? sceneY - (sceneLines.length - 1) * 46 - 52 : lineY - 58);
+  const nameY = (film ? filmY : lineY) - 74;
   const name = String(stamp?.name || "");
   let size = 72;
   ctx.font = `${size}px ${SHARE_SERIF}`;
@@ -148,8 +175,12 @@ export async function photoSlide(src, stamp, presetId = "post_4x5") {
   const line = [where, slideDate(stamp?.visited_on)].filter(Boolean).join("  ·  ");
   ctx.font = `500 40px ${SHARE_SANS}`; ctx.fillStyle = "rgba(251,246,236,0.92)";
   if (line) ctx.fillText(line, pad, lineY, maxW);
-  // the film, in gold italic under the place
+  // the film, in gold italic under the place, then the scene in one or two lines
   if (filmLine) { ctx.font = `italic 42px ${SHARE_SERIF}`; ctx.fillStyle = GOLD; ctx.fillText(filmLine, pad, filmY, maxW); }
+  if (sceneLines.length) {
+    ctx.font = `400 38px ${SHARE_SANS}`; ctx.fillStyle = "rgba(251,246,236,0.92)";
+    sceneLines.forEach((l, i) => ctx.fillText(l, pad, sceneY - (sceneLines.length - 1 - i) * 46));
+  }
   // the place
   ctx.font = `${size}px ${SHARE_SERIF}`; ctx.fillStyle = "#FFFFFF"; ctx.fillText(name, pad, nameY);
   // solid red "I was here!"

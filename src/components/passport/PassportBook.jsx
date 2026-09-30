@@ -64,7 +64,26 @@ const flagFor = (country) => {
 // Photos on a page are cover-sized backgrounds, not <img object-fit>, because
 // html2canvas 1.4 (the share capture) ignores object-fit and would stretch
 // them; it does honour background-size: cover.
+const clip = (t, n) => { const s = String(t || "").trim(); if (s.length <= n) return s; const cut = s.slice(0, n); return cut.slice(0, Math.max(cut.lastIndexOf(" "), n - 12)).replace(/[,.;:\s]+$/, "") + "…"; };
 const coverBg = (url) => ({ backgroundImage: `url("${String(url || "").replace(/"/g, "%22")}")`, backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat" });
+// The context under a scene stamp (founder, 2026-09-29: "include the
+// context"): the work, one line on the scene, the two leads. The photo-first
+// page prints its own fuller version; this is for a scene stamp with no photos.
+function FilmCaption({ film }) {
+  if (!film || !film.title) return null;
+  const cast = (film.cast || []).filter((c) => c && c.actor).slice(0, 2).map((c) => (c.role ? `${c.actor} as ${c.role}` : c.actor)).join(" · ");
+  return (
+    <div style={{ textAlign: "center", marginTop: 8, padding: "0 6px", maxWidth: "100%" }}>
+      <div style={{ fontFamily: SERIF, fontSize: fs(16), color: INK, lineHeight: 1.15 }}>
+        The scene from <i>{film.title}</i>{film.year ? ` (${film.year})` : ""}
+      </div>
+      {film.scene && <div style={{ fontFamily: SANS, fontSize: fs(11.5), color: "#3F4A52", lineHeight: 1.35, marginTop: 3 }}>{clip(film.scene, 110)}</div>}
+      {cast && <div style={{ fontFamily: MONO, fontSize: fs(9.5), color: "#2E6B4E", letterSpacing: ".02em", lineHeight: 1.4, marginTop: 4 }}>{cast}</div>}
+    </div>
+  );
+}
+const filmCaptionH = (film) => (film && film.title ? 30 + (film.scene ? 34 : 0) + ((film.cast || []).length ? 18 : 0) : 0);
+
 // A large stamp pressed onto the page, sized off the page width so heights are a
 // constant fraction across phones (lets pagination fit each page with no scroll).
 // Airport ≈ ⅓ page; iconic ≈ ½ page with "I was here!", a big ink date, and up
@@ -142,6 +161,7 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
               </div>
             )
           )}
+          <FilmCaption film={stamp.meta?.film} />
         </div>
       ) : (
         <div className="flex flex-col items-center">
@@ -166,6 +186,7 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
             <div style={{ fontFamily: SERIF, fontStyle: "italic", color: iconicInk, fontSize: fs(19), marginTop: 6, lineHeight: 1 }}>I was here!</div>
             {bigDate && <div style={{ fontFamily: SERIF, color: iconicInk, fontSize: fs(23), letterSpacing: ".01em", marginTop: 2, lineHeight: 1 }}>{bigDate}</div>}
           </>)}
+          <FilmCaption film={stamp.meta?.film} />
         </div>
       )}
 
@@ -197,7 +218,6 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
 // the calmer edge of the open photo (calmEdge), unless the traveller pinned it
 // above or below from the stamp options (meta.stamp_pos). The scene and the
 // two leads print underneath. Always a page of its own.
-const clip = (t, n) => { const s = String(t || "").trim(); if (s.length <= n) return s; const cut = s.slice(0, n); return cut.slice(0, Math.max(cut.lastIndexOf(" "), n - 12)).replace(/[,.;:\s]+$/, "") + "…"; };
 function PhotoFirstToken({ stamp, onOpen, pageW }) {
   const photos = (stamp.photos || []).filter((p) => p && p.photo_url).slice(0, 4);
   const [cur, setCur] = useState(0);
@@ -421,8 +441,9 @@ export default function PassportBook({
       // City/place stamps render the same art-or-typographic stamp as iconic
       // ones (plus a caption line), so they are estimated at the stamp's real
       // height — the old 110px guess predates that and let pages overflow.
-      if (s.kind === "city") return (ART_FRAC * pageW + 46 + photosH) * 1.05;
-      return (ART_FRAC * pageW + 52 + photosH) * 1.03;
+      const filmH = s.kind === "airport" ? 0 : filmCaptionH(s.meta && s.meta.film);
+      if (s.kind === "city") return (ART_FRAC * pageW + 46 + photosH + filmH) * 1.05;
+      return (ART_FRAC * pageW + 52 + photosH + filmH) * 1.03;
     };
     // A stamp whose layout is 'solo' (founder, 2026-09-26: "move a stamp to a
     // solo page") always gets a page of its own, and no later stamp back-fills
