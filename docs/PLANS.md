@@ -113,12 +113,22 @@ Home is now: masthead → passport hero → search → NEARBY NOW (chips, stamps
 shelf → quote. Site door copy no longer names the removed rows.
 
 **Reactions & guestbook (founder ask, 2026-09-30): mockup delivered, build awaits a yes.**
-The Blotter concept — https://claude.ai/artifact/XJgSMBnYPWJYNrUbwj82db — reactions are four
-STAMPS pressed on the blotter around a shared page, never inside the booklet: WOW (awe) ·
-TAKE ME (aspiration/intent) · I'VE BEEN (kinship) · SOMEDAY (adds the place to the
-reactor's own On the Horizon — a like that rewards the liker). Comments = the Guestbook:
-handwritten-style signatures, chronological, edit/peel your own, co-signs later; the OWNER
-can sweep any stamp or signature off their blotter. Privacy: public = any signed-in
+The Blotter concept — https://claude.ai/artifact/XJgSMBnYPWJYNrUbwj82db — v3 mockup
+(2026-09-30) after founder revisions. Reactions are STAMPS pressed on the blotter around a
+shared page, never inside the booklet — five core: WOW (our OWN engraved star-eyed face;
+never Apple's emoji artwork — characters in text are fine, Apple's images are copyrighted
+and render differently on Android) · TAKE ME · BEEN HERE, LOVED IT (footprints + heart) ·
+I WANNA GO (renamed from SOMEDAY; still adds the place to the reactor's On the Horizon) ·
+MORE PICS, PLEASE (camera — tells the owner what friends want next). Plus one CONTEXTUAL:
+YUMMY! appears only when food is the star — signal 1: photo sits under a restaurant/café/
+bakery stamp; signal 2: one extra question in the EXISTING vision-moderation call ("is
+food the MAIN subject or background?"), unsure = no stamp. Comments = the Guestbook:
+handwritten-style signatures, chronological, edit/peel your own; NEW: finger DOODLES post
+as margin-size comment cards, tap to enlarge full-width, tap to collapse — same
+fail-closed image moderation as postcards; comment-likes = CO-SIGNS (✍ tap to sign under
+someone's words, tap again to lift your pen; tapping the count shows WHO signed — public
+authorship, no anonymous applause, no ranking, guestbook stays chronological); the OWNER
+can sweep any stamp, signature or doodle off their blotter. Privacy: public = any signed-in
 traveler may press/sign; friends = mutuals; private = invisible (nothing to react to);
 teens = accepted followers only. Same slim blotter under packet photos. Profile v2 SHIPPED
 same day (4c587c3): trunk banner on TOP, traveler chips gone, About me + My website,
