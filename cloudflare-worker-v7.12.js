@@ -13044,11 +13044,14 @@ async function handlePassportStamp(request, env, ctx) {
         scene: cleanTxt(b.film.scene, 240),
       };
     }
+    // The page-one home-city stamp (onboarding "make your passport") marks
+    // itself origin:true — the app renders it as the cover page, not a brag.
+    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}) };
     const row = {
       user_id: user.id, kind, tier,
       entity_type: b.entity_type ? String(b.entity_type) : null,
       entity_id: entityId, name,
-      ...(film ? { meta: { film } } : {}),
+      ...(Object.keys(meta).length ? { meta } : {}),
       city: b.city ? String(b.city).slice(0, 120) : null,
       region: b.region ? String(b.region).slice(0, 120) : null,
       country: b.country ? String(b.country).slice(0, 120) : null,

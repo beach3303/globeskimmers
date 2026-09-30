@@ -7,10 +7,13 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { extractFirstName } from "@/lib/extractFirstName";
 import { inferProfileDefaults } from "@/lib/inferProfileDefaults";
+import { addStamp } from "@/lib/passport";
+import { countryCode } from "@/lib/countries";
 
 // Essential steps only — the rest is inferred or deferred.
 import LocationStep from "../components/onboarding/LocationStep";
 import HomeCountryStep from "../components/onboarding/HomeCountryStep";
+import PassportStep from "../components/onboarding/PassportStep";
 import FirstNameStep from "../components/onboarding/FirstNameStep";
 
 // Account-tied onboarding. The user is ALWAYS authenticated here (App.jsx's
@@ -42,7 +45,11 @@ export default function OnboardingPage() {
   const steps = useMemo(() => {
     const list = [];
     if (!initialFirstName) list.push("first_name");
-    list.push("location", "home_country");
+    // v2 order (founder queue #1, 2026-09-29): the city first so page one can
+    // render, then the passport explainer, then the location ask — by then the
+    // traveler knows exactly why the app wants it (stamps are earned by being
+    // there), which is the honest frame for the permission.
+    list.push("home_country", "passport", "location");
     return list;
   }, [initialFirstName]);
 
@@ -117,6 +124,24 @@ export default function OnboardingPage() {
       } catch { /* last-resort: ignore */ }
     }
 
+    // Page one = the home-city origin stamp (meaning model: "make your
+    // passport"). Best-effort: a failed mint never blocks the account — the
+    // passport page can mint it later. verified stays 'self'; origin marks it
+    // as the cover page, not an achievement.
+    try {
+      if (collected.home_city) {
+        await addStamp({
+          kind: "city", entity_type: "origin", entity_id: `origin:${collected.home_city}`,
+          name: collected.home_city, city: collected.home_city,
+          country: collected.home_country || undefined,
+          cc: countryCode(collected.home_country || "") || undefined,
+          lat: collected.home_lat ?? undefined, lng: collected.home_lng ?? undefined,
+          visited_on: new Date().toISOString().slice(0, 10),
+          verified: "self", origin: true,
+        });
+      }
+    } catch { /* the passport can mint page one later */ }
+
     await refreshProfile(); // so Layout's gate sees onboarding_completed = true
     navigate(createPageUrl("Home"));
   };
@@ -149,6 +174,17 @@ export default function OnboardingPage() {
       break;
     case "home_country":
       content = <HomeCountryStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.home_country} />;
+      break;
+    case "passport":
+      content = (
+        <PassportStep
+          homeCity={data.home_city}
+          homeCountry={data.home_country}
+          firstName={data.first_name || initialFirstName}
+          onNext={() => advance()}
+          onBack={onBack}
+        />
+      );
       break;
     default:
       content = null;

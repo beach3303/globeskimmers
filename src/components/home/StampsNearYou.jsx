@@ -60,6 +60,16 @@ function StampChip({ item, wide, onOpen }) {
 }
 
 export default function StampsNearYou({ onAction, wide = false }) {
+  // First-run explainer (founder queue #1: "explain what stamps near you
+  // mean" — the Atlanta story). Shows once, dismissible, never again after.
+  const [explain, setExplain] = useState(() => {
+    try { return !localStorage.getItem("pp_stamps_explained"); } catch { return false; }
+  });
+  const dismissExplain = () => {
+    setExplain(false);
+    try { localStorage.setItem("pp_stamps_explained", "1"); } catch { /* fine */ }
+  };
+
   const { getActiveLocation } = useLocation();
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
@@ -128,6 +138,19 @@ export default function StampsNearYou({ onAction, wide = false }) {
   return (
     <div className={wide ? "pb-3" : "px-4 pb-3"}>
       <div className={wide ? "" : "max-w-md mx-auto"}>
+        {explain && (
+          <div className="relative rounded-[14px] px-4 py-3 mb-3" style={{ background: "#EAF3EF", border: "1px solid #CDE2D8" }}>
+            <button type="button" onClick={dismissExplain} aria-label="Got it — hide this note"
+              className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center"
+              style={{ background: "#fff", color: "#16302B", fontSize: 12, fontWeight: 700, border: "1px solid #CDE2D8" }}>✕</button>
+            <div className="font-serif text-[calc(16px*var(--fs))] leading-[1.2] pr-6" style={{ color: "#16302B" }}>
+              These are the places actually worth going.
+            </div>
+            <p className="text-[calc(12.5px*var(--fs))] mt-1 leading-[1.45] pr-4" style={{ color: "#3F5A50" }}>
+              The stamps below are the top destinations around you — the aquarium, the mountain, the famous steps. Be at one and its stamp is yours for life, dated and verified. Add your photos, and share the page.
+            </p>
+          </div>
+        )}
         <div className="flex items-baseline justify-between mb-2 px-0.5 gap-3">
           <div className="min-w-0">
             <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1]" style={{ color: "#16302B" }}>Stamps near you</div>
