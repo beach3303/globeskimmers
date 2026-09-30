@@ -1,0 +1,33 @@
+city_key,name,qid,category,lat,lng,city,country,scope,radius_m,note
+nyc,Statue of Liberty,Q9202,landmark,40.689249,-74.044500,New York,US,world,400,liberty island; ferry or battery park view
+nyc,Empire State Building,Q9188,landmark,40.748441,-73.985664,New York,US,world,150,observatory
+nyc,Central Park,Q160409,park,40.781221,-73.966641,New York,US,world,1800,
+nyc,Times Square,Q11259,landmark,40.758000,-73.985500,New York,US,world,300,
+nyc,Rockefeller Center,Q198750,landmark,40.758700,-73.978700,New York,US,world,250,tree + skating rink in winter
+nyc,Wollman Rink,,landmark,40.768300,-73.974400,New York,US,regional,150,central park skating
+nyc,Brooklyn Bridge,Q125006,landmark,40.706100,-73.996900,New York,US,world,600,walk + dumbo pose spot
+nyc,The High Line,Q843869,park,40.747992,-74.004765,New York,US,national,700,
+nyc,Grand Central Terminal,Q201013,landmark,40.752700,-73.977200,New York,US,world,200,main concourse pose spot
+nyc,9/11 Memorial & Museum,,museum,40.711500,-74.013400,New York,US,world,250,
+nyc,The Edge at Hudson Yards,,landmark,40.754000,-74.001500,New York,US,national,150,glass-floor observation deck
+nyc,SUMMIT One Vanderbilt,,landmark,40.752900,-73.978500,New York,US,national,150,mirror-room pose spot
+nyc,American Museum of Natural History,,museum,40.781300,-73.974000,New York,US,world,250,
+nyc,The Metropolitan Museum of Art,Q160236,museum,40.779400,-73.963200,New York,US,world,250,the steps
+nyc,St. Patrick's Cathedral,,landmark,40.758600,-73.976200,New York,US,national,150,
+nyc,Charging Bull,,landmark,40.705600,-74.013400,New York,US,national,80,pose spot
+nyc,Little Island,,park,40.742100,-74.010200,New York,US,regional,200,
+nyc,Madison Square Garden,Q186125,landmark,40.750500,-73.993400,New York,US,national,200,
+la,Griffith Observatory,Q1133087,landmark,34.118400,-118.300400,Los Angeles,US,world,400,best hollywood sign + skyline view
+la,Hollywood Sign Viewpoint,Q180376,landmark,34.119000,-118.329500,Los Angeles,US,world,1500,viewed from below — lake hollywood park; sign itself is fenced
+la,Universal Studios Hollywood,Q639090,theme_park,34.138100,-118.353300,Los Angeles,US,world,700,
+la,Six Flags Magic Mountain,,theme_park,34.425300,-118.597300,Santa Clarita,US,national,700,
+la,LACMA — Urban Light,,museum,34.063900,-118.359200,Los Angeles,US,national,250,REVIEW LNG; lamp-post pose spot
+la,Lucas Museum of Narrative Art,,museum,34.016400,-118.291700,Los Angeles,US,national,250,exposition park
+la,The Original Farmers Market,,market,34.072000,-118.360300,Los Angeles,US,national,200,3rd & fairfax
+la,Hollywood Walk of Fame,Q214424,landmark,34.101600,-118.326800,Los Angeles,US,world,900,
+la,Venice Beach Boardwalk,,landmark,33.985000,-118.472800,Venice,US,national,900,
+la,The Grove,,market,34.071900,-118.357500,Los Angeles,US,regional,250,
+la,Rodeo Drive,,landmark,34.067800,-118.400300,Beverly Hills,US,national,500,
+la,The Broad,,museum,34.054500,-118.250600,Los Angeles,US,national,150,infinity room pose spot
+la,Runyon Canyon Park,,park,34.110600,-118.351000,Los Angeles,US,regional,700,best hike + view
+la,Petersen Automotive Museum,,museum,34.062200,-118.361300,Los Angeles,US,regional,150,
