@@ -85,6 +85,16 @@ Awaiting the founder's reaction to round three and to postcards.
   story sheets, earn toasts, branded share; photo-real skin auto-upgrades from R2 when the
   founder uploads their render (docs/TRUNK_RENDER_PROMPT.md). Ships with next OTA.
 
+**Rename shortlist (founder ask, 2026-09-30): 7 names verified AVAILABLE** — .com free
+(registry RDAP), .app free, no same-name App Store app on 2026-09-30: HereStamp ·
+Stampfari · WentMark · Stampolo · StampMile · HereWent · WhereWent. Claude's top three:
+HereStamp (says the product), Stampfari (the fun one), WentMark (the dignified one).
+Dead on arrival: BeenStamp and TrekStamp (apps with those exact names exist). Reminders:
+domains are snap-uppable — register favorites BEFORE deliberating long; trademark
+clearance (USPTO/EUIPO) is a lawyer step before committing; the app's bundle id
+com.globeskimmers.app is LOCKED but the display name, store listing and domain can all
+change. No verdict yet.
+
 **Home cut, 2026-09-30 (founder): "remove dream and plan, dreamer's corner, deal radar."**
 Done same day: the DREAM & PLAN kicker, DreamersCorner and DealRadarRow are off Home (phone
 and tablet; DealRadarRow deleted, DreamersCorner's file stays for its shared rows cache that
