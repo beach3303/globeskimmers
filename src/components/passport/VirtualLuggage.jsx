@@ -167,6 +167,7 @@ export default function VirtualLuggage({ stamps, onClose }) {
   const [state, setState] = useState(null); // { active, placements }
   const [faceIdx, setFaceIdx] = useState(0); // index into SWIPE_ORDER, or -1 = top
   const [turn, setTurn] = useState(0);       // -1|0|1 pseudo-3D direction
+  const [tilt, setTilt] = useState(0);       // vertical pseudo-3D (lid swipe)
   const [edit, setEdit] = useState(false);
   const [selected, setSelected] = useState(null);
   const [skinOk, setSkinOk] = useState({});  // `${type}/${face}` -> bool
@@ -319,6 +320,17 @@ export default function VirtualLuggage({ stamps, onClose }) {
           const cur = i === -1 ? 0 : i;
           return (cur + (dx < 0 ? 1 : SWIPE_ORDER.length - 1)) % SWIPE_ORDER.length;
         });
+      } else if (Math.abs(dy) >= 44 && Math.abs(dy) > Math.abs(dx) * 1.2) {
+        setSelected(null);
+        if (dy < 0 && faceIdx !== -1) {
+          // swipe up → tip the trunk and look at the lid
+          setTilt(1); setTimeout(() => setTilt(0), 330);
+          setFaceIdx(-1);
+        } else if (dy > 0 && faceIdx === -1) {
+          // swipe down from the lid → set it back down on its front
+          setTilt(-1); setTimeout(() => setTilt(0), 330);
+          setFaceIdx(0);
+        } // there is no bottom face — swiping down elsewhere leaves the trunk be
       }
     }
     if (pointers.current.size === 0) gesture.current = null;
@@ -339,7 +351,7 @@ export default function VirtualLuggage({ stamps, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[80] overflow-y-auto" style={{ background: IVORY }} role="dialog" aria-modal="true" aria-label="My Virtual Luggage">
-      <div className="max-w-md mx-auto px-4 pt-4 pb-10">
+      <div className="max-w-md mx-auto px-4 pb-10" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 22px)" }}>
         <div className="flex items-center justify-between">
           <div>
             <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".2em", color: "#8A5410" }}>Virtual Luggage</div>
@@ -366,9 +378,9 @@ export default function VirtualLuggage({ stamps, onClose }) {
             onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
             onClick={() => setSelected(null)}
             style={{
-              position: "relative", width: faceW, height: faceH, touchAction: "pan-y",
+              position: "relative", width: faceW, height: faceH, touchAction: "none",
               transformStyle: "preserve-3d",
-              transform: turn ? `rotateY(${turn * -12}deg) scaleX(0.94)` : "rotateY(0deg) scaleX(1)",
+              transform: turn ? `rotateY(${turn * -12}deg) scaleX(0.94)` : tilt ? `rotateX(${tilt * 10}deg) scaleY(0.95)` : "rotateY(0deg) scaleX(1)",
               transition: "transform 320ms cubic-bezier(.22,.61,.36,1)",
             }}
           >
@@ -416,7 +428,7 @@ export default function VirtualLuggage({ stamps, onClose }) {
             )}
           </div>
           <p style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".05em", color: INK3, marginTop: 8 }}>
-            {edit ? "Drag to place · two fingers to resize & rotate · tap ✓ when done" : "Swipe to walk around the trunk · tap ✎ to arrange your stickers"}
+            {edit ? "Drag to place · two fingers to resize & rotate · tap ✓ when done" : "Swipe sideways to walk around · swipe up for the lid · ✎ to arrange"}
           </p>
         </div>
 
