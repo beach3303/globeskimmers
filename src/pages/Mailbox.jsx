@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import { Loader2, UserPlus } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { socialFollow, socialFeed, getHandle } from "@/lib/passport";
+import InviteButton from "@/components/passport/InviteButton";
 import PostcardCompose from "@/components/passport/PostcardCompose";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -83,6 +84,7 @@ export default function MailboxPage() {
             Friends find you by your @username — <span style={{ color: TEAL, textDecoration: "underline", textUnderlineOffset: 2 }}>claim yours in Settings</span>
           </button>
         )}
+        {me && <InviteButton compact />}
 
         {/* Requests (teen approval) */}
         {lists.requests.length > 0 && (

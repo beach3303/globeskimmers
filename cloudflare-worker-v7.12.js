@@ -13233,7 +13233,10 @@ async function handlePassportShareLanding(request, env, ctx) {
     const scheme = `globeskimmers://passport/view?u=${encodeURIComponent(slug)}`;
     const chips = sample.map((s) => `<span class="chip">${esc(s.name)}</span>`).join('');
     const inner = !holder
-      ? '<div class="stamp">🛂</div><h1>This passport is private</h1><p class="muted">The owner hasn’t shared this passport, or the link is invalid.</p>'
+      ? `<div class="stamp">🛂</div><h1>You’re invited to Globeskimmers</h1><p class="muted">This traveler’s passport is private — get the app to follow them and start your own.</p>
+         <a class="btn primary" href="${scheme}">Open in Globeskimmers</a>
+         <a class="btn" href="/go/ios?src=${encodeURIComponent(slug || 'invite')}">Download for iPhone</a>
+         <a class="btn" href="/go/android?src=${encodeURIComponent(slug || 'invite')}">Download for Android</a>`
       : `<div class="stamp">🛂</div><div class="eyebrow">Globeskimmers · Virtual Passport</div>
          <h1>${esc(holder)}&rsquo;s Virtual Passport</h1>
          <div class="stats"><b>${stats.total || 0}</b> stamps · <b>${stats.countries || 0}</b> countries · <b>${stats.cities || 0}</b> cities</div>

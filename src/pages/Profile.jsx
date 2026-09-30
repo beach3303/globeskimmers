@@ -15,6 +15,7 @@ import { listPassport, getHandle, getSocialProfile, setSocialProfile, getShareLi
 import Luggage from "@/components/passport/Luggage";
 import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import PhotoPackets from "@/components/passport/PhotoPackets";
+import InviteButton from "@/components/passport/InviteButton";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -272,6 +273,9 @@ export default function ProfilePage() {
           <span style={{ fontFamily: SERIF, color: "#FFF6EC", fontSize: fs(17) }}>Open my Virtual Passport</span>
           <span aria-hidden style={{ color: "#D6A64A", fontSize: fs(18) }}>🛂</span>
         </button>
+
+        {/* Invites ride the same measured landing → store funnel as shares */}
+        <InviteButton />
       </div>
       <PhotoPackets stamps={stamps} title="Photo packets" />
     </div>
