@@ -56,6 +56,7 @@ import ConvenienceStore from './pages/ConvenienceStore';
 import CultureInformation from './pages/CultureInformation';
 import DemandReport from './pages/DemandReport';
 import Home from './pages/Home';
+import Mailbox from './pages/Mailbox';
 import MoneyExchange from './pages/MoneyExchange';
 import Onboarding from './pages/Onboarding';
 import Passport from './pages/Passport';
@@ -84,6 +85,7 @@ export const PAGES = {
     "CultureInformation": CultureInformation,
     "DemandReport": DemandReport,
     "Home": Home,
+    "Mailbox": Mailbox,
     "MoneyExchange": MoneyExchange,
     "Onboarding": Onboarding,
     "Passport": Passport,

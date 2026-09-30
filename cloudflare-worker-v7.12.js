@@ -13720,6 +13720,128 @@ async function handleAdminReports(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// ── Social P2 (2026-09-30): follow + the feed ───────────────────────────────
+// Asymmetric follow; a follow onto a TEEN account waits for their yes. Mutual
+// accepted follows are "friends". Blocks kill the edge silently. The feed is
+// reverse-chronological only (NY SAFE safe harbor) and never carries
+// coordinates; a teen's stamps surface to others no sooner than 24h after
+// minting (delayed visibility). Photos never ride the feed in v1.
+async function gbHandleToUser(env, handle) {
+  const h = String(handle || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+  if (!h) return null;
+  const q = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(h)}&select=user_id,handle`, {});
+  return (q.ok ? await q.json() : [])[0] || null;
+}
+
+async function handleSocialFollow(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const op = String(b.op || 'list');
+
+    if (op === 'list') {
+      const [fq, gq, names] = await Promise.all([
+        gbRest(env, `user_follows?followee_id=eq.${user.id}&select=follower_id,status,created_at`, {}),
+        gbRest(env, `user_follows?follower_id=eq.${user.id}&select=followee_id,status,created_at`, {}),
+        Promise.resolve(null),
+      ]);
+      const followers = fq.ok ? await fq.json() : [];
+      const following = gq.ok ? await gq.json() : [];
+      const ids = [...new Set([...followers.map((r) => r.follower_id), ...following.map((r) => r.followee_id)])].slice(0, 200);
+      let who = {};
+      if (ids.length) {
+        const [hq, pq] = await Promise.all([
+          gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle`, {}),
+          gbRest(env, `social_profiles?user_id=in.(${ids.join(',')})&select=user_id,display_name`, {}),
+        ]);
+        for (const r of (hq.ok ? await hq.json() : [])) who[r.user_id] = { handle: r.handle || null };
+        for (const r of (pq.ok ? await pq.json() : [])) who[r.user_id] = { ...(who[r.user_id] || {}), name: r.display_name || null };
+      }
+      const shape = (r, idKey) => ({ user_id: r[idKey], status: r.status, since: r.created_at, handle: who[r[idKey]]?.handle || null, name: who[r[idKey]]?.name || null });
+      return jsonResponse({
+        followers: followers.filter((r) => r.status === 'accepted').map((r) => shape(r, 'follower_id')),
+        requests: followers.filter((r) => r.status === 'pending').map((r) => shape(r, 'follower_id')),
+        following: following.map((r) => shape(r, 'followee_id')),
+      });
+    }
+
+    if (op === 'follow') {
+      const target = b.handle ? await gbHandleToUser(env, b.handle) : null;
+      if (!target) return jsonResponse({ error: 'No traveler with that username' }, 404);
+      if (target.user_id === user.id) return jsonResponse({ error: "That's you 🙂" }, 400);
+      if (await gbBlockedEither(env, user.id, target.user_id)) return jsonResponse({ ok: true, status: 'pending', muted: true });
+      const sp = await gbSocialProfile(env, target.user_id);
+      const status = sp?.social_tier === 'teen' ? 'pending' : 'accepted';
+      await gbRest(env, 'user_follows', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ follower_id: user.id, followee_id: target.user_id, status }) });
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_follow', { status }));
+      return jsonResponse({ ok: true, status, handle: target.handle });
+    }
+
+    if (op === 'unfollow') {
+      const target = b.handle ? await gbHandleToUser(env, b.handle) : (b.user_id ? { user_id: String(b.user_id).replace(/[^0-9a-f-]/gi, '') } : null);
+      if (!target) return jsonResponse({ error: 'Who?' }, 400);
+      await gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${target.user_id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+      return jsonResponse({ ok: true });
+    }
+
+    if (op === 'accept' || op === 'decline') {
+      const fid = String(b.user_id || '').replace(/[^0-9a-f-]/gi, '');
+      if (!fid) return jsonResponse({ error: 'user_id required' }, 400);
+      if (op === 'accept') {
+        await gbRest(env, `user_follows?follower_id=eq.${fid}&followee_id=eq.${user.id}&status=eq.pending`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'accepted', responded_at: new Date().toISOString() }) });
+      } else {
+        await gbRest(env, `user_follows?follower_id=eq.${fid}&followee_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+      }
+      return jsonResponse({ ok: true });
+    }
+
+    return jsonResponse({ error: 'unknown op' }, 400);
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /social/feed — the mailbox: recent stamps from people I follow, newest
+// first. Visibility rules per followee: 'public' shows to any follower;
+// 'friends' shows only when the follow is MUTUAL; private shows nothing.
+// Teen owners get the 24h delay. Never lat/lng, never photos (v1).
+async function handleSocialFeed(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const gq = await gbRest(env, `user_follows?follower_id=eq.${user.id}&status=eq.accepted&select=followee_id`, {});
+    const ids = (gq.ok ? await gq.json() : []).map((r) => r.followee_id).slice(0, 100);
+    if (!ids.length) return jsonResponse({ rows: [] });
+    const [shq, spq, backq] = await Promise.all([
+      gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle,visibility,is_public`, {}),
+      gbRest(env, `social_profiles?user_id=in.(${ids.join(',')})&select=user_id,display_name,social_tier`, {}),
+      gbRest(env, `user_follows?follower_id=in.(${ids.join(',')})&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, {}),
+    ]);
+    const share = Object.fromEntries((shq.ok ? await shq.json() : []).map((r) => [r.user_id, r]));
+    const prof = Object.fromEntries((spq.ok ? await spq.json() : []).map((r) => [r.user_id, r]));
+    const mutual = new Set((backq.ok ? await backq.json() : []).map((r) => r.follower_id));
+    const visible = ids.filter((id) => {
+      const v = share[id]?.visibility || (share[id]?.is_public ? 'public' : 'private');
+      if (v === 'public') return true;
+      if (v === 'friends') return mutual.has(id);
+      return false;
+    });
+    if (!visible.length) return jsonResponse({ rows: [] });
+    const sq = await gbRest(env, `passport_stamps?user_id=in.(${visible.join(',')})&hidden=eq.false&order=created_at.desc&limit=40&select=user_id,name,city,country,kind,visited_on,created_at,verified,meta`, {});
+    const dayAgo = Date.now() - 24 * 3600 * 1000;
+    const rows = (sq.ok ? await sq.json() : [])
+      .filter((s) => prof[s.user_id]?.social_tier !== 'teen' || Date.parse(s.created_at) < dayAgo)
+      .slice(0, 30)
+      .map((s) => ({
+        name: s.name, city: s.city, country: s.country, kind: s.kind,
+        visited_on: s.visited_on, created_at: s.created_at,
+        verified: ['gps', 'photo_loc', 'photo_ai'].includes(s.verified),
+        film: s.meta && s.meta.film ? { title: s.meta.film.title, year: s.meta.film.year } : null,
+        by: { handle: share[s.user_id]?.handle || null, name: prof[s.user_id]?.display_name || null },
+      }));
+    return jsonResponse({ rows });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // ── Social P0 (2026-09-29): blocks + usernames ──────────────────────────────
 async function gbBlockedEither(env, a, b) {
   if (!a || !b) return false;
@@ -18532,6 +18654,8 @@ export default {
       if (pathname === '/social/age' && request.method === 'POST') return await handleSocialAge(request, env, ctx);
       if (pathname === '/social/profile' && request.method === 'POST') return await handleSocialProfile(request, env, ctx);
       if (pathname === '/social/report' && request.method === 'POST') return await handleSocialReport(request, env, ctx);
+      if (pathname === '/social/follow' && request.method === 'POST') return await handleSocialFollow(request, env, ctx);
+      if (pathname === '/social/feed' && request.method === 'POST') return await handleSocialFeed(request, env);
       if (pathname === '/admin/reports' && request.method === 'POST') return await handleAdminReports(request, env);
       if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
       if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);

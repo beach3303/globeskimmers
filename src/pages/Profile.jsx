@@ -11,7 +11,7 @@ import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
 import { countryCode } from "@/lib/countries";
-import { listPassport, getHandle, getSocialProfile, setSocialProfile, getShareLink, setAgeGate } from "@/lib/passport";
+import { listPassport, getHandle, getSocialProfile, setSocialProfile, getShareLink, setAgeGate, socialFollow } from "@/lib/passport";
 import Luggage from "@/components/passport/Luggage";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
@@ -42,13 +42,14 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [share, setShare] = useState({ is_public: false, url: null });
   const [shareBusy, setShareBusy] = useState(false);
+  const [counts, setCounts] = useState({ followers: null, following: null });
   const [needYear, setNeedYear] = useState(false);
   const [yearDraft, setYearDraft] = useState("");
 
   useEffect(() => {
     let gone = false;
     (async () => {
-      const [pp, h, sp, sh] = await Promise.all([listPassport(), getHandle(), getSocialProfile(), getShareLink()]);
+      const [pp, h, sp, sh, fl] = await Promise.all([listPassport(), getHandle(), getSocialProfile(), getShareLink(), socialFollow("list")]);
       if (gone) return;
       setStamps(pp.stamps); setStats(pp.stats || {});
       setHandle(h.handle);
@@ -59,6 +60,7 @@ export default function ProfilePage() {
       const d = Array.isArray(p.dreams) ? p.dreams.map((x) => x.name) : [];
       setDreams([d[0] || "", d[1] || "", d[2] || ""]);
       if (sh.data) setShare({ is_public: !!sh.data.is_public, url: sh.data.url || null });
+      if (fl.data) setCounts({ followers: (fl.data.followers || []).length, following: (fl.data.following || []).length });
       setLoading(false);
     })();
     return () => { gone = true; };
@@ -158,9 +160,9 @@ export default function ProfilePage() {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-2 mt-4">
-          {[["Stamps", stats.total || stamps.length || 0], ["Countries", stats.countries || 0]].map(([l, v]) => (
-            <button key={l} type="button" onClick={() => navigate(createPageUrl("Passport"))} className="rounded-[14px] py-3 text-center" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
+        <div className="grid grid-cols-4 gap-2 mt-4">
+          {[["Stamps", stats.total || stamps.length || 0, "Passport"], ["Countries", stats.countries || 0, "Passport"], ["Followers", counts.followers ?? "—", "Mailbox"], ["Following", counts.following ?? "—", "Mailbox"]].map(([l, v, dest]) => (
+            <button key={l} type="button" onClick={() => navigate(createPageUrl(dest))} className="rounded-[14px] py-3 text-center" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
               <div style={{ fontSize: fs(20), fontWeight: 700, color: INK, fontVariantNumeric: "tabular-nums" }}>{v}</div>
               <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".12em", color: INK3, textTransform: "uppercase" }}>{l}</div>
             </button>

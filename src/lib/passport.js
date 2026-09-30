@@ -124,6 +124,17 @@ export async function setSocialProfile(patch) {
   const { data, error } = await callWorker('social/profile', patch || {});
   return { profile: data?.profile || null, error: error || data?.error || null };
 }
+// Follow graph (Social P2): op 'list' | 'follow' {handle} | 'unfollow' |
+// 'accept'/'decline' {user_id}. The feed is reverse-chron stamps of accepted
+// followees whose visibility allows it.
+export async function socialFollow(op, args) {
+  const { data, error } = await callWorker('social/follow', { op, ...(args || {}) });
+  return { data, error: error || data?.error || null };
+}
+export async function socialFeed() {
+  const { data, error } = await callWorker('social/feed', {});
+  return { rows: data?.rows || [], error };
+}
 // Report a shared passport (Apple 1.2's report door).
 export async function reportShared({ slug, kind, ref, reason, note }) {
   const { data, error } = await callWorker('social/report', { slug, kind, ref, reason, note });

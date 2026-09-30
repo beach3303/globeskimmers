@@ -27,6 +27,7 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
   // iPad so the chrome is consistent — each item is a real emoji + label.
   const items = [
     { id: 'home',     emoji: '🏠', label: 'Home',     route: 'Home' },
+    { id: 'mailbox',  emoji: '📬', label: 'Mailbox',  route: 'Mailbox' },
     { id: 'passport', emoji: '🛂', label: 'Passport', route: 'Passport' },
     { id: 'profile',  emoji: '👤', label: 'Profile',  route: 'Profile' },
     { id: 'settings', emoji: '⚙️', label: 'Settings', route: 'Settings' },
@@ -40,6 +41,7 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
     if (active) return active;
     if (path.includes('passport')) return 'passport';
     if (path.includes('profile')) return 'profile';
+    if (path.includes('mailbox')) return 'mailbox';
     if (path.includes('settings')) return 'settings';
     if (path === '/' || path.includes('home')) return 'home';
     return null;  // any other finder/page -> no tab highlighted
