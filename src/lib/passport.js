@@ -193,3 +193,32 @@ export async function getPublicPassport(slug) {
   const { data, error } = await callWorker('passport/public', { slug });
   return { data, error };
 }
+
+// ── The Blotter (2026-09-30): reaction stamps + guestbook AROUND a page ─────
+// One read per booklet: { targets: {'st:<id>': {marks:{wow:2,…}, mine:['wow']}},
+// entries: [...], owner: bool }. Never errors — a private/unknown slug reads empty.
+export async function blotterRead(slug) {
+  const { data } = await callWorker('blotter/read', { slug });
+  return data && !data.error ? data : { targets: {}, entries: [] };
+}
+// Press or peel one of the five reaction stamps (+ contextual 'yummy').
+export async function blotterMark(slug, target, kind, op) {
+  const { data, error } = await callWorker('blotter/mark', { slug, target, kind, op });
+  return { data, error };
+}
+// Sign the guestbook ({slug,target,text?,doodle?}), edit ({op:'edit',entry_id,text})
+// or peel your own entry ({op:'peel',entry_id}). doodle is a data-URL PNG.
+export async function blotterSign(args) {
+  const { data, error } = await callWorker('blotter/sign', args);
+  return { data, error };
+}
+// Co-sign: put your name under someone's words ('sign') or lift your pen ('lift').
+export async function blotterCosign(entry_id, op) {
+  const { data, error } = await callWorker('blotter/cosign', { entry_id, op });
+  return { data, error };
+}
+// Owner sweep: {op:'mark',target,kind} clears a stamp; {op:'entry',entry_id} removes an entry.
+export async function blotterSweep(args) {
+  const { data, error } = await callWorker('blotter/sweep', args);
+  return { data, error };
+}

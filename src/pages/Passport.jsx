@@ -6,13 +6,14 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, listCitySets } from "@/lib/passport";
+import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, listCitySets, blotterRead } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
 import PassportBook from "@/components/passport/PassportBook";
+import BlotterStrip from "@/components/passport/Blotter";
 import { isAdminEmail } from "@/lib/admins";
 import { localISODate } from "@/lib/localDate";
 import { stampRadiusFor } from "@/lib/stampRadius";
@@ -534,6 +535,9 @@ function PassportInner() {
 
   const [claim, setClaim] = useState(null); // { token, tag } from a shared invite link
 
+  // "See a sample passport" preview — sample stamps, view-only, never saved.
+  const [preview, setPreview] = useState(false);
+
   // Read-only friend view: a shared link (globeskimmers://passport/view?u=slug)
   // drops the slug in sessionStorage; web can pass ?view_slug=. When set, we load
   // that PUBLIC passport read-only (no owner actions).
@@ -583,6 +587,16 @@ function PassportInner() {
   const setPublic = async (pub) => { setShareBusy(true); const { data, error } = await getShareLink(pub); setShareBusy(false); if (error) showToast(error, "error"); else setShare(data); };
   // Read share state on mount so the privacy badge reflects the real status (default private).
   useEffect(() => { if (readOnly) return; (async () => { const { data } = await getShareLink(); if (data) setShare(data); })(); }, [readOnly]);
+
+  // The Blotter (2026-09-30) — reaction stamps + guestbook AROUND each page.
+  // One read per booklet; the strip under the open page aggregates its stamps.
+  const blSlug = readOnly ? viewSlug : (share?.slug || null);
+  const [blotter, setBlotter] = useState(null);
+  const refreshBlotter = useCallback(async () => {
+    if (!blSlug) return;
+    setBlotter(await blotterRead(blSlug));
+  }, [blSlug]);
+  useEffect(() => { if (!preview && blSlug) refreshBlotter(); }, [blSlug, preview, refreshBlotter]);
   const shareNow = async () => {
     if (!share?.url) return;
     try {
@@ -686,8 +700,6 @@ function PassportInner() {
     const top = el.getBoundingClientRect().top + window.scrollY - ((banner && banner.offsetHeight) || 0) - 6;
     try { window.scrollTo({ top: Math.max(0, top), behavior: "auto" }); } catch { window.scrollTo(0, Math.max(0, top)); }
   }, [loading]);
-  // "See a sample passport" preview — sample stamps, view-only, never saved.
-  const [preview, setPreview] = useState(false);
   const [showStampPlace, setShowStampPlace] = useState(false); // "Stamp a place" form
   const stampsView = preview ? SAMPLE_STAMPS : stamps;
   const statsView = preview ? SAMPLE_STATS : stats;
@@ -862,6 +874,9 @@ function PassportInner() {
               countries={statsView.countries || 0}
               totalStamps={stampsView.length}
               onOpenStamp={(id) => ((readOnly || preview) ? setOpenStampId(id) : setActionsId(id))}
+              renderUnderPage={!preview && blSlug ? (pgStamps) => (
+                <BlotterStrip slug={blSlug} stamps={pgStamps} blotter={blotter} ownerView={!readOnly} onChanged={refreshBlotter} />
+              ) : null}
             />
             {!readOnly && isAuthenticated && !preview && (
               <div className="text-center mt-4">

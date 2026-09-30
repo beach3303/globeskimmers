@@ -417,6 +417,7 @@ function EmptyCollectionPage({ coverH, pageNo, watermark }) {
 export default function PassportBook({
   stamps, holder, homeCountry, countries, totalStamps, onOpenStamp,
   coverUrl = PASSPORT_COVER_URL,
+  renderUnderPage = null, // (pageStamps) => node — the Blotter strip under an open page
 }) {
   const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
@@ -822,6 +823,13 @@ export default function PassportBook({
       <div aria-live="polite" className="sr-only" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
         {open ? pageLabel : "Passport closed"}
       </div>
+
+      {/* The Blotter — reactions + guestbook live UNDER the page, never inside */}
+      {open && page >= 1 && renderUnderPage && bookPages[page - 1] ? (
+        <div style={{ width: pageW, maxWidth: "100%", margin: "10px auto 0" }}>
+          {renderUnderPage(bookPages[page - 1].stamps)}
+        </div>
+      ) : null}
 
       {/* Controls (outside the book) */}
       {!open ? (

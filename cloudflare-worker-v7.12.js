@@ -12874,15 +12874,15 @@ async function gbModerate(env, text) {
 async function gbModeratePhoto(env, base64, mediaType) {
   if (!env.ANTHROPIC_API_KEY) return { allow: false, reason: 'moderation-unavailable' };
   try {
-    const system = 'You are an image safety reviewer for a public travel app where people share photos of food, drinks, dishes, cafes, storefronts, attractions, landmarks, and scenery. Reply with ONLY {"allow":true} or {"allow":false}. Set allow=false if the image contains ANY of: nudity or sexual content, graphic violence or gore, hate symbols, illegal drugs, weapons brandished as a threat, personal documents / credit cards / screens showing private info, or content that is clearly not a travel/food/place photo (memes, pure-text screenshots, spam, ads). Allow ordinary photos of food, drinks, interiors, storefronts, landmarks, nature, and people enjoying a place.';
+    const system = 'You are an image safety reviewer for a public travel app where people share photos of food, drinks, dishes, cafes, storefronts, attractions, landmarks, and scenery. Reply with ONLY {"allow":true,"food":false} (booleans as appropriate). Set allow=false if the image contains ANY of: nudity or sexual content, graphic violence or gore, hate symbols, illegal drugs, weapons brandished as a threat, personal documents / credit cards / screens showing private info, or content that is clearly not a travel/food/place photo (memes, pure-text screenshots, spam, ads). Allow ordinary photos of food, drinks, interiors, storefronts, landmarks, nature, and people enjoying a place. Set food=true ONLY when food or drink is the MAIN subject of the photo (a dish, plate, drink or spread filling the frame) — not when food is merely on a table behind a person or in the background of a scene.';
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001', max_tokens: 16, system,
+        model: 'claude-haiku-4-5-20251001', max_tokens: 24, system,
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: 'Is this photo allowed?' },
+          { type: 'text', text: 'Is this photo allowed, and is food the main subject?' },
         ] }],
       }),
     });
@@ -12890,7 +12890,8 @@ async function gbModeratePhoto(env, base64, mediaType) {
     const d = await r.json();
     const t = (d.content && d.content[0] && d.content[0].text) || '';
     const m = t.match(/"allow"\s*:\s*(true|false)/i);
-    return { allow: m ? m[1].toLowerCase() === 'true' : false };
+    const f = t.match(/"food"\s*:\s*(true|false)/i);
+    return { allow: m ? m[1].toLowerCase() === 'true' : false, food: f ? f[1].toLowerCase() === 'true' : false };
   } catch { return { allow: false, reason: 'moderation-exception' }; }
 }
 
@@ -13086,7 +13087,7 @@ async function ppLoad(env, userId) {
     // mod_status must ride along or the public serializer's ok-filter sees
     // undefined and hides every photo (found 2026-09-30 — reviewed photos were
     // invisible on public passports).
-    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption,mod_status`, {});
+    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption,mod_status,food_subject`, {});
     photos = pq.ok ? await pq.json() : [];
   }
   const byStamp = {};
@@ -13170,7 +13171,7 @@ async function handlePassportShare(request, env) {
                 if (!obj) continue;
                 const buf = new Uint8Array(await obj.arrayBuffer());
                 const v = await gbModeratePhoto(env, ppBytesToB64(buf), obj.httpMetadata?.contentType || 'image/jpeg');
-                await gbRest(env, `passport_stamp_photos?id=eq.${p.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mod_status: v && v.allow ? 'ok' : 'blocked' }) });
+                await gbRest(env, `passport_stamp_photos?id=eq.${p.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mod_status: v && v.allow ? 'ok' : 'blocked', food_subject: v && v.allow && v.food ? 1 : 0 }) });
               } catch { /* stays unchecked → stays hidden publicly */ }
             }
           })();
@@ -13905,6 +13906,311 @@ async function handlePostcardPhotoServe(request, env) {
     if (!obj) return new Response('Not found', { status: 404 });
     const headers = new Headers();
     headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/jpeg');
+    headers.set('Cache-Control', 'private, max-age=31536000, immutable');
+    headers.set('Access-Control-Allow-Origin', '*');
+    return new Response(obj.body, { headers });
+  } catch { return new Response('Error', { status: 500 }); }
+}
+
+// ── The Blotter (2026-09-30, mockup v3): reactions AROUND a page ────────────
+// Marks are stamp presses on the blotter under a shared passport page — five
+// core (wow/takeme/been/wannago/morepics) + contextual yummy (only where a
+// photo's food_subject says food is the star). The Guestbook holds signatures
+// and finger DOODLES (fail-closed image moderation, R2 bl/). Co-signs are the
+// comment-like done our way: public authorship — tap ✍ to put your name under
+// someone's words, tap again to lift your pen; who-signed is always visible.
+// Rails: non-owners need the booklet PUBLIC; block pairs vanish silently;
+// teen authors sign only on owners they follow (accepted); owner sweeps all.
+const BL_KINDS = new Set(['wow', 'takeme', 'been', 'wannago', 'morepics', 'yummy']);
+const BL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function blShare(env, slug) {
+  const clean = String(slug || '').replace(/[^a-z0-9]/gi, '');
+  if (!clean) return null;
+  const q = await gbRest(env, `passport_shares?slug=eq.${clean}&select=user_id,is_public`, {});
+  return (q.ok ? await q.json() : [])[0] || null;
+}
+async function blShareByOwner(env, ownerId) {
+  const q = await gbRest(env, `passport_shares?user_id=eq.${ownerId}&select=user_id,is_public`, {});
+  return (q.ok ? await q.json() : [])[0] || null;
+}
+// Gate: null = allowed, else a user-facing error string. `identity: true` is
+// the stricter door for acts that print the actor's handle on a public page.
+async function blGate(env, user, share, opts) {
+  if (!share) return 'Not found';
+  if (user.id === share.user_id) return null; // the owner's own blotter
+  if (!share.is_public) return 'Not found';
+  if (await gbBlockedEither(env, user.id, share.user_id)) return 'Not available';
+  if (opts && opts.identity) {
+    const sp = await gbSocialProfile(env, user.id);
+    if (sp?.social_tier === 'blocked') return 'Not available';
+    if (sp?.social_tier === 'teen') {
+      const f = await gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${share.user_id}&status=eq.accepted&select=follower_id&limit=1`, {});
+      if (!(f.ok && (await f.json()).length)) return 'Follow this traveler first — you can sign once they accept';
+    }
+  }
+  return null;
+}
+// 'st:<uuid>' → the owner's visible stamp, or null.
+async function blStamp(env, share, target) {
+  const m = /^st:([0-9a-f-]{36})$/i.exec(String(target || ''));
+  if (!m || !BL_UUID.test(m[1])) return null;
+  const q = await gbRest(env, `passport_stamps?id=eq.${m[1]}&user_id=eq.${share.user_id}&select=id,name,city,country,hidden`, {});
+  const st = (q.ok ? await q.json() : [])[0];
+  return st && !st.hidden ? st : null;
+}
+// I WANNA GO rewards the liker: the place lands on their own On the Horizon.
+async function blAddHorizon(env, userId, st) {
+  try {
+    const sp = await gbSocialProfile(env, userId);
+    const list = Array.isArray(sp?.dreams) ? sp.dreams : [];
+    const name = String(st.city || st.name || '').slice(0, 60);
+    if (!name || list.length >= 50) return;
+    if (list.some((d) => String(d?.name || '').toLowerCase() === name.toLowerCase())) return;
+    const dreams = [...list, { name }];
+    if (sp) await gbRest(env, `social_profiles?user_id=eq.${userId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ dreams, updated_at: new Date().toISOString() }) });
+    else await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: userId, dreams }) });
+  } catch { /* the press still stands */ }
+}
+
+// POST /blotter/mark { slug, target, kind, op:'press'|'peel' }
+async function handleBlotterMark(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in first' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const kind = String(b.kind || '');
+    const op = b.op === 'peel' ? 'peel' : 'press';
+    if (!BL_KINDS.has(kind)) return jsonResponse({ error: 'Unknown stamp' }, 400);
+    const share = await blShare(env, b.slug);
+    const gate = await blGate(env, user, share);
+    if (gate) return jsonResponse({ error: gate }, gate === 'Not found' ? 404 : 403);
+    const st = await blStamp(env, share, b.target);
+    if (!st) return jsonResponse({ error: 'Not found' }, 404);
+    const target = `st:${st.id}`;
+    if (op === 'press' && kind === 'yummy') {
+      // YUMMY only where food is the star (vision-tagged at the public flip).
+      const fq = await gbRest(env, `passport_stamp_photos?stamp_id=eq.${st.id}&food_subject=eq.1&mod_status=eq.ok&select=id&limit=1`, {});
+      if (!(fq.ok && (await fq.json()).length)) return jsonResponse({ error: 'YUMMY belongs on food photos' }, 400);
+    }
+    if (op === 'press') {
+      const w = await gbRest(env, 'blotter_marks?on_conflict=target,user_id,kind', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ owner_user_id: share.user_id, target, user_id: user.id, kind }) });
+      if (!w.ok) return jsonResponse({ error: 'Could not press' }, 502);
+      if (kind === 'wannago' && ctx) ctx.waitUntil(blAddHorizon(env, user.id, st));
+    } else {
+      await gbRest(env, `blotter_marks?target=eq.${encodeURIComponent(target)}&user_id=eq.${user.id}&kind=eq.${kind}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+    }
+    if (ctx) ctx.waitUntil(gbLogEvent(env, op === 'press' ? 'blotter_press' : 'blotter_peel', { kind }));
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /blotter/sign — op 'sign' { slug, target, text?, doodle? } | 'edit'
+// { entry_id, text } | 'peel' { entry_id }. A doodle is a data-URL image drawn
+// by finger; it passes the SAME fail-closed vision door as postcards.
+async function handleBlotterSign(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in first' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const op = ['sign', 'edit', 'peel'].includes(b.op) ? b.op : 'sign';
+
+    if (op !== 'sign') {
+      const id = String(b.entry_id || '');
+      if (!BL_UUID.test(id)) return jsonResponse({ error: 'Not found' }, 404);
+      const q = await gbRest(env, `blotter_entries?id=eq.${id}&author_user_id=eq.${user.id}&select=id,doodle_key`, {});
+      const e0 = (q.ok ? await q.json() : [])[0];
+      if (!e0) return jsonResponse({ error: 'Not found' }, 404);
+      if (op === 'peel') {
+        await gbRest(env, `blotter_entries?id=eq.${id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+        if (e0.doodle_key && env.MEDIA) await env.MEDIA.delete(e0.doodle_key).catch(() => {});
+        if (ctx) ctx.waitUntil(gbLogEvent(env, 'blotter_unsign', {}));
+        return jsonResponse({ ok: true });
+      }
+      const text = String(b.text || '').trim().slice(0, 280);
+      if (!text) return jsonResponse({ error: 'Write something first' }, 400);
+      const mod = await gbModerate(env, text);
+      if (!mod.allow) return jsonResponse({ error: "Let's keep the guestbook kind" }, 400);
+      await gbRest(env, `blotter_entries?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ body: text, updated_at: new Date().toISOString() }) });
+      return jsonResponse({ ok: true });
+    }
+
+    const share = await blShare(env, b.slug);
+    const gate = await blGate(env, user, share, { identity: true });
+    if (gate) return jsonResponse({ error: gate }, gate === 'Not found' ? 404 : 403);
+    const st = await blStamp(env, share, b.target);
+    if (!st) return jsonResponse({ error: 'Not found' }, 404);
+
+    const text = String(b.text || '').trim().slice(0, 280);
+    let doodleKey = null;
+    if (b.doodle) {
+      if (!env.MEDIA) return jsonResponse({ error: 'Doodles unavailable right now' }, 500);
+      let data = String(b.doodle || '');
+      const m = data.match(/^data:(image\/(?:png|jpeg|webp));base64,(.*)$/i);
+      if (!m) return jsonResponse({ error: 'Bad doodle' }, 400);
+      const mediaType = m[1].toLowerCase();
+      data = m[2].replace(/\s/g, '');
+      let bytes;
+      try { bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0)); }
+      catch { return jsonResponse({ error: 'Bad doodle' }, 400); }
+      if (bytes.length > 1500000) return jsonResponse({ error: 'Doodle too large' }, 400);
+      if (bytes.length < 200) return jsonResponse({ error: 'Draw something first' }, 400);
+      const mod = await gbModeratePhoto(env, data, mediaType); // fail-closed
+      if (!mod.allow) return jsonResponse({ error: "That drawing can't be posted" }, 400);
+      const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
+      doodleKey = `bl/${share.user_id}/${user.id}/${crypto.randomUUID()}.${ext}`;
+      await env.MEDIA.put(doodleKey, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
+    }
+    if (!text && !doodleKey) return jsonResponse({ error: 'Write or draw something first' }, 400);
+    if (text) {
+      const mod = await gbModerate(env, text);
+      if (!mod.allow) return jsonResponse({ error: "Let's keep the guestbook kind" }, 400);
+    }
+    const w = await gbRest(env, 'blotter_entries', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ owner_user_id: share.user_id, target: `st:${st.id}`, author_user_id: user.id, body: text || null, doodle_key: doodleKey }) });
+    if (!w.ok) return jsonResponse({ error: 'Could not sign' }, 502);
+    const row = (await w.json())[0];
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'blotter_sign', { doodle: !!doodleKey }));
+    const origin = new URL(request.url).origin;
+    return jsonResponse({ entry: { id: row.id, target: row.target, body: row.body, doodle: row.doodle_key ? `${origin}/bl-doodle/${row.doodle_key}` : null, created_at: row.created_at } });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /blotter/cosign { entry_id, op:'sign'|'lift' } — put your name under
+// someone's words (or take it back). Same identity door as signing.
+async function handleBlotterCosign(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in first' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.entry_id || '');
+    if (!BL_UUID.test(id)) return jsonResponse({ error: 'Not found' }, 404);
+    const q = await gbRest(env, `blotter_entries?id=eq.${id}&select=id,owner_user_id,author_user_id`, {});
+    const e0 = (q.ok ? await q.json() : [])[0];
+    if (!e0) return jsonResponse({ error: 'Not found' }, 404);
+    const share = await blShareByOwner(env, e0.owner_user_id);
+    const gate = await blGate(env, user, share, { identity: true });
+    if (gate) return jsonResponse({ error: gate }, gate === 'Not found' ? 404 : 403);
+    if (user.id !== e0.author_user_id && await gbBlockedEither(env, user.id, e0.author_user_id)) return jsonResponse({ error: 'Not available' }, 403);
+    if (b.op === 'lift') {
+      await gbRest(env, `blotter_cosigns?entry_id=eq.${id}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+    } else {
+      const w = await gbRest(env, 'blotter_cosigns?on_conflict=entry_id,user_id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ entry_id: id, user_id: user.id }) });
+      if (!w.ok) return jsonResponse({ error: 'Could not sign' }, 502);
+    }
+    if (ctx) ctx.waitUntil(gbLogEvent(env, b.op === 'lift' ? 'blotter_cosign_lift' : 'blotter_cosign', {}));
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /blotter/sweep — the OWNER clears their blotter: op 'mark'
+// { target, kind } wipes every press of that kind; op 'entry' { entry_id }
+// removes one signature/doodle (co-signs cascade).
+async function handleBlotterSweep(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in first' }, 401);
+    const b = await request.json().catch(() => ({}));
+    if (b.op === 'mark') {
+      const kind = String(b.kind || '');
+      const target = String(b.target || '');
+      if (!BL_KINDS.has(kind) || !/^st:[0-9a-f-]{36}$/i.test(target)) return jsonResponse({ error: 'Not found' }, 404);
+      await gbRest(env, `blotter_marks?owner_user_id=eq.${user.id}&target=eq.${encodeURIComponent(target)}&kind=eq.${kind}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+    } else if (b.op === 'entry') {
+      const id = String(b.entry_id || '');
+      if (!BL_UUID.test(id)) return jsonResponse({ error: 'Not found' }, 404);
+      const q = await gbRest(env, `blotter_entries?id=eq.${id}&owner_user_id=eq.${user.id}&select=id,doodle_key`, {});
+      const e0 = (q.ok ? await q.json() : [])[0];
+      if (!e0) return jsonResponse({ error: 'Not found' }, 404);
+      await gbRest(env, `blotter_entries?id=eq.${id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+      if (e0.doodle_key && env.MEDIA) await env.MEDIA.delete(e0.doodle_key).catch(() => {});
+    } else return jsonResponse({ error: 'Unknown op' }, 400);
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'blotter_sweep', { op: b.op }));
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /blotter/read { slug } — the whole booklet's blotter in one call:
+// per-target mark counts (+ mine), and every guestbook entry with author,
+// doodle URL, co-sign count and WHO signed. Blocked pairs vanish silently.
+async function handleBlotterRead(request, env) {
+  try {
+    const user = await gbUser(request, env); // optional — a signed-out reader still sees counts
+    const b = await request.json().catch(() => ({}));
+    const share = await blShare(env, b.slug);
+    if (!share) return jsonResponse({ targets: {}, entries: [] });
+    const isOwner = !!(user && user.id === share.user_id);
+    if (!share.is_public && !isOwner) return jsonResponse({ targets: {}, entries: [] });
+    const owner = share.user_id;
+    const [mq, eq2] = await Promise.all([
+      gbRest(env, `blotter_marks?owner_user_id=eq.${owner}&select=target,kind,user_id&limit=4000`, {}),
+      gbRest(env, `blotter_entries?owner_user_id=eq.${owner}&order=created_at.asc&select=id,target,author_user_id,body,doodle_key,created_at,updated_at&limit=400`, {}),
+    ]);
+    const marks = mq.ok ? await mq.json() : [];
+    let entries = eq2.ok ? await eq2.json() : [];
+    const hiddenIds = new Set();
+    if (user) {
+      const bq = await gbRest(env, `user_blocks?or=(user_id.eq.${user.id},blocked_user_id.eq.${user.id})&select=user_id,blocked_user_id`, {});
+      for (const r of (bq.ok ? await bq.json() : [])) hiddenIds.add(r.user_id === user.id ? r.blocked_user_id : r.user_id);
+    }
+    entries = entries.filter((e) => !hiddenIds.has(e.author_user_id));
+    const targets = {};
+    for (const m of marks) {
+      if (hiddenIds.has(m.user_id)) continue;
+      const t = (targets[m.target] = targets[m.target] || { marks: {}, mine: [] });
+      t.marks[m.kind] = (t.marks[m.kind] || 0) + 1;
+      if (user && m.user_id === user.id) t.mine.push(m.kind);
+    }
+    const ids = entries.map((e) => e.id);
+    let cosigns = [];
+    if (ids.length) {
+      const cq = await gbRest(env, `blotter_cosigns?entry_id=in.(${ids.join(',')})&select=entry_id,user_id&limit=4000`, {});
+      cosigns = (cq.ok ? await cq.json() : []).filter((c) => !hiddenIds.has(c.user_id));
+    }
+    const who = [...new Set([...entries.map((e) => e.author_user_id), ...cosigns.map((c) => c.user_id)])].slice(0, 200);
+    const names = {};
+    if (who.length) {
+      const [hq, nq] = await Promise.all([
+        gbRest(env, `passport_shares?user_id=in.(${who.join(',')})&select=user_id,handle`, {}),
+        gbRest(env, `social_profiles?user_id=in.(${who.join(',')})&select=user_id,display_name,avatar_key`, {}),
+      ]);
+      for (const r of (hq.ok ? await hq.json() : [])) names[r.user_id] = { handle: r.handle || null };
+      for (const r of (nq.ok ? await nq.json() : [])) names[r.user_id] = { ...(names[r.user_id] || {}), name: r.display_name || null, avatar_key: r.avatar_key || null };
+    }
+    const origin = new URL(request.url).origin;
+    const byEntry = {};
+    for (const c of cosigns) (byEntry[c.entry_id] = byEntry[c.entry_id] || []).push(c.user_id);
+    const out = entries.map((e) => {
+      const cs = byEntry[e.id] || [];
+      return {
+        id: e.id,
+        target: e.target,
+        handle: names[e.author_user_id]?.handle || null,
+        name: names[e.author_user_id]?.name || null,
+        avatar: names[e.author_user_id]?.avatar_key ? `${origin}/av-photo/${names[e.author_user_id].avatar_key}` : null,
+        body: e.body,
+        doodle: e.doodle_key ? `${origin}/bl-doodle/${e.doodle_key}` : null,
+        created_at: e.created_at,
+        edited: !!e.updated_at,
+        cosigns: cs.length,
+        cosigned: !!(user && cs.includes(user.id)),
+        signers: cs.slice(0, 30).map((u) => names[u]?.handle || names[u]?.name || 'traveler'),
+        mine: !!(user && e.author_user_id === user.id),
+      };
+    });
+    return jsonResponse({ targets, entries: out, owner: isOwner });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// GET /bl-doodle/<key> — serve a stored doodle (immutable, unguessable key).
+async function handleBlotterDoodleServe(request, env) {
+  try {
+    if (!env.MEDIA) return new Response('Not found', { status: 404 });
+    const key = decodeURIComponent(new URL(request.url).pathname.replace(/^\/bl-doodle\//, ''));
+    if (!key || key.includes('..') || !key.startsWith('bl/')) return new Response('Bad key', { status: 400 });
+    const obj = await env.MEDIA.get(key);
+    if (!obj) return new Response('Not found', { status: 404 });
+    const headers = new Headers();
+    headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/png');
     headers.set('Cache-Control', 'private, max-age=31536000, immutable');
     headers.set('Access-Control-Allow-Origin', '*');
     return new Response(obj.body, { headers });
@@ -18906,6 +19212,7 @@ export default {
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
       if (pathname.startsWith('/pc-photo/') && request.method === 'GET') return await handlePostcardPhotoServe(request, env);
       if (pathname.startsWith('/av-photo/') && request.method === 'GET') return await handleAvatarServe(request, env);
+      if (pathname.startsWith('/bl-doodle/') && request.method === 'GET') return await handleBlotterDoodleServe(request, env);
       if (pathname === '/airport-at' && request.method === 'GET') return await handleAirportAt(request, env);
       if (pathname === '/place-search' && request.method === 'GET') return await handlePlaceSearch(request, env);
       if (pathname.startsWith('/stamp-art/') && request.method === 'GET') return await handleStampArtServe(request, env);
@@ -18924,6 +19231,11 @@ export default {
       if (pathname === '/social/feed' && request.method === 'POST') return await handleSocialFeed(request, env);
       if (pathname === '/postcards/send' && request.method === 'POST') return await handlePostcardSend(request, env, ctx);
       if (pathname === '/social/avatar' && request.method === 'POST') return await handleSocialAvatar(request, env, ctx);
+      if (pathname === '/blotter/read' && request.method === 'POST') return await handleBlotterRead(request, env);
+      if (pathname === '/blotter/mark' && request.method === 'POST') return await handleBlotterMark(request, env, ctx);
+      if (pathname === '/blotter/sign' && request.method === 'POST') return await handleBlotterSign(request, env, ctx);
+      if (pathname === '/blotter/cosign' && request.method === 'POST') return await handleBlotterCosign(request, env, ctx);
+      if (pathname === '/blotter/sweep' && request.method === 'POST') return await handleBlotterSweep(request, env, ctx);
       if (pathname === '/admin/reports' && request.method === 'POST') return await handleAdminReports(request, env);
       if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
       if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);
