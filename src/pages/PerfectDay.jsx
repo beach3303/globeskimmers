@@ -70,10 +70,6 @@ function travelDelta(a, b) {
   return `+${Math.max(1, Math.round((miles / 25) * 60))} min drive`;
 }
 
-// The worker sends ISO currency codes, never symbols, and minimums can be
-// fractional — same honest formatting as EventsRow ("from $35", never "USD39.5").
-const CUR_SYM = { USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
-const fmtPrice = (n, cur) => { const c = String(cur || "").toUpperCase(); return `${c ? (CUR_SYM[c] || `${c} `) : "$"}${Math.round(n)}`; };
 
 // Mono data line for a restaurant anchor. Owned rows carry rating:null — show
 // only what we actually have; tierLabel exists only on the Google dish path.
@@ -246,7 +242,6 @@ export default function PerfectDay() {
   const [dayStops, setDayStops] = useState([]);
   const [lunch, setLunch] = useState(null);
   const [dinner, setDinner] = useState(null);
-  const [evt, setEvt] = useState(null);
   const [regenCount, setRegenCount] = useState(0);
 
   // Base = primary stay when set, else the active location (the finder pattern).
@@ -361,20 +356,6 @@ export default function PerfectDay() {
     return () => { cancelled = true; };
   }, [stage, dayStops]);
 
-  // Tonight's top priced event — one call into the same 6h KV entry EventsRow
-  // fills (same body keys, same 0.1-degree grid). Shown only when one exists.
-  useEffect(() => {
-    if (stage !== "day") return;
-    if (!city && !hasCoords) return;
-    let cancelled = false;
-    (async () => {
-      const { data } = await callWorker(ROUTE.searchEvents, { city, latitude: lat, longitude: lng, cityName: city });
-      if (cancelled) return;
-      const today = localISODate();
-      setEvt((data?.events || []).find((e) => e.date === today && Number.isFinite(e.fromPrice)) || null);
-    })();
-    return () => { cancelled = true; };
-  }, [stage]);
 
   const saveDay = () => {
     if (!dayStops.length) return;
@@ -385,7 +366,6 @@ export default function PerfectDay() {
     if (lunch) stops.push({ block: "Morning", kind: "lunch", name: lunch.name, note: restNote(lunch), source: restSource(lunch) });
     seq.slice(1).forEach((s) => stops.push({ block: "Afternoon", kind: "stop", name: s.name, note: stopNote(s) }));
     if (dinner) stops.push({ block: "Evening", kind: "dinner", name: dinner.name, note: restNote(dinner), source: restSource(dinner) });
-    if (evt) stops.push({ block: "Evening", kind: "event", name: evt.name, note: `Tonight · from ${fmtPrice(evt.fromPrice, evt.currency)}` });
     const payload = { city, date: localISODate(), stops };
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(payload)); } catch { /* storage unavailable — the day still shows */ }
     setSaved(payload);
@@ -534,18 +514,11 @@ export default function PerfectDay() {
               </section>
             )}
 
-            {(dinner || evt) && (
+            {dinner && (
               <section>
                 <BlockTitle>Evening</BlockTitle>
                 <div className="space-y-2">
-                  {dinner && <AnchorRow kicker="DINNER" name={dinner.name} note={restNote(dinner)} source={restSource(dinner)} />}
-                  {evt && (
-                    <AnchorRow
-                      kicker="TONIGHT"
-                      name={evt.name}
-                      note={`from ${fmtPrice(evt.fromPrice, evt.currency)}${evt.venue ? ` · ${evt.venue}` : ""}`}
-                    />
-                  )}
+                  <AnchorRow kicker="DINNER" name={dinner.name} note={restNote(dinner)} source={restSource(dinner)} />
                 </div>
               </section>
             )}

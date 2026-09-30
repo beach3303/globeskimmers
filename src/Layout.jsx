@@ -30,7 +30,7 @@ const AD_FINDER_PAGES = new Set([
 const BACK_TO_TOP_PAGES = new Set([
   "PlacesToEat", "CoffeeFinder", "ATMFinder", "RestroomFinder",
   "ConvenienceStore", "ThingsToDo", "Shopping",
-  "CultureInformation", "BasicPhrases", "Transportation", "Weather",
+  "CultureInformation", "BasicPhrases", "Weather",
 ]);
 
 

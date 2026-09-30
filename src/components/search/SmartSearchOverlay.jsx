@@ -275,15 +275,6 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
                 onClose();
               }}
               onPerfectDay={() => { navigate(createPageUrl("PerfectDay")); onClose(); }}
-              onBuildTrip={() => {
-                // Grounded destinations only (the card renders this action only
-                // when grounded) — the composer needs real coordinates.
-                const d = dream.destination;
-                navigate(createPageUrl("SmartPackages"), {
-                  state: { dest: { name: d.name, city: d.city, country: d.country, lat: d.lat, lng: d.lng } },
-                });
-                onClose();
-              }}
               onSearchThings={async () => {
                 try {
                   await runSmartSearch(

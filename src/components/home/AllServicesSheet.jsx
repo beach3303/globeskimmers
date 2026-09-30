@@ -9,9 +9,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  X, ChevronRight, Utensils, Coffee, Car, Bus, DollarSign, CreditCard,
-  ScanLine, Compass, ShoppingBag, Calendar, Globe, Lightbulb, Store, Toilet,
-  Luggage, BedDouble, CloudSun, Languages, Landmark, Camera,
+  X, ChevronRight, Utensils, Coffee, DollarSign, CreditCard, ScanLine, Compass, ShoppingBag, Globe, Store, Toilet, CloudSun, Languages, Landmark, Camera,
 } from 'lucide-react';
 import { useDismissable } from '@/lib/dismissStack';
 import { IVORY, IVORY_2, TEAL_DEEP } from '@/components/redesign/constants';
@@ -19,20 +17,12 @@ import { IVORY, IVORY_2, TEAL_DEEP } from '@/components/redesign/constants';
 // Every destination from the old 9-tile finder grid + 10-tile Explore grid,
 // under the doctrine's five group headers. Subtitles carry over from the old
 // tiles (tablet FEATURES/GRADS wording where the phone tile had none).
-// "Events" routes into ThingsToDo (EventsRow's world lives there today).
 const GROUPS = [
   {
     header: 'Eat & drink',
     items: [
       { icon: Utensils, title: 'Nearby Restaurants', sub: 'Where locals eat', action: 'Places to Eat' },
       { icon: Coffee, title: 'Coffee Finder', sub: 'Cafés near you', action: 'Coffee' },
-    ],
-  },
-  {
-    header: 'Get around',
-    items: [
-      { icon: Car, title: 'Book a Ride', sub: 'Cars · transfers · rides', action: 'Get A Ride' },
-      { icon: Bus, title: 'Transit Info', sub: 'Routes & times', action: 'Transportation' },
     ],
   },
   {
@@ -48,18 +38,14 @@ const GROUPS = [
     items: [
       { icon: Compass, title: 'Things to do', sub: 'Sights · tours', action: 'Things to Do' },
       { icon: ShoppingBag, title: 'Shopping', sub: 'Markets · malls', action: 'Shopping' },
-      { icon: Calendar, title: 'Events', sub: 'Concerts · sports · shows', action: 'Things to Do' },
       { icon: Globe, title: 'Virtual Passport', sub: 'Stamps · memories', action: 'Passport' },
-      { icon: Lightbulb, title: 'Insight', sub: 'Plan it like a pro', action: 'Insight' },
     ],
   },
   {
     header: 'Essentials',
     items: [
-      { icon: BedDouble, title: 'Find a Hotel', sub: 'Best price · all sites', action: 'Find a Hotel' },
       { icon: Store, title: 'Convenience', sub: '24/7 essentials', action: 'Convenience Store' },
       { icon: Toilet, title: 'Restroom Finder', sub: 'Clean & rated', action: 'Restroom' },
-      { icon: Luggage, title: 'Essentials', sub: 'eSIM · bags · stays', action: 'Travel Essentials' },
       { icon: CloudSun, title: 'Weather', sub: 'Local forecast', action: 'Weather' },
       { icon: Languages, title: 'Phrases', sub: '50 essentials', action: 'Basic Phrases' },
       { icon: Landmark, title: 'Cultural Info', sub: 'Museums · sights', action: 'Culture Information' },

@@ -5,20 +5,13 @@ import { CAT, TEAL_DEEP } from '@/components/redesign/constants';
 import FontScaleButton from '@/components/a11y/FontScaleButton';
 import HomeRows from '@/components/home/HomeRows';
 import StampsNearYou from '@/components/home/StampsNearYou';
-import StayAnchor from '@/components/home/StayAnchor';
-import EscapesRow from '@/components/home/EscapesRow';
 import RightNowStrip from '@/components/home/RightNowStrip';
-import WhereToStay from '@/components/home/WhereToStay';
-import EventsRow from '@/components/home/EventsRow';
-import MyTripCard from '@/components/home/MyTripCard';
 import WishlistCard from '@/components/home/WishlistCard';
-import VibeBundles from '@/components/home/VibeBundles';
 import DreamersCorner from '@/components/home/DreamersCorner';
 import ExperiencesRow from '@/components/home/ExperiencesRow';
 import SmartSearchBar from '@/components/search/SmartSearchBar';
 import SmartSearchOverlay from '@/components/search/SmartSearchOverlay';
 import DestinationStrip from '@/components/search/DestinationStrip';
-import { getPrimaryStay } from '@/lib/savedLocations';
 
 // iPad / tablet Home layout — implements CLAUDE_CODE_IPAD_BUILD.md §3 "Home".
 // Rendered ONLY at tablet width (HomePage branches on useIsTablet); the phone
@@ -36,7 +29,6 @@ const TABLET_HERO_MIN = 440;
 
 // Feature tiles — 2-up grid, serif title + subtitle, 74px emoji chip.
 const FEATURES = [
-  { cat: CAT.transit,     emoji: '🚌', title: 'Transit Info',       sub: 'Routes & times',   action: 'Transportation' },
   { cat: CAT.food,        emoji: '🍽️', title: 'Nearby Restaurants', sub: 'Where locals eat', action: 'Places to Eat' },
   { cat: CAT.coffee,      emoji: '☕', title: 'Coffee Shop Finder', sub: 'Cafés near you',   action: 'Coffee' },
   { cat: CAT.atm,         emoji: '🏧', title: 'ATM Finder',         sub: 'Skip the fees',    action: 'ATM' },
@@ -48,8 +40,6 @@ const FEATURES = [
 const EXPLORE = [
   { grad: `linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 60%, #FF7DB1 100%)`,     emoji: '🎟️', title: 'Things to do',         sub: 'Sights · tours',         action: 'Things to Do' },
   { grad: 'linear-gradient(135deg, #8B3A1E 0%, #B0472F 60%, #D98A6A 100%)',             emoji: '🛂', title: 'Virtual Passport',       sub: 'Stamps · memories',      action: 'Passport' },
-  { grad: 'linear-gradient(135deg, #4338CA 0%, #6366F1 60%, #A5B4FC 100%)',             emoji: '💡', title: 'Insight',               sub: 'Plan it like a pro',     action: 'Insight' },
-  { grad: 'linear-gradient(135deg, #0E7C66 0%, #14B8A6 60%, #5EEAD4 100%)',             emoji: '🧳', title: 'Travel essentials',      sub: 'eSIM · bags · stays',    action: 'Travel Essentials' },
   { grad: `linear-gradient(135deg, ${CAT.shopping.ink} 0%, #A855F7 60%, #C084FC 100%)`, emoji: '🛍️', title: 'Shopping',             sub: 'Markets · malls',        action: 'Shopping' },
   { grad: `linear-gradient(135deg, ${CAT.culture.ink} 0%, #D97706 60%, #FBBF24 100%)`,  emoji: '🏛️', title: 'Cultural Info',        sub: 'Museums · sights',       action: 'Culture Information' },
   { grad: `linear-gradient(135deg, ${CAT.phrases.ink} 0%, #CA8A04 60%, #EAB308 100%)`,  emoji: '💬', title: 'Basic Language Phrases', sub: '50 essentials',        action: 'Basic Phrases' },
@@ -64,20 +54,19 @@ export default function HomeTablet({
   destinationSearch = null, onDismissDestination,
 }) {
   const ORDER = {
-    home: ["dreamers", "escapes", "rows", "experiences", "stamps"], discovery: ["rows", "dreamers", "escapes", "experiences", "stamps"],
-    domestic: ["stamps", "rows", "dreamers", "experiences", "escapes"], international: ["stamps", "rows", "dreamers", "experiences", "escapes"],
-    planning: ["dreamers", "rows", "escapes", "experiences", "stamps"],
+    home: ["dreamers", "rows", "experiences", "stamps"], discovery: ["rows", "dreamers", "experiences", "stamps"],
+    domestic: ["stamps", "rows", "dreamers", "experiences"], international: ["stamps", "rows", "dreamers", "experiences"],
+    planning: ["dreamers", "rows", "experiences", "stamps"],
   };
   const SEC = {
     rows: <HomeRows key="rows" wide onAction={onAction} />,
     stamps: <StampsNearYou key="stamps" wide onAction={onAction} />,
-    escapes: <EscapesRow key="escapes" wide onAction={onAction} />,
-    // Extracted from HomeRows/EventsRow on phone — without these mounts the
+    // Extracted from HomeRows on phone — without these mounts the
     // tablet silently loses Dreamer's Corner AND every bookable experience.
     dreamers: <DreamersCorner key="dreamers" wide onAction={onAction} />,
     experiences: <ExperiencesRow key="experiences" wide />,
   };
-  const discoverOrder = ORDER[journeyMode] || ["rows", "stamps", "escapes"];
+  const discoverOrder = ORDER[journeyMode] || ["rows", "stamps"];
   const [showSearch, setShowSearch] = useState(false);
   return (
     <div className="mx-auto px-8 pt-6" style={{ maxWidth: 1024 }}>
@@ -219,13 +208,8 @@ export default function HomeTablet({
              cold-start; re-centers as the user moves) ─────────────────── */}
       <div className="mt-9">
         {journeyMode !== "planning" && <RightNowStrip wide onAction={onAction} />}
-        <StayAnchor />
-        {!getPrimaryStay() && ["planning", "international", "domestic"].includes(journeyMode) && <WhereToStay wide />}
         {discoverOrder.map((k) => SEC[k])}
-        <MyTripCard wide />
         <WishlistCard wide />
-        <VibeBundles wide />
-        <EventsRow wide onAction={onAction} />
       </div>
 
       {/* ── EXPLORE MORE — 3-col gradient cards ───────────────────────── */}

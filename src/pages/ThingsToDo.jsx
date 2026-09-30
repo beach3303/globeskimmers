@@ -301,25 +301,10 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
     /** @type {any} */ (window)._gsTDCloseTierMap=onClose;
     /** @type {any} */ (window)._gsTDToggleUserPin=()=>setUserExpanded(e=>!e);
     /** @type {any} */ (window)._gsTDOpenDirs=()=>setShowDirs(true);
-    /** @type {any} */ (window)._gsTDOpenTransport=()=>{
-      // P2 — navigate to Transportation Info page with the destination
-      // pre-filled via URL params + a fromMap flag so the Back button
-      // can navigate(-1) back to the previous page instead of going home.
-      const params=new URLSearchParams({
-        fromMap:'true',
-        to_lat:String(a.lat),
-        to_lng:String(a.lng),
-        to_name:a.displayName?.text||a.name||'',
-        to_address:a.formattedAddress||'',
-      });
-      onClose();
-      navigate(`/Transportation?${params.toString()}`);
-    };
     return()=>{
       delete /** @type {any} */ (window)._gsTDCloseTierMap;
       delete /** @type {any} */ (window)._gsTDToggleUserPin;
       delete /** @type {any} */ (window)._gsTDOpenDirs;
-      delete /** @type {any} */ (window)._gsTDOpenTransport;
     };
   },[onClose,a,navigate]);
   // "Reset view" handler — re-fits bounds to both pins AND re-opens the
@@ -394,16 +379,10 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       const statusHtml=st.today
         ? `<span style="font-weight:700;color:${stColor};font-size:calc(12px*var(--fs));">${st.label}</span><span style="color:#64748B;margin-left:6px;font-size:calc(12px*var(--fs));">· ${st.today}</span>`
         : `<span style="font-weight:700;color:${stColor};font-size:calc(12px*var(--fs));">${st.label}</span>`;
-      // P1 — Directions button (always shown). P2 — Transportation Info
-      // button (only when distance < 100 mi, since flights are needed
-      // for longer distances and public transit lookups don't make
-      // sense). Buttons stack horizontally below the travel-distance
-      // strip. Directions opens the Google/Apple/Waze app-picker modal
-      // ON TOP of this overlay; Transportation navigates to the
-      // Transportation Info page with destination pre-filled.
+      // Directions button (always shown) — opens the maps chooser sheet
+      // ON TOP of this overlay.
       const ctaButtonsHtml=`<div style="display:flex;gap:6px;margin-top:8px;">
         <button onclick="window._gsTDOpenDirs&&window._gsTDOpenDirs()" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px;border:none;border-radius:8px;background:linear-gradient(135deg,#D97706,#F59E0B);color:#fff;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">🧭 Directions</button>
-        ${distMi<100?`<button onclick="window._gsTDOpenTransport&&window._gsTDOpenTransport()" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px;border:none;border-radius:8px;background:#EDE9FE;color:#7C3AED;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">🚌 Transit</button>`:''}
       </div>`;
       destMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:250px;padding:12px 14px;position:relative;"><button onclick="window._gsTDCloseTierMap&&window._gsTDCloseTierMap()" aria-label="Close" style="position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:14px;font-weight:800;z-index:10;display:flex;align-items:center;justify-content:center;font-family:inherit;">✕</button><div style="font-weight:700;font-size:calc(15px*var(--fs));color:#1A2332;margin-bottom:5px;line-height:1.3;padding-right:30px;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:calc(12px*var(--fs));padding:6px 9px;border-radius:7px;background:${stBg};margin-bottom:8px;">${statusHtml}</div><div style="font-size:12px;padding:7px 10px;border-radius:7px;background:#FEF3C7;color:#92400E;font-weight:700;">${travelTxt} · ${distStr}</div>${ctaButtonsHtml}</div>`,{maxWidth:270,closeButton:false,autoClose:false,closeOnClick:false});
       // Fit both pins into view + auto-open destination popup. Uses the

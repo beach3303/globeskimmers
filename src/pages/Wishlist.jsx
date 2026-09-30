@@ -64,13 +64,6 @@ export default function WishlistPage() {
   // kind -> primary booking action.
   const act = async (it) => {
     const k = it.kind;
-    if (k === "hotel" || k === "city") {
-      logDiscover("wishlist_cta", { kind: k, title: it.title, action: "hotels", city: it.city, country: it.country });
-      // FindAHotel expects an OBJECT for presetCity; a bare string must go via
-      // presetQuery (see WhereToStay.jsx) or the destination is silently dropped.
-      navigate(createPageUrl("FindAHotel"), { state: { presetQuery: it.city || it.title } });
-      return;
-    }
     // attraction / tour / food / event -> find bookable experiences (Viator).
     logDiscover("wishlist_cta", { kind: k, title: it.title, action: k === "event" ? "tickets" : "tours", city: it.city, country: it.country });
     let url = it.url;

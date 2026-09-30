@@ -14,8 +14,8 @@
 // the licenses (and by our always-label-sources rule): the lightbox caption
 // links "artist · license" to the Commons file page.
 //
-// The CTA hands { name, city, country, lat, lng } to /SmartPackages via the
-// EXACT router-state mechanism SmartSearchOverlay already uses — one handoff,
+// (The old package CTA left with the 2026-09-29 pivot; the gallery keeps
+// flights, photos and the wishlist heart.)
 // not two. When a price tease is on screen (below) the same handoff ALSO
 // carries { checkin, checkout } so the composer opens pre-dated.
 //
@@ -40,17 +40,15 @@
 // opens the WORKER-BUILT link (marker intact) via trackAffiliateClick +
 // openPartner — the URL is never rebuilt client-side.
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
-import { createPageUrl } from "@/utils";
 import { logDiscover } from "@/lib/logDiscover";
 import { flushEvents } from "@/lib/analytics";
 import { trackAffiliateClick } from "@/lib/affiliate";
 import { openPartner } from "@/lib/openPartner";
 import { useLocation } from "@/components/location/LocationContext";
-import { TEAL_DEEP, IVORY_2 } from "@/components/redesign/constants";
+import { IVORY_2 } from "@/components/redesign/constants";
 
 const INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
 const PAPER = "#FBF6EC";
@@ -163,7 +161,6 @@ function normalizeFlight(d) {
 }
 
 export default function DreamGallery({ open, onClose, dest, onView, viewLabel = "View details" }) {
-  const navigate = useNavigate();
   const { currentGpsLocation } = useLocation();
   const [active, setActive] = useState("");
   // { [`destKey:bucketId`]: { status: 'loading'|'done', photos: [...] } } — an error
@@ -200,7 +197,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
 
   const name = dest?.name ? String(dest.name) : "";
   const destKey = name ? `${name}|${dest?.country || ""}` : "";
-  // Same strictness as SmartPackages' own reader — real numbers only, no
+  // Same strictness as the old package reader — real numbers only, no
   // string coercion. No coords → the estimate fetch is skipped entirely.
   const hasCoords = Number.isFinite(dest?.lat) && Number.isFinite(dest?.lng);
   const estSlot = estimates[destKey];
@@ -303,11 +300,11 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, lightboxIdx, onClose, photos.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, lightboxIdx, onClose, photos.length]);  
 
   useEffect(() => {
     if (open && name) logDiscover("dream_gallery_open", { place_name: name, country: dest?.country || "" });
-  }, [open, destKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, destKey]);  
 
   // Dwell — foreground ms per gallery session, measured open → close (or
   // dest-change / unmount / pagehide, whichever ends the session first).
@@ -354,7 +351,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
       window.removeEventListener("pagehide", onPageHide);
       report();
     };
-  }, [open, destKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, destKey]);  
 
   // Lazy per-bucket fetch — first select only; results (including honest
   // empties) cached in state for the life of the destination.
@@ -375,7 +372,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
       setByBucket((m) => ({ ...m, [k]: { status: "done", photos } }));
     })();
     return () => { cancelled = true; };
-  }, [open, active, destKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, active, destKey]);  
 
   // Lazy price-tease estimate — once per destination, coords required, and
   // fully parallel to the photo fetches (photos never wait on it).
@@ -392,7 +389,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
       setEstimates((m) => ({ ...m, [destKey]: { status: "done", est: normalized } }));
     })();
     return () => { cancelled = true; };
-  }, [open, destKey, hasCoords]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, destKey, hasCoords]);  
 
   // Lazy flight-months fetch — parallel to the estimate, once per destKey,
   // never blocking photos or the hotel tease. Needs BOTH ends: finite dest
@@ -411,7 +408,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
       setFlights((m) => ({ ...m, [destKey]: { status: "done", flight: normalized } }));
     })();
     return () => { cancelled = true; };
-  }, [open, destKey, hasCoords, hasOrigin]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, destKey, hasCoords, hasOrigin]);  
 
   // Lazy destination-intel blurb — once per destKey, coords required, parallel
   // to every other fetch (photos never wait on it). Read defensively: only a
@@ -434,7 +431,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
       setIntels((m) => ({ ...m, [destKey]: { status: "done", about } }));
     })();
     return () => { cancelled = true; };
-  }, [open, destKey, hasCoords]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, destKey, hasCoords]);  
 
   // One view event per shown estimate — keyed by destKey so a bucket switch
   // or reopen of the same destination never re-fires it.
@@ -442,7 +439,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
     if (!open || !est || teaseLoggedRef.current.has(destKey)) return;
     teaseLoggedRef.current.add(destKey);
     logDiscover("dream_tease_view", { place_name: name, total: est.stayTotal, currency: est.currency });
-  }, [open, est, destKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, est, destKey]);  
 
   // One view event per SHOWN flight line — the line only renders inside the
   // tease module, so it counts as shown only when est AND flight both exist.
@@ -450,7 +447,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
     if (!open || !est || !flight || flightLoggedRef.current.has(destKey)) return;
     flightLoggedRef.current.add(destKey);
     logDiscover("flight_months_view", { dest: name, month: flight.month, price: flight.price });
-  }, [open, est, flight, destKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, est, flight, destKey]);  
 
   // A vanished list (every image erroring into `failed`) must also CLEAR the
   // lightbox index — the render clamp only hides it, leaving a stale index that
@@ -459,7 +456,7 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
   // clear a legitimate index.
   useEffect(() => {
     if (lightboxIdx != null && !loading && photos.length === 0) setLightboxIdx(null);
-  }, [photos.length, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [photos.length, loading]);  
 
   if (!open || !name) return null;
 
@@ -489,19 +486,6 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
     return !(s && s.status === "done" && s.photos.length === 0);
   });
 
-  const buildTrip = () => {
-    logDiscover("dream_gallery_build_trip", { place_name: name, country });
-    if (est) logDiscover("dream_tease_build", { place_name: name, total: est.stayTotal, currency: est.currency });
-    // Same router-state handoff SmartSearchOverlay uses — SmartPackages reads
-    // routerState.dest and checks Number.isFinite(lat/lng) itself, so missing
-    // coords degrade to its own typed search, never a crash. With a tease on
-    // screen the estimate's dates ride along so the composer opens pre-dated;
-    // without one the state is byte-for-byte what it was before.
-    const state = { dest: { name, city: dest?.city, country: dest?.country, lat: dest?.lat, lng: dest?.lng } };
-    if (est) { state.checkin = est.checkin; state.checkout = est.checkout; }
-    navigate(createPageUrl("SmartPackages"), { state });
-    onClose?.();
-  };
 
   const creditLine = (p) => [p.artist, p.license].filter(Boolean).join(" · ");
 
@@ -705,13 +689,6 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
               </button>
             )}
           </div>
-          <button
-            onClick={buildTrip}
-            className="flex-none h-11 rounded-xl font-semibold text-white text-[calc(13.5px*var(--fs))] px-4"
-            style={{ background: TEAL_DEEP }}
-          >
-            Build my vacation
-          </button>
         </div>
       </div>
 

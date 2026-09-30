@@ -17,7 +17,7 @@ import { TEAL_DEEP, IVORY_2 } from "@/components/redesign/constants";
 
 const INK = "#16302B", SUB = "#71827D", EDGE = "#E6DFD0";
 
-export default function DreamAnswerCard({ destination, onView, onPerfectDay, onBuildTrip, onSearchThings }) {
+export default function DreamAnswerCard({ destination, onView, onPerfectDay, onSearchThings }) {
   const [showGallery, setShowGallery] = useState(false);
   if (!destination?.name) return null;
   const grounded = !!destination.grounded;
@@ -55,15 +55,6 @@ export default function DreamAnswerCard({ destination, onView, onPerfectDay, onB
               Plan a perfect day
             </button>
           </div>
-          {/* Primary-adjacent: the Smart-Package composer (needs the grounded
-              coords, so it never renders on the unverified branch). */}
-          <button
-            onClick={onBuildTrip}
-            className="mt-2 w-full h-11 rounded-xl font-semibold text-[calc(13.5px*var(--fs))]"
-            style={{ background: "#fff", color: INK, border: `1px solid ${EDGE}` }}
-          >
-            Build my vacation
-          </button>
           {/* Quiet secondary: browse real photos of the place first. */}
           <button
             onClick={() => setShowGallery(true)}

@@ -55,12 +55,8 @@ import CoffeeFinder from './pages/CoffeeFinder';
 import ConvenienceStore from './pages/ConvenienceStore';
 import CultureInformation from './pages/CultureInformation';
 import DemandReport from './pages/DemandReport';
-import FindAHotel from './pages/FindAHotel';
-import GetARide from './pages/GetARide';
 import Home from './pages/Home';
-import Insight from './pages/Insight';
 import MoneyExchange from './pages/MoneyExchange';
-import MyTrip from './pages/MyTrip';
 import Onboarding from './pages/Onboarding';
 import Passport from './pages/Passport';
 import PerfectDay from './pages/PerfectDay';
@@ -69,13 +65,9 @@ import RestroomFinder from './pages/RestroomFinder';
 import SavedLocations from './pages/SavedLocations';
 import Settings from './pages/Settings';
 import Shopping from './pages/Shopping';
-import SmartPackages from './pages/SmartPackages';
 import SmartPriceScanner from './pages/SmartPriceScanner';
 import SmartTextScanner from './pages/SmartTextScanner';
 import ThingsToDo from './pages/ThingsToDo';
-import Transportation from './pages/Transportation';
-import TravelEssentials from './pages/TravelEssentials';
-import Trips from './pages/Trips';
 import Weather from './pages/Weather';
 import Wishlist from './pages/Wishlist';
 import __Layout from './Layout.jsx';
@@ -90,12 +82,8 @@ export const PAGES = {
     "ConvenienceStore": ConvenienceStore,
     "CultureInformation": CultureInformation,
     "DemandReport": DemandReport,
-    "FindAHotel": FindAHotel,
-    "GetARide": GetARide,
     "Home": Home,
-    "Insight": Insight,
     "MoneyExchange": MoneyExchange,
-    "MyTrip": MyTrip,
     "Onboarding": Onboarding,
     "Passport": Passport,
     "PerfectDay": PerfectDay,
@@ -104,13 +92,9 @@ export const PAGES = {
     "SavedLocations": SavedLocations,
     "Settings": Settings,
     "Shopping": Shopping,
-    "SmartPackages": SmartPackages,
     "SmartPriceScanner": SmartPriceScanner,
     "SmartTextScanner": SmartTextScanner,
     "ThingsToDo": ThingsToDo,
-    "Transportation": Transportation,
-    "TravelEssentials": TravelEssentials,
-    "Trips": Trips,
     "Weather": Weather,
     "Wishlist": Wishlist,
 }

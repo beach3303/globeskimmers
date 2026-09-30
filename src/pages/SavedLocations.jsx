@@ -201,18 +201,6 @@ export default function SavedLocationsPage() {
             <span className="font-semibold uppercase" style={{ fontFamily: ED_MONO, fontSize: t(fs(11.5), fs(11)), letterSpacing: '.08em', color: TEAL_DEEP }}>Add New Location</span>
           </button>
 
-          {/* My Trip — the bookings hub (tours/stays/tickets the user started) */}
-          <button
-            onClick={() => navigate(createPageUrl('MyTrip'))}
-            className="w-full mb-6 p-4 rounded-[18px] flex items-center justify-between transition-colors hover:bg-black/[0.02]"
-            style={{ background: '#FFFFFF', border: `1px solid ${ED_RULE}` }}
-          >
-            <span className="flex items-center gap-3">
-              <span className="text-[18px] leading-none">🧳</span>
-              <span className="font-semibold uppercase" style={{ fontFamily: ED_MONO, fontSize: t(fs(11.5), fs(11)), letterSpacing: '.08em', color: ED_INK }}>My Trip</span>
-            </span>
-            <ChevronLeft size={18} color={ED_INK3} strokeWidth={2.2} style={{ transform: 'rotate(180deg)' }} />
-          </button>
 
           {/* Wishlist — places & experiences the user is dreaming of */}
           <button

@@ -29,7 +29,6 @@ export const CATEGORIES = [
   { key: 'money',       action: 'Money Exchange',      emoji: '💱', title: 'Money Exchange',     catKey: 'money' },
   { key: 'atm',         action: 'ATM',                 emoji: '🏧', title: 'ATM Finder',         catKey: 'atm' },
   { key: 'culture',     action: 'Culture Information',  emoji: '🏛️', title: 'Cultural Info',      catKey: 'culture' },
-  { key: 'transit',     action: 'Transportation',      emoji: '🚌', title: 'Transit Info',       catKey: 'transit' },
   { key: 'convenience', action: 'Convenience Store',    emoji: '🏪', title: 'Convenience',        catKey: 'convenience' },
   { key: 'restroom',    action: 'Restroom',            emoji: '🚻', title: 'Restroom Finder',    catKey: 'restroom' },
   { key: 'weather',     action: 'Weather',             emoji: '☀️', title: 'Weather',            catKey: 'weather' },
@@ -42,7 +41,7 @@ export const CATEGORY_BY_KEY = Object.fromEntries(CATEGORIES.map((c) => [c.key, 
 // attractions). Context boosts stack on top of these.
 const BASE_WEIGHT = {
   eat: 10, shopping: 9, coffee: 8, attractions: 8,
-  money: 5, atm: 5, culture: 4, transit: 4,
+  money: 5, atm: 5, culture: 4,
   convenience: 3, restroom: 3, weather: 2, phrases: 2,
 };
 
@@ -163,20 +162,20 @@ export function buildHomeContext({ now, timezone, latitude, weather, mode = 'dis
 // Mode boost = the "why are you here" layer. This is where home vs domestic vs
 // international vs planning diverge.
 const MODE_BOOST = {
-  international: { money: 12, atm: 11, eat: 8, phrases: 6, transit: 4 }, // just landed abroad
-  domestic:     { transit: 8, eat: 7, attractions: 6, atm: 4, shopping: 3 }, // new city — NO currency/phrases
+  international: { money: 12, atm: 11, eat: 8, phrases: 6 }, // just landed abroad
+  domestic:     { eat: 7, attractions: 6, atm: 4, shopping: 3 }, // new city — NO currency/phrases
   home:         { eat: 4, coffee: 4, attractions: 4, shopping: 3, culture: 2 }, // gentle local discovery
   discovery:    { eat: 4, coffee: 4, attractions: 4, shopping: 3 }, // unknown → treat like home
   planning:     { attractions: 10, eat: 6, culture: 5, shopping: 3 }, // dreaming about a place
 };
 
 const DAYPART_BOOST = {
-  earlyMorning: { coffee: 9, eat: 5, attractions: 2, transit: 2 },
-  morning:      { coffee: 8, eat: 5, attractions: 4, transit: 2 },
+  earlyMorning: { coffee: 9, eat: 5, attractions: 2 },
+  morning:      { coffee: 8, eat: 5, attractions: 4 },
   midday:       { eat: 7, shopping: 5, attractions: 4 },
   afternoon:    { shopping: 6, attractions: 5, coffee: 3 },
   evening:      { eat: 8, attractions: 5, shopping: 2 },
-  lateNight:    { convenience: 8, atm: 5, transit: 5, eat: 3 },
+  lateNight:    { convenience: 8, atm: 5, eat: 3 },
 };
 
 const WEATHER_BOOST = {

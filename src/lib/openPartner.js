@@ -27,39 +27,3 @@ export async function openPartner(url) {
     try { window.open(url, "_blank"); } catch { /* ignore */ }
   }
 }
-
-// openPartnerAndWait — the same sheet, but resolves when the traveler closes it
-// (native `browserFinished`). Used by in-app checkout: when the payment sheet
-// closes we ask the worker whether the session booked.
-//
-// Returns true only when it actually WAITED for the sheet to close. Web has no
-// close signal: it opens a tab and resolves at once with false — the caller must
-// not poll on its own there (the session is legitimately still "pending" while
-// the traveler types a card number in the other tab) and instead offers
-// "I've paid — check my booking".
-//
-// While the native sheet is up, `pendingFinish` holds its resolver so the
-// checkout hand-back (the worker's "Return to GlobeSkimmers" link, caught by
-// the appUrlOpen listener in AuthContext) can settle the wait the same way a
-// tap on Done does: Browser.close() dismisses the view controller WITHOUT
-// emitting browserFinished (the plugin only fires it from the user's Done), so
-// without closeCheckoutSheet() the sheet would wait forever.
-let pendingFinish = null;
-export const isCheckoutSheetOpen = () => pendingFinish != null;
-export function closeCheckoutSheet() { const f = pendingFinish; if (f) f(); }
-
-export async function openPartnerAndWait(url) {
-  if (!url) return false;
-  if (!Capacitor.isNativePlatform()) {
-    try { window.open(url, "_blank", "noopener"); } catch { /* ignore */ }
-    return false;
-  }
-  await new Promise((resolve) => {
-    let done = false, handle = null;
-    const finish = () => { if (done) return; done = true; if (pendingFinish === finish) pendingFinish = null; try { handle?.remove?.(); } catch { /* ignore */ } resolve(); };
-    pendingFinish = finish;
-    Browser.addListener("browserFinished", finish).then((h) => { handle = h; }).catch(() => {});
-    Browser.open({ url, presentationStyle: "popover" }).catch(() => finish());
-  });
-  return true;
-}

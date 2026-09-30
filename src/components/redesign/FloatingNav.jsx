@@ -27,7 +27,6 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
   // iPad so the chrome is consistent — each item is a real emoji + label.
   const items = [
     { id: 'home',     emoji: '🏠', label: 'Home',     route: 'Home' },
-    { id: 'trips',    emoji: '🧳', label: 'Trips',    route: 'Trips' },
     { id: 'passport', emoji: '🛂', label: 'Passport', route: 'Passport' },
     { id: 'settings', emoji: '⚙️', label: 'Settings', route: 'Settings' },
   ];

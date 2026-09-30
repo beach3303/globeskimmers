@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { MapPin, ChevronRight } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -8,20 +8,17 @@ import { useLocation, isLocationAskSnoozedToday, snoozeLocationAskToday, readOpe
 import LocationModePicker from "../components/location/LocationModePicker";
 import StampsNearYou from "../components/home/StampsNearYou";
 import DreamShelf from "../components/home/DreamShelf";
-import TodayCard from "../components/home/TodayCard";
-import EventsRow from "../components/home/EventsRow";
 import DealRadarRow from "../components/home/DealRadarRow";
 import WanderlustLine from "../components/home/WanderlustLine";
 // fetchHomeRows is DreamersCorner's shared /home/rows client cache — Home
-// reads PackageHero's backdrop card through it, so both consumers
-// (DreamersCorner, PackageHero) cost ONE network call per location.
+// reads it through the shared rows cache (DreamersCorner).
 // CLUTTER CUT (founder, 2026-09-20): HomeRows (Near you now / Around the
 // city today / In the city), ExperiencesRow ("Worth the drive"), EscapesRow
 // ("Trips & escapes") and the YOUR TRIP zone (StayAnchor, MyTripCard,
 // WishlistCard) no longer mount on the phone Home. StayAnchor + WishlistCard
 // moved to MyTrip.jsx; the spot rows get a new home in the next slice.
 // HomeTablet still mounts its own set — untouched, tabled.
-import DreamersCorner, { fetchHomeRows } from "../components/home/DreamersCorner";
+import DreamersCorner from "../components/home/DreamersCorner";
 import AllServicesSheet from "../components/home/AllServicesSheet";
 import { getTravelMode } from "@/lib/homeContext";
 import { TEAL_DEEP, IVORY, IVORY_2 } from "../components/redesign/constants";
@@ -148,7 +145,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!locationLoading) loadUserAndWeather();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [locationLoading, locationMode, selectedLocation, currentGpsLocation, profile]);
 
   // ENTRY FLOW — one ATOMIC decision (so the splash and the location picker can
@@ -195,7 +192,7 @@ export default function HomePage() {
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [locationLoading, signInTick, profile, showWelcome, locationMode, selectedLocation, currentGpsLocation]);
 
   // Tell LocationContext's mismatch detector to defer while the chooser / welcome
@@ -243,7 +240,7 @@ export default function HomePage() {
       try { await getCurrentLocation(); } catch { /* silent — no prompt, no error UI */ }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [locationMode, currentGpsLocation]);
 
   // Resolve the physical GPS location's timezone for the "You're here" row. Only
@@ -264,7 +261,7 @@ export default function HomePage() {
       } catch { if (!cancelled) setPhysicalTz(null); }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [locationMode, currentGpsLocation]);
 
   useEffect(() => {
@@ -470,15 +467,10 @@ export default function HomePage() {
       "Weather": "Weather",
       "Things to Do": "ThingsToDo",
       "Culture Information": "CultureInformation",
-      "Insight": "Insight",
       "Passport": "Passport",
       "Coffee": "CoffeeFinder",
       "Restroom": "RestroomFinder",
       "Places to Eat": "PlacesToEat",
-      "Transportation": "Transportation",
-      "Get A Ride": "GetARide",
-      "Find a Hotel": "FindAHotel",
-      "Travel Essentials": "TravelEssentials",
       "Shopping": "Shopping",
       "Smart Text Scanner": "SmartTextScanner",
     };
@@ -521,43 +513,7 @@ export default function HomePage() {
     }
   };
 
-  // Smart-Package entry — now the photo-led PackageHero at the top of the
-  // DREAM & PLAN zone (both stacks). Same analytics event as before.
-  const openSmartPackage = () => {
-    trackEvent('feature_used', { feature_name: 'smart_package_entry' });
-    navigate(createPageUrl('SmartPackages'));
-  };
 
-  // First Dreamer's Corner card — feeds PackageHero's photo backdrop + mono
-  // destination hint. Read through fetchHomeRows (DreamersCorner's shared,
-  // TTL'd client cache over POST /home/rows), so this is a cache hit whenever
-  // DreamersCorner/HomeRows have already asked for the same 0.1°-rounded
-  // location. Null (→ gold-gradient hero) when there's no location, no
-  // whereToNext row, or the fetch fails — all silent.
-  const [dreamerCard, setDreamerCard] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    const loc = getActiveLocation();
-    const latitude = loc?.coordinates?.latitude;
-    const longitude = loc?.coordinates?.longitude;
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) { setDreamerCard(null); return; }
-    (async () => {
-      try {
-        const { data, error } = await fetchHomeRows({
-          latitude,
-          longitude,
-          cityName: loc?.address?.city || '',
-          countryName: loc?.address?.country || '',
-        });
-        if (cancelled) return;
-        const rows = !error && Array.isArray(data?.rows) ? data.rows : [];
-        const wtn = rows.find((r) => r?.key === 'whereToNext' && Array.isArray(r.cards) && r.cards.length > 0);
-        setDreamerCard(wtn?.cards?.[0] || null);
-      } catch { if (!cancelled) setDreamerCard(null); }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locationMode, selectedLocation, currentGpsLocation]);
 
   // ── Journey-state: adapt which Discover sections LEAD, by context ──────────
   // home/discovery (you're based here) → escapes/plan first; on a trip
@@ -578,7 +534,7 @@ export default function HomePage() {
       homeLat: profile?.home_lat,
       homeLng: profile?.home_lng,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [locationMode, selectedLocation, currentGpsLocation, profile]);
 
   // Welcome-splash actions:
@@ -838,7 +794,7 @@ export default function HomePage() {
           NOTHING when its data allows nothing, so the zones self-compact:
             NEARBY NOW  — finder chips → today's answer → stamps (+ planner
               entry) → dated events;
-            DREAM & PLAN — PackageHero → Dreamer's Corner → dream shelf
+            DREAM & PLAN — Dreamer's Corner → dream shelf
               (dream stack) → deal radar.
           Gone from Home: the spot rows (HomeRows — to be re-homed on the
           Nearby surface), "Worth the drive" (ExperiencesRow), "Trips &
@@ -868,19 +824,11 @@ export default function HomePage() {
         </div>
       </div>
 
-      <TodayCard onAction={handleQuickAction} />
       <StampsNearYou onAction={handleQuickAction} />
-      {/* EventsRow: dated happenings only. The undated Viator experiences
-          sub-rail ("Worth the drive") left Home in the 2026-09-20 cut. */}
-      <EventsRow />
 
       {/* ── ZONE 2: DREAM & PLAN ───────────────────────────────────────── */}
       <ZoneKicker label="DREAM & PLAN" />
 
-      {/* PackageHero — photo-led Smart-Packages doorway, TOP of the zone in
-          both stacks. Backdrop borrows the first Dreamer's Corner photo when
-          the shared rows cache has it; gold gradient otherwise. */}
-      <PackageHero card={dreamerCard} onOpen={openSmartPackage} />
       {/* DreamersCorner contract (per the extracted component): self-fetching
           via its shared fetchHomeRows cache; optional onAction renders the
           worker row's "See all →" (whereToNext.seeAll.action = Things to Do). */}
@@ -969,64 +917,3 @@ function ZoneKicker({ label }) {
   );
 }
 
-// ── PackageHero — photo-led Smart-Packages doorway (both stacks) ───────────
-// Replaces the quiet SmartPackageCard text row at the top of DREAM & PLAN.
-// Full-width card: backdrop is the first Dreamer's Corner card's photo when
-// available (else the house gold gradient), scrimmed for legibility; serif
-// "Build a full trip" + an honest mono bookability subtitle + a mono hint
-// (the card's "City, Country") when we have one; teal CTA. The whole card is
-// one button → SmartPackages (onOpen carries the smart_package_entry event).
-function PackageHero({ card, onOpen }) {
-  const photoUrl = card?.photoUrl || null;
-  const hint = card?.whyVisit || null; // "City, Country" from the whereToNext row
-  const credit = card?.photographer || card?.credit || null;
-  return (
-    <div className="px-4 pb-3">
-      <div className="max-w-md mx-auto">
-        <motion.button
-          whileTap={{ scale: 0.98 }}
-          onClick={onOpen}
-          className="relative w-full overflow-hidden rounded-2xl text-left"
-          style={{ border: '1px solid #E6DFD0', boxShadow: '0 8px 20px -16px rgba(22,17,13,.4)' }}
-        >
-          {/* Backdrop — dreamer photo or the house gold gradient. */}
-          <div
-            aria-hidden
-            className="absolute inset-0"
-            style={
-              photoUrl
-                ? { backgroundImage: `url(${photoUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-                : { background: 'linear-gradient(135deg,#E7C7A0,#C98A2E)' }
-            }
-          />
-          {/* Scrim — keeps the white type honest on any photo. */}
-          <div aria-hidden className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(22,17,13,0.10) 0%, rgba(22,17,13,0.66) 100%)' }} />
-          <div className="relative p-4 pt-14">
-            {hint && (
-              <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] font-semibold truncate" style={{ color: 'rgba(255,252,247,0.85)' }}>
-                Dreaming of {hint}?
-              </div>
-            )}
-            <div className="font-serif text-[calc(24px*var(--fs))] leading-tight mt-0.5" style={{ color: '#FFFCF7' }}>
-              Build a full trip
-            </div>
-            <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] mt-1" style={{ color: 'rgba(255,252,247,0.85)' }}>
-              Hotel books in-app; tours &amp; flights a tap away
-            </div>
-            <div className="mt-3 inline-flex items-center gap-1 rounded-full px-3.5 py-2" style={{ background: '#17A38F' }}>
-              <span className="text-[calc(11.5px*var(--fs))] font-semibold" style={{ color: '#FFFCF7' }}>Start planning</span>
-              <ChevronRight size={14} color="#FFFCF7" strokeWidth={2.5} />
-            </div>
-          </div>
-          {/* Photo credit — required courtesy for Commons/Openverse imagery;
-              text only (the card is a single button, so no nested link). */}
-          {photoUrl && credit && (
-            <span className="absolute bottom-1.5 right-3 text-[9px]" style={{ color: 'rgba(255,252,247,0.65)' }}>
-              {credit}
-            </span>
-          )}
-        </motion.button>
-      </div>
-    </div>
-  );
-}
