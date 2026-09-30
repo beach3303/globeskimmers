@@ -13,6 +13,7 @@ import { showToast } from "@/components/Toast";
 import { countryCode } from "@/lib/countries";
 import { listPassport, getHandle, getSocialProfile, setSocialProfile, getShareLink, setAgeGate, socialFollow } from "@/lib/passport";
 import Luggage from "@/components/passport/Luggage";
+import PhotoPackets from "@/components/passport/PhotoPackets";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -238,6 +239,7 @@ export default function ProfilePage() {
           <span aria-hidden style={{ color: "#D6A64A", fontSize: fs(18) }}>🛂</span>
         </button>
       </div>
+      <PhotoPackets stamps={stamps} title="Photo packets" />
       <Luggage stamps={stamps} readOnly={false} />
     </div>
   );
