@@ -73,3 +73,1059 @@ den,Rocky Mountain National Park,,national_park,40.3428,-105.6836,"Estes Park, C
 nyc,DUMBO — Washington Street View,,landmark,40.7033,-73.9894,"Brooklyn, NY",US,regional,120,manhattan bridge pose spot
 phl,LOVE Park,,landmark,39.954,-75.1652,"Philadelphia, PA",US,regional,100,pose spot
 phl,Reading Terminal Market,,market,39.9533,-75.1593,"Philadelphia, PA",US,regional,150,
+lon,Big Ben,Q41225,landmark,51.5007,-0.1246,London,GB,world,250,pose spot: Westminster Bridge
+lon,Tower of London,Q62378,historic,51.5081,-0.0759,London,GB,world,400,book Crown Jewels early
+lon,Tower Bridge,Q83125,landmark,51.5055,-0.0754,London,GB,world,300,pose spot: riverside walkways
+lon,Buckingham Palace,Q42182,historic,51.5014,-0.1419,London,GB,world,400,Changing of the Guard
+lon,British Museum,Q6373,museum,51.5194,-0.1270,London,GB,world,250,free entry
+lon,London Eye,Q160659,landmark,51.5033,-0.1196,London,GB,world,300,
+lon,Westminster Abbey,Q5933,historic,51.4994,-0.1273,London,GB,world,250,
+lon,St Paul's Cathedral,Q173882,historic,51.5138,-0.0984,London,GB,world,250,dome climb
+lon,Trafalgar Square,Q130206,landmark,51.5080,-0.1281,London,GB,world,300,lion statues pose spot
+lon,Piccadilly Circus,,landmark,51.5101,-0.1340,London,GB,world,200,neon screens pose spot
+lon,Hyde Park,,park,51.5027,-0.1527,London,GB,national,1500,Speakers' Corner + Serpentine
+lon,Borough Market,,market,51.5055,-0.0910,London,GB,national,200,food stalls
+rom,Colosseum,Q10285,historic,41.8902,12.4922,Rome,IT,world,400,pose spot: northwest plaza
+rom,Trevi Fountain,Q185382,landmark,41.9009,12.4833,Rome,IT,world,150,filmed: La Dolce Vita
+rom,Pantheon,Q99309,historic,41.8986,12.4769,Rome,IT,world,200,Piazza della Rotonda
+rom,Spanish Steps,,landmark,41.9058,12.4823,Rome,IT,world,200,filmed: Roman Holiday
+rom,Roman Forum,,historic,41.8925,12.4853,Rome,IT,world,600,entrance Via dei Fori Imperiali
+rom,Piazza Navona,,landmark,41.8992,12.4731,Rome,IT,world,300,Bernini fountains
+rom,St Peter's Basilica,Q12512,historic,41.9022,12.4573,Vatican City,VA,world,500,square pose spot
+rom,Vatican Museums,Q182955,museum,41.9065,12.4536,Vatican City,VA,world,250,Sistine Chapel inside
+rom,Castel Sant'Angelo,,landmark,41.9031,12.4663,Rome,IT,world,250,pose spot: Ponte Sant'Angelo
+rom,Altare della Patria,,landmark,41.8955,12.4823,Rome,IT,national,300,rooftop terrace view
+rom,Galleria Borghese,,museum,41.9142,12.4922,Rome,IT,national,250,timed entry only
+ven,St Mark's Square,,landmark,45.4341,12.3388,Venice,IT,world,300,pose spot
+ven,St Mark's Basilica,,historic,45.4345,12.3397,Venice,IT,world,200,
+ven,Doge's Palace,,historic,45.4337,12.3403,Venice,IT,world,250,
+ven,Rialto Bridge,,landmark,45.4380,12.3359,Venice,IT,world,200,pose spot
+ven,Grand Canal,,landmark,45.4320,12.3288,Venice,IT,world,300,pose spot: Accademia Bridge
+ven,Bridge of Sighs,,landmark,45.4337,12.3410,Venice,IT,world,100,pose spot: Ponte della Paglia
+ven,Burano,,landmark,45.4853,12.4167,Venice,IT,national,800,colorful houses pose spot
+ven,Murano,,historic,45.4586,12.3531,Venice,IT,national,800,glass workshops
+flo,Florence Cathedral,,historic,43.7731,11.2560,Florence,IT,world,300,pose spot: Piazza del Duomo
+flo,Uffizi Gallery,Q51252,museum,43.7678,11.2553,Florence,IT,world,200,book ahead
+flo,Ponte Vecchio,,landmark,43.7679,11.2531,Florence,IT,world,200,pose spot from Lungarno
+flo,Piazzale Michelangelo,,landmark,43.7629,11.2650,Florence,IT,world,300,skyline sunset pose spot
+flo,Galleria dell'Accademia,,museum,43.7768,11.2589,Florence,IT,world,150,Michelangelo's David
+flo,Piazza della Signoria,,landmark,43.7696,11.2558,Florence,IT,world,250,open-air statue gallery
+flo,Palazzo Pitti,,historic,43.7651,11.2500,Florence,IT,national,300,
+flo,Boboli Gardens,,park,43.7649,11.2500,Florence,IT,national,800,gate at Palazzo Pitti
+flo,Mercato Centrale,,market,43.7766,11.2531,Florence,IT,regional,150,food hall
+mil,Milan Cathedral,,historic,45.4642,9.1900,Milan,IT,world,300,rooftop terraces
+mil,Galleria Vittorio Emanuele II,,landmark,45.4659,9.1900,Milan,IT,world,200,bull mosaic pose spot
+mil,Sforza Castle,,historic,45.4703,9.1794,Milan,IT,national,500,
+mil,Santa Maria delle Grazie,,historic,45.4659,9.1708,Milan,IT,world,150,Last Supper booking needed
+mil,Teatro alla Scala,,landmark,45.4674,9.1895,Milan,IT,world,150,
+mil,Navigli,,landmark,45.4520,9.1815,Milan,IT,regional,600,canal aperitivo strip
+mil,Parco Sempione,,park,45.4722,9.1772,Milan,IT,regional,800,behind Sforza Castle
+mil,Pinacoteca di Brera,,museum,45.4720,9.1878,Milan,IT,national,200,
+pis,Leaning Tower of Pisa,Q39054,landmark,43.7230,10.3966,Pisa,IT,world,200,pose spot: holding the tower
+pis,Pisa Cathedral,,historic,43.7232,10.3958,Pisa,IT,world,200,
+pis,Pisa Baptistery,,historic,43.7233,10.3941,Pisa,IT,world,150,
+pis,Piazza dei Miracoli,,landmark,43.7235,10.3954,Pisa,IT,world,400,lawn pose spot
+pis,Camposanto Monumentale,,historic,43.7238,10.3949,Pisa,IT,national,150,
+pis,Ponte di Mezzo,,landmark,43.7166,10.4030,Pisa,IT,regional,300,Arno river views
+pis,Santa Maria della Spina,,historic,43.7156,10.3970,Pisa,IT,regional,100,riverside gothic gem
+pis,Borgo Stretto,,historic,43.7180,10.4020,Pisa,IT,regional,300,arcaded old street
+bcn,Sagrada Família,Q48435,historic,41.4036,2.1744,Barcelona,ES,world,300,pose spot: Plaça de Gaudí pond
+bcn,Park Güell,,park,41.4133,2.1527,Barcelona,ES,world,600,pose spot: mosaic terrace
+bcn,La Rambla,,landmark,41.3809,2.1735,Barcelona,ES,world,700,
+bcn,Casa Batlló,,landmark,41.3917,2.1650,Barcelona,ES,world,150,Gaudí facade
+bcn,Casa Milà,,landmark,41.3954,2.1619,Barcelona,ES,world,150,La Pedrera rooftop
+bcn,Gothic Quarter,,historic,41.3839,2.1762,Barcelona,ES,world,500,cathedral plaza anchor
+bcn,La Boqueria Market,,market,41.3817,2.1716,Barcelona,ES,world,200,
+bcn,Barceloneta Beach,,beach,41.3784,2.1925,Barcelona,ES,national,1000,
+bcn,Magic Fountain of Montjuïc,,landmark,41.3712,2.1516,Barcelona,ES,national,300,evening fountain show
+bcn,Camp Nou,,landmark,41.3809,2.1228,Barcelona,ES,world,300,stadium tour
+bcn,Arc de Triomf,,landmark,41.3911,2.1806,Barcelona,ES,regional,250,
+bcn,Bunkers del Carmel,,landmark,41.4194,2.1614,Barcelona,ES,regional,200,skyline pose spot
+mad,Royal Palace of Madrid,,historic,40.4179,-3.7143,Madrid,ES,world,400,Plaza de la Armería
+mad,Prado Museum,Q160112,museum,40.4138,-3.6921,Madrid,ES,world,250,
+mad,Plaza Mayor,,landmark,40.4155,-3.7074,Madrid,ES,world,300,
+mad,Puerta del Sol,,landmark,40.4169,-3.7035,Madrid,ES,national,250,Km 0 + bear statue
+mad,Retiro Park,,park,40.4153,-3.6844,Madrid,ES,national,1200,Crystal Palace + lake
+mad,Gran Vía,,landmark,40.4203,-3.7058,Madrid,ES,national,700,
+mad,Reina Sofía Museum,,museum,40.4081,-3.6947,Madrid,ES,world,200,Guernica
+mad,Temple of Debod,,historic,40.4240,-3.7177,Madrid,ES,national,250,sunset pose spot
+mad,Santiago Bernabéu,,landmark,40.4531,-3.6883,Madrid,ES,world,300,stadium tour
+mad,Mercado de San Miguel,,market,40.4154,-3.7089,Madrid,ES,national,100,tapas hall
+sev,Plaza de España,,landmark,37.3772,-5.9869,Seville,ES,world,400,filmed: Star Wars II
+sev,Seville Cathedral,,historic,37.3861,-5.9926,Seville,ES,world,300,Giralda tower climb
+sev,Real Alcázar,,historic,37.3839,-5.9900,Seville,ES,world,400,filmed: Game of Thrones
+sev,Metropol Parasol,,landmark,37.3931,-5.9919,Seville,ES,national,200,rooftop walkway
+sev,Barrio Santa Cruz,,historic,37.3849,-5.9890,Seville,ES,national,400,old Jewish quarter lanes
+sev,Torre del Oro,,landmark,37.3822,-5.9964,Seville,ES,national,150,riverside tower
+sev,Triana Bridge,,landmark,37.3861,-5.9990,Seville,ES,regional,300,pose spot
+sev,María Luisa Park,,park,37.3760,-5.9880,Seville,ES,regional,800,
+lis,Belém Tower,,historic,38.6916,-9.2160,Lisbon,PT,world,250,
+lis,Jerónimos Monastery,,historic,38.6976,-9.2066,Lisbon,PT,world,300,
+lis,Praça do Comércio,,landmark,38.7075,-9.1365,Lisbon,PT,national,300,riverfront arch pose spot
+lis,Miradouro das Portas do Sol,,landmark,38.7118,-9.1300,Lisbon,PT,world,500,Alfama + tram 28 pose spot
+lis,São Jorge Castle,,historic,38.7139,-9.1335,Lisbon,PT,national,400,
+lis,Santa Justa Lift,,landmark,38.7124,-9.1393,Lisbon,PT,national,100,
+lis,Padrão dos Descobrimentos,,landmark,38.6936,-9.2057,Lisbon,PT,national,200,
+lis,Miradouro da Senhora do Monte,,landmark,38.7189,-9.1325,Lisbon,PT,regional,150,sunset pose spot
+lis,Rossio Square,,landmark,38.7140,-9.1390,Lisbon,PT,regional,250,wave-pattern pavement
+lis,Oceanário de Lisboa,,aquarium,38.7636,-9.0937,Lisbon,PT,world,200,
+opo,Dom Luís I Bridge,,landmark,41.1399,-8.6094,Porto,PT,world,300,pose spot: upper deck
+opo,Ribeira,,historic,41.1407,-8.6131,Porto,PT,world,400,riverside old town
+opo,Livraria Lello,,landmark,41.1469,-8.6149,Porto,PT,world,100,famous staircase bookstore
+opo,Clérigos Tower,,landmark,41.1457,-8.6140,Porto,PT,national,150,
+opo,Porto Cathedral,,historic,41.1428,-8.6111,Porto,PT,national,250,terrace viewpoint
+opo,Cais de Gaia,,landmark,41.1380,-8.6130,Porto,PT,national,600,port wine lodges
+opo,São Bento Station,,historic,41.1455,-8.6106,Porto,PT,national,100,azulejo hall
+opo,Capela das Almas,,historic,41.1502,-8.6060,Porto,PT,regional,100,azulejo facade pose spot
+ams,Rijksmuseum,Q190804,museum,52.3600,4.8852,Amsterdam,NL,world,250,
+ams,Van Gogh Museum,,museum,52.3584,4.8811,Amsterdam,NL,world,200,book ahead
+ams,Anne Frank House,,museum,52.3752,4.8840,Amsterdam,NL,world,150,timed entry only
+ams,Dam Square,,landmark,52.3730,4.8926,Amsterdam,NL,national,300,Royal Palace facade
+ams,Canal Ring,,historic,52.3702,4.8880,Amsterdam,NL,world,800,UNESCO canals cruise
+ams,Vondelpark,,park,52.3622,4.8819,Amsterdam,NL,national,1200,
+ams,Bloemenmarkt,,market,52.3667,4.8910,Amsterdam,NL,national,300,floating flower market
+ams,De Wallen,,historic,52.3723,4.8969,Amsterdam,NL,world,400,no photos of windows
+ams,Heineken Experience,,museum,52.3578,4.8919,Amsterdam,NL,national,150,
+ams,A'DAM Lookout,,landmark,52.3841,4.9003,Amsterdam,NL,regional,150,swing over the edge
+ber,Brandenburg Gate,Q82425,landmark,52.5163,13.3777,Berlin,DE,world,300,Pariser Platz pose spot
+ber,Reichstag,,historic,52.5186,13.3762,Berlin,DE,world,300,dome booking needed
+ber,East Side Gallery,,landmark,52.5050,13.4399,Berlin,DE,world,700,Berlin Wall murals
+ber,Berlin Cathedral,,historic,52.5192,13.4013,Berlin,DE,national,250,Lustgarten lawn pose spot
+ber,Museum Island,,museum,52.5198,13.3987,Berlin,DE,world,400,five museums UNESCO
+ber,Holocaust Memorial,,historic,52.5139,13.3785,Berlin,DE,world,250,visit respectfully
+ber,Checkpoint Charlie,,historic,52.5076,13.3904,Berlin,DE,world,150,
+ber,Fernsehturm,,landmark,52.5208,13.4094,Berlin,DE,national,250,TV tower observation deck
+ber,Gendarmenmarkt,,landmark,52.5138,13.3927,Berlin,DE,national,250,
+ber,Charlottenburg Palace,,historic,52.5206,13.2957,Berlin,DE,national,400,
+muc,Marienplatz,,landmark,48.1374,11.5755,Munich,DE,world,250,Glockenspiel at 11am
+muc,Frauenkirche,,historic,48.1386,11.5736,Munich,DE,national,200,twin onion domes
+muc,English Garden,,park,48.1435,11.5876,Munich,DE,national,1500,Eisbach river surfers
+muc,Nymphenburg Palace,,historic,48.1583,11.5033,Munich,DE,national,500,
+muc,Viktualienmarkt,,market,48.1352,11.5762,Munich,DE,national,250,
+muc,Hofbräuhaus,,historic,48.1376,11.5799,Munich,DE,world,100,
+muc,Munich Residenz,,historic,48.1414,11.5780,Munich,DE,national,300,
+muc,Olympiapark,,park,48.1741,11.5550,Munich,DE,national,1000,tower + 1972 grounds
+muc,Odeonsplatz,,landmark,48.1428,11.5776,Munich,DE,regional,200,Feldherrnhalle
+neu,Neuschwanstein Castle,Q4152,historic,47.5576,10.7498,Schwangau,DE,world,400,pose spot: Marienbrücke
+neu,Marienbrücke,,landmark,47.5569,10.7525,Schwangau,DE,world,100,classic castle photo bridge
+neu,Hohenschwangau Castle,,historic,47.5558,10.7366,Schwangau,DE,national,250,
+neu,Alpsee,,park,47.5533,10.7320,Schwangau,DE,regional,800,lakeshore walk
+neu,Füssen Old Town,,historic,47.5692,10.6980,Füssen,DE,regional,500,
+neu,St Coloman Church,,historic,47.5620,10.7320,Schwangau,DE,regional,150,castle backdrop pose spot
+neu,Museum of the Bavarian Kings,,museum,47.5560,10.7395,Schwangau,DE,regional,100,
+neu,Lechfall,,landmark,47.5640,10.7010,Füssen,DE,regional,150,waterfall footbridge
+prg,Charles Bridge,,landmark,50.0865,14.4114,Prague,CZ,world,400,pose spot at dawn
+prg,Old Town Square,,landmark,50.0875,14.4213,Prague,CZ,world,300,
+prg,Astronomical Clock,,landmark,50.0870,14.4208,Prague,CZ,world,100,hourly show
+prg,Prague Castle,,historic,50.0903,14.3988,Prague,CZ,world,600,first courtyard gate
+prg,St Vitus Cathedral,,historic,50.0909,14.4005,Prague,CZ,world,200,inside castle complex
+prg,Lennon Wall,,landmark,50.0863,14.4068,Prague,CZ,national,100,pose spot
+prg,Petřín Hill,,park,50.0813,14.4044,Prague,CZ,national,800,funicular to lookout tower
+prg,Wenceslas Square,,landmark,50.0813,14.4301,Prague,CZ,national,500,
+prg,Dancing House,,landmark,50.0755,14.4143,Prague,CZ,national,100,
+prg,Old-New Synagogue,,historic,50.0902,14.4184,Prague,CZ,national,300,Josefov quarter anchor
+vie,Schönbrunn Palace,,historic,48.1865,16.3131,Vienna,AT,world,800,Gloriette hill viewpoint
+vie,St Stephen's Cathedral,,historic,48.2084,16.3731,Vienna,AT,world,250,
+vie,Hofburg,,historic,48.2082,16.3666,Vienna,AT,world,400,Michaelerplatz gate
+vie,Belvedere,,museum,48.1914,16.3809,Vienna,AT,world,400,Klimt's The Kiss
+vie,Kunsthistorisches Museum,,museum,48.2036,16.3616,Vienna,AT,world,200,Maria-Theresien-Platz
+vie,Vienna State Opera,,landmark,48.2026,16.3690,Vienna,AT,world,150,
+vie,Prater Giant Ferris Wheel,,theme_park,48.2166,16.3959,Vienna,AT,world,300,filmed: The Third Man
+vie,Naschmarkt,,market,48.1986,16.3630,Vienna,AT,national,400,
+vie,Rathausplatz,,landmark,48.2107,16.3572,Vienna,AT,national,300,seasonal markets
+vie,Albertina,,museum,48.2038,16.3683,Vienna,AT,national,150,
+szg,Hohensalzburg Fortress,,historic,47.7947,13.0477,Salzburg,AT,world,400,funicular from old town
+szg,Mirabell Gardens,,park,47.8053,13.0421,Salzburg,AT,world,300,filmed: The Sound of Music
+szg,Getreidegasse,,historic,47.8001,13.0435,Salzburg,AT,world,300,Mozart's birthplace street
+szg,Salzburg Cathedral,,historic,47.7975,13.0469,Salzburg,AT,national,250,
+szg,Residenzplatz,,landmark,47.7983,13.0467,Salzburg,AT,national,250,
+szg,Hellbrunn Palace,,historic,47.7623,13.0603,Salzburg,AT,national,500,trick fountains
+szg,Mönchsberg Terrace,,landmark,47.7986,13.0400,Salzburg,AT,regional,200,old town pose spot
+szg,Mozartplatz,,landmark,47.7988,13.0478,Salzburg,AT,regional,150,
+bud,Hungarian Parliament,,historic,47.5070,19.0470,Budapest,HU,world,400,pose spot: across the Danube
+bud,Fisherman's Bastion,,landmark,47.5022,19.0348,Budapest,HU,world,250,pose spot
+bud,Buda Castle,,historic,47.4962,19.0396,Budapest,HU,world,600,
+bud,Chain Bridge,,landmark,47.4990,19.0437,Budapest,HU,world,300,
+bud,St Stephen's Basilica,,historic,47.5009,19.0540,Budapest,HU,national,250,dome view
+bud,Széchenyi Thermal Bath,,landmark,47.5186,19.0820,Budapest,HU,world,250,pose spot: outdoor pools
+bud,Heroes' Square,,landmark,47.5149,19.0778,Budapest,HU,national,300,
+bud,Great Market Hall,,market,47.4871,19.0588,Budapest,HU,national,200,
+bud,Citadella,,landmark,47.4866,19.0396,Budapest,HU,national,400,Gellért Hill skyline pose spot
+bud,Shoes on the Danube,,historic,47.5039,19.0448,Budapest,HU,national,300,memorial; visit respectfully
+ath,Acropolis of Athens,Q131013,historic,37.9711,23.7241,Athens,GR,world,500,west entrance gate
+ath,Parthenon,Q10288,historic,37.9715,23.7266,Athens,GR,world,200,
+ath,Acropolis Museum,,museum,37.9684,23.7284,Athens,GR,world,200,
+ath,Plaka,,historic,37.9730,23.7290,Athens,GR,world,500,old town lanes
+ath,Temple of Olympian Zeus,,historic,37.9694,23.7330,Athens,GR,national,250,
+ath,Ancient Agora,,historic,37.9750,23.7225,Athens,GR,national,400,
+ath,Syntagma Square,,landmark,37.9755,23.7348,Athens,GR,national,250,evzones guard change
+ath,Monastiraki Square,,market,37.9760,23.7257,Athens,GR,national,250,flea market + Acropolis view
+ath,Mount Lycabettus,,landmark,37.9818,23.7436,Athens,GR,national,250,sunset pose spot
+san,Oia,,landmark,36.4614,25.3717,Oia,GR,world,500,sunset pose spot: castle ruins
+san,Blue Domes Viewpoint,,landmark,36.4619,25.3745,Oia,GR,world,100,pose spot: three blue domes
+san,Fira,,landmark,36.4167,25.4315,Fira,GR,world,500,caldera-edge walk
+san,Imerovigli,,landmark,36.4327,25.4218,Imerovigli,GR,national,300,Skaros Rock caldera pose spot
+san,Red Beach,,beach,36.3480,25.3943,Akrotiri,GR,national,400,
+san,Akrotiri Excavations,,historic,36.3514,25.4033,Akrotiri,GR,national,250,buried Bronze Age town
+san,Kamari Beach,,beach,36.3771,25.4885,Kamari,GR,regional,1000,black sand
+san,Amoudi Bay,,landmark,36.4604,25.3668,Oia,GR,regional,200,cliffside fish tavernas
+dub,Guinness Storehouse,,museum,53.3419,-6.2867,Dublin,IE,world,250,Gravity Bar view
+dub,Trinity College,,historic,53.3446,-6.2592,Dublin,IE,world,300,Book of Kells + Long Room
+dub,Temple Bar,,landmark,53.3453,-6.2646,Dublin,IE,world,300,pose spot: red pub
+dub,Dublin Castle,,historic,53.3429,-6.2675,Dublin,IE,national,250,
+dub,St Patrick's Cathedral,,historic,53.3394,-6.2716,Dublin,IE,national,200,
+dub,Ha'penny Bridge,,landmark,53.3465,-6.2633,Dublin,IE,national,100,pose spot
+dub,Phoenix Park,,park,53.3478,-6.2923,Dublin,IE,national,2000,wild deer
+dub,Kilmainham Gaol,,museum,53.3419,-6.3099,Dublin,IE,national,150,book ahead
+edi,Edinburgh Castle,,historic,55.9487,-3.1983,Edinburgh,GB,world,400,esplanade approach
+edi,Royal Mile,,historic,55.9494,-3.1907,Edinburgh,GB,world,700,St Giles midpoint
+edi,Arthur's Seat,,park,55.9520,-3.1697,Edinburgh,GB,world,1500,trailhead at Holyrood
+edi,Palace of Holyroodhouse,,historic,55.9528,-3.1722,Edinburgh,GB,national,300,
+edi,Victoria Street,,landmark,55.9488,-3.1925,Edinburgh,GB,world,200,curved colorful shopfronts pose spot
+edi,Calton Hill,,landmark,55.9553,-3.1823,Edinburgh,GB,world,300,sunset pose spot
+edi,Princes Street Gardens,,park,55.9526,-3.1932,Edinburgh,GB,national,600,Scott Monument
+edi,National Museum of Scotland,,museum,55.9470,-3.1905,Edinburgh,GB,national,200,free entry
+edi,Dean Village,,historic,55.9519,-3.2190,Edinburgh,GB,regional,300,pose spot
+cph,Nyhavn,,landmark,55.6797,12.5906,Copenhagen,DK,world,400,pose spot: colored houses
+cph,The Little Mermaid,,landmark,55.6928,12.5992,Copenhagen,DK,world,150,
+cph,Tivoli Gardens,,theme_park,55.6738,12.5681,Copenhagen,DK,world,400,main gate Vesterbrogade
+cph,Rosenborg Castle,,historic,55.6858,12.5773,Copenhagen,DK,national,300,crown jewels
+cph,Amalienborg,,historic,55.6840,12.5930,Copenhagen,DK,national,250,changing of the guard
+cph,Rundetaarn,,landmark,55.6814,12.5736,Copenhagen,DK,national,100,spiral ramp tower
+cph,Freetown Christiania,,landmark,55.6739,12.5880,Copenhagen,DK,national,500,no photos in some zones
+cph,Strøget,,landmark,55.6786,12.5788,Copenhagen,DK,national,600,Amagertorv midpoint
+cph,Christiansborg Palace,,historic,55.6761,12.5804,Copenhagen,DK,national,250,free tower view
+sto,Gamla Stan,,historic,59.3251,18.0711,Stockholm,SE,world,500,pose spot: Stortorget facades
+sto,Vasa Museum,,museum,59.3280,18.0916,Stockholm,SE,world,200,17th-century warship
+sto,Royal Palace,,historic,59.3268,18.0717,Stockholm,SE,national,300,
+sto,Skansen,,museum,59.3255,18.1000,Stockholm,SE,national,800,open-air museum + Nordic zoo
+sto,Stockholm City Hall,,historic,59.3274,18.0543,Stockholm,SE,national,250,Nobel banquet hall
+sto,Djurgården,,park,59.3285,18.0875,Stockholm,SE,national,2000,bridge entrance
+sto,ABBA The Museum,,museum,59.3243,18.0964,Stockholm,SE,national,150,
+sto,Monteliusvägen,,landmark,59.3200,18.0628,Stockholm,SE,regional,300,skyline pose spot
+osl,Vigeland Sculpture Park,,park,59.9265,10.7040,Oslo,NO,world,800,Monolith + Angry Boy
+osl,Oslo Opera House,,landmark,59.9073,10.7530,Oslo,NO,world,300,walk the marble roof
+osl,Akershus Fortress,,historic,59.9075,10.7362,Oslo,NO,national,400,
+osl,Fram Museum,,museum,59.9035,10.6993,Oslo,NO,national,150,polar ship inside
+osl,Holmenkollen Ski Jump,,landmark,59.9638,10.6670,Oslo,NO,national,300,
+osl,MUNCH,,museum,59.9057,10.7553,Oslo,NO,national,200,The Scream
+osl,Karl Johans gate,,landmark,59.9134,10.7400,Oslo,NO,regional,500,
+osl,Royal Palace Oslo,,historic,59.9170,10.7274,Oslo,NO,national,300,
+rey,Hallgrímskirkja,,historic,64.1417,-21.9266,Reykjavik,IS,world,250,tower view + Leif statue
+rey,Sun Voyager,,landmark,64.1475,-21.9224,Reykjavik,IS,national,100,pose spot
+rey,Harpa,,landmark,64.1503,-21.9326,Reykjavik,IS,national,200,honeycomb glass facade
+rey,Rainbow Street,,landmark,64.1433,-21.9295,Reykjavik,IS,regional,200,pose spot
+rey,Perlan,,museum,64.1290,-21.9187,Reykjavik,IS,national,200,glacier exhibit + dome view
+rey,Blue Lagoon,,landmark,63.8804,-22.4468,Grindavík,IS,world,400,book ahead
+rey,Thingvellir,,national_park,64.2557,-21.1290,Thingvellir,IS,world,2000,rift valley + Hakið viewpoint
+rey,Geysir,,landmark,64.3120,-20.3010,Haukadalur,IS,world,300,Strokkur erupts every 10min
+rey,Gullfoss,,landmark,64.3270,-20.1210,Haukadalur,IS,world,300,two-tier waterfall
+luc,Chapel Bridge,,landmark,47.0516,8.3077,Lucerne,CH,world,200,pose spot
+luc,Lion Monument,,landmark,47.0584,8.3107,Lucerne,CH,world,100,
+luc,Lucerne Old Town,,historic,47.0523,8.3058,Lucerne,CH,national,400,painted facades
+luc,Musegg Wall,,historic,47.0557,8.3028,Lucerne,CH,regional,500,walkable towers
+luc,Lake Lucerne Promenade,,landmark,47.0548,8.3113,Lucerne,CH,national,600,
+luc,Mount Pilatus,,landmark,47.0348,8.2760,Kriens,CH,world,500,golden round trip base
+luc,Mount Rigi,,landmark,47.0100,8.4843,Vitznau,CH,national,500,cogwheel railway base
+luc,Swiss Museum of Transport,,museum,47.0527,8.3360,Lucerne,CH,national,250,
+int,Jungfraujoch,,landmark,46.5475,7.9843,Grindelwald,CH,world,400,Top of Europe
+int,Harder Kulm,,landmark,46.6947,7.8608,Interlaken,CH,world,200,Two Lakes Bridge pose spot
+int,Lauterbrunnen Valley,,landmark,46.5936,7.9075,Lauterbrunnen,CH,world,600,Staubbach Falls pose spot
+int,Grindelwald First,,landmark,46.6593,8.0525,Grindelwald,CH,world,400,cliff walk
+int,Höhematte,,park,46.6853,7.8597,Interlaken,CH,regional,400,paraglider landing lawn
+int,Iseltwald Pier,,landmark,46.7093,7.9650,Iseltwald,CH,national,300,filmed: Crash Landing on You
+int,Trümmelbach Falls,,landmark,46.5697,7.9109,Lauterbrunnen,CH,national,200,glacier falls inside mountain
+int,Schilthorn,,landmark,46.5572,7.8348,Mürren,CH,national,300,filmed: James Bond OHMSS
+zer,Kirchbrücke,,landmark,46.0192,7.7483,Zermatt,CH,world,100,classic Matterhorn pose spot
+zer,Gornergrat,,landmark,45.9834,7.7851,Zermatt,CH,world,300,Matterhorn + glacier panorama
+zer,Matterhorn Glacier Paradise,,landmark,45.9385,7.7295,Zermatt,CH,world,300,Europe's highest cable car
+zer,Riffelsee,,landmark,45.9842,7.7660,Zermatt,CH,world,200,Matterhorn reflection pose spot
+zer,Zermatt Village,,historic,46.0210,7.7465,Zermatt,CH,national,500,car-free main street
+zer,Sunnegga,,landmark,46.0173,7.7730,Zermatt,CH,regional,300,Leisee family viewpoint
+zer,Gorner Gorge,,landmark,46.0125,7.7528,Zermatt,CH,regional,300,
+zer,Hinterdorf,,historic,46.0215,7.7483,Zermatt,CH,regional,150,old timber barns
+ist,Hagia Sophia,Q12506,historic,41.0086,28.9802,Istanbul,TR,world,300,
+ist,Blue Mosque,,historic,41.0054,28.9768,Istanbul,TR,world,300,dress modestly
+ist,Topkapi Palace,,historic,41.0107,28.9816,Istanbul,TR,world,600,Imperial Gate entrance
+ist,Grand Bazaar,,market,41.0104,28.9680,Istanbul,TR,world,400,
+ist,Basilica Cistern,,historic,41.0084,28.9779,Istanbul,TR,world,150,
+ist,Galata Tower,,landmark,41.0256,28.9741,Istanbul,TR,world,200,
+ist,Spice Bazaar,,market,41.0165,28.9708,Istanbul,TR,national,200,
+ist,Eminönü Bosphorus Piers,,landmark,41.0176,28.9717,Istanbul,TR,world,300,cruise departure point
+ist,Dolmabahçe Palace,,historic,41.0389,28.9998,Istanbul,TR,national,400,
+ist,Süleymaniye Mosque,,historic,41.0160,28.9640,Istanbul,TR,national,300,Golden Horn view terrace
+ist,Taksim Square,,landmark,41.0369,28.9850,Istanbul,TR,national,700,Istiklal nostalgic tram
+dbk,Dubrovnik City Walls,,historic,42.6414,18.1063,Dubrovnik,HR,world,600,filmed: Game of Thrones
+dbk,Stradun,,historic,42.6412,18.1083,Dubrovnik,HR,world,300,
+dbk,Fort Lovrijenac,,historic,42.6407,18.1040,Dubrovnik,HR,world,200,filmed: Game of Thrones
+dbk,Srđ Cable Car,,landmark,42.6424,18.1118,Dubrovnik,HR,world,300,sunset panorama
+dbk,Banje Beach,,beach,42.6401,18.1150,Dubrovnik,HR,national,300,old town backdrop
+dbk,Old Port,,landmark,42.6407,18.1108,Dubrovnik,HR,national,250,
+dbk,Rector's Palace,,historic,42.6405,18.1105,Dubrovnik,HR,national,100,
+dbk,Lokrum,,park,42.6250,18.1200,Dubrovnik,HR,national,800,island ferry from port
+krk,Main Market Square,,landmark,50.0617,19.9373,Kraków,PL,world,400,Europe's largest medieval square
+krk,Wawel Castle,,historic,50.0544,19.9356,Kraków,PL,world,500,
+krk,St Mary's Basilica,,historic,50.0616,19.9393,Kraków,PL,world,150,hourly trumpet call
+krk,Cloth Hall,,market,50.0616,19.9369,Kraków,PL,world,150,
+krk,Kazimierz,,historic,50.0520,19.9477,Kraków,PL,world,500,filmed: Schindler's List
+krk,Auschwitz-Birkenau Memorial,,historic,50.0270,19.2036,Oświęcim,PL,world,1000,book ahead; visit respectfully
+krk,Wieliczka Salt Mine,,historic,49.9834,20.0540,Wieliczka,PL,world,300,underground chapel
+krk,Schindler's Factory,,museum,50.0473,19.9617,Kraków,PL,national,150,
+krk,St Florian's Gate,,historic,50.0656,19.9416,Kraków,PL,national,200,Planty park ring
+nce,Promenade des Anglais,,landmark,43.6946,7.2650,Nice,FR,world,1500,blue chairs pose spot
+nce,Castle Hill,,park,43.6946,7.2797,Nice,FR,world,400,waterfall + bay pose spot
+nce,Vieux Nice,,historic,43.6963,7.2755,Nice,FR,world,400,old town lanes
+nce,Cours Saleya Market,,market,43.6952,7.2747,Nice,FR,national,250,flower market
+nce,Place Masséna,,landmark,43.6976,7.2700,Nice,FR,national,250,checkerboard plaza
+nce,I Love Nice Sign,,landmark,43.6944,7.2845,Nice,FR,national,100,pose spot
+nce,Port Lympia,,landmark,43.6930,7.2860,Nice,FR,regional,400,colorful harbor
+nce,Marc Chagall Museum,,museum,43.7094,7.2694,Nice,FR,national,150,
+mco,Monte Carlo Casino,,landmark,43.7393,7.4280,Monaco,MC,world,250,filmed: GoldenEye
+mco,Prince's Palace,,historic,43.7313,7.4205,Monaco,MC,world,250,guard change 11:55
+mco,Oceanographic Museum,,aquarium,43.7305,7.4254,Monaco,MC,world,200,cliffside building
+mco,Monaco Cathedral,,historic,43.7303,7.4226,Monaco,MC,national,150,Grace Kelly tomb
+mco,Fairmont Hairpin,,landmark,43.7400,7.4300,Monaco,MC,world,100,pose spot: F1 hairpin
+mco,Larvotto Beach,,beach,43.7453,7.4336,Monaco,MC,regional,500,
+mco,Port Hercules,,landmark,43.7350,7.4258,Monaco,MC,national,500,superyacht harbor
+mco,Japanese Garden,,park,43.7419,7.4312,Monaco,MC,regional,200,
+brg,Markt,,landmark,51.2085,3.2245,Bruges,BE,world,300,Belfry 366-step climb
+brg,Rozenhoedkaai,,landmark,51.2079,3.2270,Bruges,BE,world,100,most-photographed canal pose spot
+brg,Burg Square,,historic,51.2086,3.2268,Bruges,BE,world,200,Basilica of Holy Blood
+brg,Minnewater,,park,51.1993,3.2247,Bruges,BE,national,400,Lake of Love swans
+brg,Begijnhof,,historic,51.2019,3.2230,Bruges,BE,national,250,quiet; keep voices low
+brg,Church of Our Lady,,historic,51.2043,3.2243,Bruges,BE,national,200,Michelangelo Madonna
+brg,Huidenvettersplein Boat Dock,,landmark,51.2074,3.2266,Bruges,BE,national,150,canal tours start
+brg,Groeningemuseum,,museum,51.2057,3.2260,Bruges,BE,regional,100,Flemish Primitives
+bru,Grand-Place,,landmark,50.8467,4.3525,Brussels,BE,world,250,flower carpet in August
+bru,Manneken Pis,,landmark,50.8450,4.3499,Brussels,BE,world,100,
+bru,Atomium,,landmark,50.8948,4.3415,Brussels,BE,world,300,
+bru,Royal Palace of Brussels,,historic,50.8417,4.3622,Brussels,BE,national,300,
+bru,Mont des Arts,,park,50.8447,4.3567,Brussels,BE,national,250,skyline pose spot
+bru,Galeries Royales Saint-Hubert,,landmark,50.8478,4.3547,Brussels,BE,national,200,covered arcade
+bru,Parc du Cinquantenaire,,park,50.8406,4.3932,Brussels,BE,national,700,triumphal arch
+bru,Magritte Museum,,museum,50.8446,4.3596,Brussels,BE,national,150,
+par,Notre-Dame de Paris,Q2981,historic,48.8534,2.3483,Paris,FR,world,300,reopened Dec 2024
+par,Palace of Versailles,Q2946,historic,48.8043,2.1216,Versailles,FR,world,800,golden gate entrance
+par,Musée d'Orsay,Q23402,museum,48.8600,2.3266,Paris,FR,world,250,
+par,Trocadéro,,landmark,48.8616,2.2888,Paris,FR,world,300,Eiffel Tower pose spot
+par,Montmartre,,historic,48.8865,2.3406,Paris,FR,world,500,filmed: Amélie
+par,Luxembourg Gardens,,park,48.8480,2.3400,Paris,FR,world,800,gate on Bd Saint-Michel
+par,Champs-Élysées,,landmark,48.8698,2.3076,Paris,FR,world,1000,
+par,Mont Saint-Michel,,historic,48.6360,-1.5114,Mont-Saint-Michel,FR,world,600,tidal island abbey
+tokyo,Shibuya Scramble Crossing,,landmark,35.6595,139.7005,Tokyo,JP,world,150,worlds busiest crossing pose spot
+tokyo,Senso-ji Temple,,historic,35.7110,139.7966,Tokyo,JP,world,400,Kaminarimon gate pose spot
+tokyo,Tokyo Tower,Q183536,landmark,35.6586,139.7454,Tokyo,JP,world,200,
+tokyo,Tokyo Skytree,Q57965,landmark,35.7101,139.8107,Tokyo,JP,world,250,tallest tower in Japan
+tokyo,Meiji Shrine,,historic,35.6700,139.7025,Tokyo,JP,world,600,great torii forest entrance
+tokyo,teamLab Planets TOKYO,,museum,35.6494,139.7898,Tokyo,JP,world,150,immersive digital art pose spot
+tokyo,Tsukiji Outer Market,,market,35.6654,139.7707,Tokyo,JP,world,300,street food stalls
+tokyo,Shinjuku Gyoen National Garden,,park,35.6851,139.7100,Tokyo,JP,national,700,cherry blossom garden
+tokyo,Imperial Palace Nijubashi Bridge,,landmark,35.6794,139.7548,Tokyo,JP,national,300,palace bridge viewpoint
+tokyo,Takeshita Street,,landmark,35.6712,139.7045,Tokyo,JP,national,300,Harajuku pop culture street
+tokyo,Ueno Park,,park,35.7148,139.7737,Tokyo,JP,national,800,museums and cherry blossoms
+tokyo,Akihabara Electric Town,,landmark,35.6984,139.7731,Tokyo,JP,national,500,anime and electronics district
+kyoto,Fushimi Inari Taisha,,historic,34.9671,135.7727,Kyoto,JP,world,700,thousand torii tunnel pose spot
+kyoto,Kinkaku-ji Golden Pavilion,,historic,35.0394,135.7292,Kyoto,JP,world,300,golden pavilion pond viewpoint
+kyoto,Arashiyama Bamboo Grove,,park,35.0168,135.6713,Kyoto,JP,world,400,bamboo path pose spot
+kyoto,Kiyomizu-dera,,historic,34.9949,135.7850,Kyoto,JP,world,400,wooden stage city viewpoint
+kyoto,Gion Hanamikoji Street,,historic,35.0030,135.7750,Kyoto,JP,world,500,geisha district
+kyoto,Nijo Castle,,historic,35.0142,135.7480,Kyoto,JP,national,400,shogun palace
+kyoto,Philosophers Path,,park,35.0210,135.7946,Kyoto,JP,national,800,canalside cherry walk
+kyoto,Togetsukyo Bridge,,landmark,35.0125,135.6776,Kyoto,JP,national,300,Arashiyama river viewpoint
+kyoto,Ginkaku-ji Silver Pavilion,,historic,35.0270,135.7982,Kyoto,JP,national,300,
+kyoto,Yasaka Pagoda,,landmark,34.9987,135.7785,Kyoto,JP,national,150,street framing pagoda pose spot
+osaka,Osaka Castle,,historic,34.6873,135.5262,Osaka,JP,world,600,castle tower and park
+osaka,Dotonbori Glico Sign,,landmark,34.6690,135.5013,Osaka,JP,world,300,Ebisubashi bridge pose spot
+osaka,Tsutenkaku Tower,,landmark,34.6525,135.5063,Osaka,JP,national,300,retro Shinsekai district
+osaka,Umeda Sky Building,,landmark,34.7055,135.4903,Osaka,JP,national,200,floating garden observatory
+osaka,Kuromon Ichiba Market,,market,34.6654,135.5064,Osaka,JP,national,300,street food market
+osaka,Shitenno-ji Temple,,historic,34.6533,135.5163,Osaka,JP,national,400,oldest Buddhist temple
+osaka,Osaka Aquarium Kaiyukan,,aquarium,34.6545,135.4290,Osaka,JP,national,200,whale shark tank
+osaka,Namba Yasaka Shrine,,historic,34.6636,135.4943,Osaka,JP,regional,150,giant lion head pose spot
+nara,Nara Park,,park,34.6851,135.8430,Nara,JP,world,1200,bowing deer pose spot
+nara,Todai-ji Temple,,historic,34.6858,135.8398,Nara,JP,world,400,Great Buddha hall
+nara,Kasuga Taisha,,historic,34.6813,135.8482,Nara,JP,national,400,lantern-lined shrine paths
+nara,Kofuku-ji Pagoda,,historic,34.6830,135.8318,Nara,JP,national,250,
+fuji,Chureito Pagoda,,landmark,35.5010,138.8010,Fujiyoshida,JP,world,250,Fuji plus pagoda pose spot
+fuji,Oishi Park,,park,35.5250,138.7360,Fujikawaguchiko,JP,world,600,Fuji lake flower viewpoint
+fuji,Oshino Hakkai,,landmark,35.4597,138.8350,Oshino,JP,national,400,spring ponds Fuji views
+fuji,Honcho Street,,landmark,35.4870,138.8070,Fujiyoshida,JP,national,200,street framing Fuji pose spot
+fuji,Mt Fuji Subaru 5th Station,,landmark,35.3966,138.7327,Fujikawaguchiko,JP,world,800,closest drivable Fuji viewpoint
+hakone,Hakone Shrine Peace Torii,,historic,35.2025,139.0255,Hakone,JP,world,250,lakeside torii pose spot
+hakone,Lake Ashi Cruise Moto-Hakone,,landmark,35.1985,139.0280,Hakone,JP,national,400,pirate ship Fuji views
+hakone,Owakudani,,landmark,35.2444,139.0194,Hakone,JP,national,500,volcanic valley black eggs
+hakone,Hakone Open-Air Museum,,museum,35.2445,139.0503,Hakone,JP,national,300,sculpture park
+seoul,Gyeongbokgung Palace,,historic,37.5760,126.9769,Seoul,KR,world,700,Gwanghwamun gate hanbok pose spot
+seoul,Bukchon Hanok Village,,historic,37.5820,126.9845,Seoul,KR,world,500,hanok alley pose spot
+seoul,N Seoul Tower,,landmark,37.5512,126.9882,Seoul,KR,world,250,Namsan love locks viewpoint
+seoul,Myeongdong Shopping Street,,market,37.5636,126.9850,Seoul,KR,national,400,street food and beauty shops
+seoul,Changdeokgung Palace,,historic,37.5794,126.9910,Seoul,KR,national,500,secret garden
+seoul,Gwangjang Market,,market,37.5701,126.9996,Seoul,KR,national,250,bindaetteok food alley
+seoul,Lotte World Tower Seoul Sky,,landmark,37.5126,127.1025,Seoul,KR,national,200,glass floor observatory
+seoul,Hongdae Street,,landmark,37.5560,126.9236,Seoul,KR,regional,400,busking and nightlife
+seoul,Cheonggyecheon Stream,,park,37.5690,126.9784,Seoul,KR,regional,300,sunken urban stream walk
+busan,Gamcheon Culture Village,,landmark,35.0973,129.0107,Busan,KR,world,600,colorful hillside pose spot
+busan,Haeundae Beach,,beach,35.1587,129.1604,Busan,KR,national,800,
+busan,Haedong Yonggungsa Temple,,historic,35.1885,129.2231,Busan,KR,national,400,seaside cliff temple
+busan,Gwangalli Beach,,beach,35.1532,129.1189,Busan,KR,national,700,Gwangan Bridge night view
+busan,Jagalchi Fish Market,,market,35.0967,129.0306,Busan,KR,national,250,
+busan,Taejongdae Park,,park,35.0533,129.0872,Busan,KR,regional,900,sea cliff viewpoints
+beijing,Great Wall at Badaling,,historic,40.3548,116.0075,Beijing,CN,world,2000,most visited wall section
+beijing,Great Wall at Mutianyu,,historic,40.4312,116.5665,Beijing,CN,world,2000,restored wall with toboggan
+beijing,Forbidden City,Q80290,historic,39.9120,116.3910,Beijing,CN,world,1000,Meridian Gate entrance
+beijing,Tiananmen Square,,landmark,39.9055,116.3976,Beijing,CN,world,600,
+beijing,Temple of Heaven,,historic,39.8822,116.4066,Beijing,CN,world,800,Hall of Prayer pose spot
+beijing,Summer Palace,,historic,39.9990,116.2782,Beijing,CN,world,1500,lakeside imperial garden
+beijing,Lama Temple,,historic,39.9470,116.4114,Beijing,CN,national,400,giant sandalwood Buddha
+beijing,Nanluoguxiang Hutong,,historic,39.9365,116.4030,Beijing,CN,national,500,hutong alley snacks
+beijing,Beihai Park,,park,39.9254,116.3830,Beijing,CN,national,700,white dagoba lake
+shanghai,The Bund,,landmark,31.2397,121.4903,Shanghai,CN,world,700,Pudong skyline pose spot
+shanghai,Oriental Pearl Tower,,landmark,31.2397,121.4995,Shanghai,CN,world,250,
+shanghai,Yu Garden,,historic,31.2270,121.4920,Shanghai,CN,world,400,classical garden and bazaar
+shanghai,Nanjing Road Pedestrian Street,,market,31.2354,121.4795,Shanghai,CN,national,700,
+shanghai,Shanghai Tower,,landmark,31.2336,121.5055,Shanghai,CN,national,200,worlds highest observation decks
+shanghai,Tianzifang,,market,31.2107,121.4665,Shanghai,CN,regional,300,shikumen lane boutiques
+shanghai,Zhujiajiao Water Town,,historic,31.1119,121.0544,Shanghai,CN,national,800,canal town day trip
+shanghai,Shanghai Museum,,museum,31.2287,121.4757,Shanghai,CN,national,200,
+xian,Terracotta Army,,historic,34.3848,109.2760,Xi'an,CN,world,600,Emperor Qin warrior pits
+xian,Xi'an City Wall South Gate,,historic,34.2542,108.9537,Xi'an,CN,world,800,cycle the ramparts
+xian,Giant Wild Goose Pagoda,,historic,34.2197,108.9640,Xi'an,CN,national,400,
+xian,Muslim Quarter,,market,34.2625,108.9525,Xi'an,CN,national,400,street food bazaar
+xian,Xi'an Bell Tower,,historic,34.2610,108.9539,Xi'an,CN,national,200,
+guilin,Elephant Trunk Hill,,landmark,25.2690,110.2955,Guilin,CN,national,500,river arch viewpoint
+guilin,Reed Flute Cave,,landmark,25.3094,110.2664,Guilin,CN,national,300,lit limestone cave
+guilin,Xingping Li River Viewpoint,,landmark,24.9440,110.5130,Yangshuo,CN,world,600,20 yuan note viewpoint
+guilin,Yangshuo West Street,,market,24.7776,110.4962,Yangshuo,CN,national,400,karst-backed walking street
+guilin,Longji Rice Terraces,,landmark,25.7400,110.1100,Longsheng,CN,world,2000,dragon backbone terraces
+hongkong,Victoria Peak,,landmark,22.2711,114.1490,Hong Kong,HK,world,400,skyline viewpoint pose spot
+hongkong,Star Ferry Tsim Sha Tsui Pier,,landmark,22.2938,114.1683,Hong Kong,HK,world,200,harbour crossing ride
+hongkong,Avenue of Stars,,landmark,22.2930,114.1744,Hong Kong,HK,world,500,harbour skyline pose spot
+hongkong,Tian Tan Big Buddha,,landmark,22.2539,113.9049,Hong Kong,HK,world,500,268 steps hilltop Buddha
+hongkong,Temple Street Night Market,,market,22.3049,114.1700,Hong Kong,HK,national,400,
+hongkong,Wong Tai Sin Temple,,historic,22.3420,114.1935,Hong Kong,HK,national,300,
+hongkong,Ngong Ping 360 Cable Car,,landmark,22.2895,113.9410,Hong Kong,HK,national,200,glass floor cabin views
+macau,Ruins of St. Paul's,,historic,22.1976,113.5407,Macau,MO,world,250,facade steps pose spot
+macau,Senado Square,,historic,22.1933,113.5396,Macau,MO,world,300,wave-tiled Portuguese plaza
+macau,A-Ma Temple,,historic,22.1865,113.5310,Macau,MO,national,250,
+macau,Macau Tower,,landmark,22.1790,113.5365,Macau,MO,national,250,worlds highest bungy
+macau,Taipa Village,,historic,22.1536,113.5570,Macau,MO,regional,400,pastel lanes egg tarts
+taipei,Taipei 101,,landmark,25.0339,121.5645,Taipei,TW,world,250,
+taipei,National Palace Museum,,museum,25.1024,121.5485,Taipei,TW,world,300,jade cabbage collection
+taipei,Chiang Kai-shek Memorial Hall,,historic,25.0347,121.5216,Taipei,TW,national,500,guard change plaza
+taipei,Shilin Night Market,,market,25.0877,121.5240,Taipei,TW,national,400,
+taipei,Longshan Temple,,historic,25.0371,121.4999,Taipei,TW,national,250,
+taipei,Elephant Mountain Viewpoint,,landmark,25.0270,121.5718,Taipei,TW,national,300,Taipei 101 sunset pose spot
+taipei,Ximending,,market,25.0370,121.5077,Taipei,TW,regional,300,youth shopping district
+bangkok,Grand Palace,,historic,13.7500,100.4913,Bangkok,TH,world,600,Emerald Buddha complex
+bangkok,Wat Arun,,historic,13.7437,100.4888,Bangkok,TH,world,300,riverside temple pose spot
+bangkok,Wat Pho,,historic,13.7465,100.4933,Bangkok,TH,world,400,46m reclining Buddha
+bangkok,Chatuchak Weekend Market,,market,13.7998,100.5500,Bangkok,TH,world,500,15000 stalls
+bangkok,Khao San Road,,landmark,13.7588,100.4975,Bangkok,TH,national,300,backpacker street
+bangkok,Jim Thompson House,,museum,13.7495,100.5283,Bangkok,TH,national,150,teak silk house
+bangkok,Yaowarat Chinatown,,market,13.7400,100.5100,Bangkok,TH,national,500,neon street food
+bangkok,Wat Saket Golden Mount,,historic,13.7538,100.5066,Bangkok,TH,national,300,spiral summit viewpoint
+bangkok,Mahanakhon SkyWalk,,landmark,13.7233,100.5285,Bangkok,TH,national,200,glass tray pose spot
+ayutthaya,Wat Mahathat,,historic,14.3568,100.5677,Ayutthaya,TH,world,400,Buddha head in tree roots
+ayutthaya,Wat Phra Si Sanphet,,historic,14.3559,100.5585,Ayutthaya,TH,world,400,three chedi row
+ayutthaya,Wat Chaiwatthanaram,,historic,14.3430,100.5420,Ayutthaya,TH,world,400,riverside sunset pose spot
+ayutthaya,Wat Yai Chai Mongkhon,,historic,14.3453,100.5926,Ayutthaya,TH,national,300,
+chiangmai,Wat Phra That Doi Suthep,,historic,18.8047,98.9217,Chiang Mai,TH,world,400,mountain temple city viewpoint
+chiangmai,Wat Chedi Luang,,historic,18.7870,98.9867,Chiang Mai,TH,national,300,ruined great chedi
+chiangmai,Wat Phra Singh,,historic,18.7884,98.9818,Chiang Mai,TH,national,250,
+chiangmai,Tha Phae Gate,,historic,18.7875,98.9933,Chiang Mai,TH,national,400,Sunday walking street start
+chiangmai,Elephant Nature Park,,zoo,19.2145,98.8595,Chiang Mai,TH,world,800,ethical elephant sanctuary
+chiangmai,Doi Inthanon Twin Pagodas,,national_park,18.5537,98.4800,Chiang Mai,TH,national,1500,Thailands highest peak
+phuket,Big Buddha Phuket,,landmark,7.8275,98.3128,Phuket,TH,national,400,hilltop island viewpoint
+phuket,Patong Beach,,beach,7.8960,98.2950,Phuket,TH,world,1200,
+phuket,Old Phuket Town,,historic,7.8848,98.3875,Phuket,TH,national,500,sino-portuguese shophouses pose spot
+phuket,Karon Viewpoint,,landmark,7.7850,98.3060,Phuket,TH,national,200,three beaches viewpoint
+phuket,Wat Chalong,,historic,7.8461,98.3374,Phuket,TH,national,300,
+phuket,Kata Beach,,beach,7.8203,98.2983,Phuket,TH,national,900,
+krabi,Railay West Beach,,beach,8.0105,98.8368,Krabi,TH,world,700,karst cliff beach
+krabi,Maya Bay,,beach,7.6788,98.7660,Ko Phi Phi,TH,world,500,filmed: The Beach
+krabi,Ko Phi Phi Viewpoint,,landmark,7.7419,98.7747,Ko Phi Phi,TH,world,300,twin bays viewpoint
+krabi,Ao Nang Beach,,beach,8.0320,98.8210,Krabi,TH,national,900,longtail boat hub
+krabi,Tiger Cave Temple,,historic,8.1247,98.9250,Krabi,TH,national,400,1260 steps summit viewpoint
+singapore,Marina Bay Sands SkyPark,,landmark,1.2834,103.8607,Singapore,SG,world,300,rooftop skyline viewpoint
+singapore,Gardens by the Bay,,park,1.2816,103.8636,Singapore,SG,world,600,Supertree Grove light show
+singapore,Merlion Park,,landmark,1.2868,103.8545,Singapore,SG,world,150,pose spot
+singapore,Jewel Changi Rain Vortex,,landmark,1.3601,103.9891,Singapore,SG,world,200,indoor waterfall pose spot
+singapore,Singapore Zoo,,zoo,1.4040,103.7930,Singapore,SG,world,500,open rainforest zoo
+singapore,Buddha Tooth Relic Temple,,historic,1.2814,103.8443,Singapore,SG,national,300,Chinatown landmark
+singapore,Little India,,landmark,1.3064,103.8513,Singapore,SG,national,500,colorful shophouse district
+singapore,Siloso Beach Sentosa,,beach,1.2546,103.8113,Singapore,SG,national,800,
+singapore,Clarke Quay,,landmark,1.2906,103.8465,Singapore,SG,regional,300,riverside nightlife
+kl,Petronas Twin Towers,,landmark,3.1579,101.7116,Kuala Lumpur,MY,world,300,KLCC park night pose spot
+kl,Batu Caves,,historic,3.2380,101.6840,Kuala Lumpur,MY,world,400,rainbow steps pose spot
+kl,Merdeka Square,,historic,3.1480,101.6937,Kuala Lumpur,MY,national,300,independence flagpole plaza
+kl,KL Tower,,landmark,3.1529,101.7037,Kuala Lumpur,MY,national,250,sky deck glass box
+kl,Central Market,,market,3.1458,101.6955,Kuala Lumpur,MY,national,200,
+kl,Thean Hou Temple,,historic,3.1214,101.6872,Kuala Lumpur,MY,national,250,lantern courtyard pose spot
+kl,Jalan Alor Food Street,,market,3.1452,101.7090,Kuala Lumpur,MY,national,300,
+penang,Armenian Street Murals,,landmark,5.4145,100.3388,George Town,MY,world,400,Children on Bicycle pose spot
+penang,Kek Lok Si Temple,,historic,5.3993,100.2735,George Town,MY,national,500,largest Malaysian Buddhist temple
+penang,Penang Hill,,landmark,5.4231,100.2758,George Town,MY,national,500,funicular summit viewpoint
+penang,Chew Jetty,,historic,5.4123,100.3412,George Town,MY,national,300,clan stilt village
+penang,Cheong Fatt Tze Blue Mansion,,historic,5.4199,100.3345,George Town,MY,national,150,filmed: Crazy Rich Asians
+bali,Uluwatu Temple,,historic,-8.8291,115.0849,Uluwatu,ID,world,500,clifftop sunset kecak dance
+bali,Tanah Lot,,historic,-8.6210,115.0868,Tabanan,ID,world,400,sea temple sunset pose spot
+bali,Tegallalang Rice Terraces,,landmark,-8.4310,115.2780,Ubud,ID,world,600,terrace swing pose spot
+bali,Sacred Monkey Forest,,park,-8.5190,115.2590,Ubud,ID,world,400,
+bali,Ubud Royal Palace,,historic,-8.5063,115.2624,Ubud,ID,national,300,art market opposite
+bali,Lempuyang Gates of Heaven,,historic,-8.3900,115.6310,Karangasem,ID,world,400,mirror gate pose spot
+bali,Tirta Empul,,historic,-8.4153,115.3155,Tampaksiring,ID,national,300,purification pools
+bali,Kuta Beach,,beach,-8.7180,115.1670,Kuta,ID,world,1000,surf and sunset
+bali,Seminyak Beach,,beach,-8.6908,115.1564,Seminyak,ID,national,900,beach club sunsets
+bali,Kelingking Beach Viewpoint,,landmark,-8.7510,115.4718,Nusa Penida,ID,world,500,T-rex cliff pose spot
+hanoi,Hoan Kiem Lake,,park,21.0287,105.8524,Hanoi,VN,world,500,Turtle Tower red bridge
+hanoi,Old Quarter,,historic,21.0340,105.8505,Hanoi,VN,world,600,36 streets motorbike buzz
+hanoi,Train Street,,landmark,21.0316,105.8444,Hanoi,VN,world,200,cafe by passing train
+hanoi,Temple of Literature,,historic,21.0290,105.8356,Hanoi,VN,national,300,first university courtyards
+hanoi,Ho Chi Minh Mausoleum,,historic,21.0368,105.8345,Hanoi,VN,national,400,Ba Dinh Square
+hanoi,St Joseph's Cathedral,,historic,21.0288,105.8489,Hanoi,VN,regional,150,
+hanoi,Tran Quoc Pagoda,,historic,21.0480,105.8366,Hanoi,VN,national,250,West Lake islet pagoda
+halong,Ha Long Bay Cruise Port,,landmark,20.9190,106.9870,Ha Long,VN,world,2000,karst bay cruises
+halong,Ti Top Island,,beach,20.8650,107.0840,Ha Long,VN,world,800,island summit bay viewpoint
+halong,Sung Sot Cave,,landmark,20.8660,107.0750,Ha Long,VN,world,400,largest bay cave
+hoian,Japanese Covered Bridge,,historic,15.8772,108.3263,Hoi An,VN,world,150,pose spot
+hoian,Hoi An Ancient Town,,historic,15.8770,108.3280,Hoi An,VN,world,600,lantern night pose spot
+hoian,Hoi An Night Market,,market,15.8759,108.3273,Hoi An,VN,national,300,lantern stalls river boats
+hoian,An Bang Beach,,beach,15.9137,108.3397,Hoi An,VN,national,800,
+hcmc,Ben Thanh Market,,market,10.7721,106.6983,Ho Chi Minh City,VN,world,300,
+hcmc,Notre-Dame Cathedral of Saigon,,historic,10.7797,106.6990,Ho Chi Minh City,VN,national,200,
+hcmc,Saigon Central Post Office,,historic,10.7799,106.6997,Ho Chi Minh City,VN,national,150,Eiffel-era interior
+hcmc,War Remnants Museum,,museum,10.7793,106.6925,Ho Chi Minh City,VN,world,200,
+hcmc,Independence Palace,,historic,10.7772,106.6955,Ho Chi Minh City,VN,national,300,
+hcmc,Bui Vien Walking Street,,landmark,10.7674,106.6932,Ho Chi Minh City,VN,regional,300,backpacker nightlife
+hcmc,Cu Chi Tunnels,,historic,11.1420,106.4640,Ho Chi Minh City,VN,world,800,wartime tunnel network
+siemreap,Angkor Wat,Q43473,historic,13.4125,103.8600,Siem Reap,KH,world,1500,sunrise reflection pond pose spot
+siemreap,Bayon Temple,,historic,13.4411,103.8589,Siem Reap,KH,world,500,smiling stone faces
+siemreap,Ta Prohm,,historic,13.4350,103.8890,Siem Reap,KH,world,500,filmed: Tomb Raider
+siemreap,Angkor Thom South Gate,,historic,13.4276,103.8590,Siem Reap,KH,world,300,face tower causeway
+siemreap,Phnom Bakheng,,historic,13.4237,103.8567,Siem Reap,KH,national,400,sunset hill viewpoint
+siemreap,Banteay Srei,,historic,13.5988,103.9627,Siem Reap,KH,national,400,pink sandstone carvings
+siemreap,Pub Street,,landmark,13.3545,103.8552,Siem Reap,KH,regional,300,night market nightlife
+manila,Fort Santiago Intramuros,,historic,14.5946,120.9708,Manila,PH,world,800,walled city citadel
+manila,San Agustin Church,,historic,14.5893,120.9750,Manila,PH,national,200,oldest Philippine stone church
+manila,Rizal Park,,park,14.5822,120.9780,Manila,PH,national,600,national hero monument
+manila,Manila Baywalk,,landmark,14.5720,120.9790,Manila,PH,regional,700,bay sunset viewpoint
+manila,Binondo Chinatown,,market,14.5998,120.9745,Manila,PH,national,500,worlds oldest Chinatown
+cebu,Magellan's Cross,,historic,10.2933,123.9021,Cebu City,PH,national,150,
+cebu,Basilica del Santo Nino,,historic,10.2942,123.9020,Cebu City,PH,national,200,
+cebu,Kawasan Falls,,landmark,9.8073,123.3730,Badian,PH,world,500,canyoneering turquoise falls
+cebu,Oslob Whale Shark Watching,,landmark,9.4617,123.3830,Oslob,PH,world,500,dawn whale shark swims
+bohol,Chocolate Hills Viewpoint,,landmark,9.8290,124.1400,Carmen,PH,world,800,
+bohol,Philippine Tarsier Sanctuary,,zoo,9.6960,123.9440,Corella,PH,national,400,worlds smallest primate
+bohol,Loboc River Cruise,,landmark,9.6380,124.0320,Loboc,PH,national,500,floating lunch cruise
+bohol,Alona Beach,,beach,9.5480,123.7740,Panglao,PH,national,800,
+boracay,White Beach,,beach,11.9620,121.9250,Boracay,PH,world,1500,powder sand sunset
+boracay,Willy's Rock,,landmark,11.9658,121.9229,Boracay,PH,world,150,tidal grotto pose spot
+boracay,Puka Shell Beach,,beach,11.9885,121.9155,Boracay,PH,national,700,
+boracay,Mount Luho Viewpoint,,landmark,11.9790,121.9370,Boracay,PH,regional,200,island panorama
+delhi,Red Fort,,historic,28.6562,77.2410,Delhi,IN,world,700,Lahori Gate entrance
+delhi,India Gate,,landmark,28.6129,77.2295,Delhi,IN,world,400,
+delhi,Qutub Minar,,historic,28.5245,77.1855,Delhi,IN,world,400,
+delhi,Humayun's Tomb,,historic,28.5933,77.2506,Delhi,IN,world,400,Taj Mahal precursor
+delhi,Lotus Temple,,historic,28.5535,77.2588,Delhi,IN,world,300,
+delhi,Jama Masjid,,historic,28.6508,77.2336,Delhi,IN,national,300,minaret old city viewpoint
+delhi,Chandni Chowk,,market,28.6562,77.2300,Delhi,IN,national,600,old Delhi bazaar
+delhi,Akshardham Temple,,historic,28.6126,77.2770,Delhi,IN,national,500,
+agra,Agra Fort,,historic,27.1796,78.0211,Agra,IN,world,600,Mughal red sandstone fort
+agra,Mehtab Bagh,,park,27.1799,78.0413,Agra,IN,national,400,Taj sunset viewpoint
+agra,Itmad-ud-Daulah Baby Taj,,historic,27.1928,78.0312,Agra,IN,national,300,
+jaipur,Hawa Mahal,,historic,26.9239,75.8267,Jaipur,IN,world,150,facade across street pose spot
+jaipur,Amber Fort,,historic,26.9855,75.8513,Jaipur,IN,world,800,hilltop fort mirror palace
+jaipur,City Palace,,historic,26.9255,75.8236,Jaipur,IN,national,400,
+jaipur,Jantar Mantar,,historic,26.9246,75.8248,Jaipur,IN,national,200,giant stone instruments
+jaipur,Jal Mahal,,landmark,26.9539,75.8463,Jaipur,IN,national,300,lake palace viewpoint
+jaipur,Nahargarh Fort,,historic,26.9370,75.8155,Jaipur,IN,national,500,pink city sunset viewpoint
+jaipur,Patrika Gate,,landmark,26.8536,75.8056,Jaipur,IN,national,150,painted arches pose spot
+mumbai,Gateway of India,,landmark,18.9220,72.8347,Mumbai,IN,world,300,
+mumbai,Marine Drive,,landmark,18.9438,72.8230,Mumbai,IN,world,1500,Queens Necklace sunset
+mumbai,Chhatrapati Shivaji Maharaj Terminus,,historic,18.9401,72.8356,Mumbai,IN,world,250,filmed: Slumdog Millionaire
+mumbai,Elephanta Caves,,historic,18.9634,72.9315,Mumbai,IN,world,600,island cave temples
+mumbai,Haji Ali Dargah,,historic,18.9826,72.8090,Mumbai,IN,national,300,causeway sea mosque
+mumbai,Colaba Causeway,,market,18.9170,72.8280,Mumbai,IN,regional,500,
+mumbai,Juhu Beach,,beach,19.0970,72.8265,Mumbai,IN,national,1000,street food sunsets
+varanasi,Dashashwamedh Ghat,,historic,25.3065,83.0107,Varanasi,IN,world,300,evening Ganga aarti
+varanasi,Kashi Vishwanath Temple,,historic,25.3110,83.0104,Varanasi,IN,world,250,
+varanasi,Assi Ghat,,historic,25.2877,83.0064,Varanasi,IN,national,300,sunrise boat rides
+varanasi,Manikarnika Ghat,,historic,25.3118,83.0138,Varanasi,IN,national,200,sacred cremation ghat
+varanasi,Sarnath Dhamek Stupa,,historic,25.3811,83.0247,Varanasi,IN,world,500,Buddhas first sermon site
+kathmandu,Swayambhunath Stupa,,historic,27.7148,85.2903,Kathmandu,NP,world,400,monkey temple city viewpoint
+kathmandu,Boudhanath Stupa,,historic,27.7214,85.3618,Kathmandu,NP,world,300,giant mandala stupa
+kathmandu,Pashupatinath Temple,,historic,27.7107,85.3486,Kathmandu,NP,world,400,sacred riverside temple
+kathmandu,Kathmandu Durbar Square,,historic,27.7043,85.3068,Kathmandu,NP,world,400,
+kathmandu,Thamel,,market,27.7152,85.3120,Kathmandu,NP,national,400,trekking gear bazaar
+kathmandu,Patan Durbar Square,,historic,27.6726,85.3254,Patan,NP,world,300,Newari temple square
+kathmandu,Bhaktapur Durbar Square,,historic,27.6720,85.4281,Bhaktapur,NP,world,400,medieval city square
+sydney,Sydney Opera House,Q45178,landmark,-33.8568,151.2153,Sydney,AU,world,300,
+sydney,Sydney Harbour Bridge,,landmark,-33.8560,151.2108,Sydney,AU,world,500,BridgeClimb and Pylon Lookout
+sydney,Bondi Beach,,beach,-33.8908,151.2743,Sydney,AU,world,1000,
+sydney,Bondi Icebergs Pool,,landmark,-33.8945,151.2743,Sydney,AU,world,200,ocean pool pose spot
+sydney,Manly Beach,,beach,-33.7969,151.2873,Sydney,AU,national,900,ferry ride from Quay
+sydney,The Rocks,,historic,-33.8593,151.2089,Sydney,AU,national,400,colonial lanes weekend markets
+sydney,Darling Harbour,,landmark,-33.8732,151.1997,Sydney,AU,regional,500,
+sydney,Taronga Zoo,,zoo,-33.8433,151.2411,Sydney,AU,national,400,harbour view zoo
+sydney,Mrs Macquarie's Chair,,park,-33.8588,151.2228,Sydney,AU,national,300,Opera House bridge viewpoint
+melbourne,Federation Square,,landmark,-37.8180,144.9691,Melbourne,AU,national,300,
+melbourne,Hosier Lane,,landmark,-37.8167,144.9693,Melbourne,AU,world,150,street art pose spot
+melbourne,Flinders Street Station,,historic,-37.8183,144.9671,Melbourne,AU,national,200,
+melbourne,Queen Victoria Market,,market,-37.8076,144.9568,Melbourne,AU,national,400,
+melbourne,Royal Botanic Gardens Melbourne,,park,-37.8304,144.9796,Melbourne,AU,national,800,
+melbourne,Brighton Bathing Boxes,,beach,-37.9177,144.9866,Melbourne,AU,world,300,colorful huts pose spot
+melbourne,St Kilda Pier,,beach,-37.8678,144.9740,Melbourne,AU,national,700,sunset penguins
+cairns,Great Barrier Reef Cruises,,national_park,-16.9220,145.7789,Cairns,AU,world,2000,Reef Fleet Terminal departures
+cairns,Cairns Esplanade Lagoon,,park,-16.9180,145.7780,Cairns,AU,regional,300,
+cairns,Skyrail Rainforest Cableway,,landmark,-16.8410,145.6920,Cairns,AU,national,300,Kuranda rainforest gondola
+cairns,Green Island,,beach,-16.7593,145.9737,Cairns,AU,national,800,reef island day trip
+goldcoast,Surfers Paradise Beach,,beach,-28.0016,153.4307,Gold Coast,AU,world,1200,sign pose spot
+goldcoast,SkyPoint Observation Deck,,landmark,-28.0063,153.4297,Gold Coast,AU,national,200,Q1 tower views
+goldcoast,Burleigh Heads,,beach,-28.0886,153.4515,Gold Coast,AU,national,800,headland surf viewpoint
+goldcoast,Currumbin Wildlife Sanctuary,,zoo,-28.1344,153.4873,Gold Coast,AU,national,400,koala and lorikeet feeding
+goldcoast,Warner Bros. Movie World,,theme_park,-27.9060,153.3140,Gold Coast,AU,national,500,
+uluru,Uluru,,national_park,-25.3444,131.0369,Yulara,AU,world,2000,sunrise and sunset viewpoints
+uluru,Kata Tjuta,,national_park,-25.3000,130.7360,Yulara,AU,world,2000,Valley of the Winds
+uluru,Field of Light,,landmark,-25.2340,130.9860,Yulara,AU,national,400,50000 light installation
+auckland,Sky Tower,,landmark,-36.8485,174.7621,Auckland,NZ,national,200,
+auckland,Auckland War Memorial Museum,,museum,-36.8605,174.7776,Auckland,NZ,national,300,
+auckland,Mount Eden Summit,,landmark,-36.8772,174.7644,Auckland,NZ,national,400,volcanic crater city viewpoint
+auckland,Waiheke Island Oneroa Beach,,beach,-36.7870,175.0030,Auckland,NZ,national,800,vineyard island ferry trip
+auckland,Viaduct Harbour,,landmark,-36.8425,174.7610,Auckland,NZ,regional,300,
+rotorua,Te Puia Pohutu Geyser,,park,-38.1625,176.2528,Rotorua,NZ,world,600,geyser and Maori culture
+rotorua,Wai-O-Tapu Thermal Wonderland,,landmark,-38.3559,176.3690,Rotorua,NZ,world,700,Champagne Pool colors
+rotorua,Redwoods Treewalk,,park,-38.1580,176.2740,Rotorua,NZ,national,500,night-lit canopy bridges
+rotorua,Polynesian Spa,,landmark,-38.1400,176.2560,Rotorua,NZ,regional,200,lakeside geothermal baths
+queenstown,Skyline Gondola Bob's Peak,,landmark,-45.0300,168.6550,Queenstown,NZ,world,300,lake and Remarkables viewpoint
+queenstown,Queenstown Bay Waterfront,,park,-45.0325,168.6598,Queenstown,NZ,national,400,
+queenstown,Kawarau Bridge Bungy,,landmark,-45.0093,168.8850,Queenstown,NZ,world,200,birthplace of bungy
+queenstown,Glenorchy Wharf Shed,,landmark,-44.8484,168.3820,Glenorchy,NZ,national,200,red shed lake pose spot
+milford,Milford Sound,,national_park,-44.6717,167.9256,Milford Sound,NZ,world,1500,Mitre Peak foreshore viewpoint
+hobbiton,Hobbiton Movie Set,,landmark,-37.8721,175.6832,Matamata,NZ,world,700,filmed: Lord of the Rings
+fiji,Port Denarau Marina,,landmark,-17.7716,177.3817,Nadi,FJ,national,400,island cruise departures
+fiji,Denarau Beach,,beach,-17.7680,177.3700,Nadi,FJ,national,900,
+fiji,Monuriki Island,,beach,-17.6092,177.0330,Mamanuca Islands,FJ,world,600,filmed: Cast Away
+fiji,Cloud 9 Floating Bar,,landmark,-17.7360,177.1810,Mamanuca Islands,FJ,national,200,reef platform pose spot
+cdmx,Zocalo,,historic,19.4326,-99.1332,Mexico City,MX,national,500,filmed: Spectre
+cdmx,Catedral Metropolitana,,landmark,19.4344,-99.1332,Mexico City,MX,national,150,
+cdmx,Palacio de Bellas Artes,,landmark,19.4352,-99.1413,Mexico City,MX,national,150,pose spot
+cdmx,Castillo de Chapultepec,,historic,19.4204,-99.1819,Mexico City,MX,national,250,
+cdmx,Museo Nacional de Antropologia,,museum,19.4260,-99.1863,Mexico City,MX,national,200,
+cdmx,Museo Frida Kahlo,,museum,19.3551,-99.1626,Mexico City,MX,national,120,Casa Azul; timed entry
+cdmx,Xochimilco Embarcadero Nativitas,,park,19.2578,-99.0997,Mexico City,MX,national,800,trajinera boats
+cdmx,Angel de la Independencia,,landmark,19.4270,-99.1677,Mexico City,MX,national,150,pose spot
+cdmx,Torre Latinoamericana,,landmark,19.4339,-99.1406,Mexico City,MX,regional,100,observation deck
+cdmx,Coyoacan Jardin Centenario,,historic,19.3500,-99.1622,Mexico City,MX,regional,400,
+cdmx,Templo Mayor,,historic,19.4348,-99.1316,Mexico City,MX,national,200,
+cdmx,Museo Soumaya,,museum,19.4406,-99.2046,Mexico City,MX,regional,150,pose spot facade
+cdmx,Basilica de Guadalupe,,landmark,19.4841,-99.1175,Mexico City,MX,national,400,
+teotihuacan,Piramide del Sol,,historic,19.6925,-98.8438,Teotihuacan,MX,world,500,
+teotihuacan,Piramide de la Luna,,historic,19.6999,-98.8440,Teotihuacan,MX,world,300,pose spot from plaza
+teotihuacan,Calzada de los Muertos,,historic,19.6930,-98.8460,Teotihuacan,MX,world,700,
+teotihuacan,La Ciudadela,,historic,19.6845,-98.8460,Teotihuacan,MX,national,400,Quetzalcoatl temple
+cancun,Playa Delfines,,beach,21.0619,-86.7773,Cancun,MX,national,800,pose spot Cancun sign
+cancun,Playa Tortugas,,beach,21.1420,-86.7458,Cancun,MX,regional,500,
+cancun,Zona Arqueologica El Rey,,historic,21.0604,-86.7783,Cancun,MX,regional,300,iguanas
+cancun,Playa Norte Isla Mujeres,,beach,21.2622,-86.7530,Isla Mujeres,MX,national,600,
+cancun,Museo Maya de Cancun,,museum,21.0767,-86.7784,Cancun,MX,regional,150,
+tulum,Zona Arqueologica de Tulum,,historic,20.2149,-87.4295,Tulum,MX,world,600,clifftop ruins; pose spot
+tulum,Playa Paraiso,,beach,20.2060,-87.4270,Tulum,MX,national,600,
+tulum,Gran Cenote,,park,20.2469,-87.4637,Tulum,MX,national,200,
+tulum,Cenote Dos Ojos,,park,20.3244,-87.3900,Tulum,MX,national,300,
+chichen-itza,Chichen Itza El Castillo,Q5859,historic,20.6829,-88.5686,Chichen Itza,MX,world,1000,pose spot; equinox serpent
+chichen-itza,Cenote Sagrado,,historic,20.6876,-88.5677,Chichen Itza,MX,national,200,
+chichen-itza,Cenote Ik Kil,,park,20.6633,-88.5450,Chichen Itza,MX,national,150,
+playa-carmen,Quinta Avenida,,landmark,20.6274,-87.0799,Playa del Carmen,MX,national,700,pedestrian strip
+playa-carmen,Parque Los Fundadores,,landmark,20.6246,-87.0750,Playa del Carmen,MX,regional,200,Portal Maya pose spot
+playa-carmen,Playa Mamitas,,beach,20.6340,-87.0645,Playa del Carmen,MX,regional,400,
+cozumel,Playa Palancar,,beach,20.3486,-87.0272,Cozumel,MX,national,600,snorkel reef
+cozumel,San Gervasio,,historic,20.5844,-86.8446,Cozumel,MX,regional,400,
+cozumel,Punta Sur,,park,20.2710,-86.9890,Cozumel,MX,regional,1000,lighthouse
+cabo,El Arco,,landmark,22.8759,-109.8955,Cabo San Lucas,MX,world,300,boat viewpoint; pose spot
+cabo,Playa del Amor,,beach,22.8772,-109.8953,Cabo San Lucas,MX,national,300,
+cabo,Playa El Medano,,beach,22.8896,-109.9027,Cabo San Lucas,MX,regional,800,
+cabo,Marina Cabo San Lucas,,landmark,22.8800,-109.9080,Cabo San Lucas,MX,regional,500,
+puerto-vallarta,Malecon,,landmark,20.6089,-105.2354,Puerto Vallarta,MX,national,700,seahorse statue pose
+puerto-vallarta,Parroquia de Guadalupe,,landmark,20.6076,-105.2330,Puerto Vallarta,MX,national,120,crown tower
+puerto-vallarta,Playa Los Muertos,,beach,20.5990,-105.2370,Puerto Vallarta,MX,national,500,pier pose spot
+puerto-vallarta,Zona Romantica,,landmark,20.6010,-105.2360,Puerto Vallarta,MX,regional,500,
+oaxaca,Zocalo de Oaxaca,,landmark,17.0614,-96.7253,Oaxaca,MX,national,300,
+oaxaca,Templo de Santo Domingo,,landmark,17.0658,-96.7229,Oaxaca,MX,national,150,
+oaxaca,Monte Alban,,historic,17.0437,-96.7679,Oaxaca,MX,world,800,Zapotec ruins
+oaxaca,Hierve el Agua,,park,16.8658,-96.2751,San Lorenzo Albarradas,MX,national,500,infinity pool pose spot
+oaxaca,Mercado 20 de Noviembre,,market,17.0598,-96.7259,Oaxaca,MX,regional,200,smoke-hall grills
+oaxaca,Arbol del Tule,,landmark,17.0464,-96.6354,Santa Maria del Tule,MX,national,100,widest tree
+rio,Cristo Redentor,Q79961,landmark,-22.9519,-43.2105,Rio de Janeiro,BR,world,200,summit access; pose spot
+rio,Bondinho Pao de Acucar,,landmark,-22.9552,-43.1645,Rio de Janeiro,BR,world,300,cable car base; filmed: Moonraker
+rio,Praia de Copacabana,,beach,-22.9711,-43.1822,Rio de Janeiro,BR,world,2000,boardwalk wave pattern
+rio,Praia de Ipanema,,beach,-22.9868,-43.2040,Rio de Janeiro,BR,world,1500,Posto 9 sunset
+rio,Escadaria Selaron,,landmark,-22.9151,-43.1793,Rio de Janeiro,BR,national,100,pose spot
+rio,Pedra do Arpoador,,landmark,-22.9893,-43.1935,Rio de Janeiro,BR,regional,200,sunset pose spot
+rio,Maracana,,landmark,-22.9121,-43.2302,Rio de Janeiro,BR,national,300,stadium tour
+rio,Parque Lage,,park,-22.9604,-43.2110,Rio de Janeiro,BR,national,300,mansion pool pose spot
+rio,Museu do Amanha,,museum,-22.8939,-43.1794,Rio de Janeiro,BR,national,200,
+rio,Santa Teresa,,historic,-22.9208,-43.1875,Rio de Janeiro,BR,regional,500,tram streets
+rio,Forte de Copacabana,,historic,-22.9862,-43.1874,Rio de Janeiro,BR,regional,300,
+iguazu-br,Cataratas do Iguacu,,national_park,-25.6953,-54.4367,Foz do Iguacu,BR,world,1500,panoramic walkway; pose spot
+iguazu-ar,Garganta del Diablo,,national_park,-25.6915,-54.4425,Puerto Iguazu,AR,world,2000,balcony over falls
+sao-paulo,Avenida Paulista,,landmark,-23.5613,-46.6565,Sao Paulo,BR,national,700,
+sao-paulo,MASP,,museum,-23.5614,-46.6559,Sao Paulo,BR,national,150,floating building
+sao-paulo,Parque Ibirapuera,,park,-23.5874,-46.6576,Sao Paulo,BR,national,1500,
+sao-paulo,Mercado Municipal,,market,-23.5419,-46.6294,Sao Paulo,BR,national,200,mortadella sandwich
+sao-paulo,Beco do Batman,,landmark,-23.5565,-46.6893,Sao Paulo,BR,regional,200,street art pose spot
+sao-paulo,Catedral da Se,,landmark,-23.5507,-46.6344,Sao Paulo,BR,regional,200,
+sao-paulo,Pinacoteca,,museum,-23.5343,-46.6334,Sao Paulo,BR,national,150,
+sao-paulo,Farol Santander,,landmark,-23.5457,-46.6339,Sao Paulo,BR,regional,100,skyline deck
+buenos-aires,Obelisco,,landmark,-34.6037,-58.3816,Buenos Aires,AR,national,200,pose spot
+buenos-aires,Plaza de Mayo,,historic,-34.6083,-58.3722,Buenos Aires,AR,national,300,
+buenos-aires,Casa Rosada,,landmark,-34.6080,-58.3703,Buenos Aires,AR,national,150,Evita balcony
+buenos-aires,Caminito,,landmark,-34.6395,-58.3630,Buenos Aires,AR,world,300,painted houses pose spot
+buenos-aires,Cementerio de la Recoleta,,historic,-34.5875,-58.3933,Buenos Aires,AR,world,250,Evita tomb
+buenos-aires,Teatro Colon,,landmark,-34.6010,-58.3831,Buenos Aires,AR,national,150,
+buenos-aires,El Ateneo Grand Splendid,,landmark,-34.5958,-58.3944,Buenos Aires,AR,national,100,theatre bookstore
+buenos-aires,Puente de la Mujer,,landmark,-34.6077,-58.3646,Buenos Aires,AR,regional,200,
+buenos-aires,Feria de San Telmo,,market,-34.6203,-58.3717,Buenos Aires,AR,national,300,Sunday fair
+buenos-aires,Floralis Generica,,landmark,-34.5819,-58.3933,Buenos Aires,AR,regional,200,
+buenos-aires,La Bombonera,,landmark,-34.6356,-58.3649,Buenos Aires,AR,national,200,Boca stadium
+buenos-aires,El Rosedal de Palermo,,park,-34.5715,-58.4170,Buenos Aires,AR,regional,500,
+bariloche,Centro Civico,,landmark,-41.1335,-71.3103,Bariloche,AR,national,200,St Bernard dogs pose
+bariloche,Cerro Campanario,,landmark,-41.1245,-71.4520,Bariloche,AR,national,300,chairlift base; top view
+bariloche,Llao Llao,,landmark,-41.0593,-71.5310,Bariloche,AR,national,300,hotel viewpoint
+bariloche,Cerro Catedral,,landmark,-41.1697,-71.4402,Bariloche,AR,national,500,ski base village
+bariloche,Punto Panoramico Circuito Chico,,landmark,-41.0762,-71.5507,Bariloche,AR,regional,200,pose spot
+el-calafate,Glaciar Perito Moreno,,national_park,-50.4934,-73.1200,El Calafate,AR,world,1500,boardwalk viewpoints; calving ice
+el-calafate,Laguna Nimez,,park,-50.3288,-72.2702,El Calafate,AR,regional,600,flamingos
+torres-paine,Mirador Base Las Torres,,national_park,-50.9412,-72.9590,Torres del Paine,CL,world,800,granite towers; pose spot
+torres-paine,Salto Grande,,national_park,-50.9700,-73.1420,Torres del Paine,CL,national,400,
+torres-paine,Lago Pehoe,,national_park,-51.0700,-73.0000,Torres del Paine,CL,world,1500,Cuernos view
+torres-paine,Mirador Glaciar Grey,,national_park,-51.1360,-73.0910,Torres del Paine,CL,national,800,
+santiago-cl,Plaza de Armas,,landmark,-33.4378,-70.6505,Santiago,CL,national,300,
+santiago-cl,Cerro San Cristobal,,landmark,-33.4310,-70.6320,Santiago,CL,national,300,funicular base
+santiago-cl,Cerro Santa Lucia,,park,-33.4403,-70.6437,Santiago,CL,regional,300,
+santiago-cl,Palacio de La Moneda,,landmark,-33.4430,-70.6540,Santiago,CL,national,200,
+santiago-cl,Sky Costanera,,landmark,-33.4179,-70.6067,Santiago,CL,national,150,tallest deck in SA
+santiago-cl,Mercado Central,,market,-33.4337,-70.6503,Santiago,CL,regional,200,seafood hall
+santiago-cl,Barrio Bellavista,,landmark,-33.4325,-70.6345,Santiago,CL,regional,500,
+santiago-cl,Museo Precolombino,,museum,-33.4390,-70.6520,Santiago,CL,regional,100,
+valparaiso,Cerro Concepcion,,historic,-33.0403,-71.6277,Valparaiso,CL,national,500,street art pose spot
+valparaiso,La Sebastiana,,museum,-33.0428,-71.6135,Valparaiso,CL,national,100,Neruda house
+valparaiso,Plaza Sotomayor,,landmark,-33.0380,-71.6280,Valparaiso,CL,regional,300,
+valparaiso,Paseo 21 de Mayo,,landmark,-33.0338,-71.6395,Valparaiso,CL,regional,200,harbor viewpoint
+easter-island,Ahu Tongariki,,historic,-27.1258,-109.2769,Hanga Roa,CL,world,500,15 moai sunrise pose
+easter-island,Rano Raraku,,historic,-27.1214,-109.2886,Hanga Roa,CL,world,800,moai quarry
+easter-island,Ahu Tahai,,historic,-27.1379,-109.4270,Hanga Roa,CL,national,300,sunset pose spot
+easter-island,Playa Anakena,,beach,-27.0733,-109.3235,Hanga Roa,CL,national,500,moai on beach
+easter-island,Rano Kau,,landmark,-27.1810,-109.4385,Hanga Roa,CL,national,600,crater rim; Orongo
+lima,Plaza Mayor de Lima,,historic,-12.0459,-77.0305,Lima,PE,national,300,
+lima,Parque del Amor,,park,-12.1266,-77.0367,Lima,PE,national,400,clifftop kiss statue pose
+lima,Larcomar,,landmark,-12.1317,-77.0302,Lima,PE,regional,200,cliff mall
+lima,Huaca Pucllana,,historic,-12.1108,-77.0340,Lima,PE,national,300,adobe pyramid
+lima,Museo Larco,,museum,-12.0722,-77.0710,Lima,PE,national,150,
+lima,Puente de los Suspiros,,landmark,-12.1493,-77.0225,Lima,PE,regional,200,Barranco pose spot
+lima,Convento de San Francisco,,historic,-12.0457,-77.0274,Lima,PE,national,150,catacombs
+lima,Parque Kennedy,,park,-12.1197,-77.0300,Lima,PE,regional,300,cats
+cusco,Plaza de Armas Cusco,,historic,-13.5165,-71.9784,Cusco,PE,world,300,
+cusco,Sacsayhuaman,,historic,-13.5086,-71.9823,Cusco,PE,world,800,
+cusco,Qorikancha,,historic,-13.5203,-71.9752,Cusco,PE,national,200,sun temple
+cusco,Catedral del Cusco,,landmark,-13.5164,-71.9779,Cusco,PE,national,150,
+cusco,Mercado San Pedro,,market,-13.5203,-71.9832,Cusco,PE,national,200,
+cusco,Piedra de los Doce Angulos,,landmark,-13.5160,-71.9757,Cusco,PE,national,100,pose spot
+cusco,Barrio de San Blas,,historic,-13.5148,-71.9745,Cusco,PE,regional,400,
+cusco,Cristo Blanco,,landmark,-13.5096,-71.9745,Cusco,PE,regional,150,city viewpoint
+sacred-valley,Parque Arqueologico de Pisac,,historic,-13.4147,-71.8470,Pisac,PE,national,700,terraces
+sacred-valley,Mercado de Pisac,,market,-13.4215,-71.8468,Pisac,PE,national,300,
+sacred-valley,Fortaleza de Ollantaytambo,,historic,-13.2577,-72.2660,Ollantaytambo,PE,national,500,
+sacred-valley,Moray,,historic,-13.3297,-72.1963,Maras,PE,national,500,circular terraces
+sacred-valley,Salineras de Maras,,historic,-13.3040,-72.1540,Maras,PE,national,500,salt ponds pose spot
+machu-picchu,Machu Picchu,Q676203,historic,-13.1633,-72.5449,Aguas Calientes,PE,world,1200,guardhouse postcard view; pose spot
+machu-picchu,Huayna Picchu,,landmark,-13.1570,-72.5460,Aguas Calientes,PE,national,300,permit climb
+vinicunca,Montana de Siete Colores,,landmark,-13.8697,-71.3030,Pitumarca,PE,world,500,Rainbow Mountain pose spot
+cartagena,Torre del Reloj,,landmark,10.4220,-75.5486,Cartagena,CO,national,200,walled city gate
+cartagena,Castillo San Felipe de Barajas,,historic,10.4226,-75.5390,Cartagena,CO,world,400,
+cartagena,Plaza Santo Domingo,,historic,10.4240,-75.5520,Cartagena,CO,national,200,Botero sculpture
+cartagena,Las Bovedas,,market,10.4283,-75.5476,Cartagena,CO,regional,200,craft arcades
+cartagena,Cafe del Mar Baluarte,,landmark,10.4250,-75.5530,Cartagena,CO,regional,200,sunset on wall
+cartagena,Plaza de la Trinidad,,historic,10.4192,-75.5468,Cartagena,CO,regional,300,Getsemani murals
+cartagena,Playa Blanca Baru,,beach,10.2278,-75.5852,Cartagena,CO,national,1000,
+cartagena,Playa de Bocagrande,,beach,10.4000,-75.5570,Cartagena,CO,regional,800,
+medellin,Comuna 13 Escaleras,,landmark,6.2520,-75.6195,Medellin,CO,national,400,graffiti tour pose spot
+medellin,Plaza Botero,,landmark,6.2529,-75.5686,Medellin,CO,national,200,bronze sculptures
+medellin,Pueblito Paisa,,landmark,6.2354,-75.5806,Medellin,CO,regional,200,hilltop village replica
+medellin,Jardin Botanico de Medellin,,park,6.2705,-75.5660,Medellin,CO,regional,400,
+medellin,Parque Arvi,,park,6.2814,-75.5023,Medellin,CO,regional,800,metrocable access
+guatape,Piedra del Penol,,landmark,6.2220,-75.1783,Guatape,CO,world,300,740 steps; pose spot
+guatape,Calles de Guatape,,historic,6.2330,-75.1590,Guatape,CO,national,400,zocalos painted town
+bogota,Monserrate,,landmark,4.6021,-74.0568,Bogota,CO,national,300,funicular base
+bogota,Plaza de Bolivar,,historic,4.5981,-74.0760,Bogota,CO,national,300,
+bogota,Museo del Oro,,museum,4.6018,-74.0721,Bogota,CO,world,150,gold hall
+bogota,Museo Botero,,museum,4.5969,-74.0735,Bogota,CO,national,100,
+bogota,Chorro de Quevedo,,historic,4.5966,-74.0699,Bogota,CO,regional,300,La Candelaria
+bogota,Mercado de Usaquen,,market,4.6946,-74.0308,Bogota,CO,regional,300,Sunday flea
+zipaquira,Catedral de Sal,,historic,5.0186,-74.0089,Zipaquira,CO,national,300,underground salt church
+quito,Plaza Grande,,historic,-0.2202,-78.5120,Quito,EC,national,250,
+quito,La Compania de Jesus,,landmark,-0.2213,-78.5135,Quito,EC,national,100,gold-leaf church
+quito,Basilica del Voto Nacional,,landmark,-0.2148,-78.5079,Quito,EC,national,200,tower climb pose
+quito,El Panecillo,,landmark,-0.2273,-78.5199,Quito,EC,national,300,winged virgin
+quito,Calle La Ronda,,historic,-0.2234,-78.5137,Quito,EC,regional,300,
+quito,Teleferico Quito,,landmark,-0.1898,-78.5335,Quito,EC,regional,300,cable car base
+quito,Mitad del Mundo,,landmark,-0.0022,-78.4558,Quito,EC,world,400,equator line pose spot
+galapagos,Estacion Charles Darwin,,zoo,-0.7427,-90.3023,Puerto Ayora,EC,world,300,giant tortoises
+galapagos,Tortuga Bay,,beach,-0.7605,-90.3340,Puerto Ayora,EC,national,1000,marine iguanas
+galapagos,Las Grietas,,park,-0.7532,-90.3148,Puerto Ayora,EC,regional,200,swim crevasse
+galapagos,Muelle de los Pescadores,,market,-0.7438,-90.3125,Puerto Ayora,EC,regional,100,sea lions at fish stall
+la-paz,Plaza Murillo,,historic,-16.4957,-68.1335,La Paz,BO,national,250,
+la-paz,Mercado de las Brujas,,market,-16.4965,-68.1382,La Paz,BO,national,200,witches market
+la-paz,Valle de la Luna,,park,-16.5675,-68.0930,La Paz,BO,national,600,
+la-paz,Mirador Killi Killi,,landmark,-16.4877,-68.1257,La Paz,BO,regional,150,city bowl view
+la-paz,Mi Teleferico Estacion Central,,landmark,-16.4880,-68.1400,La Paz,BO,regional,200,cable car network
+uyuni,Salar de Uyuni,,park,-20.3072,-66.9412,Uyuni,BO,world,2500,Colchani access; mirror pose spot
+uyuni,Isla Incahuasi,,park,-20.2404,-67.6228,Uyuni,BO,world,800,cactus island
+uyuni,Cementerio de Trenes,,landmark,-20.4746,-66.9903,Uyuni,BO,national,300,rusted trains pose spot
+toronto,CN Tower,,landmark,43.6426,-79.3871,Toronto,CA,world,150,EdgeWalk
+toronto,Ripleys Aquarium of Canada,,aquarium,43.6424,-79.3860,Toronto,CA,national,150,shark tunnel
+toronto,Royal Ontario Museum,,museum,43.6677,-79.3948,Toronto,CA,national,150,crystal facade
+toronto,Distillery District,,historic,43.6503,-79.3596,Toronto,CA,national,400,
+toronto,Nathan Phillips Square,,landmark,43.6527,-79.3839,Toronto,CA,national,250,Toronto sign pose spot
+toronto,St Lawrence Market,,market,43.6487,-79.3716,Toronto,CA,national,200,peameal bacon
+toronto,Casa Loma,,historic,43.6780,-79.4094,Toronto,CA,national,200,filmed: X-Men
+toronto,Toronto Islands Ferry,,park,43.6408,-79.3767,Toronto,CA,regional,300,skyline view access
+toronto,High Park,,park,43.6465,-79.4637,Toronto,CA,regional,1000,cherry blossoms
+toronto,Kensington Market,,market,43.6552,-79.4006,Toronto,CA,regional,400,
+niagara-ca,Horseshoe Falls Table Rock,,landmark,43.0791,-79.0788,Niagara Falls,CA,world,500,pose spot; Journey Behind Falls
+niagara-ca,Skylon Tower,,landmark,43.0850,-79.0800,Niagara Falls,CA,national,100,
+niagara-ca,Clifton Hill,,landmark,43.0908,-79.0745,Niagara Falls,CA,regional,400,
+niagara-ca,Niagara-on-the-Lake,,historic,43.2553,-79.0720,Niagara-on-the-Lake,CA,national,400,Queen Street
+vancouver,Stanley Park Totem Poles,,park,49.2994,-123.1207,Vancouver,CA,national,2500,seawall
+vancouver,Granville Island Market,,market,49.2723,-123.1343,Vancouver,CA,national,300,
+vancouver,Capilano Suspension Bridge,,park,49.3429,-123.1149,North Vancouver,CA,national,300,pose spot
+vancouver,Gastown Steam Clock,,landmark,49.2844,-123.1089,Vancouver,CA,national,100,pose spot
+vancouver,Canada Place,,landmark,49.2888,-123.1111,Vancouver,CA,regional,300,sails
+vancouver,Grouse Mountain,,landmark,49.3700,-123.0987,North Vancouver,CA,regional,300,Skyride base
+vancouver,English Bay Beach,,beach,49.2864,-123.1425,Vancouver,CA,regional,500,
+vancouver,Science World,,museum,49.2734,-123.1038,Vancouver,CA,regional,200,geodesic dome
+vancouver,Kitsilano Beach,,beach,49.2743,-123.1553,Vancouver,CA,regional,600,
+victoria-bc,BC Parliament Buildings,,landmark,48.4198,-123.3702,Victoria,CA,national,300,Inner Harbour lights
+victoria-bc,Fairmont Empress,,landmark,48.4213,-123.3670,Victoria,CA,national,150,afternoon tea
+victoria-bc,Butchart Gardens,,park,48.5635,-123.4692,Brentwood Bay,CA,national,800,sunken garden
+victoria-bc,Fishermans Wharf,,landmark,48.4218,-123.3827,Victoria,CA,regional,300,float homes
+victoria-bc,Royal BC Museum,,museum,48.4199,-123.3675,Victoria,CA,regional,150,
+banff,Banff Gondola,,landmark,51.1480,-115.5617,Banff,CA,national,300,Sulphur Mountain base
+banff,Banff Avenue,,landmark,51.1784,-115.5708,Banff,CA,national,400,Cascade Mountain pose spot
+banff,Lake Minnewanka,,park,51.2536,-115.4090,Banff,CA,regional,1500,cruise dock
+banff,Bow Falls,,landmark,51.1666,-115.5601,Banff,CA,regional,200,
+banff,Surprise Corner,,landmark,51.1705,-115.5559,Banff,CA,regional,150,Banff Springs pose spot
+banff,Johnston Canyon,,park,51.2453,-115.8393,Banff,CA,national,800,catwalk falls
+lake-louise,Lake Louise Lakeshore,,park,51.4166,-116.2150,Lake Louise,CA,world,800,Chateau front pose spot
+moraine-lake,Moraine Lake Rockpile,,park,51.3289,-116.1795,Lake Louise,CA,world,600,Twenty Dollar View pose
+jasper,Maligne Lake,,park,52.7290,-117.6400,Jasper,CA,national,1500,Spirit Island cruise dock
+jasper,Athabasca Falls,,park,52.6647,-117.8843,Jasper,CA,national,300,
+jasper,Jasper SkyTram,,landmark,52.8476,-118.1125,Jasper,CA,regional,300,base station
+jasper,Pyramid Lake,,park,52.9165,-118.0950,Jasper,CA,regional,600,island footbridge
+jasper,Columbia Icefield,,national_park,52.2208,-117.2240,Jasper,CA,world,1500,Athabasca Glacier access
+montreal,Place Jacques-Cartier,,historic,45.5078,-73.5527,Montreal,CA,national,400,Old Montreal
+montreal,Basilique Notre-Dame,,landmark,45.5046,-73.5562,Montreal,CA,national,150,blue altar
+montreal,Belvedere Kondiaronk,,park,45.5036,-73.5872,Montreal,CA,national,500,Mount Royal pose spot
+montreal,Marche Jean-Talon,,market,45.5362,-73.6146,Montreal,CA,regional,200,
+montreal,Jardin Botanique,,park,45.5566,-73.5631,Montreal,CA,national,800,
+montreal,Stade Olympique,,landmark,45.5579,-73.5515,Montreal,CA,national,300,leaning tower
+montreal,Oratoire Saint-Joseph,,landmark,45.4920,-73.6180,Montreal,CA,national,300,dome stairs
+montreal,Habitat 67,,landmark,45.5004,-73.5430,Montreal,CA,regional,200,pose spot from quay
+quebec-city,Chateau Frontenac,,landmark,46.8118,-71.2049,Quebec City,CA,national,200,Dufferin Terrace pose spot
+quebec-city,Rue du Petit-Champlain,,historic,46.8109,-71.2027,Quebec City,CA,national,300,pose spot
+quebec-city,Chute Montmorency,,park,46.8907,-71.1477,Quebec City,CA,national,500,suspension bridge falls
+quebec-city,Place Royale,,historic,46.8125,-71.2017,Quebec City,CA,national,150,
+quebec-city,Plaines d Abraham,,park,46.7995,-71.2180,Quebec City,CA,regional,800,
+quebec-city,Porte Saint-Louis,,historic,46.8077,-71.2102,Quebec City,CA,regional,300,city walls
+ottawa,Parliament Hill,,landmark,45.4254,-75.7003,Ottawa,CA,national,300,Centennial Flame
+ottawa,ByWard Market,,market,45.4277,-75.6920,Ottawa,CA,national,300,BeaverTails
+ottawa,Rideau Canal Locks,,landmark,45.4258,-75.6970,Ottawa,CA,national,300,winter skateway
+ottawa,National Gallery of Canada,,museum,45.4296,-75.6989,Ottawa,CA,national,150,Maman spider pose
+ottawa,Canadian Museum of History,,museum,45.4304,-75.7086,Gatineau,CA,national,200,
+havana,Plaza Vieja,,historic,23.1365,-82.3496,Havana,CU,national,300,
+havana,El Capitolio,,landmark,23.1352,-82.3589,Havana,CU,national,200,classic cars pose spot
+havana,Malecon,,landmark,23.1436,-82.3702,Havana,CU,world,1500,seawall sunset
+havana,Plaza de la Catedral,,historic,23.1412,-82.3493,Havana,CU,national,200,
+havana,Plaza de la Revolucion,,landmark,23.1223,-82.3860,Havana,CU,national,500,Che mural
+havana,Castillo del Morro,,historic,23.1497,-82.3558,Havana,CU,national,400,harbor fortress
+havana,Hotel Nacional,,landmark,23.1440,-82.3800,Havana,CU,national,200,garden terrace
+havana,Fusterlandia,,landmark,23.0888,-82.4655,Havana,CU,regional,300,mosaic houses pose spot
+varadero,Playa de Varadero,,beach,23.1570,-81.2450,Varadero,CU,world,2500,
+varadero,Parque Josone,,park,23.1566,-81.2426,Varadero,CU,regional,300,
+san-juan,Castillo San Felipe del Morro,,historic,18.4708,-66.1240,San Juan,PR,world,500,kite esplanade pose
+san-juan,Castillo San Cristobal,,historic,18.4673,-66.1113,San Juan,PR,national,300,
+san-juan,Calle Fortaleza Umbrellas,,landmark,18.4647,-66.1181,San Juan,PR,national,200,umbrella street pose spot
+san-juan,Paseo de la Princesa,,historic,18.4633,-66.1170,San Juan,PR,regional,300,
+san-juan,Condado Beach,,beach,18.4580,-66.0770,San Juan,PR,regional,800,
+el-yunque,El Yunque El Portal,,national_park,18.3262,-65.7511,Rio Grande,PR,national,2000,rainforest visitor center
+punta-cana,Playa Bavaro,,beach,18.6829,-68.4030,Punta Cana,DO,world,2000,
+punta-cana,Playa Macao,,beach,18.7658,-68.4477,Punta Cana,DO,national,800,
+punta-cana,Hoyo Azul,,park,18.4720,-68.4450,Punta Cana,DO,national,300,cenote pose spot
+punta-cana,Isla Saona,,beach,18.1380,-68.6980,Saona Island,DO,national,2000,catamaran day trip
+nassau,Atlantis Paradise Island,,theme_park,25.0855,-77.3210,Nassau,BS,world,800,Royal Towers pose spot
+nassau,Cable Beach,,beach,25.0775,-77.4090,Nassau,BS,national,1000,
+nassau,Queens Staircase,,historic,25.0735,-77.3365,Nassau,BS,national,100,66 steps
+nassau,Straw Market,,market,25.0787,-77.3445,Nassau,BS,regional,150,
+nassau,Junkanoo Beach,,beach,25.0800,-77.3500,Nassau,BS,regional,400,cruise walkable
+montego-bay,Doctors Cave Beach,,beach,18.4909,-77.9270,Montego Bay,JM,national,400,
+montego-bay,Hip Strip,,landmark,18.4880,-77.9270,Montego Bay,JM,regional,600,Gloucester Avenue
+montego-bay,Rose Hall Great House,,historic,18.5115,-77.8155,Montego Bay,JM,national,200,White Witch legend
+ocho-rios,Dunns River Falls,,park,18.4145,-77.1373,Ocho Rios,JM,world,500,climbable falls; filmed: Dr. No
+ocho-rios,Mystic Mountain,,theme_park,18.4110,-77.1300,Ocho Rios,JM,regional,300,bobsled ride
+ocho-rios,Ocho Rios Bay Beach,,beach,18.4070,-77.1030,Ocho Rios,JM,regional,500,
+ocho-rios,Blue Hole Secret Falls,,park,18.3660,-77.0770,Ocho Rios,JM,national,300,rope swing pose
+aruba,Eagle Beach,,beach,12.5586,-70.0561,Oranjestad,AW,world,800,fofoti tree pose spot
+aruba,Palm Beach,,beach,12.5756,-70.0448,Oranjestad,AW,national,1000,
+aruba,California Lighthouse,,landmark,12.6155,-70.0512,Oranjestad,AW,national,150,sunset pose
+aruba,Conchi Natural Pool,,national_park,12.5320,-69.9330,Oranjestad,AW,national,300,Arikok 4x4 access
+aruba,Flamingo Beach,,beach,12.5090,-70.0420,Oranjestad,AW,world,200,flamingo pose spot
+arenal,Parque Nacional Volcan Arenal,,national_park,10.4443,-84.7376,La Fortuna,CR,national,2000,volcano cone viewpoint
+arenal,Catarata La Fortuna,,park,10.4437,-84.6672,La Fortuna,CR,national,300,500 steps down
+arenal,Mistico Hanging Bridges,,park,10.4780,-84.7610,La Fortuna,CR,national,500,canopy pose spot
+manuel-antonio,Parque Nacional Manuel Antonio,,national_park,9.3925,-84.1417,Quepos,CR,world,1500,sloths and capuchins
+manuel-antonio,Playa Manuel Antonio,,beach,9.3896,-84.1434,Quepos,CR,national,400,inside park
+manuel-antonio,Playa Espadilla,,beach,9.3970,-84.1560,Quepos,CR,regional,600,
+monteverde,Reserva Monteverde,,national_park,10.3015,-84.7947,Monteverde,CR,national,1500,cloud forest entrance
+monteverde,Selvatura Park,,park,10.3400,-84.7990,Monteverde,CR,national,500,hanging bridges ziplines
+panama-city,Esclusas de Miraflores,,landmark,8.9966,-79.5913,Panama City,PA,world,300,canal visitor center
+panama-city,Casco Viejo,,historic,8.9517,-79.5340,Panama City,PA,national,400,Plaza Independencia
+panama-city,Cinta Costera,,park,8.9600,-79.5250,Panama City,PA,regional,800,skyline walk
+panama-city,Biomuseo,,museum,8.9137,-79.5427,Panama City,PA,national,150,Gehry colors pose
+panama-city,Calzada de Amador,,landmark,8.9160,-79.5310,Panama City,PA,regional,1000,causeway
+belize,Great Blue Hole,,national_park,17.3151,-87.5347,Belize City,BZ,world,2500,aerial pose; dive site
+belize,The Split Caye Caulker,,beach,17.7625,-88.0254,Caye Caulker,BZ,national,300,go slow
+belize,Hol Chan Marine Reserve,,park,17.8640,-87.9740,San Pedro,BZ,national,1000,snorkel nurse sharks
+belize,Secret Beach,,beach,17.9670,-88.0330,San Pedro,BZ,regional,400,
+belize,Altun Ha,,historic,17.7639,-88.3468,Belize City,BZ,national,500,Maya beer-label temple
+dubai,Burj Khalifa At the Top Entrance,Q12495,landmark,25.1972,55.2744,Dubai,AE,world,150,entry via Dubai Mall lower ground
+dubai,Dubai Fountain Viewpoint,,landmark,25.1953,55.2762,Dubai,AE,world,250,"evening shows, pose spot"
+dubai,Palm Jumeirah Boardwalk (The Pointe),,landmark,25.1116,55.1382,Dubai,AE,world,600,"Atlantis view, pose spot"
+dubai,Burj Al Arab Viewpoint (Umm Suqeim Beach),,landmark,25.1430,55.1899,Dubai,AE,world,300,public beach pose spot
+dubai,Dubai Marina Walk,,landmark,25.0772,55.1332,Dubai,AE,national,800,skyline promenade
+dubai,Dubai Gold Souk,,market,25.2709,55.2971,Dubai,AE,world,400,Deira entry gate
+dubai,Al Marmoom Desert Safari Area (Al Qudra),,park,24.8310,55.3700,Dubai,AE,regional,3000,desert safari meetup zone
+dubai,Dubai Frame,,landmark,25.2354,55.3004,Dubai,AE,national,150,golden frame pose spot
+dubai,Museum of the Future,,museum,25.2191,55.2822,Dubai,AE,world,150,torus facade pose spot
+dubai,Al Fahidi Historical Neighbourhood,,historic,25.2640,55.3000,Dubai,AE,regional,300,old Dubai lanes
+abudhabi,Sheikh Zayed Grand Mosque,,landmark,24.4128,54.4747,Abu Dhabi,AE,world,250,"visitor entry, pose spot"
+abudhabi,Louvre Abu Dhabi,,museum,24.5336,54.3984,Abu Dhabi,AE,world,200,rain-of-light dome
+abudhabi,Ferrari World Yas Island,,theme_park,24.4838,54.6069,Abu Dhabi,AE,world,250,world's fastest coaster
+abudhabi,Emirates Palace,,landmark,24.4617,54.3174,Abu Dhabi,AE,national,250,gold-leaf lobby high tea
+abudhabi,Qasr Al Watan,,landmark,24.4582,54.3090,Abu Dhabi,AE,national,250,presidential palace tours
+abudhabi,Warner Bros World,,theme_park,24.4790,54.6010,Abu Dhabi,AE,national,250,indoor park on Yas Island
+abudhabi,Corniche Beach,,beach,24.4633,54.3440,Abu Dhabi,AE,regional,800,family beach promenade
+abudhabi,Qasr Al Hosn,,historic,24.4826,54.3547,Abu Dhabi,AE,regional,200,oldest stone building
+doha,Souq Waqif,,market,25.2874,51.5330,Doha,QA,world,500,main lane entry
+doha,Museum of Islamic Art,,museum,25.2952,51.5393,Doha,QA,world,200,Pei building on Corniche
+doha,National Museum of Qatar,,museum,25.2857,51.5449,Doha,QA,national,250,desert rose building
+doha,The Pearl (Porto Arabia),,landmark,25.3680,51.5500,Doha,QA,national,800,marina promenade
+doha,Katara Cultural Village,,landmark,25.3595,51.5258,Doha,QA,regional,500,amphitheatre and beach
+doha,Doha Corniche Skyline Walk,,landmark,25.3000,51.5330,Doha,QA,regional,800,West Bay pose spot
+jerusalem,Western Wall Plaza,,historic,31.7767,35.2345,Jerusalem,IL,world,250,"plaza access, security check"
+jerusalem,Church of the Holy Sepulchre,,historic,31.7784,35.2296,Jerusalem,IL,world,150,courtyard entrance
+jerusalem,Dome of the Rock (Temple Mount),,historic,31.7780,35.2354,Jerusalem,IL,world,250,entry via Mughrabi ramp
+jerusalem,Mount of Olives Viewpoint,,landmark,31.7781,35.2448,Jerusalem,IL,world,200,Old City panorama pose spot
+jerusalem,Via Dolorosa (Lions Gate start),,historic,31.7808,35.2362,Jerusalem,IL,world,400,pilgrim route start
+jerusalem,Garden of Gethsemane,,historic,31.7794,35.2396,Jerusalem,IL,world,150,ancient olive trees
+jerusalem,Tower of David (Jaffa Gate),,museum,31.7765,35.2274,Jerusalem,IL,national,150,citadel and night show
+jerusalem,Yad Vashem,,museum,31.7742,35.1757,Jerusalem,IL,world,250,Holocaust memorial museum
+jerusalem,Israel Museum,,museum,31.7720,35.2041,Jerusalem,IL,national,250,Dead Sea Scrolls shrine
+jerusalem,Mahane Yehuda Market,,market,31.7857,35.2125,Jerusalem,IL,regional,400,the shuk food lanes
+telaviv,Old Jaffa,,historic,32.0542,34.7519,Tel Aviv,IL,national,400,"port, Kedumim Square"
+telaviv,Jaffa Flea Market,,market,32.0550,34.7560,Tel Aviv,IL,regional,300,Shuk Hapishpeshim stalls
+telaviv,Frishman-Gordon Beach Strip,,beach,32.0797,34.7665,Tel Aviv,IL,national,800,promenade sunsets
+telaviv,Carmel Market,,market,32.0693,34.7696,Tel Aviv,IL,regional,400,entry at Allenby end
+telaviv,Rothschild Boulevard,,landmark,32.0660,34.7745,Tel Aviv,IL,regional,800,Bauhaus White City stroll
+telaviv,Neve Tzedek,,historic,32.0605,34.7646,Tel Aviv,IL,regional,400,first neighborhood lanes
+telaviv,Tel Aviv Museum of Art,,museum,32.0773,34.7869,Tel Aviv,IL,regional,150,modern art icon
+masada,Masada Cable Car Base (East),,historic,31.3124,35.3644,Masada,IL,world,300,"cableway base, Snake Path"
+deadsea,Ein Bokek Beach,,beach,31.1999,35.3622,Ein Bokek,IL,world,800,"Dead Sea float, pose spot"
+deadsea,Ein Gedi Nature Reserve,,national_park,31.4615,35.3895,Ein Gedi,IL,national,500,David Waterfall trail
+deadsea,Qumran National Park,,historic,31.7414,35.4593,Qumran,IL,national,300,Dead Sea Scrolls caves
+petra,Petra Visitor Center (Siq Entrance),,historic,30.3224,35.4792,Petra,JO,world,500,site entry gate
+petra,The Treasury Viewpoint (Al-Khazneh),,historic,30.3225,35.4517,Petra,JO,world,150,"pose spot, filmed: Indiana Jones"
+petra,The Monastery (Ad Deir),,historic,30.3387,35.4400,Petra,JO,world,150,800-step hike reward
+petra,Little Petra (Siq al-Barid),,historic,30.3781,35.4370,Petra,JO,national,300,free quieter sister site
+wadirum,Wadi Rum Visitor Centre,,national_park,29.6263,35.4175,Wadi Rum,JO,world,3000,"filmed: The Martian, Dune"
+wadirum,Seven Pillars of Wisdom Viewpoint,,landmark,29.6180,35.4290,Wadi Rum,JO,national,1000,rock massif pose spot
+amman,Amman Citadel,,historic,31.9546,35.9346,Amman,JO,national,300,"Temple of Hercules, city views"
+amman,Roman Theatre,,historic,31.9516,35.9394,Amman,JO,national,150,6000-seat ancient theatre
+amman,Rainbow Street,,landmark,31.9492,35.9276,Amman,JO,regional,500,cafes and viewpoints
+amman,Jordan Museum,,museum,31.9455,35.9247,Amman,JO,national,150,Dead Sea Copper Scroll home
+amman,King Abdullah I Mosque,,landmark,31.9622,35.9190,Amman,JO,regional,150,blue dome visitor entry
+giza,Giza Panorama Plateau,,landmark,29.9713,31.1264,Giza,EG,world,300,nine-pyramids pose spot
+giza,Grand Egyptian Museum,,museum,29.9936,31.1193,Giza,EG,world,300,Tutankhamun galleries entrance
+cairo,Egyptian Museum (Tahrir),,museum,30.0478,31.2336,Cairo,EG,world,200,historic Tahrir collection
+cairo,Khan el-Khalili,,market,30.0477,31.2622,Cairo,EG,world,400,entry near Hussein Mosque
+luxor,Valley of the Kings,,historic,25.7402,32.6014,Luxor,EG,world,500,visitor center tram entry
+luxor,Karnak Temple (First Pylon),,historic,25.7180,32.6555,Luxor,EG,world,400,sphinx avenue entry
+luxor,Hatshepsut Temple,,historic,25.7380,32.6065,Luxor,EG,world,300,Deir el-Bahari terraces
+luxor,Colossi of Memnon,,landmark,25.7206,32.6105,Luxor,EG,national,150,roadside pose spot
+marrakech,Jemaa el-Fnaa,,market,31.6258,-7.9891,Marrakech,MA,world,500,"evening food stalls, pose spot"
+marrakech,Jardin Majorelle,,park,31.6414,-8.0033,Marrakech,MA,world,200,YSL blue garden
+marrakech,Bahia Palace,,historic,31.6216,-7.9822,Marrakech,MA,national,200,zellige courtyards
+chefchaouen,Chefchaouen Blue Medina,,historic,35.1688,-5.2636,Chefchaouen,MA,world,500,blue streets pose spot
+chefchaouen,Spanish Mosque Viewpoint,,landmark,35.1673,-5.2560,Chefchaouen,MA,regional,200,sunset panorama pose spot
+chefchaouen,Ras El Maa Waterfall,,landmark,35.1705,-5.2577,Chefchaouen,MA,regional,150,medina edge springs
+fes,Bab Boujloud (Blue Gate),,historic,34.0619,-4.9834,Fes,MA,national,300,medina entry gate
+fes,Chouara Tannery Terraces,,landmark,34.0661,-4.9702,Fes,MA,world,150,"dye pits viewpoint, pose spot"
+fes,Marinid Tombs Viewpoint,,landmark,34.0700,-4.9789,Fes,MA,regional,300,medina panorama pose spot
+casablanca,Hassan II Mosque,,landmark,33.6083,-7.6326,Casablanca,MA,world,300,oceanfront esplanade pose spot
+capetown,Table Mountain Cableway (Lower Station),,landmark,-33.9489,18.4034,Cape Town,ZA,world,300,cableway base station
+capetown,V&A Waterfront,,landmark,-33.9045,18.4201,Cape Town,ZA,world,800,harbour with mountain views
+capetown,Robben Island Ferry (Nelson Mandela Gateway),,historic,-33.9066,18.4235,Cape Town,ZA,world,150,ferry departure point
+capetown,Boulders Beach Penguin Boardwalk,,beach,-34.1973,18.4519,Simon's Town,ZA,world,300,African penguin colony boardwalk
+capetown,Cape of Good Hope Sign,,national_park,-34.3579,18.4734,Cape Town,ZA,world,800,"Cape Point park, pose spot"
+capetown,Bo-Kaap (Wale Street),,historic,-33.9205,18.4140,Cape Town,ZA,world,400,colorful houses pose spot
+capetown,Lion's Head Trailhead,,landmark,-33.9360,18.3970,Cape Town,ZA,national,300,sunrise hike start
+capetown,Kirstenbosch Botanical Garden,,park,-33.9858,18.4327,Cape Town,ZA,world,500,Boomslang canopy walkway
+capetown,Camps Bay Beach,,beach,-33.9506,18.3776,Cape Town,ZA,national,500,Twelve Apostles backdrop
+stellenbosch,Stellenbosch Historic Center (Dorp Street),,historic,-33.9380,18.8580,Stellenbosch,ZA,national,500,Cape Dutch oak streets
+stellenbosch,Huguenot Monument,,landmark,-33.9200,19.1230,Franschhoek,ZA,national,300,winelands valley icon
+stellenbosch,Franschhoek Main Street,,landmark,-33.9105,19.1215,Franschhoek,ZA,regional,500,wine tram departures
+johannesburg,Apartheid Museum,,museum,-26.2373,28.0089,Johannesburg,ZA,world,250,essential history museum
+johannesburg,Vilakazi Street (Mandela House),,historic,-26.2385,27.9088,Soweto,ZA,world,400,two Nobel laureates street
+johannesburg,Constitution Hill,,historic,-26.1893,28.0416,Johannesburg,ZA,national,250,prison to court complex
+johannesburg,Gold Reef City,,theme_park,-26.2350,28.0127,Johannesburg,ZA,regional,400,mining-themed rides
+kruger,Paul Kruger Gate,,national_park,-24.9813,31.4854,Kruger,ZA,world,3000,main Skukuza entry gate
+kruger,Skukuza Rest Camp,,national_park,-24.9948,31.5919,Kruger,ZA,national,1000,flagship rest camp
+vicfalls,Victoria Falls Rainforest Entrance,,national_park,-17.9343,25.8455,Victoria Falls,ZW,world,800,viewpoint trail entry
+vicfalls,Victoria Falls Bridge,,landmark,-17.9344,25.8583,Victoria Falls,ZW,world,150,"bungee, gorge views"
+livingstone,Mosi-oa-Tunya Park Entrance (Knife-Edge),,national_park,-17.9240,25.8670,Livingstone,ZM,world,500,Knife-Edge Bridge viewpoints
+livingstone,Devil's Pool (Livingstone Island),,landmark,-17.9243,25.8605,Livingstone,ZM,world,300,"seasonal edge pool, pose spot"
+kasane,Chobe Sedudu Gate,,national_park,-17.8433,25.1436,Kasane,BW,world,3000,riverfront game drives entry
+kasane,Kasane Riverfront Cruise Jetties,,landmark,-17.7935,25.1550,Kasane,BW,national,800,sunset elephant cruises
+maun,Maun Airport (Delta Charters),,landmark,-19.9726,23.4311,Maun,BW,world,1000,Okavango scenic flights
+maun,Moremi South Gate,,national_park,-19.4258,23.6456,Maun,BW,world,3000,Okavango Delta reserve entry
+nairobi,Giraffe Centre,,zoo,-1.3754,36.7447,Nairobi,KE,world,200,"feed Rothschild giraffes, pose spot"
+nairobi,Sheldrick Elephant Orphanage,,zoo,-1.3630,36.7780,Nairobi,KE,world,300,11am elephant viewing
+nairobi,Nairobi National Park Main Gate,,national_park,-1.3565,36.7855,Nairobi,KE,world,1000,rhinos with skyline backdrop
+nairobi,Karen Blixen Museum,,museum,-1.3415,36.7090,Nairobi,KE,national,150,filmed: Out of Africa
+masaimara,Sekenani Gate,,national_park,-1.5858,35.2517,Maasai Mara,KE,world,3000,"main entry, Great Migration"
+amboseli,Amboseli Observation Hill,,national_park,-2.6930,37.2450,Amboseli,KE,world,3000,Kilimanjaro backdrop elephants
+zanzibar,Stone Town (Forodhani Gardens),,historic,-6.1616,39.1864,Zanzibar City,TZ,world,500,evening food market seafront
+zanzibar,Nungwi Beach,,beach,-5.7245,39.2953,Nungwi,TZ,world,800,sunset dhows pose spot
+zanzibar,Prison Island (Changuu),,historic,-6.1226,39.1686,Zanzibar City,TZ,national,400,"giant tortoises, boat trip"
+zanzibar,Jozani Forest,,national_park,-6.2660,39.4150,Zanzibar,TZ,national,1000,red colobus monkeys
+serengeti,Naabi Hill Gate,,national_park,-2.8345,34.9934,Serengeti,TZ,world,3000,"main entry, kopje viewpoint"
+ngorongoro,Ngorongoro Crater Rim Viewpoint,,national_park,-3.2065,35.4820,Ngorongoro,TZ,world,1000,crater panorama pose spot
+ngorongoro,Loduare Gate,,national_park,-3.3489,35.5432,Karatu,TZ,national,1000,conservation area entry gate
+kilimanjaro,Machame Gate,,national_park,-3.0751,37.3264,Moshi,TZ,world,1000,Whiskey Route trailhead
+mauritius,Le Morne Beach Viewpoint,,beach,-20.4453,57.3122,Le Morne,MU,world,800,"UNESCO peak backdrop, pose spot"
+mauritius,Chamarel Seven Coloured Earths,,landmark,-20.4404,57.3735,Chamarel,MU,world,300,coloured dunes and waterfall
+mauritius,Ile aux Cerfs,,beach,-20.2718,57.8033,Trou d'Eau Douce,MU,national,800,lagoon day-trip island
+mauritius,Pamplemousses Botanical Garden,,park,-20.1052,57.5807,Pamplemousses,MU,national,400,giant water lilies
+seychelles,Anse Source d'Argent,,beach,-4.3719,55.8280,La Digue,SC,world,500,"granite boulders, pose spot"
+seychelles,Anse Lazio,,beach,-4.2947,55.6959,Praslin,SC,world,400,ranked-best beach
+seychelles,Vallee de Mai,,national_park,-4.3297,55.7382,Praslin,SC,world,500,coco de mer palms UNESCO
+seychelles,Beau Vallon Beach,,beach,-4.6215,55.4278,Beau Vallon,SC,national,600,Mahe main beach
+addis,National Museum of Ethiopia,,museum,9.0377,38.7616,Addis Ababa,ET,national,150,Lucy fossil home
+addis,Holy Trinity Cathedral,,historic,9.0333,38.7644,Addis Ababa,ET,national,150,Selassie tomb cathedral
+addis,Entoto Park Viewpoint,,park,9.0930,38.7630,Addis Ababa,ET,regional,800,eucalyptus hills city views
+addis,Merkato,,market,9.0333,38.7220,Addis Ababa,ET,national,800,Africa's largest open market
+lalibela,Church of St George (Bete Giyorgis),,historic,12.0289,39.0405,Lalibela,ET,world,200,rock-hewn cross pose spot
+lalibela,Northern Group (Bete Medhane Alem),,historic,12.0332,39.0424,Lalibela,ET,world,300,largest monolithic church
+sossusvlei,Sesriem Gate,,national_park,-24.4842,15.8000,Sesriem,NA,world,2000,park entry before dawn
+sossusvlei,Deadvlei,,landmark,-24.7593,15.2923,Sesriem,NA,world,500,"dead camelthorn pans, pose spot"
+sossusvlei,Dune 45,,landmark,-24.7311,15.4700,Sesriem,NA,world,300,climbable sunrise dune
+kigali,Kigali Genocide Memorial,,museum,-1.9307,30.0605,Kigali,RW,world,250,Gisozi memorial gardens
+volcanoes,Volcanoes National Park HQ (Kinigi),,national_park,-1.4323,29.5948,Kinigi,RW,world,2000,gorilla trek briefing point
