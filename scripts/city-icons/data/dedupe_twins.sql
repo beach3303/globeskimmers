@@ -1,15 +1,119 @@
--- Twin merge (2026-09-30): where a hand-seeded icon (no qid) shares its EXACT
--- name with an encyclopedia row, keep the encyclopedia row — it carries the
--- qid, photo and links — but give it the icon's scope, radius and ranking.
--- Then the hand-seeded twin retires. Safe to re-run.
-UPDATE attractions SET
-  founder_scope = (SELECT i.founder_scope FROM attractions i WHERE i.id LIKE 'icon:%' AND i.qid IS NULL AND i.name = attractions.name LIMIT 1),
-  footprint_radius_m = coalesce(footprint_radius_m, (SELECT i.footprint_radius_m FROM attractions i WHERE i.id LIKE 'icon:%' AND i.qid IS NULL AND i.name = attractions.name LIMIT 1)),
-  updated_at = datetime('now')
-WHERE id LIKE 'wikidata:%'
-  AND EXISTS (SELECT 1 FROM attractions i WHERE i.id LIKE 'icon:%' AND i.qid IS NULL AND i.name = attractions.name);
-DELETE FROM attractions WHERE id LIKE 'icon:%' AND qid IS NULL
-  AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name = attractions.name);
--- Ranking floors follow the promotion (same floors as before).
-UPDATE attractions SET popularity=max(coalesce(popularity,0),5000000), updated_at=datetime('now') WHERE coalesce(founder_scope,'')='world';
-UPDATE attractions SET popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE coalesce(founder_scope,'')='national';
+-- Twin merge v2 (2026-09-30): per-name statements — the correlated-scan
+-- version exceeded D1's CPU limit. Same outcome: the encyclopedia row
+-- wins and inherits scope/radius/ranking; the hand-seeded twin retires.
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,150), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Wollman Rink';
+DELETE FROM attractions WHERE id='icon:wollman-rink' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Wollman Rink');
+UPDATE attractions SET founder_scope='world', footprint_radius_m=coalesce(footprint_radius_m,250), popularity=max(coalesce(popularity,0),5000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='9/11 Memorial & Museum';
+DELETE FROM attractions WHERE id='icon:9-11-memorial-museum' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='9/11 Memorial & Museum');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,150), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='The Edge at Hudson Yards';
+DELETE FROM attractions WHERE id='icon:the-edge-at-hudson-yards' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='The Edge at Hudson Yards');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,150), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='SUMMIT One Vanderbilt';
+DELETE FROM attractions WHERE id='icon:summit-one-vanderbilt' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='SUMMIT One Vanderbilt');
+UPDATE attractions SET founder_scope='world', footprint_radius_m=coalesce(footprint_radius_m,250), popularity=max(coalesce(popularity,0),5000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='American Museum of Natural History';
+DELETE FROM attractions WHERE id='icon:american-museum-of-natural-history' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='American Museum of Natural History');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,150), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='St. Patrick''s Cathedral';
+DELETE FROM attractions WHERE id='icon:st-patrick-s-cathedral' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='St. Patrick''s Cathedral');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,80), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Charging Bull';
+DELETE FROM attractions WHERE id='icon:charging-bull' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Charging Bull');
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,200), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Little Island';
+DELETE FROM attractions WHERE id='icon:little-island' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Little Island');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,700), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Six Flags Magic Mountain';
+DELETE FROM attractions WHERE id='icon:six-flags-magic-mountain' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Six Flags Magic Mountain');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,250), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='LACMA — Urban Light';
+DELETE FROM attractions WHERE id='icon:lacma-urban-light' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='LACMA — Urban Light');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,250), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Lucas Museum of Narrative Art';
+DELETE FROM attractions WHERE id='icon:lucas-museum-of-narrative-art' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Lucas Museum of Narrative Art');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,200), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='The Original Farmers Market';
+DELETE FROM attractions WHERE id='icon:the-original-farmers-market' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='The Original Farmers Market');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,900), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Venice Beach Boardwalk';
+DELETE FROM attractions WHERE id='icon:venice-beach-boardwalk' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Venice Beach Boardwalk');
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,250), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='The Grove';
+DELETE FROM attractions WHERE id='icon:the-grove' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='The Grove');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,500), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Rodeo Drive';
+DELETE FROM attractions WHERE id='icon:rodeo-drive' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Rodeo Drive');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,150), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='The Broad';
+DELETE FROM attractions WHERE id='icon:the-broad' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='The Broad');
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,700), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Runyon Canyon Park';
+DELETE FROM attractions WHERE id='icon:runyon-canyon-park' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Runyon Canyon Park');
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,150), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Petersen Automotive Museum';
+DELETE FROM attractions WHERE id='icon:petersen-automotive-museum' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Petersen Automotive Museum');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,250), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Georgia Aquarium';
+DELETE FROM attractions WHERE id='icon:georgia-aquarium' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Georgia Aquarium');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,150), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='World of Coca-Cola';
+DELETE FROM attractions WHERE id='icon:world-of-coca-cola' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='World of Coca-Cola');
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,300), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Centennial Olympic Park';
+DELETE FROM attractions WHERE id='icon:centennial-olympic-park' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Centennial Olympic Park');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,1500), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Stone Mountain Park';
+DELETE FROM attractions WHERE id='icon:stone-mountain-park' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Stone Mountain Park');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,300), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Martin Luther King Jr. National Historical Park';
+DELETE FROM attractions WHERE id='icon:martin-luther-king-jr-national-historical-park' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Martin Luther King Jr. National Historical Park');
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,120), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Fox Theatre';
+DELETE FROM attractions WHERE id='icon:fox-theatre' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Fox Theatre');
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,200), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Ponce City Market';
+DELETE FROM attractions WHERE id='icon:ponce-city-market' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Ponce City Market');
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,300), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Mercedes-Benz Stadium';
+DELETE FROM attractions WHERE id='icon:mercedes-benz-stadium' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Mercedes-Benz Stadium');
+UPDATE attractions SET founder_scope='world', footprint_radius_m=coalesce(footprint_radius_m,500), popularity=max(coalesce(popularity,0),5000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='San Diego Zoo';
+DELETE FROM attractions WHERE id='icon:san-diego-zoo' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='San Diego Zoo');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,800), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Balboa Park';
+DELETE FROM attractions WHERE id='icon:balboa-park' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Balboa Park');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,200), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='USS Midway Museum';
+DELETE FROM attractions WHERE id='icon:uss-midway-museum' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='USS Midway Museum');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,300), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='La Jolla Cove';
+DELETE FROM attractions WHERE id='icon:la-jolla-cove' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='La Jolla Cove');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,250), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Hotel del Coronado';
+DELETE FROM attractions WHERE id='icon:hotel-del-coronado' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Hotel del Coronado');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,500), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='SeaWorld San Diego';
+DELETE FROM attractions WHERE id='icon:seaworld-san-diego' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='SeaWorld San Diego');
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,300), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Old Town San Diego';
+DELETE FROM attractions WHERE id='icon:old-town-san-diego' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Old Town San Diego');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,250), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Grand Ole Opry';
+DELETE FROM attractions WHERE id='icon:grand-ole-opry' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Grand Ole Opry');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,120), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Ryman Auditorium';
+DELETE FROM attractions WHERE id='icon:ryman-auditorium' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Ryman Auditorium');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,150), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Country Music Hall of Fame';
+DELETE FROM attractions WHERE id='icon:country-music-hall-of-fame' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Country Music Hall of Fame');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,400), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Broadway Honky-Tonk Row';
+DELETE FROM attractions WHERE id='icon:broadway-honky-tonk-row' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Broadway Honky-Tonk Row');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,200), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='The Parthenon';
+DELETE FROM attractions WHERE id='icon:the-parthenon' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='The Parthenon');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,400), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Navy Pier';
+DELETE FROM attractions WHERE id='icon:navy-pier' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Navy Pier');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,120), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Willis Tower Skydeck';
+DELETE FROM attractions WHERE id='icon:willis-tower-skydeck' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Willis Tower Skydeck');
+UPDATE attractions SET founder_scope='world', footprint_radius_m=coalesce(footprint_radius_m,200), popularity=max(coalesce(popularity,0),5000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='National Museum of Natural History';
+DELETE FROM attractions WHERE id='icon:national-museum-of-natural-history' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='National Museum of Natural History');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,200), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Jefferson Memorial';
+DELETE FROM attractions WHERE id='icon:jefferson-memorial' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Jefferson Memorial');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,200), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Fountains of Bellagio';
+DELETE FROM attractions WHERE id='icon:fountains-of-bellagio' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Fountains of Bellagio');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,120), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Welcome to Fabulous Las Vegas Sign';
+DELETE FROM attractions WHERE id='icon:welcome-to-fabulous-las-vegas-sign' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Welcome to Fabulous Las Vegas Sign');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,250), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Sphere';
+DELETE FROM attractions WHERE id='icon:sphere' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Sphere');
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,400), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Fremont Street Experience';
+DELETE FROM attractions WHERE id='icon:fremont-street-experience' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Fremont Street Experience');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,200), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Painted Ladies';
+DELETE FROM attractions WHERE id='icon:painted-ladies' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Painted Ladies');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,250), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Pier 39';
+DELETE FROM attractions WHERE id='icon:pier-39' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Pier 39');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,200), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Lombard Street';
+DELETE FROM attractions WHERE id='icon:lombard-street' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Lombard Street');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,250), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Pike Place Market';
+DELETE FROM attractions WHERE id='icon:pike-place-market' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Pike Place Market');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,400), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Space Center Houston';
+DELETE FROM attractions WHERE id='icon:space-center-houston' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Space Center Houston');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,600), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='San Antonio River Walk';
+DELETE FROM attractions WHERE id='icon:san-antonio-river-walk' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='San Antonio River Walk');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,400), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Red Rocks Amphitheatre';
+DELETE FROM attractions WHERE id='icon:red-rocks-amphitheatre' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Red Rocks Amphitheatre');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,800), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Garden of the Gods';
+DELETE FROM attractions WHERE id='icon:garden-of-the-gods' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Garden of the Gods');
+UPDATE attractions SET founder_scope='national', footprint_radius_m=coalesce(footprint_radius_m,2000), popularity=max(coalesce(popularity,0),2000000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Rocky Mountain National Park';
+DELETE FROM attractions WHERE id='icon:rocky-mountain-national-park' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Rocky Mountain National Park');
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,120), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='DUMBO — Washington Street View';
+DELETE FROM attractions WHERE id='icon:dumbo-washington-street-view' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='DUMBO — Washington Street View');
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,100), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='LOVE Park';
+DELETE FROM attractions WHERE id='icon:love-park' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='LOVE Park');
+UPDATE attractions SET founder_scope='regional', footprint_radius_m=coalesce(footprint_radius_m,150), popularity=max(coalesce(popularity,0),500000), updated_at=datetime('now') WHERE id LIKE 'wikidata:%' AND name='Reading Terminal Market';
+DELETE FROM attractions WHERE id='icon:reading-terminal-market' AND EXISTS (SELECT 1 FROM attractions w WHERE w.id LIKE 'wikidata:%' AND w.name='Reading Terminal Market');
