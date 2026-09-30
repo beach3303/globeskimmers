@@ -114,6 +114,16 @@ export async function setAgeGate(birth_year) {
   const { data, error } = await callWorker('social/age', { birth_year });
   return { set: !!data?.set, tier: data?.tier || null, error: error || data?.error || null };
 }
+// Social profile v1 (worker-moderated door): read, or patch any of
+// { display_name, bio, favorites, dreams } — favorites/dreams ≤3 {name,country}.
+export async function getSocialProfile() {
+  const { data, error } = await callWorker('social/profile', {});
+  return { profile: data?.profile || null, error };
+}
+export async function setSocialProfile(patch) {
+  const { data, error } = await callWorker('social/profile', patch || {});
+  return { profile: data?.profile || null, error: error || data?.error || null };
+}
 // Report a shared passport (Apple 1.2's report door).
 export async function reportShared({ slug, kind, ref, reason, note }) {
   const { data, error } = await callWorker('social/report', { slug, kind, ref, reason, note });

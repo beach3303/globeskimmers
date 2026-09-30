@@ -28,6 +28,7 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
   const items = [
     { id: 'home',     emoji: '🏠', label: 'Home',     route: 'Home' },
     { id: 'passport', emoji: '🛂', label: 'Passport', route: 'Passport' },
+    { id: 'profile',  emoji: '👤', label: 'Profile',  route: 'Profile' },
     { id: 'settings', emoji: '⚙️', label: 'Settings', route: 'Settings' },
   ];
 
@@ -38,6 +39,7 @@ export default function FloatingNav({ active, dark = false, liftForAd = false })
   const detectActive = () => {
     if (active) return active;
     if (path.includes('passport')) return 'passport';
+    if (path.includes('profile')) return 'profile';
     if (path.includes('settings')) return 'settings';
     if (path === '/' || path.includes('home')) return 'home';
     return null;  // any other finder/page -> no tab highlighted

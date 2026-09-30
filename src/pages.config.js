@@ -59,6 +59,7 @@ import Home from './pages/Home';
 import MoneyExchange from './pages/MoneyExchange';
 import Onboarding from './pages/Onboarding';
 import Passport from './pages/Passport';
+import Profile from './pages/Profile';
 import PerfectDay from './pages/PerfectDay';
 import PlacesToEat from './pages/PlacesToEat';
 import RestroomFinder from './pages/RestroomFinder';
@@ -86,6 +87,7 @@ export const PAGES = {
     "MoneyExchange": MoneyExchange,
     "Onboarding": Onboarding,
     "Passport": Passport,
+    "Profile": Profile,
     "PerfectDay": PerfectDay,
     "PlacesToEat": PlacesToEat,
     "RestroomFinder": RestroomFinder,

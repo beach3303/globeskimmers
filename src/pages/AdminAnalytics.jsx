@@ -84,6 +84,18 @@ export default function AdminAnalytics() {
   const [generatedAt, setGeneratedAt] = useState(null);
   // Messages sent from the website's contact form (worker /admin/contact).
   const [inbox, setInbox] = useState({ messages: [], open: 0, total: 0, error: null });
+  // Social safety reports (Apple 1.2 queue). minor_safety rows carry the 24h
+  // triage SLA — they sort first and show an age tag.
+  const [reports, setReports] = useState({ rows: [], error: null });
+  const loadReports = async () => {
+    const { data, error } = await callWorker('admin/reports', { status: 'open' });
+    const rows = (data?.reports || []).slice().sort((a, b) => (a.reason === 'minor_safety' ? -1 : 0) - (b.reason === 'minor_safety' ? -1 : 0) || String(b.created_at).localeCompare(String(a.created_at)));
+    setReports({ rows, error: error || data?.error || null });
+  };
+  const resolveReport = async (id, resolve) => {
+    await callWorker('admin/reports', { id, resolve });
+    loadReports();
+  };
 
   const loadInbox = async (markHandled) => {
     try {
@@ -125,7 +137,7 @@ export default function AdminAnalytics() {
         const { data: us, error: ue } = await callWorker('admin-user-stats', {});
         setUserStats(ue ? null : us);
       } catch { setUserStats(null); }
-      await loadInbox();
+      await loadInbox(); loadReports();
       setGeneratedAt(new Date().toISOString());
     } catch (e) {
       setError(e?.message || 'Failed to load analytics');
@@ -385,6 +397,23 @@ export default function AdminAnalytics() {
               <KpiCard icon={Activity} label="Stickiness" value={`${stickiness}%`} color={COLORS.green} />
               <KpiCard icon={Sparkles} label="Taps/session" value={avgRowsTaps} color={COLORS.accent} />
             </div>
+
+            <Section title={`🛡️ Safety reports — ${reports.rows.length} open`} icon={Mail} empty={reports.error ? `Couldn't load reports: ${reports.error}` : reports.rows.length === 0 ? 'No open reports. Shared-passport reports land here; a child-safety reason gets 24h triage.' : null}>
+              {reports.rows.map((r) => (
+                <div key={r.id} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border || '#eee'}` }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
+                    <span style={{ fontWeight: 700, color: r.reason === 'minor_safety' ? '#B0472F' : COLORS.dark, textTransform: 'uppercase', fontSize: 11, letterSpacing: '.06em' }}>{r.reason === 'minor_safety' ? '⚠️ CHILD SAFETY — 24H' : r.reason}</span>
+                    <span style={{ color: COLORS.gray, fontSize: 12 }}>{r.kind}{r.subject_slug ? ` · /p/${r.subject_slug}` : ''}{r.ref ? ` · ${r.ref}` : ''}</span>
+                    <span style={{ color: COLORS.gray, marginLeft: 'auto', fontSize: 12 }}>{String(r.created_at || '').slice(0, 16).replace('T', ' ')}</span>
+                  </div>
+                  {r.note && <div style={{ fontSize: 13, color: COLORS.dark, whiteSpace: 'pre-wrap', marginTop: 4 }}>{r.note}</div>}
+                  <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+                    <button type="button" onClick={() => resolveReport(r.id, 'resolved')} style={{ fontSize: 12, color: COLORS.accent, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>Resolved</button>
+                    <button type="button" onClick={() => resolveReport(r.id, 'dismissed')} style={{ fontSize: 12, color: COLORS.gray, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>Dismiss</button>
+                  </div>
+                </div>
+              ))}
+            </Section>
 
             <Section title={`✉️ Website messages — ${inbox.open} open`} icon={Mail} empty={inbox.error ? `Couldn't load messages: ${inbox.error}` : inbox.messages.length === 0 ? 'No messages from globeskimmers.io yet. The contact form stores them here.' : null}>
               {inbox.messages.map((m) => (
