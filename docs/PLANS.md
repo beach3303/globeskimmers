@@ -30,6 +30,15 @@ docs/research/ and folded into one page — https://claude.ai/artifact/6q3WsLiBQ
 (the sized build queue, the ten founder decisions, first five partnership deals, LA28
 timeline, the first-party data rules). It supersedes the raw list below as the working plan.
 
+**Founder call, 2026-09-29 (late):** NO dish stamps inside the passport — the passport is
+places only ("a passport isn't a place to collect food"). Food sharing is wanted, big, but
+in its own object. Brainstorm delivered: postcards (a dish/moment photo + dish name +
+where + experience caption + a city POSTMARK, sent to friends — the feed is a mailbox),
+suitcase stickers (playful collectibles and creature/character art live on the profile's
+suitcase, never on stamps — this is also the cleaner Disney/aquarium art surface), trip
+pages later. Passport = proof · Postcards = moments · Stickers = personality. Awaiting the
+founder's pick before mockups.
+
 **The new build queue (founder, 2026-09-29):**
 1. Passport top priority: Stamps Near You with a first-run explainer (the Atlanta story:
    the stamps ARE the top tourist destinations); friend tagging → the tagged friend is
