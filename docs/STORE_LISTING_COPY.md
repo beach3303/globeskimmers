@@ -17,23 +17,23 @@ Globeskimmers
 
 Apple shows this directly under the app name in the store. The job: tell someone in 3 seconds what they're buying.
 
-**Option A (utility-forward):**
+**Option A (recommended — the product):**
 ```
-Travel smart, anywhere
+Your Virtual Passport
 ```
-*22 / 30 chars ✅*
+*21 / 30 chars ✅*
 
-**Option B (value-forward):**
+**Option B (action-forward):**
 ```
-Money, places, translate
+Stamp every place you go
 ```
 *24 / 30 chars ✅*
 
 **Option C (warmth-forward):**
 ```
-Your pocket travel buddy
+Collect the world
 ```
-*24 / 30 chars ✅*
+*17 / 30 chars ✅*
 
 ---
 
@@ -42,9 +42,9 @@ Your pocket travel buddy
 This is the only text Apple lets you change WITHOUT submitting a new app version. Use it for time-sensitive things (a holiday push, "Now with X feature", etc.). Default copy:
 
 ```
-Scan prices in any currency. Translate signs and menus. Find ATMs, restaurants, restrooms, and coffee near you. Compare exchange rates. All in one place.
+Your Virtual Passport stamps every place you go. Collect memories, share pages with friends, send postcards — and let your trunk wear the stickers every trip earns.
 ```
-*158 / 170 chars ✅*
+*164 / 170 chars ✅*
 
 ---
 
@@ -53,9 +53,9 @@ Scan prices in any currency. Translate signs and menus. Find ATMs, restaurants, 
 Shows above the screenshots on the Play Store listing.
 
 ```
-Smart price scanner, instant translator, and nearby finder — all in one app.
+Your Virtual Passport — collect stamps, memories & postcards everywhere you go.
 ```
-*78 / 80 chars ✅*
+*79 / 80 chars ✅*
 
 ---
 
@@ -64,43 +64,32 @@ Smart price scanner, instant translator, and nearby finder — all in one app.
 The main pitch. Used identically on App Store description + Play Store full description.
 
 ```
-Globeskimmers is the travel utility that figures things out so you don't have to.
+Globeskimmers is your Virtual Passport — a beautiful, realistic travel booklet that stamps every place you go, and keeps the memories that prove it.
 
-Point your camera at a price tag in a foreign currency — we'll convert it to yours and tell you if it's a good deal. Point it at a sign, menu, or product label — we'll translate it instantly. Looking for the nearest ATM, restroom, coffee shop, or restaurant? We'll find them, ranked by what actually matters: how authentic, how close, and how well-reviewed.
+Arrive somewhere worth remembering and your passport senses it: the Georgia Aquarium, the Eiffel Tower, a Las Vegas layover, even the exact steps where Rocky raised his arms. Tap once and the place is stamped forever — hand-engraved, dated, yours.
 
-WHAT'S INSIDE
+YOUR PASSPORT
+• Verified stamps — GPS and your own photos prove you were really there
+• Memory photos — every stamp holds an album; each city gathers its prints into photo packets
+• Iconic stamps — hundreds of hand-engraved artworks for the world's most famous places
+• Movie-scene stamps — stand where famous scenes were filmed and earn the film strip to show it
 
-• Smart Price Scanner — Snap any price tag. Get an instant currency conversion plus a quick price analysis: is it normal for this neighborhood, or are you paying tourist prices? Compare to typical prices at nearby stores and to what it would cost back home.
+SHARE IT, YOUR WAY
+• Share your passport — friends react with collectible stamps: WOW, TAKE ME, BEEN HERE ♥, I WANNA GO, MORE PICS PLEASE
+• The Guestbook — friends leave a signature or a little finger-drawn doodle on your pages
+• Postcards — send a moment straight to a friend, never into a feed
+• Profiles, @usernames & following — and text invites for friends & family
+• Virtual Luggage — a photoreal trunk that wears the stickers every destination earns
 
-• Smart Text Scanner — 25+ languages with pronunciation guides for Japanese, Thai, Korean, Arabic, Chinese, and more. Translate signs, menus, packaging, and handwriting just by aiming your camera.
+THE TRAVEL TOOLKIT
+Everything you need the moment you land: nearby restaurants ranked for authenticity, coffee, ATMs, restrooms, convenience stores, live exchange-rate comparisons, weather, cultural know-how, and a camera scanner that translates signs and converts prices.
 
-• Places to Eat — Not just "restaurants near me" — intent-aware search that tells the difference between authentic Korean BBQ and a fusion spot that happens to serve bulgogi. Filtered by traveler-favorite, locals' favorite, and value.
+PRIVATE BY DEFAULT
+Your passport is yours alone until you choose to share it. Photos you add stay in your private journal; anything made public passes automated review first. Every profile can be blocked, every item reported. Travelers under 18 get extra protections: their passports can't be made public and new followers need their approval. We never sell your data and never track you across other apps.
 
-• Coffee, ATMs, Restrooms, Convenience Stores — One-tap finders for the daily essentials that get hard to find when you don't know the area.
-
-• Money Exchange — Compare live rates from exchange counters near you. Spot the spread before you walk in.
-
-• Basic Phrases — Curated travel phrases per country, with native pronunciation and dialect awareness (Cantonese vs. Mandarin, Filipino vs. Tagalog regional variants, etc.).
-
-• Things to Do — Curated attractions with AI-written context: history, what makes it worth seeing, when's best to visit, and how to compare prices.
-
-• Cultural Information — Customs, tipping norms, dress codes, taboos — the stuff every traveler wishes they'd known before they got there.
-
-WHY GLOBESKIMMERS
-
-We built this because no single travel app covered the full picture. Currency apps don't translate. Translation apps don't find restrooms. Restaurant apps don't tell you whether the place actually serves authentic regional cuisine or just calls itself "Asian fusion."
-
-Globeskimmers replaces 6+ apps with one polished pocket tool. Everything is fast, ad-supported, and honest — we tell you when a result is mediocre instead of pretending it's great.
-
-PRIVACY
-
-Your location stays on your device unless you actively use it to find something nearby. We don't track you across other apps. We don't sell your data. Camera images are processed instantly and discarded — never stored.
-
-Globeskimmers Premium (launching soon) removes ads and unlocks higher daily scan limits for travelers who need more.
-
-Built with care by travelers, for travelers.
+Free to use, supported by ads. Built with care by travelers, for travelers — collect the world, stamp by stamp.
 ```
-*~2,800 / 4000 chars ✅*
+*~2,015 / 4000 chars ✅*
 
 ---
 
@@ -109,9 +98,9 @@ Built with care by travelers, for travelers.
 Apple counts every character including commas. Pick the ones that real searchers actually use — not what sounds good in marketing.
 
 ```
-travel,currency converter,translator,scanner,price,exchange,ATM,restaurant finder,phrases,abroad
+travel,passport,stamps,journal,memories,postcards,trip diary,scrapbook,friends,places
 ```
-*97 / 100 chars ✅*
+*85 / 100 chars ✅*
 
 Reasoning on each:
 - **travel** — the highest-volume term in your category
