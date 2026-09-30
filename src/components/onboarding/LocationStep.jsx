@@ -383,7 +383,7 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
         </motion.div>
 
         <h2 className="text-3xl font-bold text-[#0A4D68] mb-4 text-center">
-          Enable Location Access
+          Find what&rsquo;s near you
         </h2>
         
         <p className="text-gray-600 mb-8 text-center">
@@ -500,6 +500,12 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
               "Continue"
             )}
           </Button>
+          {!granted && (
+            <button type="button" onClick={onExit}
+              className="w-full text-center text-sm text-gray-500 underline underline-offset-2 py-1">
+              Not now
+            </button>
+          )}
         </div>
 
         <div className="mt-8 p-4 bg-blue-50 rounded-lg">
