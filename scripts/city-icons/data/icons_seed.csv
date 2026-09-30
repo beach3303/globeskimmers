@@ -1,33 +1,75 @@
 city_key,name,qid,category,lat,lng,city,country,scope,radius_m,note
-nyc,Statue of Liberty,Q9202,landmark,40.689249,-74.044500,New York,US,world,400,liberty island; ferry or battery park view
-nyc,Empire State Building,Q9188,landmark,40.748441,-73.985664,New York,US,world,150,observatory
-nyc,Central Park,Q160409,park,40.781221,-73.966641,New York,US,world,1800,
-nyc,Times Square,Q11259,landmark,40.758000,-73.985500,New York,US,world,300,
-nyc,Rockefeller Center,Q198750,landmark,40.758700,-73.978700,New York,US,world,250,tree + skating rink in winter
-nyc,Wollman Rink,,landmark,40.768300,-73.974400,New York,US,regional,150,central park skating
-nyc,Brooklyn Bridge,Q125006,landmark,40.706100,-73.996900,New York,US,world,600,walk + dumbo pose spot
-nyc,The High Line,Q843869,park,40.747992,-74.004765,New York,US,national,700,
-nyc,Grand Central Terminal,Q201013,landmark,40.752700,-73.977200,New York,US,world,200,main concourse pose spot
-nyc,9/11 Memorial & Museum,,museum,40.711500,-74.013400,New York,US,world,250,
-nyc,The Edge at Hudson Yards,,landmark,40.754000,-74.001500,New York,US,national,150,glass-floor observation deck
-nyc,SUMMIT One Vanderbilt,,landmark,40.752900,-73.978500,New York,US,national,150,mirror-room pose spot
-nyc,American Museum of Natural History,,museum,40.781300,-73.974000,New York,US,world,250,
-nyc,The Metropolitan Museum of Art,Q160236,museum,40.779400,-73.963200,New York,US,world,250,the steps
-nyc,St. Patrick's Cathedral,,landmark,40.758600,-73.976200,New York,US,national,150,
-nyc,Charging Bull,,landmark,40.705600,-74.013400,New York,US,national,80,pose spot
-nyc,Little Island,,park,40.742100,-74.010200,New York,US,regional,200,
-nyc,Madison Square Garden,Q186125,landmark,40.750500,-73.993400,New York,US,national,200,
-la,Griffith Observatory,Q1133087,landmark,34.118400,-118.300400,Los Angeles,US,world,400,best hollywood sign + skyline view
-la,Hollywood Sign Viewpoint,Q180376,landmark,34.119000,-118.329500,Los Angeles,US,world,1500,viewed from below — lake hollywood park; sign itself is fenced
-la,Universal Studios Hollywood,Q639090,theme_park,34.138100,-118.353300,Los Angeles,US,world,700,
-la,Six Flags Magic Mountain,,theme_park,34.425300,-118.597300,Santa Clarita,US,national,700,
-la,LACMA — Urban Light,,museum,34.063900,-118.359200,Los Angeles,US,national,250,REVIEW LNG; lamp-post pose spot
-la,Lucas Museum of Narrative Art,,museum,34.016400,-118.291700,Los Angeles,US,national,250,exposition park
-la,The Original Farmers Market,,market,34.072000,-118.360300,Los Angeles,US,national,200,3rd & fairfax
-la,Hollywood Walk of Fame,Q214424,landmark,34.101600,-118.326800,Los Angeles,US,world,900,
-la,Venice Beach Boardwalk,,landmark,33.985000,-118.472800,Venice,US,national,900,
-la,The Grove,,market,34.071900,-118.357500,Los Angeles,US,regional,250,
-la,Rodeo Drive,,landmark,34.067800,-118.400300,Beverly Hills,US,national,500,
-la,The Broad,,museum,34.054500,-118.250600,Los Angeles,US,national,150,infinity room pose spot
-la,Runyon Canyon Park,,park,34.110600,-118.351000,Los Angeles,US,regional,700,best hike + view
-la,Petersen Automotive Museum,,museum,34.062200,-118.361300,Los Angeles,US,regional,150,
+nyc,Statue of Liberty,Q9202,landmark,40.689249,-74.044500,"New York, NY",US,world,400,liberty island; ferry or battery park view
+nyc,Empire State Building,Q9188,landmark,40.748441,-73.985664,"New York, NY",US,world,150,observatory
+nyc,Central Park,Q160409,park,40.781221,-73.966641,"New York, NY",US,world,1800,
+nyc,Times Square,Q11259,landmark,40.758000,-73.985500,"New York, NY",US,world,300,
+nyc,Rockefeller Center,Q198750,landmark,40.758700,-73.978700,"New York, NY",US,world,250,tree + skating rink in winter
+nyc,Wollman Rink,,landmark,40.768300,-73.974400,"New York, NY",US,regional,150,central park skating
+nyc,Brooklyn Bridge,Q125006,landmark,40.706100,-73.996900,"New York, NY",US,world,600,walk + dumbo pose spot
+nyc,The High Line,Q843869,park,40.747992,-74.004765,"New York, NY",US,national,700,
+nyc,Grand Central Terminal,Q201013,landmark,40.752700,-73.977200,"New York, NY",US,world,200,main concourse pose spot
+nyc,9/11 Memorial & Museum,,museum,40.711500,-74.013400,"New York, NY",US,world,250,
+nyc,The Edge at Hudson Yards,,landmark,40.754000,-74.001500,"New York, NY",US,national,150,glass-floor observation deck
+nyc,SUMMIT One Vanderbilt,,landmark,40.752900,-73.978500,"New York, NY",US,national,150,mirror-room pose spot
+nyc,American Museum of Natural History,,museum,40.781300,-73.974000,"New York, NY",US,world,250,
+nyc,The Metropolitan Museum of Art,Q160236,museum,40.779400,-73.963200,"New York, NY",US,world,250,the steps
+nyc,St. Patrick's Cathedral,,landmark,40.758600,-73.976200,"New York, NY",US,national,150,
+nyc,Charging Bull,,landmark,40.705600,-74.013400,"New York, NY",US,national,80,pose spot
+nyc,Little Island,,park,40.742100,-74.010200,"New York, NY",US,regional,200,
+nyc,Madison Square Garden,Q186125,landmark,40.750500,-73.993400,"New York, NY",US,national,200,
+la,Griffith Observatory,Q1133087,landmark,34.118400,-118.300400,"Los Angeles, CA",US,world,400,best hollywood sign + skyline view
+la,Hollywood Sign Viewpoint,Q180376,landmark,34.119000,-118.329500,"Los Angeles, CA",US,world,1500,viewed from below — lake hollywood park; sign itself is fenced
+la,Universal Studios Hollywood,Q639090,theme_park,34.138100,-118.353300,"Los Angeles, CA",US,world,700,
+la,Six Flags Magic Mountain,,theme_park,34.425300,-118.597300,"Santa Clarita, CA",US,national,700,
+la,LACMA — Urban Light,,museum,34.063900,-118.359200,"Los Angeles, CA",US,national,250,REVIEW LNG; lamp-post pose spot
+la,Lucas Museum of Narrative Art,,museum,34.016400,-118.291700,"Los Angeles, CA",US,national,250,exposition park
+la,The Original Farmers Market,,market,34.072000,-118.360300,"Los Angeles, CA",US,national,200,3rd & fairfax
+la,Hollywood Walk of Fame,Q214424,landmark,34.101600,-118.326800,"Los Angeles, CA",US,world,900,
+la,Venice Beach Boardwalk,,landmark,33.985000,-118.472800,"Venice, CA",US,national,900,
+la,The Grove,,market,34.071900,-118.357500,"Los Angeles, CA",US,regional,250,
+la,Rodeo Drive,,landmark,34.067800,-118.400300,"Beverly Hills, CA",US,national,500,
+la,The Broad,,museum,34.054500,-118.250600,"Los Angeles, CA",US,national,150,infinity room pose spot
+la,Runyon Canyon Park,,park,34.110600,-118.351000,"Los Angeles, CA",US,regional,700,best hike + view
+la,Petersen Automotive Museum,,museum,34.062200,-118.361300,"Los Angeles, CA",US,regional,150,
+atl,Georgia Aquarium,,aquarium,33.7634,-84.3951,"Atlanta, GA",US,national,250,whale sharks
+atl,World of Coca-Cola,,museum,33.7629,-84.3927,"Atlanta, GA",US,national,150,
+atl,Centennial Olympic Park,,park,33.7603,-84.3935,"Atlanta, GA",US,regional,300,
+atl,Stone Mountain Park,,park,33.8053,-84.1455,"Stone Mountain, GA",US,national,1500,
+atl,Martin Luther King Jr. National Historical Park,,landmark,33.7556,-84.3722,"Atlanta, GA",US,national,300,
+atl,Fox Theatre,,landmark,33.7726,-84.3857,"Atlanta, GA",US,regional,120,
+atl,Ponce City Market,,market,33.7726,-84.3664,"Atlanta, GA",US,regional,200,beltline
+atl,Mercedes-Benz Stadium,,landmark,33.7554,-84.4008,"Atlanta, GA",US,regional,300,
+sd,San Diego Zoo,,zoo,32.7353,-117.149,"San Diego, CA",US,world,500,
+sd,Balboa Park,,park,32.7341,-117.1446,"San Diego, CA",US,national,800,
+sd,USS Midway Museum,,museum,32.7137,-117.1751,"San Diego, CA",US,national,200,
+sd,La Jolla Cove,,landmark,32.8503,-117.2721,"San Diego, CA",US,national,300,sea lions
+sd,Hotel del Coronado,,landmark,32.6807,-117.1786,"Coronado, CA",US,national,250,
+sd,SeaWorld San Diego,,theme_park,32.7648,-117.2265,"San Diego, CA",US,national,500,
+sd,Old Town San Diego,,historic,32.7542,-117.1966,"San Diego, CA",US,regional,300,
+bna,Grand Ole Opry,,landmark,36.2065,-86.6922,"Nashville, TN",US,national,250,
+bna,Ryman Auditorium,,landmark,36.1612,-86.7785,"Nashville, TN",US,national,120,
+bna,Country Music Hall of Fame,,museum,36.1584,-86.7762,"Nashville, TN",US,national,150,
+bna,Broadway Honky-Tonk Row,,landmark,36.16,-86.778,"Nashville, TN",US,national,400,lower broadway
+bna,The Parthenon,,landmark,36.1497,-86.8133,"Nashville, TN",US,national,200,centennial park pose spot
+chi,Navy Pier,,landmark,41.8917,-87.6086,"Chicago, IL",US,national,400,
+chi,Willis Tower Skydeck,,landmark,41.8789,-87.6359,"Chicago, IL",US,national,120,the ledge
+chi,Art Institute of Chicago,Q239303,museum,41.8796,-87.6237,"Chicago, IL",US,world,200,
+dc,Washington Monument,Q178114,landmark,38.8895,-77.0353,"Washington, DC",US,world,250,
+dc,National Museum of Natural History,,museum,38.8913,-77.0261,"Washington, DC",US,world,200,
+dc,Jefferson Memorial,,landmark,38.8814,-77.0365,"Washington, DC",US,national,200,
+las,Fountains of Bellagio,,landmark,36.1126,-115.1767,"Las Vegas, NV",US,national,200,pose spot
+las,Welcome to Fabulous Las Vegas Sign,,landmark,36.082,-115.1728,"Las Vegas, NV",US,national,120,pose spot
+las,Sphere,,landmark,36.1207,-115.162,"Las Vegas, NV",US,national,250,
+las,Fremont Street Experience,,landmark,36.1699,-115.1423,"Las Vegas, NV",US,regional,400,
+sf,Painted Ladies,,landmark,37.7764,-122.4346,"San Francisco, CA",US,national,200,alamo square pose spot
+sf,Pier 39,,landmark,37.8087,-122.4098,"San Francisco, CA",US,national,250,sea lions
+sf,Lombard Street,,landmark,37.8021,-122.4187,"San Francisco, CA",US,national,200,crooked block
+sea,Pike Place Market,,market,47.6097,-122.3422,"Seattle, WA",US,national,250,
+hou,Space Center Houston,,museum,29.5519,-95.097,"Houston, TX",US,national,400,
+sat,San Antonio River Walk,,landmark,29.4232,-98.4861,"San Antonio, TX",US,national,600,
+den,Red Rocks Amphitheatre,,landmark,39.6654,-105.2057,"Morrison, CO",US,national,400,
+cos,Garden of the Gods,,park,38.8784,-104.8698,"Colorado Springs, CO",US,national,800,
+den,Rocky Mountain National Park,,national_park,40.3428,-105.6836,"Estes Park, CO",US,national,2000,
+nyc,DUMBO — Washington Street View,,landmark,40.7033,-73.9894,"Brooklyn, NY",US,regional,120,manhattan bridge pose spot
+phl,LOVE Park,,landmark,39.954,-75.1652,"Philadelphia, PA",US,regional,100,pose spot
+phl,Reading Terminal Market,,market,39.9533,-75.1593,"Philadelphia, PA",US,regional,150,
