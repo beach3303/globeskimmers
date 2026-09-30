@@ -13,6 +13,7 @@ import html2canvas from "html2canvas";
 import { Capacitor } from "@capacitor/core";
 import { deriveLabels, unseenLabels, markLabelsSeen } from "@/lib/labels";
 import { composeShare } from "@/lib/shareCanvas";
+import { getShareLink } from "@/lib/passport";
 import { showToast } from "@/components/Toast";
 import { logEvent } from "@/lib/analytics";
 import LuggageLabel from "@/components/passport/LuggageLabel";
@@ -128,7 +129,9 @@ export default function Luggage({ stamps, readOnly }) {
 
   const shareNow = async () => {
     if (!share) return;
-    const text = "My luggage on Globeskimmers 🧳";
+    let shareUrl = null;
+    try { const { data: sl } = await getShareLink(); shareUrl = sl?.url || null; } catch { /* fine */ }
+    const text = shareUrl ? `My luggage on Globeskimmers 🧳 ${shareUrl}` : "My luggage on Globeskimmers 🧳";
     try {
       if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("Share") && Capacitor.isPluginAvailable("Filesystem")) {
         const { Filesystem, Directory } = await import("@capacitor/filesystem");

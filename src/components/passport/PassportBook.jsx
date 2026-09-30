@@ -6,6 +6,7 @@ import { Capacitor } from "@capacitor/core";
 import { showToast } from "@/components/Toast";
 import { logEvent } from "@/lib/analytics";
 import { SHARE_TARGETS, targetById, shareUseLabel, composeShare, MAX_PHOTO_SLIDES, photoSlide } from "@/lib/shareCanvas";
+import { getShareLink } from "@/lib/passport";
 import { countryCode } from "@/lib/countries";
 import { stampArtUrl } from "@/lib/stampArt";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
@@ -163,6 +164,11 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
             )
           )}
           <FilmCaption film={stamp.meta?.film} />
+          {(stamp.tagged_by_name || stamp.tagged_by_handle) && (
+            <div style={{ fontFamily: MONO, fontSize: fs(10), color: "#2E6B4E", letterSpacing: ".06em", marginTop: 6, textTransform: "uppercase" }}>
+              WITH {(stamp.tagged_by_name || `@${stamp.tagged_by_handle}`).toUpperCase()}
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex flex-col items-center">
@@ -188,6 +194,11 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
             {bigDate && <div style={{ fontFamily: SERIF, color: iconicInk, fontSize: fs(23), letterSpacing: ".01em", marginTop: 2, lineHeight: 1 }}>{bigDate}</div>}
           </>)}
           <FilmCaption film={stamp.meta?.film} />
+          {(stamp.tagged_by_name || stamp.tagged_by_handle) && (
+            <div style={{ fontFamily: MONO, fontSize: fs(10), color: "#2E6B4E", letterSpacing: ".06em", marginTop: 6, textTransform: "uppercase" }}>
+              WITH {(stamp.tagged_by_name || `@${stamp.tagged_by_handle}`).toUpperCase()}
+            </div>
+          )}
         </div>
       )}
 
@@ -586,7 +597,12 @@ export default function PassportBook({
       const pg = page >= 1 && page - 1 < bookPages.length ? bookPages[page - 1] : null;
       const photos = pg ? pg.stamps.flatMap((st) => (st.photos || []).filter((ph) => ph && ph.photo_url).map((ph) => ({ src: ph.photo_url, stamp: st }))) : [];
       setHeroStamp(null);
-      setPreview({ status: "ready", target: "instagram", use: "story", preset: "story_meta", subject: "page", pageStamps: pg ? pg.stamps : [], pageCanvas, photos, mix: photos.length > 0 ? "both" : "page", slides: null, slidesPreset: null, slidesBusy: false, slideFailed: 0, ...img });
+      // The growth link: every share carries the traveler's landing URL —
+      // the research's one multiplier (installs-per-share). Fetched lazily,
+      // never blocks the render.
+      let shareUrl = null;
+      try { const { data: sl } = await getShareLink(); shareUrl = sl?.url || null; } catch { /* the image still shares */ }
+      setPreview({ status: "ready", target: "instagram", use: "story", preset: "story_meta", subject: "page", shareUrl, pageStamps: pg ? pg.stamps : [], pageCanvas, photos, mix: photos.length > 0 ? "both" : "page", slides: null, slidesPreset: null, slidesBusy: false, slideFailed: 0, ...img });
       logEvent("passport_share_open", { photos_on_page: photos.length }, "Passport");
     } catch (e) {
       try { console.error("[passport share] render failed", e); } catch { /* ignore */ }
@@ -674,7 +690,7 @@ export default function PassportBook({
     const carousel = mix !== "page" && preview.slidesPreset === preview.preset ? (preview.slides || []) : [];
     // "My photos" posts the photo slides alone; if none could be drawn, the page goes instead.
     const includePage = mix !== "photos" || !carousel.length;
-    const text = "My Virtual Passport on Globeskimmers 🛂";
+    const text = preview.shareUrl ? `My Virtual Passport on Globeskimmers 🛂 ${preview.shareUrl}` : "My Virtual Passport on Globeskimmers 🛂";
     try {
       if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("Share") && Capacitor.isPluginAvailable("Filesystem")) {
         const { Filesystem, Directory } = await import("@capacitor/filesystem");
@@ -688,7 +704,7 @@ export default function PassportBook({
           const ws = await Filesystem.writeFile({ path: `globeskimmers-passport-photo-${i + 1}.jpg`, data: String(carousel[i].dataUrl).split(",")[1], directory: Directory.Cache });
           uris.push(ws.uri);
         }
-        const res = await Share.share({ title: "My Virtual Passport", text, files: uris });
+        const res = await Share.share({ title: "My Virtual Passport", text, url: preview.shareUrl || undefined, files: uris });
         logEvent("passport_share", { ...shareMeta(preview), images: uris.length, via: "app", activity: res?.activityType || null, platform: platformFromActivity(res?.activityType) || preview.target || "unknown" }, "Passport");
         closePreview(); return;
       }

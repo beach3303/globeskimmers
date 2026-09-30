@@ -1060,6 +1060,15 @@ async function handleAdminUserStats(request, env) {
 // is acceptable for now (the data is aggregate, no PII), but if that
 // changes we'd add a shared-secret header check here.
 const ANALYTICS_QUERIES = {
+  // The growth funnel: shares → landing views → store taps, by day.
+  share_funnel_30d: `SELECT date(created_at) AS day,
+      SUM(CASE WHEN event_type = 'passport_share' THEN 1 ELSE 0 END) AS shares,
+      SUM(CASE WHEN event_type = 'share_landing_view' THEN 1 ELSE 0 END) AS landing_views,
+      SUM(CASE WHEN event_type = 'share_landing_store' THEN 1 ELSE 0 END) AS store_taps
+    FROM events
+    WHERE created_at >= datetime('now','-30 days')
+      AND event_type IN ('passport_share','share_landing_view','share_landing_store')
+    GROUP BY day ORDER BY day DESC`,
   // ── Discover / behavior ("what people pick") — from the events table via the
   //    canonical logDiscover shape {city,country,intent,payload}. No PII; aggregate. ──
   discover_top_destinations: `
@@ -13074,12 +13083,30 @@ async function ppLoad(env, userId) {
   let photos = [];
   if (stamps.length) {
     const ids = stamps.map((s) => s.id).join(',');
-    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption`, {});
+    // mod_status must ride along or the public serializer's ok-filter sees
+    // undefined and hides every photo (found 2026-09-30 — reviewed photos were
+    // invisible on public passports).
+    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption,mod_status`, {});
     photos = pq.ok ? await pq.json() : [];
   }
   const byStamp = {};
   for (const p of photos) (byStamp[p.stamp_id] = byStamp[p.stamp_id] || []).push(p);
-  const out = stamps.map((s) => ({ ...s, photos: byStamp[s.id] || [] }));
+  let out = stamps.map((s) => ({ ...s, photos: byStamp[s.id] || [] }));
+  // "with @friend" (2026-09-30): a claimed tag stamped tagged_by — resolve the
+  // tagger's handle/name once so booklet chips need no extra call.
+  const taggers = [...new Set(out.map((s) => s.tagged_by).filter(Boolean))].slice(0, 50);
+  if (taggers.length) {
+    const [hq, nq] = await Promise.all([
+      gbRest(env, `passport_shares?user_id=in.(${taggers.join(',')})&select=user_id,handle`, {}),
+      gbRest(env, `social_profiles?user_id=in.(${taggers.join(',')})&select=user_id,display_name`, {}),
+    ]);
+    const who = {};
+    for (const r of (hq.ok ? await hq.json() : [])) who[r.user_id] = { handle: r.handle || null };
+    for (const r of (nq.ok ? await nq.json() : [])) who[r.user_id] = { ...(who[r.user_id] || {}), name: r.display_name || null };
+    out = out.map((s) => (s.tagged_by && who[s.tagged_by]
+      ? { ...s, tagged_by_handle: who[s.tagged_by].handle || null, tagged_by_name: who[s.tagged_by].name || null }
+      : s));
+  }
   const distinct = (pred, key) => new Set(out.filter(pred).map(key).filter(Boolean)).size;
   const stats = {
     total: out.length,
@@ -13185,9 +13212,12 @@ async function handlePassportPublic(request, env) {
 }
 
 // Shared-booklet landing page (web teaser + open-in-app + download).
-async function handlePassportShareLanding(request, env) {
+async function handlePassportShareLanding(request, env, ctx) {
   try {
     const slug = decodeURIComponent(new URL(request.url).pathname.replace(/^\/p\//, '')).replace(/[^a-z0-9]/gi, '');
+    // The growth funnel's first rung: every landing view is a share that
+    // worked. installs-per-share reads from these three events.
+    if (ctx && slug) ctx.waitUntil(gbLogEvent(env, 'share_landing_view', { slug }));
     let holder = null, stats = null, sample = [];
     if (slug) {
       const q = await gbRest(env, `passport_shares?slug=eq.${slug}&select=user_id,is_public`, {});
@@ -13209,8 +13239,8 @@ async function handlePassportShareLanding(request, env) {
          <div class="chips">${chips}</div>
          <p>See the full booklet — stamps, photos & memories — in the app.</p>
          <a class="btn primary" href="${scheme}">Open in Globeskimmers</a>
-         <a class="btn" href="${PP_IOS_URL}">Download for iPhone</a>
-         <a class="btn" href="${PP_PLAY_URL}">Download for Android</a>`;
+         <a class="btn" href="/go/ios?src=${encodeURIComponent(slug)}">Download for iPhone</a>
+         <a class="btn" href="/go/android?src=${encodeURIComponent(slug)}">Download for Android</a>`;
     const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Globeskimmers — Virtual Passport</title><style>body{font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;background:#FFFCF7;color:#16110D;margin:0;padding:36px 20px;text-align:center}.wrap{max-width:440px;margin:0 auto}.stamp{font-size:60px;margin:6px 0}.eyebrow{font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:#B0472F}h1{font-size:27px;margin:8px 0}.stats{color:#3A3128;font-size:15px;margin:2px 0 14px}.chips{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-bottom:16px}.chip{background:#F3E2C7;color:#8A5410;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px}p{font-size:15px;line-height:1.5;color:#3A3128}.btn{display:block;margin:10px auto;max-width:320px;padding:14px;border-radius:14px;text-decoration:none;font-weight:700;background:#fff;color:#16110D;border:1px solid rgba(0,0,0,.12)}.btn.primary{background:#B0472F;color:#fff;border:none}.muted{color:#736657}</style></head><body><div class="wrap">${inner}</div></body></html>`;
     return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' } });
   } catch { return new Response('Error', { status: 500 }); }
@@ -13403,6 +13433,20 @@ async function handlePassportCheckPhotos(request, env, ctx) {
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_photo_check', { checked, proof: null, ai_match: best?.match || null }));
     return jsonResponse({ ok: true, verified: stamp.verified, checked, match: best?.match || null, reason: best?.reason || null });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// /go/<ios|android>?src=<slug> — the store hop, logged so installs-per-share
+// has its middle rung (view → store tap → install). The src rides to the
+// store page as campaign context where the store allows it.
+function handleStoreGo(request, env, ctx) {
+  const u = new URL(request.url);
+  const store = u.pathname.replace(/^\/go\//, '').replace(/[^a-z]/g, '');
+  const src = String(u.searchParams.get('src') || '').replace(/[^a-z0-9]/gi, '').slice(0, 24);
+  const dest = store === 'android'
+    ? `${PP_PLAY_URL}&referrer=${encodeURIComponent(`utm_source=share&utm_content=${src}`)}`
+    : `${PP_IOS_URL}?ct=share-${src || 'unknown'}`;
+  if (ctx) ctx.waitUntil(gbLogEvent(env, 'share_landing_store', { slug: src, store: store === 'android' ? 'android' : 'ios' }));
+  return new Response(null, { status: 302, headers: { Location: dest, 'Cache-Control': 'no-store' } });
 }
 
 // Serve bespoke landmark STAMP ART from R2 (shared, public, long-cached). Files
@@ -18840,7 +18884,8 @@ export default {
       if (pathname.startsWith('/t/') && request.method === 'GET') return await handlePassportTagLanding(request, env);
       if (pathname === '/passport/share' && request.method === 'POST') return await handlePassportShare(request, env);
       if (pathname === '/passport/public' && request.method === 'POST') return await handlePassportPublic(request, env);
-      if (pathname.startsWith('/p/') && request.method === 'GET') return await handlePassportShareLanding(request, env);
+      if (pathname.startsWith('/p/') && request.method === 'GET') return await handlePassportShareLanding(request, env, ctx);
+      if (pathname.startsWith('/go/') && request.method === 'GET') return handleStoreGo(request, env, ctx);
       if (pathname === '/cache/stats') return await handleCacheStats(request, env);
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
       if (pathname === '/places/coffee') return await handleCoffeeSearch(request, env);
