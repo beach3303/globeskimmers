@@ -42,8 +42,13 @@ mailbox feed, photo packet + public postcard rack, the full profile (suitcase ba
 stats row with followers, Follow + ✉️ Postcard verbs, PASSPORT/POSTCARDS/SUITCASE/TAGGED
 tabs), and the event-night trio (factual ticket-stub stamp + tour-poster sticker +
 postcard) with the money (official sticker drops ~$2.5–20k anchors, demand reports,
-ticket affiliate later): Cd2qNnmp4BnuShfS1Rc9eV. Founder liked the suitcase; postcard
-metaphor pending their reaction.
+ticket affiliate later): Cd2qNnmp4BnuShfS1Rc9eV. Founder liked the suitcase and set the bar
+2026-09-29: "not too cartoon … respectable." Suitcase redesigned same day (v2 of the
+mockup): stickers become 1920s hotel LUGGAGE LABELS (aged paper, engraved line art, serif,
+muted inks, the stamps' worn-ink filter; naturalist animals, never mascots; no emoji on
+the trunk). Three trunk directions offered: A navy canvas steamer · B cognac leather ·
+C line-engraved (Claude's lean: A for the object, C for small share renders). Awaiting the
+founder's trunk pick and their reaction to postcards.
 
 **The new build queue (founder, 2026-09-29):**
 1. Passport top priority: Stamps Near You with a first-run explainer (the Atlanta story:
