@@ -37,6 +37,13 @@ Nuitée lane generally. Do not build on them without a new founder decision.
 4. Stamp sizing: revisit one-stamp-per-page vs smaller stamps + a dedicated share render.
 5. Practical info on stamp destinations: entrance price and parking cost (the Georgia
    Aquarium was ~$60/person + $30 parking — the founder wanted to know).
+6. Home + Onboarding restructure for the passport-first app (founder, 2026-09-29): audit
+   both, passport hero on Home, onboarding that teaches the passport in ≤3 screens.
+7. Subtle, legal demographics with an explicit privacy promise (founder, 2026-09-29):
+   every question doubles as a delight feature (birthday → birthday stamp, dream
+   destinations → wishlist); first-party data now so travel-adjacent ads can be a future
+   revenue line; minors never monetized. Near-term bar the founder set: make 10–500
+   people extremely happy; the stamps must be beautiful.
 
 ## Build queue, in order (PRE-PIVOT — kept for history; hotel items are shelved)
 
