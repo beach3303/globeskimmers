@@ -113,8 +113,8 @@ Home is now: masthead → passport hero → search → NEARBY NOW (chips, stamps
 shelf → quote. Site door copy no longer names the removed rows.
 
 **Reactions & guestbook (founder ask, 2026-09-30): mockup delivered, build awaits a yes.**
-The Blotter concept — https://claude.ai/artifact/XJgSMBnYPWJYNrUbwj82db — v3 mockup
-(2026-09-30) after founder revisions. Reactions are STAMPS pressed on the blotter around a
+The Blotter — BUILT + DEPLOYED 2026-09-30 (e282fb6; founder said yes to mockup v3
+https://claude.ai/artifact/XJgSMBnYPWJYNrUbwj82db). Ships to devices with the next OTA. Reactions are STAMPS pressed on the blotter around a
 shared page, never inside the booklet — five core: WOW (our OWN engraved star-eyed face;
 never Apple's emoji artwork — characters in text are fine, Apple's images are copyrighted
 and render differently on Android) · TAKE ME · BEEN HERE, LOVED IT (footprints + heart) ·
@@ -128,7 +128,15 @@ as margin-size comment cards, tap to enlarge full-width, tap to collapse — sam
 fail-closed image moderation as postcards; comment-likes = CO-SIGNS (✍ tap to sign under
 someone's words, tap again to lift your pen; tapping the count shows WHO signed — public
 authorship, no anonymous applause, no ranking, guestbook stays chronological); the OWNER
-can sweep any stamp, signature or doodle off their blotter. Privacy: public = any signed-in
+can sweep any stamp, signature or doodle off their blotter.
+
+Virtual Luggage v2 — BUILT + DEPLOYED 2026-09-30 (9d4f071), from the founder's ChatGPT
+reference boards: six trunk styles (Classic default), five swipeable faces with a
+pseudo-3D turn, stickers as a separate hand-placed layer (drag/pinch/rotate, per-face,
+server-saved). Earned inventory: storied labels + city stickers + airport roundels.
+FOUNDER TO DO: generate clean per-face renders (no stickers baked in) + upload to R2
+stamp-art/luggage/<type>/<face>.webp — prompt kit in docs/TRUNK_RENDER_PROMPT.md.
+Open decision: milestone unlocks for the five non-Classic trunks (all selectable today). Privacy: public = any signed-in
 traveler may press/sign; friends = mutuals; private = invisible (nothing to react to);
 teens = accepted followers only. Same slim blotter under packet photos. Profile v2 SHIPPED
 same day (4c587c3): trunk banner on TOP, traveler chips gone, About me + My website,

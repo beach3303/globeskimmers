@@ -987,3 +987,11 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Rails: non-owners need the booklet public; blocked pairs vanish silently; teen authors sign only where they follow the owner (accepted).
 - Also fixed: Passport.jsx preview state declared after its first use in effect deps (TDZ crash, latent — was not yet OTA'd).
 - Activate: nothing manual — migration + worker were CI. Frontend ships with the next `npm run ota`.
+
+## 2026-09-30 — Virtual Luggage v2 (six trunks · five faces · placed stickers)
+- Committed + deployed: 9d4f071. Migration 20260930231000_luggage.sql applied by CI ✓ (api.luggage_state). Worker /luggage/get + /luggage/set live + probed ✓.
+- Per the founder's ChatGPT reference boards: Classic/Cognac/Midnight/Expedition/Voyager/Explorer; FRONT→RIGHT→BACK→LEFT swipe (320ms pseudo-3D), TOP chip, subtle dots; luggage = background layer, stickers = separate layer (drag / pinch-resize / rotate / per-face / normalized coords / server-persisted, no low cap — safety rail 900).
+- Sticker inventory is earned: storied labels (labels.js) + one sticker per stamped city + airport roundels. Tray shows the unplaced; each trunk keeps its own arrangement.
+- Faces load from R2 `stamp-art/luggage/<type>/<face>.webp`; engraved fallback face until renders upload. Entry point: Profile → My luggage → "Open 🧳".
+- Judgment call flagged: all six trunks selectable now; milestone unlocks are a later decision.
+- Activate (founder): 1) generate CLEAN per-face renders in the same ChatGPT session (no stickers/text — see docs/TRUNK_RENDER_PROMPT.md §Virtual Luggage v2) and upload via the `npx wrangler r2 object put` one-liners (Classic's five faces first); 2) frontend ships with the next `npm run ota`.
