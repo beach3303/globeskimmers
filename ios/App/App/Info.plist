@@ -2,12 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CAPACITOR_DEBUG</key>
+	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Globeskimmers</string>
+	<string>Globeskimmers</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -20,10 +20,116 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.globeskimmers.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>globeskimmers</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-2858807823087664~5847327858</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Globeskimmers uses your camera to scan price tags for instant currency conversion and to translate signs, menus, and labels into your language.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Globeskimmers uses your location to find nearby restaurants, ATMs, attractions, restrooms, and money exchange spots so we can show you the closest, most relevant results.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Globeskimmers uses your photo library so you can save translation screenshots and scanned prices for offline reference.</string>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>4fzdc2evr5.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>4pfyvq9l8r.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>2fnua5tdw4.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>ydx93a7ass.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>p78axxw29g.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>v72qych5uu.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>ludvb6z3bs.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cp8zw746q7.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>3sh42y64q3.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>c6k4g5qg8m.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>s39g8k73mm.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>3qy4746246.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>3rd42ekr43.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>hs6bdukanm.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>mlmmfzh3r3.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>v9wttpbfk9.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>n38lu8286q.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>47vhws6wlr.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>kbd757ywx3.skadnetwork</string>
+		</dict>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -47,88 +153,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-
-	<!-- Permission usage strings — Apple requires a human-readable
-	     reason for every protected capability. The system shows these
-	     verbatim in the permission prompt and on the privacy
-	     transparency screens, so they must be honest and specific. -->
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Globeskimmers uses your location to find nearby restaurants, ATMs, attractions, restrooms, and money exchange spots so we can show you the closest, most relevant results.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Globeskimmers uses your camera to scan price tags for instant currency conversion and to translate signs, menus, and labels into your language.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Globeskimmers uses your photo library so you can save translation screenshots and scanned prices for offline reference.</string>
-
-	<!-- App Tracking Transparency: NSUserTrackingUsageDescription intentionally
-	     REMOVED for the v1.0 submission. The app never calls
-	     ATTrackingManager.requestTrackingAuthorization (verified: zero ATT
-	     references in src) and serves only NON-personalized AdMob ads, so it
-	     does NOT track users. Shipping the ATT string while declaring
-	     "Tracking = No" in App Store Connect's App Privacy makes Apple block
-	     the submission for an inconsistent tracking declaration. Re-add this
-	     key — AND actually call requestTrackingAuthorization, AND flip the
-	     App Privacy "used for tracking" answers to Yes — only if/when
-	     personalized (e.g. location-based) ads are implemented later. -->
-	<!-- (NSUserTrackingUsageDescription removed — see note above.) -->
-
-	<!-- Google Mobile Ads SDK — App ID (Globeskimmers iOS). NOT secret;
-	     this identifier ships in every installed binary and is how
-	     AdMob attributes ad revenue to your account. Without this key,
-	     the SDK crashes the app on launch. -->
-	<key>GADApplicationIdentifier</key>
-	<string>ca-app-pub-2858807823087664~5847327858</string>
-
-	<!-- SKAdNetwork — Apple's privacy-preserving ad attribution
-	     framework. Each ad network you want to receive attribution
-	     from must be declared here. Google publishes the canonical
-	     list at https://developers.google.com/admob/ios/sknetwork.
-	     The 20 entries below cover Google + the most common AdMob
-	     mediation partners; expand the list before enabling extra
-	     mediation networks in AdMob. -->
-	<key>SKAdNetworkItems</key>
-	<array>
-		<dict><key>SKAdNetworkIdentifier</key><string>cstr6suwn9.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>4fzdc2evr5.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>4pfyvq9l8r.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>2fnua5tdw4.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>ydx93a7ass.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>p78axxw29g.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>v72qych5uu.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>ludvb6z3bs.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>cp8zw746q7.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>3sh42y64q3.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>c6k4g5qg8m.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>s39g8k73mm.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>3qy4746246.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>3rd42ekr43.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>hs6bdukanm.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>mlmmfzh3r3.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>v9wttpbfk9.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>n38lu8286q.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>47vhws6wlr.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>kbd757ywx3.skadnetwork</string></dict>
-	</array>
-
-	<!-- Custom URL scheme — routes globeskimmers://auth/callback (the Supabase
-	     OAuth deep-link redirect) back into the app. This is a CUSTOM scheme,
-	     NOT a Universal Link, so no Associated Domains capability and no
-	     apple-app-site-association file are needed. The OS hands the URL to
-	     AppDelegate and @capacitor/app emits it via the 'appUrlOpen' event.
-	     List ONLY the bare scheme here — never "globeskimmers://" or a path. -->
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>com.globeskimmers.app</string>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>globeskimmers</string>
-			</array>
-		</dict>
-	</array>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 </dict>
 </plist>
