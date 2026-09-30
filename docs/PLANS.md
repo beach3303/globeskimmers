@@ -46,9 +46,16 @@ ticket affiliate later): Cd2qNnmp4BnuShfS1Rc9eV. Founder liked the suitcase and 
 2026-09-29: "not too cartoon … respectable." Suitcase redesigned same day (v2 of the
 mockup): stickers become 1920s hotel LUGGAGE LABELS (aged paper, engraved line art, serif,
 muted inks, the stamps' worn-ink filter; naturalist animals, never mascots; no emoji on
-the trunk). Three trunk directions offered: A navy canvas steamer · B cognac leather ·
-C line-engraved (Claude's lean: A for the object, C for small share renders). Awaiting the
-founder's trunk pick and their reaction to postcards.
+the trunk). Founder rejected the first three flat-vector trunks ("not buying") and set the realism
+bar at the passport cover's photo-real render, plus asked how a lifetime of stickers fits.
+Round three (mockup v3, same artifact): studio-light realistic Steamer hero; SPACE solved
+by (1) the five-face spin, ~10 labels/face, (2) the growing luggage SET — fill a piece,
+the porter brings the next; the profile banner becomes the stacked set, (3) period-correct
+label overlap with tap-to-front, (4) a keepsake tray inside the lid for peeled labels,
+(5) pinch-zoom. Production trunk = a photo-real render from the same pipeline as the
+passport cover (locked prompt written into the mockup; labels composited on top so they
+stay draggable). Materials wardrobe: navy Steamer default · Cognac · Midnight · Expedition.
+Awaiting the founder's reaction to round three and to postcards.
 
 **The new build queue (founder, 2026-09-29):**
 1. Passport top priority: Stamps Near You with a first-run explainer (the Atlanta story:
