@@ -6,9 +6,39 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-09-26
+Last updated: 2026-09-29
 
-## Build queue, in order
+## THE PIVOT — 2026-09-29, founder decision, effective immediately
+
+**The product is the Virtual Passport plus the nearby finders. Nothing else.**
+Removed from the app the same day (commit 99a2dd8; git keeps the code, the worker keeps
+every route so existing booking data and webhooks stay servable): Get a Ride / cars /
+transfers, Transportation (transit routes, times, info), Find a Hotel, My Trips (both
+pages), Smart Packages (it is the hotel booking flow), Insights, Events / concerts /
+sports / shows (the Ticketmaster rail), Travel Essentials (eSIM, bags, spaces), and the
+"Today in {city}" card. KEPT: restaurants, coffee, ATM, money exchange, convenience,
+restrooms, shopping malls, things to do, weather, basic crisis phrases, cultural info,
+text scanner, Home, Passport, Settings.
+
+Anything in the sections below that builds on hotels, rides, transit, events, packages
+or trips is **shelved by this pivot**, not deleted from history: booking emails, hotel
+filters and multi-room, saved cards, flights, car rental, Apple Pay on checkout, the
+Nuitée lane generally. Do not build on them without a new founder decision.
+
+**The new build queue (founder, 2026-09-29):**
+1. Passport top priority: Stamps Near You with a first-run explainer (the Atlanta story:
+   the stamps ARE the top tourist destinations); friend tagging → the tagged friend is
+   offered the stamp; per-destination photo albums; public/private passports, following,
+   traveler profiles. Architecture first, then slices.
+2. Stamp art: every major nature landmark gets real art (Stone Mountain class); licensed
+   partner art (Disney, aquariums) needs permission — partnership playbook in research.
+3. Monetization research: what to ask attractions for (discounts for stampers, data
+   reports, per-stamp fees), how comparable products partner, discreet competitor scan.
+4. Stamp sizing: revisit one-stamp-per-page vs smaller stamps + a dedicated share render.
+5. Practical info on stamp destinations: entrance price and parking cost (the Georgia
+   Aquarium was ~$60/person + $30 parking — the founder wanted to know).
+
+## Build queue, in order (PRE-PIVOT — kept for history; hotel items are shelved)
 
 **Hotel lane, agreed 2026-09-22 — runs now, while item 1 waits on the founder's answers.**
 In this order: (a) **booking emails** from GlobeSkimmers via Resend (confirmation, cancellation,
