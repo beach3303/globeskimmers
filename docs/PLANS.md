@@ -136,7 +136,20 @@ pseudo-3D turn, stickers as a separate hand-placed layer (drag/pinch/rotate, per
 server-saved). Earned inventory: storied labels + city stickers + airport roundels.
 FOUNDER TO DO: generate clean per-face renders (no stickers baked in) + upload to R2
 stamp-art/luggage/<type>/<face>.webp — prompt kit in docs/TRUNK_RENDER_PROMPT.md.
-Open decision: milestone unlocks for the five non-Classic trunks (all selectable today). Privacy: public = any signed-in
+Open decision: milestone unlocks for the five non-Classic trunks (all selectable today).
+
+GLOBAL DESTINATIONS AUDIT (founder directive 2026-09-30, standing): every city's stamp
+suggestions must match where tourists actually go. Finding: the atlas icon seed loaded
+internationally (Paris has icon: rows) but NEVER carried US city icons — NYC/LA had
+zero while their stamp art sits in R2; atlas-founder-manual.json holds only 23 exotic
+leftovers. Pipeline: scripts/city-icons/ (seed CSV → idempotent SQL; insert-if-absent
+by qid, promote scope if present). NYC + LA shipped first (founder's own must-have
+lists; Hollywood Sign anchored at below-the-hill viewpoints). Sensing needs no code:
+NearbyStampPrompt reads attractions/nearby (stampsOnly, 2km) so icons AND film spots
+are sensed the moment rows exist with proper scope. BUILD ITEM (approved direction):
+small-city fallback — when a town has no stampable icons, suggest the nearest big
+city's top spots. NEXT: founder runs the icon-count forensics reads; then the global
+reload city-by-city with review sheets. Privacy: public = any signed-in
 traveler may press/sign; friends = mutuals; private = invisible (nothing to react to);
 teens = accepted followers only. Same slim blotter under packet photos. Profile v2 SHIPPED
 same day (4c587c3): trunk banner on TOP, traveler chips gone, About me + My website,
