@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import { Loader2, UserPlus } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { socialFollow, socialFeed, getHandle } from "@/lib/passport";
+import PostcardCompose from "@/components/passport/PostcardCompose";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 
@@ -29,6 +30,7 @@ export default function MailboxPage() {
   const [lists, setLists] = useState({ followers: [], following: [], requests: [] });
   const [handleDraft, setHandleDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [compose, setCompose] = useState(false);
 
   const load = async () => {
     const [f, l, h] = await Promise.all([socialFeed(), socialFollow("list"), getHandle()]);
@@ -56,7 +58,12 @@ export default function MailboxPage() {
     <div className="min-h-screen pb-28" style={{ background: IVORY }}>
       <div className="max-w-md mx-auto px-4 pt-6">
         <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: STAMP }}>Globeskimmers · Mailbox</div>
-        <h1 style={{ fontFamily: SERIF, fontSize: fs(28), color: INK, lineHeight: 1.05, marginTop: 4 }}>Where your people went</h1>
+        <div className="flex items-end justify-between gap-3">
+          <h1 style={{ fontFamily: SERIF, fontSize: fs(28), color: INK, lineHeight: 1.05, marginTop: 4 }}>Where your people went</h1>
+          <button type="button" onClick={() => setCompose(true)} className="flex-none rounded-full px-4 py-2 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12.5) }}>
+            ✉️ Postcard
+          </button>
+        </div>
 
         {/* Follow by handle */}
         <div className="flex gap-2 mt-4">
@@ -104,7 +111,25 @@ export default function MailboxPage() {
               </p>
             </div>
           ) : (
-            rows.map((r, i) => (
+            rows.map((r, i) => r.type === "postcard" ? (
+              <div key={i} className="rounded-[14px] overflow-hidden mt-3 first:mt-0" style={{ background: "#FFFDF6", border: "1px solid #E4DAC4", boxShadow: "0 8px 18px -14px rgba(22,17,13,.4)" }}>
+                <img src={r.photo} alt={r.place ? `Postcard from ${r.place}` : "A postcard"} loading="lazy" style={{ width: "100%", aspectRatio: "3 / 2", objectFit: "cover", display: "block" }} />
+                <div className="px-4 py-3">
+                  {r.message && <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(17), color: INK, lineHeight: 1.3 }}>&ldquo;{r.message}&rdquo;</div>}
+                  {(r.dish || r.place) && (
+                    <div style={{ fontSize: fs(12.5), color: INK2, marginTop: r.message ? 5 : 0 }}>
+                      {r.dish ? <b>{r.dish}</b> : null}{r.dish && r.place ? " · " : ""}{r.place || ""}
+                    </div>
+                  )}
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".04em" }}>
+                      FROM {r.by.name || (r.by.handle ? `@${r.by.handle}` : "A TRAVELER")}{r.city ? ` · ${String(r.city).toUpperCase()}` : ""}{r.to_me ? " · TO YOU" : ""}
+                    </span>
+                    <span className="ml-auto flex-none" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3 }}>{when(r.created_at)}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
               <div key={i} className="rounded-[16px] px-4 py-3 mt-2 first:mt-0" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
                 <div className="flex items-baseline gap-2">
                   <span className="truncate" style={{ fontWeight: 700, fontSize: fs(13.5), color: INK }}>{r.by.name || (r.by.handle ? `@${r.by.handle}` : "A traveler")}</span>
@@ -124,6 +149,8 @@ export default function MailboxPage() {
         </div>
 
         {/* Following list */}
+        <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={load} following={lists.following} />
+
         {lists.following.length > 0 && (
           <div className="mt-7">
             <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".16em", color: "#8A5410" }}>Following · {lists.following.length}</div>

@@ -145,6 +145,12 @@ export async function getAgeInfo() {
   const { data, error } = await callWorker('social/age', {});
   return { set: !!data?.set, tier: data?.tier || null, birth_md: data?.birth_md || null, error };
 }
+// Send a postcard: image (data URL from resizePhoto), message, the place
+// line, optional dish meta, and either to_handle or nothing (= followers).
+export async function sendPostcard({ image, message, place_name, city, country, meta, to_handle }) {
+  const { data, error } = await callWorker('postcards/send', { image, message, place_name, city, country, meta, to_handle });
+  return { data, error: error || data?.error || null };
+}
 // Report a shared passport (Apple 1.2's report door).
 export async function reportShared({ slug, kind, ref, reason, note }) {
   const { data, error } = await callWorker('social/report', { slug, kind, ref, reason, note });

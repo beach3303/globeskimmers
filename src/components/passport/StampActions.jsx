@@ -17,6 +17,8 @@ import { countryCode } from "@/lib/countries";
 import { localISODate } from "@/lib/localDate";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { useDismissable } from "@/lib/dismissStack";
+import PostcardCompose from "@/components/passport/PostcardCompose";
+import { socialFollow } from "@/lib/passport";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -46,6 +48,13 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(null); // "photos" | "layout" | "delete" | null
   const [confirmDel, setConfirmDel] = useState(false);
+  const [compose, setCompose] = useState(false);
+  const [following, setFollowing] = useState([]);
+  const openCompose = async () => {
+    const { data } = await socialFollow("list");
+    setFollowing(data?.following || []);
+    setCompose(true);
+  };
   useDismissable(true, onClose);
   const photos = Array.isArray(stamp.photos) ? stamp.photos : [];
   const room = Math.max(0, MAX_PHOTOS - photos.length);
@@ -231,6 +240,9 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
               onClick={checkPhotos} disabled={busy === "check"} />
           )}
           {!readOnly && (
+            <Row icon={PencilLine} label="Send as a postcard" sub="This place's photo on the front, your words on the back" onClick={openCompose} />
+          )}
+          {!readOnly && (
             <Row icon={PencilLine} label="Details, date & tag a friend" sub="Set the real visit date, invite who you were with" onClick={onDetails} />
           )}
           {!readOnly && !confirmDel && (
@@ -249,7 +261,9 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
             Close
           </button>
         </div>
-        <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
+        <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={() => setCompose(false)} following={following}
+        preset={{ image: null, place_name: stamp.name, city: stamp.city, country: stamp.country }} />
+      <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
         {!readOnly && <p className="text-center mt-2" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".04em" }}>Stamp ink: {STAMP === "#B0472F" ? "passport red" : STAMP}</p>}
       </div>
     </div>

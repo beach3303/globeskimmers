@@ -13731,6 +13731,87 @@ async function handleAdminReports(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// ── Postcards (2026-09-30): sent, not posted ────────────────────────────────
+// The photo is moderated SYNCHRONOUSLY at send (a postcard is shared by
+// definition — fail-closed, no unreviewed image ever leaves the sender).
+// Addressing: to_handle → one recipient (blocks kill it silently; a TEEN
+// sender may only address mutuals); no address → everyone who follows the
+// sender (teen senders cannot broadcast). Photos serve from /pc-photo/ by
+// unguessable key, the house private-by-obscurity pattern.
+async function handlePostcardSend(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const msg = b.message == null ? null : String(b.message).replace(/https?:\S+/gi, '').replace(/\s+/g, ' ').trim().slice(0, 240) || null;
+    const clean = (v, n) => (v == null ? null : String(v).replace(/\s+/g, ' ').trim().slice(0, n) || null);
+    const sp = await gbSocialProfile(env, user.id);
+    if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
+    if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Postcards aren\'t available on this account' }, 403);
+
+    // Address it.
+    let toUser = null;
+    if (b.to_handle) {
+      const t = await gbHandleToUser(env, b.to_handle);
+      if (!t) return jsonResponse({ error: 'No traveler with that username' }, 404);
+      if (t.user_id === user.id) return jsonResponse({ error: 'A postcard to yourself? Frame it instead 🙂' }, 400);
+      if (await gbBlockedEither(env, user.id, t.user_id)) return jsonResponse({ ok: true, muted: true });
+      if (sp.social_tier === 'teen') {
+        const [a, bq] = await Promise.all([
+          gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${t.user_id}&status=eq.accepted&select=follower_id`, {}),
+          gbRest(env, `user_follows?follower_id=eq.${t.user_id}&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, {}),
+        ]);
+        const mutual = a.ok && bq.ok && (await a.json()).length && (await bq.json()).length;
+        if (!mutual) return jsonResponse({ error: 'You can send postcards to friends you follow each other with' }, 403);
+      }
+      toUser = t.user_id;
+    } else if (sp.social_tier === 'teen') {
+      return jsonResponse({ error: 'Address your postcard to a friend — broadcast opens at 18' }, 403);
+    }
+
+    // The front photo.
+    let data = String(b.image || ''); let mediaType = 'image/jpeg';
+    const m = data.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.*)$/i);
+    if (m) { mediaType = m[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : m[1].toLowerCase(); data = m[2]; }
+    else if (b.content_type && /^image\/(jpeg|png|webp)$/i.test(b.content_type)) { mediaType = String(b.content_type).toLowerCase(); }
+    if (!data) return jsonResponse({ error: 'A postcard needs its photo' }, 400);
+    let bytes;
+    try { bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0)); } catch { return jsonResponse({ error: 'Bad image data' }, 400); }
+    if (bytes.length > 4 * 1024 * 1024) return jsonResponse({ error: 'Photo too large' }, 400);
+    if (bytes.length < 500) return jsonResponse({ error: 'That image is too small' }, 400);
+    const verdict = await gbModeratePhoto(env, ppBytesToB64(bytes), mediaType);
+    if (!verdict || !verdict.allow) return jsonResponse({ error: "This photo can't go on a postcard" }, 422);
+    const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
+    const key = `pc/${crypto.randomUUID()}.${ext}`;
+    await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
+
+    const row = {
+      sender_id: user.id, to_user_id: toUser, photo_key: key, message: msg,
+      place_name: clean(b.place_name, 80), city: clean(b.city, 60), country: clean(b.country, 60),
+      ...(b.meta && typeof b.meta === 'object' ? { meta: { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) } } : {}),
+    };
+    const w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+    if (!w.ok) { if (ctx) ctx.waitUntil(env.MEDIA.delete(key).catch(() => {})); return jsonResponse({ error: 'Could not send' }, 502); }
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: !!toUser, has_dish: !!(b.meta && b.meta.dish) }));
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+async function handlePostcardPhotoServe(request, env) {
+  try {
+    if (!env.MEDIA) return new Response('Not found', { status: 404 });
+    const key = decodeURIComponent(new URL(request.url).pathname.replace(/^\/pc-photo\//, ''));
+    if (!key || key.includes('..') || !key.startsWith('pc/')) return new Response('Bad key', { status: 400 });
+    const obj = await env.MEDIA.get(key);
+    if (!obj) return new Response('Not found', { status: 404 });
+    const headers = new Headers();
+    headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/jpeg');
+    headers.set('Cache-Control', 'private, max-age=31536000, immutable');
+    headers.set('Access-Control-Allow-Origin', '*');
+    return new Response(obj.body, { headers });
+  } catch { return new Response('Error', { status: 500 }); }
+}
+
 // ── Social P2 (2026-09-30): follow + the feed ───────────────────────────────
 // Asymmetric follow; a follow onto a TEEN account waits for their yes. Mutual
 // accepted follows are "friends". Blocks kill the edge silently. The feed is
@@ -13821,34 +13902,63 @@ async function handleSocialFeed(request, env) {
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const gq = await gbRest(env, `user_follows?follower_id=eq.${user.id}&status=eq.accepted&select=followee_id`, {});
     const ids = (gq.ok ? await gq.json() : []).map((r) => r.followee_id).slice(0, 100);
-    if (!ids.length) return jsonResponse({ rows: [] });
-    const [shq, spq, backq] = await Promise.all([
+    // No early return: a postcard addressed to ME arrives even with zero follows.
+    const [shq, spq, backq] = ids.length ? await Promise.all([
       gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle,visibility,is_public`, {}),
       gbRest(env, `social_profiles?user_id=in.(${ids.join(',')})&select=user_id,display_name,social_tier`, {}),
       gbRest(env, `user_follows?follower_id=in.(${ids.join(',')})&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, {}),
-    ]);
-    const share = Object.fromEntries((shq.ok ? await shq.json() : []).map((r) => [r.user_id, r]));
-    const prof = Object.fromEntries((spq.ok ? await spq.json() : []).map((r) => [r.user_id, r]));
-    const mutual = new Set((backq.ok ? await backq.json() : []).map((r) => r.follower_id));
+    ]) : [null, null, null];
+    const share = Object.fromEntries(((shq && shq.ok) ? await shq.json() : []).map((r) => [r.user_id, r]));
+    const prof = Object.fromEntries(((spq && spq.ok) ? await spq.json() : []).map((r) => [r.user_id, r]));
+    const mutual = new Set(((backq && backq.ok) ? await backq.json() : []).map((r) => r.follower_id));
     const visible = ids.filter((id) => {
       const v = share[id]?.visibility || (share[id]?.is_public ? 'public' : 'private');
       if (v === 'public') return true;
       if (v === 'friends') return mutual.has(id);
       return false;
     });
-    if (!visible.length) return jsonResponse({ rows: [] });
-    const sq = await gbRest(env, `passport_stamps?user_id=in.(${visible.join(',')})&hidden=eq.false&order=created_at.desc&limit=40&select=user_id,name,city,country,kind,visited_on,created_at,verified,meta`, {});
+    const sq = visible.length ? await gbRest(env, `passport_stamps?user_id=in.(${visible.join(',')})&hidden=eq.false&order=created_at.desc&limit=40&select=user_id,name,city,country,kind,visited_on,created_at,verified,meta`, {}) : null;
+    // Postcards addressed to ME (from anyone I follow or not — a direct card
+    // is a consented tag-like object; blocks were enforced at send) plus
+    // BROADCAST cards from the people I follow.
+    const origin = new URL(request.url).origin;
+    const [pcTo, pcBroadcast] = await Promise.all([
+      gbRest(env, `postcards?to_user_id=eq.${user.id}&order=created_at.desc&limit=20&select=*`, {}),
+      visible.length ? gbRest(env, `postcards?sender_id=in.(${visible.join(',')})&to_user_id=is.null&order=created_at.desc&limit=20&select=*`, {}) : Promise.resolve({ ok: false }),
+    ]);
+    const pcs = [...(pcTo.ok ? await pcTo.json() : []), ...(pcBroadcast.ok ? await pcBroadcast.json() : [])];
+    const pcSenders = [...new Set(pcs.map((p) => p.sender_id))].filter((id) => !share[id]);
+    if (pcSenders.length) {
+      const [h2, p2] = await Promise.all([
+        gbRest(env, `passport_shares?user_id=in.(${pcSenders.join(',')})&select=user_id,handle`, {}),
+        gbRest(env, `social_profiles?user_id=in.(${pcSenders.join(',')})&select=user_id,display_name`, {}),
+      ]);
+      for (const r of (h2.ok ? await h2.json() : [])) share[r.user_id] = { ...(share[r.user_id] || {}), handle: r.handle };
+      for (const r of (p2.ok ? await p2.json() : [])) prof[r.user_id] = { ...(prof[r.user_id] || {}), display_name: r.display_name };
+    }
+    const cardRows = pcs.map((p) => ({
+      type: 'postcard', created_at: p.created_at,
+      photo: `${origin}/pc-photo/${p.photo_key}`,
+      message: p.message, place: p.place_name, city: p.city, country: p.country,
+      dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
+      to_me: p.to_user_id === user.id,
+      by: { handle: share[p.sender_id]?.handle || null, name: prof[p.sender_id]?.display_name || null },
+    }));
     const dayAgo = Date.now() - 24 * 3600 * 1000;
-    const rows = (sq.ok ? await sq.json() : [])
+    const stampRows = ((sq && sq.ok) ? await sq.json() : [])
       .filter((s) => prof[s.user_id]?.social_tier !== 'teen' || Date.parse(s.created_at) < dayAgo)
       .slice(0, 30)
       .map((s) => ({
+        type: 'stamp',
         name: s.name, city: s.city, country: s.country, kind: s.kind,
         visited_on: s.visited_on, created_at: s.created_at,
         verified: ['gps', 'photo_loc', 'photo_ai'].includes(s.verified),
         film: s.meta && s.meta.film ? { title: s.meta.film.title, year: s.meta.film.year } : null,
         by: { handle: share[s.user_id]?.handle || null, name: prof[s.user_id]?.display_name || null },
       }));
+    const rows = [...cardRows, ...stampRows]
+      .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+      .slice(0, 40);
     return jsonResponse({ rows });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -18652,6 +18762,7 @@ export default {
 
       // Passport (personal, private)
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
+      if (pathname.startsWith('/pc-photo/') && request.method === 'GET') return await handlePostcardPhotoServe(request, env);
       if (pathname === '/airport-at' && request.method === 'GET') return await handleAirportAt(request, env);
       if (pathname === '/place-search' && request.method === 'GET') return await handlePlaceSearch(request, env);
       if (pathname.startsWith('/stamp-art/') && request.method === 'GET') return await handleStampArtServe(request, env);
@@ -18667,6 +18778,7 @@ export default {
       if (pathname === '/social/report' && request.method === 'POST') return await handleSocialReport(request, env, ctx);
       if (pathname === '/social/follow' && request.method === 'POST') return await handleSocialFollow(request, env, ctx);
       if (pathname === '/social/feed' && request.method === 'POST') return await handleSocialFeed(request, env);
+      if (pathname === '/postcards/send' && request.method === 'POST') return await handlePostcardSend(request, env, ctx);
       if (pathname === '/admin/reports' && request.method === 'POST') return await handleAdminReports(request, env);
       if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
       if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);
