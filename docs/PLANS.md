@@ -57,6 +57,21 @@ passport cover (locked prompt written into the mockup; labels composited on top 
 stay draggable). Materials wardrobe: navy Steamer default · Cognac · Midnight · Expedition.
 Awaiting the founder's reaction to round three and to postcards.
 
+**Founder directives, 2026-09-29 (late night):**
+- KEEP the existing share-to-social of passport pages ("I was here") — nothing replaces it
+  until the network is large; the trunk share is additive. (Nothing was removed.)
+- Usernames: yes — every user creates a handle and can change it (worker-side uniqueness,
+  reserved list, 2 changes/30 days, old handle released; per the social architecture).
+- Teen/child protection must match what Meta, Instagram, TikTok and Snapchat actually do —
+  research running → docs/research/teen-safety-platforms-2026-09.md; fold into Social P1.
+- Ship to BOTH stores as soon as the social build is complete (the P1 native build carries
+  the store questionnaire changes; both platforms always).
+- NEXT PROJECT: the globeskimmers.io landing page — match the pivot; value prop around
+  "collect memories, collect memory photos"; the travel quotes STAY.
+- Suitcase v1 BUILT same day (672e47c): trunk on the Passport page, 7 derived label rules,
+  story sheets, earn toasts, branded share; photo-real skin auto-upgrades from R2 when the
+  founder uploads their render (docs/TRUNK_RENDER_PROMPT.md). Ships with next OTA.
+
 **The new build queue (founder, 2026-09-29):**
 1. Passport top priority: Stamps Near You with a first-run explainer (the Atlanta story:
    the stamps ARE the top tourist destinations); friend tagging → the tagged friend is
