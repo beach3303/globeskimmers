@@ -24,7 +24,7 @@ const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13,.12)";
 const STAMP = "#B0472F", IVORY = "#FFFCF7", IVORY_2 = "#F6F0E4";
-const MAX_PHOTOS = 4;
+const MAX_PHOTOS = 12; // the page prints the first 4; the album (lightbox/packets) holds them all
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 
 function Row({ icon: Icon, label, sub, onClick, disabled, tone }) {
@@ -195,7 +195,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
         <div className="flex flex-col gap-2 mt-3">
           {!readOnly && (
             <Row icon={busy === "photos" ? Loader2 : Plus} label={photos.length ? "Add more memory photos" : "Add memory photos"}
-              sub={room ? (stamp.meta?.film ? `Up to ${room} more · your first photo opens full on the page` : `Up to ${room} more · they print under the stamp`) : "This stamp already holds 4 photos"}
+              sub={room ? (stamp.meta?.film ? `Up to ${room} more · your first photo opens full on the page` : `Up to ${room} more · 4 print under the stamp, the rest fill the album`) : "This album is full (12 photos)"}
               onClick={() => room && fileRef.current?.click()} disabled={busy === "photos" || !room} />
           )}
           {photos.length > 0 && (

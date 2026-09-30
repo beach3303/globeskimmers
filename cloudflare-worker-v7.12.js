@@ -13371,6 +13371,17 @@ async function handlePassportPhotoUpload(request, env, ctx) {
     const origin = new URL(request.url).origin;
     const photoUrl = `${origin}/pp-photo/${key}`;
     await gbRest(env, 'passport_stamp_photos', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ stamp_id: stampId, user_id: user.id, photo_key: key, photo_url: photoUrl, caption: b.caption ? String(b.caption).slice(0, 200) : null }) });
+    // If the booklet is ALREADY public, review this photo now (async) — the
+    // public-flip sweep only runs at flip time, so without this a photo added
+    // later would never earn mod_status 'ok' and never show to friends.
+    if (ctx) ctx.waitUntil((async () => {
+      try {
+        const shq = await gbRest(env, `passport_shares?user_id=eq.${user.id}&is_public=eq.true&select=user_id&limit=1`, {});
+        if (!(shq.ok && (await shq.json()).length)) return; // private journal — no review
+        const v = await gbModeratePhoto(env, data, mediaType);
+        await gbRest(env, `passport_stamp_photos?photo_key=eq.${encodeURIComponent(key)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mod_status: v && v.allow ? 'ok' : 'blocked', food_subject: v && v.allow && v.food ? 1 : 0 }) });
+      } catch { /* stays unchecked → stays owner-only */ }
+    })());
 
     // Proof from this photo — location tag first (free), then recognition.
     const patch = {};
