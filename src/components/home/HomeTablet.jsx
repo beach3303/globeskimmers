@@ -7,7 +7,6 @@ import HomeRows from '@/components/home/HomeRows';
 import StampsNearYou from '@/components/home/StampsNearYou';
 import RightNowStrip from '@/components/home/RightNowStrip';
 import WishlistCard from '@/components/home/WishlistCard';
-import DreamersCorner from '@/components/home/DreamersCorner';
 import ExperiencesRow from '@/components/home/ExperiencesRow';
 import SmartSearchBar from '@/components/search/SmartSearchBar';
 import SmartSearchOverlay from '@/components/search/SmartSearchOverlay';
@@ -54,16 +53,15 @@ export default function HomeTablet({
   destinationSearch = null, onDismissDestination,
 }) {
   const ORDER = {
-    home: ["dreamers", "rows", "experiences", "stamps"], discovery: ["rows", "dreamers", "experiences", "stamps"],
-    domestic: ["stamps", "rows", "dreamers", "experiences"], international: ["stamps", "rows", "dreamers", "experiences"],
-    planning: ["dreamers", "rows", "experiences", "stamps"],
+    home: ["rows", "experiences", "stamps"], discovery: ["rows", "experiences", "stamps"],
+    domestic: ["stamps", "rows", "experiences"], international: ["stamps", "rows", "experiences"],
+    planning: ["rows", "experiences", "stamps"],
   };
   const SEC = {
     rows: <HomeRows key="rows" wide onAction={onAction} />,
     stamps: <StampsNearYou key="stamps" wide onAction={onAction} />,
     // Extracted from HomeRows on phone — without these mounts the
     // tablet silently loses Dreamer's Corner AND every bookable experience.
-    dreamers: <DreamersCorner key="dreamers" wide onAction={onAction} />,
     experiences: <ExperiencesRow key="experiences" wide />,
   };
   const discoverOrder = ORDER[journeyMode] || ["rows", "stamps"];

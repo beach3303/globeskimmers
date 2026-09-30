@@ -8,17 +8,13 @@ import { useLocation, isLocationAskSnoozedToday, snoozeLocationAskToday, readOpe
 import LocationModePicker from "../components/location/LocationModePicker";
 import StampsNearYou from "../components/home/StampsNearYou";
 import DreamShelf from "../components/home/DreamShelf";
-import DealRadarRow from "../components/home/DealRadarRow";
 import WanderlustLine from "../components/home/WanderlustLine";
-// fetchHomeRows is DreamersCorner's shared /home/rows client cache — Home
-// reads it through the shared rows cache (DreamersCorner).
 // CLUTTER CUT (founder, 2026-09-20): HomeRows (Near you now / Around the
 // city today / In the city), ExperiencesRow ("Worth the drive"), EscapesRow
 // ("Trips & escapes") and the YOUR TRIP zone (StayAnchor, MyTripCard,
 // WishlistCard) no longer mount on the phone Home. StayAnchor + WishlistCard
 // moved to MyTrip.jsx; the spot rows get a new home in the next slice.
 // HomeTablet still mounts its own set — untouched, tabled.
-import DreamersCorner from "../components/home/DreamersCorner";
 import AllServicesSheet from "../components/home/AllServicesSheet";
 import { getTravelMode } from "@/lib/homeContext";
 import { TEAL_DEEP, IVORY, IVORY_2 } from "../components/redesign/constants";
@@ -797,8 +793,7 @@ export default function HomePage() {
           NOTHING when its data allows nothing, so the zones self-compact:
             NEARBY NOW  — finder chips → today's answer → stamps (+ planner
               entry) → dated events;
-            DREAM & PLAN — Dreamer's Corner → dream shelf
-              (dream stack) → deal radar.
+            then the dream shelf (dream stack) and the daily quote.
           Gone from Home: the spot rows (HomeRows — to be re-homed on the
           Nearby surface), "Worth the drive" (ExperiencesRow), "Trips &
           escapes" (EscapesRow), and the YOUR TRIP zone, which now lives only
@@ -835,13 +830,9 @@ export default function HomePage() {
 
       <StampsNearYou onAction={handleQuickAction} onNearest={setNearestStamp} />
 
-      {/* ── ZONE 2: DREAM & PLAN ───────────────────────────────────────── */}
-      <ZoneKicker label="DREAM & PLAN" />
-
-      {/* DreamersCorner contract (per the extracted component): self-fetching
-          via its shared fetchHomeRows cache; optional onAction renders the
-          worker row's "See all →" (whereToNext.seeAll.action = Things to Do). */}
-      <DreamersCorner onAction={handleQuickAction} />
+      {/* Dreamer's Corner, Deal Radar and the DREAM & PLAN kicker left on the
+          founder's 2026-09-30 cut. The dream stack (DreamShelf) and the daily
+          quote stay — the quotes are protected by name. */}
       {isDreamStack && (
         <DreamShelf
           latitude={activeLocation?.coordinates?.latitude}
@@ -851,7 +842,6 @@ export default function HomePage() {
           onOpenActivity={openDreamActivity}
         />
       )}
-      <DealRadarRow />
 
       {/* A quiet daily travel quote to close the scroll — encouragement, never
           a sales line. Copyright-safe (public-domain authors + originals). */}

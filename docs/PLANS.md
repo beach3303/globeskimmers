@@ -85,6 +85,13 @@ Awaiting the founder's reaction to round three and to postcards.
   story sheets, earn toasts, branded share; photo-real skin auto-upgrades from R2 when the
   founder uploads their render (docs/TRUNK_RENDER_PROMPT.md). Ships with next OTA.
 
+**Home cut, 2026-09-30 (founder): "remove dream and plan, dreamer's corner, deal radar."**
+Done same day: the DREAM & PLAN kicker, DreamersCorner and DealRadarRow are off Home (phone
+and tablet; DealRadarRow deleted, DreamersCorner's file stays for its shared rows cache that
+HomeRows uses). KEPT by name: the daily travel quote (WanderlustLine) and the dream shelf.
+Home is now: masthead → passport hero → search → NEARBY NOW (chips, stamps row) → dream
+shelf → quote. Site door copy no longer names the removed rows.
+
 **"BUILD ALL" (founder, 2026-09-29 late): the queue below is greenlit end-to-end.** Slices
 1–4 shipped the same night (onboarding v2 + explainer, Home passport hero, hero-stamp share
 renderer + lying-S strips + denser booklet, Social P0 handles/two-question claim/blocks —
