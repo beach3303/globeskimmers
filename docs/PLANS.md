@@ -63,7 +63,20 @@ Awaiting the founder's reaction to round three and to postcards.
 - Usernames: yes — every user creates a handle and can change it (worker-side uniqueness,
   reserved list, 2 changes/30 days, old handle released; per the social architecture).
 - Teen/child protection must match what Meta, Instagram, TikTok and Snapchat actually do —
-  research running → docs/research/teen-safety-platforms-2026-09.md; fold into Social P1.
+  DONE, docs/research/teen-safety-platforms-2026-09.md. Verdict: our spec already meets or
+  beats platform parity on substance (forced private for minors, no DMs, tag consent, 24h
+  delayed visibility, never-live location, fail-closed photo moderation, reverse-chron feed,
+  no like counts, no under-18 ad personalization). NINE ADDS bound into Social P1/P2:
+  (1) consume the OS Declared Age Range + parental-consent signals before social opt-in;
+  (2) birth year locks after first entry — age-up edits need the OS signal or support;
+  (3) AUSTRALIA: no social opt-in under 16 for AU users (their under-16 law is live);
+  (4) UK Online Safety Act children's-access + risk assessments written BEFORE P2 ships;
+  (5) standing invariant: if push notifications ever ship, none to minors 21:00–07:00;
+  (6) minor-safety reports get a 24-hour triage SLA; (7) NSFWJS client pre-check as a
+  courtesy before upload; (8) log the age-assurance method and date per account;
+  (9) state the location doctrine (never live, 24h delay for minors) in store + privacy copy.
+  Reasoned skips: parental dashboards, AI age estimation, screen-time tools, PG-13 tiers
+  (we are not an infinite feed; audits show dashboards are the least effective tool).
 - Ship to BOTH stores as soon as the social build is complete (the P1 native build carries
   the store questionnaire changes; both platforms always).
 - NEXT PROJECT: the globeskimmers.io landing page — match the pivot; value prop around
