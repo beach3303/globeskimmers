@@ -226,3 +226,22 @@ The moment profiles/visibility ship (Social P1+P2), both stores' questionnaires 
 - Both: privacy policy gains the social section + the one-line promise ("Your stamps and
   photos are yours — we never sell your photos or your location history, and we never show
   ads to kids").
+
+## What's New — v1.0.3 (iOS) / 1.0.7 (Android), 2026-09-30
+
+App Store "What's New" / Play "Release notes" (≤4000, aim short):
+
+> Your Virtual Passport just became a place to meet fellow travelers.
+>
+> • Share your passport — friends react with collectible stamps: WOW, TAKE ME, BEEN HERE ♥, I WANNA GO, MORE PICS PLEASE
+> • The Guestbook — leave a signature or a little finger-drawn doodle on someone's page
+> • Postcards — send a moment straight to a friend, never a feed
+> • Profiles, usernames & following — with strong privacy defaults and extra protections for teens
+> • Virtual Luggage — walk around your trunk and place the stickers every destination earns
+> • Photo packets, city sets, a birthday stamp, and dozens of polish fixes
+
+Reviewer notes (App Review / Play "App access"):
+> Social features require an account. Passports are PRIVATE BY DEFAULT; all user
+> photos/drawings pass automated review before public display; every item can be
+> reported in-app; blocking is available on every profile; under-18 accounts cannot
+> go public and require follower approval. Test account available on request.
