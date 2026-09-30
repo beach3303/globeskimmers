@@ -222,3 +222,13 @@ export async function blotterSweep(args) {
   const { data, error } = await callWorker('blotter/sweep', args);
   return { data, error };
 }
+
+// ── Virtual Luggage (2026-09-30): six trunks, five faces, placed stickers ───
+export async function luggageGet() {
+  const { data } = await callWorker('luggage/get', {});
+  return data && !data.error ? data : { active: 'classic', placements: {} };
+}
+export async function luggageSet(patch) {
+  const { data, error } = await callWorker('luggage/set', patch);
+  return { data, error };
+}

@@ -17,6 +17,7 @@ import { getShareLink } from "@/lib/passport";
 import { showToast } from "@/components/Toast";
 import { logEvent } from "@/lib/analytics";
 import LuggageLabel from "@/components/passport/LuggageLabel";
+import VirtualLuggage from "@/components/passport/VirtualLuggage";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -98,6 +99,7 @@ export default function Luggage({ stamps, readOnly }) {
   const [story, setStory] = useState(null);     // the tapped label
   const [busy, setBusy] = useState(false);
   const [share, setShare] = useState(null);     // { url, dataUrl, blob } two-tap preview
+  const [openLug, setOpenLug] = useState(false); // the full walk-around luggage
   const trunkRef = useRef(null);
 
   // The earn toast — once per new label, only on the owner's own passport.
@@ -166,13 +168,22 @@ export default function Luggage({ stamps, readOnly }) {
             {labels.length ? `${labels.length} label${labels.length === 1 ? "" : "s"} on the trunk` : "The trunk travels with you"}
           </h3>
         </div>
-        {labels.length > 0 && (
-          <button type="button" onClick={renderShare} disabled={busy}
-            className="rounded-full px-4 py-2 font-semibold disabled:opacity-60"
-            style={{ background: "#0E7C86", color: "#fff", fontSize: fs(12.5), fontFamily: "inherit" }}>
-            {busy ? "Rendering…" : "Share"}
-          </button>
-        )}
+        <div className="flex gap-2">
+          {!readOnly && (
+            <button type="button" onClick={() => setOpenLug(true)}
+              className="rounded-full px-4 py-2 font-semibold"
+              style={{ background: "#FFFCF7", color: "#3A3128", border: "1px solid rgba(22,17,13,.14)", fontSize: fs(12.5), fontFamily: "inherit" }}>
+              Open 🧳
+            </button>
+          )}
+          {labels.length > 0 && (
+            <button type="button" onClick={renderShare} disabled={busy}
+              className="rounded-full px-4 py-2 font-semibold disabled:opacity-60"
+              style={{ background: "#0E7C86", color: "#fff", fontSize: fs(12.5), fontFamily: "inherit" }}>
+              {busy ? "Rendering…" : "Share"}
+            </button>
+          )}
+        </div>
       </div>
 
       <div ref={trunkRef} style={{ position: "relative", borderRadius: 18, overflow: "hidden", background: "radial-gradient(120% 100% at 50% 0%, #3A342A 0%, #241F17 62%, #191510 100%)", padding: "14px 10px 8px" }}>
@@ -237,6 +248,9 @@ export default function Luggage({ stamps, readOnly }) {
           </div>
         </div>
       )}
+
+      {/* The walk-around trunk: six styles, five faces, hand-placed stickers */}
+      {openLug && <VirtualLuggage stamps={stamps} onClose={() => setOpenLug(false)} />}
     </div>
   );
 }

@@ -35,3 +35,34 @@ draggable and keep their stories.
 v1 ships the front face only. When the spin builds, generate per material:
 "the same trunk turned to show its left end", "…its lid from slightly above",
 same style block — keep the seed/session so the trunk stays identical.
+
+---
+
+## Virtual Luggage v2 (2026-09-30) — six styles × five faces
+
+The founder's ChatGPT reference boards (The Classic navy, The Cognac, The Midnight,
+The Expedition green, The Voyager ivory, The Explorer oxblood) set the family look.
+The app now renders a walk-around trunk: FRONT → RIGHT → BACK → LEFT (+ TOP/LID),
+with the sticker layer composited on top. It looks for one image per face at:
+
+```
+stamp-art/luggage/<type>/<face>.webp     type: classic|cognac|midnight|expedition|voyager|explorer
+                                         face: front|right|back|left|top   (bottom later)
+```
+
+Until a face is uploaded, a quiet engraved fallback face renders — respectable, but
+the photo-real renders are the point.
+
+### Generating (in the same ChatGPT session that made the boards)
+Ask for each face **clean — no stickers, no labels, no text** (the founder's own
+correction on the boards), straight-on, the SAME object rotated: identical lighting,
+leather grain, brass tone, strap width, corner hardware, proportions, stitching.
+Front/back landscape ≈ 1600×1000, left/right portrait ≈ 1000×1300, top ≈ 1600×550.
+Warm ivory/off-white backdrop, soft ground shadow, edge-to-edge trunk (~92% of frame).
+
+### Upload one-liners (per face)
+```
+npx wrangler r2 object put globeskimmers-media/stamp-art/luggage/classic/front.webp --file=./classic-front.webp --remote
+```
+…repeat per type/face (30 files for the full set; The Classic's five faces first —
+it is the default trunk everyone starts with).

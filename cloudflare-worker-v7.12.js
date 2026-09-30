@@ -13912,6 +13912,66 @@ async function handlePostcardPhotoServe(request, env) {
   } catch { return new Response('Error', { status: 500 }); }
 }
 
+// ── Virtual Luggage (2026-09-30): six trunks, five faces, placed stickers ───
+// The luggage artwork is the background layer; earned destination stickers
+// are a separate interactive layer the traveler places by hand. Positions are
+// NORMALIZED (0..1) so a sticker stays put across phone sizes. One state row
+// per user: { active, placements: {luggage: {face: [{sid,x,y,scale,rot,z}]}} }.
+const LG_TYPES = new Set(['classic', 'cognac', 'midnight', 'expedition', 'voyager', 'explorer']);
+const LG_FACES = new Set(['front', 'right', 'back', 'left', 'top', 'bottom']);
+
+async function handleLuggageGet(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in first' }, 401);
+    const q = await gbRest(env, `luggage_state?user_id=eq.${user.id}&select=active,placements`, {});
+    const row = (q.ok ? await q.json() : [])[0];
+    return jsonResponse({ active: row?.active || 'classic', placements: row?.placements || {} });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+async function handleLuggageSet(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in first' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const patch = { user_id: user.id, updated_at: new Date().toISOString() };
+    if (b.active !== undefined) {
+      if (!LG_TYPES.has(String(b.active))) return jsonResponse({ error: 'Unknown luggage' }, 400);
+      patch.active = String(b.active);
+    }
+    if (b.placements !== undefined) {
+      const src = b.placements && typeof b.placements === 'object' && !Array.isArray(b.placements) ? b.placements : {};
+      const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+      const out = {};
+      let total = 0;
+      for (const [lug, faces] of Object.entries(src)) {
+        if (!LG_TYPES.has(lug) || !faces || typeof faces !== 'object') continue;
+        const fo = {};
+        for (const [face, list] of Object.entries(faces)) {
+          if (!LG_FACES.has(face) || !Array.isArray(list)) continue;
+          const cl = [];
+          for (const pl of list.slice(0, 300)) {
+            const sid = String(pl?.sid || '').slice(0, 80);
+            if (!sid) continue;
+            cl.push({ sid, x: num(pl.x, 0, 1, 0.5), y: num(pl.y, 0, 1, 0.5), scale: num(pl.scale, 0.3, 3, 1), rot: num(pl.rot, -180, 180, 0), z: num(pl.z, 0, 999, 0) });
+            total += 1;
+          }
+          if (cl.length) fo[face] = cl;
+        }
+        if (Object.keys(fo).length) out[lug] = fo;
+      }
+      // "Do not impose a low sticker limit" — this cap is a safety rail, not a game rule.
+      if (total > 900 || JSON.stringify(out).length > 150000) return jsonResponse({ error: 'Too many stickers to save' }, 400);
+      patch.placements = out;
+    }
+    const w = await gbRest(env, 'luggage_state?on_conflict=user_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(patch) });
+    if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'luggage_save', {}));
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // ── The Blotter (2026-09-30, mockup v3): reactions AROUND a page ────────────
 // Marks are stamp presses on the blotter under a shared passport page — five
 // core (wow/takeme/been/wannago/morepics) + contextual yummy (only where a
@@ -19236,6 +19296,8 @@ export default {
       if (pathname === '/blotter/sign' && request.method === 'POST') return await handleBlotterSign(request, env, ctx);
       if (pathname === '/blotter/cosign' && request.method === 'POST') return await handleBlotterCosign(request, env, ctx);
       if (pathname === '/blotter/sweep' && request.method === 'POST') return await handleBlotterSweep(request, env, ctx);
+      if (pathname === '/luggage/get' && request.method === 'POST') return await handleLuggageGet(request, env);
+      if (pathname === '/luggage/set' && request.method === 'POST') return await handleLuggageSet(request, env, ctx);
       if (pathname === '/admin/reports' && request.method === 'POST') return await handleAdminReports(request, env);
       if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
       if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);
