@@ -148,8 +148,14 @@ lists; Hollywood Sign anchored at below-the-hill viewpoints). Sensing needs no c
 NearbyStampPrompt reads attractions/nearby (stampsOnly, 2km) so icons AND film spots
 are sensed the moment rows exist with proper scope. BUILD ITEM (approved direction):
 small-city fallback — when a town has no stampable icons, suggest the nearest big
-city's top spots. NEXT: founder runs the icon-count forensics reads; then the global
-reload city-by-city with review sheets. Privacy: public = any signed-in
+city's top spots. DONE 2026-09-30, same day: the WORLD SEED is loaded — four parallel
+research passes (Europe 339 · Asia-Pacific 294 · Americas 290 · Africa+MidEast 133,
+zero validation rejects) merged into a 1,130-icon seed; loaded with indexed,
+collision-proof idempotent SQL + per-name twin merge; parks split per kingdom at real
+gates; rides demoted inside park fences; verified live across six continents
+(Chureito Pagoda → Trocadéro → Sydney → Cape Town → Mexico City). KNOWN RESIDUE for a
+later polish pass: accent/name-variant twins the exact-name merge can't see
+(Musée/Musee d'Orsay, Kirstenbosch ×2) — needs a fuzzy-match pass, low priority. Privacy: public = any signed-in
 traveler may press/sign; friends = mutuals; private = invisible (nothing to react to);
 teens = accepted followers only. Same slim blotter under packet photos. Profile v2 SHIPPED
 same day (4c587c3): trunk banner on TOP, traveler chips gone, About me + My website,
