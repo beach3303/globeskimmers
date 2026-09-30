@@ -128,6 +128,11 @@ def main():
             for f in ("scene", "cast1", "role1", "cast2", "role2"):
                 if (o.get(f) or "").strip():
                     r[f] = o[f].strip()
+            # The scene pass marked some seed lines as generic filler ("was
+            # used in parts of the series") with no scene to replace them.
+            # An empty line is more honest than a vague one, so blank those.
+            if "recommend blanking" in (o.get("notes") or "") and not (o.get("scene") or "").strip():
+                r["scene"] = ""
             if (o.get("verdict") or "").startswith("drop"):
                 dropped.append((r["spot_name"], r["work_title"], o["verdict"]))
                 continue

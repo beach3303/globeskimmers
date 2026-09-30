@@ -41,8 +41,8 @@ Q7053028,Normandale Community College,Q300555,A Serious Man,drop,A community col
 Q59330112,Rinpung Dzong,Q1141873,Little Buddha,keep,Scenes of Little Buddha were filmed at the fortress in Paro.,384
 Q48972968,Baja Studios,Q44578,Titanic,drop,A working studio whose visitor tour has closed; nothing for a traveller to stand at.,4
 Q181172,Tikal,Q17738,Star Wars: Episode IV – A New Hope,keep,Both Tikal and Temple IV are stamps we already have; the film line goes on each.,10
-Q19835,"Warner Bros. Studios, Leavesden",Q102438,Harry Potter and the Philosopher's Stone,keep,Open to visitors through the Studio Tour.,18
-Q48821,Kennedy Space Center,Q106428,Apollo 13,keep,A major visitor complex; the scene line stays empty until a source gives one.,77
+Q19835,"Warner Bros. Studios, Leavesden",Q102438,Harry Potter and the Philosopher's Stone,merge:icon:Q27924395,The Studio Tour stamp 340 m away is the visitable place; the film goes there.,18
+Q48821,Kennedy Space Center,Q106428,Apollo 13,drop,No source says the film was shot at the centre; the film line waits for one. The centre keeps its own stamp.,77
 Q5555209,Halton House,Q160060,The King's Speech,drop,"An RAF officers' mess, not open to visitors.",81
 Q979167,Ajim,Q17738,Star Wars: Episode IV – A New Hope,drop,A town-level location with no single spot to stand at.,90
 Q5713579,Hendon Police College,Q14171368,Avengers: Age of Ultron,drop,"A police training college, not a visitor place.",92
@@ -51,3 +51,31 @@ Q519826,Lawrence Livermore National Laboratory,Q171711,Star Trek Into Darkness,d
 Q12858813,Lincoln Heights Jail,Q205028,Iron Man 2,drop,"A closed former jail, not open to visitors.",138
 Q5365721,Elliott School,Q190588,Love Actually,drop,"A working school, not a visitor place.",139
 Q2628510,Badminton House,Q194413,Pearl Harbor,drop,"A private house, not open to visitors.",147
+Q129143,Trafalgar Square,Q5890,V for Vendetta,drop,The only tie to the film is a road closure; no scene was shot in the square.,5
+Q1472049,Salisbury Plain,Q62721520,1917,drop,"A large, partly restricted military training area.",157
+Q1431014,National Ignition Facility,Q171711,Star Trek Into Darkness,drop,Inside a secure national laboratory.,159
+Q125138,Queens–Midtown Tunnel,Q51416,Men in Black,drop,The scene is set in the tunnel; no source says it was shot there.,167
+Q2485027,Ford Island,Q194413,Pearl Harbor,keep,Open to visitors through the Pearl Harbor sites; the island article names the film.,207
+Q1332478,Wye Valley,Q55632932,Sex Education,drop,A large area; filming was spread over several villages.,228
+Q214855,Bank of China Tower,Q156329,Star Trek: Voyager,drop,"An exterior shot, most likely stock footage.",231
+Q49136,Fenway Park,Q725539,The Town,drop,No source says the scenes were shot in the park; the film line waits for one.,249
+Q16995495,Joyce Grove,Q14918344,The Imitation Game,drop,A hospice until 2020; not a visitor place.,256
+Q25212617,Carlton Hotel,Q201819,District 9,drop,Closed since 1998.,261
+Q2630372,Top Gear test track,Q33162,Top Gear,drop,A private airfield.,263
+Q2092214,University of North Carolina Wilmington,Q203385,One Tree Hill,drop,A working campus; a weak stamp.,267
+Q332474,Harrods,Q27964337,Peter Rabbit,drop,A story setting; no source says the scenes were shot in the store.,275
+Q7826925,Torrance High School,Q117590,"Beverly Hills, 90210",drop,A working school.,284
+Q7372382,Stone Canyon Reservoir,Q644987,Chinatown,drop,A fenced reservoir; nothing to stand at.,291
+Q1241943,Narragansett Bay,Q217112,Moonrise Kingdom,drop,A large area; filming was on several islands and forts.,303
+Q1802429,St. Andrew's School,Q3577037,The West Wing,drop,A working boarding school.,304
+Q6970416,National Archives Building,Q309366,National Treasure,drop,The section is set there; no source says it was filmed there.,325
+Q8038699,Wrotham Park,Q391101,Agatha Christie's Poirot,drop,A private house.,327
+Q3137221,University of Toronto Scarborough,Q634810,Total Recall,drop,A working campus; a weak stamp.,340
+Q1727138,Los Angeles City College,Q728553,Community,drop,A working campus; a weak stamp.,351
+Q7494978,Sheriff Street,Q304074,In the Name of the Father,drop,The flats used for the scene were demolished.,365
+Q18683358,Integral House,Q21296543,Star Trek: Discovery,drop,A private residence.,374
+Q16899452,Rotherfield Park,Q391101,Agatha Christie's Poirot,drop,A private house.,378
+Q1534537,Schnals Valley,Q15631013,Everest,drop,A large valley with no single spot.,379
+Q5270901,Diamond Ranch High School,Q691611,Serenity,drop,A working school.,385
+Q16957681,Chilworth Manor,Q391101,Agatha Christie's Poirot,drop,A private house.,392
+Q29014,Millennium Dome,Q212145,The World Is Not Enough,merge:curated:united-kingdom-london-the-o2-arena,The Dome is the same building as The O2 Arena stamp; the Bond film goes on that stamp.,108
