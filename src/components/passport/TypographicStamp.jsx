@@ -46,6 +46,40 @@ function wrapWords(name, maxLines) {
 const longestOf = (lines) => lines.reduce((m, l) => Math.max(m, l.length), 1);
 // Georgia bold caps average ~0.62em of advance, so this keeps the longest line
 // inside `box` without measuring text (which SVG can't do before paint).
+// Lying-S film band (founder pick 2026-09-29: "an S laying down that mimics a
+// film rolling"): one sine period across the strip, drawn as two edge paths
+// plus sprocket holes that follow the curve.
+const sPts = (x0, x1, cy, amp, n = 44) => Array.from({ length: n + 1 }, (_, i) => {
+  const t = i / n; return { x: x0 + (x1 - x0) * t, y: cy - amp * Math.sin(2 * Math.PI * t) };
+});
+function sBand(x0, x1, cy, amp, width = 20, step = 19, perf = [9, 8]) {
+  const pts = sPts(x0, x1, cy, amp);
+  const tang = pts.map((p, i) => { const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)]; const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy) || 1; return { x: dx / l, y: dy / l }; });
+  const h = width / 2;
+  const edge = (sgn) => pts.map((p, i) => `${i ? "L" : "M"}${(p.x - tang[i].y * sgn * h).toFixed(1)},${(p.y + tang[i].x * sgn * h).toFixed(1)}`).join(" ");
+  const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+  const total = cum[cum.length - 1], count = Math.floor((total - 12) / step), start = (total - (count - 1) * step) / 2;
+  const perfs = [];
+  for (let k = 0; k < count; k++) {
+    const d = start + k * step; let i = cum.findIndex((c) => c >= d); if (i < 1) i = 1;
+    const t = (d - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1);
+    const px = pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, py = pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t;
+    perfs.push({ x: px, y: py, a: Math.atan2(tang[i].y, tang[i].x) * 180 / Math.PI });
+  }
+  const capA = pts[0], capB = pts[pts.length - 1], tA = tang[0], tB = tang[tang.length - 1];
+  const caps = `M${(capA.x + tA.y * h).toFixed(1)},${(capA.y - tA.x * h).toFixed(1)} L${(capA.x - tA.y * h).toFixed(1)},${(capA.y + tA.x * h).toFixed(1)} M${(capB.x + tB.y * h).toFixed(1)},${(capB.y - tB.x * h).toFixed(1)} L${(capB.x - tB.y * h).toFixed(1)},${(capB.y + tB.x * h).toFixed(1)}`;
+  return { top: edge(1), bot: edge(-1), caps, perfs, pw: perf[0], ph: perf[1] };
+}
+const FilmBand = ({ x0, x1, cy, amp }) => {
+  const b = sBand(x0, x1, cy, amp);
+  return (<>
+    <path d={b.top} fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinejoin="round" />
+    <path d={b.bot} fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinejoin="round" />
+    <path d={b.caps} fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" />
+    {b.perfs.map((p, i) => <rect key={i} x={-b.pw / 2} y={-b.ph / 2} width={b.pw} height={b.ph} rx="2" fill="currentColor" transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${p.a.toFixed(1)})`} />)}
+  </>);
+};
+
 const fitSize = (lines, box, max) => Math.min(max, box / (longestOf(lines) * 0.62));
 
 // Stack of centred lines, vertically centred on `mid`.
@@ -242,7 +276,7 @@ export default function TypographicStamp({
       const lines = wrapWords(name, 2);
       const two = lines.length > 1;
       const size = fitSize(lines, 226, two ? 27 : 35);
-      const perf = [37, 263].flatMap((y) => Array.from({ length: 12 }, (_, i) => <rect key={`${y}-${i}`} x={39 + i * 19} y={y} width="10" height="9" rx="2" fill="currentColor" />));
+      // Lying-S strips (S1): the top rolls up-then-down, the bottom mirrors it.
       const title = String(film?.title || "").toUpperCase();
       const filmLine = film?.year ? `${title} · ${film.year}` : title;
       // Long titles wrap onto two lines, the year on the second, instead of
@@ -259,9 +293,8 @@ export default function TypographicStamp({
       return {
         name: <Lines lines={lines} size={size} mid={two ? 147 : 146} />,
         frame: (<>
-          <rect x="30" y="30" width="240" height="23" rx="3" fill="none" stroke="currentColor" strokeWidth="2.4" />
-          <rect x="30" y="256" width="240" height="23" rx="3" fill="none" stroke="currentColor" strokeWidth="2.4" />
-          {perf}
+          <FilmBand x0={26} x1={274} cy={41} amp={11} />
+          <FilmBand x0={26} x1={274} cy={269} amp={-9} />
           <text x="150" y={two ? 94 : 110} textAnchor="middle" fontFamily={SERIF} {...ft(15, 3.4, "★ FILMED HERE ★", 262)} fontWeight="700" fill="currentColor">★ FILMED HERE ★</text>
           <path d={`M70,${two ? 103 : 120} L230,${two ? 103 : 120}`} stroke="currentColor" strokeWidth="1.5" />
           <path d={`M70,${two ? 177 : 170} L230,${two ? 177 : 170}`} stroke="currentColor" strokeWidth="2.6" />

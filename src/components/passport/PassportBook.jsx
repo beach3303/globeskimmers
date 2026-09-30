@@ -43,14 +43,15 @@ const hashStr = (s) => { let h = 0; const str = String(s || ""); for (let i = 0;
 const PAPER = "#FBF6EC", PAPER_EDGE = "#EADFC9";
 const NAVY = "#0C2B50", NAVY_DEEP = "#071B33", GOLD = "#D6A64A";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
-// Stamp width as a share of the page width. 0.50 until 2026-09-28, when the
-// founder chose ink B and then "Updated B" from the mockups
-// (https://claude.ai/artifact/Hivj8DCxdPgkLV611bt17Y): the place name, "I was
-// here!" and the date two to three sizes above B. Scaling the whole stamp is
-// what does that — the name is already fitted to the stamp's width. On a
-// phone: name ≈ 39 px, strike ≈ 20 px, date ≈ 15 px; one stamp per page. The
-// shared Story and Post both draw from this page, so both follow.
-const ART_FRAC = 0.76;
+// Stamp width as a share of the page width. The 2026-09-28 "Updated B" sizing
+// (0.76, one stamp per page) existed only because the SHARED image was drawn
+// from the page. 2026-09-29 the share renderer decoupled: a share can render
+// ONE chosen stamp at hero size (HERO_FRAC below, matching Updated B's on-story
+// text sizes), so the booklet itself returns to a denser, more passport-like
+// 0.56 — two stamps pack a page again.
+const ART_FRAC = 0.56;
+// The hidden hero page a single-stamp share captures — Updated B's scale.
+const HERO_FRAC = 0.76;
 
 const KIND = {
   country: "🌍", city: "🏙️", airport: "✈️", icon: "🗽", wonder: "🏔️", attraction: "📍",
@@ -549,6 +550,11 @@ export default function PassportBook({
   // opens the sheet); otherwise the Web Share API; on the web a plain download.
   // Every failure says why — never silent.
   const activePageRef = useRef(null);
+  // The hidden hero page: one chosen stamp at HERO_FRAC ("Updated B") that a
+  // single-stamp share captures instead of the on-screen page. Kept in the DOM
+  // (offscreen) so html2canvas can draw it with the booklet's exact fonts.
+  const heroRef = useRef(null);
+  const [heroStamp, setHeroStamp] = useState(null);
   const [sharing, setSharing] = useState(false);
   // preview: { status: "rendering" } | { status: "ready", url, blob, dataUrl } | { status: "error", message }
   // The overlay appears the instant Share is tapped (founder, 2026-09-27: the
@@ -579,13 +585,34 @@ export default function PassportBook({
       // The memory photos on THIS page, in page order — the carousel's slides 2+.
       const pg = page >= 1 && page - 1 < bookPages.length ? bookPages[page - 1] : null;
       const photos = pg ? pg.stamps.flatMap((st) => (st.photos || []).filter((ph) => ph && ph.photo_url).map((ph) => ({ src: ph.photo_url, stamp: st }))) : [];
-      setPreview({ status: "ready", target: "instagram", use: "story", preset: "story_meta", pageCanvas, photos, mix: photos.length > 0 ? "both" : "page", slides: null, slidesPreset: null, slidesBusy: false, slideFailed: 0, ...img });
+      setHeroStamp(null);
+      setPreview({ status: "ready", target: "instagram", use: "story", preset: "story_meta", subject: "page", pageStamps: pg ? pg.stamps : [], pageCanvas, photos, mix: photos.length > 0 ? "both" : "page", slides: null, slidesPreset: null, slidesBusy: false, slideFailed: 0, ...img });
       logEvent("passport_share_open", { photos_on_page: photos.length }, "Passport");
     } catch (e) {
       try { console.error("[passport share] render failed", e); } catch { /* ignore */ }
       setPreview({ status: "error", message: e?.message || String(e) });
     } finally { setSharing(false); }
   }, [sharing, page, bookPages]);
+  // Re-render the preview around ONE stamp (subject) or back to the page.
+  const chooseSubject = useCallback(async (stampOrNull) => {
+    if (!preview || preview.status !== "ready") return;
+    setHeroStamp(stampOrNull);
+    setPreview((p) => ({ ...p, status: "rendering", subject: stampOrNull ? stampOrNull.id : "page" }));
+    try {
+      await new Promise((r) => setTimeout(r, 60)); // let the hero node paint
+      const el = stampOrNull ? heroRef.current : (activePageRef.current || document.querySelector("[data-pp-active-page]"));
+      if (!el) throw new Error("nothing to render");
+      const pageCanvas = await html2canvas(el, {
+        useCORS: true, backgroundColor: "#FBF6EC", scale: 2, logging: false, imageTimeout: 8000,
+        onclone: (doc) => { doc.querySelectorAll("*").forEach((n) => { if (n.style && /inset/.test(n.style.boxShadow || "")) n.style.boxShadow = "none"; }); },
+      });
+      const img = await composeShare(pageCanvas, preview.preset || "story_meta");
+      setPreview((p) => (p && { ...p, status: "ready", pageCanvas, subject: stampOrNull ? stampOrNull.id : "page", ...img }));
+    } catch (e) {
+      setPreview((p) => (p && { ...p, status: "ready" }));
+      showToast(e?.message || "Could not render that stamp", "error");
+    }
+  }, [preview]);
   const slidesJob = useRef(0);
   const closePreview = useCallback(() => {
     slidesJob.current += 1; // cancels a slide build in flight
@@ -740,6 +767,16 @@ export default function PassportBook({
           </div>
         )}
 
+        {/* The hidden hero page: one stamp at Updated-B scale, captured when a
+            single stamp is shared. Offscreen but in the DOM (html2canvas needs
+            a laid-out node). Width matches the real page so composeShare's
+            typography lands identically. */}
+        {heroStamp && (
+          <div ref={heroRef} aria-hidden style={{ position: "absolute", left: -10000, top: 0, width: pageW, height: pageW * 1.6, background: PAPER, border: `1px solid ${PAPER_EDGE}`, borderRadius: 16, padding: 18, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+            <StampToken stamp={heroStamp} idx={0} onOpen={() => {}} pageW={heroStamp.kind === "airport" ? pageW : pageW * (HERO_FRAC / ART_FRAC)} />
+          </div>
+        )}
+
         {/* Front cover — hinged at the left spine */}
         <AnimatePresence initial={false}>
           {!open && (
@@ -856,6 +893,22 @@ export default function PassportBook({
                     className="flex-1 rounded-lg py-2 font-semibold"
                     style={{ background: preview.use === u ? "#FBF6EC" : "rgba(255,255,255,0.1)", color: preview.use === u ? NAVY : "#fff", border: "1px solid rgba(255,255,255,0.25)", fontFamily: MONO, fontSize: fs(11.5), letterSpacing: ".04em" }}>
                     {shareUseLabel(preview.target, u)}
+                  </button>
+                ))}
+              </div>
+            )}
+            {preview.status === "ready" && (preview.pageStamps || []).length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto" role="radiogroup" aria-label="What to render" style={{ scrollbarWidth: "none" }}>
+                <button type="button" role="radio" aria-checked={preview.subject === "page"} onClick={() => chooseSubject(null)}
+                  className="flex-none rounded-lg px-3 py-2 font-semibold"
+                  style={{ background: preview.subject === "page" ? "#FBF6EC" : "rgba(255,255,255,0.1)", color: preview.subject === "page" ? NAVY : "#fff", border: "1px solid rgba(255,255,255,0.25)", fontSize: fs(12) }}>
+                  Whole page
+                </button>
+                {(preview.pageStamps || []).map((st) => (
+                  <button key={st.id} type="button" role="radio" aria-checked={preview.subject === st.id} onClick={() => chooseSubject(st)}
+                    className="flex-none rounded-lg px-3 py-2 font-semibold max-w-[46%] truncate"
+                    style={{ background: preview.subject === st.id ? "#FBF6EC" : "rgba(255,255,255,0.1)", color: preview.subject === st.id ? NAVY : "#fff", border: "1px solid rgba(255,255,255,0.25)", fontSize: fs(12) }}>
+                    {st.name} · big
                   </button>
                 ))}
               </div>
