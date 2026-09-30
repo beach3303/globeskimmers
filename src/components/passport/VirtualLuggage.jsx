@@ -170,7 +170,7 @@ export default function VirtualLuggage({ stamps, onClose }) {
   const [tilt, setTilt] = useState(0);       // vertical pseudo-3D (lid swipe)
   const [edit, setEdit] = useState(false);
   const [selected, setSelected] = useState(null);
-  const [skinOk, setSkinOk] = useState({});  // `${type}/${face}` -> bool
+  const [skinOk, setSkinOk] = useState({});  // `${type}/${face}` -> false (missing) | number (h/w aspect)
   const dirty = useRef(false);
   const saveTimer = useRef(null);
   const stageRef = useRef(null);
@@ -189,6 +189,9 @@ export default function VirtualLuggage({ stamps, onClose }) {
   const tray = stickers.filter((s) => !placedSids.has(s.sid));
   const skinKey = `${active}/${face}`;
   const showSkin = skinOk[skinKey] !== false;
+  // Each render keeps its own proportions (the Classic set is square; the
+  // Midnight/Cognac faces are cropped tighter) — clamp so the stage stays sane.
+  const skinAspect = typeof skinOk[skinKey] === "number" ? Math.min(1.35, Math.max(0.45, skinOk[skinKey])) : 1;
   const bounds = showSkin ? (SKIN_BOUNDS[face] || BOUNDS) : BOUNDS;
 
   const scheduleSave = useCallback((next) => {
@@ -339,7 +342,7 @@ export default function VirtualLuggage({ stamps, onClose }) {
   const faceW = Math.min(typeof window !== "undefined" ? 0.92 * window.innerWidth : 360, 430);
   // The real renders are square and show whole (never cropped); the engraved
   // fallback keeps its per-face proportions.
-  const faceH = faceW * (showSkin ? 1 : (ASPECT[face] || 0.62));
+  const faceH = faceW * (showSkin ? skinAspect : (ASPECT[face] || 0.62));
 
   if (!state) {
     return (
@@ -389,6 +392,7 @@ export default function VirtualLuggage({ stamps, onClose }) {
                 <img
                   src={`${ART_BASE}/${active}/${face}.webp`} alt={`${active} luggage, ${face} face`}
                   onError={() => setSkinOk((m) => ({ ...m, [skinKey]: false }))}
+                  onLoad={(e) => { const im = e.currentTarget; if (im.naturalWidth > 0) setSkinOk((m) => ({ ...m, [skinKey]: im.naturalHeight / im.naturalWidth })); }}
                   draggable={false}
                   style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", pointerEvents: "none" }}
                 />
