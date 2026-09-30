@@ -85,6 +85,12 @@ Awaiting the founder's reaction to round three and to postcards.
   story sheets, earn toasts, branded share; photo-real skin auto-upgrades from R2 when the
   founder uploads their render (docs/TRUNK_RENDER_PROMPT.md). Ships with next OTA.
 
+**"BUILD ALL" (founder, 2026-09-29 late): the queue below is greenlit end-to-end.** Slices
+1–4 shipped the same night (onboarding v2 + explainer, Home passport hero, hero-stamp share
+renderer + lying-S strips + denser booklet, Social P0 handles/two-question claim/blocks —
+migration applied, worker live). Next: Social P1 (native build + store questionnaire), the
+consent page + birthday stamp, P2 follow/feed, albums, then postcards & stamp lanes.
+
 **The new build queue (founder, 2026-09-29):**
 1. Passport top priority: Stamps Near You with a first-run explainer (the Atlanta story:
    the stamps ARE the top tourist destinations); friend tagging → the tagged friend is
