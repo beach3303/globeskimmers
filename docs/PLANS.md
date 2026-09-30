@@ -112,6 +112,18 @@ HomeRows uses). KEPT by name: the daily travel quote (WanderlustLine) and the dr
 Home is now: masthead → passport hero → search → NEARBY NOW (chips, stamps row) → dream
 shelf → quote. Site door copy no longer names the removed rows.
 
+**Reactions & guestbook (founder ask, 2026-09-30): mockup delivered, build awaits a yes.**
+The Blotter concept — https://claude.ai/artifact/XJgSMBnYPWJYNrUbwj82db — reactions are four
+STAMPS pressed on the blotter around a shared page, never inside the booklet: WOW (awe) ·
+TAKE ME (aspiration/intent) · I'VE BEEN (kinship) · SOMEDAY (adds the place to the
+reactor's own On the Horizon — a like that rewards the liker). Comments = the Guestbook:
+handwritten-style signatures, chronological, edit/peel your own, co-signs later; the OWNER
+can sweep any stamp or signature off their blotter. Privacy: public = any signed-in
+traveler may press/sign; friends = mutuals; private = invisible (nothing to react to);
+teens = accepted followers only. Same slim blotter under packet photos. Profile v2 SHIPPED
+same day (4c587c3): trunk banner on TOP, traveler chips gone, About me + My website,
+free-form unlimited favorites (founder removes their two via ✕), dreams → ON THE HORIZON.
+
 **Store first (founder, 2026-09-30): partnerships are SKIPPED until the whole app is
 finished and deployed to BOTH stores.** The Georgia Aquarium pitch and every outreach item
 waits. Build focus: close every remaining OTA-able item so the founder's single native
