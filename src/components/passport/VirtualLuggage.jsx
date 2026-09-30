@@ -37,6 +37,15 @@ const FACES = ["front", "right", "back", "left", "top"];
 const ASPECT = { front: 0.62, back: 0.62, left: 1.3, right: 1.3, top: 0.34 };
 // Sticker-safe region (normalized) — a sticker never half-falls off the trunk.
 const BOUNDS = { xMin: 0.08, xMax: 0.92, yMin: 0.14, yMax: 0.88 };
+// The founder's renders are SQUARE (trunk centered on ivory) — per-face safe
+// zones tuned to that artwork so stickers land on leather, not backdrop.
+const SKIN_BOUNDS = {
+  front: { xMin: 0.12, xMax: 0.88, yMin: 0.3, yMax: 0.72 },
+  back: { xMin: 0.12, xMax: 0.88, yMin: 0.3, yMax: 0.72 },
+  right: { xMin: 0.3, xMax: 0.72, yMin: 0.24, yMax: 0.8 },
+  left: { xMin: 0.3, xMax: 0.72, yMin: 0.24, yMax: 0.8 },
+  top: { xMin: 0.12, xMax: 0.88, yMin: 0.28, yMax: 0.68 },
+};
 
 const STICKER_INKS = ["#7A2E1D", "#31465F", "#2F4A33", "#7A5B22", "#4E3A5E"];
 const STICKER_SHAPES = ["roundel", "lozenge", "diamond"];
@@ -177,6 +186,9 @@ export default function VirtualLuggage({ stamps, onClose }) {
     return set;
   }, [placements, active]);
   const tray = stickers.filter((s) => !placedSids.has(s.sid));
+  const skinKey = `${active}/${face}`;
+  const showSkin = skinOk[skinKey] !== false;
+  const bounds = showSkin ? (SKIN_BOUNDS[face] || BOUNDS) : BOUNDS;
 
   const scheduleSave = useCallback((next) => {
     dirty.current = true;
@@ -275,8 +287,8 @@ export default function VirtualLuggage({ stamps, onClose }) {
     if (!rect) return;
     if (g.kind === "drag") {
       const pt = pointers.current.get(e.pointerId);
-      const x = Math.min(BOUNDS.xMax, Math.max(BOUNDS.xMin, g.pl.x + (pt.x - g.start.x) / rect.width));
-      const y = Math.min(BOUNDS.yMax, Math.max(BOUNDS.yMin, g.pl.y + (pt.y - g.start.y) / rect.height));
+      const x = Math.min(bounds.xMax, Math.max(bounds.xMin, g.pl.x + (pt.x - g.start.x) / rect.width));
+      const y = Math.min(bounds.yMax, Math.max(bounds.yMin, g.pl.y + (pt.y - g.start.y) / rect.height));
       applyPl(() => ({ x, y }));
     } else if (g.kind === "pinch" && pointers.current.size >= 2) {
       const [a, b] = [...pointers.current.values()];
@@ -313,9 +325,9 @@ export default function VirtualLuggage({ stamps, onClose }) {
   };
 
   const faceW = Math.min(typeof window !== "undefined" ? 0.92 * window.innerWidth : 360, 430);
-  const faceH = faceW * (ASPECT[face] || 0.62);
-  const skinKey = `${active}/${face}`;
-  const showSkin = skinOk[skinKey] !== false;
+  // The real renders are square and show whole (never cropped); the engraved
+  // fallback keeps its per-face proportions.
+  const faceH = faceW * (showSkin ? 1 : (ASPECT[face] || 0.62));
 
   if (!state) {
     return (
@@ -366,7 +378,7 @@ export default function VirtualLuggage({ stamps, onClose }) {
                   src={`${ART_BASE}/${active}/${face}.webp`} alt={`${active} luggage, ${face} face`}
                   onError={() => setSkinOk((m) => ({ ...m, [skinKey]: false }))}
                   draggable={false}
-                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }}
+                  style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", pointerEvents: "none" }}
                 />
               ) : (
                 <FallbackFace type={active} face={face} />
