@@ -99,7 +99,11 @@ StampYay** (plus earlier: StampAtlast, Atlastamp, StampVoyage, StampChase, Stamp
 StampNomad, StampTrove, StampOrbit, HereStamp, Stampfari, WentMark, Stampolo, StampMile,
 HereWent, WhereWent — 20 available in all). Catchiest taken ones (buy/lawyer path):
 Stamply, StampChamp, StampCamp, Stamperoo, Stampito. Deliberately avoided: "Stampy"
-(a famous Minecraft YouTuber owns that word culturally).
+(a famous Minecraft YouTuber owns that word culturally). Meaning round 2026-09-30: every
+plain dictionary travel-word .com is squatted (safara, rihla, tabi-, vandra, andiamo,
+zinda, atrevo, audaz, memora, wanderlore, farbound… all registered). Fusions win: six
+more verified available — **DareFar · WentBrave · DreamWent · WentLore · FarWent ·
+StampBound** (26 available in all).
 
 **Home cut, 2026-09-30 (founder): "remove dream and plan, dreamer's corner, deal radar."**
 Done same day: the DREAM & PLAN kicker, DreamersCorner and DealRadarRow are off Home (phone
