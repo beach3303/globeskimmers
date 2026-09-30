@@ -18,7 +18,7 @@ for r in rows:
     exists = f"qid={q(qid)}" if qid else f"(name={q(name)} AND city={q(city)})"
     pop = 500000 if r["scope"] == "world" else 200000 if r["scope"] == "national" else 80000
     out.append(
-      "INSERT INTO attractions (id,name,category,lat,lng,city,country,source,source_id,footprint_radius_m,tier,scope,qid,sitelinks,popularity) "
+      "INSERT OR IGNORE INTO attractions (id,name,category,lat,lng,city,country,source,source_id,footprint_radius_m,tier,scope,qid,sitelinks,popularity) "
       f"SELECT {q(rid)},{q(name)},{q(r['category'])},{r['lat']},{r['lng']},{q(city)},{q(r['country'])},'city_icon',{q(qid or slug(name))},{r['radius_m']},'page',{q(r['scope'])},{q(qid) if qid else 'NULL'},150,{pop} "
       f"WHERE NOT EXISTS (SELECT 1 FROM attractions WHERE {exists});")
     out.append(
