@@ -141,6 +141,9 @@ export default function HomePage() {
   // Masthead passport count — null while loading; null and 0 both render the
   // quiet "PASSPORT →" (never a fake count, never a bare zero).
   const [passportTotal, setPassportTotal] = useState(null);
+  // The passport hero's "next stamp": the closest stampable place, reported up
+  // by StampsNearYou (one fetch serves both surfaces).
+  const [nearestStamp, setNearestStamp] = useState(null);
   const pickerPrompted = useRef(false); // gate the one-time location-picker auto-open (per mount)
 
   useEffect(() => {
@@ -801,6 +804,12 @@ export default function HomePage() {
           escapes" (EscapesRow), and the YOUR TRIP zone, which now lives only
           on the My Trip page. VibeBundles + WhereToStay stay OFF Home. */}
 
+      {/* PASSPORT HERO — the product leads (pivot, 2026-09-29). Built from
+          state Home already holds: the masthead's stamp count and the nearest
+          stampable place StampsNearYou reports up. Quiet ivory card: serif
+          count, mono next-stamp line, the whole card opens the Passport. */}
+      <PassportHero total={passportTotal} nearest={nearestStamp} onOpen={() => { trackEvent('feature_used', { feature_name: 'passport_hero' }); navigate(createPageUrl('Passport')); }} />
+
       {/* ── ZONE 1: NEARBY NOW ─────────────────────────────────────────── */}
       <ZoneKicker label="NEARBY NOW" />
 
@@ -824,7 +833,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <StampsNearYou onAction={handleQuickAction} />
+      <StampsNearYou onAction={handleQuickAction} onNearest={setNearestStamp} />
 
       {/* ── ZONE 2: DREAM & PLAN ───────────────────────────────────────── */}
       <ZoneKicker label="DREAM & PLAN" />
@@ -875,6 +884,37 @@ export default function HomePage() {
       {/* Arrival stamps — airport (domestic + international) + land/boat border crossings */}
       {profile?.onboarding_completed && !showWelcome && <AirportArrivalPrompt />}
       {profile?.onboarding_completed && !showWelcome && <BorderCrossingPrompt />}
+    </div>
+  );
+}
+
+// ── PassportHero — the passport-first doorway at the top of Home ───────────
+// Endowed progress, no guilt: a count when there is one, the nearest stamp
+// when known, and a warm zero state. One tap → Passport.
+function PassportHero({ total, nearest, onOpen }) {
+  const has = Number.isFinite(total) && total > 0;
+  const miles = nearest && Number.isFinite(nearest.miles) ? (nearest.miles < 10 ? nearest.miles.toFixed(1) : Math.round(nearest.miles)) : null;
+  return (
+    <div className="px-4 pb-4">
+      <button type="button" onClick={onOpen} aria-label="Open your Virtual Passport"
+        className="w-full max-w-md mx-auto block text-left rounded-2xl px-5 py-4"
+        style={{ background: '#FBF6EC', border: '1px solid #EADFC9', boxShadow: '0 10px 24px -20px rgba(22,17,13,.5)' }}>
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="font-mono uppercase text-[calc(9.5px*var(--fs))] font-semibold" style={{ letterSpacing: '.2em', color: '#B0472F' }}>My Virtual Passport</div>
+            <div className="font-serif text-[calc(24px*var(--fs))] leading-[1.1] mt-1" style={{ color: '#16110D' }}>
+              {has ? `${total} stamp${total === 1 ? '' : 's'} collected` : 'Your first page is waiting'}
+            </div>
+            <div className="font-mono text-[calc(10.5px*var(--fs))] mt-1.5 truncate" style={{ letterSpacing: '.05em', color: '#736657' }}>
+              {nearest && nearest.name
+                ? `NEXT STAMP: ${String(nearest.name).toUpperCase()}${miles != null ? ` · ${miles} MI` : ''}`
+                : has ? 'OPEN THE BOOKLET · SHARE A PAGE' : 'STAMP YOUR HOME CITY TO BEGIN'}
+            </div>
+          </div>
+          <div aria-hidden className="flex-none w-12 h-12 rounded-xl flex items-center justify-center"
+            style={{ background: '#0C2B50', border: '1px solid #D6A64A', color: '#D6A64A', fontSize: 22 }}>🛂</div>
+        </div>
+      </button>
     </div>
   );
 }

@@ -59,7 +59,7 @@ function StampChip({ item, wide, onOpen }) {
   );
 }
 
-export default function StampsNearYou({ onAction, wide = false }) {
+export default function StampsNearYou({ onAction, wide = false, onNearest }) {
   // First-run explainer (founder queue #1: "explain what stamps near you
   // mean" — the Atlanta story). Shows once, dismissible, never again after.
   const [explain, setExplain] = useState(() => {
@@ -99,6 +99,12 @@ export default function StampsNearYou({ onAction, wide = false }) {
         // Iconic first, then nearest — the marquee spots read as "worth a stamp".
         list.sort((a, b) => (Number(!!b.isMarquee) - Number(!!a.isMarquee)) || ((a.distanceMiles ?? 999) - (b.distanceMiles ?? 999)));
         setItems(list.slice(0, 12));
+        // Feed the passport hero the closest stampable place (by distance, not
+        // marquee rank — "next stamp" should be the one you can walk to).
+        if (onNearest) {
+          const near = list.slice().sort((a, b) => (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999))[0];
+          onNearest(near ? { name: near.name, miles: Number.isFinite(near.distanceMiles) ? near.distanceMiles : null } : null);
+        }
       } catch { if (!cancelled) setItems([]); }
     })();
     return () => { cancelled = true; };
