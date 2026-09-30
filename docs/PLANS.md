@@ -25,6 +25,11 @@ or trips is **shelved by this pivot**, not deleted from history: booking emails,
 filters and multi-room, saved cards, flights, car rental, Apple Pay on checkout, the
 Nuitée lane generally. Do not build on them without a new founder decision.
 
+**The Passport Plan (2026-09-29, evening):** all four research reports are in
+docs/research/ and folded into one page — https://claude.ai/artifact/6q3WsLiBQw3qNq5j5pFomC
+(the sized build queue, the ten founder decisions, first five partnership deals, LA28
+timeline, the first-party data rules). It supersedes the raw list below as the working plan.
+
 **The new build queue (founder, 2026-09-29):**
 1. Passport top priority: Stamps Near You with a first-run explainer (the Atlanta story:
    the stamps ARE the top tourist destinations); friend tagging → the tagged friend is
