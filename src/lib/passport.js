@@ -105,6 +105,20 @@ export async function getHandle() {
   const { data, error } = await callWorker('social/handle', {});
   return { handle: data?.handle || null, error };
 }
+// Age gate (Social P1): read state, or set the birth year once (it locks).
+export async function getAgeGate() {
+  const { data, error } = await callWorker('social/age', {});
+  return { set: !!data?.set, tier: data?.tier || null, error };
+}
+export async function setAgeGate(birth_year) {
+  const { data, error } = await callWorker('social/age', { birth_year });
+  return { set: !!data?.set, tier: data?.tier || null, error: error || data?.error || null };
+}
+// Report a shared passport (Apple 1.2's report door).
+export async function reportShared({ slug, kind, ref, reason, note }) {
+  const { data, error } = await callWorker('social/report', { slug, kind, ref, reason, note });
+  return { data, error };
+}
 export async function setHandle(handle) {
   const { data, error } = await callWorker('social/handle', { handle });
   return { handle: data?.handle || null, error: error || data?.error || null };

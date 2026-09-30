@@ -214,3 +214,15 @@ Recommend launching **globally** unless you have a specific reason to start narr
 | ⏳ | Capture 6.7" iPhone screenshots (1290×2796) — minimum 3, ideally 5-7 |
 | ⏳ | Capture Android phone screenshots (1080×1920+) — minimum 2, ideally 5-7 |
 | ⏳ | Bump CFBundleVersion / android versionCode if resubmitting |
+
+## Social P1 questionnaire flips (prepare WITH the next native build — do not submit before)
+The moment profiles/visibility ship (Social P1+P2), both stores' questionnaires change:
+- Apple: UGC = YES (report ✓ /social/report, block ✓ /social/block, filter ✓ fail-closed photo
+  moderation, contact ✓ founder email). Expect the age rating to move 4+ → 13+ (Apple's
+  2025 tiers: 4/9/13/16/18). Adopt the Declared Age Range API entitlement in the same build.
+- Google Play: "Users can interact" = YES, UGC = YES; target audience must NOT include
+  children (keeps AdMob out of Families policy). Data-safety form adds: user IDs (handles),
+  photos (user-shared), coarse "places visited" (user content, optional, not sold).
+- Both: privacy policy gains the social section + the one-line promise ("Your stamps and
+  photos are yours — we never sell your photos or your location history, and we never show
+  ads to kids").

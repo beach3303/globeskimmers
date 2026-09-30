@@ -6,7 +6,7 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
+import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
@@ -610,6 +610,14 @@ function PassportInner() {
   };
 
   const holder = readOnly ? (viewHolder || "A traveler") : (profile?.first_name || profile?.display_name || "Traveler");
+  // Apple 1.2's report door on shared passports (Social P1): one tap, one
+  // reason, silent to the owner; minor_safety carries the 24h triage SLA.
+  const [reporting, setReporting] = useState(false);
+  const sendReport = async (reason) => {
+    const { error } = await reportShared({ slug: viewSlug, kind: "passport", reason });
+    setReporting(false);
+    showToast(error || "Thank you — we review every report", error ? "error" : "success");
+  };
   const exitView = () => { try { sessionStorage.removeItem("pp_view_slug"); } catch { /* ignore */ } window.location.assign(createPageUrl("Passport")); };
 
   // Booklet view: one swipeable page per country (like a real passport).
@@ -863,6 +871,28 @@ function PassportInner() {
 
       {/* Stamp a place — manual city/spot visit stamp */}
       {showStampPlace && <StampPlaceModal onClose={() => setShowStampPlace(false)} onDone={() => { setShowStampPlace(false); load(); }} />}
+
+      {/* Friend view: the quiet report door (and the sheet of reasons) */}
+      {readOnly && (
+        <div className="text-center mt-6 mb-2">
+          <button type="button" onClick={() => setReporting(true)} style={{ background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
+            Report this passport
+          </button>
+        </div>
+      )}
+      {reporting && (
+        <div className="fixed inset-0 z-[9998] flex items-end justify-center" role="dialog" aria-modal="true" aria-label="Report this passport" style={{ background: "rgba(22,17,13,.45)" }} onClick={() => setReporting(false)}>
+          <div className="w-full max-w-md rounded-t-[22px] p-5 pb-8" style={{ background: "#FFFCF7" }} onClick={(e) => e.stopPropagation()}>
+            <p style={{ fontFamily: SERIF, fontSize: fs(19), color: INK }}>What&apos;s wrong here?</p>
+            <div className="flex flex-col gap-2 mt-3">
+              {[["minor_safety", "A child's safety"], ["nudity", "Nudity or sexual content"], ["harassment", "Harassment or hate"], ["spam", "Spam or a scam"], ["other", "Something else"]].map(([id, label]) => (
+                <button key={id} type="button" onClick={() => sendReport(id)} className="w-full rounded-[12px] py-2.5 font-semibold text-left px-4" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13.5) }}>{label}</button>
+              ))}
+              <button type="button" onClick={() => setReporting(false)} className="w-full rounded-[12px] py-2.5 font-semibold" style={{ background: "#F6F0E4", color: INK2, fontSize: fs(13) }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stamp options — one tap on a stamp in the booklet */}
       {actionsStamp && (

@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
-import { getHandle, setHandle } from "@/lib/passport";
+import { getHandle, setHandle, setAgeGate } from "@/lib/passport";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
 import { useLocation, readOpenBehavior, writeOpenBehavior } from "@/components/location/LocationContext";
@@ -416,12 +416,23 @@ export default function SettingsPage() {
   const [handleDraft, setHandleDraft] = useState("");
   const [handleBusy, setHandleBusy] = useState(false);
   useEffect(() => { (async () => { const { handle: h } = await getHandle(); if (h) { setHandleState(h); setHandleDraft(h); } })(); }, []);
+  // The worker answers 'age_required' until the birth year is set (it locks
+  // after the first write; under-13 and AU-under-16 accounts get no social).
+  const [needYear, setNeedYear] = useState(false);
+  const [yearDraft, setYearDraft] = useState("");
   const saveHandle = async () => {
     const want = handleDraft.trim().toLowerCase();
     if (!want || want === handle) return;
     setHandleBusy(true);
+    if (needYear) {
+      const y = Number(yearDraft);
+      const { error: ageErr } = await setAgeGate(y);
+      if (ageErr && ageErr !== "age_required") { setHandleBusy(false); showToast(ageErr, "error"); return; }
+      setNeedYear(false);
+    }
     const { handle: h, error } = await setHandle(want);
     setHandleBusy(false);
+    if (error === "age_required") { setNeedYear(true); showToast("One thing first — the year you were born", "success"); return; }
     if (error) { showToast(error, "error"); return; }
     setHandleState(h); setHandleDraft(h);
     showToast(`You're @${h}`, "success");
@@ -802,7 +813,12 @@ export default function SettingsPage() {
                       placeholder="yourname" aria-label="Username" autoCapitalize="none" autoCorrect="off"
                       className="flex-1 outline-none bg-transparent pl-1" style={{ fontSize: 15 }} />
                   </div>
-                  <button type="button" onClick={saveHandle} disabled={handleBusy || !handleDraft.trim() || handleDraft.trim() === handle}
+                  {needYear && (
+                    <input value={yearDraft} onChange={(e) => setYearDraft(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                      placeholder="Born (e.g. 1990)" inputMode="numeric" aria-label="Year you were born"
+                      className="w-28 rounded-xl px-3 h-12 outline-none" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 15 }} />
+                  )}
+                  <button type="button" onClick={saveHandle} disabled={handleBusy || !handleDraft.trim() || (needYear ? yearDraft.length !== 4 : handleDraft.trim() === handle)}
                     className="h-12 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>
                     {handleBusy ? 'Saving…' : handle ? 'Change' : 'Claim'}
                   </button>

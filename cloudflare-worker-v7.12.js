@@ -13123,7 +13123,34 @@ async function handlePassportShare(request, env) {
       const ins = await gbRest(env, 'passport_shares', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ user_id: user.id, slug, is_public: b.is_public === true }) });
       row = (ins.ok ? (await ins.json())[0] : { slug, is_public: b.is_public === true });
     } else if (typeof b.is_public === 'boolean') {
-      await gbRest(env, `passport_shares?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ is_public: b.is_public, updated_at: new Date().toISOString() }) });
+      // Going PUBLIC passes the age gate (P1): no gate yet → the app asks for
+      // the birth year first; under-13 / AU-under-16 never; 13–17 not public.
+      if (b.is_public) {
+        const sp = await gbSocialProfile(env, user.id);
+        if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
+        if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Sharing isn\'t available on this account' }, 403);
+        if (sp.social_tier === 'teen') return jsonResponse({ error: 'Public passports open at 18 — you\'ll be able to share with friends soon' }, 403);
+        // Fail-closed photo moderation the moment the journal becomes public:
+        // unchecked photos get reviewed in the background; the public
+        // serializer only ever shows status 'ok'.
+        const pq = await gbRest(env, `passport_stamp_photos?user_id=eq.${user.id}&mod_status=is.null&select=id,photo_key&limit=40`, {});
+        const pending = pq.ok ? await pq.json() : [];
+        if (pending.length && env.MEDIA) {
+          const job = (async () => {
+            for (const p of pending) {
+              try {
+                const obj = await env.MEDIA.get(p.photo_key);
+                if (!obj) continue;
+                const buf = new Uint8Array(await obj.arrayBuffer());
+                const v = await gbModeratePhoto(env, ppBytesToB64(buf), obj.httpMetadata?.contentType || 'image/jpeg');
+                await gbRest(env, `passport_stamp_photos?id=eq.${p.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mod_status: v && v.allow ? 'ok' : 'blocked' }) });
+              } catch { /* stays unchecked → stays hidden publicly */ }
+            }
+          })();
+          await Promise.race([job, new Promise((r) => setTimeout(r, 6000))]);
+        }
+      }
+      await gbRest(env, `passport_shares?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ is_public: b.is_public, visibility: b.is_public ? 'public' : 'private', updated_at: new Date().toISOString() }) });
       row.is_public = b.is_public;
     }
     const origin = new URL(request.url).origin;
@@ -13146,7 +13173,13 @@ async function handlePassportPublic(request, env) {
     // coordinates of every visit (privacy audit 2026-09-29: select=* leaked
     // full-precision lat/lng of the owner's whole history to anyone with the
     // slug). City + country stay; the numbers go.
-    const shared = stamps.map(({ lat, lng, ...rest }) => rest);
+    const shared = stamps
+      .filter((st) => !st.hidden)
+      .map(({ lat, lng, ...rest }) => ({
+        ...rest,
+        // Fail-closed: another viewer sees only photos that PASSED moderation.
+        photos: (rest.photos || []).filter((p) => p.mod_status === 'ok'),
+      }));
     return jsonResponse({ holder, stamps: shared, stats });
   } catch (e) { return jsonResponse({ error: e.message, private: true }, 500); }
 }
@@ -13577,6 +13610,116 @@ async function handlePassportPhotoDelete(request, env, ctx) {
 // (kept only for the passive inbox path when the tagger knows it).
 const PP_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.globeskimmers.app';
 const PP_IOS_URL = 'https://apps.apple.com/us/app/globeskimmers/id6753154199';
+// ── Social P1 (2026-09-30): age gate, profile v1, visibility, reports ──────
+// The tiers: under-13 never gets social (no handle, no public); 13–17 gets no
+// PUBLIC passport (friends comes with P2) and stricter defaults; Australians
+// under 16 get no social at all (their law is live). Birth year locks after
+// the first write — age-up edits go through support.
+function socialTierFor(year, country) {
+  const y = Math.round(Number(year));
+  if (!(y >= 1900 && y <= new Date().getFullYear())) return null;
+  const age = new Date().getFullYear() - y;
+  if (age < 13) return 'blocked';
+  if (age < 16 && String(country || '').toUpperCase() === 'AU') return 'blocked';
+  if (age < 18) return 'teen';
+  return 'adult';
+}
+async function gbSocialProfile(env, userId) {
+  const q = await gbRest(env, `social_profiles?user_id=eq.${userId}&select=*`, {});
+  return (q.ok ? await q.json() : [])[0] || null;
+}
+
+// POST /social/age { birth_year? } — read my gate state, or set it once.
+async function handleSocialAge(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const mine = await gbSocialProfile(env, user.id);
+    if (b.birth_year === undefined) return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null });
+    if (mine?.birth_year) return jsonResponse({ set: true, tier: mine.social_tier, locked: true });
+    const country = request.headers.get('cf-ipcountry') || '';
+    const tier = socialTierFor(b.birth_year, country);
+    if (!tier) return jsonResponse({ error: 'Enter the year you were born' }, 400);
+    const row = { user_id: user.id, birth_year: Math.round(Number(b.birth_year)), birth_year_at: new Date().toISOString(), social_tier: tier, country_at_gate: country, updated_at: new Date().toISOString() };
+    const w = mine
+      ? await gbRest(env, `social_profiles?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) })
+      : await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+    if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_age_set', { tier }));
+    return jsonResponse({ set: true, tier });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /social/profile {} reads mine; { display_name?, bio?, favorites?, dreams? }
+// writes. One moderated door: lengths clamped, URLs stripped from the bio, no
+// free-text anywhere else. Favorites/dreams are ≤3 short {name, country} pairs.
+async function handleSocialProfile(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const mine = await gbSocialProfile(env, user.id);
+    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year };
+    if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined) {
+      return jsonResponse({ profile: pick(mine) || null });
+    }
+    const clean = (v, n) => (v == null ? null : String(v).replace(/https?:\S+/gi, '').replace(/\s+/g, ' ').trim().slice(0, n) || null);
+    const places = (v) => Array.isArray(v) ? v.slice(0, 3).map((x) => ({ name: clean(x?.name, 60), country: clean(x?.country, 40) })).filter((x) => x.name) : null;
+    const patch = { updated_at: new Date().toISOString() };
+    if (b.display_name !== undefined) patch.display_name = clean(b.display_name, 40);
+    if (b.bio !== undefined) patch.bio = clean(b.bio, 140);
+    if (b.favorites !== undefined) patch.favorites = places(b.favorites);
+    if (b.dreams !== undefined) patch.dreams = places(b.dreams);
+    const w = mine
+      ? await gbRest(env, `social_profiles?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) })
+      : await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, ...patch }) });
+    if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_profile_set', {}));
+    const after = await gbSocialProfile(env, user.id);
+    return jsonResponse({ profile: pick(after) });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /social/report { slug?, kind, ref?, reason, note? } — Apple 1.2's
+// report door. minor_safety reports carry a 24h triage SLA (admin queue).
+async function handleSocialReport(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const reason = ['minor_safety', 'nudity', 'harassment', 'spam', 'other'].includes(b.reason) ? b.reason : 'other';
+    const kind = ['passport', 'photo', 'tag', 'handle'].includes(b.kind) ? b.kind : 'passport';
+    const row = {
+      reporter_id: user.id, kind, reason,
+      subject_slug: b.slug ? String(b.slug).replace(/[^a-z0-9]/gi, '').slice(0, 24) : null,
+      ref: b.ref ? String(b.ref).slice(0, 120) : null,
+      note: b.note ? String(b.note).replace(/\s+/g, ' ').trim().slice(0, 500) : null,
+    };
+    const w = await gbRest(env, 'content_reports', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+    if (!w.ok) return jsonResponse({ error: 'Could not send the report' }, 502);
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_report', { kind, reason }));
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /admin/reports { status? } — the triage queue. Same admin gate as the
+// other admin routes; resolve with { id, resolve: 'resolved' | 'dismissed' }.
+async function handleAdminReports(request, env) {
+  try {
+    const denied = await requireAdmin(request, env);
+    if (denied) return denied;
+    const b = await request.json().catch(() => ({}));
+    if (b.id && ['resolved', 'dismissed'].includes(b.resolve)) {
+      await gbRest(env, `content_reports?id=eq.${String(b.id).replace(/[^0-9a-f-]/gi, '')}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: b.resolve, resolved_at: new Date().toISOString() }) });
+      return jsonResponse({ ok: true });
+    }
+    const status = ['open', 'resolved', 'dismissed'].includes(b.status) ? b.status : 'open';
+    const q = await gbRest(env, `content_reports?status=eq.${status}&order=created_at.desc&limit=100&select=*`, {});
+    return jsonResponse({ reports: q.ok ? await q.json() : [] });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // ── Social P0 (2026-09-29): blocks + usernames ──────────────────────────────
 async function gbBlockedEither(env, a, b) {
   if (!a || !b) return false;
@@ -13622,6 +13765,9 @@ async function handleSocialHandle(request, env, ctx) {
     if (b.handle === undefined) return jsonResponse({ handle: mine?.handle || null });
     const want = String(b.handle || '').toLowerCase().trim();
     if (!/^[a-z0-9_]{3,20}$/.test(want)) return jsonResponse({ error: '3–20 characters: letters, numbers, underscore' }, 400);
+    const sp = await gbSocialProfile(env, user.id);
+    if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
+    if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Usernames aren\'t available on this account' }, 403);
     if (HANDLE_RESERVED.has(want) || /^gs_/.test(want)) return jsonResponse({ error: 'That name is reserved' }, 400);
     if (mine?.handle && mine.handle.toLowerCase() === want) return jsonResponse({ handle: mine.handle });
     // 2 changes per rolling 30 days (the first claim is free).
@@ -18383,6 +18529,10 @@ export default {
       if (pathname === '/passport/stamp/layout' && request.method === 'POST') return await handlePassportStampLayout(request, env);
       if (pathname === '/social/handle' && request.method === 'POST') return await handleSocialHandle(request, env, ctx);
       if (pathname === '/social/block' && request.method === 'POST') return await handleSocialBlock(request, env, ctx);
+      if (pathname === '/social/age' && request.method === 'POST') return await handleSocialAge(request, env, ctx);
+      if (pathname === '/social/profile' && request.method === 'POST') return await handleSocialProfile(request, env, ctx);
+      if (pathname === '/social/report' && request.method === 'POST') return await handleSocialReport(request, env, ctx);
+      if (pathname === '/admin/reports' && request.method === 'POST') return await handleAdminReports(request, env);
       if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
       if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);
       if (pathname === '/passport/stamp/check-photos' && request.method === 'POST') return await handlePassportCheckPhotos(request, env, ctx);
