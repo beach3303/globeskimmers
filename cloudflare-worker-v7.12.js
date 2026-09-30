@@ -13716,15 +13716,23 @@ async function handleSocialProfile(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const mine = await gbSocialProfile(env, user.id);
     const origin = new URL(request.url).origin;
-    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null };
+    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null };
     if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined) {
       return jsonResponse({ profile: pick(mine) || null });
     }
     const clean = (v, n) => (v == null ? null : String(v).replace(/https?:\S+/gi, '').replace(/\s+/g, ' ').trim().slice(0, n) || null);
-    const places = (v) => Array.isArray(v) ? v.slice(0, 3).map((x) => ({ name: clean(x?.name, 60), country: clean(x?.country, 40) })).filter((x) => x.name) : null;
+    // Free-form places (2026-09-30): anything, up to 50, strings or the old
+    // {name} objects — stored uniformly as [{name}].
+    const places = (v) => Array.isArray(v)
+      ? v.slice(0, 50).map((x) => ({ name: clean(typeof x === 'string' ? x : x?.name, 60) })).filter((x) => x.name)
+      : null;
     const patch = { updated_at: new Date().toISOString() };
     if (b.display_name !== undefined) patch.display_name = clean(b.display_name, 40);
-    if (b.bio !== undefined) patch.bio = clean(b.bio, 140);
+    if (b.bio !== undefined) patch.bio = clean(b.bio, 200);
+    if (b.website !== undefined) {
+      const w = String(b.website || '').trim().slice(0, 120);
+      patch.website = /^https?:\/\/[^\s]{4,}$/i.test(w) ? w : null;
+    }
     if (b.favorites !== undefined) patch.favorites = places(b.favorites);
     if (b.dreams !== undefined) patch.dreams = places(b.dreams);
     const w = mine
