@@ -13534,8 +13534,22 @@ async function handleStampArtServe(request, env) {
   try {
     if (!env.MEDIA) return new Response('Not found', { status: 404 });
     const rel = decodeURIComponent(new URL(request.url).pathname.replace(/^\/stamp-art\//, ''));
-    if (!rel || rel.includes('..') || rel.includes('/')) return new Response('Bad key', { status: 400 });
-    const obj = await env.MEDIA.get(`stamp-art/${rel}`);
+    // Subpaths are legal now (luggage faces live at luggage/<type>/<face>.<ext>);
+    // only traversal and odd characters are not.
+    if (!rel || rel.includes('..') || !/^[a-z0-9][a-z0-9/_.-]*$/i.test(rel)) return new Response('Bad key', { status: 400 });
+    let obj = await env.MEDIA.get(`stamp-art/${rel}`);
+    // Extension-forgiving: the app asks for .webp, but whatever the founder
+    // actually exported (.png/.jpg) serves from the same URL — no re-OTA.
+    if (!obj) {
+      const m = rel.match(/^(.*)\.(webp|png|jpe?g)$/i);
+      if (m) {
+        for (const ext of ['webp', 'png', 'jpg', 'jpeg']) {
+          if (ext === m[2].toLowerCase()) continue;
+          obj = await env.MEDIA.get(`stamp-art/${m[1]}.${ext}`);
+          if (obj) break;
+        }
+      }
+    }
     if (!obj) return new Response('Not found', { status: 404 });
     const headers = new Headers();
     headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/png');
