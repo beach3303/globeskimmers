@@ -995,3 +995,9 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Faces load from R2 `stamp-art/luggage/<type>/<face>.webp`; engraved fallback face until renders upload. Entry point: Profile → My luggage → "Open 🧳".
 - Judgment call flagged: all six trunks selectable now; milestone unlocks are a later decision.
 - Activate (founder): 1) generate CLEAN per-face renders in the same ChatGPT session (no stickers/text — see docs/TRUNK_RENDER_PROMPT.md §Virtual Luggage v2) and upload via the `npx wrangler r2 object put` one-liners (Classic's five faces first); 2) frontend ships with the next `npm run ota`.
+
+## 2026-10-01 — iOS 1.0.3 (8) SUBMITTED to App Store Review
+- Submission ID 281dd542-35d4-4be8-b540-b74c4d791dba, Waiting for Review since 4:54 AM.
+- Carries: location-primer fix (5.1.1(iv) reply posted in-thread), Declared Age Range capability + plugin, Capgo updater (first store binary with OTA inside), passport-era listing (copy/keywords/screenshots/support URL), UGC = YES flips, 13+ age rating, App Privacy + User Content/User ID.
+- On approval: existing users update once via the store; all future releases flow by OTA.
+- Play Store: blocked on founder's D-U-N-S/organization-account decision (old account closed for inactivity 2021; signed .aab + keystore + listing assets all ready).

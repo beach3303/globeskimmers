@@ -161,6 +161,12 @@ teens = accepted followers only. Same slim blotter under packet photos. Profile 
 same day (4c587c3): trunk banner on TOP, traveler chips gone, About me + My website,
 free-form unlimited favorites (founder removes their two via ✕), dreams → ON THE HORIZON.
 
+SUBMITTED TO APPLE — 2026-10-01, 4:54 AM. iOS 1.0.3 (build 8) is Waiting for Review:
+the full pivoted app (passport, social, luggage, world icons), new listing copy,
+worn-ink screenshots, UGC/age/privacy flips, demo account, and the 5.1.1 fix note
+posted in the rejection thread. On approval every store user updates once and joins
+the OTA train permanently. Google Play waits on the D-U-N-S / org-account decision.
+
 **Store first (founder, 2026-09-30): partnerships are SKIPPED until the whole app is
 finished and deployed to BOTH stores.** The Georgia Aquarium pitch and every outreach item
 waits. Build focus: close every remaining OTA-able item so the founder's single native
