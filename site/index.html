@@ -116,7 +116,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 
 /* the two situations */
-.modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 40px; }
+.modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-top: 40px; }
 @media (max-width: 720px) { .modes { grid-template-columns: 1fr; } }
 .mode { padding: 22px 24px 18px; border-radius: 18px; background: var(--panel); }
 .mode::before { content: ""; display: block; width: 28px; height: 3px; border-radius: 3px; background: var(--hue); margin: 2px 0 14px; }
@@ -294,13 +294,13 @@ footer { margin-top: 56px; padding: 26px 0 48px; border-top: 1px solid var(--rul
   <section class="hero">
     <div class="kicker">The Virtual Passport · iOS · Android coming soon</div>
     <h1>Collect the world, <em>one stamp</em> at a time.<br>Keep <em>every memory.</em></h1>
-    <p class="lede">Every place you really go can stamp your Virtual Passport — dated, beautiful, and verified you were there. Pin your memory photos to each stamp, and every trip becomes a keepsake you can share. Around you, the app still finds everything a traveler needs.</p>
+    <p class="lede">Every place you really go can stamp your Virtual Passport — dated, beautiful, and verified you were there. Pin your memory photos to each stamp, and every trip becomes a keepsake. Share a page and friends answer with collectible stamps, sign your guestbook, send you postcards — and your trunk slowly fills with the stickers every destination earns. Around you, the app still finds everything a traveler needs.</p>
     <div class="cta">
       <a class="badge" href="https://apps.apple.com/us/app/globeskimmers/id6753154199" aria-label="Download on the App Store"><img src="/img/app-store-badge.svg" alt="Download on the App Store" height="52"></a>
       <a class="android" href="#contact" aria-label="Android app coming soon"><span class="soon">Coming soon on</span><b>Android</b></a>
       <span class="free">Free on the App Store</span>
     </div>
-    <div class="modes"><article class="mode here"><div class="kicker">The passport</div><h2>Stamp where you go</h2><ul><li>Airports, landmarks and new countries</li><li>Famous filming locations — &ldquo;the scene from&hellip;&rdquo;</li><li>Verified by GPS or your photo&#x27;s own location</li><li>Your memory photos pinned to every stamp</li><li>Share the page to any social platform</li><li>Stamps near you, sensed when you open it</li></ul></article><article class="mode plan"><div class="kicker">Wherever you are</div><h2>Find what you need nearby</h2><ul><li>Restaurants, street food and coffee</li><li>Restrooms, ATMs and money exchange</li><li>Groceries, malls and souvenirs</li><li>Attractions, tours and a perfect-day plan</li><li>Weather, crisis phrases and cultural notes</li><li>A camera that reads menus and prices</li></ul></article></div></div>
+    <div class="modes"><article class="mode here"><div class="kicker">The passport</div><h2>Stamp where you go</h2><ul><li>Airports, landmarks and new countries</li><li>Famous filming locations — &ldquo;the scene from&hellip;&rdquo;</li><li>Verified by GPS or your photo&#x27;s own location</li><li>Your memory photos pinned to every stamp</li><li>Share the page to any social platform</li><li>Stamps near you, sensed when you open it</li></ul></article><article class="mode plan"><div class="kicker">Share it, your way</div><h2>Meet fellow travelers</h2><ul><li>Friends react with collectible stamps — WOW, TAKE ME, BEEN HERE ♥, I WANNA GO</li><li>A guestbook on every shared page — signatures and finger-drawn doodles</li><li>Postcards sent straight to a friend, never into a feed</li><li>@usernames, following, and text invites for family</li><li>A photoreal trunk that wears your destination stickers</li><li>Private by default — extra protections for teens</li></ul></article><article class="mode plan"><div class="kicker">Wherever you are</div><h2>Find what you need nearby</h2><ul><li>Restaurants, street food and coffee</li><li>Restrooms, ATMs and money exchange</li><li>Groceries, malls and souvenirs</li><li>Attractions, tours and a perfect-day plan</li><li>Weather, crisis phrases and cultural notes</li><li>A camera that reads menus and prices</li></ul></article></div></div>
   </section>
 
   <section class="phones" id="inside" aria-label="Screens from the app">
@@ -318,10 +318,10 @@ footer { margin-top: 56px; padding: 26px 0 48px; border-top: 1px solid var(--rul
       <h2>What the app does today.</h2>
     </div>
     <div class="grid">
-      <article class="door food"><span class="line"></span><div><div class="kicker">Near you now</div><h3>The mundane, sorted nearest first</h3><p>Places to eat, coffee, ATMs, restrooms, convenience stores, money exchange, shopping and things to do, ordered by distance from wherever you stand, plus events and ways to get around. Search restaurants by the dish, not the category: every match carries a plain tier, and when nothing nearby fits, the app says so. Basic phrases with audio, cultural notes and a camera that reads a price tag or a menu cover the moments a map can&#x27;t.</p></div></article>
+      <article class="door food"><span class="line"></span><div><div class="kicker">Near you now</div><h3>The mundane, sorted nearest first</h3><p>Places to eat, coffee, ATMs, restrooms, convenience stores, money exchange, shopping and things to do, ordered by distance from wherever you stand. Search restaurants by the dish, not the category: every match carries a plain tier, and when nothing nearby fits, the app says so. Basic phrases with audio, cultural notes and a camera that reads a price tag or a menu cover the moments a map can&#x27;t.</p></div></article>
       <article class="door stay"><span class="line"></span><div><div class="kicker">Virtual Passport</div><h3>Stamps you actually earned</h3><p>Land at an airport, stand at a famous place, cross a border, or reach a filming location, and its stamp is yours — dated the day you were there. The green check means it&#x27;s verified: by GPS at the place, or by your photo&#x27;s own location. No check-ins from the couch.</p></div></article>
       <article class="door pkg"><span class="line"></span><div><div class="kicker">Collect memories</div><h3>Your photos, on the page</h3><p>Pin your memory photos to any stamp — the whale shark, the plate of shrimp and grits, the view from the steps — and the page becomes a travel album. Share it to Instagram, TikTok, Snapchat or anywhere else, sized right for stories and posts.</p></div></article>
-      <article class="door dream"><span class="line"></span><div><div class="kicker">Dream and plan</div><h3>Galleries for the places you&#x27;ll go</h3><p>Credited photo galleries of places you haven&#x27;t been yet, a Perfect Day planner that builds a day around what&#x27;s near you, and a wishlist that keeps every dream until you stamp it.</p></div></article>
+      <article class="door dream"><span class="line"></span><div><div class="kicker">Meet fellow travelers</div><h3>Reactions, guestbooks &amp; postcards</h3><p>Share a passport page and friends press collectible stamps on it — WOW, TAKE ME, BEEN HERE ♥ — or sign your guestbook with a line or a little finger-drawn doodle. Postcards go straight to one person, never into a feed. Everything is private by default, and travelers under 18 get extra protections.</p></div></article>
     </div>
 
     <div class="honest">

@@ -29,3 +29,18 @@ jobs:
           # site/_redirects and site/_headers as plain files instead of applying them.
           wranglerVersion: '4.131.2'
           command: deploy --config wrangler-site.toml
+
+      # /legal/* on the live domain is served by the API worker from R2 (a
+      # Base44-era relic route) — NOT by this site worker. Keep both copies in
+      # lockstep or policy edits silently never go live (found 2026-10-01 after
+      # a day of "successful" deploys serving week-old privacy copy). Retire
+      # this step only after the dashboard route for /legal/* is removed.
+      - name: Sync legal pages to the API worker's R2 copies
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          wranglerVersion: '4.131.2'
+          command: |
+            r2 object put globeskimmers-media/legal/privacy.html --file=site/legal/privacy.html --content-type="text/html; charset=utf-8" --remote
+            r2 object put globeskimmers-media/legal/terms.html --file=site/legal/terms.html --content-type="text/html; charset=utf-8" --remote
