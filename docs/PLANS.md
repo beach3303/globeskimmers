@@ -165,7 +165,19 @@ SUBMITTED TO APPLE — 2026-10-01, 4:54 AM. iOS 1.0.3 (build 8) is Waiting for R
 the full pivoted app (passport, social, luggage, world icons), new listing copy,
 worn-ink screenshots, UGC/age/privacy flips, demo account, and the 5.1.1 fix note
 posted in the rejection thread. On approval every store user updates once and joins
-the OTA train permanently. Google Play waits on the D-U-N-S / org-account decision.
+the OTA train permanently. Google Play status (2026-10-01, paused at founder's workday): old account closed for
+inactivity; no D-U-N-S exists for 'globeskimmers' at ZIP 91007. Free D-U-N-S
+application (Google-developer lane, dfc.dnb.com) is filled through step 4 — PARKED at
+step 5 'Upload Files', which wants 2 of: EIN letter / business license / DBA cert /
+etc. "Finish Later" preserves it. TOMORROW'S FIRST MOVE: check Stripe → Settings →
+Business details for entity type + EIN. Fork: (a) EIN exists → CP-575 is doc 1, find
+doc 2, finish D&B, org account; (b) individual/no EIN → grab free instant EIN at
+irs.gov anyway, then open PERSONAL Play account ($25) and start the 12-tester /
+14-day closed test immediately — same ~3-week timeline as the paperwork path, zero
+documents. All Play assets ready: signed .aab, keystore (password in founder's
+manager), listing copy, play screenshots + feature graphic + 512 icon in
+~/Downloads/globeskimmers-store-shots/play. Apple: 1.0.3(8) Waiting for Review since
+4:54 AM — expect verdict within ~48h; founder forwards any reviewer question.
 
 **Store first (founder, 2026-09-30): partnerships are SKIPPED until the whole app is
 finished and deployed to BOTH stores.** The Georgia Aquarium pitch and every outreach item
