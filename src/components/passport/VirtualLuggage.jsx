@@ -48,6 +48,11 @@ const SKIN_BOUNDS = {
   bottom: { xMin: 0.12, xMax: 0.88, yMin: 0.28, yMax: 0.68 },
 };
 
+// The collector loop (founder, 2026-10-02): everyone starts with The Classic;
+// filling a trunk with UNLOCK_AT placed stickers unlocks the next one. A trunk
+// that already holds stickers (or is active) stays unlocked — nobody loses access.
+export const UNLOCK_AT = 12;
+
 const STICKER_INKS = ["#7A2E1D", "#31465F", "#2F4A33", "#7A5B22", "#4E3A5E"];
 const STICKER_SHAPES = ["roundel", "lozenge", "diamond"];
 const hash = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); };
@@ -183,6 +188,20 @@ export default function VirtualLuggage({ stamps, onClose }) {
   const face = faceIdx === -1 ? "top" : faceIdx === -2 ? "bottom" : SWIPE_ORDER[faceIdx];
   const placements = state?.placements || {};
   const faceList = (placements[active]?.[face] || []);
+  const countFor = (typeKey) => Object.values(placements[typeKey] || {}).reduce((n, f) => n + f.length, 0);
+  // Unlock chain: Classic always; each next trunk opens when the previous one
+  // holds UNLOCK_AT stickers. Grandfather anything already used.
+  const unlocked = useMemo(() => {
+    const set = new Set([LUGGAGE_TYPES[0].key, active]);
+    for (let i = 1; i < LUGGAGE_TYPES.length; i++) {
+      const prev = LUGGAGE_TYPES[i - 1].key, cur = LUGGAGE_TYPES[i].key;
+      if (set.has(prev) && countFor(prev) >= UNLOCK_AT) set.add(cur);
+      if (countFor(cur) > 0) set.add(cur);
+    }
+    return set;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placements, active]);
+
   const placedSids = useMemo(() => {
     const set = new Set();
     for (const f of Object.values(placements[active] || {})) for (const p of f) set.add(p.sid);
@@ -476,23 +495,29 @@ export default function VirtualLuggage({ stamps, onClose }) {
         <div className="mt-5">
           <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".2em", color: "#8A5410" }}>The collection</div>
           <div className="flex gap-2.5 overflow-x-auto pt-2 pb-1" style={{ scrollbarWidth: "none" }}>
-            {LUGGAGE_TYPES.map((t) => (
-              <button key={t.key} type="button" onClick={() => { setSelected(null); mutate((d) => { d.active = t.key; return d; }); }}
-                aria-pressed={t.key === active} aria-label={`Switch to ${t.name}`}
-                className="flex-none rounded-xl px-2.5 py-2 active:scale-95 transition-transform"
-                style={{ background: "#fff", border: t.key === active ? "2px solid #8A5410" : `1px solid ${RULE}`, minWidth: 86 }}>
-                <span className="block rounded-md mx-auto" style={{ width: 52, height: 34, background: t.body, border: `2px solid ${t.edge}`, position: "relative" }}>
-                  <span className="absolute inset-y-0" style={{ left: 14, width: 7, background: t.strap }} />
-                  <span className="absolute inset-y-0" style={{ right: 14, width: 7, background: t.strap }} />
-                </span>
-                <span className="block mt-1.5" style={{ fontFamily: MONO, fontSize: fs(8), letterSpacing: ".08em", color: t.key === active ? "#8A5410" : INK3 }}>
-                  {t.name.toUpperCase()}
-                </span>
-              </button>
-            ))}
+            {LUGGAGE_TYPES.map((t, idx) => {
+              const isOpen = unlocked.has(t.key);
+              const prev = idx > 0 ? LUGGAGE_TYPES[idx - 1] : null;
+              const progress = prev ? Math.min(UNLOCK_AT, countFor(prev.key)) : UNLOCK_AT;
+              return (
+                <button key={t.key} type="button" disabled={!isOpen}
+                  onClick={() => { if (!isOpen) return; setSelected(null); mutate((d) => { d.active = t.key; return d; }); }}
+                  aria-pressed={t.key === active}
+                  aria-label={isOpen ? `Switch to ${t.name}` : `${t.name} is locked — fill ${prev?.name} with ${UNLOCK_AT} stickers`}
+                  className="flex-none rounded-xl px-2.5 py-2 active:scale-95 transition-transform"
+                  style={{ background: "#fff", border: t.key === active ? "2px solid #8A5410" : `1px solid ${RULE}`, minWidth: 86, opacity: isOpen ? 1 : 0.55 }}>
+                  <span className="block rounded-md mx-auto" style={{ width: 52, height: 34, background: `center/cover url(${ART_BASE}/${t.key}/front.webp), ${t.body}`, border: `2px solid ${t.edge}`, position: "relative" }}>
+                    {!isOpen && <span className="absolute inset-0 grid place-items-center" style={{ background: "rgba(255,252,247,.45)", fontSize: 14 }}>🔒</span>}
+                  </span>
+                  <span className="block mt-1.5" style={{ fontFamily: MONO, fontSize: fs(8), letterSpacing: ".08em", color: t.key === active ? "#8A5410" : INK3 }}>
+                    {isOpen ? t.name.toUpperCase() : `${progress}/${UNLOCK_AT} TO OPEN`}
+                  </span>
+                </button>
+              );
+            })}
           </div>
           <p style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".05em", color: INK3, marginTop: 6 }}>
-            Each trunk keeps its own stickers — your collection grows, nothing is ever lost.
+            Fill a trunk with {UNLOCK_AT} stickers to unlock the next. Every trunk keeps its own — nothing is ever lost.
           </p>
         </div>
       </div>

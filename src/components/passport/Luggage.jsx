@@ -17,85 +17,27 @@ import { getShareLink } from "@/lib/passport";
 import { showToast } from "@/components/Toast";
 import { logEvent } from "@/lib/analytics";
 import LuggageLabel from "@/components/passport/LuggageLabel";
-import VirtualLuggage from "@/components/passport/VirtualLuggage";
+import VirtualLuggage, { buildStickers, LUGGAGE_TYPES } from "@/components/passport/VirtualLuggage";
+import { luggageGet } from "@/lib/passport";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const INK = "#16110D", INK3 = "#736657", RULE = "rgba(22,17,13,.12)";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 
-export const TRUNK_SKIN_URL = "https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/trunk-steamer-front-v1.jpg";
-
-// Label slots on the trunk's front face (fractions of the 680×480 skin box),
-// tuned to sit between the straps and clear of the lock plate. Order matters:
-// the first labels earned take the best real estate.
-const SLOTS = [
-  { x: 0.44, y: 0.40, w: 0.29, rot: -6 },   // centre-left, the hero spot
-  { x: 0.59, y: 0.66, w: 0.20, rot: 5 },    // lower centre-right
-  { x: 0.78, y: 0.33, w: 0.22, rot: -8 },   // upper right panel
-  { x: 0.37, y: 0.78, w: 0.145, rot: 7 },   // lower left panel
-  { x: 0.155, y: 0.255, w: 0.115, rot: 8 }, // upper left panel
-  { x: 0.155, y: 0.62, w: 0.13, rot: -7 },  // mid left
-  { x: 0.82, y: 0.80, w: 0.15, rot: 6 },    // lower right corner
-  { x: 0.50, y: 0.17, w: 0.17, rot: -4 },   // above the lock, small
-];
-
-// The interim skin: the studio-lit trunk from the design spec, drawn inline so
-// the feature works before the photo-real render is uploaded.
-function InterimTrunk() {
-  return (
-    <svg viewBox="0 0 680 480" width="100%" style={{ display: "block" }} aria-hidden="true">
-      <defs>
-        <linearGradient id="lgbody" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#3A4A63" /><stop offset=".18" stopColor="#31405A" /><stop offset=".6" stopColor="#26324A" /><stop offset="1" stopColor="#1B2436" />
-        </linearGradient>
-        <linearGradient id="lgsheen" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#fff" stopOpacity="0" /><stop offset=".22" stopColor="#fff" stopOpacity=".10" /><stop offset=".38" stopColor="#fff" stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id="lgwood" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#7A5A38" /><stop offset=".5" stopColor="#6A4C2E" /><stop offset="1" stopColor="#553C22" />
-        </linearGradient>
-        <linearGradient id="lgstrap" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#5E4426" /><stop offset=".5" stopColor="#7A5A34" /><stop offset="1" stopColor="#4E3820" />
-        </linearGradient>
-        <linearGradient id="lgbrass" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#E8CE8B" /><stop offset=".45" stopColor="#B9985C" /><stop offset="1" stopColor="#8A6C38" />
-        </linearGradient>
-        <filter id="lggrain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="n" /><feColorMatrix in="n" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.07 0" /><feComposite operator="over" in2="SourceGraphic" /></filter>
-        <filter id="lgwoodg"><feTurbulence type="turbulence" baseFrequency="0.012 0.11" numOctaves="2" seed="9" result="n" /><feColorMatrix in="n" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.22 0" /><feComposite operator="over" in2="SourceGraphic" /></filter>
-      </defs>
-      <ellipse cx="340" cy="452" rx="270" ry="20" fill="#000" opacity=".35" />
-      <path d="M300,42 q40,-30 80,0" fill="none" stroke="#3E2C16" strokeWidth="15" strokeLinecap="round" />
-      <path d="M300,42 q40,-30 80,0" fill="none" stroke="#6E5230" strokeWidth="8" strokeLinecap="round" />
-      <g filter="url(#lggrain)"><rect x="70" y="48" width="540" height="392" rx="16" fill="url(#lgbody)" /></g>
-      <rect x="70" y="48" width="540" height="392" rx="16" fill="url(#lgsheen)" />
-      <rect x="70" y="48" width="540" height="392" rx="16" fill="none" stroke="#101722" strokeWidth="3" />
-      <g filter="url(#lgwoodg)">
-        <rect x="70" y="122" width="540" height="26" fill="url(#lgwood)" />
-        <rect x="70" y="336" width="540" height="26" fill="url(#lgwood)" />
-      </g>
-      <rect x="70" y="122" width="540" height="3" fill="#9A7A4E" /><rect x="70" y="145" width="540" height="3" fill="#3E2C16" />
-      <rect x="70" y="336" width="540" height="3" fill="#9A7A4E" /><rect x="70" y="359" width="540" height="3" fill="#3E2C16" />
-      <rect x="168" y="48" width="36" height="392" fill="url(#lgstrap)" />
-      <rect x="476" y="48" width="36" height="392" fill="url(#lgstrap)" />
-      <g stroke="#D8C49A" strokeWidth="1" strokeDasharray="4 4" opacity=".5"><path d="M175,52 v384 M197,52 v384 M483,52 v384 M505,52 v384" /></g>
-      <rect x="164" y="224" width="44" height="34" rx="4" fill="url(#lgbrass)" stroke="#5E4A22" strokeWidth="1.6" />
-      <rect x="472" y="224" width="44" height="34" rx="4" fill="url(#lgbrass)" stroke="#5E4A22" strokeWidth="1.6" />
-      <path d="M316,48 h48 v34 a24,24 0 0 1 -48,0 z" fill="url(#lgbrass)" stroke="#5E4A22" strokeWidth="1.8" />
-      <circle cx="340" cy="70" r="5.5" fill="#3E2E12" /><rect x="337.5" y="73" width="5" height="9" rx="2" fill="#3E2E12" />
-      <g stroke="#5E4A22" strokeWidth="1.4">
-        <path d="M70,110 v-46 a16,16 0 0 1 16,-16 h46 v20 a42,42 0 0 0 -42,42 z" fill="url(#lgbrass)" />
-        <path d="M610,110 v-46 a16,16 0 0 0 -16,-16 h-46 v20 a42,42 0 0 1 42,42 z" fill="url(#lgbrass)" />
-        <path d="M70,378 v46 a16,16 0 0 0 16,16 h46 v-20 a42,42 0 0 1 -42,-42 z" fill="url(#lgbrass)" />
-        <path d="M610,378 v46 a16,16 0 0 1 -16,16 h-46 v-20 a42,42 0 0 0 42,-42 z" fill="url(#lgbrass)" />
-      </g>
-    </svg>
-  );
-}
+const ART_BASE = "https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/luggage";
 
 export default function Luggage({ stamps, readOnly }) {
   const labels = useMemo(() => deriveLabels(stamps), [stamps]);
-  const [skinOk, setSkinOk] = useState(true);   // optimistic; onError falls back
+  const stickers = useMemo(() => buildStickers(stamps), [stamps]);
+  const bySid = useMemo(() => Object.fromEntries(stickers.map((x) => [x.sid, x])), [stickers]);
+  const [lug, setLug] = useState(null);         // { active, placements } — the real trunk
+  const [skinAspect, setSkinAspect] = useState(1);
+  useEffect(() => { let gone = false; (async () => { const d = await luggageGet(); if (!gone) setLug(d); })(); return () => { gone = true; }; }, []);
+  const activeType = lug?.active || "classic";
+  const trunkName = (LUGGAGE_TYPES.find((t) => t.key === activeType) || LUGGAGE_TYPES[0]).name;
+  const frontPlaced = lug?.placements?.[activeType]?.front || [];
+  const placedTotal = Object.values(lug?.placements?.[activeType] || {}).reduce((n, f) => n + f.length, 0);
   const [story, setStory] = useState(null);     // the tapped label
   const [busy, setBusy] = useState(false);
   const [share, setShare] = useState(null);     // { url, dataUrl, blob } two-tap preview
@@ -113,7 +55,6 @@ export default function Luggage({ stamps, readOnly }) {
     markLabelsSeen(labels);
   }, [labels, readOnly]);
 
-  const placed = labels.slice(0, SLOTS.length).map((l, i) => ({ l, s: SLOTS[i] }));
 
   const renderShare = async () => {
     if (busy || !trunkRef.current) return;
@@ -165,7 +106,7 @@ export default function Luggage({ stamps, readOnly }) {
         <div>
           <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: "#8A5410" }}>My luggage</div>
           <h3 style={{ fontFamily: SERIF, fontSize: fs(22), color: INK, lineHeight: 1.1 }}>
-            {labels.length ? `${labels.length} label${labels.length === 1 ? "" : "s"} on the trunk` : "The trunk travels with you"}
+            {trunkName}{stickers.length ? ` · ${placedTotal} of ${stickers.length} stickers placed` : ""}
           </h3>
         </div>
         <div className="flex gap-2">
@@ -186,24 +127,33 @@ export default function Luggage({ stamps, readOnly }) {
         </div>
       </div>
 
-      <div ref={trunkRef} style={{ position: "relative", borderRadius: 18, overflow: "hidden", background: "radial-gradient(120% 100% at 50% 0%, #3A342A 0%, #241F17 62%, #191510 100%)", padding: "14px 10px 8px" }}>
-        <div style={{ position: "relative", width: "100%", aspectRatio: "680 / 480" }}>
-          {skinOk ? (
-            <img src={TRUNK_SKIN_URL} alt="Your travel trunk" crossOrigin="anonymous" onError={() => setSkinOk(false)}
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
-          ) : (
-            <div style={{ position: "absolute", inset: 0 }}><InterimTrunk /></div>
-          )}
-          {placed.map(({ l, s }) => (
-            <button key={l.key} type="button" onClick={() => setStory(l)} aria-label={`Label: ${l.big || l.top}. Tap for its story.`}
-              style={{ position: "absolute", left: `${s.x * 100}%`, top: `${s.y * 100}%`, width: `${s.w * 100}%`, transform: `translate(-50%, -50%) rotate(${s.rot}deg)`, filter: "drop-shadow(0 3px 2.5px rgba(0,0,0,.5))", background: "none", border: 0, padding: 0, cursor: "pointer" }}>
-              <LuggageLabel label={l} uid={l.key} />
-            </button>
-          ))}
-          {!labels.length && (
-            <div style={{ position: "absolute", left: "50%", top: "44%", transform: "translate(-50%,-50%) rotate(-4deg)", width: "56%", opacity: .9 }}>
+      <div ref={trunkRef} style={{ position: "relative", borderRadius: 18, overflow: "hidden", background: "radial-gradient(120% 100% at 50% 0%, #3A342A 0%, #241F17 62%, #191510 100%)", padding: "14px 10px 10px" }}>
+        <div style={{ position: "relative", width: "100%", aspectRatio: `1 / ${skinAspect}` }}>
+          <img src={`${ART_BASE}/${activeType}/front.webp`} alt={`${trunkName} — your travel trunk`} crossOrigin="anonymous"
+            onLoad={(e) => { const im = e.currentTarget; if (im.naturalWidth > 0) setSkinAspect(Math.min(1.35, Math.max(0.45, im.naturalHeight / im.naturalWidth))); }}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
+          {frontPlaced.map((pl) => {
+            const st = bySid[pl.sid];
+            if (!st) return null;
+            return (
+              <button key={pl.sid} type="button" onClick={() => st.label?.story && setStory(st.label)} aria-label={`Sticker: ${st.label.top || st.label.big}`}
+                style={{ position: "absolute", left: `${pl.x * 100}%`, top: `${pl.y * 100}%`, width: `${((st.w || 92) * pl.scale / 340) * 100}%`, transform: `translate(-50%, -50%) rotate(${pl.rot}deg)`, filter: "drop-shadow(0 3px 2.5px rgba(0,0,0,.5))", background: "none", border: 0, padding: 0, cursor: "pointer", zIndex: 10 + (pl.z || 0) }}>
+                <LuggageLabel label={st.label} uid={`bn-${pl.sid.replace(/[^a-z0-9]/gi, "")}`} />
+              </button>
+            );
+          })}
+          {!frontPlaced.length && stickers.length > 0 && (
+            <div style={{ position: "absolute", left: "50%", top: "46%", transform: "translate(-50%,-50%) rotate(-4deg)", width: "60%", opacity: .92 }}>
               <div style={{ background: "#F2E9D2", border: "1px solid #DCCFAE", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
-                <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(15), color: "#7A6A45" }}>Labels arrive as you travel —</div>
+                <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(15), color: "#7A6A45" }}>{stickers.length} sticker{stickers.length === 1 ? "" : "s"} earned —</div>
+                <div style={{ fontFamily: SERIF, fontSize: fs(13), color: "#7A6A45" }}>open the trunk to place them.</div>
+              </div>
+            </div>
+          )}
+          {!stickers.length && (
+            <div style={{ position: "absolute", left: "50%", top: "46%", transform: "translate(-50%,-50%) rotate(-4deg)", width: "60%", opacity: .92 }}>
+              <div style={{ background: "#F2E9D2", border: "1px solid #DCCFAE", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
+                <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(15), color: "#7A6A45" }}>Stickers arrive as you travel —</div>
                 <div style={{ fontFamily: SERIF, fontSize: fs(13), color: "#7A6A45" }}>your first stamp brings the first one.</div>
               </div>
             </div>
