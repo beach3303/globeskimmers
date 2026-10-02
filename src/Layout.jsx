@@ -52,7 +52,7 @@ const trackEvent = (eventType, data = {}) => {
 
 export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
-  const { profile, isAuthenticated, isLoadingAuth } = useAuth();
+  const { profile, user, isAuthenticated, isLoadingAuth } = useAuth();
 
   // Whether the current page should show the bottom banner (finder pages).
   // Drives the banner mount, the FloatingNav lift, and extra bottom padding so
@@ -86,7 +86,17 @@ export default function Layout({ children, currentPageName }) {
   // before deciding, so we never bounce an already-onboarded user to /Onboarding.
   useEffect(() => {
     if (isLoadingAuth || !profile) return;
-    const completed = profile.onboarding_completed === true;
+    // The App Review demo account replays the full onboarding on every app
+    // launch (founder, 2026-10-02): the reviewer always sees the first-run
+    // experience — including the reworked location screen — never a lived-in
+    // account. sessionStorage keeps it to once per launch so finishing
+    // onboarding doesn't loop.
+    let reviewerTour = false;
+    try {
+      reviewerTour = (user?.email || "").toLowerCase() === "appreview@globeskimmers.io"
+        && !sessionStorage.getItem("gsk_review_toured");
+    } catch { /* storage unavailable → no replay */ }
+    const completed = profile.onboarding_completed === true && !reviewerTour;
     if (!completed && currentPageName !== "Onboarding") {
       navigate(createPageUrl("Onboarding"));
     } else if (completed && currentPageName === "Onboarding") {

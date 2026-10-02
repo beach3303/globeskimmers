@@ -142,6 +142,7 @@ export default function OnboardingPage() {
       }
     } catch { /* the passport can mint page one later */ }
 
+    try { sessionStorage.setItem("gsk_review_toured", "1"); } catch { /* fine */ } // review account: one tour per launch
     await refreshProfile(); // so Layout's gate sees onboarding_completed = true
     navigate(createPageUrl("Home"));
   };
