@@ -161,6 +161,15 @@ teens = accepted followers only. Same slim blotter under packet photos. Profile 
 same day (4c587c3): trunk banner on TOP, traveler chips gone, About me + My website,
 free-form unlimited favorites (founder removes their two via ✕), dreams → ON THE HORIZON.
 
+ADS REMOVED ENTIRELY (founder, 2026-10-02): AdMob is out of the app, the configs,
+the copy and the privacy policy. iOS build 10 / Android versionCode 10 carry it.
+Store flips change accordingly: ASC App Privacy drops advertising identifiers;
+future Play answers: contains ads = NO. Apple timeline: build 8 rejected 2.1
+(launch crash — suspect: the new declared-age-range entitlement, unreproducible
+in any local config; sim boots clean twice incl. OTA handoff); build 9 stripped
+the entitlement; build 10 = 9 + ad removal + reviewer-onboarding replay + full-ink
+airport text. Resubmission rides build 10 after a TestFlight double-launch check.
+
 SUBMITTED TO APPLE — 2026-10-01, 4:54 AM. iOS 1.0.3 (build 8) is Waiting for Review:
 the full pivoted app (passport, social, luggage, world icons), new listing copy,
 worn-ink screenshots, UGC/age/privacy flips, demo account, and the 5.1.1 fix note
