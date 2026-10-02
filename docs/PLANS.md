@@ -161,6 +161,19 @@ teens = accepted followers only. Same slim blotter under packet photos. Profile 
 same day (4c587c3): trunk banner on TOP, traveler chips gone, About me + My website,
 free-form unlimited favorites (founder removes their two via ✕), dreams → ON THE HORIZON.
 
+THE LIST — before the Apple resubmission (founder: "build first, then submit"):
+  [x] Remove AdMob everywhere (build 10)
+  [x] Reviewer account replays onboarding each launch
+  [x] Airport stamps: city/country/date full ink
+  [x] Luggage: all six trunks photoreal (R2), BOTTOM face added, finger-follow turning
+  [ ] FOUNDER: git pull && npm run cap:sync → Xcode Archive 1.0.3 (10) → Upload
+  [ ] FOUNDER: TestFlight build 10 on the iPhone — launch twice (not required by
+      Apple, but the only way to run the exact store-signed binary after a 2.1)
+  [ ] FOUNDER: version page → build 10, description last line → "Free to use.",
+      App Privacy: drop any v1 advertising/device-ID declarations
+  [ ] FOUNDER: reply in thread (crash note) → Resubmit
+  After approval: npm run ota keeps working; D-U-N-S wait continues for Play.
+
 ADS REMOVED ENTIRELY (founder, 2026-10-02): AdMob is out of the app, the configs,
 the copy and the privacy policy. iOS build 10 / Android versionCode 10 carry it.
 Store flips change accordingly: ASC App Privacy drops advertising identifiers;
