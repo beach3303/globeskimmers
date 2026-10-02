@@ -166,6 +166,8 @@ THE LIST — before the Apple resubmission (founder: "build first, then submit")
   [x] Reviewer account replays onboarding each launch
   [x] Airport stamps: city/country/date full ink
   [x] Luggage: all six trunks photoreal (R2), BOTTOM face added, finger-follow turning
+  [x] Profile banner = the ACTIVE trunk's real front + placed stickers (cartoon gone)
+  [x] Collection loop: fill a trunk (12 stickers) to unlock the next; in-use trunks grandfathered
   [ ] FOUNDER: git pull && npm run cap:sync → Xcode Archive 1.0.3 (10) → Upload
   [ ] FOUNDER: TestFlight build 10 on the iPhone — launch twice (not required by
       Apple, but the only way to run the exact store-signed binary after a 2.1)
