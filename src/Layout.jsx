@@ -10,21 +10,11 @@ import LocationMismatchSheet from "@/components/location/LocationMismatchSheet";
 import LocationAutoFollowOffer from "@/components/location/LocationAutoFollowOffer";
 import BrandBanner from "@/components/redesign/BrandBanner";
 import FloatingNav from "@/components/redesign/FloatingNav";
-import AdBanner from "@/components/ads/AdBanner";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
 import BackToTop from "@/components/BackToTop";
 import { logEvent } from "@/lib/analytics";
 import "@/lib/cloudSync"; // starts Wishlist/Saved → account sync on sign-in (side-effect)
 import { IVORY } from "@/components/redesign/constants";
-
-// Finder list pages that show a bottom AdMob banner ("per-feature ads").
-// Home shows NO banner (Phase-1a-lite moved the ad off Home), so it's
-// intentionally NOT in this set. These keys must match the page keys in
-// pages.config.js (= currentPageName).
-const AD_FINDER_PAGES = new Set([
-  "PlacesToEat", "CoffeeFinder", "ATMFinder", "RestroomFinder",
-  "ConvenienceStore", "ThingsToDo", "Shopping",
-]);
 
 // Long, scrollable content/list pages that get the floating "back to top" button.
 const BACK_TO_TOP_PAGES = new Set([
@@ -57,7 +47,6 @@ export default function Layout({ children, currentPageName }) {
   // Whether the current page should show the bottom banner (finder pages).
   // Drives the banner mount, the FloatingNav lift, and extra bottom padding so
   // the last card / radius row clears the overlay.
-  const showFinderAd = AD_FINDER_PAGES.has(currentPageName);
 
   // Swipe-down gesture: close the frontmost overlay (photo, form, location
   // picker) via the dismiss stack. Page-level swipe-to-exit was REMOVED per user
@@ -162,37 +151,19 @@ export default function Layout({ children, currentPageName }) {
 
           {/* App Content — offset by banner height (50px + status-bar safe
               area, so content clears the now-safe-area-aware BrandBanner) +
-              floating nav clearance (pb-24). On finder pages an AdMob banner
-              overlays the bottom edge, so add ~64px extra bottom padding there
-              so the last card / radius row isn't hidden behind it. */}
+              floating nav clearance (pb-24). */}
           <div
             className={`w-full max-w-full overflow-x-clip min-h-screen ${isOnboarding ? "" : "pb-24"}`}
-            style={{
-              paddingTop: 'calc(50px + env(safe-area-inset-top))',
-              // On finder pages the FloatingNav is lifted (~64-72px) AND an
-              // AdMob banner (~56px) sits below it. Clear both + the home-
-              // indicator safe area so the last card / Directions·Map·Less /
-              // AI DETAILS never end up hidden under the pill at full scroll.
-              ...(showFinderAd ? { paddingBottom: 'calc(6rem + 84px + env(safe-area-inset-bottom))' } : {}),
-            }}
+            style={{ paddingTop: 'calc(50px + env(safe-area-inset-top))' }}
           >
             {children}
           </div>
 
-          {/* Per-feature bottom banner on finder pages (Home mounts its own via
-              Home.jsx). Single mount point so only one overlay banner is ever
-              active. */}
-          {showFinderAd && <AdBanner />}
+          {/* Floating "back to top" on long content/list pages. */}
+          {BACK_TO_TOP_PAGES.has(currentPageName) && <BackToTop bottom={96} />}
 
-          {/* Floating "back to top" on long content/list pages. Lifted higher on
-              finder pages so it clears the ad banner + lifted nav. */}
-          {BACK_TO_TOP_PAGES.has(currentPageName) && <BackToTop bottom={showFinderAd ? 150 : 96} />}
-
-          {/* Floating pill nav — 3 anchors (Home / Saved / Settings). Lifted
-              above the AdMob banner on the finder pages so the ad can pin to
-              the bottom edge without the pill overlapping it. Home no longer
-              mounts a banner, so it keeps the resting 22px height. */}
-          <FloatingNav liftForAd={showFinderAd} />
+          {/* Floating pill nav — 3 anchors (Home / Saved / Settings). */}
+          <FloatingNav />
 
           {/* Global location nudges — mounted here (not in Home) so they catch
               their events on ANY page after foreground: the "you appear to be in

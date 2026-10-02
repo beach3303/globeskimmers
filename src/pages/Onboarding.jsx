@@ -1,7 +1,5 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Capacitor } from "@capacitor/core";
-import { AdMob } from "@capacitor-community/admob";
 import { createPageUrl } from "@/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
@@ -56,15 +54,6 @@ export default function OnboardingPage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [data, setData] = useState({});
   const [saving, setSaving] = useState(false);
-
-  // No ads during onboarding. The native AdMob banner is a system overlay that
-  // can linger from the brief Home mount that precedes the onboarding redirect,
-  // so clear it on entry. Ads resume on Home once onboarding_completed is true.
-  useEffect(() => {
-    if (Capacitor.getPlatform() === "web") return;
-    AdMob.hideBanner().catch(() => {});
-    AdMob.removeBanner().catch(() => {});
-  }, []);
 
   // Step back to revise an earlier answer. Answers persist in `data`, and each
   // step re-seeds its local state from its `value` prop, so the previous

@@ -7,14 +7,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <!-- Google Mobile Ads SDK — Android App ID (Globeskimmers Android).
-             NOT secret; ships in every installed APK and is how AdMob
-             attributes ad revenue to your account. Without this meta-data,
-             the SDK throws on first ad request and the app crashes. -->
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-2858807823087664~6207410187"
-        />
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"

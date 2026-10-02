@@ -87,7 +87,7 @@ Everything you need the moment you land: nearby restaurants ranked for authentic
 PRIVATE BY DEFAULT
 Your passport is yours alone until you choose to share it. Photos you add stay in your private journal; anything made public passes automated review first. Every profile can be blocked, every item reported. Travelers under 18 get extra protections: their passports can't be made public and new followers need their approval. We never sell your data and never track you across other apps.
 
-Free to use, supported by ads. Built with care by travelers, for travelers — collect the world, stamp by stamp.
+Free to use. Built with care by travelers, for travelers — collect the world, stamp by stamp.
 ```
 *~2,015 / 4000 chars ✅*
 
