@@ -32,9 +32,9 @@ export const LUGGAGE_TYPES = [
   { key: "explorer", name: "The Explorer", body: "#5E2320", strap: "#3B2317", edge: "#471A18" },
 ];
 const SWIPE_ORDER = ["front", "right", "back", "left"];
-const FACES = ["front", "right", "back", "left", "top"];
+const FACES = ["front", "right", "back", "left", "top", "bottom"];
 // Per-face canvas aspect (h/w) — sides are tall, the lid is low.
-const ASPECT = { front: 0.62, back: 0.62, left: 1.3, right: 1.3, top: 0.34 };
+const ASPECT = { front: 0.62, back: 0.62, left: 1.3, right: 1.3, top: 0.34, bottom: 0.34 };
 // Sticker-safe region (normalized) — a sticker never half-falls off the trunk.
 const BOUNDS = { xMin: 0.08, xMax: 0.92, yMin: 0.14, yMax: 0.88 };
 // The founder's renders are SQUARE (trunk centered on ivory) — per-face safe
@@ -45,6 +45,7 @@ const SKIN_BOUNDS = {
   right: { xMin: 0.3, xMax: 0.72, yMin: 0.24, yMax: 0.8 },
   left: { xMin: 0.3, xMax: 0.72, yMin: 0.24, yMax: 0.8 },
   top: { xMin: 0.12, xMax: 0.88, yMin: 0.28, yMax: 0.68 },
+  bottom: { xMin: 0.12, xMax: 0.88, yMin: 0.28, yMax: 0.68 },
 };
 
 const STICKER_INKS = ["#7A2E1D", "#31465F", "#2F4A33", "#7A5B22", "#4E3A5E"];
@@ -168,6 +169,7 @@ export default function VirtualLuggage({ stamps, onClose }) {
   const [faceIdx, setFaceIdx] = useState(0); // index into SWIPE_ORDER, or -1 = top
   const [turn, setTurn] = useState(0);       // -1|0|1 pseudo-3D direction
   const [tilt, setTilt] = useState(0);       // vertical pseudo-3D (lid swipe)
+  const [drag, setDrag] = useState(null);    // live finger-follow {dx,dy} while turning
   const [edit, setEdit] = useState(false);
   const [selected, setSelected] = useState(null);
   const [skinOk, setSkinOk] = useState({});  // `${type}/${face}` -> false (missing) | number (h/w aspect)
@@ -178,7 +180,7 @@ export default function VirtualLuggage({ stamps, onClose }) {
   useEffect(() => { (async () => setState(await luggageGet()))(); }, []);
 
   const active = state?.active || "classic";
-  const face = faceIdx === -1 ? "top" : SWIPE_ORDER[faceIdx];
+  const face = faceIdx === -1 ? "top" : faceIdx === -2 ? "bottom" : SWIPE_ORDER[faceIdx];
   const placements = state?.placements || {};
   const faceList = (placements[active]?.[face] || []);
   const placedSids = useMemo(() => {
@@ -289,6 +291,11 @@ export default function VirtualLuggage({ stamps, onClose }) {
     if (!g) return;
     const rect = stageRef.current?.getBoundingClientRect();
     if (!rect) return;
+    if (g.kind === "swipe") {
+      const pt = pointers.current.get(e.pointerId);
+      setDrag({ dx: pt.x - g.start.x, dy: pt.y - g.start.y });
+      return;
+    }
     if (g.kind === "drag") {
       const pt = pointers.current.get(e.pointerId);
       const x = Math.min(bounds.xMax, Math.max(bounds.xMin, g.pl.x + (pt.x - g.start.x) / rect.width));
@@ -314,26 +321,26 @@ export default function VirtualLuggage({ stamps, onClose }) {
     }
     if (g && g.kind === "swipe" && pointers.current.size === 0) {
       gesture.current = null;
+      setDrag(null);
       const dx = e.clientX - g.start.x, dy = e.clientY - g.start.y;
       if (Math.abs(dx) >= 44 && Math.abs(dx) > Math.abs(dy) * 1.2) {
         setSelected(null);
         setTurn(dx < 0 ? 1 : -1);
         setTimeout(() => setTurn(0), 330);
         setFaceIdx((i) => {
-          const cur = i === -1 ? 0 : i;
+          const cur = i < 0 ? 0 : i;
           return (cur + (dx < 0 ? 1 : SWIPE_ORDER.length - 1)) % SWIPE_ORDER.length;
         });
       } else if (Math.abs(dy) >= 44 && Math.abs(dy) > Math.abs(dx) * 1.2) {
         setSelected(null);
-        if (dy < 0 && faceIdx !== -1) {
-          // swipe up → tip the trunk and look at the lid
-          setTilt(1); setTimeout(() => setTilt(0), 330);
-          setFaceIdx(-1);
-        } else if (dy > 0 && faceIdx === -1) {
-          // swipe down from the lid → set it back down on its front
-          setTilt(-1); setTimeout(() => setTilt(0), 330);
-          setFaceIdx(0);
-        } // there is no bottom face — swiping down elsewhere leaves the trunk be
+        setTilt(dy < 0 ? 1 : -1); setTimeout(() => setTilt(0), 330);
+        if (dy < 0) {
+          // swipe up: from the base back to the front, otherwise tip to the lid
+          setFaceIdx((i) => (i === -2 ? 0 : -1));
+        } else {
+          // swipe down: from the lid back to the front, otherwise roll to the base
+          setFaceIdx((i) => (i === -1 ? 0 : -2));
+        }
       }
     }
     if (pointers.current.size === 0) gesture.current = null;
@@ -383,8 +390,10 @@ export default function VirtualLuggage({ stamps, onClose }) {
             style={{
               position: "relative", width: faceW, height: faceH, touchAction: "none",
               transformStyle: "preserve-3d",
-              transform: turn ? `rotateY(${turn * -12}deg) scaleX(0.94)` : tilt ? `rotateX(${tilt * 10}deg) scaleY(0.95)` : "rotateY(0deg) scaleX(1)",
-              transition: "transform 320ms cubic-bezier(.22,.61,.36,1)",
+              transform: drag
+                ? `rotateY(${Math.max(-40, Math.min(40, (drag.dx / faceW) * 70)).toFixed(1)}deg) rotateX(${Math.max(-32, Math.min(32, (-drag.dy / faceH) * 55)).toFixed(1)}deg) scale(0.97)`
+                : turn ? `rotateY(${turn * -12}deg) scaleX(0.94)` : tilt ? `rotateX(${tilt * 10}deg) scaleY(0.95)` : "rotateY(0deg) scaleX(1)",
+              transition: drag ? "none" : "transform 320ms cubic-bezier(.22,.61,.36,1)",
             }}
           >
             <div style={{ position: "absolute", inset: 0, borderRadius: 14, overflow: "hidden", boxShadow: "0 22px 40px -20px rgba(22,17,13,.5)" }}>
@@ -423,6 +432,11 @@ export default function VirtualLuggage({ stamps, onClose }) {
               style={{ background: faceIdx === -1 ? "#F3E2C7" : "#fff", border: `1px solid ${RULE}`, fontFamily: MONO, fontSize: fs(9), letterSpacing: ".14em", color: "#8A5410" }}>
               TOP / LID
             </button>
+            <button type="button" onClick={() => { setSelected(null); setFaceIdx((i) => (i === -2 ? 0 : -2)); }}
+              className="rounded-full px-3 py-1" aria-pressed={faceIdx === -2}
+              style={{ background: faceIdx === -2 ? "#F3E2C7" : "#fff", border: `1px solid ${RULE}`, fontFamily: MONO, fontSize: fs(9), letterSpacing: ".14em", color: "#8A5410" }}>
+              BOTTOM / BASE
+            </button>
             {edit && selected && (
               <button type="button" onClick={peelSelected}
                 className="rounded-full px-3 py-1 inline-flex items-center gap-1.5"
@@ -432,7 +446,7 @@ export default function VirtualLuggage({ stamps, onClose }) {
             )}
           </div>
           <p style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".05em", color: INK3, marginTop: 8 }}>
-            {edit ? "Drag to place · two fingers to resize & rotate · tap ✓ when done" : "Swipe sideways to walk around · swipe up for the lid · ✎ to arrange"}
+            {edit ? "Drag to place · two fingers to resize & rotate · tap ✓ when done" : "Swipe sideways to walk around · up for the lid, down for the base · ✎ to arrange"}
           </p>
         </div>
 
