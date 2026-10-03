@@ -6,11 +6,26 @@ import React, { useEffect, useState } from "react";
 import { Loader2, UserPlus } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import OfficialSeal from "@/components/passport/OfficialSeal";
-import { socialFollow, socialFeed, getHandle } from "@/lib/passport";
+import { socialFollow, socialFeed, getHandle, setHandle, setAgeGate, socialUnread } from "@/lib/passport";
+import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import InviteButton from "@/components/passport/InviteButton";
 import PostcardCompose from "@/components/passport/PostcardCompose";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+
+// One line per thing that happened to you — the activity the dot announces.
+function activityLine(a) {
+  const who = a.by.name || (a.by.handle ? `@${a.by.handle}` : "A traveler");
+  switch (a.type) {
+    case "follow_request": return { who, text: "asked to follow you" };
+    case "follow": return { who, text: "started following you" };
+    case "postcard": return { who, text: a.to_me ? `sent you a postcard${a.place ? ` from ${a.place}` : ""}` : `mailed a postcard${a.place ? ` from ${a.place}` : ""}` };
+    case "reaction": return { who, text: `stamped ${a.reactions.join(" · ")}${a.stamp ? ` on ${a.stamp}` : " on your passport"}` };
+    case "signature": return { who, text: `${a.doodle && !a.body ? "left a doodle" : "signed"}${a.stamp ? ` your ${a.stamp} page` : " your passport"}${a.body ? `: “${a.body}”` : ""}` };
+    case "tag": return { who, text: `tagged you${a.place ? ` at ${a.place}` : ""} — were you there together?` };
+    default: return { who, text: "" };
+  }
+}
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -33,10 +48,39 @@ export default function MailboxPage() {
   const [handleDraft, setHandleDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [compose, setCompose] = useState(false);
+  const [activity, setActivity] = useState([]);
+  // Claim-your-@username, right here (it used to live two taps away).
+  const [claimDraft, setClaimDraft] = useState("");
+  const [claimSugs, setClaimSugs] = useState([]);
+  const [claimNeedYear, setClaimNeedYear] = useState(false);
+  const [claimYear, setClaimYear] = useState("");
+  const [claimBusy, setClaimBusy] = useState(false);
+
+  const claim = async () => {
+    const want = claimDraft.trim().toLowerCase();
+    if (!want) return;
+    setClaimBusy(true);
+    if (claimNeedYear) {
+      const { error: yErr } = await setAgeGate(Number(claimYear));
+      if (yErr && yErr !== "age_required") { setClaimBusy(false); showToast(yErr, "error"); return; }
+      setClaimNeedYear(false);
+    }
+    const { handle: h, suggestions, error } = await setHandle(want);
+    setClaimBusy(false);
+    if (error === "age_required") {
+      const osYear = birthYearFromRange(await readOsAgeRange());
+      if (osYear) { const { error: aErr } = await setAgeGate(osYear); if (!aErr) { claim(); return; } }
+      setClaimNeedYear(true); showToast("One thing first — the year you were born", "success"); return;
+    }
+    setClaimSugs(error ? (suggestions || []) : []);
+    if (error) { showToast(error, "error"); return; }
+    setMe(h); setClaimDraft("");
+    showToast(`You're @${h} — friends can find you now`, "success");
+  };
 
   const load = async () => {
-    const [f, l, h] = await Promise.all([socialFeed(), socialFollow("list"), getHandle()]);
-    setRows(f.rows); setMe(h.handle);
+    const [f, l, h, u] = await Promise.all([socialFeed(), socialFollow("list"), getHandle(), socialUnread({ mark: true })]);
+    setRows(f.rows); setMe(h.handle); setActivity(u.activity || []);
     if (l.data) setLists({ followers: l.data.followers || [], following: l.data.following || [], requests: l.data.requests || [] });
     setLoading(false);
   };
@@ -81,11 +125,63 @@ export default function MailboxPage() {
           </button>
         </div>
         {!me && !loading && (
-          <button type="button" onClick={() => navigate(createPageUrl("Settings"))} className="mt-2 text-left" style={{ background: "none", border: 0, padding: 0, color: INK3, fontSize: fs(11.5) }}>
-            Friends find you by your @username — <span style={{ color: TEAL, textDecoration: "underline", textUnderlineOffset: 2 }}>claim yours in Settings</span>
-          </button>
+          <div className="mt-4 rounded-[16px] p-3.5" style={{ background: "#FFFBF0", border: "1px solid #EAD9AE" }}>
+            <p style={{ fontSize: fs(13.5), color: INK, fontWeight: 700 }}>Claim your @username</p>
+            <p style={{ fontSize: fs(12), color: INK2, marginTop: 2 }}>It&rsquo;s how friends find you, follow you, and send you postcards.</p>
+            <div className="flex gap-2 mt-2.5 items-center">
+              <div className="flex-1 flex items-center rounded-xl px-3 h-11" style={{ border: `1px solid ${RULE}`, background: "#fff" }}>
+                <span style={{ color: INK3, fontWeight: 700 }}>@</span>
+                <input value={claimDraft} onChange={(e) => setClaimDraft(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20))}
+                  placeholder="yourname" aria-label="Choose your username" autoCapitalize="none" autoCorrect="off"
+                  className="flex-1 outline-none bg-transparent pl-1" style={{ fontSize: fs(14) }} onKeyDown={(e) => e.key === "Enter" && claim()} />
+              </div>
+              {claimNeedYear && (
+                <input value={claimYear} onChange={(e) => setClaimYear(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))} placeholder="Born" inputMode="numeric" aria-label="Year you were born"
+                  className="w-20 h-11 rounded-xl px-3 outline-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }} />
+              )}
+              <button type="button" onClick={claim} disabled={claimBusy || claimDraft.length < 3 || (claimNeedYear && claimYear.length !== 4)}
+                className="h-11 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL, color: "#fff", fontSize: fs(13) }}>
+                {claimBusy ? "…" : "Claim"}
+              </button>
+            </div>
+            {claimSugs.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2 items-center">
+                <span style={{ color: INK3, fontSize: fs(11.5) }}>Free right now:</span>
+                {claimSugs.map((sug) => (
+                  <button key={sug} type="button" onClick={() => { setClaimDraft(sug); setClaimSugs([]); }} className="rounded-full px-3 py-1"
+                    style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(12.5), fontWeight: 600, color: INK }}>@{sug}</button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
-        {me && <InviteButton compact />}
+        <InviteButton compact />
+
+        {/* What happened to you — the activity behind the Mailbox dot */}
+        {activity.length > 0 && (
+          <div className="mt-5">
+            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".16em", color: "#8A5410" }}>
+              On your passport{activity.some((a) => a.unread) ? ` · ${activity.filter((a) => a.unread).length} new` : ""}
+            </div>
+            <div className="mt-2 rounded-[16px] overflow-hidden" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
+              {activity.slice(0, 12).map((a, i) => {
+                const { who, text } = activityLine(a);
+                const goes = a.type === "reaction" || a.type === "signature" || a.type === "tag";
+                return (
+                  <button key={i} type="button" onClick={goes ? () => navigate(createPageUrl("Passport")) : undefined} disabled={!goes}
+                    className="w-full text-left flex items-start gap-2.5 px-3.5 py-2.5"
+                    style={{ borderTop: i ? `1px solid ${RULE}` : "none", background: a.unread ? "#FFFBF0" : "#fff", cursor: goes ? "pointer" : "default" }}>
+                    <span aria-label={a.unread ? "new" : undefined} className="flex-none rounded-full" style={{ width: 8, height: 8, marginTop: 6, background: a.unread ? "#E0533C" : "transparent" }} />
+                    <span className="flex-1" style={{ fontSize: fs(13), color: INK2, lineHeight: 1.4 }}>
+                      <b style={{ color: INK }}>{who}</b>{a.by.verified ? <OfficialSeal size={11} tier={a.by.seal || "burgundy"} /> : null} {text}
+                    </span>
+                    <span className="flex-none" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, marginTop: 2 }}>{when(a.at)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Requests (teen approval) */}
         {lists.requests.length > 0 && (

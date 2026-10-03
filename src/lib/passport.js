@@ -110,6 +110,14 @@ export async function socialRequest({ kind, handle, note }) {
   const { data, error } = await callWorker('social/request', { kind, handle, note });
   return { ok: !!data?.ok, error: error || data?.error || null };
 }
+// The Mailbox unread signal: { total, activity? }. mark:true (the Mailbox
+// opening) returns the activity with unread flags, then marks it all seen and
+// tells the nav to clear its dot.
+export async function socialUnread({ mark = false } = {}) {
+  const { data, error } = await callWorker('social/unread', mark ? { mark: true } : {});
+  if (mark && !error) { try { window.dispatchEvent(new Event("gs:unread")); } catch { /* no window */ } }
+  return { total: data?.total || 0, activity: data?.activity || [], error };
+}
 // Is a username being held for THIS account (founder's family list)?
 export async function heldForMe() {
   const { data, error } = await callWorker('social/held-for-me', {});

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { useIsTablet } from '@/lib/useIsTablet';
+import { socialUnread } from '@/lib/passport';
 
 // Floating pill nav — fixed, centered, 22px above bottom safe area.
 // 4 anchors: Home, Trips, Passport, Settings.
@@ -21,6 +22,27 @@ export default function FloatingNav({ active, dark = false }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isTablet = useIsTablet();
+
+  // The unread dot on Mailbox: refreshed on navigation and when the app comes
+  // back to the foreground (at most once a minute), cleared the moment the
+  // Mailbox marks everything seen (the gs:unread event).
+  const [unread, setUnread] = useState(0);
+  const lastCheck = useRef(0);
+  useEffect(() => {
+    let gone = false;
+    const check = async (force = false) => {
+      if (!force && Date.now() - lastCheck.current < 60000) return;
+      lastCheck.current = Date.now();
+      const { total, error } = await socialUnread();
+      if (!gone && !error) setUnread(total);
+    };
+    check();
+    const onSeen = () => { setUnread(0); lastCheck.current = Date.now(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    window.addEventListener('gs:unread', onSeen);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { gone = true; window.removeEventListener('gs:unread', onSeen); document.removeEventListener('visibilitychange', onVisible); };
+  }, [location.pathname]);
 
   // Emoji nav icons (matches the iPad redesign spec). Shown on BOTH phone and
   // iPad so the chrome is consistent — each item is a real emoji + label.
@@ -101,7 +123,7 @@ export default function FloatingNav({ active, dark = false }) {
           <button
             key={it.id}
             onClick={() => navigate(createPageUrl(it.route))}
-            aria-label={it.id}
+            aria-label={it.id === 'mailbox' && unread > 0 ? `mailbox, ${unread} new` : it.id}
             style={{
               minWidth: 62,
               display: 'flex',
@@ -119,7 +141,12 @@ export default function FloatingNav({ active, dark = false }) {
               transition: 'background 120ms, opacity 120ms',
             }}
           >
-            <span style={{ fontSize: 22, lineHeight: 1 }}>{it.emoji}</span>
+            <span style={{ fontSize: 22, lineHeight: 1, position: 'relative' }}>
+              {it.emoji}
+              {it.id === 'mailbox' && unread > 0 && !isActive && (
+                <span aria-hidden="true" style={{ position: 'absolute', top: -2, right: -4, width: 10, height: 10, borderRadius: 9999, background: '#E0533C', boxShadow: `0 0 0 2px ${bg}` }} />
+              )}
+            </span>
             <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.2, lineHeight: 1 }}>{it.label}</span>
           </button>
         );

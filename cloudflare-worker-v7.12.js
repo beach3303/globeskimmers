@@ -14746,7 +14746,12 @@ async function handleSocialHandle(request, env, ctx) {
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Usernames aren\'t available on this account' }, 403);
     const held = await gbHeld(env, want);
-    if (held && !held.claimed_at && String(user.email || '').toLowerCase() !== String(held.email || '').toLowerCase()) {
+    const myEmail = String(user.email || '').toLowerCase();
+    const heldEmail = String(held?.email || '').toLowerCase();
+    // A name held for one of the founder's admin emails is claimable from ANY
+    // of those admin accounts; family names stay locked to their own email.
+    const adminOwn = ADMIN_EMAILS_WORKER.includes(myEmail) && ADMIN_EMAILS_WORKER.includes(heldEmail);
+    if (held && !held.claimed_at && myEmail !== heldEmail && !adminOwn) {
       // Held for someone else (or no email attached yet): plain "taken".
       return await gbTakenResponse(env, want);
     }
@@ -14789,7 +14794,8 @@ async function handleSocialHeldForMe(request, env) {
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const email = String(user.email || '').toLowerCase();
     if (!email) return jsonResponse({ held: null });
-    const q = await gbRest(env, `held_handles?email=eq.${encodeURIComponent(email)}&claimed_at=is.null&select=handle,display_name&limit=1`, {});
+    const emails = ADMIN_EMAILS_WORKER.includes(email) ? ADMIN_EMAILS_WORKER : [email];
+    const q = await gbRest(env, `held_handles?email=in.(${emails.map((e) => encodeURIComponent(e)).join(',')})&claimed_at=is.null&select=handle,display_name&limit=1`, {});
     const row = (q.ok ? await q.json() : [])[0] || null;
     if (!row) return jsonResponse({ held: null });
     const hq = await gbRest(env, `passport_shares?user_id=eq.${user.id}&select=handle`, {});
@@ -14836,6 +14842,90 @@ async function handleAdminHeldHandles(request, env) {
     }
     const list = await gbRest(env, 'held_handles?select=*&order=created_at.asc', {});
     return jsonResponse({ rows: list.ok ? await list.json() : [], emailConfigured: !!env.RESEND_API_KEY });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /social/unread { mark? } — what happened TO this traveler since they
+// last opened the Mailbox: follow requests and new followers, postcards to
+// them (direct, or broadcast by someone they follow), reactions and
+// signatures on their passport pages, pending tag invites. Returns the unread
+// total plus 30 days of activity, newest first, each flagged unread. mark:true
+// moves mailbox_seen_at to now AFTER reading. Teen activity under 24h stays
+// hidden, the same rail as the who-signed lists.
+const BL_KIND_LABEL = { wow: 'WOW', takeme: 'TAKE ME', been: 'BEEN HERE \u2665', wannago: 'I WANNA GO', morepics: 'MORE PICS', yummy: 'YUMMY' };
+async function handleSocialUnread(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const me = user.id;
+    const sp = await gbSocialProfile(env, me);
+    const seenAt = Date.parse(sp?.mailbox_seen_at || '') || (Date.now() - 14 * 864e5);
+    const floor = encodeURIComponent(new Date(Date.now() - 30 * 864e5).toISOString());
+    const j = async (r) => (r.ok ? await r.json() : []);
+    const [follows, following, direct, marks, entries, tags] = await Promise.all([
+      gbRest(env, `user_follows?followee_id=eq.${me}&created_at=gte.${floor}&select=follower_id,status,created_at&order=created_at.desc&limit=50`, {}).then(j),
+      gbRest(env, `user_follows?follower_id=eq.${me}&status=eq.accepted&select=followee_id&limit=200`, {}).then(j),
+      gbRest(env, `postcards?to_user_id=eq.${me}&created_at=gte.${floor}&select=sender_id,place_name,created_at&order=created_at.desc&limit=50`, {}).then(j),
+      gbRest(env, `blotter_marks?owner_user_id=eq.${me}&user_id=neq.${me}&created_at=gte.${floor}&select=target,user_id,kind,created_at&order=created_at.desc&limit=150`, {}).then(j),
+      gbRest(env, `blotter_entries?owner_user_id=eq.${me}&author_user_id=neq.${me}&created_at=gte.${floor}&select=target,author_user_id,body,doodle_key,created_at&order=created_at.desc&limit=50`, {}).then(j),
+      gbRest(env, `passport_tags?to_user_id=eq.${me}&status=eq.pending&created_at=gte.${floor}&select=from_user_id,name,created_at&order=created_at.desc&limit=50`, {}).then(j),
+    ]);
+    const fIds = following.map((r) => r.followee_id).filter(Boolean);
+    const broadcasts = fIds.length
+      ? await gbRest(env, `postcards?to_user_id=is.null&sender_id=in.(${fIds.join(',')})&created_at=gte.${floor}&select=sender_id,place_name,created_at&order=created_at.desc&limit=50`, {}).then(j)
+      : [];
+
+    const items = [];
+    for (const r of follows) items.push({ type: r.status === 'pending' ? 'follow_request' : 'follow', uid: r.follower_id, at: r.created_at });
+    for (const r of direct) items.push({ type: 'postcard', uid: r.sender_id, place: r.place_name || null, at: r.created_at, to_me: true });
+    for (const r of broadcasts) items.push({ type: 'postcard', uid: r.sender_id, place: r.place_name || null, at: r.created_at });
+    // One row per person per page, however many stamps they pressed.
+    const grouped = new Map();
+    for (const r of marks) {
+      const k = `${r.user_id}|${r.target}`;
+      const g = grouped.get(k);
+      if (g) { if (!g.kinds.includes(r.kind)) g.kinds.push(r.kind); if (r.created_at > g.at) g.at = r.created_at; }
+      else grouped.set(k, { type: 'reaction', uid: r.user_id, target: r.target, kinds: [r.kind], at: r.created_at });
+    }
+    items.push(...grouped.values());
+    for (const r of entries) items.push({ type: 'signature', uid: r.author_user_id, target: r.target, body: r.body ? String(r.body).slice(0, 90) : null, doodle: !!r.doodle_key, at: r.created_at });
+    for (const r of tags) items.push({ type: 'tag', uid: r.from_user_id, place: r.name || null, at: r.created_at });
+
+    const uids = [...new Set(items.map((i) => i.uid).filter(Boolean))].slice(0, 200);
+    const stampIds = [...new Set(items.map((i) => (i.target || '').startsWith('st:') ? i.target.slice(3) : null).filter(Boolean))].slice(0, 200);
+    const [hs, ps, st] = await Promise.all([
+      uids.length ? gbRest(env, `passport_shares?user_id=in.(${uids.join(',')})&select=user_id,handle,verified,seal`, {}).then(j) : [],
+      uids.length ? gbRest(env, `social_profiles?user_id=in.(${uids.join(',')})&select=user_id,display_name,social_tier`, {}).then(j) : [],
+      stampIds.length ? gbRest(env, `passport_stamps?id=in.(${stampIds.join(',')})&select=id,name`, {}).then(j) : [],
+    ]);
+    const who = {};
+    for (const r of hs) who[r.user_id] = { handle: r.handle || null, verified: r.verified === true, seal: r.verified === true ? (r.seal || 'burgundy') : null };
+    for (const r of ps) who[r.user_id] = { ...(who[r.user_id] || {}), name: r.display_name || null, teen: r.social_tier === 'teen' };
+    const stampName = Object.fromEntries(st.map((r) => [r.id, r.name]));
+    const dayAgo = Date.now() - 864e5;
+
+    const activity = items
+      .filter((i) => !(who[i.uid]?.teen && Date.parse(i.at) > dayAgo))
+      .sort((a, c) => String(c.at).localeCompare(String(a.at)))
+      .slice(0, 40)
+      .map((i) => ({
+        type: i.type, at: i.at, unread: Date.parse(i.at) > seenAt,
+        by: { handle: who[i.uid]?.handle || null, name: who[i.uid]?.name || null, verified: !!who[i.uid]?.verified, seal: who[i.uid]?.seal || null },
+        ...(i.kinds ? { reactions: i.kinds.map((k) => BL_KIND_LABEL[k] || k) } : {}),
+        ...(i.target ? { stamp: stampName[i.target.slice(3)] || null } : {}),
+        ...(i.body !== undefined ? { body: i.body, doodle: i.doodle } : {}),
+        ...(i.place !== undefined ? { place: i.place } : {}),
+        ...(i.to_me ? { to_me: true } : {}),
+      }));
+    const total = activity.filter((a) => a.unread).length;
+
+    if (b.mark === true) {
+      const now = new Date().toISOString();
+      if (sp) await gbRest(env, `social_profiles?user_id=eq.${me}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mailbox_seen_at: now }) });
+      else await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: me, mailbox_seen_at: now }) });
+    }
+    return jsonResponse({ total, activity: b.mark === true || b.activity === true ? activity : undefined });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -19691,6 +19781,7 @@ export default {
       if (pathname === '/social/profile' && request.method === 'POST') return await handleSocialProfile(request, env, ctx);
       if (pathname === '/social/report' && request.method === 'POST') return await handleSocialReport(request, env, ctx);
       if (pathname === '/social/follow' && request.method === 'POST') return await handleSocialFollow(request, env, ctx);
+      if (pathname === '/social/unread' && request.method === 'POST') return await handleSocialUnread(request, env);
       if (pathname === '/social/feed' && request.method === 'POST') return await handleSocialFeed(request, env);
       if (pathname === '/postcards/send' && request.method === 'POST') return await handlePostcardSend(request, env, ctx);
       if (pathname === '/social/avatar' && request.method === 'POST') return await handleSocialAvatar(request, env, ctx);
