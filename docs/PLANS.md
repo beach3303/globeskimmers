@@ -184,6 +184,12 @@ THE QUEUE — founder-agreed 2026-10-03 (build order; strike as shipped):
       food/drink as subject, anonymous, "Ordered by N travelers". NOT YET: opt-in from
       stamp/postcard/guestbook photos; card hero preferring traveler photos (needs a
       batch summary endpoint); IP-country check on dish GPS (stamps have it).
+  [x] Stamp pages (founder 2026-10-03): every recommended stamp opens ONE attraction page
+      (ActivityDetail — Things to Do has no standalone pages, only an in-list pop-up):
+      verified tickets by audience + discounts + parking with prices (/attractions/visit-info,
+      code-checked against the fetched official pages, 30-day cache), the Things to Do AI
+      panel (stamp id → Google twin, all 21 LA stamps match), GPS-only stamp re-checked by
+      the worker. NEXT: Things to Do cards that match a stamp should open this page too.
   [ ] City Board: postcards TO a city, proof-gated, Blotter rails, "Postcards from here"
   [ ] P2: stampable door from finder cards, Perfect Day door, NAV_CLEARANCE, CLAUDE.md truths
   [ ] Landing page messaging → North Star positioning ("I was there"; places/moments/memories)

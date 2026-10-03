@@ -1127,3 +1127,23 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   test: founder at a restaurant after the OTA → card → "Here now? Add your dish".
 - Gates: node --check, eslint, no-undef (touched + app-wide 0), build 0, cap copy, sim
   Release clean install boots, bundle contains the route.
+
+## 2026-10-03 (night) — Stamp pages: tickets, parking, AI panel, server GPS check
+- /attractions/visit-info { id }: Sonnet 5 fetches the official site (Wikidata P856) and
+  follows its links; web_search only without an official site. Code keeps a price only if
+  its page was fetched and states the amount; every number in text lines must be on the
+  page; labels' ages/words too. Live: Getty Villa = free + timed reservation + parking
+  $25 / $15 after 3pm / $10 after 6pm (6k tokens); Battleship Iowa = parking verified,
+  admission not (prices live in a booking widget; Sonnet's reseller prices were dropped by
+  the check — working as intended). Caps: 150/day signed-in (20 per traveler), 20/day
+  unsigned (5 per network). Cache 30 days, 3 when nothing found.
+- Cost to watch: Iowa read 113k input tokens on Sonnet 5 (138k on Opus 5); Getty 6k.
+  visit_info_lookup events in D1 carry in_tok/out_tok per lookup.
+- /attraction-ai-details accepts stamp ids (resolveStampGid → Google id, IDs-only text
+  search in a footprint-sized box). All 21 LA recommended stamps resolve.
+- handlePassportStamp: attraction stamps with a `fix` are distance-checked against the D1
+  row (ppStampRadius = server copy of stampRadius.js); too far → 409 not_here. No fix
+  (older builds) → old checks. ActivityDetail + NearbyStampPrompt send the fix.
+- "Add your order" copy + "Did you like it?" (migration 20261004100000 applied; worker live).
+- Gates: node --check, eslint, no-undef (app-wide 0), build 0, cap copy, sim clean boot,
+  bundle contains visit-info + "Add your order". App side ships with the next OTA.
