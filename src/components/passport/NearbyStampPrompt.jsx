@@ -59,7 +59,7 @@ export default function NearbyStampPrompt({ stamps, onStamped }) {
       const pos = await getFix();
       if (!pos || cancelled) return;
       const lat = pos.coords.latitude, lng = pos.coords.longitude, acc = pos.coords.accuracy;
-      setFix({ lat, lng });
+      setFix({ lat, lng, acc });
       const [near, ap] = await Promise.all([
         callWorker("attractions/nearby", { latitude: lat, longitude: lng, radiusKm: 2, limit: 12, includeSecrets: true, stampsOnly: true }).catch(() => ({ data: null })),
         airportAt(lat, lng, acc),
@@ -107,6 +107,8 @@ export default function NearbyStampPrompt({ stamps, onStamped }) {
         name: v ? v.name : a.name, city: a.city || null, region: a.region || a.state || null, country: a.country || null, cc: ccOf(a),
         lat: Number.isFinite(+a.lat) ? +a.lat : null, lng: Number.isFinite(+a.lng) ? +a.lng : null,
         visited_on: localISODate(), local_hour: new Date().getHours(), verified: "gps",
+        category: a.category || undefined,
+        ...(fix ? { fix } : {}), // the worker re-checks the distance (never stored)
         ...(a.film ? { film: a.film } : {}),
       });
     }

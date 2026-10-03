@@ -11,9 +11,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import MapAppSelector from '../components/MapAppSelector';
 import PhotoGalleryModal from '@/components/coffee/PhotoGalleryModal';
 import Guestbook from '@/components/Guestbook';
+import AttractionAIDetails from '@/components/AttractionAIDetails';
 import { invokeLLM, callWorker } from "@/lib/callWorker";
 import { addStamp, metersBetween } from "@/lib/passport";
 import { stampRadiusFor } from "@/lib/stampRadius";
+import { getCurrentPositionSmart } from "@/lib/geolocation";
 import { resolveStampVariant } from "@/lib/stampVariants";
 import { countryCode } from "@/lib/countries";
 import { localISODate } from "@/lib/localDate";
@@ -182,6 +184,10 @@ export default function ActivityDetailPage() {
               footprint_radius_m: row.footprint_radius_m ?? undefined,
               typical_minutes: (row.typicalMinutes ?? row.typical_minutes) ?? undefined,
               film: row.film || undefined,
+              website: row.website || undefined,
+              ticket_price: row.ticket_price || undefined,
+              ticket_url: row.ticket_url || undefined,
+              parking_text: row.parking_text || undefined,
             };
           }
         }
@@ -202,11 +208,51 @@ export default function ActivityDetailPage() {
         loadEnhancedDetails(activityData);
         loadOwnedPhotos(activityData);
         loadOwnedAddress(activityData);
+        loadAttractionFacts(activityData);
+        loadVisitInfo(activityData);
       }
     } catch (error) {
       console.error('Error loading activity:', error);
     }
     setLoading(false);
+  };
+
+  // The Home/Dream handoffs carry only the card fields; the stamp record has the
+  // rest (website, curated ticket + parking facts, footprint, category).
+  const isStampRecord = (a) => /^(curated|icon|wikidata|osm|places):|^[a-z]{2}-/.test(String(a?.id || ''));
+  const loadAttractionFacts = async (activityData) => {
+    if (!isStampRecord(activityData) || activityData.website !== undefined) return;
+    const { data } = await callWorker('attractions/get', { id: activityData.id });
+    const row = data?.attraction;
+    if (!row) return;
+    setActivity((prev) => (prev && prev.id === row.id ? {
+      ...prev,
+      website: prev.website || row.website || undefined,
+      ticket_price: prev.ticket_price || row.ticket_price || undefined,
+      ticket_url: prev.ticket_url || row.ticket_url || undefined,
+      parking_text: prev.parking_text || row.parking_text || undefined,
+      free_to_visit: prev.free_to_visit ?? row.freeToVisit,
+      category: prev.category || row.category,
+      footprint_radius_m: prev.footprint_radius_m ?? row.footprint_radius_m ?? undefined,
+      latitude: Number.isFinite(prev.latitude) ? prev.latitude : row.lat,
+      longitude: Number.isFinite(prev.longitude) ? prev.longitude : row.lng,
+    } : prev));
+  };
+
+  // Tickets by audience + parking, read from the official site by the worker and
+  // kept only where the fetched page states the amount (30-day cache; the first
+  // visitor waits up to a minute while it reads the pages).
+  const [visit, setVisit] = useState(null); // null | 'loading' | result
+  const loadVisitInfo = async (activityData) => {
+    if (!isStampRecord(activityData)) return;
+    setVisit('loading');
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data } = await callWorker('attractions/visit-info', { id: activityData.id }, { timeoutMs: 90000 });
+      if (data?.pending) { await new Promise((r) => setTimeout(r, 8000)); continue; }
+      setVisit(data && data.ok ? data : { ok: false, official_site: data?.official_site || null });
+      return;
+    }
+    setVisit({ ok: false });
   };
 
   // Owned address (#4): pull a free address from our Overture places table via the
@@ -275,28 +321,27 @@ export default function ActivityDetailPage() {
     setLoadingDetails(false);
   };
 
-  // Verified-only stamping (founder doctrine, 2026-10-02): a stamp is EARNED
-  // at the place — GPS inside the footprint — or later in the Passport with a
-  // photo whose own location/vision proves the visit. No honor-system claims.
+  // GPS-only stamping here (founder, 2026-10-03): the button stamps only when a
+  // fresh fix puts you inside the attraction's footprint — checked here, then
+  // again by the worker against its own coordinates (the fix rides along for
+  // that check and is never stored).
   const [stamping, setStamping] = useState(false);
   const [stamped, setStamped] = useState(false);
-  const [proofHelp, setProofHelp] = useState(false);
+  const [notHere, setNotHere] = useState(null); // null | { meters } | { noFix: true }
   const handleStamp = async () => {
     if (stamping || stamped) return;
     setStamping(true);
-    setProofHelp(false);
-    const placeLat = Number(activity.latitude ?? activityLocation?.latitude);
-    const placeLng = Number(activity.longitude ?? activityLocation?.longitude);
-    let gpsLat = null, gpsLng = null, here = false;
+    setNotHere(null);
+    const placeLat = Number(activity.latitude);
+    const placeLng = Number(activity.longitude);
+    let gpsLat = null, gpsLng = null, gpsAcc = null, meters = null;
     try {
-      const pos = await new Promise((res, rej) => {
-        if (!navigator.geolocation) return rej(new Error('no geo'));
-        navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 7000, maximumAge: 30000 });
-      });
-      gpsLat = pos.coords.latitude; gpsLng = pos.coords.longitude;
-      here = metersBetween(gpsLat, gpsLng, placeLat, placeLng) <= stampRadiusFor(activity);
-    } catch { /* no fix → not verifiable right now */ }
-    if (!here) { setStamping(false); setProofHelp(true); return; }
+      const pos = await getCurrentPositionSmart({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+      gpsLat = pos.coords.latitude; gpsLng = pos.coords.longitude; gpsAcc = pos.coords.accuracy ?? null;
+      meters = metersBetween(gpsLat, gpsLng, placeLat, placeLng);
+    } catch { /* no fix → can't verify right now */ }
+    if (meters == null || !Number.isFinite(meters)) { setStamping(false); setNotHere({ noFix: true }); return; }
+    if (meters > stampRadiusFor(activity) + Math.min(gpsAcc || 0, 100)) { setStamping(false); setNotHere({ meters }); return; }
     const variant = resolveStampVariant({ name: activity.name, lat: gpsLat, lng: gpsLng, country: activity.country, verified: 'gps' });
     const { data, error } = await addStamp({
       kind: 'attraction',
@@ -312,10 +357,13 @@ export default function ActivityDetailPage() {
       visited_on: localISODate(),
       local_hour: new Date().getHours(),
       verified: 'gps',
+      category: activity.category || undefined,
+      fix: { lat: gpsLat, lng: gpsLng, acc: gpsAcc },
       ...(activity.film?.title ? { film: activity.film } : {}),
     });
     setStamping(false);
-    if (data?.code === 'proof_needed') { setProofHelp(true); return; }
+    if (data?.code === 'not_here') { setNotHere({ meters: data.distance_m }); return; }
+    if (data?.code === 'proof_needed') { setNotHere({ meters: null }); return; }
     if (error) { showToast(/sign in/i.test(error) ? 'Sign in to stamp your Virtual Passport' : 'Could not add stamp'); return; }
     setStamped(true);
     showToast(data?.verified === 'gps' ? '✓ Verified — added to your Virtual Passport 🛂' : 'Added to your Virtual Passport 🛂');
@@ -592,7 +640,7 @@ export default function ActivityDetailPage() {
             </div>
           )}
 
-          {/* Verified stamping only: earned at the place, or by photo proof later */}
+          {/* GPS-only stamping: earned at the place */}
           <button
             onClick={handleStamp}
             disabled={stamping || stamped}
@@ -601,17 +649,13 @@ export default function ActivityDetailPage() {
           >
             {stamping ? 'Checking you are here…' : stamped ? '✓ In your Virtual Passport' : '📍 Stamp it — I\'m here'}
           </button>
-          {proofHelp && (
-            <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          {notHere && (
+            <div className="mt-2 mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
               <p className="text-[calc(13px*var(--fs))] text-amber-900">
-                Stamps are earned at the place — your GPS doesn&rsquo;t show you here right now.
-                Been before? Add it from your Passport with a photo from the visit: the photo&rsquo;s
-                own location and what&rsquo;s in it verify you were really there.
+                {notHere.noFix
+                  ? 'We need your location to stamp this — turn on Location for Globeskimmers, then tap again.'
+                  : `This stamp is earned at the place${Number.isFinite(notHere.meters) ? ` — you\'re about ${displayDistance(notHere.meters / 1000)} away` : ''}. Tap again when you\'re here.`}
               </p>
-              <button onClick={() => navigate(createPageUrl('Passport'))}
-                className="mt-2 text-[calc(13px*var(--fs))] font-bold text-amber-900 underline underline-offset-2">
-                Open my Passport →
-              </button>
             </div>
           )}
           {/* Movie scene spot: the film behind the place (plain text — no stills, no logos) */}
@@ -731,15 +775,14 @@ export default function ActivityDetailPage() {
         {/* Tab Content */}
         {activeTab === 'overview' && (
           <div className="space-y-4">
-            {activity.parking_text && (
-              <div className="bg-white rounded-xl shadow-md p-5">
-                <h3 className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-purple-600" />
-                  Parking
-                </h3>
-                <p className="text-[calc(14px*var(--fs))] text-gray-700 whitespace-pre-line">{activity.parking_text}</p>
-              </div>
-            )}
+            <TicketsCard activity={activity} visit={visit} />
+
+            <ParkingCard activity={activity} visit={visit} />
+
+            {/* The same AI panel as the Things to Do card (shared cache) */}
+            <div className="bg-white rounded-xl shadow-md p-4">
+              <AttractionAIDetails placeId={activity.placeId || activity.id} placeName={activity.name} page="ActivityDetail" />
+            </div>
 
             {/* Opening Hours Section */}
             {activity.opening_hours && activity.opening_hours.weekday_text && activity.opening_hours.weekday_text.length > 0 && (
@@ -790,36 +833,6 @@ export default function ActivityDetailPage() {
                 </div>
               </div>
             )}
-
-            {/* Pricing — real ticket facts when curated; honest fallbacks otherwise */}
-            <div className="bg-white rounded-xl shadow-md p-5">
-              <h3 className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-3 flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-green-600" />
-                Pricing
-              </h3>
-              {activity.ticket_price ? (
-                <div>
-                  <p className="text-[calc(22px*var(--fs))] font-bold text-gray-900">{activity.ticket_price}</p>
-                  {activity.ticket_url ? (
-                    <a href={activity.ticket_url} target="_blank" rel="noopener noreferrer"
-                      className="mt-2 inline-block rounded-xl bg-green-600 text-white px-4 py-2 font-bold text-[calc(14px*var(--fs))]">
-                      Get tickets online here ↗
-                    </a>
-                  ) : (
-                    <p className="text-[calc(13px*var(--fs))] text-gray-500 mt-1">Tickets available at the gate.</p>
-                  )}
-                </div>
-              ) : activity.freeToVisit ? (
-                <p className="text-[calc(18px*var(--fs))] font-bold text-green-700">Free to visit</p>
-              ) : (activity.website || activity.websiteUri) ? (
-                <a href={activity.website || activity.websiteUri} target="_blank" rel="noopener noreferrer"
-                  className="text-[calc(14px*var(--fs))] font-semibold text-purple-700 underline underline-offset-2">
-                  See prices &amp; tickets on the official site ↗
-                </a>
-              ) : (
-                <p className="text-[calc(13px*var(--fs))] text-gray-500">Contact the venue for ticket prices.</p>
-              )}
-            </div>
 
             {(loadingDetails || llmTips.length > 0 || activity.tip) && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
@@ -938,5 +951,150 @@ export default function ActivityDetailPage() {
       )}
 
     </div>
+  );
+}
+
+// ── Tickets + parking cards ───────────────────────────────────────────────────
+// Fed by /attractions/visit-info: every amount shown was read on the page named
+// in the source line (the worker drops any price that page doesn't state).
+// Curated D1 facts win when present. Nothing found → the official site, never a guess.
+const AUDIENCE_ORDER = ['adult', 'child', 'youth', 'student', 'senior', 'military', 'resident', 'family', 'other'];
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return null; } };
+const checkedOn = (iso) => { try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch { return null; } };
+
+function SourceLine({ url, checkedAt }) {
+  const host = hostOf(url);
+  if (!host) return null;
+  return (
+    <p className="mt-3 text-[calc(11.5px*var(--fs))] text-gray-500">
+      From <a href={url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">{host}</a>
+      {checkedAt ? ` · checked ${checkedOn(checkedAt)}` : ''} · prices can change
+    </p>
+  );
+}
+
+function CardShell({ icon, title, children }) {
+  return (
+    <div className="bg-white rounded-xl shadow-md p-5">
+      <h3 className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-3 flex items-center gap-2">
+        {icon}
+        {title}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+function OfficialLink({ url, label }) {
+  if (!url) return <p className="text-[calc(13px*var(--fs))] text-gray-500">Contact the venue for details.</p>;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+      className="text-[calc(14px*var(--fs))] font-semibold text-purple-700 underline underline-offset-2">
+      {label} ↗
+    </a>
+  );
+}
+
+function TicketsCard({ activity, visit }) {
+  const official = (visit && visit.official_site) || activity.website || activity.websiteUri || null;
+  const icon = <DollarSign className="w-5 h-5 text-green-600" />;
+  if (activity.ticket_price) {
+    return (
+      <CardShell icon={icon} title="Tickets">
+        <p className="text-[calc(22px*var(--fs))] font-bold text-gray-900">{activity.ticket_price}</p>
+        {activity.ticket_url && (
+          <a href={activity.ticket_url} target="_blank" rel="noopener noreferrer"
+            className="mt-2 inline-block rounded-xl bg-green-600 text-white px-4 py-2 font-bold text-[calc(14px*var(--fs))]">
+            Get tickets ↗
+          </a>
+        )}
+      </CardShell>
+    );
+  }
+  if (visit === 'loading') {
+    return (
+      <CardShell icon={icon} title="Tickets">
+        <p className="text-[calc(13px*var(--fs))] text-gray-500 mb-2">Checking the official site for current prices…</p>
+        <div className="space-y-2" aria-hidden="true">
+          <div className="h-3.5 rounded bg-gray-200 animate-pulse w-3/4" />
+          <div className="h-3.5 rounded bg-gray-200 animate-pulse w-2/3" />
+          <div className="h-3.5 rounded bg-gray-200 animate-pulse w-1/2" />
+        </div>
+      </CardShell>
+    );
+  }
+  const a = visit && visit.ok ? visit.admission : null;
+  const prices = a ? [...a.prices].sort((x, y) => AUDIENCE_ORDER.indexOf(x.audience) - AUDIENCE_ORDER.indexOf(y.audience)) : [];
+  const free = a?.free === true || (!a && (activity.free_to_visit ?? activity.freeToVisit) === true);
+  const hasAny = free || prices.length || a?.discounts?.length || a?.free_days || a?.reservation;
+  return (
+    <CardShell icon={icon} title="Tickets">
+      {!hasAny && <OfficialLink url={a?.buy_url || official} label="See prices & tickets on the official site" />}
+      {free && <p className="text-[calc(18px*var(--fs))] font-bold text-green-700">Free admission</p>}
+      {prices.length > 0 && (
+        <div className="divide-y divide-gray-100">
+          {prices.map((p, i) => (
+            <div key={i} className="flex items-baseline justify-between gap-3 py-2">
+              <span className="text-[calc(14px*var(--fs))] text-gray-800 min-w-0">
+                {p.label}
+                {p.note && <span className="block text-[calc(12px*var(--fs))] text-gray-500">{p.note}</span>}
+              </span>
+              <span className="text-[calc(16px*var(--fs))] font-bold text-gray-900 flex-none">{p.amount === 0 ? 'Free' : (p.amount_text || `${p.amount}`)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {a?.discounts?.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {a.discounts.map((d, i) => (
+            <li key={i} className="text-[calc(13.5px*var(--fs))] text-gray-700 flex gap-2"><span className="text-green-600">✓</span><span>{d.label}</span></li>
+          ))}
+        </ul>
+      )}
+      {a?.free_days && <p className="mt-2 text-[calc(13.5px*var(--fs))] text-gray-700">🗓️ {a.free_days}</p>}
+      {a?.reservation && <p className="mt-2 text-[calc(13.5px*var(--fs))] text-gray-700">🎟️ {a.reservation}</p>}
+      {hasAny && (a?.buy_url || official) && (
+        <a href={a?.buy_url || official} target="_blank" rel="noopener noreferrer"
+          className="mt-3 inline-block rounded-xl bg-green-600 text-white px-4 py-2 font-bold text-[calc(14px*var(--fs))]">
+          {free ? 'Reserve / plan your visit ↗' : 'Get tickets ↗'}
+        </a>
+      )}
+      {hasAny && a && <SourceLine url={a.source_url || official} checkedAt={visit.checked_at} />}
+    </CardShell>
+  );
+}
+
+function ParkingCard({ activity, visit }) {
+  const icon = <MapPin className="w-5 h-5 text-purple-600" />;
+  if (activity.parking_text) {
+    return (
+      <CardShell icon={icon} title="Parking">
+        <p className="text-[calc(14px*var(--fs))] text-gray-700 whitespace-pre-line">{activity.parking_text}</p>
+      </CardShell>
+    );
+  }
+  if (visit === 'loading' || !visit) return null;
+  const pk = visit.ok ? visit.parking : null;
+  const official = visit.official_site || activity.website || null;
+  if (!pk?.options?.length && !pk?.note) {
+    return official ? (
+      <CardShell icon={icon} title="Parking">
+        <OfficialLink url={official} label="Parking details on the official site" />
+      </CardShell>
+    ) : null;
+  }
+  return (
+    <CardShell icon={icon} title="Parking">
+      <div className="divide-y divide-gray-100">
+        {pk.options.map((o, i) => (
+          <div key={i} className="py-2">
+            <p className="text-[calc(14px*var(--fs))] font-semibold text-gray-800">{o.label}</p>
+            {o.price_text && <p className="text-[calc(13.5px*var(--fs))] text-gray-600">{o.price_text}</p>}
+          </div>
+        ))}
+      </div>
+      {pk.note && <p className="mt-2 text-[calc(13.5px*var(--fs))] text-gray-700">{pk.note}</p>}
+      <SourceLine url={pk.source_url || official} checkedAt={visit.checked_at} />
+    </CardShell>
   );
 }
