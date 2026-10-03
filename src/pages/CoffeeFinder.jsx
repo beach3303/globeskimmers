@@ -13,6 +13,7 @@ import { logEvent } from "@/lib/analytics";
 import { logSearch, logZeroResults } from "@/lib/logSearch";
 import { matchesQuery } from "@/lib/searchText";
 import AIDetailsSection from "@/components/AIDetailsSection";
+import TravelerDishes from "@/components/finder/TravelerDishes";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import { Coffee as CoffeeIcon, SlidersHorizontal, Sparkles } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
@@ -327,6 +328,7 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
         <div style={{display:"flex",flexDirection:"column",gap:fs(z(12,10)),marginTop:fs(z(18,13))}}>
           <CafeWorkProfileSection placeId={shop.placeId || shop.id} placeName={name} lat={shop.lat} lng={shop.lng}/>
           <AIDetailsSection placeId={shop.placeId || shop.id} placeName={name} lat={shop.lat} lng={shop.lng} page="CoffeeFinder" kind="coffee"/>
+          <TravelerDishes place={{ id: shop.placeId || shop.id, name, lat: shop.lat, lng: shop.lng }} kind="coffee"/>
         </div>
 
         {/* Actions */}

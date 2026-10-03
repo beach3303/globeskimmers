@@ -44,6 +44,7 @@ import { ROUTE } from "@/lib/workerRoutes";
 import { logEvent } from "@/lib/analytics";
 import { logSearch, logZeroResults } from "@/lib/logSearch";
 import AIDetailsSection from "@/components/AIDetailsSection";
+import TravelerDishes from "@/components/finder/TravelerDishes";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
 import { MapPin, Utensils, Clock, SlidersHorizontal, SearchX, AlertCircle } from "lucide-react";
@@ -780,6 +781,9 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
         {/* AI details — on the front card, above the actions */}
         <div style={{marginTop:t(fs(18),fs(13))}}>
           <AIDetailsSection placeId={restaurant.placeId||restaurant.id} placeName={name} lat={restaurant.lat} lng={restaurant.lng} page="PlacesToEat" kind="restaurant"/>
+        </div>
+        <div style={{marginTop:t(fs(12),fs(10))}}>
+          <TravelerDishes place={{id:restaurant.placeId||restaurant.id,name,lat:restaurant.lat,lng:restaurant.lng}} kind="restaurant"/>
         </div>
 
         {/* Actions */}
