@@ -1217,3 +1217,23 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   (sign-in gate) — first visual check is the founder's phone after `npm run ota`.
 - Seen while verifying, not changed: review-word chips can be vague ("Heads up: avoid",
   "What people love: amazing") — the list already showed them; candidate polish.
+
+## 2026-10-03 (late) — Things to Do review chips tidied (f2af89d)
+- Founder: "Yes please tidy the chips" (after "Heads up: expensive · avoid" on Universal).
+  Correction to the previous entry: list results carry no reviews (0 of 108 LA list cards
+  had review chips), so these chips only reached stamp-tap cards (Place Details, 5 reviews)
+  — they became visible with bae9381.
+- What people love = a named part praised in the same sentence (views, rides, studio tour,
+  exhibits, trails…), never a bare superlative. Heads up = crowds / pricey / long lines /
+  tricky parking only; negated sentences never count. Best time = reviewers' advice (go
+  early, weekdays, sunset). Each needs ≥2 of the reviews read.
+- Text property chips: the name, or ≥2 reviews (list cards unchanged — 9/10 synthetic
+  review-less places identical; the one change is intended: "inside" no longer = Indoor).
+  Badges that repeated a property chip removed (Adults Only stays). Word fixes: date ≠
+  couples, free ≠ budget, complimentary/no charge ≠ free entry; Free Entry ⇒ Budget Friendly.
+- Verified live: Universal → love attention to detail · studio tour · rides; heads up crowds ·
+  pricey; best time Go early; chips Family Friendly · Adventure · Accessible, no badges.
+  The Broad → exhibits · art. Yosemite → views · trails, no heads up (was "loud, too hot").
+- Trade-off: a fact one reviewer states (Griffith Observatory's free entry) no longer makes a
+  chip; the Tickets card carries verified prices.
+- Worker only — no app change. Phones still need `npm run ota` for e3f07ce (the card layout).
