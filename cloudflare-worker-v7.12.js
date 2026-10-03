@@ -7312,8 +7312,6 @@ const VISIT_RESELLERS = ['viator.com', 'getyourguide.com', 'klook.com', 'tiqets.
 const VISIT_PLATFORMS = ['facebook.com', 'instagram.com', 'x.com', 'twitter.com', 'linktr.ee', 'google.com', 'yelp.com', 'wikipedia.org'];
 const VISIT_INFO_DAILY_CAP = 150;   // fresh lookups per day, all travelers
 const VISIT_INFO_USER_CAP = 20;     // fresh lookups per traveler per day
-const VISIT_INFO_ANON_CAP = 20;     // fresh lookups per day without sign-in (all networks)
-const VISIT_INFO_IP_CAP = 5;        // … and per network
 const VISIT_AUDIENCES = new Set(['adult', 'child', 'youth', 'student', 'senior', 'military', 'resident', 'family', 'other']);
 const VISIT_INFO_PROMPT = [
   'You find current visitor prices for ONE attraction, for a travel app that never guesses.',
@@ -7479,6 +7477,13 @@ async function handleAttractionVisitInfo(request, env, ctx) {
     const cached = kv ? await kv.get(cacheKey, { type: 'json' }).catch(() => null) : null;
     if (cached) return jsonResponse({ ...cached, _cache: 'hit' });
 
+    // A saved result is free for anyone to read; a NEW lookup is paid (Claude +
+    // search, and Google details for a Google id), so only a signed-in traveler
+    // starts one (founder, 2026-10-03: the app is signed-in only — this closes
+    // the door to callers outside it).
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'sign_in', message: 'Sign in to look up prices' }, 401);
+
     // SELECT * — the facts columns (website, ticket_price, parking_text) only
     // exist once scripts/city-icons/data/add_attraction_facts.sql has run.
     // Any Things to Do place works too: a Google id reads its name and website
@@ -7491,21 +7496,15 @@ async function handleAttractionVisitInfo(request, env, ctx) {
       row = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(id).first().catch(() => null);
     }
     if (!row) return jsonResponse({ error: 'Not found' }, 404);
-    const user = await gbUser(request, env);
     if (!env.ANTHROPIC_API_KEY) return jsonResponse({ error: 'not configured' }, 500);
-    let who = user?.id;
-    if (!who) {
-      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`visit:${ip}`));
-      who = 'ip-' + [...new Uint8Array(h)].slice(0, 8).map((x) => x.toString(16).padStart(2, '0')).join('');
-    }
+    const who = user.id;
 
     if (kv) {
       if (await kv.get(`visit:lock:${id}`).catch(() => null)) return jsonResponse({ pending: true });
       const day = new Date().toISOString().slice(0, 10);
-      const gk = user ? `visit:cap:${day}` : `visit:cap:anon:${day}`, uk = `visit:cap:${who}:${day}`;
+      const gk = `visit:cap:${day}`, uk = `visit:cap:${who}:${day}`;
       const [g, u] = await Promise.all([kv.get(gk).catch(() => 0), kv.get(uk).catch(() => 0)]);
-      if ((Number(g) || 0) >= (user ? VISIT_INFO_DAILY_CAP : VISIT_INFO_ANON_CAP) || (Number(u) || 0) >= (user ? VISIT_INFO_USER_CAP : VISIT_INFO_IP_CAP)) return jsonResponse({ error: 'busy', message: 'Price lookups are paused for today — check the official site' }, 429);
+      if ((Number(g) || 0) >= VISIT_INFO_DAILY_CAP || (Number(u) || 0) >= VISIT_INFO_USER_CAP) return jsonResponse({ error: 'busy', message: 'Price lookups are paused for today — check the official site' }, 429);
       await Promise.all([
         kv.put(gk, String((Number(g) || 0) + 1), { expirationTtl: 2 * 86400 }),
         kv.put(uk, String((Number(u) || 0) + 1), { expirationTtl: 2 * 86400 }),
