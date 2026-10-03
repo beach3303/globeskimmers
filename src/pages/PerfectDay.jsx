@@ -378,7 +378,7 @@ export default function PerfectDay() {
     setSaved(null);
     setSelected([]);
     setDayStops([]);
-    setLunch(null); setDinner(null); setEvt(null);
+    setLunch(null); setDinner(null);
     setStage("pick");
   };
 

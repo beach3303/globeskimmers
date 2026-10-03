@@ -48,9 +48,10 @@ function resizePhoto(file, maxDim = 1280, quality = 0.82) {
   });
 }
 
-export default function Guestbook({ entityType = "place", entityId, entityName }) {
+export default function Guestbook({ entityType = "place", entityId, entityName, onCount }) {
   const { user, profile, isAuthenticated } = useAuth();
   const [entries, setEntries] = useState([]);
+  useEffect(() => { onCount?.(entries.length); }, [entries.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState(false);
   const [prompt, setPrompt] = useState("tip");
@@ -79,7 +80,6 @@ export default function Guestbook({ entityType = "place", entityId, entityName }
 
   const resetCompose = () => {
     setComposing(false); setBody("");
-    setPhotoPreview(null); setPhotoData(null); setUploadingPhoto(false);
   };
 
   const postDoodle = async (dataUrl) => {
@@ -204,8 +204,8 @@ export default function Guestbook({ entityType = "place", entityId, entityName }
               <span className="text-[calc(11px*var(--fs))] text-gray-400">{body.length}/1000 · posts publicly as {displayName}</span>
               <div className="flex gap-2">
                 <button onClick={resetCompose} className="px-4 py-2 rounded-lg text-[calc(13px*var(--fs))] text-gray-600">Cancel</button>
-                <button onClick={submit} disabled={busy || uploadingPhoto} className="px-5 py-2 rounded-lg font-semibold text-white text-[calc(13px*var(--fs))] disabled:opacity-50" style={{ background: "#17A38F" }}>
-                  {busy ? "Signing…" : uploadingPhoto ? "Photo…" : "Sign"}
+                <button onClick={submit} disabled={busy} className="px-5 py-2 rounded-lg font-semibold text-white text-[calc(13px*var(--fs))] disabled:opacity-50" style={{ background: "#17A38F" }}>
+                  {busy ? "Signing…" : "Sign"}
                 </button>
               </div>
             </div>
