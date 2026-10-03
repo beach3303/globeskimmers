@@ -8219,16 +8219,6 @@ async function handleMoneyExchange(request, env, ctx) {
       }).catch(() => []);
     }
 
-    // Live mid-market rate (never cached). Per-location variance applied below.
-    let baseRate = null;
-    if (fromCurrency && toCurrency && env.EXCHANGERATE_API_KEY) {
-      try {
-        const r = await fetch(`https://v6.exchangerate-api.com/v6/${env.EXCHANGERATE_API_KEY}/pair/${fromCurrency}/${toCurrency}`);
-        const d = await r.json();
-        if (d.result === 'success') baseRate = d.conversion_rate;
-      } catch { /* rate is optional; locations still return */ }
-    }
-
     const today = new Date().getDay();
     const locations = [];
     for (const place of places) {
@@ -8242,8 +8232,10 @@ async function handleMoneyExchange(request, env, ctx) {
       const isOpen = place.currentOpeningHours?.openNow ?? place.regularOpeningHours?.openNow ?? place.isOpen ?? false;
       if (openOnly && !isOpen) continue;
 
-      let rate = null;
-      if (baseRate) rate = baseRate * (1 + ((Math.random() * 0.04) - 0.02)); // ±2%
+      // No per-office rate: we don't know any office's real rate, and a
+      // randomized one dressed up as theirs is a lie (Honest UX). The page
+      // shows the real market rate on its own; offices show none.
+      const rate = null;
 
       const weekday = place.currentOpeningHours?.weekdayDescriptions
         || place.regularOpeningHours?.weekdayDescriptions
@@ -8267,7 +8259,7 @@ async function handleMoneyExchange(request, env, ctx) {
 
     if (sortBy === 'rate') {
       const withRates = locations.filter(l => l.exchange_rate != null).sort((a, b) => b.exchange_rate - a.exchange_rate);
-      const withoutRates = locations.filter(l => l.exchange_rate == null);
+      const withoutRates = locations.filter(l => l.exchange_rate == null).sort((a, b) => a.distance_miles - b.distance_miles);
       locations.length = 0;
       locations.push(...withRates, ...withoutRates);
     } else {
