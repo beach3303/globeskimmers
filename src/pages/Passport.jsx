@@ -26,6 +26,7 @@ import StampActions from "@/components/passport/StampActions";
 import Luggage from "@/components/passport/Luggage";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import HeldHandleClaim from "@/components/passport/HeldHandleClaim";
+import PhotoFooter from "@/components/passport/PhotoFooter";
 
 
 // ============================================================================
@@ -814,9 +815,9 @@ function PassportInner() {
   useEffect(() => { if (actionsId && !stampsView.some((s) => s.id === actionsId)) setActionsId(null); }, [stampsView, actionsId]);
   // Every memory photo of a stamp, in the lightbox's shape, opened at `index`.
   const enlargeStampPhotos = (st, index) => {
-    const photos = (st.photos || []).map((p) => ({ src: p.photo_url }));
+    const photos = (st.photos || []).map((p) => ({ src: p.photo_url, id: p.id, caption: p.caption || null, food: Number(p.food_subject) === 1 }));
     if (!photos.length) return;
-    setLightbox({ photos, index: Math.min(Math.max(index || 0, 0), photos.length - 1), title: `I was here! ${st.name}`, credit: st.visited_on ? fmtDate(st.visited_on) : null });
+    setLightbox({ photos, index: Math.min(Math.max(index || 0, 0), photos.length - 1), title: `I was here! ${st.name}`, credit: st.visited_on ? fmtDate(st.visited_on) : null, social: true });
   };
 
   return (
@@ -1131,6 +1132,13 @@ function PassportInner() {
         onIndexChange={(i) => setLightbox((l) => (l ? { ...l, index: i } : l))}
         title={lightbox?.title}
         credit={lightbox?.credit}
+        renderFooter={lightbox?.social && !preview ? (ph) => (
+          <PhotoFooter key={ph.id} photo={ph} slug={blSlug} blotter={blotter} ownerView={!readOnly} onChanged={refreshBlotter}
+            onCaption={(id, caption) => {
+              setLightbox((l) => (l ? { ...l, photos: l.photos.map((x) => (x.id === id ? { ...x, caption } : x)) } : l));
+              setStamps((prev) => prev.map((st) => (st.photos?.some((x) => x.id === id) ? { ...st, photos: st.photos.map((x) => (x.id === id ? { ...x, caption } : x)) } : st)));
+            }} />
+        ) : null}
       />
     </div>
   );

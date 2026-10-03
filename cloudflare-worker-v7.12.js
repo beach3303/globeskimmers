@@ -13458,7 +13458,9 @@ async function handlePassportPhotoUpload(request, env, ctx) {
     await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
     const origin = new URL(request.url).origin;
     const photoUrl = `${origin}/pp-photo/${key}`;
-    await gbRest(env, 'passport_stamp_photos', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ stamp_id: stampId, user_id: user.id, photo_key: key, photo_url: photoUrl, caption: b.caption ? String(b.caption).slice(0, 200) : null }) });
+    let upCaption = b.caption ? String(b.caption).replace(/\s+/g, ' ').trim().slice(0, 200) || null : null;
+    if (upCaption && !(await gbModerate(env, upCaption)).allow) upCaption = null;
+    await gbRest(env, 'passport_stamp_photos', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ stamp_id: stampId, user_id: user.id, photo_key: key, photo_url: photoUrl, caption: upCaption }) });
     // If the booklet is ALREADY public, review this photo now (async) — the
     // public-flip sweep only runs at flip time, so without this a photo added
     // later would never earn mod_status 'ok' and never show to friends.
@@ -13664,6 +13666,27 @@ async function handleStampArtServe(request, env) {
   } catch { return new Response('Error', { status: 500 }); }
 }
 
+// POST /passport/photo/caption { photo_id, caption } — the owner's line under
+// a photo (≤200 chars, moderated like guestbook notes; '' clears it).
+async function handlePassportPhotoCaption(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.photo_id || '');
+    if (!BL_UUID.test(id)) return jsonResponse({ error: 'Not found' }, 404);
+    const caption = String(b.caption || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (caption) {
+      const mod = await gbModerate(env, caption);
+      if (!mod.allow) return jsonResponse({ error: 'Let\u2019s keep captions kind \u2014 try different words' }, 422);
+    }
+    const w = await gbRest(env, `passport_stamp_photos?id=eq.${id}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ caption: caption || null }) });
+    const rows = w.ok ? await w.json() : [];
+    if (!rows.length) return jsonResponse({ error: 'Not found' }, 404);
+    return jsonResponse({ ok: true, caption: caption || null });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // Serve a stamp photo from R2 (unguessable key). Private-by-obscurity.
 async function handlePassportPhotoServe(request, env) {
   try {
@@ -13739,13 +13762,31 @@ async function handlePassportDelete(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const stampId = String(b.stamp_id || '');
     if (!stampId) return jsonResponse({ error: 'stamp_id required' }, 400);
-    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=eq.${stampId}&user_id=eq.${user.id}&select=photo_key`, {});
-    const keys = (pq.ok ? await pq.json() : []).map((p) => p.photo_key).filter(Boolean);
+    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=eq.${stampId}&user_id=eq.${user.id}&select=id,photo_key`, {});
+    const prow = pq.ok ? await pq.json() : [];
+    const keys = prow.map((p) => p.photo_key).filter(Boolean);
     const del = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
     if (!del.ok) return jsonResponse({ error: 'delete failed' }, 502);
+    await blPurgeTargets(env, user.id, [`st:${stampId}`, ...prow.map((p) => `ph:${p.id}`)], ctx);
     if (keys.length && env.MEDIA && ctx) ctx.waitUntil(Promise.all(keys.map((k) => env.MEDIA.delete(k).catch(() => {}))));
     return jsonResponse({ ok: true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// Wipe every reaction, comment and doodle aimed at these targets (owner's
+// own blotter only). Co-signs cascade with their entries.
+async function blPurgeTargets(env, ownerId, targets, ctx) {
+  const list = (targets || []).filter((t) => /^(st|ph):[0-9a-f-]{36}$/i.test(t));
+  if (!list.length) return;
+  const inList = `in.(${list.map((t) => encodeURIComponent(`"${t}"`)).join(',')})`;
+  const eq = await gbRest(env, `blotter_entries?owner_user_id=eq.${ownerId}&target=${inList}&select=id,doodle_key`, {});
+  const rows = eq.ok ? await eq.json() : [];
+  await Promise.all([
+    gbRest(env, `blotter_marks?owner_user_id=eq.${ownerId}&target=${inList}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+    gbRest(env, `blotter_entries?owner_user_id=eq.${ownerId}&target=${inList}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+  ]);
+  const keys = rows.map((r) => r.doodle_key).filter(Boolean);
+  if (keys.length && env.MEDIA && ctx) ctx.waitUntil(Promise.all(keys.map((k) => env.MEDIA.delete(k).catch(() => {}))));
 }
 
 // Delete one photo + its R2 object.
@@ -13761,6 +13802,7 @@ async function handlePassportPhotoDelete(request, env, ctx) {
     if (!row) return jsonResponse({ error: 'not found' }, 404);
     await gbRest(env, `passport_stamp_photos?id=eq.${photoId}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
     if (row.photo_key && env.MEDIA && ctx) ctx.waitUntil(env.MEDIA.delete(row.photo_key).catch(() => {}));
+    await blPurgeTargets(env, user.id, [`ph:${photoId}`], ctx);
     return jsonResponse({ ok: true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -14141,6 +14183,23 @@ async function blStamp(env, share, target) {
   const st = (q.ok ? await q.json() : [])[0];
   return st && !st.hidden ? st : null;
 }
+// 'st:<uuid>' or 'ph:<uuid>' → { st, photo?, target }. A photo resolves
+// through its stamp (so ownership, hidden stamps and every blGate rail apply
+// unchanged), and a visitor reaches only a photo that passed moderation.
+async function blTarget(env, share, target, viewerId) {
+  const t = String(target || '');
+  if (t.startsWith('st:')) {
+    const st = await blStamp(env, share, t);
+    return st ? { st, target: `st:${st.id}` } : null;
+  }
+  const m = /^ph:([0-9a-f-]{36})$/i.exec(t);
+  if (!m || !BL_UUID.test(m[1])) return null;
+  const pq = await gbRest(env, `passport_stamp_photos?id=eq.${m[1]}&user_id=eq.${share.user_id}&select=id,stamp_id,mod_status,food_subject`, {});
+  const photo = (pq.ok ? await pq.json() : [])[0];
+  if (!photo || (viewerId !== share.user_id && photo.mod_status !== 'ok')) return null;
+  const st = await blStamp(env, share, `st:${photo.stamp_id}`);
+  return st ? { st, photo, target: `ph:${photo.id}` } : null;
+}
 // I WANNA GO rewards the liker: the place lands on their own On the Horizon.
 async function blAddHorizon(env, userId, st) {
   try {
@@ -14167,13 +14226,17 @@ async function handleBlotterMark(request, env, ctx) {
     const share = await blShare(env, b.slug);
     const gate = await blGate(env, user, share);
     if (gate) return jsonResponse({ error: gate }, gate === 'Not found' ? 404 : 403);
-    const st = await blStamp(env, share, b.target);
-    if (!st) return jsonResponse({ error: 'Not found' }, 404);
-    const target = `st:${st.id}`;
+    const tgt = await blTarget(env, share, b.target, user.id);
+    if (!tgt) return jsonResponse({ error: 'Not found' }, 404);
+    const { st, target } = tgt;
     if (op === 'press' && kind === 'yummy') {
       // YUMMY only where food is the star (vision-tagged at the public flip).
-      const fq = await gbRest(env, `passport_stamp_photos?stamp_id=eq.${st.id}&food_subject=eq.1&mod_status=eq.ok&select=id&limit=1`, {});
-      if (!(fq.ok && (await fq.json()).length)) return jsonResponse({ error: 'YUMMY belongs on food photos' }, 400);
+      if (tgt.photo) {
+        if (!(Number(tgt.photo.food_subject) === 1 && tgt.photo.mod_status === 'ok')) return jsonResponse({ error: 'YUMMY belongs on food photos' }, 400);
+      } else {
+        const fq = await gbRest(env, `passport_stamp_photos?stamp_id=eq.${st.id}&food_subject=eq.1&mod_status=eq.ok&select=id&limit=1`, {});
+        if (!(fq.ok && (await fq.json()).length)) return jsonResponse({ error: 'YUMMY belongs on food photos' }, 400);
+      }
     }
     if (op === 'press') {
       const w = await gbRest(env, 'blotter_marks?on_conflict=target,user_id,kind', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ owner_user_id: share.user_id, target, user_id: user.id, kind }) });
@@ -14220,7 +14283,8 @@ async function handleBlotterSign(request, env, ctx) {
     const share = await blShare(env, b.slug);
     const gate = await blGate(env, user, share, { identity: true });
     if (gate) return jsonResponse({ error: gate }, gate === 'Not found' ? 404 : 403);
-    const st = await blStamp(env, share, b.target);
+    const tgt = await blTarget(env, share, b.target, user.id);
+    const st = tgt ? tgt.st : null;
     if (!st) return jsonResponse({ error: 'Not found' }, 404);
 
     const text = String(b.text || '').trim().slice(0, 280);
@@ -14248,7 +14312,7 @@ async function handleBlotterSign(request, env, ctx) {
       const mod = await gbModerate(env, text);
       if (!mod.allow) return jsonResponse({ error: "Let's keep the guestbook kind" }, 400);
     }
-    const w = await gbRest(env, 'blotter_entries', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ owner_user_id: share.user_id, target: `st:${st.id}`, author_user_id: user.id, body: text || null, doodle_key: doodleKey }) });
+    const w = await gbRest(env, 'blotter_entries', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ owner_user_id: share.user_id, target: tgt.target, author_user_id: user.id, body: text || null, doodle_key: doodleKey }) });
     if (!w.ok) return jsonResponse({ error: 'Could not sign' }, 502);
     const row = (await w.json())[0];
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'blotter_sign', { doodle: !!doodleKey }));
@@ -14295,7 +14359,7 @@ async function handleBlotterSweep(request, env, ctx) {
     if (b.op === 'mark') {
       const kind = String(b.kind || '');
       const target = String(b.target || '');
-      if (!BL_KINDS.has(kind) || !/^st:[0-9a-f-]{36}$/i.test(target)) return jsonResponse({ error: 'Not found' }, 404);
+      if (!BL_KINDS.has(kind) || !/^(st|ph):[0-9a-f-]{36}$/i.test(target)) return jsonResponse({ error: 'Not found' }, 404);
       await gbRest(env, `blotter_marks?owner_user_id=eq.${user.id}&target=eq.${encodeURIComponent(target)}&kind=eq.${kind}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
     } else if (b.op === 'entry') {
       const id = String(b.entry_id || '');
@@ -14325,10 +14389,34 @@ async function handleBlotterRead(request, env) {
     const owner = share.user_id;
     const [mq, eq2] = await Promise.all([
       gbRest(env, `blotter_marks?owner_user_id=eq.${owner}&select=target,kind,user_id&limit=4000`, {}),
-      gbRest(env, `blotter_entries?owner_user_id=eq.${owner}&order=created_at.asc&select=id,target,author_user_id,body,doodle_key,created_at,updated_at&limit=400`, {}),
+      gbRest(env, `blotter_entries?owner_user_id=eq.${owner}&order=created_at.desc&select=id,target,author_user_id,body,doodle_key,created_at,updated_at&limit=800`, {}),
     ]);
-    const marks = mq.ok ? await mq.json() : [];
-    let entries = eq2.ok ? await eq2.json() : [];
+    let marks = mq.ok ? await mq.json() : [];
+    let entries = (eq2.ok ? await eq2.json() : []).reverse();
+    // Defense in depth: a visitor sees blotter activity only on targets they
+    // can see — a stamp that still exists and isn't hidden, a photo that
+    // passed moderation (orphans from before the delete-purge never surface).
+    if (!isOwner) {
+      const all = [...new Set([...marks, ...entries].map((r) => String(r.target || '')))];
+      const stIds = all.filter((t) => t.startsWith('st:')).map((t) => t.slice(3)).filter((x) => BL_UUID.test(x));
+      const phIds = all.filter((t) => t.startsWith('ph:')).map((t) => t.slice(3)).filter((x) => BL_UUID.test(x));
+      const [sq, pq] = await Promise.all([
+        stIds.length ? gbRest(env, `passport_stamps?id=in.(${stIds.slice(0, 300).join(',')})&user_id=eq.${owner}&hidden=eq.false&select=id`, {}) : null,
+        phIds.length ? gbRest(env, `passport_stamp_photos?id=in.(${phIds.slice(0, 300).join(',')})&user_id=eq.${owner}&mod_status=eq.ok&select=id,stamp_id`, {}) : null,
+      ]);
+      const okSt = new Set((sq && sq.ok ? await sq.json() : []).map((r) => r.id));
+      const okPh = new Set();
+      const phRows = pq && pq.ok ? await pq.json() : [];
+      const parent = [...new Set(phRows.map((r) => r.stamp_id).filter((x) => !okSt.has(x)))];
+      if (parent.length) {
+        const extra = await gbRest(env, `passport_stamps?id=in.(${parent.join(',')})&user_id=eq.${owner}&hidden=eq.false&select=id`, {});
+        for (const r of (extra.ok ? await extra.json() : [])) okSt.add(r.id);
+      }
+      for (const r of phRows) if (okSt.has(r.stamp_id)) okPh.add(r.id);
+      const visible = (t) => (t.startsWith('st:') ? okSt.has(t.slice(3)) : t.startsWith('ph:') ? okPh.has(t.slice(3)) : false);
+      marks = marks.filter((m) => visible(String(m.target || '')));
+      entries = entries.filter((e) => visible(String(e.target || '')));
+    }
     const hiddenIds = new Set();
     if (user) {
       const bq = await gbRest(env, `user_blocks?or=(user_id.eq.${user.id},blocked_user_id.eq.${user.id})&select=user_id,blocked_user_id`, {});
@@ -14898,7 +14986,15 @@ async function handleSocialUnread(request, env) {
     for (const r of tags) items.push({ type: 'tag', uid: r.from_user_id, place: r.name || null, at: r.created_at });
 
     const uids = [...new Set(items.map((i) => i.uid).filter(Boolean))].slice(0, 200);
-    const stampIds = [...new Set(items.map((i) => (i.target || '').startsWith('st:') ? i.target.slice(3) : null).filter(Boolean))].slice(0, 200);
+    const photoIds = [...new Set(items.map((i) => (i.target || '').startsWith('ph:') ? i.target.slice(3) : null).filter(Boolean))].slice(0, 200);
+    const photoStamp = {};
+    if (photoIds.length) {
+      for (const r of await gbRest(env, `passport_stamp_photos?id=in.(${photoIds.join(',')})&user_id=eq.${me}&select=id,stamp_id`, {}).then(j)) photoStamp[r.id] = r.stamp_id;
+    }
+    const stampIds = [...new Set([
+      ...items.map((i) => (i.target || '').startsWith('st:') ? i.target.slice(3) : null),
+      ...Object.values(photoStamp),
+    ].filter(Boolean))].slice(0, 200);
     const [hs, ps, st] = await Promise.all([
       uids.length ? gbRest(env, `passport_shares?user_id=in.(${uids.join(',')})&select=user_id,handle,verified,seal`, {}).then(j) : [],
       uids.length ? gbRest(env, `social_profiles?user_id=in.(${uids.join(',')})&select=user_id,display_name,social_tier`, {}).then(j) : [],
@@ -14918,7 +15014,7 @@ async function handleSocialUnread(request, env) {
         type: i.type, at: i.at, unread: Date.parse(i.at) > seenAt,
         by: { handle: who[i.uid]?.handle || null, name: who[i.uid]?.name || null, verified: !!who[i.uid]?.verified, seal: who[i.uid]?.seal || null },
         ...(i.kinds ? { reactions: i.kinds.map((k) => BL_KIND_LABEL[k] || k) } : {}),
-        ...(i.target ? { stamp: stampName[i.target.slice(3)] || null } : {}),
+        ...(i.target ? { stamp: stampName[i.target.startsWith('ph:') ? photoStamp[i.target.slice(3)] : i.target.slice(3)] || null, photo: i.target.startsWith('ph:') } : {}),
         ...(i.body !== undefined ? { body: i.body, doodle: i.doodle } : {}),
         ...(i.place !== undefined ? { place: i.place } : {}),
         ...(i.to_me ? { to_me: true } : {}),
@@ -19800,6 +19896,7 @@ export default {
       if (pathname === '/admin/reports' && request.method === 'POST') return await handleAdminReports(request, env);
       if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
       if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);
+      if (pathname === '/passport/photo/caption' && request.method === 'POST') return await handlePassportPhotoCaption(request, env);
       if (pathname === '/passport/stamp/check-photos' && request.method === 'POST') return await handlePassportCheckPhotos(request, env, ctx);
       if (pathname === '/passport/tag' && request.method === 'POST') return await handlePassportTag(request, env, ctx);
       if (pathname === '/passport/tags' && request.method === 'POST') return await handlePassportTagsList(request, env);

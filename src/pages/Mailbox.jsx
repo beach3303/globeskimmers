@@ -20,8 +20,10 @@ function activityLine(a) {
     case "follow_request": return { who, text: "asked to follow you" };
     case "follow": return { who, text: "started following you" };
     case "postcard": return { who, text: a.to_me ? `sent you a postcard${a.place ? ` from ${a.place}` : ""}` : `mailed a postcard${a.place ? ` from ${a.place}` : ""}` };
-    case "reaction": return { who, text: `stamped ${a.reactions.join(" · ")}${a.stamp ? ` on ${a.stamp}` : " on your passport"}` };
-    case "signature": return { who, text: `${a.doodle && !a.body ? "left a doodle" : "signed"}${a.stamp ? ` your ${a.stamp} page` : " your passport"}${a.body ? `: “${a.body}”` : ""}` };
+    case "reaction": return { who, text: `stamped ${a.reactions.join(" · ")}${a.photo ? ` on your photo${a.stamp ? ` from ${a.stamp}` : ""}` : a.stamp ? ` on ${a.stamp}` : " on your passport"}` };
+    case "signature": return { who, text: a.photo
+      ? `${a.doodle && !a.body ? "doodled on" : "commented on"} your photo${a.stamp ? ` from ${a.stamp}` : ""}${a.body ? `: “${a.body}”` : ""}`
+      : `${a.doodle && !a.body ? "left a doodle" : "signed"}${a.stamp ? ` your ${a.stamp} page` : " your passport"}${a.body ? `: “${a.body}”` : ""}` };
     case "tag": return { who, text: `tagged you${a.place ? ` at ${a.place}` : ""} — were you there together?` };
     default: return { who, text: "" };
   }

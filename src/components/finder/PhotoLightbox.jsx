@@ -37,7 +37,7 @@ const prefersReducedMotion = () =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-export default function PhotoLightbox({ photos, index, onClose, onIndexChange, title, credit }) {
+export default function PhotoLightbox({ photos, index, onClose, onIndexChange, title, credit, renderFooter = null }) {
   const list = (Array.isArray(photos) ? photos : []).filter((p) => p && typeof p.src === "string" && p.src);
   const open = index != null && list.length > 0;
 
@@ -96,10 +96,15 @@ export default function PhotoLightbox({ photos, index, onClose, onIndexChange, t
     step(s.dx < 0 ? 1 : -1);
   };
 
-  // Escape closes; arrows page.
+  // Escape closes; arrows page — unless the keys belong to something else:
+  // a text field (caption, comment) or a sheet opened from the footer.
+  const rootRef = useRef(null);
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => {
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""))) return;
+      if (rootRef.current && rootRef.current.querySelector('[aria-modal="true"]')) return;
       if (e.key === "Escape") { onClose?.(); return; }
       if (e.key === "ArrowLeft") step(-1);
       else if (e.key === "ArrowRight") step(1);
@@ -120,6 +125,7 @@ export default function PhotoLightbox({ photos, index, onClose, onIndexChange, t
 
   return createPortal(
     <div
+      ref={rootRef}
       className="fixed inset-0 z-[9999] flex flex-col items-center justify-center px-3 py-8"
       style={{ background: "rgba(12,10,8,0.93)" }}
       role="dialog"
@@ -205,6 +211,14 @@ export default function PhotoLightbox({ photos, index, onClose, onIndexChange, t
           <div className="mt-1" style={{ fontFamily: MONO, fontSize: fs(9.5), color: FAINT }}>{credit}</div>
         ) : null}
       </div>
+      {renderFooter && (
+        // Taps and touches here (and in the sheets this opens) must never reach
+        // the backdrop's close or the swipe handlers.
+        <div className="flex-none mt-3 w-full max-w-md" onClick={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()}>
+          {renderFooter(photo, idx)}
+        </div>
+      )}
     </div>,
     document.body,
   );

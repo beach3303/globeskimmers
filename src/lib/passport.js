@@ -118,6 +118,11 @@ export async function socialUnread({ mark = false } = {}) {
   if (mark && !error) { try { window.dispatchEvent(new Event("gs:unread")); } catch { /* no window */ } }
   return { total: data?.total || 0, activity: data?.activity || [], error };
 }
+// The owner's caption under one photo (moderated; '' clears it).
+export async function setPhotoCaption(photo_id, caption) {
+  const { data, error } = await callWorker('passport/photo/caption', { photo_id, caption });
+  return { caption: data?.caption ?? null, error: error || data?.error || null };
+}
 // Is a username being held for THIS account (founder's family list)?
 export async function heldForMe() {
   const { data, error } = await callWorker('social/held-for-me', {});

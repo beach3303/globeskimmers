@@ -93,12 +93,14 @@ function yummyTarget(stamps) {
 }
 
 // ── The strip under a page: press stamps + open the Guestbook ───────────────
-export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged }) {
+// `photoId` points the strip at one photo (its reactions and comments)
+// instead of a page's stamps; `food` says that photo's food is the star.
+export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, food = false }) {
   const [busy, setBusy] = useState(null);       // kind being pressed/peeled
   const [sheet, setSheet] = useState(false);
-  const targets = useMemo(() => (stamps || []).map((s) => `st:${s.id}`), [stamps]);
+  const targets = useMemo(() => (photoId ? [`ph:${photoId}`] : (stamps || []).map((s) => `st:${s.id}`)), [stamps, photoId]);
   const lead = targets[0] || null;
-  const yumTarget = useMemo(() => yummyTarget(stamps), [stamps]);
+  const yumTarget = useMemo(() => (photoId ? (food ? `ph:${photoId}` : null) : yummyTarget(stamps)), [stamps, photoId, food]);
 
   const agg = useMemo(() => {
     const counts = {}, mine = new Set();
@@ -159,19 +161,19 @@ export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged }) {
         <button type="button" onClick={() => setSheet(true)}
           className="ml-auto rounded-xl px-2.5 py-1.5 active:scale-95 transition-transform"
           style={{ background: CARD, border: `1px solid ${RULE}`, fontFamily: MONO, fontSize: fs(9.5), fontWeight: 700, letterSpacing: ".06em", color: "#8A5410" }}>
-          ✍ GUESTBOOK{pageEntries.length ? ` · ${pageEntries.length}` : ""}
+          {photoId ? "💬 COMMENTS" : "✍ GUESTBOOK"}{pageEntries.length ? ` · ${pageEntries.length}` : ""}
         </button>
       </div>
       {sheet && (
         <GuestbookSheet slug={slug} targets={targets} lead={lead} entries={pageEntries}
-          ownerView={ownerView} onChanged={onChanged} onClose={() => setSheet(false)} />
+          ownerView={ownerView} onChanged={onChanged} onClose={() => setSheet(false)} forPhoto={!!photoId} />
       )}
     </>
   );
 }
 
 // ── The Guestbook sheet: signatures, doodles, co-signs ──────────────────────
-function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, onClose }) {
+function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, onClose, forPhoto = false }) {
   useDismissable(true, onClose);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -211,13 +213,13 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center" role="dialog" aria-modal="true" aria-label="Guestbook">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center" role="dialog" aria-modal="true" aria-label={forPhoto ? "Comments" : "Guestbook"}>
       <button aria-label="Close" onClick={onClose} className="absolute inset-0" style={{ background: "rgba(22,17,13,.45)" }} />
       <div className="relative w-full max-w-md rounded-t-3xl px-4 pt-4 pb-6 max-h-[82vh] overflow-y-auto" style={{ background: PAPER }}>
         <div className="flex items-center justify-between">
           <div>
-            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".2em", color: "#8A5410" }}>The Guestbook</div>
-            <div style={{ fontFamily: SERIF, fontSize: fs(20), color: INK }}>Sign this page</div>
+            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".2em", color: "#8A5410" }}>{forPhoto ? "Comments" : "The Guestbook"}</div>
+            <div style={{ fontFamily: SERIF, fontSize: fs(20), color: INK }}>{forPhoto ? "On this photo" : "Sign this page"}</div>
           </div>
           <button onClick={onClose} aria-label="Close the guestbook" className="rounded-full p-2" style={{ background: CARD, border: `1px solid ${RULE}` }}>
             <X size={16} color={INK} />
@@ -227,7 +229,7 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
         <div className="mt-3">
           {entries.length === 0 && (
             <p style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(14.5), color: INK3 }}>
-              No signatures yet — be the first to leave a line or a little drawing.
+              {forPhoto ? "No comments yet — be the first to leave a line or a little drawing." : "No signatures yet — be the first to leave a line or a little drawing."}
             </p>
           )}
           {entries.map((e) => (
@@ -284,7 +286,7 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
 
         {/* Compose: a line, or a doodle in the margin */}
         <div className="flex items-center gap-2 mt-3">
-          <input value={text} onChange={(e) => setText(e.target.value)} maxLength={280} placeholder="Sign the guestbook…"
+          <input value={text} onChange={(e) => setText(e.target.value)} maxLength={280} placeholder={forPhoto ? "Write a comment…" : "Sign the guestbook…"}
             className="flex-1 min-w-0 rounded-xl px-3 py-2.5"
             style={{ background: CARD, border: `1px solid ${RULE}`, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(15), color: INK }} />
           <button type="button" onClick={() => setPad(true)} aria-label="Draw a doodle instead"
@@ -294,7 +296,7 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
           <button type="button" onClick={() => sign(undefined)} disabled={busy}
             className="flex-none rounded-xl px-3.5 py-2.5 font-semibold active:scale-95 transition-transform"
             style={{ background: "#0E7C86", color: "#fff", fontSize: fs(13), opacity: busy ? 0.6 : 1 }}>
-            Sign ✍
+            {forPhoto ? "Post ✍" : "Sign ✍"}
           </button>
         </div>
         <p className="mt-2" style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".06em", color: INK3 }}>

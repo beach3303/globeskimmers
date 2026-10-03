@@ -81,7 +81,7 @@ export const ToastContainer = () => {
   };
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[9999] pointer-events-none">
+    <div className="fixed top-0 left-0 right-0 z-[10000] pointer-events-none">
       <div className="flex flex-col items-center gap-2 pt-4">
         {toasts.map(toast => (
           <div key={toast.id} className="pointer-events-auto">
