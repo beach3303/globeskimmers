@@ -7,7 +7,6 @@ import HomeRows from '@/components/home/HomeRows';
 import StampsNearYou from '@/components/home/StampsNearYou';
 import PassportHero from '@/components/home/PassportHero';
 import FriendsTravels from '@/components/home/FriendsTravels';
-import ExperiencesRow from '@/components/home/ExperiencesRow';
 import SmartSearchBar from '@/components/search/SmartSearchBar';
 import SmartSearchOverlay from '@/components/search/SmartSearchOverlay';
 import DestinationStrip from '@/components/search/DestinationStrip';
@@ -54,16 +53,13 @@ export default function HomeTablet({
   passportTotal = null, nearestStamp = null,
 }) {
   const ORDER = {
-    home: ["rows", "experiences", "stamps"], discovery: ["rows", "experiences", "stamps"],
-    domestic: ["stamps", "rows", "experiences"], international: ["stamps", "rows", "experiences"],
-    planning: ["rows", "experiences", "stamps"],
+    home: ["rows", "stamps"], discovery: ["rows", "stamps"],
+    domestic: ["stamps", "rows"], international: ["stamps", "rows"],
+    planning: ["rows", "stamps"],
   };
   const SEC = {
     rows: <HomeRows key="rows" wide onAction={onAction} />,
     stamps: <StampsNearYou key="stamps" wide onAction={onAction} />,
-    // Extracted from HomeRows on phone — without these mounts the
-    // tablet silently loses Dreamer's Corner AND every bookable experience.
-    experiences: <ExperiencesRow key="experiences" wide />,
   };
   const discoverOrder = ORDER[journeyMode] || ["rows", "stamps"];
   const [showSearch, setShowSearch] = useState(false);

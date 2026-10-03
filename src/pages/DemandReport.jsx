@@ -1,8 +1,8 @@
 // DemandReport — the founder-readable demand brief.
 //
-// One quiet page answering five questions in plain language: what people
-// browse, what they search (the actual query strings), where they linger,
-// what they book, and what recent guests said. Reads the same admin-gated
+// One quiet page answering three questions in plain language: what people
+// browse, what they search (the actual query strings), and where they linger.
+// (No booking in the app since 2026-10-03, so the bookings/feedback sections left.) Reads the same admin-gated
 // Worker /analytics-query route AdminAnalytics fans out over — one named
 // D1 query per section — but rendered Passport Standard (serif headlines,
 // mono data) instead of dashboard bars.
@@ -235,38 +235,6 @@ export default function DemandReport() {
 
             {/* demand_bookings_by_country_90d: {country, partner, bookings, commission} —
                 real conversions only; sandbox test bookings are excluded in SQL. */}
-            <Section kicker="Last 90 days" title="What people book" isEmpty={bookings.length === 0}>
-              {bookings.map((r, i) => (
-                <DataRow
-                  key={i}
-                  label={pick(r.country, r.dest_country, r.label) || '(unknown)'}
-                  detail={[pick(r.partner), num(r.commission) ? `$${num(r.commission).toFixed(2)}` : null].filter(Boolean).join(' · ') || null}
-                  value={num(r.bookings, r.count, r.clicks)}
-                />
-              ))}
-            </Section>
-
-            <Section kicker="Most recent" title="Recent trip feedback" isEmpty={feedback.length === 0}>
-              {feedback.map((f, i) => (
-                <div key={i} className="py-2.5" style={{ borderTop: `1px solid ${ED_RULE}` }}>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span style={{ fontFamily: ED_MONO, fontSize: 14, letterSpacing: '.14em', color: STAMP_RED }}>
-                      {starsFor(pick(f.rating, f.stars))}
-                    </span>
-                    <span className="flex-none" style={{ fontFamily: ED_MONO, fontSize: 10, color: ED_INK3 }}>{fmtWhen(f)}</span>
-                  </div>
-                  <div className="mt-1 truncate" style={{ fontFamily: ED_SERIF, fontSize: 15.5, color: ED_INK, lineHeight: 1.3 }}>
-                    {pick(f.hotel_name, f.hotelName, f.hotel, f.product_name) || 'Stay'}
-                    {pick(f.city, f.dest_city) ? ` · ${pick(f.city, f.dest_city)}` : ''}
-                  </div>
-                  {pick(f.problems, f.problem) && (
-                    <p className="mt-1" style={{ color: ED_INK3, fontSize: 13, lineHeight: 1.5 }}>
-                      {`“${pick(f.problems, f.problem)}”`}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </Section>
           </>
         )}
 

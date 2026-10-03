@@ -12,19 +12,17 @@
 // a card tap) calls onAction(seeAll.action) — the same handleQuickAction the
 // tiles use — to open the vertical finder page. Sideways → down/up.
 //
-// The worker's `whereToNext` row is SKIPPED here — DreamersCorner renders it as
-// its own component (and owns the shared fetchHomeRows client cache, so both
-// components mounting still costs one /home/rows call per location).
+// The worker's `whereToNext` (dream) row is skipped here.
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLocation } from "@/components/location/LocationContext";
 import { callWorker } from "@/lib/callWorker";
-import { fetchHomeRows } from "@/components/home/DreamersCorner";
+import { fetchHomeRows } from "@/lib/homeRows";
 import { trackEvent } from "@/Layout";
-import { createPageUrl } from "@/utils";
 import MapAppSelector from "@/components/MapAppSelector";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import useHorizontalSwipe from "@/lib/useHorizontalSwipe";
+import { openAttraction } from "@/lib/openAttraction";
 
 function HomeRowCard({ card, onOpen, wide }) {
   const name = card.name || "Explore";
@@ -159,11 +157,10 @@ export default function HomeRows({ onAction, wide = false }) {
 
     (async () => {
       try {
-        // Shared client cache (DreamersCorner owns it) — one /home/rows call
-        // per location even with DreamersCorner mounted in the same stack.
+        // Shared client cache (src/lib/homeRows.js) — one /home/rows call per location.
         const { data, error } = await fetchHomeRows({ latitude, longitude, cityName: city, countryName: country });
         if (cancelled) return;
-        // whereToNext is DreamersCorner's row now — skip it here.
+        // whereToNext (the old dream row) is skipped.
         const gotRows = (!error && Array.isArray(data?.rows) ? data.rows : []).filter((r) => r?.key !== "whereToNext");
         setRows(gotRows);
         // Demand signal: this user is active in / planning this city. Origin

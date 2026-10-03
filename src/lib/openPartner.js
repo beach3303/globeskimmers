@@ -1,11 +1,6 @@
-// openPartner — the ONE way the app hands a traveler to a partner site.
-//
-// Why this exists (founder call, 2026-08-31 — "as much in-app as we can"):
-// three money paths (Viator tours, Events, Stay22 hotels) used bare
-// window.open(_blank). Inside a Capacitor shell on iOS that ejects the user to
-// Safari, where viator.com's Universal Links then hand off to the Viator native
-// app — a fresh session, so they sign in again — and the affiliate's "mobile web
-// only" tracking is lost on the way. Two other screens already did it right.
+// openPartner — the ONE way the app opens an outside site (an attraction's
+// official website, a photo's license page). There is no booking in the app
+// (founder, 2026-10-03); this only keeps outside pages in an in-app sheet.
 //
 // Native → Capacitor Browser (SFSafariViewController on iOS, Chrome Custom Tabs
 // on Android): stays inside the app as a sheet with a Done button, keeps its own

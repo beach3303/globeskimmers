@@ -18,7 +18,7 @@
  * Layout (per handoff):
  *   Zone 1 — DECIDE: Quick-Fit strip + GS Verdict + Price + Lines & Wait
  *   Zone 2 — DO: "What You'll Do Here" (built from alsoRecommended)
- *   Zone 3 — BOOK AHEAD: affiliate placeholder slot (Phase 4 wires real button)
+ *   Zone 3 — PLAN AHEAD: reservation / timed-entry facts (information, never booking)
  *   Zone 4 — FIT & PREP: collapsed tap-rows
  *   "More" tap: depth prose (Vibe, About, Crowd, BestTime, Value, GoodToKnow, Traveler)
  *
@@ -398,7 +398,7 @@ function buildQuickFit(details, sourceFor) {
       stamp: (details.crowd || details.worthIt) ? sourceFor('crowd') : 'call',
     },
     {
-      icon: '🎟️', label: 'Booking',
+      icon: '🎟️', label: 'Entry',
       value: deriveBooking(details, vf),
       // Verified when Google reservable flag is present, reviews when
       // we're falling back to the practical.reservation text, call when
@@ -455,7 +455,7 @@ function deriveBooking(details, vf) {
   const r = details?.practical?.reservation;
   if (!r) return 'Walk-in or call';
   const lower = r.toLowerCase();
-  if (/required|must book|book ahead|advance/.test(lower)) return 'Book ahead';
+  if (/required|must book|book ahead|advance/.test(lower)) return 'Reserve ahead';
   if (/timed[- ]entry/.test(lower)) return 'Timed entry';
   if (/recommended/.test(lower)) return 'Reservation suggested';
   if (/walk[- ]in/.test(lower)) return 'Walk-in OK';
@@ -493,22 +493,19 @@ function ZoneDo({ details, sourceFor }) {
 }
 
 // ============================================================================
-// Zone 3 — BOOK AHEAD
+// Zone 3 — PLAN AHEAD
 // ============================================================================
 
 function ZoneBook({ details, sourceFor }) {
-  // Phase 4 is rescoped — the original affiliate-ticket button is on hold.
-  // The replacement direction is an "Eat Nearby" hand-off (attraction →
-  // PlacesToEat search of the attraction's address, with a return path
-  // back here). Until that's spec'd we render the existing practical.reservation
-  // line as the actionable info in this zone, with no fake CTA below it.
+  // Information for planning the day — GlobeSkimmers never books (founder,
+  // 2026-10-03): the reservation facts, no ticket button.
   const reservation = details?.practical?.reservation;
   const reservable = details?.verifiedFacts?.reservable;
   if (!reservation && typeof reservable !== 'boolean') return null;
   return (
     <div style={{ marginBottom: '14px', padding: '12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}` }}>
       <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
-        🎟️ BOOKING
+        🗓️ PLAN AHEAD
       </div>
       {typeof reservable === 'boolean' && (
         <div style={{ fontSize: '13px', color: DARK, lineHeight: '1.5', marginBottom: reservation ? '6px' : '0' }}>

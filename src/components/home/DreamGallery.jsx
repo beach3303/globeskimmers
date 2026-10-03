@@ -1,6 +1,6 @@
 // DreamGallery — the full-screen "dream browser": a photo-immersion sheet that
 // opens from dream surfaces (DreamShelf, DreamAnswerCard) so the user browses
-// MANY beautiful real photos of a destination and lands on "Build my vacation".
+// MANY beautiful real photos of a destination, then opens its Things to Do card.
 //
 // Data: POST /destination/gallery { name, country?, bucket?, limit } →
 // { name, bucket, photos: [{ src, full, w, h, title, artist, license, link }] }
@@ -14,40 +14,15 @@
 // the licenses (and by our always-label-sources rule): the lightbox caption
 // links "artist · license" to the Commons file page.
 //
-// (The old package CTA left with the 2026-09-29 pivot; the gallery keeps
-// flights, photos and the wishlist heart.)
-// not two. When a price tease is on screen (below) the same handoff ALSO
-// carries { checkin, checkout } so the composer opens pre-dated.
-//
-// Price tease: POST /package/estimate { name, country, lat, lng } →
-// { ok, available, monthLabel, checkin, checkout, nights, party,
-//   hotel: { name, stayTotal, currency }, splitFour, intel, includes }.
-// Fetched lazily ONCE per destination (only when dest has finite coords),
-// cached per destKey, never blocking photos. Every field is read defensively:
-// available:false or any missing rendered field → no tease, gallery unchanged.
-// The split-by-four line is arithmetic framing only — never a payment promise.
-//
-// Flight line: POST /flights/months { originLat, originLng, destLat, destLng,
-// destName } → { ok, origin:{iata,city}, dest:{iata,city},
-// months:[{month,label,price,direct}], note, link }. Fetched lazily alongside
-// the estimate, once per destKey; origin is the user's PHYSICAL GPS fix (the
-// same source DreamersCorner's flight fragment uses) — no fix → no fetch.
-// months[0] is the worker's cheapest month. Rendered ONLY inside the tease
-// module: one mono line plus the worker's honesty note verbatim under it.
-// ok:false, empty months, or any missing rendered field → the tease renders
-// exactly as it did before flights existed. direct === true may add
-// "· nonstop"; direct null/false → stops are never mentioned. "See flights"
-// opens the WORKER-BUILT link (marker intact) via trackAffiliateClick +
-// openPartner — the URL is never rebuilt client-side.
+// No booking and no vacation builder (founder, 2026-10-03): the hotel/flight
+// price tease and "Build your vacation" are gone; the gallery is inspiration.
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { logDiscover } from "@/lib/logDiscover";
 import { flushEvents } from "@/lib/analytics";
-import { trackAffiliateClick } from "@/lib/affiliate";
 import { openPartner } from "@/lib/openPartner";
-import { useLocation } from "@/components/location/LocationContext";
 import { IVORY_2 } from "@/components/redesign/constants";
 
 const INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
@@ -90,78 +65,7 @@ const prefersReducedMotion = () =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// Nuitee money register — currency symbol, 2dp only when the amount has cents.
-const money = (amt, cur) => {
-  if (!Number.isFinite(amt)) return "";
-  const digits = Number.isInteger(amt) ? 0 : 2;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: cur || "USD",
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
-    }).format(amt);
-  } catch {
-    return `${Math.round(amt * 100) / 100} ${cur || ""}`.trim();
-  }
-};
-
-// Validate /package/estimate into exactly what the tease renders/emits, or
-// null. Strict on purpose: a partial estimate renders NOTHING new — the
-// gallery must stay exactly as-is rather than show a broken pitch.
-function normalizeEstimate(d) {
-  if (!d || d.ok !== true || d.available !== true) return null;
-  const monthLabel = typeof d.monthLabel === "string" ? d.monthLabel.trim() : "";
-  const isDay = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
-  const checkin = isDay(d.checkin) ? d.checkin : "";
-  const checkout = isDay(d.checkout) ? d.checkout : "";
-  const nights = Number(d.nights);
-  const stayTotal = Number(d.hotel?.stayTotal);
-  const currency = typeof d.hotel?.currency === "string" && d.hotel.currency ? d.hotel.currency : "";
-  const splitFour = Number(d.splitFour);
-  // monthLabel is OPTIONAL: the worker sends null when the best-time window had
-  // no parseable month (e.g. "Year-round") — the tease then simply drops the
-  // "Best in" prefix rather than inventing a month or losing the whole pitch.
-  if (!checkin || !checkout || !(checkout > checkin)) return null;
-  if (!Number.isFinite(nights) || nights < 1) return null;
-  if (!Number.isFinite(stayTotal) || stayTotal <= 0 || !currency) return null;
-  if (!Number.isFinite(splitFour) || splitFour <= 0) return null;
-  return { monthLabel, checkin, checkout, nights: Math.round(nights), stayTotal, currency, splitFour };
-}
-
-// Validate /flights/months into exactly what the flight line renders/emits, or
-// null. Same strictness as normalizeEstimate: months[0] is the worker's
-// cheapest month, and ok:false, an empty months[], or any missing rendered
-// field → null — the tease renders exactly as it did without flights.
-function normalizeFlight(d) {
-  if (!d || d.ok !== true) return null;
-  const m = Array.isArray(d.months) ? d.months[0] : null;
-  if (!m) return null;
-  const label = typeof m.label === "string" ? m.label.trim() : "";
-  const month = typeof m.month === "string" ? m.month : "";
-  const price = Number(m.price);
-  const originIata = typeof d.origin?.iata === "string" ? d.origin.iata.trim() : "";
-  const destIata = typeof d.dest?.iata === "string" ? d.dest.iata.trim() : "";
-  if (!label || !originIata || !destIata) return null;
-  if (!Number.isFinite(price) || price <= 0) return null;
-  return {
-    label,
-    month,
-    price,
-    originIata,
-    destIata,
-    currency: typeof d.currency === "string" && d.currency ? d.currency : "USD",
-    // Only a literal true earns "nonstop" — null/false/missing never mention stops.
-    direct: m.direct === true,
-    // The worker-built affiliate link, marker included — opened as-is, never
-    // rebuilt client-side. Missing/odd link → the line renders without the CTA.
-    link: typeof d.link === "string" && /^https?:\/\//.test(d.link) ? d.link : "",
-    note: typeof d.note === "string" ? d.note.trim() : "",
-  };
-}
-
 export default function DreamGallery({ open, onClose, dest, onView, viewLabel = "View details" }) {
-  const { currentGpsLocation } = useLocation();
   const [active, setActive] = useState("");
   // { [`destKey:bucketId`]: { status: 'loading'|'done', photos: [...] } } — an error
   // or empty result lands as done+[] (honest empty; the chip hides itself).
@@ -179,16 +83,6 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
   // photo.src, so onError can never loop. Reset on destination change.
   const [lbFullFailed, setLbFullFailed] = useState(() => new Set());
   const [lbImgFailed, setLbImgFailed] = useState(() => new Set());
-  // { [destKey]: { status: 'loading'|'done', est: normalized|null } } — kept
-  // across destination swaps so each destination is estimated at most once
-  // per mount. done+null = tried, nothing showable (gallery stays as-is).
-  const [estimates, setEstimates] = useState({});
-  const teaseLoggedRef = useRef(new Set());
-  // { [destKey]: { status: 'loading'|'done', flight: normalized|null } } —
-  // same shape and lifecycle as `estimates`: tried at most once per destKey,
-  // done+null = nothing showable, the tease stays exactly as-is.
-  const [flights, setFlights] = useState({});
-  const flightLoggedRef = useRef(new Set());
   // { [destKey]: { status: 'loading'|'done', about: string } } — the AI
   // destination-intel blurb, fetched once per destKey when coords exist. Read
   // DEFENSIVELY: available:false, a missing `about`, or any error → done+"" and
@@ -200,17 +94,6 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
   // Same strictness as the old package reader — real numbers only, no
   // string coercion. No coords → the estimate fetch is skipped entirely.
   const hasCoords = Number.isFinite(dest?.lat) && Number.isFinite(dest?.lng);
-  const estSlot = estimates[destKey];
-  const est = estSlot?.status === "done" ? estSlot.est : null;
-  // Flight origin = where the user PHYSICALLY is (GPS fix) — the exact source
-  // DreamersCorner's "~9H FLIGHT (EST)" fragment reads — never the browsed
-  // location. In navigate mode this stays null until Home's silent GPS fetch
-  // fills it; until then the flight fetch honestly skips.
-  const gpsLat = currentGpsLocation?.coordinates?.latitude;
-  const gpsLng = currentGpsLocation?.coordinates?.longitude;
-  const hasOrigin = Number.isFinite(gpsLat) && Number.isFinite(gpsLng);
-  const flightSlot = flights[destKey];
-  const flight = flightSlot?.status === "done" ? flightSlot.flight : null;
   const intelSlot = intels[destKey];
   const about = intelSlot?.status === "done" ? intelSlot.about : "";
 
@@ -374,42 +257,6 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
     return () => { cancelled = true; };
   }, [open, active, destKey]);  
 
-  // Lazy price-tease estimate — once per destination, coords required, and
-  // fully parallel to the photo fetches (photos never wait on it).
-  useEffect(() => {
-    if (!open || !name || !hasCoords) return;
-    if (estimates[destKey]) return; // already loading or loaded
-    let cancelled = false;
-    setEstimates((m) => ({ ...m, [destKey]: { status: "loading", est: null } }));
-    (async () => {
-      const body = { name, country: dest?.country ? String(dest.country) : "", lat: dest.lat, lng: dest.lng };
-      const res = await callWorker(ROUTE.packageEstimate, body);
-      if (cancelled) return;
-      const normalized = res.error ? null : normalizeEstimate(res.data);
-      setEstimates((m) => ({ ...m, [destKey]: { status: "done", est: normalized } }));
-    })();
-    return () => { cancelled = true; };
-  }, [open, destKey, hasCoords]);  
-
-  // Lazy flight-months fetch — parallel to the estimate, once per destKey,
-  // never blocking photos or the hotel tease. Needs BOTH ends: finite dest
-  // coords AND a user GPS fix; no fix at open → skipped, and the hasOrigin dep
-  // re-runs the effect to fetch the moment the silent GPS fill lands.
-  useEffect(() => {
-    if (!open || !name || !hasCoords || !hasOrigin) return;
-    if (flights[destKey]) return; // already loading or loaded
-    let cancelled = false;
-    setFlights((m) => ({ ...m, [destKey]: { status: "loading", flight: null } }));
-    (async () => {
-      const body = { originLat: gpsLat, originLng: gpsLng, destLat: dest.lat, destLng: dest.lng, destName: name };
-      const res = await callWorker(ROUTE.flightsMonths, body);
-      if (cancelled) return;
-      const normalized = res.error ? null : normalizeFlight(res.data);
-      setFlights((m) => ({ ...m, [destKey]: { status: "done", flight: normalized } }));
-    })();
-    return () => { cancelled = true; };
-  }, [open, destKey, hasCoords, hasOrigin]);  
-
   // Lazy destination-intel blurb — once per destKey, coords required, parallel
   // to every other fetch (photos never wait on it). Read defensively: only a
   // whole available:true payload with a non-empty string `about` becomes a
@@ -432,22 +279,6 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
     })();
     return () => { cancelled = true; };
   }, [open, destKey, hasCoords]);  
-
-  // One view event per shown estimate — keyed by destKey so a bucket switch
-  // or reopen of the same destination never re-fires it.
-  useEffect(() => {
-    if (!open || !est || teaseLoggedRef.current.has(destKey)) return;
-    teaseLoggedRef.current.add(destKey);
-    logDiscover("dream_tease_view", { place_name: name, total: est.stayTotal, currency: est.currency });
-  }, [open, est, destKey]);  
-
-  // One view event per SHOWN flight line — the line only renders inside the
-  // tease module, so it counts as shown only when est AND flight both exist.
-  useEffect(() => {
-    if (!open || !est || !flight || flightLoggedRef.current.has(destKey)) return;
-    flightLoggedRef.current.add(destKey);
-    logDiscover("flight_months_view", { dest: name, month: flight.month, price: flight.price });
-  }, [open, est, flight, destKey]);  
 
   // A vanished list (every image erroring into `failed`) must also CLEAR the
   // lightbox index — the render clamp only hides it, leaving a stale index that
@@ -488,27 +319,6 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
 
 
   const creditLine = (p) => [p.artist, p.license].filter(Boolean).join(" · ");
-
-  // "See flights" → SubID logged via aff/click, then the WORKER-BUILT Aviasales
-  // link (marker preserved) opens in the in-app sheet. Same house pattern as
-  // EventsRow/DealRadarRow: open the returned url, fall back to the raw one so
-  // a tracking hiccup never blocks the traveler.
-  const openFlights = async () => {
-    if (!flight?.link) return;
-    logDiscover("flight_tap", { dest: name, origin: flight.originIata });
-    let url = flight.link;
-    try {
-      url = await trackAffiliateClick({
-        partner: "aviasales",
-        targetUrl: flight.link,
-        category: "flight",
-        productName: `${flight.originIata}→${flight.destIata}`,
-        destCity: name,
-        destCountry: country,
-      });
-    } catch { /* fall back to the raw link */ }
-    openPartner(url || flight.link);
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: PAPER }}>
@@ -625,59 +435,12 @@ export default function DreamGallery({ open, onClose, dest, onView, viewLabel = 
         </div>
       </div>
 
-      {/* Price tease — the honest sales pitch, only when a real estimate came
-          back whole. Hotel-only money, split-by-four as plain arithmetic
-          framing (never a payment product we don't control). */}
-      {est && (
-        <div className="flex-none px-4 pt-3 pb-2.5" style={{ background: IVORY_2, borderTop: `1px solid ${EDGE}` }}>
-          <div className="max-w-md mx-auto">
-            <div className="font-serif text-[calc(16px*var(--fs))] leading-tight" style={{ color: INK }}>
-              Want to take this vacation?
-            </div>
-            <div className="font-mono text-[calc(12px*var(--fs))] mt-1 leading-snug" style={{ color: INK }}>
-              {est.monthLabel ? `Best in ${est.monthLabel} · roughly` : "Roughly"} {money(est.stayTotal, est.currency)} for two · {est.nights} night{est.nights === 1 ? "" : "s"}
-            </div>
-            <div className="font-mono text-[calc(11.5px*var(--fs))] mt-0.5 leading-snug" style={{ color: SUB }}>
-              ≈ {money(est.stayTotal / est.nights, est.currency)} a night for two · hotel only — tours and tickets priced separately
-            </div>
-            {/* Flight line — only when /flights/months came back whole. The
-                "· nonstop" tag needs a literal direct:true; the note below is
-                the worker's honesty label, rendered verbatim. */}
-            {flight && (
-              <>
-                <div className="font-mono text-[calc(11.5px*var(--fs))] mt-1 leading-snug" style={{ color: INK }}>
-                  Flights: cheapest in {flight.label} · from {money(flight.price, flight.currency)} · {flight.originIata}→{flight.destIata}
-                  {flight.direct ? " · nonstop" : ""}
-                  {flight.link && (
-                    <>
-                      {" "}
-                      <button
-                        onClick={openFlights}
-                        className="underline underline-offset-2"
-                        style={{ color: SUB }}
-                      >
-                        See flights
-                      </button>
-                    </>
-                  )}
-                </div>
-                {flight.note && (
-                  <div className="font-mono text-[calc(10.5px*var(--fs))] mt-0.5 leading-snug" style={{ color: SUB }}>
-                    {flight.note}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Sticky bottom CTA — the whole sheet lands here. */}
       <div className="flex-none px-4 pt-3 bg-white" style={{ borderTop: `1px solid ${EDGE}`, paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))" }}>
         <div className="max-w-md mx-auto flex items-center gap-3">
           <div className="flex-1 min-w-0">
             <div className="font-serif text-[calc(16px*var(--fs))] leading-tight" style={{ color: INK }}>
-              Dream it? Build your vacation.
+              Dream it? Go see it.
             </div>
             {onView && (
               <button

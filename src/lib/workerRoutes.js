@@ -27,7 +27,6 @@ export const ROUTE = {
   getCoffeeOwned: 'coffee-owned',
   searchCoffee: 'coffee/search',
   coffeeWorkProfiles: 'coffee/work-profiles',
-  searchHotels: 'hotels/search',
   getShoppingPlaces: 'shopping',
   getShoppingOwned: 'shopping-owned',
   getConvenienceStores: 'convenience-stores',
@@ -41,9 +40,6 @@ export const ROUTE = {
   getMoneyExchangeOwned: 'moneyexchange-owned',
   getActivities: 'activities',
   searchActivities: 'activities/search',
-  searchEvents: 'events/search',
-  affiliateMine: 'aff/mine',
-  affiliateImport: 'aff/import',
   savesPull: 'saves/pull',
   savesPush: 'saves/push',
   getHomeRows: 'home/rows',
@@ -54,19 +50,5 @@ export const ROUTE = {
   destinationGallery: 'destination/gallery',
   destinationIntel: 'destination/intel',
 
-  // Smart Packages — Stripe hosted checkout (test mode; founder-only entry)
-  packageCheckout: 'package/checkout',
-
-  // Smart Packages — honest one-shot price tease for dream surfaces
-  packageEstimate: 'package/estimate',
-
-  // Deal Radar — airline fare-sale list for the Home row
-  dealsList: 'deals/list',
-
-  // Trips — post-stay feedback prompt on past bookings
-  tripFeedback: 'trip/feedback',
-
-  // Flights — cheapest-month teaser for the dream gallery's price tease
-  flightsMonths: 'flights/months',
 
 };

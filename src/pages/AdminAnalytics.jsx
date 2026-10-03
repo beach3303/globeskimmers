@@ -786,13 +786,6 @@ export default function AdminAnalytics() {
               ))}
             </Section>
 
-            <Section title="🏨 Hotel areas people pick (30d)" icon={Search} empty={discAreas.length === 0 ? 'Fills as users tap areas in "Where should I stay?" — the hotel-booking intent signal.' : null}>
-              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Which base neighborhoods convert — your hotel affiliate targets.</div>
-              {discAreas.map((d, i) => (
-                <BarRow key={i} label={`${d.area || '(unknown)'}${d.city ? ' · ' + d.city : ''}`} count={d.taps} max={maxDiscArea} color={COLORS.accent} />
-              ))}
-            </Section>
-
             {/* ── Search-intent graph — "what people search, and WHERE" (the demand moat) ── */}
             <Section title="🔎 Top searches — and where (30d)" icon={Search} empty={searchesByCity.length === 0 ? 'Fills as users search any finder — the query + the city it was searched in (present = there now · planning = dreaming).' : null}>
               <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>What people type + where they typed it — the first-party demand-intent graph.</div>
@@ -805,13 +798,6 @@ export default function AdminAnalytics() {
               <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Which vertical each destination searches for most — where to push which inventory.</div>
               {searchCatsByCity.map((d, i) => (
                 <BarRow key={i} label={`${d.city || '—'}${d.country ? ', ' + d.country : ''} · ${d.category || '?'}`} count={d.searches} max={searchCatsByCity[0]?.searches || 1} color={COLORS.amber} />
-              ))}
-            </Section>
-
-            <Section title="🚗 Transfers vs rental cars (30d)" icon={Activity} empty={rideDemand.length === 0 ? 'Fills as users tap ride options — airport transfer vs rental car vs rideshare, by city.' : null}>
-              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Which transport people want, where — steers Get-a-Ride partner priority.</div>
-              {rideDemand.map((d, i) => (
-                <BarRow key={i} label={`${d.ride_type || '?'}${d.city ? ' · ' + d.city : ''}`} count={d.taps} max={rideDemand[0]?.taps || 1} color={COLORS.green} />
               ))}
             </Section>
 
@@ -845,33 +831,6 @@ export default function AdminAnalytics() {
             </Section>
 
             {/* ── Wishlist Demand Radar — where people DREAM to go (highest-signal, first-party) ── */}
-            <Section title="❤️ Wishlist — top destinations (30d)" icon={Search} empty={wishByCity.length === 0 ? 'Fills as users ❤️ places — the highest-signal demand data (where they want to go).' : null}>
-              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Where people want to go — first-party demand for retargeting + affiliate.</div>
-              {wishByCity.map((d, i) => (
-                <BarRow key={i} label={`${d.city || '(unknown)'}${d.country ? ', ' + d.country : ''}`} count={d.wishes} max={wishByCity[0]?.wishes || 1} color={COLORS.accent} />
-              ))}
-            </Section>
-
-            <Section title="❤️ Most-wishlisted places (30d)" icon={Sparkles} empty={wishTop.length === 0 ? 'Fills as users ❤️ specific places / tours / events.' : null}>
-              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Specific saved items — your affiliate + Demand-Radar targets.</div>
-              {wishTop.map((d, i) => (
-                <BarRow key={i} label={`${d.title || '(unknown)'}${d.city ? ' · ' + d.city : ''}`} count={d.wishes} max={wishTop[0]?.wishes || 1} color={COLORS.accent} />
-              ))}
-            </Section>
-
-            <Section title="❤️ Wishlist by type (30d)" icon={Activity} empty={wishByKind.length === 0 ? 'Fills as users wishlist across types (attraction / event / city / …).' : null}>
-              {wishByKind.map((d, i) => (
-                <BarRow key={i} label={d.kind || '(unknown)'} count={d.wishes} max={wishByKind[0]?.wishes || 1} color={COLORS.green} />
-              ))}
-            </Section>
-
-            <Section title="➡️ Wishlist → Book taps (30d)" icon={Search} empty={wishCta.length === 0 ? 'Fills as users tap Find tours / Find hotels from the wishlist — the money step.' : null}>
-              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Which saved items convert to a booking CTA — wishlist→affiliate.</div>
-              {wishCta.map((d, i) => (
-                <BarRow key={i} label={`${d.action || '?'} · ${d.kind || ''}${d.city ? ' · ' + d.city : ''}`} count={d.taps} max={wishCta[0]?.taps || 1} color={COLORS.accent} />
-              ))}
-            </Section>
-
             {/* ── Highest-intent action + who's traveling ── */}
             <Section title="🧭 Directions taps — going here now (30d)" icon={Activity} empty={dirByPlace.length === 0 ? 'Fills as users tap Directions — the strongest "actually going there" signal, across every finder.' : null}>
               <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Highest-intent action — foot-traffic + merchant proof.</div>
@@ -888,48 +847,6 @@ export default function AdminAnalytics() {
             </Section>
 
             {/* ── THE MONEY FUNNEL — sessions → engaged → clicked → booked ── */}
-            <Section title="💸 Affiliate funnel (30d)" icon={Activity} empty={!funnel.sessions ? 'Fills as sessions engage → click → book. "Booked" lights up once the conversion import lands.' : null}>
-              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Distinct sessions at each stage — the money funnel. Booked = 0 until offline conversion import.</div>
-              <BarRow label="Sessions" count={funnel.sessions || 0} max={funnel.sessions || 1} color={COLORS.accent} />
-              <BarRow label="Engaged (tapped something)" count={funnel.engaged_sessions || 0} max={funnel.sessions || 1} color={COLORS.accent} />
-              <BarRow label="Clicked affiliate" count={funnel.click_sessions || 0} max={funnel.sessions || 1} color={COLORS.green} />
-              <BarRow label="Booked" count={funnel.booked_sessions || 0} max={funnel.sessions || 1} color={COLORS.green} />
-            </Section>
-
-            <Section title="💸 Booking intent — planning vs present (30d)" icon={Search} empty={affByIntent.length === 0 ? 'Fills as affiliate clicks accrue (planning = dreaming ahead, present = there now).' : null}>
-              {affByIntent.map((d, i) => (
-                <BarRow key={i} label={`${d.intent}${d.conversions ? ` · ${d.conversions} booked` : ''}`} count={d.clicks} max={affByIntent[0]?.clicks || 1} color={COLORS.accent} />
-              ))}
-            </Section>
-
-            <Section title="🚗 Escapes / day trips people pick (30d)" icon={Sparkles} empty={discEscapes.length === 0 ? 'Fills as users tap escapes — day-trip + tour affiliate demand.' : null}>
-              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>Which day trips people want from each base — tour/experience affiliate targets.</div>
-              {discEscapes.map((d, i) => (
-                <BarRow key={i} label={`${d.trip || '(unknown)'}${d.base ? ' · from ' + d.base : ''}`} count={d.taps} max={maxDiscEscape} color={COLORS.accent} />
-              ))}
-            </Section>
-
-            <Section title="💸 Affiliate performance (30d)" icon={Sparkles} empty={affByPartner.length === 0 ? 'No affiliate clicks yet — taps on Book a Ride / Book a tour appear here once affiliate_clicks is created + the worker deployed.' : null}>
-              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>
-                <strong style={{ color: COLORS.dark }}>{affTotalClicks}</strong> clicks · <strong style={{ color: COLORS.dark }}>{affTotalConversions}</strong> conversions · <strong style={{ color: COLORS.green }}>${affTotalCommission.toFixed(2)}</strong> commission (conversions fill in once we import each network's report)
-              </div>
-              {affByPartner.map((r, i) => (
-                <BarRow key={i} label={`${r.partner} · ${r.conversions || 0} conv · $${(r.commission || 0).toFixed(2)}`} count={r.clicks} max={Math.max(...affByPartner.map(x => x.clicks || 0), 1)} color={COLORS.green} />
-              ))}
-            </Section>
-
-            <Section title="🎟️ Top affiliate taps (30d)" icon={Sparkles} empty={affTopProducts.length === 0 ? 'No product taps yet.' : null}>
-              {affTopProducts.map((p, i) => (
-                <BarRow key={i} label={`${p.name}${p.partner ? ' · ' + p.partner : ''}`} count={p.clicks} max={Math.max(...affTopProducts.map(x => x.clicks || 0), 1)} color={COLORS.accent} />
-              ))}
-            </Section>
-
-            <Section title="🌍 Affiliate taps by destination (30d)" icon={Search} empty={affByCountry.length === 0 ? 'No destination data yet.' : null}>
-              {affByCountry.map((c, i) => (
-                <BarRow key={i} label={c.country} count={c.clicks} max={Math.max(...affByCountry.map(x => x.clicks || 0), 1)} color={COLORS.accent} />
-              ))}
-            </Section>
-
             {/* 🛂 PASSPORT STAMPS */}
             <Section title="🛂 Passport — totals" icon={Sparkles}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 13, color: COLORS.dark }}>
