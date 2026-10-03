@@ -16674,34 +16674,9 @@ async function handleActivitySearch(request, env, ctx) {
       } catch { return []; }
     })();
 
-    // 2) Viator products → bookable experiences (monetized).
-    const productsP = (async () => {
-      if (!env.VIATOR_API_KEY) return [];
-      try {
-        const res = await fetch('https://api.viator.com/partner/search/freetext', {
-          method: 'POST',
-          headers: {
-            'exp-api-key': env.VIATOR_API_KEY,
-            Accept: 'application/json;version=2.0',
-            'Accept-Language': 'en-US',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            searchTerm: term,
-            searchTypes: [{ searchType: 'PRODUCTS', pagination: { start: 1, count: 12 } }],
-            currency: 'USD',
-          }),
-        });
-        if (!res.ok) return [];
-        const d = await res.json();
-        const results = Array.isArray(d?.products?.results) ? d.products.results : [];
-        // Shared mapper: same fields as before PLUS duration + Viator flags
-        // (free cancellation, skip the line…) for the tour rows.
-        return results.map(viatorMapProduct).filter((p) => p.title && p.url);
-      } catch { return []; }
-    })();
-
-    const [places, products] = await Promise.all([placesP, productsP]);
+    // No booking in the app (founder, 2026-10-03): Viator products are gone;
+    // `products` stays an empty list for older builds.
+    const [places, products] = [await placesP, []];
     const payload = { places, products, query };
     if ((places.length || products.length) && ctx) {
       ctx.waitUntil(env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: 3 * 24 * 60 * 60 }).catch(() => {}));
@@ -20790,12 +20765,14 @@ export default {
       if (pathname === '/hotels/nuitee/search' && request.method === 'POST') return await handleNuiteeSearch(request, env, ctx);
       if (pathname === '/hotels/nuitee/hotel' && request.method === 'POST') return await handleNuiteeHotel(request, env, ctx);
       if (pathname === '/hotels/nuitee/photos' && request.method === 'POST') return await handleNuiteePhotos(request, env, ctx);
-      if (pathname === '/hotels/nuitee/prebook' && request.method === 'POST') return await handleNuiteePrebook(request, env);
+      // No booking in the app (founder, 2026-10-03): new bookings are refused here;
+      // the webhook, cancel, booking and return routes keep serving existing stays.
+      if (pathname === '/hotels/nuitee/prebook' && request.method === 'POST') return jsonResponse({ error: 'Booking isn\u2019t available in GlobeSkimmers', code: 'booking_removed' }, 410);
       if (pathname === '/hotels/nuitee/status' && request.method === 'POST') return await handleNuiteeStatus(request, env);
       if (pathname === '/hotels/nuitee/booking' && request.method === 'POST') return await handleNuiteeBooking(request, env, ctx);
       if (pathname === '/hotels/nuitee/cancel' && request.method === 'POST') return await handleNuiteeCancel(request, env, ctx);
       if (pathname === '/hotels/nuitee/webhook' && request.method === 'POST') return await handleNuiteeWebhook(request, env, ctx);
-      if (pathname === '/hotels/nuitee/checkout' && request.method === 'GET') return await handleNuiteeCheckout(request, env);
+      if (pathname === '/hotels/nuitee/checkout' && request.method === 'GET') return jsonResponse({ error: 'Booking isn\u2019t available in GlobeSkimmers', code: 'booking_removed' }, 410);
       if (pathname === '/hotels/nuitee/return' && request.method === 'GET') return await handleNuiteeReturn(request, env, ctx);
       // Smart Packages (priced drafts only — NO payment; booking stays per-component)
       if (pathname === '/package/draft' && request.method === 'POST') return await handlePackageDraft(request, env, ctx);
@@ -20806,8 +20783,8 @@ export default {
       // Destination planning intel (Wave A) — Anthropic + KV only, hard-validated, always carries the verify-locally guidance line
       if (pathname === '/destination/intel' && request.method === 'POST') return await handleDestinationIntel(request, env, ctx);
       // Stripe payments (Wave 1 — GlobeSkimmers as merchant; hotel stay total of a priced package)
-      if (pathname === '/package/checkout' && request.method === 'POST') return await handlePackageCheckout(request, env);
-      if (pathname === '/package/pay' && request.method === 'GET') return await handlePackagePay(request, env);
+      if (pathname === '/package/checkout' && request.method === 'POST') return jsonResponse({ error: 'Booking isn\u2019t available in GlobeSkimmers', code: 'booking_removed' }, 410);
+      if (pathname === '/package/pay' && request.method === 'GET') return jsonResponse({ error: 'Booking isn\u2019t available in GlobeSkimmers', code: 'booking_removed' }, 410);
       if (pathname === '/package/pay/return' && request.method === 'GET') return await handlePackagePayReturn(request, env);
       if (pathname === '/stripe/health' && request.method === 'GET') return await handleStripeHealth(request, env);
       if (pathname === '/stripe/domain/register' && request.method === 'POST') return await handleStripeDomainRegister(request, env);
