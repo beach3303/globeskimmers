@@ -20,7 +20,7 @@ import { localISODate } from "@/lib/localDate";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { useDismissable } from "@/lib/dismissStack";
 import PostcardCompose from "@/components/passport/PostcardCompose";
-import { socialFollow, setStampNote } from "@/lib/passport";
+import { socialFollow, setStampNote, setStampVisibility } from "@/lib/passport";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -53,9 +53,23 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(null); // "photos" | "layout" | "delete" | null
   const [confirmDel, setConfirmDel] = useState(false);
-  // Trip note (airport / border arrivals): "what was this trip for?" — private
-  // unless the traveler shows it on their shared passport.
+  // A note on every stamp — "what was this trip for?" on arrivals, "want to
+  // remember something about this place?" everywhere else. Private unless the
+  // traveler shows it on their shared passport.
   const arrival = stamp.kind === "airport" || stamp.entity_type === "border";
+  // Who sees the stamp itself: only me, or my shared passport (+ friends' feeds).
+  const [onlyMe, setOnlyMe] = useState(stamp.hidden === true);
+  const [visBusy, setVisBusy] = useState(false);
+  const setVisibility = async (hidden) => {
+    if (visBusy || hidden === onlyMe) return;
+    setVisBusy(true);
+    const r = await setStampVisibility(stamp.id, hidden);
+    setVisBusy(false);
+    if (r.error) { showToast(r.error, "error"); return; }
+    setOnlyMe(r.hidden);
+    showToast(r.hidden ? "Only you can see this stamp 🔒" : "On your passport for friends to see 🌍", "success");
+    onChanged?.();
+  };
   const [noteEdit, setNoteEdit] = useState(false);
   const [noteDraft, setNoteDraft] = useState(stamp.note || "");
   const [notePublic, setNotePublic] = useState(stamp.note_public === true);
@@ -194,21 +208,34 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
           </button>
         </div>
 
-        {arrival && !readOnly && (
+        {!readOnly && (
+          <div className="mt-3 rounded-[14px] px-3.5 py-3" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
+            <span className="block uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".14em", color: INK3 }}>Who can see this stamp</span>
+            <div className="flex gap-2 mt-2">
+              {[[true, "🔒 Only me"], [false, "🌍 My passport"]].map(([h, label]) => (
+                <button key={label} type="button" onClick={() => setVisibility(h)} disabled={visBusy} aria-pressed={onlyMe === h}
+                  className="flex-1 rounded-full py-2 font-semibold disabled:opacity-60"
+                  style={{ background: onlyMe === h ? INK : "#fff", color: onlyMe === h ? "#fff" : INK, border: `1px solid ${RULE}`, fontSize: fs(13) }}>{label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!readOnly && (
           <div className="mt-3 rounded-[14px] px-3.5 py-3" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
             {!noteEdit ? (
               <button type="button" onClick={() => setNoteEdit(true)} className="w-full text-left">
                 <span className="block uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".14em", color: "#8A5410" }}>
-                  ✈️ Trip note · {stamp.note && stamp.note_public ? "🌍 Shared" : "🔒 Private"}
+                  {arrival ? "✈️ Trip note" : "📝 Memory"} · {stamp.note && stamp.note_public ? "🌍 Shared" : "🔒 Private"}
                 </span>
                 <span className="block" style={{ fontFamily: SERIF, fontSize: fs(16), color: stamp.note ? INK : INK3, marginTop: 3, lineHeight: 1.3 }}>
-                  {stamp.note || "What was this trip for? Add a note only you can see."}
+                  {stamp.note || (arrival ? "What was this trip for? Add a note only you can see." : "Want to remember something about this place? Add a note only you can see.")}
                 </span>
               </button>
             ) : (
               <>
                 <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value.slice(0, 280))} rows={3} autoFocus
-                  placeholder="Visiting family, a conference, our honeymoon…" aria-label="Trip note"
+                  placeholder={arrival ? "Visiting family, a conference, our honeymoon…" : "Best coffee ever… an important day… who you were with"} aria-label={arrival ? "Trip note" : "Memory"}
                   className="w-full rounded-xl px-3 py-2 outline-none resize-none" style={{ border: `1px solid ${RULE}`, background: IVORY, fontSize: fs(14.5), color: INK }} />
                 <label className="flex items-center gap-2 mt-2" style={{ fontSize: fs(12.5), color: INK3 }}>
                   <input type="checkbox" checked={notePublic} onChange={(e) => setNotePublic(e.target.checked)} />

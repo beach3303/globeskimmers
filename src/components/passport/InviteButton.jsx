@@ -21,8 +21,8 @@ export default function InviteButton({ compact = false }) {
     try {
       const [{ handle }, { data: sl }] = await Promise.all([getHandle(), getShareLink()]);
       const url = sl?.url || "https://globeskimmers.io";
-      const who = handle ? `I'm @${handle} on Globeskimmers` : "I'm on Globeskimmers";
-      const text = `${who} 🛂 — a virtual passport that stamps every place you go. Come collect with me: ${url}`;
+      const me = handle ? ` (I'm @${handle})` : "";
+      const text = `Join me on Globeskimmers 🌎✈️${me} Claim your username, collect stamps from everywhere you go, save memories & tag the people you share them with. Let's fill our virtual passports together! 💛 ${url}`;
       if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("Share")) {
         const { Share } = await import("@capacitor/share");
         await Share.share({ title: "Join me on Globeskimmers", text });

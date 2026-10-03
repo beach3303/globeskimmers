@@ -45,6 +45,7 @@ import { logEvent } from "@/lib/analytics";
 import { logSearch, logZeroResults } from "@/lib/logSearch";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import TravelerDishes from "@/components/finder/TravelerDishes";
+import { HereStamp } from "@/components/attraction/AttractionExtras";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
 import { MapPin, Utensils, Clock, SlidersHorizontal, SearchX, AlertCircle } from "lucide-react";
@@ -783,6 +784,7 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
           <AIDetailsSection placeId={restaurant.placeId||restaurant.id} placeName={name} lat={restaurant.lat} lng={restaurant.lng} page="PlacesToEat" kind="restaurant"/>
         </div>
         <div style={{marginTop:t(fs(12),fs(10))}}>
+          <HereStamp place={{id:restaurant.placeId||restaurant.id,name,lat:restaurant.lat,lng:restaurant.lng,types:restaurant.types,formattedAddress:restaurant.formattedAddress||restaurant.address}}/>
           <TravelerDishes place={{id:restaurant.placeId||restaurant.id,name,lat:restaurant.lat,lng:restaurant.lng}} kind="restaurant"/>
         </div>
 

@@ -126,6 +126,11 @@ export async function setStampNote(stamp_id, { note, isPublic } = {}) {
   const { data, error } = await callWorker('passport/stamp/note', body);
   return { note: data?.note ?? null, notePublic: data?.note_public === true, error: error || data?.error || null };
 }
+// Who sees a stamp: hidden = only me; shown = my shared passport + friends' feeds.
+export async function setStampVisibility(stamp_id, hidden) {
+  const { data, error } = await callWorker('passport/stamp/visibility', { stamp_id, hidden: !!hidden });
+  return { hidden: data?.hidden === true, error: error || data?.error || null };
+}
 // The owner's caption under one photo (moderated; '' clears it).
 export async function setPhotoCaption(photo_id, caption) {
   const { data, error } = await callWorker('passport/photo/caption', { photo_id, caption });

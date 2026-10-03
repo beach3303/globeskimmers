@@ -87,7 +87,7 @@ function TripNote({ stamp, readOnly }) {
     <div className="w-full mt-2.5 rounded-xl px-3 py-2" style={{ background: IVORY_2, border: `1px solid ${RULE}` }}>
       {!readOnly && (
         <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".06em", color: INK3, textTransform: "uppercase" }}>
-          ✈️ Trip note · {stamp.note_public ? "🌍 Shared" : "🔒 Private"}
+          {stamp.kind === "airport" || stamp.entity_type === "border" ? "✈️ Trip note" : "📝 Memory"} · {stamp.note_public ? "🌍 Shared" : "🔒 Private"}
         </div>
       )}
       <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(15), color: INK, lineHeight: 1.3, marginTop: readOnly ? 0 : 2, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
@@ -453,6 +453,7 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
       ...(verified !== "gps" ? { await_proof: true } : {}),
     });
     if (error || !data?.id) { setBusy(false); showToast(error || "Could not add stamp", "error"); return; }
+    if (data.private) showToast("This may be a sensitive place ❤️ — the stamp starts private. Share it from the stamp anytime.", "success");
     let proof = null;
     for (const f of photos) {
       try {

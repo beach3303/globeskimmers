@@ -11,7 +11,7 @@
 import React, { useEffect, useState } from "react";
 import { DollarSign, MapPin } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
-import { addStamp, metersBetween } from "@/lib/passport";
+import { addStamp, metersBetween, setStampNote } from "@/lib/passport";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { resolveStampVariant } from "@/lib/stampVariants";
 import { countryCode } from "@/lib/countries";
@@ -20,6 +20,7 @@ import { getCurrentPositionSmart } from "@/lib/geolocation";
 import { showToast } from "@/components/Toast";
 import { openPartner } from "@/lib/openPartner";
 import Guestbook from "@/components/Guestbook";
+import { useLocation } from "@/components/location/LocationContext";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -68,7 +69,22 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
   const link = resolved?.stamp || null;
   const [busy, setBusy] = useState(false);
   const [stamped, setStamped] = useState(false);
-  const [notHere, setNotHere] = useState(null); // null | { meters } | { noFix: true }
+  const [notHere, setNotHere] = useState(null); // null | { meters } | { noFix: true } | { message }
+  const [stampedId, setStampedId] = useState(null);
+  const [startedPrivate, setStartedPrivate] = useState(false);
+  const [memory, setMemory] = useState("");
+  const [memBusy, setMemBusy] = useState(false);
+  const [memSaved, setMemSaved] = useState(false);
+  const [howOpen, setHowOpen] = useState(false);
+  const saveMemory = async () => {
+    if (!stampedId || !memory.trim() || memBusy) return;
+    setMemBusy(true);
+    const { error } = await setStampNote(stampedId, { note: memory.trim() });
+    setMemBusy(false);
+    if (error) { showToast(error, "error"); return; }
+    setMemSaved(true);
+    showToast("Saved privately to your stamp 🔒", "success");
+  };
   const name = a.displayName?.text || a.name || "this place";
   const pid = String(a.placeId || a.id || "");
   const kind = idKind(pid);
@@ -122,6 +138,8 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
     if (data?.code === "not_here" || data?.code === "unlocatable" || data?.code === "proof_needed") { setNotHere({ message: data.error || null }); return; }
     if (error) { showToast(/sign in/i.test(error) ? "Sign in to stamp your Virtual Passport" : error, "error"); return; }
     setStamped(true);
+    setStampedId(data?.id || null);
+    setStartedPrivate(data?.private === true);
     showToast(iconic ? "✓ Verified — added to your Virtual Passport 🛂" : "✓ “I was here” — added to your Virtual Passport 🛂", "success");
   };
 
@@ -134,8 +152,36 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
       </button>
       {!stamped && !notHere && (
         <p style={{ fontSize: fs(11.5), color: INK3, textAlign: "center", marginTop: 5 }}>
-          {iconic ? "An official GlobeSkimmers stamp" : "A typographic “I was here” stamp"} · only at the place, by GPS
+          {iconic ? "An official GlobeSkimmers stamp" : "A typographic “I was here” stamp"} · only at the place, by GPS ·{" "}
+          <button type="button" onClick={() => setHowOpen((v) => !v)} style={{ textDecoration: "underline", color: "inherit" }}>How stamps work</button>
         </p>
+      )}
+      {howOpen && !stamped && (
+        <ul style={{ marginTop: 8, borderRadius: 12, background: "#FBF6EC", border: `1px solid ${RULE}`, padding: "10px 12px 10px 28px", fontSize: fs(12.5), color: INK, lineHeight: 1.45, listStyle: "disc" }}>
+          <li>A stamp is earned by being there: your phone&rsquo;s location has to be inside the place when you tap.</li>
+          <li>We never show where you stood — only the place&rsquo;s name and the date.</li>
+          <li>Notes and photos are yours: private unless you choose to share them.</li>
+          <li>Hospitals, clinics, schools, places of worship and other sensitive places start private. You never have to say why you were there.</li>
+        </ul>
+      )}
+      {stamped && startedPrivate && (
+        <p style={{ marginTop: 8, borderRadius: 12, border: "1px solid #E6D3EA", background: "#FBF5FC", padding: "10px 12px", fontSize: fs(13), color: "#5B2B66" }}>
+          This may be a sensitive place ❤️ — this stamp starts private, so only you can see it. You can share it from your Passport anytime.
+        </p>
+      )}
+      {stamped && stampedId && !memSaved && (
+        <div style={{ marginTop: 10, borderRadius: 14, border: `1px solid ${RULE}`, background: "#fff", padding: "12px 12px 10px" }}>
+          <div style={{ fontFamily: SERIF, fontSize: fs(18), color: INK, lineHeight: 1.2 }}>Want to remember something about this moment?</div>
+          <div style={{ fontSize: fs(12), color: INK3, marginTop: 2 }}>🔒 Optional, and only you can see it — share it on your passport later if you like.</div>
+          <textarea value={memory} onChange={(e) => setMemory(e.target.value.slice(0, 280))} rows={2}
+            placeholder="Best coffee ever… an important day… who you were with" aria-label="Memory"
+            style={{ width: "100%", marginTop: 8, borderRadius: 10, border: `1px solid ${RULE}`, padding: "8px 10px", fontSize: fs(14), color: INK, resize: "none", fontFamily: "inherit" }} />
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
+            <button type="button" onClick={() => setMemSaved(true)} style={{ fontSize: fs(13), color: INK3, padding: "6px 10px" }}>Not now</button>
+            <button type="button" onClick={saveMemory} disabled={memBusy || !memory.trim()}
+              style={{ fontSize: fs(13), fontWeight: 700, color: "#fff", background: STAMP, borderRadius: 10, padding: "6px 14px", opacity: memory.trim() ? 1 : 0.5 }}>{memBusy ? "Saving…" : "Save memory"}</button>
+          </div>
+        </div>
       )}
       {notHere && (
         <p style={{ marginTop: 8, borderRadius: 12, border: "1px solid #FCD9A8", background: "#FFF8EC", padding: "10px 12px", fontSize: fs(13), color: "#7A4A0C" }}>
@@ -146,6 +192,22 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
         </p>
       )}
     </div>
+  );
+}
+
+// "You're here — stamp it" on any place card (restaurants, cafés…): "If you were
+// there, you can stamp it." Shows only while the device's own GPS fix is inside
+// the place; the worker re-checks against Google's location.
+export function HereStamp({ place, formatDistance }) {
+  const { currentGpsLocation } = useLocation();
+  const g = currentGpsLocation?.coordinates;
+  const lat = Number(place?.lat), lng = Number(place?.lng);
+  if (!g || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (metersBetween(g.latitude, g.longitude, lat, lng) > stampRadiusFor({ types: place.types }) + 50) return null;
+  const pid = String(place.id || "");
+  return (
+    <StampHereButton a={{ ...place, lat, lng, placeId: pid, displayName: { text: place.name } }}
+      link={{ stamp: null, gid: idKind(pid) === "google" ? pid : null }} formatDistance={formatDistance} />
   );
 }
 
