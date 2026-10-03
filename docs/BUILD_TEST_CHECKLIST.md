@@ -1102,3 +1102,15 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - To test on a phone (after OTA): land at an airport or use the Passport arrival prompt →
   write a note → Skip/Save; open the stamp → toggle sharing → view your public link.
 - Founder: `git pull && npm run cap:sync && npm run ota` to ship the app side.
+
+## 2026-10-03 (night) — Top 3 dishes, counted honestly (bad5f92 → v13)
+- /ai-details for restaurant + coffee: the AI names up to 5 candidates with literal words
+  and the reviews about each; worker code counts a review only if claimed AND literal,
+  keeps the top 3 (topDishes + dishReviewsRead). bestDish/alsoRecommended still filled for
+  older builds. Prompt v13 — every food panel regenerates once (Haiku only; details cached).
+- Iterations, from live tests: v10 literal-only gave Guelaguetza "Mole Negro 5 of 5"
+  ("molé sampler" → "mole"); v11 claims-only undercounted; v12 shared-word filter dropped
+  Langer's pastrami to 1; v13 holds on 9 places (DTF, Guelaguetza, Langer's, Tsujita,
+  Phở 79, Leo's, Blue Bottle [coffee], Sushi Gen, Ichiran Shibuya), spot-checked by hand.
+- Regex "Customer favorites" retired in the worker (returns []) and the card.
+- App side (TOP DISHES / ☕ TOP ORDERS list with the count line) ships with the next OTA.

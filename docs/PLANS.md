@@ -169,9 +169,13 @@ THE QUEUE — founder-agreed 2026-10-03 (build order; strike as shipped):
       stamp, editable in the stamp sheet (airport + border), "Show on my shared passport"
       passes text moderation; the public booklet strips unshared notes server-side.
       Ships to phones with the next OTA.
-  [ ] Top 3 dishes, counted honestly: AI names the dishes, CODE counts mentions in the
+  [x] Top 3 dishes, counted honestly: AI names the dishes, CODE counts mentions in the
       reviews we have ("in 4 of 5 recent reviews"); our own travelers' dish posts add
       "ordered by N travelers" (the founder's "mentioned 50 times" grows from our data)
+      Live (prompt v13): "Mentioned in 3 of the 5 Google reviews we read" — a review counts
+      only if the AI says it's about that dish AND its text names it (a true lower bound).
+      Regex "Customer favorites" chips removed (they showed "Just As Expected"). The
+      "ordered by N travelers" half ships with "Add your dish" (next item).
   [ ] Option C phase 2: traveler photos on places (proof-gated: GPS or photo location),
       opt-in from stamp/postcard/guestbook photos, "Add your dish" on restaurants; cards
       prefer traveler photo > Wikimedia > Google (compliant bridge, credited)

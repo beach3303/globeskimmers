@@ -3246,7 +3246,8 @@ async function handleAIDetails(request, env) {
         // v7: dropped goodFor/notIdealFor/headsUp (duplicates of verdict +
         // goodToKnow), so the response is leaner again. ~1500 covers the
         // remaining fields with headroom for richer bestTime/value copy.
-        max_tokens: 1500,
+        // v10+: topDishes carries up to 5 candidates with words + review lists.
+        max_tokens: 2000,
         system: buildAIDetailsSystemPrompt(kind),
         messages: [{ role: 'user', content: userContent }]
       })
