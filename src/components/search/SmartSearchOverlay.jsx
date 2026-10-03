@@ -25,6 +25,7 @@ import { ruleParse, runSmartSearch } from "@/lib/smartSearch";
 import { logSearch } from "@/lib/logSearch";
 import { createPageUrl } from "@/utils";
 import DreamAnswerCard from "./DreamAnswerCard";
+import { openAttraction } from "@/lib/openAttraction";
 
 const IVORY = "#FFFCF7", INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
 const RECENTS_KEY = "gs_smart_search_recents_v1";
@@ -269,9 +270,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
             <DreamAnswerCard
               destination={dream.destination}
               onView={() => {
-                // Clear any stale in-app handoff so ?id= wins (belt — ActivityDetail also compares ids).
-                try { sessionStorage.removeItem("current_activity"); sessionStorage.removeItem("activity_location"); } catch { /* ignore */ }
-                navigate(createPageUrl("ActivityDetail") + "?id=" + encodeURIComponent(dream.destination.id));
+                openAttraction(navigate, dream.destination);
                 onClose();
               }}
               onPerfectDay={() => { navigate(createPageUrl("PerfectDay")); onClose(); }}

@@ -37,6 +37,7 @@ import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
 import DestinationStrip from "@/components/search/DestinationStrip";
 import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
 import FriendsTravels from "@/components/home/FriendsTravels";
+import { openAttraction } from "@/lib/openAttraction";
 
 // Translation mapping for greetings — shown next to the mono "Hello" kicker
 // when the active location's country has a non-English primary language.
@@ -478,40 +479,10 @@ export default function HomePage() {
     if (routes[actionLabel]) navigate(createPageUrl(routes[actionLabel]));
   };
 
-  // Dream-shelf tap → the same ActivityDetail hand-off HomeRows.openFullPage
-  // uses (attraction row into sessionStorage as the fast path, ?id= keeps the
-  // page deep-linkable). Inlined here — Home owns what opening a dream means.
+  // Dream-shelf tap → the attraction's Things to Do card.
   const openDreamActivity = (item) => {
-    try {
-      const loc = getActiveLocation?.();
-      const activity = {
-        id: item.id,
-        name: item.name,
-        category: item.category,
-        photos: item.photoUrl ? [item.photoUrl] : [],
-        description: item.whyVisit || item.description || "",
-        address: item.address || "",
-        latitude: item.lat,
-        longitude: item.lng,
-        rating: item.rating,
-        free_to_visit: item.freeToVisit,
-        distance_km: Number.isFinite(item.distanceMiles) ? +(item.distanceMiles * 1.60934).toFixed(1) : undefined,
-        // Stamps earned from the detail page carry their country (passport
-        // "countries" count, GPS-vs-IP check) and the per-row stamp radius
-        // override — pass them through whenever the row has them.
-        city: item.city || undefined,
-        region: item.region || item.state || undefined,
-        country: item.country || undefined,
-        countryCode: item.countryCode || item.cc || undefined,
-        footprint_radius_m: item.footprint_radius_m ?? item.footprintRadiusM ?? undefined,
-      };
-      sessionStorage.setItem("current_activity", JSON.stringify(activity));
-      if (loc) sessionStorage.setItem("activity_location", JSON.stringify(loc));
-      trackEvent("dream_shelf_open_detail", { place_id: item.id, place_name: item.name });
-      navigate(createPageUrl("ActivityDetail") + "?id=" + encodeURIComponent(activity.id));
-    } catch {
-      handleQuickAction("Things to Do"); // safe fallback to the finder list
-    }
+    trackEvent("dream_shelf_open_detail", { place_id: item.id, place_name: item.name });
+    if (!openAttraction(navigate, item)) handleQuickAction("Things to Do");
   };
 
 

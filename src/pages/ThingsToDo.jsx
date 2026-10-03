@@ -8,18 +8,19 @@ import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
-import { trackAffiliateClick } from "@/lib/affiliate";
-import { viatorSearchLink, viatorProductLink } from "@/lib/viator";
 import { openPartner } from "@/lib/openPartner";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import MapAppSelector from "@/components/MapAppSelector";
 import AttractionAIDetails from "@/components/AttractionAIDetails";
+import AttractionExtras from "@/components/attraction/AttractionExtras";
+import { stampRadiusFor } from "@/lib/stampRadius";
+import { metersBetween } from "@/lib/passport";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 import { logSearch, logZeroResults } from "@/lib/logSearch";
 import { matchesQuery } from "@/lib/searchText";
-import { ChevronLeft, MapPin, Star, CalendarDays, X } from "lucide-react";
+import { ChevronLeft, MapPin, Star } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import PersonaChooser from "@/components/PersonaChooser";
@@ -451,149 +452,14 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
 // fields, handlers, and sub-components. fs() stays on every text size so the
 // 4-step glasses control scales card text gracefully (serif name has a 2-line
 // clamp + the card uses min-height so it GROWS instead of clipping).
-// Only surface "Book a tour here" (Viator) where a bookable experience actually
-// exists — real attractions / landmarks / museums / ticketed sights — NOT on
-// generic parks, beaches, plazas, or spots with no comparable tour. Keeps the
-// affiliate honest (no dead "book a tour" that returns nothing relevant).
-const TOURABLE_RE = /tourist_attraction|attraction|museum|gallery|monument|memorial|landmark|historic|heritage|castle|palace|\bfort\b|ruin|temple|cathedral|basilica|shrine|mosque|tower|observation|viewpoint|zoo|aquarium|theme_park|amusement|water_?park|national_park|waterfall|cave|volcano|cruise|\bboat\b|harbou?r|botanical|winery|distillery|culture|cultural/i;
-function isTourable(a) {
-  const hay = `${a?.category || ''} ${(a?.types || []).join(' ')} ${a?.activityLabel || ''} ${a?.activityCategory || ''}`.toLowerCase();
-  return TOURABLE_RE.test(hay);
-}
-
-// Tour-row formatters. Prices are requested in USD; anything else keeps its code.
-const tourPrice=(tp)=>tp?.fromPrice==null?null:`${tp.currency==="USD"?"$":""}${Math.round(tp.fromPrice)}${tp.currency&&tp.currency!=="USD"?` ${tp.currency}`:""}`;
-// "today" / "Sat, Sep 5" from a YYYY-MM-DD schedule date (UTC day granularity).
-const tourNextDate=(iso)=>{
-  if(!iso)return null;
-  if(iso===new Date().toISOString().slice(0,10))return "today";
-  const d=new Date(`${iso}T12:00:00Z`);
-  return Number.isNaN(d.getTime())?null:d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",timeZone:"UTC"});
-};
-// "Sat, Mar 14" from YYYY-MM-DD — travel-date chip + availability lines (UTC day
-// granularity, same convention as tourNextDate above, minus the "today" case).
-const travelDateLabel=(iso)=>{
-  if(!iso)return null;
-  const d=new Date(`${iso}T12:00:00Z`);
-  return Number.isNaN(d.getTime())?null:d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",timeZone:"UTC"});
-};
-const isoToday=()=>new Date().toISOString().slice(0,10);
-const isoDaysOut=(days)=>{const d=new Date();d.setDate(d.getDate()+days);return d.toISOString().slice(0,10);};
-// Compact mono travel-date chip — "Pick a date" opens the NATIVE date input (an
-// invisible overlay, so the tap lands on it directly; the repo has no date-picker
-// lib and this works on web + both Capacitor shells). Min today, max one year
-// out. With a date set it reads "Sat, Mar 14" (tap = repick) and the X clears.
-// Quiet by design — availability is a helper, not the page's primary action.
-function TourDateChip({travelDate,onChange}){
-  const label=travelDateLabel(travelDate);
-  return(
-    <span onClick={(e)=>e.stopPropagation()} style={{position:"relative",display:"inline-flex",alignItems:"center",gap:"calc(5px*var(--fs))",background:"#fff",border:`1px solid ${ED_RULE}`,borderRadius:"999px",padding:"calc(4px*var(--fs)) calc(10px*var(--fs))",fontFamily:ED_MONO,fontSize:"calc(11px*var(--fs))",fontWeight:500,color:ED_INK2,whiteSpace:"nowrap"}}>
-      <CalendarDays size={12} color={ED_INK3} strokeWidth={2}/>
-      <span>{label||"Pick a date"}</span>
-      <input type="date" value={travelDate||""} min={isoToday()} max={isoDaysOut(365)}
-        onChange={(e)=>onChange(e.target.value||null)} aria-label="Travel date for tour availability"
-        style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,cursor:"pointer",border:"none",padding:0,margin:0}}/>
-      {travelDate&&<button onClick={(e)=>{e.stopPropagation();onChange(null);}} aria-label="Clear travel date" style={{position:"relative",zIndex:1,display:"inline-flex",alignItems:"center",background:"none",border:"none",padding:0,margin:0,cursor:"pointer",color:ED_INK3}}><X size={12} strokeWidth={2.4}/></button>}
-    </span>
-  );
-}
-// One product's availability on the picked date — mono data line. Renders ONLY
-// on a real answer: true → "Sat, Mar 14: available · from $89" (price when the
-// worker returned one), false → quiet "not available Sat, Mar 14". null =
-// couldn't verify → render NOTHING availability-related (honest-UX rule; the
-// caller keeps its schedule line and the source credit stays un-earned).
-function AvailabilityLine({av,travelDate,fontSize}){
-  if(!av||(av.available!==true&&av.available!==false))return null;
-  const dLabel=travelDateLabel(travelDate);
-  if(!dLabel)return null;
-  const price=av.available?tourPrice(av):null;
-  return(
-    <div style={{marginTop:"calc(3px*var(--fs))",fontFamily:ED_MONO,fontSize,fontWeight:av.available?600:400,color:av.available?"#2E7D46":ED_INK3}}>
-      {av.available?`${dLabel}: available${price?` · from ${price}`:""}`:`not available ${dLabel}`}
-    </div>
-  );
-}
-function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet,travelDate=null,onTravelDate=null}){
+function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet}){
   const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false); const [hoursExp,setHoursExp]=useState(false); const [gallery,setGallery]=useState({open:false,idx:0});
-  const [viatorMatch,setViatorMatch]=useState(null); // null=checking · true=Viator has products · false=no · 'na'=can't verify (no key/rate-limited)
-  const [tours,setTours]=useState([]);               // top tours AT this attraction (price · duration · rating) — /viator/products
-  const [sched,setSched]=useState(null);             // {code:{daysLabel,nextDate}} — /viator/schedule, fetched lazily on expand
-  const [avail,setAvail]=useState({});               // {`${code}|${date}`: /viator/availability answer} — fetched lazily when a travel date is picked
-  const availReq=useRef({});                         // keys already requested — ONE call per code+date; a date change fetches only its new keys
   const fs=(n)=>`calc(${n}px*var(--fs))`;
   // t(tabletValue, phoneValue) — pick the size for the active platform. Used for
   // BOTH fs()-wrapped type sizes and raw px (photo height, radius, paddings).
   const t=(tab,ph)=>isTablet?tab:ph;
   useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
   const name=a.displayName?.text||a.name||"Activity"; const st=openStatus(a);
-  // Book a tour — Viator affiliate deep-link (search for this attraction). High
-  // intent; earns via pid. Logged through /aff/click (SubID→D1).
-  const openViatorTour=async()=>{
-    const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorSearchLink(name),category:"tour",productName:name,destCity:a.city,destCountry:a.country});
-    openPartner(url);   // in-app sheet — stays logged in, keeps attribution
-  };
-  // Only show "Book a tour" when Viator actually has products for THIS attraction.
-  // Pre-filter with isTourable (cheap, no API) to skip non-attractions; the API
-  // confirms a real match. 'na' (no key / rate-limited) → fall back to heuristic.
-  useEffect(()=>{
-    if(!isTourable(a)){setViatorMatch(false);return;}
-    let cancelled=false;
-    // /viator/products is a superset of the old /viator/match: the same single
-    // freetext call now keeps the top 3 products (price · duration · rating ·
-    // free cancellation) instead of collapsing them to a boolean.
-    // lat/lng let the worker scope the search to THIS Viator destination —
-    // without it "Disneyland Park, Anaheim" led with Disneyland Paris tickets.
-    callWorker('viator/products',{name,city:a.city||'',lat:a.lat??a.location?.latitude,lng:a.lng??a.location?.longitude,count:3})
-      .then(({data})=>{
-        if(cancelled)return;
-        const list=Array.isArray(data?.products)?data.products:[];
-        setTours(list);
-        setViatorMatch(data?.match===true||list.length>0?true:data?.match===false?false:'na');
-      })
-      .catch(()=>{if(!cancelled)setViatorMatch('na');});
-    return()=>{cancelled=true;};
-  },[]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Operating schedule ("Runs daily · next Sat, Sep 5") — only once the card is
-  // expanded, so a 20-card list never fans out 60 schedule calls on load.
-  useEffect(()=>{
-    if(!exp||sched||!tours.length)return;
-    let cancelled=false;
-    callWorker('viator/schedule',{codes:tours.map(tp=>tp.code).filter(Boolean)})
-      .then(({data})=>{if(!cancelled)setSched(data?.schedules||{});})
-      .catch(()=>{if(!cancelled)setSched({});});
-    return()=>{cancelled=true;};
-  },[exp,tours,sched]);
-  // Date availability — when the user picked a travel date, ask /viator/availability
-  // per visible tour (same lazy gate as the schedule effect above: only once the
-  // card is expanded, so a list never fans out N×3 calls on a date pick). Cached
-  // by code+date, so re-expanding or re-picking a checked date never re-calls.
-  useEffect(()=>{
-    if(!exp||!travelDate||!tours.length)return;
-    let cancelled=false;
-    tours.forEach(tp=>{
-      if(!tp.code)return;
-      const key=`${tp.code}|${travelDate}`;
-      if(availReq.current[key])return;
-      availReq.current[key]=true;
-      callWorker('viator/availability',{productCode:tp.code,travelDate,adults:2})
-        .then(({data})=>{
-          if(cancelled){delete availReq.current[key];return;} // unmounted — let a remount refetch
-          setAvail(m=>({...m,[key]:data&&typeof data==="object"?data:{available:null}}));
-        })
-        .catch(()=>{if(!cancelled)setAvail(m=>({...m,[key]:{available:null}}));}); // couldn't verify → renders nothing
-    });
-    return()=>{cancelled=true;};
-  },[exp,tours,travelDate]);
-  // Tap a tour row → the PRODUCT page (not a search page), in the in-app sheet,
-  // with the product code on the click record for attribution.
-  const openTourProduct=async(tp)=>{
-    const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorProductLink(tp.url)||viatorSearchLink(tp.title),productId:tp.code,category:"tour",productName:tp.title,destCity:a.city,destCountry:a.country});
-    if(url) openPartner(url);
-  };
-  // Credit "availability per Viator" only when a REAL answer (true/false) rendered
-  // for the picked date — mirrors the sched credit guard below; available:null
-  // renders nothing, so it earns no credit.
-  const availAnswered=!!travelDate&&tours.some(tp=>{const av=avail[`${tp.code}|${travelDate}`];return !!av&&(av.available===true||av.available===false);});
   const activeTags=PROP_TAGS.filter(t=>a.props?.[t.key]);
   const aColor=a.activityColor||T.accent;
   const photos=(a.photos||[]).filter(Boolean);
@@ -678,7 +544,7 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
         {a.nationalPhoneNumber&&(
           <a href={`tel:${a.nationalPhoneNumber}`} style={{marginTop:fs(t(14,12)),background:"#EFF4FB",borderRadius:t("16px","14px"),padding:t(`${fs(18)} ${fs(20)}`,`${fs(12)} ${fs(14)}`),display:"flex",alignItems:"center",gap:fs(t(14,12)),textDecoration:"none"}}>
             <span style={{fontSize:fs(t(24,20))}}>📞</span>
-            <span><span style={{display:"block",fontSize:fs(t(20,13.5)),fontWeight:600,color:"#2E6FE0"}}>{a.nationalPhoneNumber}</span><span style={{fontSize:fs(t(15,12)),color:ED_INK3}}>Tap to call / book</span></span>
+            <span><span style={{display:"block",fontSize:fs(t(20,13.5)),fontWeight:600,color:"#2E6FE0"}}>{a.nationalPhoneNumber}</span><span style={{fontSize:fs(t(15,12)),color:ED_INK3}}>Tap to call</span></span>
           </a>
         )}
 
@@ -689,62 +555,9 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
           <button onClick={()=>setExp(e=>!e)} style={{flex:1,borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:exp?ED_INK:ED_IVORY2,color:exp?"#fff":ED_INK2}}>{exp?"Less ▴":"More ▾"}</button>
         </div>
 
-        {/* Book a tour — Viator affiliate. Shows ONLY when Viator actually has
-            products for this attraction (verified via /viator/match). 'na' = can't
-            verify (no API key / rate-limited) → falls back to the isTourable gate. */}
-        {/* Tours here — Viator products AT this attraction: price · duration ·
-            rating · free cancellation. A real listing, not a search-page link;
-            a tap lands on the product in the in-app sheet. Sources labeled. */}
-        {viatorMatch===true&&tours.length>0&&(
-          <div style={{marginTop:fs(t(14,10))}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:fs(8),flexWrap:"wrap",margin:`0 ${fs(2)} ${fs(8)}`}}>
-              <span style={{display:"inline-flex",alignItems:"center",gap:fs(8)}}>
-                <span style={{fontWeight:700,fontSize:fs(t(16,13)),color:ED_INK2}}>🎟️ Tours here</span>
-                {onTravelDate&&<TourDateChip travelDate={travelDate} onChange={onTravelDate}/>}
-              </span>
-              <button onClick={openViatorTour} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit",fontSize:fs(t(13.5,11.5)),fontWeight:600,color:"#127a5e"}}>See all · Viator ↗</button>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:fs(8)}}>
-              {tours.map((tp)=>{
-                const s=sched?.[tp.code]; const price=tourPrice(tp); const next=tourNextDate(s?.nextDate);
-                const av=travelDate?avail[`${tp.code}|${travelDate}`]:null; const avAnswered=!!av&&(av.available===true||av.available===false);
-                return(
-                <button key={tp.code||tp.url} onClick={()=>openTourProduct(tp)} style={{display:"flex",gap:fs(t(12,10)),alignItems:"center",textAlign:"left",background:"#fff",border:`1px solid ${ED_RULE}`,borderRadius:t("14px","12px"),padding:fs(t(10,8)),cursor:"pointer",fontFamily:"inherit",width:"100%"}}>
-                  {tp.thumbnail&&<img src={tp.thumbnail} alt="" style={{width:fs(t(84,68)),height:fs(t(64,52)),objectFit:"cover",borderRadius:t("10px","8px"),flexShrink:0}}/>}
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:700,fontSize:fs(t(14.5,12.5)),color:ED_INK,lineHeight:1.3,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{tp.title}</div>
-                    <div style={{display:"flex",alignItems:"center",gap:fs(6),marginTop:fs(3),flexWrap:"wrap",fontSize:fs(t(12.5,11)),color:ED_INK3}}>
-                      {tp.rating!=null&&<span><span style={{color:"#E0922F"}}>★</span> {Number(tp.rating).toFixed(1)}{tp.reviews?` (${Number(tp.reviews).toLocaleString()})`:""}</span>}
-                      {tp.duration&&<span>· {tp.duration}</span>}
-                      {tp.freeCancellation&&<span style={{color:"#2E7D46",fontWeight:600}}>· Free cancellation</span>}
-                      {tp.skipTheLine&&<span style={{fontWeight:600}}>· Skip the line</span>}
-                    </div>
-                    {/* A real yes/no for the picked date REPLACES the generic schedule
-                        line; no date picked (or available:null) keeps the schedule default. */}
-                    {avAnswered
-                      ?<AvailabilityLine av={av} travelDate={travelDate} fontSize={fs(t(12,10.5))}/>
-                      :(s?.daysLabel||next)&&<div style={{marginTop:fs(3),fontSize:fs(t(12,10.5)),color:ED_INK3}}>{s?.daysLabel}{s?.daysLabel&&next?" · ":""}{next?(next==="today"?"runs today":`next ${next}`):""}</div>}
-                  </div>
-                  <div style={{textAlign:"right",flexShrink:0}}>
-                    {price&&<div style={{fontWeight:800,fontSize:fs(t(15,13)),color:ED_INK}}><span style={{fontWeight:500,fontSize:fs(t(11.5,10)),color:ED_INK3}}>from </span>{price}</div>}
-                    <div style={{marginTop:fs(4),background:"#127a5e",color:"#fff",padding:`${fs(5)} ${fs(10)}`,borderRadius:"999px",fontWeight:700,fontSize:fs(t(12,10.5))}}>Book</div>
-                  </div>
-                </button>
-                );
-              })}
-            </div>
-            {/* Credit the schedule source only when a schedule was actually rendered —
-                sched is {} (truthy) after an empty or failed /viator/schedule fetch. */}
-            <div style={{fontSize:fs(t(11,10)),color:ED_INK3,margin:`${fs(6)} ${fs(2)} 0`}}>Tours &amp; prices by Viator{sched&&Object.keys(sched).length?" · schedule per Viator":""}{availAnswered?" · availability per Viator":""} · we may earn a commission</div>
-          </div>
-        )}
-        {/* Plain button only when we KNOW tours exist but got no rows, or can't
-            verify ('na': worker/API unreachable) — the money path never vanishes. */}
-        {((viatorMatch===true&&tours.length===0)||viatorMatch==='na')&&(
-          <button onClick={openViatorTour} style={{width:"100%",marginTop:fs(t(12,8)),borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(17,13.5)),fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:fs(7),background:"#127a5e",color:"#fff"}}>
-            🎟️ Book a tour here <span style={{fontSize:fs(t(13,11)),opacity:0.85,fontWeight:600}}>· Viator ↗</span>
-          </button>
-        )}
+        {/* The attraction page (founder, 2026-10-03): GPS-only stamp, verified
+            prices + parking for planning a day and a budget, and the guestbook. */}
+        {forceExpanded&&<AttractionExtras a={a} formatDistance={formatDistance} isTablet={isTablet}/>}
 
         {/* Expanded details */}
         <AnimatePresence>
@@ -802,7 +615,7 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
                 {a.websiteUri&&(
                   <a href={a.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(t(16,14)),background:T.accentL,borderRadius:t("16px","14px"),textDecoration:"none",color:T.accentD,border:`1px solid ${T.accent}40`}}>
                     <span style={{fontSize:fs(t(22,18))}}>🌐</span>
-                    <span><span style={{display:"block",fontWeight:600,fontSize:fs(t(16,13.5))}}>Visit Website / Book</span><span style={{fontSize:fs(t(14,12)),color:ED_INK3}}>Tickets &amp; details</span></span>
+                    <span><span style={{display:"block",fontWeight:600,fontSize:fs(t(16,13.5))}}>Visit Website</span><span style={{fontSize:fs(t(14,12)),color:ED_INK3}}>Hours, prices &amp; details</span></span>
                   </a>
                 )}
               </div>
@@ -821,7 +634,7 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
 // Old verb keys stay so payloads cached before the change still color.
 const TRAVEL_COLORS={'100+ mi away':{bg:'#FEE2E2',color:'#DC2626'},'≈50–100 mi':{bg:'#FED7AA',color:'#C2410C'},'≈15–50 mi':{bg:'#FEF3C7',color:'#D97706'},'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'✈️ Flights Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'},'📍 Nearby':{bg:'#D1FAE5',color:'#059669'}};
 
-function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,cardRef=null,travelDate=null,onTravelDate=null}){
+function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,cardRef=null,pinned=false}){
   const [dirs,setDirs]=useState(false);
   const [gallery,setGallery]=useState({open:false,idx:0});
   // fs()-style scaler for the editorial body (used at both widths now).
@@ -866,6 +679,8 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
   // wired to the parent's useDistanceUnit hook, so use a simple miles
   // formatter (matches the compact card's "X.X mi" rendering).
   const fmtDist=(d)=>`${d.toFixed(1)} mi`;
+  // Standing at it? (the location in use is the user's own GPS fix) → offer the stamp.
+  const here=Number.isFinite(userLat)&&Number.isFinite(a.lat)&&metersBetween(userLat,userLng,a.lat,a.lng)<=stampRadiusFor({types:a.types,category:a.activityCategory,footprint_radius_m:a.stamp?.footprint_radius_m});
   // ── Editorial tier card (responsive) ────────────────────────────────────
   // Same DATA + handlers as before (open-modal onClick, photo-gallery taps,
   // Directions, Website) — restyled with the editorial tokens (serif name,
@@ -895,11 +710,13 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
         )}
       </div>
       <div style={{padding:t(`${fs(20)} ${fs(22)} ${fs(22)}`,`${fs(14)} ${fs(14)} ${fs(14)}`)}}>
+        {pinned&&<div style={{fontFamily:ED_MONO,fontSize:fs(t(12,10)),letterSpacing:".12em",textTransform:"uppercase",color:ED_INK3,marginBottom:fs(6)}}>From your stamps</div>}
         {a.activityLabel&&<div style={{fontSize:fs(t(14,11.5)),fontWeight:600,color:ED_TODO,letterSpacing:"0.2px",marginBottom:fs(4)}}>{a.activityIcon} {a.activityLabel}</div>}
         <div style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(t(26,21)),lineHeight:1.08,color:ED_INK,marginBottom:fs(10),display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
         {a.travelType&&<div style={{marginBottom:fs(8)}}><span style={{background:tc.bg,color:tc.color,padding:`${fs(5)} ${fs(t(12,10))}`,borderRadius:"999px",fontSize:fs(t(13,11)),fontWeight:700,display:"inline-block"}}>{a.travelType} · {a.distance}</span></div>}
         {a.rating&&<div style={{display:"flex",alignItems:"center",gap:fs(6),marginBottom:fs(8)}}><span style={{color:"#E0922F",fontSize:fs(t(16,13))}}>★</span><span style={{fontWeight:700,color:ED_INK2,fontSize:fs(t(16,13))}}>{a.rating}</span><span style={{color:ED_INK3,fontSize:fs(t(14,11.5))}}>({(a.userRatingCount||0).toLocaleString()})</span></div>}
         {a.formattedAddress&&<div style={{fontSize:fs(t(14,11.5)),color:ED_INK3,marginBottom:fs(12),whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress.split(',').slice(-3,-1).join(',').trim()}</div>}
+        {here&&<button onClick={(e)=>{e.stopPropagation();setExpanded(true);}} style={{width:"100%",marginBottom:fs(8),padding:fs(t(12,9)),borderRadius:t("14px","12px"),border:"none",background:"#B0472F",color:"#fff",fontWeight:700,fontSize:fs(t(15,12.5)),cursor:"pointer",fontFamily:"inherit"}}>📍 You&rsquo;re here — get the stamp</button>}
         <div style={{display:"flex",gap:fs(t(10,8))}}>
           <button onClick={(e)=>{e.stopPropagation();setDirs(true);}} style={{flex:1,padding:fs(t(13,10)),borderRadius:t("14px","12px"),border:"none",background:ED_TODO,color:"#fff",fontWeight:600,fontSize:fs(t(16,12.5)),cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
           {a.websiteUri&&<button onClick={(e)=>{e.stopPropagation();openPartner(a.websiteUri);}} style={{flex:1,padding:fs(t(13,10)),borderRadius:t("14px","12px"),border:"none",background:ED_IVORY2,color:ED_INK2,fontWeight:600,fontSize:fs(t(16,12.5)),cursor:"pointer",fontFamily:"inherit"}}>🌐 Website</button>}
@@ -925,7 +742,7 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
                 aria-label="Close"
                 style={{position:"absolute",top:"12px",right:"12px",zIndex:10000,width:"36px",height:"36px",borderRadius:"50%",border:"none",background:"rgba(255,255,255,0.95)",color:T.dark,fontSize:"calc(18px*var(--fs))",fontWeight:"800",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}
               >✕</button>
-              <ActivityCardTablet a={_photos.length?{...a,photos:_photos}:a} index={0} onMap={()=>setMapOpen(true)} isHighlighted={false} cardRef={null} forceExpanded={true} userLat={userLat} userLng={userLng} formatDistance={fmtDist} isTablet={isTablet} travelDate={travelDate} onTravelDate={onTravelDate}/>
+              <ActivityCardTablet a={_photos.length?{...a,photos:_photos}:a} index={0} onMap={()=>setMapOpen(true)} isHighlighted={false} cardRef={null} forceExpanded={true} userLat={userLat} userLng={userLng} formatDistance={fmtDist} isTablet={isTablet}/>
             </div>
           </motion.div>
         )}
@@ -937,7 +754,7 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
   );
 }
 
-function TierSection({title,icon,items,userLat,userLng,isTablet,defaultCollapsed=false,travelDate=null,onTravelDate=null}){
+function TierSection({title,icon,items,userLat,userLng,isTablet,defaultCollapsed=false}){
   const persona=usePersona();
   const [collapsed,setCollapsed]=useState(defaultCollapsed);
   if(!items?.length) return null;
@@ -968,7 +785,7 @@ function TierSection({title,icon,items,userLat,userLng,isTablet,defaultCollapsed
       </div>
       <AnimatePresence>{!collapsed&&(
         <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-          <div style={itemsLayout}>{personaRank(items,persona).map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} isTablet={isTablet} travelDate={travelDate} onTravelDate={onTravelDate}/>)}</div>
+          <div style={itemsLayout}>{personaRank(items,persona).map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} isTablet={isTablet}/>)}</div>
         </motion.div>
       )}</AnimatePresence>
     </div>
@@ -1004,18 +821,17 @@ export default function ThingsToDoFinder() {
   const [highlight,setHighlight]=useState(null);
   const [expandedIdx,setExpandedIdx]=useState(null);
   const [activePin,setActivePin]=useState(null);
-  // Activity search — surfaces bookable EXPERIENCES (Viator) the owned attractions
-  // DB can't cover (zip lining, whale watching, ATV…) + filters nearby places.
+  // Activity search — live Google places for any activity (zip lining, whale
+  // watching…) merged with nearby owned matches. No booking (founder, 2026-10-03).
   // NOTE: declared here (with the other state) rather than lower, because the
   // `filtered` useMemo below reads `submitted` — declaring it after `filtered`
   // hit the temporal dead zone and crashed the whole page on render.
   const [q,setQ]=useState("");
   const [submitted,setSubmitted]=useState("");
-  const [tours,setTours]=useState(null); // null=not searched · []=none · [...]=results
-  const [tourBusy,setTourBusy]=useState(false);
-  const [travelDate,setTravelDate]=useState(null);   // ISO YYYY-MM-DD | null — tour-availability date (chips in the tour headers)
-  const [tourAvail,setTourAvail]=useState({});       // {`${code}|${date}`: /viator/availability answer} — page-level experience rows
-  const tourAvailReq=useRef({});                     // keys already requested — one call per code+date
+  const [tourBusy,setTourBusy]=useState(false);    // the activity search is running
+  // A stamp tapped anywhere in the app opens HERE (founder, 2026-10-03): that
+  // attraction's card, pinned on top and opened. ?focus=<id> or router state.
+  const [focusCard,setFocusCard]=useState(null);
   const [searchPlaces,setSearchPlaces]=useState([]); // live Google Places keyword results
   const [searchError,setSearchError]=useState(null); // callWorker envelope error for the last search — distinct from "no results"
   const cardRefs=useRef({});
@@ -1206,50 +1022,23 @@ export default function ThingsToDoFinder() {
   // higher up with the rest of the component state (see note there).
   const runActivitySearch=async(explicitQuery)=>{
     const query=(typeof explicitQuery==='string'?explicitQuery:q).trim(); if(!query) return;
-    setSubmitted(query); setTourBusy(true); setTours(null); setSearchPlaces([]); setSearchError(null);
+    setSubmitted(query); setTourBusy(true); setSearchPlaces([]); setSearchError(null);
     try{
       const {data,error:fetchErr}=await callWorker(ROUTE.searchActivities,{query:expandActivityQuery(query),city,country,latitude:lat,longitude:lng,radiusMiles:radius});
       // callWorker never throws — a timeout / HTTP error resolves as { data:null, error }.
       // Route it to the catch below so a failed call is never logged as zero demand
       // (logZeroResults) or rendered as "Nothing for X nearby".
-      if(!data||typeof data!=="object"||(data.error&&!(data.places?.length||data.products?.length))) throw new Error(data?.error||fetchErr||"Network error");
+      if(!data||typeof data!=="object"||(data.error&&!data.places?.length)) throw new Error(data?.error||fetchErr||"Network error");
       const places=Array.isArray(data?.places)?data.places:[];
-      const products=Array.isArray(data?.products)?data.products:[];
       setSearchPlaces(places);
-      setTours(products);
-      // Geo-tagged demand signal — what activities/experiences people want, where.
-      const total=places.length+products.length;
+      // Geo-tagged demand signal — what activities people want, where.
+      const total=places.length;
       if(total) logSearch('things_to_do',query,{radius,resultCount:total});
       else logZeroResults('things_to_do',query,{radius});
-    }catch(e){ setTours([]); setSearchPlaces([]); setSearchError(e?.message||"Network error"); }
+    }catch(e){ setSearchPlaces([]); setSearchError(e?.message||"Network error"); }
     setTourBusy(false);
   };
-  const clearSearch=()=>{setQ("");setSubmitted("");setTours(null);setSearchPlaces([]);setSearchError(null);};
-  // Page-level date availability — when a travel date is picked, check each
-  // bookable-experience row via the worker's POST /viator/availability (one call
-  // per code+date, cached in tourAvail; a date change fetches only its new keys).
-  // Mirrors the per-card lazy pattern in ActivityCardTablet.
-  useEffect(()=>{
-    if(!travelDate||!tours||!tours.length)return;
-    let cancelled=false;
-    tours.forEach(tp=>{
-      if(!tp.code)return;
-      const key=`${tp.code}|${travelDate}`;
-      if(tourAvailReq.current[key])return;
-      tourAvailReq.current[key]=true;
-      callWorker('viator/availability',{productCode:tp.code,travelDate,adults:2})
-        .then(({data})=>{
-          if(cancelled){delete tourAvailReq.current[key];return;}
-          setTourAvail(m=>({...m,[key]:data&&typeof data==="object"?data:{available:null}}));
-        })
-        .catch(()=>{if(!cancelled)setTourAvail(m=>({...m,[key]:{available:null}}));}); // couldn't verify → renders nothing
-    });
-    return()=>{cancelled=true;};
-  },[travelDate,tours]);
-  // Credit "availability per Viator" in the attribution line only when a real
-  // yes/no actually rendered (available:null renders nothing — no credit).
-  const tourAvailAnswered=!!travelDate&&Array.isArray(tours)&&tours.some(tp=>{const av=tourAvail[`${tp.code}|${travelDate}`];return !!av&&(av.available===true||av.available===false);});
-
+  const clearSearch=()=>{setQ("");setSubmitted("");setSearchPlaces([]);setSearchError(null);};
   // Smart-Search spine / cross-finder handoff: a query passed via router state
   // prefills the box and auto-runs the activity search once coords are ready.
   const presetRanRef=useRef(false);
@@ -1262,14 +1051,19 @@ export default function ThingsToDoFinder() {
     runActivitySearch(String(pq).trim());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[routerLocation.state?.presetQuery,lat,lng]);
-  const openTour=async(p)=>{
-    const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorProductLink(p.url)||viatorSearchLink(p.title),productId:p.code,category:"tour",productName:p.title,destCity:city,destCountry:country});
-    if(url) openPartner(url);
-  };
-  const openViatorFallback=async()=>{
-    const url=await trackAffiliateClick({partner:"viator",targetUrl:viatorSearchLink(`${submitted} ${city}`.trim()),category:"tour",productName:submitted,destCity:city,destCountry:country});
-    if(url) openPartner(url);
-  };
+  // The stamp hand-off: load that ONE attraction as a Things to Do card.
+  const focusRanRef=useRef(null);
+  useEffect(()=>{
+    const fid=routerLocation.state?.focus?.id||new URLSearchParams(routerLocation.search||"").get("focus");
+    if(!fid||focusRanRef.current===fid) return;
+    focusRanRef.current=fid;
+    const hint=routerLocation.state?.focus||{};
+    callWorker('activities/one',{id:String(fid),userLat:lat,userLng:lng}).then(({data})=>{
+      if(data?.activity) setFocusCard({...data.activity,stamp:data.stamp??null});
+      else if(Number.isFinite(+hint.lat)) setFocusCard({id:String(fid),placeId:String(fid),name:hint.name||"Attraction",displayName:{text:hint.name||"Attraction"},lat:+hint.lat,lng:+hint.lng,photos:hint.photo?[hint.photo]:[],activityIcon:"⭐",stamp:data?.stamp??null});
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[routerLocation.state?.focus?.id,routerLocation.search]);
 
   return(
     <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
@@ -1314,7 +1108,7 @@ export default function ThingsToDoFinder() {
         <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
       </div>
 
-      {/* Activity search — bookable experiences (Viator) + nearby matches */}
+      {/* Activity search — any activity nearby */}
       <div className={`px-4 ${colWrap} mx-auto pb-2`}>
         <form onSubmit={(e)=>{e.preventDefault();runActivitySearch();}} style={{display:"flex",gap:"8px"}}>
           <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search anything to do — zip lining, snorkeling…" autoCapitalize="none" style={{flex:1,minWidth:0,padding:"11px 14px",borderRadius:"12px",border:"1.5px solid #E2E8F0",fontSize:"calc(14px*var(--fs))",fontFamily:"inherit",color:T.dark,background:"#fff"}}/>
@@ -1376,6 +1170,11 @@ export default function ThingsToDoFinder() {
       :viewMode==="list"?(<div style={isTablet
         ? {maxWidth:1024,margin:"0 auto",padding:"14px 24px 170px",display:"flex",flexDirection:"column",gap:"4px"}
         : {padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"4px"}}>
+        {focusCard&&(
+          <div style={{marginBottom:isTablet?"22px":"14px"}}>
+            <TierCard a={focusCard} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen pinned/>
+          </div>
+        )}
         {submitted&&(
           <div style={{marginBottom:"2px"}}>
             {filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Places matching &ldquo;{submitted}&rdquo;</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
@@ -1384,13 +1183,13 @@ export default function ThingsToDoFinder() {
         )}
         {browseFilterActive&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🔧</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Filtered results</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
         {!submitted&&!browseFilterActive&&(nationalIcons.length>0||regionalGems.length>0||nearbyAttractions.length>0)&&<PersonaChooser/>}
-        {!submitted&&!browseFilterActive&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet} travelDate={travelDate} onTravelDate={setTravelDate} defaultCollapsed/>}
-        {!submitted&&!browseFilterActive&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet} travelDate={travelDate} onTravelDate={setTravelDate} defaultCollapsed/>}
-        {!submitted&&!browseFilterActive&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet} travelDate={travelDate} onTravelDate={setTravelDate}/>}
+        {!submitted&&!browseFilterActive&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
+        {!submitted&&!browseFilterActive&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
+        {!submitted&&!browseFilterActive&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet}/>}
         {!submitted&&!browseFilterActive&&(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Near You</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
         {/* Empty state */}
         {submitted
-          ? (!tourBusy&&cardsList.length===0&&(!tours||tours.length===0)
+          ? (!tourBusy&&cardsList.length===0
               ? (searchError
                   /* The worker call failed — that is not "nothing nearby". Honest retry state. */
                   ? <div style={{textAlign:"center",padding:"40px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"12px"}}>📡</div><div style={{fontWeight:"800",fontSize:"calc(17px*var(--fs))",color:T.dark}}>Couldn&rsquo;t reach the server</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Check your connection and try again.</div><button onClick={()=>runActivitySearch(submitted)} style={{marginTop:"14px",padding:"10px 22px",borderRadius:"12px",border:"none",background:T.accent,color:"#fff",fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Try Again</button></div>
@@ -1406,51 +1205,16 @@ export default function ThingsToDoFinder() {
           const showBeyondHeader=submitted&&searchBeyond.length>0&&i===filtered.length;
           return (<React.Fragment key={a.id||i}>
             {showBeyondHeader&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:isTablet?"14px 4px 4px":"6px 4px 2px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🧭</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>A bit farther — worth the trip</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({searchBeyond.length})</span></div>}
-            <TierCard a={a} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={expandedIdx===i} cardRef={(el)=>cardRefs.current[i]=el} travelDate={travelDate} onTravelDate={setTravelDate}/>
+            <TierCard a={a} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={expandedIdx===i} cardRef={(el)=>cardRefs.current[i]=el}/>
           </React.Fragment>);
         })}</div>
 
-        {/* Bookable experiences (Viator) — AFTER the in-app results; monetized,
-            direct product deep-links. Demoted from the old top-of-page slot. */}
-        {submitted&&(tourBusy||(tours&&tours.length>0))&&(
-          <div style={{marginTop:"18px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap",margin:"4px 4px 10px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🎟️</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Book &ldquo;{submitted}&rdquo; experiences</span><TourDateChip travelDate={travelDate} onChange={setTravelDate}/></div>
-            {tourBusy?(<div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",padding:"6px 4px"}}>Searching tours…</div>):(<>
-              <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>{tours.map((tp)=>(
-                <button key={tp.code||tp.url} onClick={()=>openTour(tp)} style={{display:"flex",gap:"12px",alignItems:"center",textAlign:"left",background:"#fff",border:"1px solid #E8EDF2",borderRadius:"16px",padding:"10px",cursor:"pointer",fontFamily:"inherit"}}>
-                  {tp.thumbnail&&<img src={tp.thumbnail} alt="" style={{width:88,height:66,objectFit:"cover",borderRadius:"10px",flexShrink:0}}/>}
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:"700",fontSize:"calc(13.5px*var(--fs))",color:T.dark,lineHeight:1.3,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{tp.title}</div>
-                    <div style={{display:"flex",alignItems:"center",gap:"8px",marginTop:"3px",flexWrap:"wrap"}}>
-                      {tp.rating!=null&&<span style={{fontSize:"calc(11.5px*var(--fs))",color:T.gray}}>⭐ {Number(tp.rating).toFixed(1)}{tp.reviews?` (${tp.reviews})`:""}</span>}
-                      {tp.duration&&<span style={{fontSize:"calc(11.5px*var(--fs))",color:T.gray}}>· {tp.duration}</span>}
-                      {tp.freeCancellation&&<span style={{fontSize:"calc(11.5px*var(--fs))",color:"#2E7D46",fontWeight:"600"}}>· Free cancellation</span>}
-                      {tp.fromPrice!=null&&<span style={{fontSize:"calc(12px*var(--fs))",fontWeight:"700",color:T.accentD}}>from {tp.currency==="USD"?"$":""}{Math.round(tp.fromPrice)}{tp.currency&&tp.currency!=="USD"?` ${tp.currency}`:""}</span>}
-                    </div>
-                    {/* Picked-date availability — sibling of the meta row; renders only
-                        on a real yes/no from /viator/availability (null → nothing). */}
-                    <AvailabilityLine av={travelDate?tourAvail[`${tp.code}|${travelDate}`]:null} travelDate={travelDate} fontSize="calc(11.5px*var(--fs))"/>
-                  </div>
-                  <span style={{background:T.accent,color:"#fff",padding:"7px 12px",borderRadius:"10px",fontWeight:"700",fontSize:"calc(12px*var(--fs))",flexShrink:0}}>Book</span>
-                </button>
-              ))}</div>
-              <div style={{fontSize:"calc(10.5px*var(--fs))",color:T.gray,margin:"6px 4px 0"}}>Tours &amp; prices by Viator{tourAvailAnswered?" · availability per Viator":""} · we may earn a commission</div>
-            </>)}
-          </div>
-        )}
-
-        {/* Local matches rendered but the worker call for bookable experiences
-            failed — say so instead of silently showing no tours. */}
+        {/* Results rendered but the search call failed — say so honestly. */}
         {submitted&&!tourBusy&&searchError&&cardsList.length>0&&(
           <div style={{marginTop:"14px",padding:"10px 14px",borderRadius:"12px",background:"#FFF5F5",border:`1px solid ${T.coral}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px"}}>
-            <span style={{color:T.coral,fontWeight:"600",fontSize:"calc(12.5px*var(--fs))"}}>Couldn&rsquo;t reach the server for bookable experiences.</span>
+            <span style={{color:T.coral,fontWeight:"600",fontSize:"calc(12.5px*var(--fs))"}}>Couldn&rsquo;t reach the server for more results.</span>
             <button onClick={()=>runActivitySearch(submitted)} style={{flexShrink:0,padding:"7px 12px",borderRadius:"8px",border:"none",background:T.coral,color:"#fff",fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Try again</button>
           </div>
-        )}
-
-        {/* Exit-to-Viator — LAST RESORT only: nothing in-app AND no products. */}
-        {submitted&&!tourBusy&&cardsList.length===0&&(!tours||tours.length===0)&&(
-          <button onClick={openViatorFallback} style={{width:"100%",marginTop:"14px",padding:"12px",borderRadius:"12px",border:`1.5px dashed ${T.accent}`,background:T.accentL,color:T.accentD,fontWeight:"700",fontSize:"calc(13px*var(--fs))",fontFamily:"inherit",cursor:"pointer"}}>Search &ldquo;{submitted}&rdquo; on Viator →</button>
         )}
       </div>)
       :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:T.dark}}>✕</button></div>)}

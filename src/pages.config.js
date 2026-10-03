@@ -48,7 +48,7 @@
  * The mainPage value must match a key in the PAGES object exactly.
  */
 import ATMFinder from './pages/ATMFinder';
-import ActivityDetail from './pages/ActivityDetail';
+import ActivityDetail from './components/attraction/ActivityRedirect';
 import AdminAnalytics from './pages/AdminAnalytics';
 import BasicPhrases from './pages/BasicPhrases';
 import CoffeeFinder from './pages/CoffeeFinder';

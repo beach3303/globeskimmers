@@ -7,7 +7,7 @@
 // (attractions/nearby, D1 — zero Google/AI spend). Renders NOTHING when there's
 // no coverage, so the tiles + feed above stand alone.
 //
-// A tap opens the attraction (ActivityDetail), where the GPS-verified "I was
+// A tap opens the attraction's Things to Do card, where the GPS-verified "I was
 // here" stamp is actually earned — we never claim a tap collects a stamp.
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -17,6 +17,7 @@ import { stampArtUrl } from "@/lib/stampArt";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 import { logDiscover } from "@/lib/logDiscover";
 import { createPageUrl } from "@/utils";
+import { openAttraction } from "@/lib/openAttraction";
 
 const INK = "#243447", INK3 = "#66717D", STAMP = "#B0472F", PAPER = "#FBF6EC";
 
@@ -147,33 +148,10 @@ export default function StampsNearYou({ onAction, wide = false, onNearest }) {
   }
   const nearestMi = far ? Math.round(Math.min(...items.map((x) => (Number.isFinite(x.distanceMiles) ? x.distanceMiles : 999)))) : null;
 
-  // Open the attraction so the user can earn the stamp there (GPS "I was here").
+  // Open the attraction's Things to Do card — the stamp is earned there by GPS.
   const openStamp = (item) => {
-    try {
-      const loc = getActiveLocation?.();
-      const activity = {
-        id: item.id, name: item.name, category: item.category,
-        photos: item.photoUrl ? [item.photoUrl] : [],
-        description: item.whyVisit || item.description || "",
-        latitude: item.lat, longitude: item.lng, rating: item.rating,
-        free_to_visit: item.freeToVisit,
-        distance_km: Number.isFinite(item.distanceKm) ? item.distanceKm : undefined,
-        // Stamps earned from this page carry their country (passport "countries"
-        // count, GPS-vs-IP check) and the per-row stamp radius override — pass
-        // them through whenever the worker card has them.
-        city: item.city || undefined,
-        region: item.region || item.state || undefined,
-        country: item.country || undefined,
-        countryCode: item.countryCode || item.cc || undefined,
-        footprint_radius_m: item.footprint_radius_m ?? item.footprintRadiusM ?? undefined,
-        film: item.film || undefined,   // movie scene spots: the film behind the place
-      };
-      sessionStorage.setItem("current_activity", JSON.stringify(activity));
-      if (loc) sessionStorage.setItem("activity_location", JSON.stringify(loc));
-      logDiscover("home_stamp_tap", { place_id: item.id, place_name: item.name });
-      // ?id= makes the page deep-linkable/shareable; sessionStorage stays the fast path.
-      navigate(createPageUrl("ActivityDetail") + "?id=" + encodeURIComponent(activity.id));
-    } catch { onAction?.("Things to Do"); }
+    logDiscover("home_stamp_tap", { place_id: item.id, place_name: item.name });
+    if (!openAttraction(navigate, item)) onAction?.("Things to Do");
   };
 
   return (

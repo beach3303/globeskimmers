@@ -99,43 +99,13 @@ export default function HomeRows({ onAction, wide = false }) {
     }
   };
 
-  // Open the FULL attraction page (address, hours, gallery, directions, map, AI
-  // tips) — reuses ActivityDetail, which reads the attraction from sessionStorage.
+  // Open the attraction's Things to Do card (the one page for an attraction).
   const openFullPage = (card) => {
-    try {
-      const loc = getActiveLocation?.();
-      const activity = {
-        id: card.id,
-        name: card.name,
-        category: card.category,
-        photos: Array.isArray(card.photos) && card.photos.length ? card.photos : (card.photoUrl ? [card.photoUrl] : []),
-        description: card.whyVisit || "",
-        address: card.address || "",
-        latitude: card.lat,
-        longitude: card.lng,
-        rating: card.rating,
-        free_to_visit: card.freeToVisit,
-        distance_km: Number.isFinite(card.distanceMiles) ? +(card.distanceMiles * 1.60934).toFixed(1) : undefined,
-        // Stamps earned from this page carry their country (passport "countries"
-        // count, GPS-vs-IP check) and the per-row stamp radius override — pass
-        // them through whenever the worker card has them.
-        city: card.city || undefined,
-        region: card.region || card.state || undefined,
-        country: card.country || undefined,
-        countryCode: card.countryCode || card.cc || undefined,
-        footprint_radius_m: card.footprint_radius_m ?? card.footprintRadiusM ?? undefined,
-      };
-      sessionStorage.setItem("current_activity", JSON.stringify(activity));
-      if (loc) sessionStorage.setItem("activity_location", JSON.stringify(loc));
-      trackEvent("home_row_open_detail", { place_id: card.id, place_name: card.name });
-      setDetail(null);
-      // ?id= makes the page deep-linkable/shareable; sessionStorage stays the fast path.
-      navigate(createPageUrl("ActivityDetail") + "?id=" + encodeURIComponent(activity.id));
-    } catch {
-      setDetail(null);
-      onAction?.("Things to Do"); // safe fallback to the finder list
-    }
+    trackEvent("home_row_open_detail", { place_id: card.id, place_name: card.name });
+    setDetail(null);
+    if (!openAttraction(navigate, card)) onAction?.("Things to Do");
   };
+
 
   useEffect(() => {
     let cancelled = false;
