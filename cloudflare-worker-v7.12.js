@@ -14634,6 +14634,15 @@ async function gbHandleSuggestions(env, want) {
     return cands.filter((h) => !taken.has(h)).slice(0, 3);
   } catch { return []; }
 }
+// The founder's tone (2026-10-03): taken is never a dead end — name what's
+// free, and say plainly that any other name they like works too.
+async function gbTakenResponse(env, want) {
+  const suggestions = await gbHandleSuggestions(env, want);
+  const error = suggestions.length
+    ? `@${want} is taken — one of these is free, or enter any other name you like`
+    : `@${want} is taken — try another name you like`;
+  return jsonResponse({ error, suggestions }, 409);
+}
 async function handleSocialHandle(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -14650,7 +14659,7 @@ async function handleSocialHandle(request, env, ctx) {
     const held = await gbHeld(env, want);
     if (held && !held.claimed_at && String(user.email || '').toLowerCase() !== String(held.email || '').toLowerCase()) {
       // Held for someone else (or no email attached yet): plain "taken".
-      return jsonResponse({ error: 'That username is taken', suggestions: await gbHandleSuggestions(env, want) }, 409);
+      return await gbTakenResponse(env, want);
     }
     if (!held && (HANDLE_RESERVED.has(want) || /^gs_/.test(want))) {
       return jsonResponse({ error: 'That name is reserved', suggestions: await gbHandleSuggestions(env, want) }, 400);
@@ -14665,13 +14674,13 @@ async function handleSocialHandle(request, env, ctx) {
     }
     const taken = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(want)}&select=user_id&limit=1`, {});
     const owner = (taken.ok ? await taken.json() : [])[0];
-    if (owner && owner.user_id !== user.id) return jsonResponse({ error: 'That username is taken', suggestions: await gbHandleSuggestions(env, want) }, 409);
+    if (owner && owner.user_id !== user.id) return await gbTakenResponse(env, want);
     const patch = { handle: want, handle_changed_at: new Date().toISOString(), handle_changes: typeof changes === 'number' ? changes : 0, updated_at: new Date().toISOString() };
     let w;
     if (mine) w = await gbRest(env, `passport_shares?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
     else w = await gbRest(env, 'passport_shares', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, slug: crypto.randomUUID().replace(/-/g, '').slice(0, 12), is_public: false, ...patch }) });
     if (!w.ok) {
-      if (w.status === 409) return jsonResponse({ error: 'That username is taken', suggestions: await gbHandleSuggestions(env, want) }, 409);
+      if (w.status === 409) return await gbTakenResponse(env, want);
       return jsonResponse({ error: 'Could not save the username' }, 502);
     }
     if (held && !held.claimed_at) {

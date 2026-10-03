@@ -848,7 +848,7 @@ export default function SettingsPage() {
                 </div>
                 {handleSugs.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2 items-center">
-                    <span style={{ color: ED_INK3, fontSize: 12 }}>Still available:</span>
+                    <span style={{ color: ED_INK3, fontSize: 12 }}>Free right now:</span>
                     {handleSugs.map((sug) => (
                       <button key={sug} type="button" onClick={() => { setHandleDraft(sug); setHandleSugs([]); }}
                         className="rounded-full px-3 py-1.5" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 13, fontWeight: 600, color: ED_INK }}>@{sug}</button>
