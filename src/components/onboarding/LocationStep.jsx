@@ -132,18 +132,6 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
       setDenialCount(0);
       setShowSorryMessage(false);
       
-      // Best-effort: persist permission status. GUARDED so a missing Base44
-      // session (Supabase auth path) can't throw into this success path and
-      // surface a false "location error" AFTER GPS already succeeded.
-      try {
-        const { base44 } = await import("@/api/base44Client");
-        await base44.auth.updateMe({
-          location_permission_granted: true,
-          location_permission_date: new Date().toISOString(),
-          location_enabled: true
-        });
-      } catch { /* prefs unavailable — non-fatal */ }
-
       onLocationGranted({
         latitude: position.coords.latitude,
         longitude: position.coords.longitude
@@ -157,15 +145,6 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
       if (err.code === 1) { // Permission denied
         const newDenialCount = denialCount + 1;
         setDenialCount(newDenialCount);
-        
-        // Best-effort: record denial. GUARDED — non-fatal without a Base44 session.
-        try {
-          const { base44 } = await import("@/api/base44Client");
-          await base44.auth.updateMe({
-            location_permission_granted: false,
-            location_permission_date: new Date().toISOString()
-          });
-        } catch { /* prefs unavailable — non-fatal */ }
         
         // Only show "sorry" screen after 3 attempts
         if (newDenialCount >= 3) {
