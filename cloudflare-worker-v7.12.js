@@ -5009,15 +5009,15 @@ async function handleParseIntent(request, env) {
 // miss vs ~$0.045 via the generic /invoke-llm it replaces for the spine.
 // ============================================================================
 const PARSE_SEARCH_TTL_SECONDS = 24 * 60 * 60;
-const PARSE_SEARCH_PROMPT_VERSION = 'v2';
-const PARSE_SEARCH_CATEGORIES = new Set(['eat', 'coffee', 'things', 'hotel', 'shopping', 'atm', 'money', 'ride', 'convenience', 'restroom', 'weather', 'none']);
+const PARSE_SEARCH_PROMPT_VERSION = 'v3';  // v3: no hotel / ride categories (no booking in the app, founder 2026-10-03)
+const PARSE_SEARCH_CATEGORIES = new Set(['eat', 'coffee', 'things', 'shopping', 'atm', 'money', 'convenience', 'restroom', 'weather', 'none']);
 const PARSE_SEARCH_SCOPES = new Set(['near_me', 'at_stay', 'named_place', 'unknown']);
 
 const PARSE_SEARCH_SYSTEM_PROMPT = `You parse a traveler's free-text search for Globeskimmers into STRICT JSON so the app can route them to the right finder, scoped to the right place.
 
 OUTPUT SCHEMA (return EXACTLY this shape — no extra keys, no markdown):
 {
-  "category": "eat" | "coffee" | "things" | "hotel" | "shopping" | "atm" | "money" | "ride" | "convenience" | "restroom" | "weather" | "none",
+  "category": "eat" | "coffee" | "things" | "shopping" | "atm" | "money" | "convenience" | "restroom" | "weather" | "none",
   "scope": "near_me" | "at_stay" | "named_place" | "unknown",
   "place": "<city/place name if scope is named_place, else empty string>",
   "query": "<the core thing to search, cleaned of scope words, e.g. ramen, viral desserts>",
@@ -5029,11 +5029,10 @@ CATEGORY = which finder fits:
 - eat = any food / restaurant / dish / bakery / dessert
 - coffee = coffee, café, tea, boba
 - things = things to do, attractions, museums, tours, hikes, sightseeing
-- hotel = where to stay, accommodation
 - shopping = shops, malls, souvenirs
-- atm = cash / ATM ; money = currency exchange ; ride = taxi / car / transfer
+- atm = cash / ATM ; money = currency exchange
 - convenience = convenience store ; restroom = toilet ; weather = forecast
-- none = the query is ONLY a place name (no thing to find), e.g. "Positano".
+- none = the query is ONLY a place name (no thing to find), e.g. "Positano" — and for hotels, lodging, flights, taxis or car rentals, which the app does not offer (keep any named place).
 
 SCOPE:
 - near_me = near the user now ("near me", "nearby", "around here")

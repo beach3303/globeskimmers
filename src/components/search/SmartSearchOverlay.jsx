@@ -39,7 +39,11 @@ const SCOPES = [
 const SUGGESTIONS = ["Coffee near me", "Things to do", "Best dinner", "Viral desserts", "Restroom", "ATM"];
 
 function readRecents() {
-  try { return JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]"); } catch { return []; }
+  // Hotels, rides and flights aren't searchable any more — old recents for them would dead-end.
+  try {
+    const list = JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]");
+    return Array.isArray(list) ? list.filter((t) => typeof t === "string" && !/\b(hotels?|where to stay|lodging|hostels?|airbnb|motels?|resorts?|flights?|taxi|uber|car rentals?)\b/i.test(t)) : [];
+  } catch { return []; }
 }
 
 export default function SmartSearchOverlay({ isOpen, onClose }) {
@@ -299,7 +303,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
                   className="flex items-center gap-1.5 rounded-full px-3 py-2 text-[calc(12.5px*var(--fs))]"
                   style={{ background: "#F2EEE6", color: INK }}
                 >
-                  {recents.length && <Clock className="w-3 h-3" style={{ color: SUB }} />}
+                  {recents.length > 0 && <Clock className="w-3 h-3" style={{ color: SUB }} />}
                   {text}
                 </button>
               ))}
