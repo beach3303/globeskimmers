@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocation } from "@/components/location/LocationContext";
 import { useAuth } from "@/lib/AuthContext";
-import { addStamp } from "@/lib/passport";
+import { addStamp, setStampNote } from "@/lib/passport";
 import { showToast } from "@/components/Toast";
 import { airportAt } from "@/lib/airports";
 import AirportStamp from "@/components/passport/AirportStamp";
@@ -49,6 +49,19 @@ export default function AirportArrivalPrompt() {
     if (markHandled && pending) { const s = getSet(); s.add(pending.iata); saveSet(s); }
     setPending(null);
   };
+  // After the stamp: "what was this trip for?" — private by default.
+  const [noteFor, setNoteFor] = useState(null); // { id, city }
+  const [note, setNote] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
+  const saveNote = async () => {
+    if (!noteFor || !note.trim()) { setNoteFor(null); return; }
+    setNoteBusy(true);
+    const { error } = await setStampNote(noteFor.id, { note: note.trim() });
+    setNoteBusy(false);
+    if (error) { showToast(error, "error"); return; }
+    showToast("Saved privately to your stamp 🔒", "success");
+    setNoteFor(null); setNote("");
+  };
   const add = async () => {
     if (!pending || busy) return;
     setBusy(true);
@@ -60,12 +73,31 @@ export default function AirportArrivalPrompt() {
       local_hour: new Date().getHours(),
     });
     setBusy(false);
+    const city = pending.city;
     close(true);
-    if (error) showToast(error, "error");
+    if (error) { showToast(error, "error"); return; }
     // Reflect the server's verdict: show the ✓ only if the GPS claim was corroborated.
-    else showToast(`✈️ ${pending.city} (${pending.iata}) arrival stamped 🛂${data?.verified === "gps" ? " ✓" : ""}`, "success");
+    showToast(`✈️ ${city} (${pending.iata}) arrival stamped 🛂${data?.verified === "gps" ? " ✓" : ""}`, "success");
+    if (data?.id) setNoteFor({ id: data.id, city });
   };
 
+  if (noteFor) {
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}>
+        <div style={{ background: "#f3eee1", borderRadius: 22, maxWidth: 360, width: "100%", padding: 22, boxShadow: "0 24px 60px -20px rgba(0,0,0,.5)" }}>
+          <p style={{ fontFamily: '"Instrument Serif",Georgia,serif', fontSize: 22, color: "#16110D", margin: "0 0 4px" }}>What brings you to {noteFor.city}?</p>
+          <p style={{ color: "#736657", fontSize: 12.5, lineHeight: 1.45 }}>🔒 Only you can see this — you can share it on your passport later.</p>
+          <textarea value={note} onChange={(e) => setNote(e.target.value.slice(0, 280))} rows={3} autoFocus
+            placeholder="Visiting family, a conference, our honeymoon…" aria-label="Trip note"
+            style={{ width: "100%", marginTop: 10, borderRadius: 12, border: "1px solid rgba(22,17,13,.14)", background: "#fff", padding: "10px 12px", fontSize: 15, color: "#16110D", fontFamily: "inherit", resize: "none" }} />
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button onClick={() => { setNoteFor(null); setNote(""); }} disabled={noteBusy} style={{ flex: 1, borderRadius: 12, padding: "11px", fontWeight: 600, background: "#fff", color: "#3A3128", border: "1px solid rgba(22,17,13,.12)", fontSize: 14 }}>Skip</button>
+            <button onClick={saveNote} disabled={noteBusy || !note.trim()} style={{ flex: 1, borderRadius: 12, padding: "11px", fontWeight: 700, background: "#B0472F", color: "#fff", border: "none", fontSize: 14, opacity: note.trim() ? 1 : 0.6 }}>{noteBusy ? "Saving…" : "Save note"}</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!pending) return null;
   const today = new Date().toISOString().slice(0, 10);
   const country = regionName(pending.countryCode);

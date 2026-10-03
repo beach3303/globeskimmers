@@ -13327,8 +13327,10 @@ async function handlePassportPublic(request, env) {
     // slug). City + country stay; the numbers go.
     const shared = stamps
       .filter((st) => !st.hidden)
-      .map(({ lat, lng, ...rest }) => ({
+      .map(({ lat, lng, note, note_public, ...rest }) => ({
         ...rest,
+        // A trip note is private unless its owner chose to share it.
+        ...(note_public && note ? { note, note_public: true } : {}),
         // Fail-closed: another viewer sees only photos that PASSED moderation.
         photos: (rest.photos || []).filter((p) => p.mod_status === 'ok'),
       }));
@@ -13703,6 +13705,31 @@ async function handleStampArtServe(request, env) {
     if (obj.httpEtag) headers.set('ETag', obj.httpEtag);
     return new Response(obj.body, { headers });
   } catch { return new Response('Error', { status: 500 }); }
+}
+
+// POST /passport/stamp/note { stamp_id, note?, public? } — the trip note on a
+// stamp ("what was this trip for?"). Private by default; sharing it on the
+// passport passes the text moderation door first.
+async function handlePassportStampNote(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.stamp_id || '');
+    if (!BL_UUID.test(id)) return jsonResponse({ error: 'Not found' }, 404);
+    const q = await gbRest(env, `passport_stamps?id=eq.${id}&user_id=eq.${user.id}&select=note,note_public`, {});
+    const cur = (q.ok ? await q.json() : [])[0];
+    if (!cur) return jsonResponse({ error: 'Not found' }, 404);
+    const note = b.note !== undefined ? (String(b.note || '').replace(/\s+/g, ' ').trim().slice(0, 280) || null) : cur.note;
+    const isPublic = b.public !== undefined ? b.public === true : cur.note_public === true;
+    if (isPublic && note) {
+      const mod = await gbModerate(env, note);
+      if (!mod.allow) return jsonResponse({ error: 'Let\u2019s keep shared notes kind \u2014 edit it, or untick sharing to keep it private. Nothing was saved.' }, 422);
+    }
+    const w = await gbRest(env, `passport_stamps?id=eq.${id}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ note, note_public: !!(isPublic && note) }) });
+    if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
+    return jsonResponse({ ok: true, note, note_public: !!(isPublic && note) });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
 // POST /passport/photo/caption { photo_id, caption } — the owner's line under
@@ -19995,6 +20022,7 @@ export default {
       if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
       if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);
       if (pathname === '/passport/photo/caption' && request.method === 'POST') return await handlePassportPhotoCaption(request, env);
+      if (pathname === '/passport/stamp/note' && request.method === 'POST') return await handlePassportStampNote(request, env);
       if (pathname === '/passport/stamp/check-photos' && request.method === 'POST') return await handlePassportCheckPhotos(request, env, ctx);
       if (pathname === '/passport/tag' && request.method === 'POST') return await handlePassportTag(request, env, ctx);
       if (pathname === '/passport/tags' && request.method === 'POST') return await handlePassportTagsList(request, env);

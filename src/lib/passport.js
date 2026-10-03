@@ -118,6 +118,14 @@ export async function socialUnread({ mark = false } = {}) {
   if (mark && !error) { try { window.dispatchEvent(new Event("gs:unread")); } catch { /* no window */ } }
   return { total: data?.total || 0, activity: data?.activity || [], error };
 }
+// A stamp's trip note ("what was this trip for?") — private unless shared.
+export async function setStampNote(stamp_id, { note, isPublic } = {}) {
+  const body = { stamp_id };
+  if (note !== undefined) body.note = note;
+  if (isPublic !== undefined) body.public = isPublic;
+  const { data, error } = await callWorker('passport/stamp/note', body);
+  return { note: data?.note ?? null, notePublic: data?.note_public === true, error: error || data?.error || null };
+}
 // The owner's caption under one photo (moderated; '' clears it).
 export async function setPhotoCaption(photo_id, caption) {
   const { data, error } = await callWorker('passport/photo/caption', { photo_id, caption });

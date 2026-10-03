@@ -80,6 +80,23 @@ function Stat({ n, label }) {
   );
 }
 
+// Trip note — private unless the owner shared it; visitors only ever receive shared ones.
+function TripNote({ stamp, readOnly }) {
+  if (!stamp.note) return null;
+  return (
+    <div className="w-full mt-2.5 rounded-xl px-3 py-2" style={{ background: IVORY_2, border: `1px solid ${RULE}` }}>
+      {!readOnly && (
+        <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".06em", color: INK3, textTransform: "uppercase" }}>
+          ✈️ Trip note · {stamp.note_public ? "🌍 Shared" : "🔒 Private"}
+        </div>
+      )}
+      <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(15), color: INK, lineHeight: 1.3, marginTop: readOnly ? 0 : 2, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+        {stamp.note}
+      </div>
+    </div>
+  );
+}
+
 function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }) {
   const isHome = stamp.kind === "city" && homeCity && String(stamp.city || "").toLowerCase() === String(homeCity).toLowerCase();
   const k = KIND[stamp.kind] || KIND.attraction;
@@ -161,6 +178,8 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
             <button onClick={() => setConfirmDel(true)} className="rounded-lg px-2 py-1" style={{ background: IVORY_2, color: INK3, fontSize: fs(11.5) }} title="Remove">🗑</button>
           ))}
         </div>
+
+        <TripNote stamp={stamp} readOnly={readOnly} />
 
         {/* Memory photos — thumbnails you can enlarge (same as iconic stamps) */}
         {photos.length > 0 && (
@@ -268,6 +287,8 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
           <button onClick={saveDate} disabled={busy} className="rounded-lg px-3 py-1 font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: fs(12.5) }}>Save</button>
         </div>
       )}
+
+      <TripNote stamp={stamp} readOnly={readOnly} />
 
       {/* Memory photos */}
       {photos.length > 0 && (

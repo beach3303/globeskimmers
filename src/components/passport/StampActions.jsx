@@ -18,7 +18,7 @@ import { localISODate } from "@/lib/localDate";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { useDismissable } from "@/lib/dismissStack";
 import PostcardCompose from "@/components/passport/PostcardCompose";
-import { socialFollow } from "@/lib/passport";
+import { socialFollow, setStampNote } from "@/lib/passport";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -48,6 +48,22 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(null); // "photos" | "layout" | "delete" | null
   const [confirmDel, setConfirmDel] = useState(false);
+  // Trip note (airport / border arrivals): "what was this trip for?" — private
+  // unless the traveler shows it on their shared passport.
+  const arrival = stamp.kind === "airport" || stamp.entity_type === "border";
+  const [noteEdit, setNoteEdit] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(stamp.note || "");
+  const [notePublic, setNotePublic] = useState(stamp.note_public === true);
+  const [noteBusy, setNoteBusy] = useState(false);
+  const saveNote = async () => {
+    setNoteBusy(true);
+    const { error } = await setStampNote(stamp.id, { note: noteDraft.trim(), isPublic: notePublic });
+    setNoteBusy(false);
+    if (error) { showToast(error, "error"); return; }
+    setNoteEdit(false);
+    showToast(noteDraft.trim() ? (notePublic ? "Note shared on your passport 🌍" : "Saved privately 🔒") : "Note removed", "success");
+    onChanged?.();
+  };
   const [compose, setCompose] = useState(false);
   const [following, setFollowing] = useState([]);
   const openCompose = async () => {
@@ -172,6 +188,35 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
             <X size={17} color={INK} strokeWidth={2.2} />
           </button>
         </div>
+
+        {arrival && !readOnly && (
+          <div className="mt-3 rounded-[14px] px-3.5 py-3" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
+            {!noteEdit ? (
+              <button type="button" onClick={() => setNoteEdit(true)} className="w-full text-left">
+                <span className="block uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".14em", color: "#8A5410" }}>
+                  ✈️ Trip note · {stamp.note && stamp.note_public ? "🌍 Shared" : "🔒 Private"}
+                </span>
+                <span className="block" style={{ fontFamily: SERIF, fontSize: fs(16), color: stamp.note ? INK : INK3, marginTop: 3, lineHeight: 1.3 }}>
+                  {stamp.note || "What was this trip for? Add a note only you can see."}
+                </span>
+              </button>
+            ) : (
+              <>
+                <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value.slice(0, 280))} rows={3} autoFocus
+                  placeholder="Visiting family, a conference, our honeymoon…" aria-label="Trip note"
+                  className="w-full rounded-xl px-3 py-2 outline-none resize-none" style={{ border: `1px solid ${RULE}`, background: IVORY, fontSize: fs(14.5), color: INK }} />
+                <label className="flex items-center gap-2 mt-2" style={{ fontSize: fs(12.5), color: INK3 }}>
+                  <input type="checkbox" checked={notePublic} onChange={(e) => setNotePublic(e.target.checked)} />
+                  Show on my shared passport
+                </label>
+                <div className="flex gap-2 mt-2.5">
+                  <button type="button" onClick={() => { setNoteEdit(false); setNoteDraft(stamp.note || ""); setNotePublic(stamp.note_public === true); }} className="flex-1 rounded-xl py-2 font-semibold" style={{ background: "#fff", color: INK3, border: `1px solid ${RULE}`, fontSize: fs(13) }}>Cancel</button>
+                  <button type="button" onClick={saveNote} disabled={noteBusy} className="flex-1 rounded-xl py-2 font-semibold disabled:opacity-60" style={{ background: "#B0472F", color: "#fff", fontSize: fs(13) }}>{noteBusy ? "Saving…" : "Save"}</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Memory photos — tap to enlarge (swipe through them), × removes one */}
         {photos.length > 0 && (
