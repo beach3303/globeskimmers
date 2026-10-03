@@ -7267,7 +7267,9 @@ async function handleAttractionVisitInfo(request, env, ctx) {
     const cached = kv ? await kv.get(cacheKey, { type: 'json' }).catch(() => null) : null;
     if (cached) return jsonResponse({ ...cached, _cache: 'hit' });
 
-    const row = await env.ATTRACTIONS_DB.prepare('SELECT id, name, city, country, qid, website, free_to_visit FROM attractions WHERE id = ?1 LIMIT 1').bind(id).first().catch(() => null);
+    // SELECT * — the facts columns (website, ticket_price, parking_text) only
+    // exist once scripts/city-icons/data/add_attraction_facts.sql has run.
+    const row = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(id).first().catch(() => null);
     if (!row) return jsonResponse({ error: 'Not found' }, 404);
     const user = await gbUser(request, env);
     if (!env.ANTHROPIC_API_KEY) return jsonResponse({ error: 'not configured' }, 500);
