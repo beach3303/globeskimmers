@@ -97,6 +97,50 @@ export default function AdminAnalytics() {
     loadReports();
   };
 
+  // Held usernames (the founder's family reservations) + the Official Seal.
+  const [held, setHeld] = useState({ rows: [], emailConfigured: false, error: null });
+  const [heldDraft, setHeldDraft] = useState({ handle: '', name: '', email: '' });
+  const [heldEdits, setHeldEdits] = useState({});      // handle -> email draft
+  const [heldBusy, setHeldBusy] = useState(null);      // handle being acted on
+  const [inviteCopy, setInviteCopy] = useState(null);  // { handle, text } when email isn't configured
+  const [seals, setSeals] = useState({ rows: [], error: null });
+  const [sealDraft, setSealDraft] = useState('');
+  const heldCall = async (body) => {
+    const { data, error } = await callWorker('admin/held-handles', body);
+    if (data?.rows) setHeld({ rows: data.rows, emailConfigured: !!data.emailConfigured, error: error || data?.error || null });
+    return { data, error: error || data?.error || null };
+  };
+  const sealCall = async (body) => {
+    const { data, error } = await callWorker('admin/verified', body);
+    if (data?.rows) setSeals({ rows: data.rows, error: error || data?.error || null });
+    return { data, error: error || data?.error || null };
+  };
+  const addHeld = async () => {
+    const { error } = await heldCall({ op: 'add', handle: heldDraft.handle, display_name: heldDraft.name, email: heldDraft.email });
+    if (error) setHeld((h) => ({ ...h, error })); else setHeldDraft({ handle: '', name: '', email: '' });
+  };
+  const saveHeldEmail = async (handle) => {
+    setHeldBusy(handle);
+    const { error } = await heldCall({ op: 'update', handle, email: heldEdits[handle] ?? '' });
+    setHeldBusy(null);
+    if (error) setHeld((h) => ({ ...h, error }));
+    else setHeldEdits((e) => { const n = { ...e }; delete n[handle]; return n; });
+  };
+  const inviteHeld = async (handle) => {
+    setHeldBusy(handle); setInviteCopy(null);
+    const { data, error } = await heldCall({ op: 'invite', handle });
+    setHeldBusy(null);
+    if (error) { setHeld((h) => ({ ...h, error })); return; }
+    if (data?.sent) { await heldCall({ op: 'list' }); }
+    else if (data?.text) {
+      setInviteCopy({ handle, text: `Subject: ${data.subject}\n\n${data.text}` });
+      try { await navigator.clipboard.writeText(`Subject: ${data.subject}\n\n${data.text}`); } catch { /* shown below anyway */ }
+    }
+  };
+  const removeHeld = async (handle) => { await heldCall({ op: 'remove', handle }); };
+  const grantSeal = async () => { const { error } = await sealCall({ op: 'grant', handle: sealDraft }); if (error) setSeals((v) => ({ ...v, error })); else setSealDraft(''); };
+  const revokeSeal = async (handle) => { await sealCall({ op: 'revoke', handle }); };
+
   const loadInbox = async (markHandled) => {
     try {
       const { data: ib, error: ie } = await callWorker('admin/contact', markHandled ? { markHandled } : {});
@@ -137,7 +181,7 @@ export default function AdminAnalytics() {
         const { data: us, error: ue } = await callWorker('admin-user-stats', {});
         setUserStats(ue ? null : us);
       } catch { setUserStats(null); }
-      await loadInbox(); loadReports();
+      await loadInbox(); loadReports(); heldCall({ op: 'list' }); sealCall({ op: 'list' });
       setGeneratedAt(new Date().toISOString());
     } catch (e) {
       setError(e?.message || 'Failed to load analytics');
@@ -434,6 +478,76 @@ export default function AdminAnalytics() {
                   <button type="button" onClick={() => loadInbox(m.id)} style={{ marginTop: 6, fontSize: 12, color: COLORS.accent, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>Mark handled</button>
                 </div>
               ))}
+            </Section>
+
+            <Section title={`👑 Held usernames — ${held.rows.filter(r => r.claimed_at).length} claimed of ${held.rows.length}`} icon={UserCheck}
+              empty={held.rows.length === 0 && !held.error ? 'No names on the hold list yet. Add one below — it instantly reads as "taken" to everyone except the email you attach.' : null}>
+              {held.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{held.error}</div>}
+              {!held.emailConfigured && held.rows.length > 0 && (
+                <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>
+                  ✉️ Invitation email isn&rsquo;t wired yet (needs the RESEND_API_KEY secret) — &ldquo;Compose invite&rdquo; copies the message so you can text/email it yourself.
+                </div>
+              )}
+              {held.rows.map((r) => (
+                <div key={r.handle} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border}` }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', fontSize: 13 }}>
+                    <span style={{ fontWeight: 700, color: COLORS.dark }}>@{r.handle}</span>
+                    {r.display_name && <span style={{ color: COLORS.gray }}>{r.display_name}</span>}
+                    {r.claimed_at
+                      ? <span style={{ color: COLORS.green, fontWeight: 700 }}>🎉 Claimed {String(r.claimed_at).slice(0, 10)}</span>
+                      : r.invited_at
+                        ? <span style={{ color: COLORS.amber, fontWeight: 600 }}>Invited {String(r.invited_at).slice(0, 10)}</span>
+                        : <span style={{ color: COLORS.gray }}>Saved</span>}
+                  </div>
+                  {!r.claimed_at && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                      <input value={heldEdits[r.handle] ?? r.email ?? ''} onChange={(e) => setHeldEdits((v) => ({ ...v, [r.handle]: e.target.value }))}
+                        placeholder="their-email@example.com" aria-label={`Email for @${r.handle}`}
+                        style={{ flex: '1 1 220px', minWidth: 180, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
+                      <button type="button" onClick={() => saveHeldEmail(r.handle)} disabled={heldBusy === r.handle || heldEdits[r.handle] === undefined}
+                        style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: heldEdits[r.handle] === undefined ? 0.5 : 1 }}>Save email</button>
+                      <button type="button" onClick={() => inviteHeld(r.handle)} disabled={heldBusy === r.handle || !(heldEdits[r.handle] ?? r.email)}
+                        style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: COLORS.green, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: (heldEdits[r.handle] ?? r.email) ? 1 : 0.5 }}>
+                        {heldBusy === r.handle ? 'Working…' : held.emailConfigured ? 'Send invitation' : 'Compose invite'}
+                      </button>
+                      <button type="button" onClick={() => removeHeld(r.handle)} style={{ padding: '7px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.red, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Release</button>
+                    </div>
+                  )}
+                  {inviteCopy?.handle === r.handle && (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>Copied to your clipboard — paste it into a text or email:</div>
+                      <textarea readOnly value={inviteCopy.text} rows={6} style={{ width: '100%', fontSize: 12, padding: 8, borderRadius: 8, border: `1px solid ${COLORS.border}`, color: COLORS.dark }} />
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
+                <input value={heldDraft.handle} onChange={(e) => setHeldDraft((d) => ({ ...d, handle: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20) }))}
+                  placeholder="@username to hold" aria-label="Username to hold" style={{ flex: '1 1 150px', minWidth: 130, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
+                <input value={heldDraft.name} onChange={(e) => setHeldDraft((d) => ({ ...d, name: e.target.value.slice(0, 60) }))}
+                  placeholder="Their first name (for the hello)" aria-label="Display name" style={{ flex: '1 1 170px', minWidth: 150, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
+                <input value={heldDraft.email} onChange={(e) => setHeldDraft((d) => ({ ...d, email: e.target.value }))}
+                  placeholder="Email (now or later)" aria-label="Email" style={{ flex: '1 1 190px', minWidth: 160, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
+                <button type="button" onClick={addHeld} disabled={heldDraft.handle.length < 3}
+                  style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: COLORS.dark, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: heldDraft.handle.length < 3 ? 0.5 : 1 }}>Hold it</button>
+              </div>
+            </Section>
+
+            <Section title={`✪ The GlobeSkimmers Seal — ${seals.rows.length} granted`} icon={UserCheck}
+              empty={seals.rows.length === 0 && !seals.error ? 'No seals granted yet. Reserved for official figures, official businesses, and whoever you choose to gift it to. Users never see a checkmark — they see the Seal.' : null}>
+              {seals.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{seals.error}</div>}
+              {seals.rows.map((r) => (
+                <div key={r.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: `1px solid ${COLORS.border}`, fontSize: 13 }}>
+                  <span style={{ fontWeight: 700, color: COLORS.dark }}>@{r.handle}</span>
+                  <button type="button" onClick={() => revokeSeal(r.handle)} style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.red, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Revoke</button>
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
+                <input value={sealDraft} onChange={(e) => setSealDraft(e.target.value)} placeholder="@handle to grant the Seal"
+                  aria-label="Handle to grant the Seal" style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
+                <button type="button" onClick={grantSeal} disabled={!sealDraft.trim()}
+                  style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: sealDraft.trim() ? 1 : 0.5 }}>Grant</button>
+              </div>
             </Section>
 
             <Section title="Active users per day (30d)" icon={Eye} empty={activeByDay.length === 0 ? 'No active-user data yet.' : null}>

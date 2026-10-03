@@ -14381,13 +14381,13 @@ async function handleSocialFollow(request, env, ctx) {
       let who = {};
       if (ids.length) {
         const [hq, pq] = await Promise.all([
-          gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle`, {}),
+          gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle,verified`, {}),
           gbRest(env, `social_profiles?user_id=in.(${ids.join(',')})&select=user_id,display_name`, {}),
         ]);
-        for (const r of (hq.ok ? await hq.json() : [])) who[r.user_id] = { handle: r.handle || null };
+        for (const r of (hq.ok ? await hq.json() : [])) who[r.user_id] = { handle: r.handle || null, verified: r.verified === true };
         for (const r of (pq.ok ? await pq.json() : [])) who[r.user_id] = { ...(who[r.user_id] || {}), name: r.display_name || null };
       }
-      const shape = (r, idKey) => ({ user_id: r[idKey], status: r.status, since: r.created_at, handle: who[r[idKey]]?.handle || null, name: who[r[idKey]]?.name || null });
+      const shape = (r, idKey) => ({ user_id: r[idKey], status: r.status, since: r.created_at, handle: who[r[idKey]]?.handle || null, name: who[r[idKey]]?.name || null, verified: who[r[idKey]]?.verified === true });
       return jsonResponse({
         followers: followers.filter((r) => r.status === 'accepted').map((r) => shape(r, 'follower_id')),
         requests: followers.filter((r) => r.status === 'pending').map((r) => shape(r, 'follower_id')),
@@ -14579,11 +14579,42 @@ async function handleSocialBlock(request, env, ctx) {
 // handle is released by the overwrite. Worker-side so moderation has one door.
 const HANDLE_RESERVED = new Set(['admin', 'administrator', 'globeskimmers', 'globeskimmer', 'support', 'help', 'official', 'staff', 'mod', 'moderator', 'root', 'system', 'passport', 'founder', 'api', 'null', 'undefined', 'me', 'you', 'user', 'test']);
 // Handles HELD for specific people (the founder's family). A held name reads
-// as plain "taken" to everyone EXCEPT the exact signed-in email it is held
-// for — that account claims it normally. Add a sibling as 'handle': 'email'.
-const HANDLE_HELD = {
-  maiza: 'maizasimeon@gmail.com',
-};
+// as plain "taken" to everyone EXCEPT the email it is held for — that account
+// claims it normally. The list lives in api.held_handles and the founder
+// manages it (names, emails, invitations) from Admin Analytics.
+async function gbHeld(env, handle) {
+  const q = await gbRest(env, `held_handles?handle=eq.${encodeURIComponent(handle)}&select=*`, {});
+  return (q.ok ? await q.json() : [])[0] || null;
+}
+// The invitation email. Composed always; sent only when RESEND_API_KEY is
+// set — otherwise the admin panel offers the text for the founder to send
+// by hand. Never includes anything but the name, handle, and sign-in email.
+async function gbSendHeldInvite(env, row) {
+  const name = row.display_name || 'traveler';
+  const subject = '\u{1F389} Maiza saved a GlobeSkimmers username for you';
+  const text = `Hello ${name},
+
+Maiza, in partnership with GlobeSkimmers, has saved the username @${row.handle} — just for you.
+
+To claim it: download GlobeSkimmers, sign in with this email address (${row.email}), and your reserved username will be waiting the moment you open the app.
+
+If you already use another username, claiming will change it to @${row.handle}.
+
+"The world is a book, and those who do not travel read only one page."
+
+Enjoy stamping your world,
+Maiza & GlobeSkimmers \u2708\uFE0F`;
+  if (!env.RESEND_API_KEY) return { sent: false, subject, text, reason: 'no-key' };
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: env.RESEND_FROM || 'GlobeSkimmers <hello@globeskimmers.io>', to: [row.email], subject, text }),
+    });
+    if (!r.ok) return { sent: false, subject, text, reason: `resend-${r.status}` };
+    return { sent: true, subject, text };
+  } catch (e) { return { sent: false, subject, text, reason: e.message }; }
+}
 // Up to 3 available alternatives offered whenever a wanted handle is taken or
 // reserved — travel-flavored, same charset rules, checked in one query.
 async function gbHandleSuggestions(env, want) {
@@ -14592,10 +14623,14 @@ async function gbHandleSuggestions(env, want) {
     const n2 = () => String(10 + Math.floor(Math.random() * 90));
     const cands = [...new Set([`${base}_`, `${base}${n2()}`, `${base}_${n2()}`, `${base}_travels`, `${base}_abroad`])]
       .map((h) => h.slice(0, 20))
-      .filter((h) => /^[a-z0-9_]{3,20}$/.test(h) && !HANDLE_RESERVED.has(h) && !HANDLE_HELD[h] && !/^gs_/.test(h));
+      .filter((h) => /^[a-z0-9_]{3,20}$/.test(h) && !HANDLE_RESERVED.has(h) && !/^gs_/.test(h));
     if (!cands.length) return [];
-    const q = await gbRest(env, `passport_shares?handle=in.(${cands.map((h) => encodeURIComponent(h)).join(',')})&select=handle`, {});
-    const taken = new Set((q.ok ? await q.json() : []).map((r) => String(r.handle || '').toLowerCase()));
+    const inList = cands.map((h) => encodeURIComponent(h)).join(',');
+    const [q, hq] = await Promise.all([
+      gbRest(env, `passport_shares?handle=in.(${inList})&select=handle`, {}),
+      gbRest(env, `held_handles?handle=in.(${inList})&select=handle`, {}),
+    ]);
+    const taken = new Set([...(q.ok ? await q.json() : []), ...(hq.ok ? await hq.json() : [])].map((r) => String(r.handle || '').toLowerCase()));
     return cands.filter((h) => !taken.has(h)).slice(0, 3);
   } catch { return []; }
 }
@@ -14604,19 +14639,20 @@ async function handleSocialHandle(request, env, ctx) {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
-    const q = await gbRest(env, `passport_shares?user_id=eq.${user.id}&select=handle,handle_changed_at,handle_changes,slug,is_public`, {});
+    const q = await gbRest(env, `passport_shares?user_id=eq.${user.id}&select=handle,handle_changed_at,handle_changes,slug,is_public,verified`, {});
     const mine = (q.ok ? await q.json() : [])[0] || null;
-    if (b.handle === undefined) return jsonResponse({ handle: mine?.handle || null });
+    if (b.handle === undefined) return jsonResponse({ handle: mine?.handle || null, verified: mine?.verified === true });
     const want = String(b.handle || '').toLowerCase().trim();
     if (!/^[a-z0-9_]{3,20}$/.test(want)) return jsonResponse({ error: '3–20 characters: letters, numbers, underscore' }, 400);
     const sp = await gbSocialProfile(env, user.id);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Usernames aren\'t available on this account' }, 403);
-    const heldFor = HANDLE_HELD[want];
-    if (heldFor && String(user.email || '').toLowerCase() !== heldFor) {
+    const held = await gbHeld(env, want);
+    if (held && !held.claimed_at && String(user.email || '').toLowerCase() !== String(held.email || '').toLowerCase()) {
+      // Held for someone else (or no email attached yet): plain "taken".
       return jsonResponse({ error: 'That username is taken', suggestions: await gbHandleSuggestions(env, want) }, 409);
     }
-    if (!heldFor && (HANDLE_RESERVED.has(want) || /^gs_/.test(want))) {
+    if (!held && (HANDLE_RESERVED.has(want) || /^gs_/.test(want))) {
       return jsonResponse({ error: 'That name is reserved', suggestions: await gbHandleSuggestions(env, want) }, 400);
     }
     if (mine?.handle && mine.handle.toLowerCase() === want) return jsonResponse({ handle: mine.handle });
@@ -14638,8 +14674,90 @@ async function handleSocialHandle(request, env, ctx) {
       if (w.status === 409) return jsonResponse({ error: 'That username is taken', suggestions: await gbHandleSuggestions(env, want) }, 409);
       return jsonResponse({ error: 'Could not save the username' }, 502);
     }
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_handle_set', {}));
-    return jsonResponse({ handle: want });
+    if (held && !held.claimed_at) {
+      // The ceremony is honored: mark the claim for the founder's panel.
+      await gbRest(env, `held_handles?handle=eq.${encodeURIComponent(want)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ claimed_at: new Date().toISOString(), claimed_by: user.id }) });
+    }
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_handle_set', held && !held.claimed_at ? { held: 1 } : {}));
+    return jsonResponse({ handle: want, ...(held && !held.claimed_at ? { held_claim: true, held_name: held.display_name || null } : {}) });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /social/held-for-me {} — is a username waiting for THIS account?
+// Matched by sign-in email; powers the claim ceremony card on the Passport.
+async function handleSocialHeldForMe(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const email = String(user.email || '').toLowerCase();
+    if (!email) return jsonResponse({ held: null });
+    const q = await gbRest(env, `held_handles?email=eq.${encodeURIComponent(email)}&claimed_at=is.null&select=handle,display_name&limit=1`, {});
+    const row = (q.ok ? await q.json() : [])[0] || null;
+    if (!row) return jsonResponse({ held: null });
+    const hq = await gbRest(env, `passport_shares?user_id=eq.${user.id}&select=handle`, {});
+    return jsonResponse({ held: { handle: row.handle, name: row.display_name || null }, current: (hq.ok ? await hq.json() : [])[0]?.handle || null });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /admin/held-handles { op, handle?, display_name?, email? } — the
+// founder's reservation desk: list | add | update | remove | invite.
+async function handleAdminHeldHandles(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  const b = await request.json().catch(() => ({}));
+  const op = String(b.op || 'list');
+  const clean = (v) => String(v || '').toLowerCase().trim();
+  try {
+    if (op === 'add') {
+      const handle = clean(b.handle).replace(/^@/, '');
+      if (!/^[a-z0-9_]{3,20}$/.test(handle)) return jsonResponse({ error: '3\u201320 characters: letters, numbers, underscore' }, 400);
+      if (HANDLE_RESERVED.has(handle) || /^gs_/.test(handle)) return jsonResponse({ error: 'That name is on the system reserved list already' }, 400);
+      const own = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}&select=user_id&limit=1`, {});
+      if ((own.ok ? await own.json() : []).length) return jsonResponse({ error: 'A user already owns that handle' }, 409);
+      const row = { handle, display_name: String(b.display_name || '').trim().slice(0, 60) || null, email: clean(b.email) || null };
+      const w = await gbRest(env, 'held_handles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+      if (!w.ok) return jsonResponse({ error: w.status === 409 ? 'Already on the list' : 'Could not save' }, w.status === 409 ? 409 : 502);
+    } else if (op === 'update') {
+      const patch = {};
+      if (b.email !== undefined) patch.email = clean(b.email) || null;
+      if (b.display_name !== undefined) patch.display_name = String(b.display_name || '').trim().slice(0, 60) || null;
+      const w = await gbRest(env, `held_handles?handle=eq.${encodeURIComponent(clean(b.handle))}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
+      if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
+    } else if (op === 'remove') {
+      await gbRest(env, `held_handles?handle=eq.${encodeURIComponent(clean(b.handle))}&claimed_at=is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+    } else if (op === 'invite') {
+      const q = await gbRest(env, `held_handles?handle=eq.${encodeURIComponent(clean(b.handle))}&select=*`, {});
+      const row = (q.ok ? await q.json() : [])[0];
+      if (!row) return jsonResponse({ error: 'Not on the list' }, 404);
+      if (!row.email) return jsonResponse({ error: 'Add their email first' }, 400);
+      if (row.claimed_at) return jsonResponse({ error: 'Already claimed \u{1F389}' }, 400);
+      const res = await gbSendHeldInvite(env, row);
+      if (res.sent) await gbRest(env, `held_handles?handle=eq.${encodeURIComponent(clean(b.handle))}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ invited_at: new Date().toISOString() }) });
+      return jsonResponse({ sent: res.sent, reason: res.reason || null, subject: res.subject, text: res.text });
+    }
+    const list = await gbRest(env, 'held_handles?select=*&order=created_at.asc', {});
+    return jsonResponse({ rows: list.ok ? await list.json() : [], emailConfigured: !!env.RESEND_API_KEY });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /admin/verified { op, handle? } — the founder's checkmark desk.
+// verified is reserved for monetization / official figures / businesses,
+// and the founder may gift it. No user-facing path ever writes this flag.
+async function handleAdminVerified(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  const b = await request.json().catch(() => ({}));
+  const op = String(b.op || 'list');
+  try {
+    if (op === 'grant' || op === 'revoke') {
+      const handle = String(b.handle || '').toLowerCase().trim().replace(/^@/, '');
+      if (!handle) return jsonResponse({ error: 'Which @handle?' }, 400);
+      const w = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ verified: op === 'grant', updated_at: new Date().toISOString() }) });
+      const rows = w.ok ? await w.json() : [];
+      if (!rows.length) return jsonResponse({ error: 'No user with that handle' }, 404);
+    }
+    const list = await gbRest(env, 'passport_shares?verified=eq.true&select=handle,user_id&order=handle.asc', {});
+    return jsonResponse({ rows: list.ok ? await list.json() : [] });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -19387,6 +19505,9 @@ export default {
       if (pathname === '/passport/stamp/date' && request.method === 'POST') return await handlePassportStampDate(request, env);
       if (pathname === '/passport/stamp/layout' && request.method === 'POST') return await handlePassportStampLayout(request, env);
       if (pathname === '/social/handle' && request.method === 'POST') return await handleSocialHandle(request, env, ctx);
+      if (pathname === '/social/held-for-me' && request.method === 'POST') return await handleSocialHeldForMe(request, env);
+      if (pathname === '/admin/held-handles' && request.method === 'POST') return await handleAdminHeldHandles(request, env);
+      if (pathname === '/admin/verified' && request.method === 'POST') return await handleAdminVerified(request, env);
       if (pathname === '/passport/sets' && request.method === 'POST') return await handlePassportSets(request, env);
       if (pathname === '/social/block' && request.method === 'POST') return await handleSocialBlock(request, env, ctx);
       if (pathname === '/social/age' && request.method === 'POST') return await handleSocialAge(request, env, ctx);

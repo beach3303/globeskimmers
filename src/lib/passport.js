@@ -103,7 +103,12 @@ export async function blockTagger(token) {
 // Username: read (no args) or claim/change. 3–20 [a-z0-9_], 2 changes/30 days.
 export async function getHandle() {
   const { data, error } = await callWorker('social/handle', {});
-  return { handle: data?.handle || null, error };
+  return { handle: data?.handle || null, verified: data?.verified === true, error };
+}
+// Is a username being held for THIS account (founder's family list)?
+export async function heldForMe() {
+  const { data, error } = await callWorker('social/held-for-me', {});
+  return { held: data?.held || null, current: data?.current || null, error };
 }
 // Age gate (Social P1): read state, or set the birth year once (it locks).
 export async function getAgeGate() {
@@ -168,7 +173,7 @@ export async function reportShared({ slug, kind, ref, reason, note }) {
 }
 export async function setHandle(handle) {
   const { data, error } = await callWorker('social/handle', { handle });
-  return { handle: data?.handle || null, suggestions: data?.suggestions || [], error: error || data?.error || null };
+  return { handle: data?.handle || null, suggestions: data?.suggestions || [], heldClaim: data?.held_claim === true, heldName: data?.held_name || null, error: error || data?.error || null };
 }
 // My incoming pending tags (the passive "Tagged you" inbox — email path).
 export async function listTags() {

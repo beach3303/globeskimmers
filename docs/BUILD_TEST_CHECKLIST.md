@@ -1014,3 +1014,16 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Virtual Luggage: swipe capture wrapper (fixes dead lower half) + inverted vertical mapping.
 - Gates: node --check ✓, eslint --quiet ✓, npm run build ✓, cap copy ✓. App-side changes reach
   devices on the next `npm run ota` / native build — not yet on any phone at write time.
+
+## 2026-10-03 — held-username release ceremony + the GlobeSkimmers Seal
+- api.held_handles table (migration auto-applies on push) replaces the in-worker map;
+  founder manages names/emails/invites in Admin Analytics ("Held usernames" desk).
+- Claim ceremony card on the Passport for the matching sign-in email (hello-by-name,
+  current-username-change notice, 🎉 celebration + travel quote). Claims mark the row.
+- Verification = the GlobeSkimmers Seal (dashed mini stamp-seal SVG, never a checkmark);
+  passport_shares.verified, admin grant/revoke desk, renders on Profile + Mailbox rows.
+- Invitation email sends via Resend when RESEND_API_KEY is set; until then the desk
+  composes + copies the message for manual sending.
+- **Activate (optional, founder):** `npx wrangler secret put RESEND_API_KEY` (+ later
+  Resend domain DNS) to make "Send invitation" email for real.
+- Gates: node --check ✓, eslint ✓, build ✓, cap copy ✓.

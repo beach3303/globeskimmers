@@ -24,6 +24,7 @@ import NearbyStampPrompt, { NEARBY_KEY, nearbySensingOn } from "@/components/pas
 import StampActions from "@/components/passport/StampActions";
 import Luggage from "@/components/passport/Luggage";
 import PhotoPackets from "@/components/passport/PhotoPackets";
+import HeldHandleClaim from "@/components/passport/HeldHandleClaim";
 
 
 // ============================================================================
@@ -801,6 +802,7 @@ function PassportInner() {
             <button onClick={() => { try { localStorage.setItem("pp_arrival_explained", "1"); } catch { /* ignore */ } setExplainArrivals(false); }} className="mt-2 rounded-lg px-3 py-1.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12) }}>Got it</button>
           </div>
         )}
+        {!readOnly && !preview && <HeldHandleClaim fs={fs} />}
         {!readOnly && !preview && bdayAsk && (
           <div className="mb-4 rounded-[16px] p-3.5" style={{ background: "#FFFBF0", border: "1px solid #EAD9AE" }}>
             <p style={{ color: INK, fontSize: fs(14), fontWeight: 700 }}>🎂 When&rsquo;s your birthday?</p>

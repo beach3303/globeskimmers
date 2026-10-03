@@ -16,6 +16,7 @@ import Luggage from "@/components/passport/Luggage";
 import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import InviteButton from "@/components/passport/InviteButton";
+import OfficialSeal from "@/components/passport/OfficialSeal";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -36,6 +37,7 @@ export default function ProfilePage() {
   const [stamps, setStamps] = useState([]);
   const [stats, setStats] = useState({});
   const [handle, setHandle] = useState(null);
+  const [handleVerified, setHandleVerified] = useState(false); // founder-granted mark only
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [favorites, setFavorites] = useState([]);   // [string]
@@ -70,6 +72,7 @@ export default function ProfilePage() {
       if (gone) return;
       setStamps(pp.stamps); setStats(pp.stats || {});
       setHandle(h.handle);
+      setHandleVerified(h.verified === true);
       const p = sp.profile || {};
       setName(p.display_name || profile?.first_name || "");
       setAvatarUrl(p.avatar || null);
@@ -155,7 +158,10 @@ export default function ProfilePage() {
               aria-label="Display name"
               className="w-full bg-transparent outline-none" style={{ fontFamily: SERIF, fontSize: fs(24), color: INK }} />
             <div style={{ fontFamily: MONO, fontSize: fs(11.5), color: INK3, marginTop: 2 }}>
-              {handle ? `@${handle}` : (
+              {handle ? (<>
+                @{handle}
+                {handleVerified && <OfficialSeal size={13} />}
+              </>) : (
                 <button type="button" onClick={() => navigate(createPageUrl("Settings"))} style={{ background: "none", border: 0, padding: 0, color: TEAL, textDecoration: "underline", textUnderlineOffset: 2, fontFamily: MONO, fontSize: fs(11.5) }}>
                   Claim your @username →
                 </button>
