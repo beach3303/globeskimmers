@@ -277,6 +277,43 @@ X-style — the Seal's trust is the same asset the partnership lanes sell.
   space**; show the experience in meeting #1, never architecture or the
   roadmap.
 
+## 6b. Fundraising — the second strategy session (2026-10-03), fact-checked
+
+Positioning to investors: **"GlobeSkimmers is building the verified
+experience network for the physical world"** — short form: **"We're
+turning 'I was there' into a platform."** Never pitch "a travel app with a
+Virtual Passport."
+
+Scenario ladder ChatGPT modeled (illustrative, not promises): 500K MAU ->
+$3–6M/yr; 3M MAU -> $30–50M/yr; 10–20M MAU -> $200–350M/yr. Load-bearing
+assumption: partner + sponsorship money is ~2/3 of revenue (75–125 paying
+partners at the 3M-MAU tier). Consumer premium at 3% x $49/yr is the small
+part. Treat partner count and price as the number investors will attack.
+
+Raise: **$1.5–2.5M pre-seed** with a strategic investor, to prove ONE
+measurable loop (attendance -> collectible -> share -> new user -> partner
+renews), not to build features. Narrow beachhead, enormous vision.
+
+Verified facts (2026-10-03 web check):
+- Elysian Park Ventures — founded 2014 by the LA Dodgers ownership group;
+  sports x tech x culture; stage-agnostic; $500K–$100M checks. ✓
+- Courtside Ventures — early-stage sports/lifestyle/gaming; $200M+ AUM
+  across three funds ($100M Fund III). ✓
+- Comcast NBCUniversal LIFT Labs — **80%+** of portfolio companies landed a
+  pilot/POC/commercial deal (ChatGPT's "90%" is not supported). Cohorts are
+  THEMED (recent ones: generative AI) — check the current theme before
+  applying.
+- Disney Accelerator 2026 — five growth-stage companies, all robotics /
+  generative AI / data synthesis. A later target, and thematically far.
+- Carta Q2 2026 — average pre-seed SAFE $276K; median post-money cap $18M
+  for $1M–$2.4M rounds; median seed $4.1M raised on $24.3M (18% dilution).
+
+Before the first pitch (founder + Claude, 2026-10-03): launch the approved
+build, instrument the investor metrics (stamps claimed, share rate,
+share-generated installs via referral links, D7/D30 retention), and ship an
+Events v1 demo at LA venues (Dodger Stadium first — generic stamps, no team
+marks) so the sports beachhead is something an Elysian partner can hold.
+
 ## 7. Guardrails (compliance & craft)
 
 - **Written brand authorization + approved assets** before any branded
