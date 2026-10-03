@@ -38,6 +38,7 @@ export default function ProfilePage() {
   const [stats, setStats] = useState({});
   const [handle, setHandle] = useState(null);
   const [handleVerified, setHandleVerified] = useState(false); // founder-granted mark only
+  const [sealTier, setSealTier] = useState(null);
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [favorites, setFavorites] = useState([]);   // [string]
@@ -73,6 +74,7 @@ export default function ProfilePage() {
       setStamps(pp.stamps); setStats(pp.stats || {});
       setHandle(h.handle);
       setHandleVerified(h.verified === true);
+      setSealTier(h.seal || null);
       const p = sp.profile || {};
       setName(p.display_name || profile?.first_name || "");
       setAvatarUrl(p.avatar || null);
@@ -160,7 +162,7 @@ export default function ProfilePage() {
             <div style={{ fontFamily: MONO, fontSize: fs(11.5), color: INK3, marginTop: 2 }}>
               {handle ? (<>
                 @{handle}
-                {handleVerified && <OfficialSeal size={13} />}
+                {handleVerified && <OfficialSeal size={13} tier={sealTier || "burgundy"} />}
               </>) : (
                 <button type="button" onClick={() => navigate(createPageUrl("Settings"))} style={{ background: "none", border: 0, padding: 0, color: TEAL, textDecoration: "underline", textUnderlineOffset: 2, fontFamily: MONO, fontSize: fs(11.5) }}>
                   Claim your @username →

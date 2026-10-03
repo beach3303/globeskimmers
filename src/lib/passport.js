@@ -103,7 +103,7 @@ export async function blockTagger(token) {
 // Username: read (no args) or claim/change. 3–20 [a-z0-9_], 2 changes/30 days.
 export async function getHandle() {
   const { data, error } = await callWorker('social/handle', {});
-  return { handle: data?.handle || null, verified: data?.verified === true, error };
+  return { handle: data?.handle || null, verified: data?.verified === true, seal: data?.seal || null, error };
 }
 // Request a username (business/official) or the GlobeSkimmers Seal.
 export async function socialRequest({ kind, handle, note }) {

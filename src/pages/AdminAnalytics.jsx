@@ -17,6 +17,9 @@ import { callWorker } from '@/lib/callWorker';
 import { createPageUrl } from '@/utils';
 import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap, Users, UserCheck, Mail } from 'lucide-react';
 import { isAdminEmail } from '@/lib/admins';
+import OfficialSeal from '@/components/passport/OfficialSeal';
+
+const SEAL_TIER_LABEL = { gold: 'Gold · Honored', burgundy: 'Burgundy · Official', teal: 'Teal · GlobeSkimmers team' };
 
 const COLORS = {
   bg: '#F0F4F8',
@@ -105,6 +108,7 @@ export default function AdminAnalytics() {
   const [inviteCopy, setInviteCopy] = useState(null);  // { handle, text } when email isn't configured
   const [seals, setSeals] = useState({ rows: [], error: null });
   const [sealDraft, setSealDraft] = useState('');
+  const [sealTierDraft, setSealTierDraft] = useState('burgundy');
   const [brandOpen, setBrandOpen] = useState(null);   // brand handle with controls expanded
   const [requests, setRequests] = useState({ rows: [], error: null });
   const reqCall = async (body) => {
@@ -146,7 +150,7 @@ export default function AdminAnalytics() {
     }
   };
   const removeHeld = async (handle) => { await heldCall({ op: 'remove', handle }); };
-  const grantSeal = async () => { const { error } = await sealCall({ op: 'grant', handle: sealDraft }); if (error) setSeals((v) => ({ ...v, error })); else setSealDraft(''); };
+  const grantSeal = async () => { const { error } = await sealCall({ op: 'grant', handle: sealDraft, seal: sealTierDraft }); if (error) setSeals((v) => ({ ...v, error })); else setSealDraft(''); };
   const revokeSeal = async (handle) => { await sealCall({ op: 'revoke', handle }); };
 
   const loadInbox = async (markHandled) => {
@@ -597,13 +601,20 @@ export default function AdminAnalytics() {
               {seals.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{seals.error}</div>}
               {seals.rows.map((r) => (
                 <div key={r.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: `1px solid ${COLORS.border}`, fontSize: 13 }}>
-                  <span style={{ fontWeight: 700, color: COLORS.dark }}>@{r.handle}</span>
+                  <span style={{ fontWeight: 700, color: COLORS.dark, display: 'flex', alignItems: 'center' }}>@{r.handle}<OfficialSeal size={14} tier={r.seal || 'burgundy'} /></span>
+                  <span style={{ fontSize: 11.5, color: COLORS.gray }}>{SEAL_TIER_LABEL[r.seal || 'burgundy']}</span>
                   <button type="button" onClick={() => revokeSeal(r.handle)} style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.red, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Revoke</button>
                 </div>
               ))}
               <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
                 <input value={sealDraft} onChange={(e) => setSealDraft(e.target.value)} placeholder="@handle to grant the Seal"
                   aria-label="Handle to grant the Seal" style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
+                <select value={sealTierDraft} onChange={(e) => setSealTierDraft(e.target.value)} aria-label="Seal tier"
+                  style={{ padding: '7px 8px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff' }}>
+                  <option value="gold">Gold — Honored</option>
+                  <option value="burgundy">Burgundy — Official</option>
+                  <option value="teal">Teal — GlobeSkimmers team</option>
+                </select>
                 <button type="button" onClick={grantSeal} disabled={!sealDraft.trim()}
                   style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: sealDraft.trim() ? 1 : 0.5 }}>Grant</button>
               </div>

@@ -1037,3 +1037,17 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Admin Analytics: Brand & entity reserve (tap a chip → attach partner email / release),
   Username & Seal requests queue (Done/Dismiss), kind toggle on the hold form.
 - Settings: "A business or official page?" request door → /social/request (3 open max).
+
+## 2026-10-03 — Seal tiers, save batch 3, and the username blocklist
+- Seal tiers: gold = Honored (founder's personal honor, foil), burgundy = Official
+  (businesses/partners/figures), teal = House (team). passport_shares.seal; admin desk
+  grants with a tier picker; Profile/Mailbox render the tier ink. Existing grants
+  backfilled burgundy.
+- Save batch 3 (754 held): Kirk/TPUSA, CEOs+founders (~100), Facebook/Samsung/Fox set,
+  sacred names, Trump set + 20 US leadership titles, 228 countries, 404 world cities
+  (kind 'place', for future official tourism accounts).
+- Username blocklist (policy, no release path): 142 exact + 91 substring terms —
+  satanic/evil names, terror/gang entities, profanity+slurs in ~15 languages. Verified
+  zero collisions against all 1,392 held names and a real-name probe set (therapist,
+  michelle, bahamas, pakistan, phuket…). osama/jihad stay claimable (real first names;
+  binladen/alqaeda blocked); troia/weed/sinaloa stay (real places).

@@ -93,7 +93,7 @@ export default function MailboxPage() {
             <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".16em", color: "#8A5410" }}>Wants to follow you</div>
             {lists.requests.map((r) => (
               <div key={r.user_id} className="flex items-center gap-2 rounded-[14px] px-3 py-2.5 mt-2" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
-                <span className="flex-1 truncate" style={{ fontSize: fs(13.5), color: INK, fontWeight: 600 }}>{r.name || (r.handle ? `@${r.handle}` : "A traveler")}{r.verified ? <OfficialSeal size={12} /> : null}</span>
+                <span className="flex-1 truncate" style={{ fontSize: fs(13.5), color: INK, fontWeight: 600 }}>{r.name || (r.handle ? `@${r.handle}` : "A traveler")}{r.verified ? <OfficialSeal size={12} tier={r.seal || "burgundy"} /> : null}</span>
                 <button type="button" onClick={() => respond(r.user_id, "accept")} className="rounded-lg px-3 py-1.5 font-semibold" style={{ background: GREEN, color: "#fff", fontSize: fs(12) }}>Allow</button>
                 <button type="button" onClick={() => respond(r.user_id, "decline")} className="rounded-lg px-3 py-1.5 font-semibold" style={{ background: SOFT, color: INK2, fontSize: fs(12) }}>Not now</button>
               </div>
@@ -161,7 +161,7 @@ export default function MailboxPage() {
               {lists.following.map((f) => (
                 <button key={f.user_id} type="button" onClick={() => unfollow(f.user_id)} title="Tap to unfollow"
                   className="rounded-full px-3 py-1.5" style={{ background: SOFT, border: `1px solid ${RULE}`, fontSize: fs(12), color: INK2, fontWeight: 600 }}>
-                  {f.name || (f.handle ? `@${f.handle}` : "traveler")}{f.verified ? <OfficialSeal size={12} /> : null}{f.status === "pending" ? " · pending" : ""}
+                  {f.name || (f.handle ? `@${f.handle}` : "traveler")}{f.verified ? <OfficialSeal size={12} tier={f.seal || "burgundy"} /> : null}{f.status === "pending" ? " · pending" : ""}
                 </button>
               ))}
             </div>

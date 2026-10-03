@@ -14381,13 +14381,13 @@ async function handleSocialFollow(request, env, ctx) {
       let who = {};
       if (ids.length) {
         const [hq, pq] = await Promise.all([
-          gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle,verified`, {}),
+          gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle,verified,seal`, {}),
           gbRest(env, `social_profiles?user_id=in.(${ids.join(',')})&select=user_id,display_name`, {}),
         ]);
-        for (const r of (hq.ok ? await hq.json() : [])) who[r.user_id] = { handle: r.handle || null, verified: r.verified === true };
+        for (const r of (hq.ok ? await hq.json() : [])) who[r.user_id] = { handle: r.handle || null, verified: r.verified === true, seal: r.verified === true ? (r.seal || 'burgundy') : null };
         for (const r of (pq.ok ? await pq.json() : [])) who[r.user_id] = { ...(who[r.user_id] || {}), name: r.display_name || null };
       }
-      const shape = (r, idKey) => ({ user_id: r[idKey], status: r.status, since: r.created_at, handle: who[r[idKey]]?.handle || null, name: who[r[idKey]]?.name || null, verified: who[r[idKey]]?.verified === true });
+      const shape = (r, idKey) => ({ user_id: r[idKey], status: r.status, since: r.created_at, handle: who[r[idKey]]?.handle || null, name: who[r[idKey]]?.name || null, verified: who[r[idKey]]?.verified === true, seal: who[r[idKey]]?.seal || null });
       return jsonResponse({
         followers: followers.filter((r) => r.status === 'accepted').map((r) => shape(r, 'follower_id')),
         requests: followers.filter((r) => r.status === 'pending').map((r) => shape(r, 'follower_id')),
@@ -14578,6 +14578,47 @@ async function handleSocialBlock(request, env, ctx) {
 // ^[a-z0-9_]{3,20}$, unique (case-insensitive), 2 changes per 30 days, the old
 // handle is released by the overwrite. Worker-side so moderation has one door.
 const HANDLE_RESERVED = new Set(['admin', 'administrator', 'globeskimmers', 'globeskimmer', 'support', 'help', 'official', 'staff', 'mod', 'moderator', 'root', 'system', 'passport', 'founder', 'api', 'null', 'undefined', 'me', 'you', 'user', 'test']);
+// Blocked outright (founder policy 2026-10-03): evil/satanic names, violent,
+// terror and gang entities, and profanity/slurs across languages. Claimable
+// by NO ONE — no release path, not even the admin desk. EXACT matches the
+// whole handle; SUB matches anywhere inside one, and only carries terms that
+// cannot false-positive on real human names or places (the Scunthorpe rule:
+// 'hell' would hit michelle, 'ass' hits cassandra, 'hamas' hits bahamas —
+// those live in EXACT).
+const HANDLE_BLOCKED_EXACT = new Set([
+  '1488', '666', 'al_qaeda', 'amk', 'anal', 'antichrist', 'arsch', 'arse', 'ass', 'baphomet',
+  'beaner', 'beelzebub', 'bellend', 'bloods', 'boko', 'boner', 'bullshit', 'camorra', 'cartel',
+  'cazzo', 'chinga', 'chink', 'chuj', 'chut', 'cocaine', 'cock', 'connard', 'coon', 'cosanostra',
+  'crap', 'crips', 'cum', 'damn', 'darkie', 'demon', 'demonic', 'demons', 'devil', 'devils',
+  'diablo', 'dick', 'dipshit', 'dumbass', 'dyke', 'elchapo', 'evil', 'fag', 'farc', 'fentanyl',
+  'fitta', 'fuk', 'gago', 'gandu', 'gang', 'gangs', 'gangsta', 'gangster', 'genocide', 'gook',
+  'hamas', 'hell', 'hells', 'hellsangels', 'heroin', 'hitman', 'hoe', 'hoes', 'holocaust', 'homo',
+  'hooker', 'horny', 'hure', 'injun', 'isil', 'isis', 'jackass', 'joder', 'kaffir', 'kafir',
+  'kanker', 'kike', 'kill', 'killer', 'kkk', 'klan', 'loli', 'mafia', 'malaka', 'manko', 'marica',
+  'merda', 'merde', 'meth', 'milf', 'ms13', 'ms_13', 'nazi', 'nazis', 'neger', 'negro', 'nonce',
+  'nude', 'nudes', 'orgy', 'paki', 'pedo', 'penis', 'piss', 'polpot', 'porn', 'porno', 'prick',
+  'proudboys', 'puta', 'putas', 'pute', 'puto', 'rape', 'rapist', 'retard', 'sex', 'sexy',
+  'shaytan', 'shit', 'shithead', 'sicario', 'slut', 'sluts', 'spic', 'squaw', 'stalin', 'suka',
+  'thedevil', 'thot', 'tits', 'tranny', 'twat', 'unabomber', 'verga', 'wank', 'wetback', 'yakuza',
+]);
+const HANDLE_BLOCKED_SUB = [
+  'alqaeda', 'alqaida', 'alshabaab', 'arschloch', 'asshole', 'bestiality', 'bhenchod', 'binladen',
+  'bitch', 'blowjob', 'blyat', 'bokoharam', 'buceta', 'cabron', 'caonima', 'caralho', 'childporn',
+  'chutiya', 'cocksucker', 'cunt', 'daesh', 'dickhead', 'dildo', 'encule', 'faggot', 'filhodaputa',
+  'fotze', 'fuck', 'gaesaekki', 'gangbang', 'handjob', 'heilhitler', 'hentai', 'hezbollah',
+  'hijodeputa', 'hijueputa', 'hitler', 'hizbollah', 'hurensohn', 'incest', 'kontol', 'kuklux',
+  'kurwa', 'lucifer', 'luciferian', 'madarchod', 'maricon', 'mierda', 'molester', 'murder', 'n1gga',
+  'n1gger', 'ngentot', 'nigga', 'nigger', 'orgasm', 'orospu', 'paedophile', 'pedophile', 'pendejo',
+  'pidor', 'pizda', 'pizdec', 'porcodio', 'pornhub', 'pornstar', 'pukimak', 'pussy', 'putain',
+  'putangina', 'puttana', 'salope', 'satan', 'scheiss', 'schoolshooter', 'schwuchtel', 'sharmuta',
+  'shibal', 'siegheil', 'stronzo', 'swastika', 'taliban', 'tangina', 'terrorist', 'vaffanculo',
+  'vagina', 'wanker', 'whitepower', 'whore', 'wichser', 'yarrak',
+];
+function handleBlocked(h) {
+  if (HANDLE_BLOCKED_EXACT.has(h)) return true;
+  for (const t of HANDLE_BLOCKED_SUB) if (h.includes(t)) return true;
+  return false;
+}
 // Handles HELD for specific people (the founder's family). A held name reads
 // as plain "taken" to everyone EXCEPT the email it is held for — that account
 // claims it normally. The list lives in api.held_handles and the founder
@@ -14623,7 +14664,7 @@ async function gbHandleSuggestions(env, want) {
     const n2 = () => String(10 + Math.floor(Math.random() * 90));
     const cands = [...new Set([`${base}_`, `${base}${n2()}`, `${base}_${n2()}`, `${base}_travels`, `${base}_abroad`])]
       .map((h) => h.slice(0, 20))
-      .filter((h) => /^[a-z0-9_]{3,20}$/.test(h) && !HANDLE_RESERVED.has(h) && !/^gs_/.test(h));
+      .filter((h) => /^[a-z0-9_]{3,20}$/.test(h) && !HANDLE_RESERVED.has(h) && !/^gs_/.test(h) && !handleBlocked(h));
     if (!cands.length) return [];
     const inList = cands.map((h) => encodeURIComponent(h)).join(',');
     const [q, hq] = await Promise.all([
@@ -14648,11 +14689,12 @@ async function handleSocialHandle(request, env, ctx) {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
-    const q = await gbRest(env, `passport_shares?user_id=eq.${user.id}&select=handle,handle_changed_at,handle_changes,slug,is_public,verified`, {});
+    const q = await gbRest(env, `passport_shares?user_id=eq.${user.id}&select=handle,handle_changed_at,handle_changes,slug,is_public,verified,seal`, {});
     const mine = (q.ok ? await q.json() : [])[0] || null;
-    if (b.handle === undefined) return jsonResponse({ handle: mine?.handle || null, verified: mine?.verified === true });
+    if (b.handle === undefined) return jsonResponse({ handle: mine?.handle || null, verified: mine?.verified === true, seal: mine?.verified === true ? (mine?.seal || 'burgundy') : null });
     const want = String(b.handle || '').toLowerCase().trim();
     if (!/^[a-z0-9_]{3,20}$/.test(want)) return jsonResponse({ error: '3–20 characters: letters, numbers, underscore' }, 400);
+    if (handleBlocked(want)) return jsonResponse({ error: 'That name isn\u2019t available' }, 400);
     const sp = await gbSocialProfile(env, user.id);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Usernames aren\'t available on this account' }, 403);
@@ -14721,6 +14763,7 @@ async function handleAdminHeldHandles(request, env) {
       const handle = clean(b.handle).replace(/^@/, '');
       if (!/^[a-z0-9_]{3,20}$/.test(handle)) return jsonResponse({ error: '3\u201320 characters: letters, numbers, underscore' }, 400);
       if (HANDLE_RESERVED.has(handle) || /^gs_/.test(handle)) return jsonResponse({ error: 'That name is on the system reserved list already' }, 400);
+      if (handleBlocked(handle)) return jsonResponse({ error: 'That name is on the blocked list (policy) — it cannot be held or claimed' }, 400);
       const own = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}&select=user_id&limit=1`, {});
       if ((own.ok ? await own.json() : []).length) return jsonResponse({ error: 'A user already owns that handle' }, 409);
       const row = { handle, display_name: String(b.display_name || '').trim().slice(0, 60) || null, email: clean(b.email) || null, kind: b.kind === 'brand' ? 'brand' : 'family' };
@@ -14786,9 +14829,11 @@ async function handleAdminHandleRequests(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
-// POST /admin/verified { op, handle? } — the founder's checkmark desk.
-// verified is reserved for monetization / official figures / businesses,
-// and the founder may gift it. No user-facing path ever writes this flag.
+// POST /admin/verified { op, handle?, seal? } — the founder's Seal desk.
+// Tiers: gold = Honored (the founder's personal honor), burgundy = Official
+// (businesses, partners, public figures), teal = House (GlobeSkimmers team).
+// No user-facing path ever writes verified or seal.
+const SEAL_TIERS = new Set(['gold', 'burgundy', 'teal']);
 async function handleAdminVerified(request, env) {
   const denied = await requireAdmin(request, env);
   if (denied) return denied;
@@ -14798,11 +14843,12 @@ async function handleAdminVerified(request, env) {
     if (op === 'grant' || op === 'revoke') {
       const handle = String(b.handle || '').toLowerCase().trim().replace(/^@/, '');
       if (!handle) return jsonResponse({ error: 'Which @handle?' }, 400);
-      const w = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ verified: op === 'grant', updated_at: new Date().toISOString() }) });
+      const seal = op === 'grant' ? (SEAL_TIERS.has(b.seal) ? b.seal : 'burgundy') : null;
+      const w = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ verified: op === 'grant', seal, updated_at: new Date().toISOString() }) });
       const rows = w.ok ? await w.json() : [];
       if (!rows.length) return jsonResponse({ error: 'No user with that handle' }, 404);
     }
-    const list = await gbRest(env, 'passport_shares?verified=eq.true&select=handle,user_id&order=handle.asc', {});
+    const list = await gbRest(env, 'passport_shares?verified=eq.true&select=handle,user_id,seal&order=handle.asc', {});
     return jsonResponse({ rows: list.ok ? await list.json() : [] });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
