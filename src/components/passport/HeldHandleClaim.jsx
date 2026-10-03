@@ -22,16 +22,24 @@ export default function HeldHandleClaim({ fs = (n) => n }) {
   const [needYear, setNeedYear] = useState(false);
   const [year, setYear] = useState("");
 
+  // A personal claim link (Hide My Email-proof) beats matching by email.
+  const [token, setToken] = useState(() => { try { return sessionStorage.getItem("gs_held_token") || null; } catch { return null; } });
+  // A link opened while the Passport is already on screen hands its token over here.
+  useEffect(() => {
+    const onToken = () => { try { setToken(sessionStorage.getItem("gs_held_token") || null); } catch { /* fine */ } };
+    window.addEventListener("gs:held-token", onToken);
+    return () => window.removeEventListener("gs:held-token", onToken);
+  }, []);
   useEffect(() => {
     let gone = false;
-    try { if (sessionStorage.getItem("gsk_held_snooze") === "1") return; } catch { /* fine */ }
+    try { if (!token && sessionStorage.getItem("gsk_held_snooze") === "1") return; } catch { /* fine */ }
     (async () => {
-      const { held: h, current: c, error } = await heldForMe();
+      const { held: h, current: c, error } = await heldForMe(token);
       if (gone || error || !h) return;
       setHeld(h); setCurrent(c);
     })();
     return () => { gone = true; };
-  }, []);
+  }, [token]);
 
   if (!held) return null;
 
@@ -42,7 +50,7 @@ export default function HeldHandleClaim({ fs = (n) => n }) {
       if (yErr && yErr !== "age_required") { setBusy(false); showToast(yErr, "error"); return; }
       setNeedYear(false);
     }
-    const { handle, heldClaim, error } = await setHandle(held.handle);
+    const { handle, heldClaim, error } = await setHandle(held.handle, token);
     setBusy(false);
     if (error === "age_required") {
       // Prefer the OS age assertion; fall back to one inline question.
@@ -56,7 +64,10 @@ export default function HeldHandleClaim({ fs = (n) => n }) {
       return;
     }
     if (error) { showToast(error, "error"); return; }
-    if (handle || heldClaim) setClaimed(true);
+    if (handle || heldClaim) {
+      try { sessionStorage.removeItem("gs_held_token"); } catch { /* fine */ }
+      setClaimed(true);
+    }
   };
 
   if (claimed) {

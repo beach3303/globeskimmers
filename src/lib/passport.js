@@ -124,8 +124,8 @@ export async function setPhotoCaption(photo_id, caption) {
   return { caption: data?.caption ?? null, error: error || data?.error || null };
 }
 // Is a username being held for THIS account (founder's family list)?
-export async function heldForMe() {
-  const { data, error } = await callWorker('social/held-for-me', {});
+export async function heldForMe(token) {
+  const { data, error } = await callWorker('social/held-for-me', token ? { token } : {});
   return { held: data?.held || null, current: data?.current || null, error };
 }
 // Age gate (Social P1): read state, or set the birth year once (it locks).
@@ -189,8 +189,8 @@ export async function reportShared({ slug, kind, ref, reason, note }) {
   const { data, error } = await callWorker('social/report', { slug, kind, ref, reason, note });
   return { data, error };
 }
-export async function setHandle(handle) {
-  const { data, error } = await callWorker('social/handle', { handle });
+export async function setHandle(handle, heldToken) {
+  const { data, error } = await callWorker('social/handle', heldToken ? { handle, held_token: heldToken } : { handle });
   return { handle: data?.handle || null, suggestions: data?.suggestions || [], heldClaim: data?.held_claim === true, heldName: data?.held_name || null, error: error || data?.error || null };
 }
 // My incoming pending tags (the passive "Tagged you" inbox — email path).

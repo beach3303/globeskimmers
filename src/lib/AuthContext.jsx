@@ -160,6 +160,20 @@ export const AuthProvider = ({ children }) => {
           } catch { /* ignore malformed deep link */ }
           return;
         }
+        // A held username's claim link: globeskimmers://handle/claim?token=… →
+        // stash the token + route to the Passport, where the claim card shows.
+        if (url && url.includes('handle/claim')) {
+          try {
+            const token = (url.split('token=')[1] || '').split(/[&#]/)[0];
+            if (token) {
+              try { sessionStorage.setItem('gs_held_token', decodeURIComponent(token)); sessionStorage.removeItem('gsk_held_snooze'); } catch { /* ignore */ }
+              window.history.pushState({}, '', '/Passport');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+              window.dispatchEvent(new Event('gs:held-token'));
+            }
+          } catch { /* ignore malformed deep link */ }
+          return;
+        }
         // Read-only friend view: globeskimmers://passport/view?u=<slug>
         if (url && url.includes('passport/view')) {
           try {

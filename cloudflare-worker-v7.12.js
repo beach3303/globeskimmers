@@ -14770,14 +14770,17 @@ async function gbHeld(env, handle) {
 // The invitation email. Composed always; sent only when RESEND_API_KEY is
 // set — otherwise the admin panel offers the text for the founder to send
 // by hand. Never includes anything but the name, handle, and sign-in email.
-async function gbSendHeldInvite(env, row) {
+async function gbSendHeldInvite(env, row, link) {
   const name = row.display_name || 'traveler';
   const subject = '\u{1F389} Maiza saved a GlobeSkimmers username for you';
   const text = `Hello ${name},
 
 Maiza, in partnership with GlobeSkimmers, has saved the username @${row.handle} — just for you.
 
-To claim it: download GlobeSkimmers, sign in with this email address (${row.email}), and your reserved username will be waiting the moment you open the app.
+To claim it: download GlobeSkimmers, sign in, then open your personal link — your reserved username will be waiting:
+${link}
+
+(Any sign-in works — Apple, Google, or email.)
 
 If you already use another username, claiming will change it to @${row.handle}.
 
@@ -14844,7 +14847,8 @@ async function handleSocialHandle(request, env, ctx) {
     // A name held for one of the founder's admin emails is claimable from ANY
     // of those admin accounts; family names stay locked to their own email.
     const adminOwn = ADMIN_EMAILS_WORKER.includes(myEmail) && ADMIN_EMAILS_WORKER.includes(heldEmail);
-    if (held && !held.claimed_at && myEmail !== heldEmail && !adminOwn) {
+    const tokenOwn = !!held?.claim_token && String(b.held_token || '') === held.claim_token;
+    if (held && !held.claimed_at && myEmail !== heldEmail && !adminOwn && !tokenOwn) {
       // Held for someone else (or no email attached yet): plain "taken".
       return await gbTakenResponse(env, want);
     }
@@ -14885,15 +14889,50 @@ async function handleSocialHeldForMe(request, env) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const token = String(b.token || '').replace(/[^a-f0-9]/gi, '');
+    let row = null;
+    if (token.length >= 32) {
+      const tq = await gbRest(env, `held_handles?claim_token=eq.${token}&claimed_at=is.null&select=handle,display_name&limit=1`, {});
+      row = (tq.ok ? await tq.json() : [])[0] || null;
+    }
     const email = String(user.email || '').toLowerCase();
-    if (!email) return jsonResponse({ held: null });
-    const emails = ADMIN_EMAILS_WORKER.includes(email) ? ADMIN_EMAILS_WORKER : [email];
-    const q = await gbRest(env, `held_handles?email=in.(${emails.map((e) => encodeURIComponent(e)).join(',')})&claimed_at=is.null&select=handle,display_name&limit=1`, {});
-    const row = (q.ok ? await q.json() : [])[0] || null;
+    if (!row && email) {
+      const emails = ADMIN_EMAILS_WORKER.includes(email) ? ADMIN_EMAILS_WORKER : [email];
+      const q = await gbRest(env, `held_handles?email=in.(${emails.map((e) => encodeURIComponent(e)).join(',')})&claimed_at=is.null&select=handle,display_name&limit=1`, {});
+      row = (q.ok ? await q.json() : [])[0] || null;
+    }
     if (!row) return jsonResponse({ held: null });
     const hq = await gbRest(env, `passport_shares?user_id=eq.${user.id}&select=handle`, {});
     return jsonResponse({ held: { handle: row.handle, name: row.display_name || null }, current: (hq.ok ? await hq.json() : [])[0]?.handle || null });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// GET /h/<token> — a held username's personal claim link. Opens the app
+// (globeskimmers://handle/claim?token=…) or offers the download first.
+async function handleHeldClaimLanding(request, env) {
+  try {
+    const token = decodeURIComponent(new URL(request.url).pathname.replace(/^\/h\//, '')).replace(/[^a-f0-9]/gi, '');
+    let row = null;
+    if (token.length >= 32) {
+      const q = await gbRest(env, `held_handles?claim_token=eq.${token}&select=handle,display_name,claimed_at&limit=1`, {});
+      row = (q.ok ? await q.json() : [])[0] || null;
+    }
+    const esc = (v) => String(v || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const scheme = `globeskimmers://handle/claim?token=${encodeURIComponent(token)}`;
+    const inner = !row
+      ? `<div class="stamp">\u{1F4EE}</div><h1>This link has expired</h1><p>Ask the person who invited you for a fresh one.</p>`
+      : row.claimed_at
+        ? `<div class="stamp">\u{1F389}</div><h1>@${esc(row.handle)} is already claimed</h1><p>If that was you, it's waiting in your app.</p><a class="btn primary" href="${scheme}">Open in Globeskimmers</a>`
+        : `<div class="stamp">\u{1F48C}</div><h1>Hello${row.display_name ? ` ${esc(row.display_name)}` : ''}</h1>`
+          + `<p>Maiza, in partnership with GlobeSkimmers, has saved <b>@${esc(row.handle)}</b> — just for you.</p>`
+          + `<a class="btn primary" href="${scheme}">Claim it in Globeskimmers</a>`
+          + `<p class="muted small">Don't have the app yet? Download it, sign in any way you like, then come back and tap the button above.</p>`
+          + `<a class="btn" href="${PP_IOS_URL}">Download for iPhone</a>`
+          + `<a class="btn" href="${PP_PLAY_URL}">Download for Android</a>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Globeskimmers — a username saved for you</title><style>body{font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;background:#FFFCF7;color:#16110D;margin:0;padding:36px 20px;text-align:center}.wrap{max-width:420px;margin:0 auto}.stamp{font-size:64px;margin:8px 0}h1{font-size:26px;margin:8px 0}p{font-size:15px;line-height:1.5}.btn{display:block;margin:10px auto;max-width:320px;padding:14px;border-radius:14px;text-decoration:none;font-weight:700;background:#fff;color:#16110D;border:1px solid rgba(0,0,0,.12)}.btn.primary{background:#0E7C86;color:#fff;border:none}.muted{color:#736657;margin-top:18px}.small{font-size:13px}</style></head><body><div class="wrap">${inner}</div></body></html>`;
+    return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+  } catch { return new Response('Error', { status: 500 }); }
 }
 
 // POST /admin/held-handles { op, handle?, display_name?, email? } — the
@@ -14929,7 +14968,14 @@ async function handleAdminHeldHandles(request, env) {
       if (!row) return jsonResponse({ error: 'Not on the list' }, 404);
       if (!row.email) return jsonResponse({ error: 'Add their email first' }, 400);
       if (row.claimed_at) return jsonResponse({ error: 'Already claimed \u{1F389}' }, 400);
-      const res = await gbSendHeldInvite(env, row);
+      // One personal, unguessable claim link per name (kept across re-sends).
+      let token = row.claim_token;
+      if (!token) {
+        token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+        await gbRest(env, `held_handles?handle=eq.${encodeURIComponent(row.handle)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ claim_token: token }) });
+      }
+      const link = `${new URL(request.url).origin}/h/${token}`;
+      const res = await gbSendHeldInvite(env, row, link);
       if (res.sent) await gbRest(env, `held_handles?handle=eq.${encodeURIComponent(clean(b.handle))}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ invited_at: new Date().toISOString() }) });
       return jsonResponse({ sent: res.sent, reason: res.reason || null, subject: res.subject, text: res.text });
     }
@@ -19917,6 +19963,7 @@ export default {
       if (pathname === '/passport/tag/by-token' && request.method === 'POST') return await handlePassportTagByToken(request, env);
       if (pathname === '/passport/tag/claim' && request.method === 'POST') return await handlePassportTagClaim(request, env, ctx);
       if (pathname.startsWith('/t/') && request.method === 'GET') return await handlePassportTagLanding(request, env);
+      if (pathname.startsWith('/h/') && request.method === 'GET') return await handleHeldClaimLanding(request, env);
       if (pathname === '/passport/share' && request.method === 'POST') return await handlePassportShare(request, env);
       if (pathname === '/passport/public' && request.method === 'POST') return await handlePassportPublic(request, env);
       if (pathname.startsWith('/p/') && request.method === 'GET') return await handlePassportShareLanding(request, env, ctx);
