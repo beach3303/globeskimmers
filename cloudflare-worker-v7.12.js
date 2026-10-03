@@ -7302,9 +7302,10 @@ async function handleActivityOne(request, env) {
 // Sonnet 5, not Opus: a lookup reads several whole pages (Opus 5 measured 138k input
 // tokens on Battleship Iowa), and code re-checks every amount against the page text.
 const VISIT_INFO_MODEL = 'claude-sonnet-5';
-const VISIT_INFO_VERSION = 'v4';  // v4: + web search INSIDE the official site, cited excerpts as evidence (sites built with JavaScript, like Universal's, fetch as an empty shell); v2: fetch-only from the official site when known (v1's open search burned the budget on rejected URLs)
-// Kept 90 days (founder, 2026-10-03: "every 3 months"); 3 days when nothing was found.
-const VISIT_INFO_TTL = 90 * 86400, VISIT_INFO_EMPTY_TTL = 3 * 86400;
+const VISIT_INFO_VERSION = 'v5';  // v5: parking gets its own search, no search commentary in notes; v4: + web search INSIDE the official site, cited excerpts as evidence (sites built with JavaScript, like Universal's, fetch as an empty shell); v2: fetch-only from the official site when known (v1's open search burned the budget on rejected URLs)
+// Kept 90 days (founder, 2026-10-03: "every 3 months"); 30 days when nothing was
+// found — a place with no prices online was re-checked (and paid for) every 3 days.
+const VISIT_INFO_TTL = 90 * 86400, VISIT_INFO_EMPTY_TTL = 30 * 86400;
 // Never a price source — sellers' marked-up or bundled prices (search filter + code check).
 const VISIT_RESELLERS = ['viator.com', 'getyourguide.com', 'klook.com', 'tiqets.com', 'headout.com', 'musement.com', 'undercovertourist.com', 'getawaytoday.com', 'tripadvisor.com', 'expedia.com', 'groupon.com', 'go-city.com', 'citypass.com', 'stubhub.com', 'vividseats.com', 'ticketnetwork.com'];
 // An "official site" on one of these is a profile page, not the venue's own site.
@@ -7317,13 +7318,13 @@ const VISIT_AUDIENCES = new Set(['adult', 'child', 'youth', 'student', 'senior',
 const VISIT_INFO_PROMPT = [
   'You find current visitor prices for ONE attraction, for a travel app that never guesses.',
   'Start from the OFFICIAL website when one is given: web_fetch it, then follow ITS links to the tickets/admission page and the parking (or "plan your visit", "visit", "directions", "FAQ") page. Only fetch URLs that appear in a page you already fetched or in a search result — never guess a URL. With no official website given, use web_search to find it. Fetch at most 5 pages.',
-  'Many official sites are built with JavaScript and fetch as an empty shell. When an official website is given, web_search searches ONLY that site: search it for the attraction\'s ticket prices and its parking whenever a fetched page shows no prices — right away if the home page fetches nearly empty.',
+  'Many official sites are built with JavaScript and fetch as an empty shell. When an official website is given, web_search searches ONLY that site: whenever a fetched page shows no prices (right away if the home page fetches nearly empty), run one search for ticket prices and a SEPARATE search for parking prices (e.g. "<attraction> parking").',
   'Report ONLY what a page you fetched or a search result you cite states. Never use memory, never estimate, never average. Prefer the official site; use a third-party page only when the official site states nothing, and never a reseller\'s marked-up price.',
   'Before the JSON, write one short sentence for each price and parking fact you report, quoting the amount exactly as the source writes it, and cite the search result it comes from (facts from a fetched page need no citation). A fact with neither a citation nor a fetched page is dropped.',
   'For every price, give source_url = the exact URL of the fetched page or the cited search result that states it, and amount_text exactly as written there. When prices vary by date, give the lowest "from" price the source states and say "from — varies by date" in note.',
   'Audience is one of: adult, child, youth, student, senior, military, resident, family, other. Put the age range or condition in label (e.g. "Child (3–9)", "Senior (62+)").',
   'Military, veteran, teacher, first-responder, resident, AAA or similar offers go in discounts unless they have their own price.',
-  'If admission is free, set free=true. If something is not stated, use null or an empty list.',
+  'If admission is free, set free=true. If something is not stated, use null or an empty list — labels and notes are facts for travelers in the source\'s words, never comments about your search (no "not stated", "not found", "sources").',
   'Finish with ONLY the JSON object inside <json></json> tags, in this shape:',
   '{"official_site":"url|null","admission":{"free":true|false|null,"currency":"USD","prices":[{"audience":"adult","label":"Adult (10+)","amount":25,"amount_text":"$25","note":null,"source_url":"url"}],"discounts":[{"label":"Military — free with ID","source_url":"url"}],"free_days":null,"reservation":null,"buy_url":null,"source_url":null},"parking":{"options":[{"label":"On-site lot","price_text":"$25 per car","amount":25,"source_url":"url"}],"note":null,"source_url":null}}',
 ].join(' ');
@@ -7365,7 +7366,7 @@ async function visitAsk(env, userText, host) {
         model: VISIT_INFO_MODEL, max_tokens: 4000, system: VISIT_INFO_PROMPT,
         output_config: { effort: 'low' },
         tools: [
-          { type: 'web_search_20250305', name: 'web_search', max_uses: 3, ...(host ? { allowed_domains: [host] } : { blocked_domains: VISIT_RESELLERS }) },
+          { type: 'web_search_20250305', name: 'web_search', max_uses: 4, ...(host ? { allowed_domains: [host] } : { blocked_domains: VISIT_RESELLERS }) },
           { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 5, max_content_tokens: 8000 },
         ],
         messages,
@@ -7406,9 +7407,17 @@ function visitEvidence(blocks) {
   return { pages, seen };
 }
 const visitOnList = (u, list) => { const h = visitHost(u); return !!h && list.some((d) => h === d || h.endsWith('.' + d)); };
+// "(exact price not stated…)", "…no parking price was found in the fetched/cited
+// sources" — the model talking about its search, not a fact for travelers.
+const VISIT_META_RE = /\b(not stated|not found|not listed|not specified|no specific|exact price|fetched|cited|sources?)\b/i;
+const visitUnmeta = (t) => {
+  if (typeof t !== 'string') return t;
+  const s = t.replace(/\s*\([^)]*\)?/g, (m) => (VISIT_META_RE.test(m) ? '' : m)).trim();
+  return s && !VISIT_META_RE.test(s) ? s : null;
+};
 function visitVerify(raw, ev) {
   const textOf = (u) => (visitOnList(u, VISIT_RESELLERS) ? null : ev.pages.get(visitUrlKey(u)) || null);
-  const str = (v, n) => (typeof v === 'string' && v.trim() && !/^https?:\/\//i.test(v.trim()) ? v.trim().slice(0, n) : null);
+  const str = (v, n) => { const u = typeof v === 'string' && v.trim() && !/^https?:\/\//i.test(v.trim()) ? visitUnmeta(v.trim()) : null; return u ? u.slice(0, n) : null; };
   // Every number in a line must appear in the page it cites.
   const numsIn = (line, t) => !!line && !!t && (line.match(/\d+(?:[.,]\d+)?/g) || []).every((n) => visitAmountIn(t, Number(n.replace(',', '.'))));
   const wordsIn = (line, t) => { const w = String(line || '').toLowerCase().match(/[a-z]{4,}/g) || []; const tl = t.toLowerCase(); return !w.length || w.some((x) => tl.includes(x)); };
@@ -7525,7 +7534,7 @@ async function handleAttractionVisitInfo(request, env, ctx) {
         fetched: ev.pages.size, raw_prices: Array.isArray(raw?.admission?.prices) ? raw.admission.prices.length : null,
         in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, searches: ask.usage?.searches || 0, stop: ask.stop || null, error: ask.error ? ask.error.slice(0, 200) : null,
       }).catch(() => {});
-      const _diag = { fetched: ev.pages.size, seen: ev.seen.size, raw_prices: Array.isArray(raw?.admission?.prices) ? raw.admission.prices.length : null, raw_parking: Array.isArray(raw?.parking?.options) ? raw.parking.options.length : null, in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, stop: ask.stop || null, pages: [...ev.pages.keys()].slice(0, 6) };
+      const _diag = { queries: ask.blocks.filter((x) => x?.type === 'server_tool_use' && x.name === 'web_search').map((x) => String(x.input?.query || '').slice(0, 80)), fetched: ev.pages.size, seen: ev.seen.size, raw_prices: Array.isArray(raw?.admission?.prices) ? raw.admission.prices.length : null, raw_parking: Array.isArray(raw?.parking?.options) ? raw.parking.options.length : null, in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, stop: ask.stop || null, pages: [...ev.pages.keys()].slice(0, 6) };
       return ask.error ? { ok: false, error: 'lookup_failed', detail: ask.error.slice(0, 200), official_site: info.official_site, _diag } : { ...out, _diag };
     })();
     if (ctx) ctx.waitUntil(work.catch(() => {}));
