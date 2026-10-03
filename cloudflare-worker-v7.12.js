@@ -14056,7 +14056,8 @@ async function handlePassportPhotoCaption(request, env) {
 // there — device GPS within DISH_PROOF_M of the place, or the photo's own
 // location tag within it — and only after the photo review passes AND food or a
 // drink is the main subject. Posts are anonymous; "ordered by N travelers"
-// counts them (one per traveler per dish per place).
+// counts them (one per traveler per dish per place); "· N loved it" counts the
+// travelers who said so — the only verdict ever shown.
 const DISH_PROOF_M = 150;
 const DISH_DAILY_CAP = 12;
 const dishKey = (v) => String(v || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -14074,14 +14075,15 @@ async function dishPlaceIds(env, raw) {
 function dishSummary(rows) {
   const by = new Map();
   for (const r of rows) {
-    const g = by.get(r.dish_key) || { dish: r.dish, travelers: new Set(), photos: [], last: r.created_at };
+    const g = by.get(r.dish_key) || { dish: r.dish, travelers: new Set(), loved: new Set(), photos: [], last: r.created_at };
     g.travelers.add(r.user_id);
+    if (r.liked === true) g.loved.add(r.user_id);
     if (g.photos.length < 6) g.photos.push({ id: r.id, url: r.photo_url });
     by.set(r.dish_key, g);
   }
   return [...by.values()]
-    .map((g) => ({ dish: g.dish, travelers: g.travelers.size, photos: g.photos, last: g.last }))
-    .sort((a, b) => b.travelers - a.travelers || String(b.last).localeCompare(String(a.last)));
+    .map((g) => ({ dish: g.dish, travelers: g.travelers.size, loved: g.loved.size, photos: g.photos, last: g.last }))
+    .sort((a, b) => b.travelers - a.travelers || b.loved - a.loved || String(b.last).localeCompare(String(a.last)));
 }
 
 // POST /places/dishes { place_id } → { dishes: [{ dish, travelers, photos }], mine: [{ id, dish }] }
@@ -14091,7 +14093,7 @@ async function handlePlaceDishes(request, env) {
     const ids = await dishPlaceIds(env, b.place_id);
     if (!ids) return jsonResponse({ dishes: [], mine: [] });
     const inList = ids.all.map((x) => `"${x}"`).join(',');
-    const q = await gbRest(env, `place_dishes?place_id=in.(${inList})&mod_status=eq.ok&order=created_at.desc&limit=200&select=id,user_id,dish,dish_key,photo_url,created_at`, {});
+    const q = await gbRest(env, `place_dishes?place_id=in.(${inList})&mod_status=eq.ok&order=created_at.desc&limit=200&select=id,user_id,dish,dish_key,photo_url,liked,created_at`, {});
     const rows = q.ok ? await q.json() : [];
     const user = await gbUser(request, env).catch(() => null);
     const mine = user ? rows.filter((r) => r.user_id === user.id).map((r) => ({ id: r.id, dish: r.dish, url: r.photo_url })) : [];
@@ -14099,7 +14101,7 @@ async function handlePlaceDishes(request, env) {
   } catch (e) { return jsonResponse({ error: e.message, dishes: [], mine: [] }, 500); }
 }
 
-// POST /places/dishes/add { place_id, place_name, place_lat, place_lng, kind, dish, image, lat, lng, acc, exif }
+// POST /places/dishes/add { place_id, place_name, place_lat, place_lng, kind, dish, liked, image, lat, lng, acc, exif }
 async function handlePlaceDishAdd(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -14160,7 +14162,7 @@ async function handlePlaceDishAdd(request, env, ctx) {
     // One post per traveler per dish per place: a new photo replaces the old one.
     const oq = await gbRest(env, `place_dishes?user_id=eq.${user.id}&place_id=eq.${encodeURIComponent(ids.canon)}&dish_key=eq.${encodeURIComponent(key)}&select=id,photo_key`, {});
     const old = (oq.ok ? await oq.json() : [])[0];
-    const row = { user_id: user.id, place_id: ids.canon, place_name: String(b.place_name || '').slice(0, 120) || null, kind, dish, dish_key: key, photo_key: photoKey, photo_url: photoUrl, proof, mod_status: 'ok', created_at: new Date().toISOString() };
+    const row = { user_id: user.id, place_id: ids.canon, place_name: String(b.place_name || '').slice(0, 120) || null, kind, dish, dish_key: key, photo_key: photoKey, photo_url: photoUrl, proof, mod_status: 'ok', created_at: new Date().toISOString(), ...(typeof b.liked === 'boolean' ? { liked: b.liked } : {}) };
     const w = old
       ? await gbRest(env, `place_dishes?id=eq.${old.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) })
       : await gbRest(env, 'place_dishes', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
