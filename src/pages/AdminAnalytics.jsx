@@ -105,6 +105,14 @@ export default function AdminAnalytics() {
   const [inviteCopy, setInviteCopy] = useState(null);  // { handle, text } when email isn't configured
   const [seals, setSeals] = useState({ rows: [], error: null });
   const [sealDraft, setSealDraft] = useState('');
+  const [brandOpen, setBrandOpen] = useState(null);   // brand handle with controls expanded
+  const [requests, setRequests] = useState({ rows: [], error: null });
+  const reqCall = async (body) => {
+    const { data, error } = await callWorker('admin/handle-requests', body || {});
+    setRequests({ rows: data?.rows || [], error: error || data?.error || null });
+  };
+  const famRows = held.rows.filter((r) => r.kind !== 'brand');
+  const brandRows = held.rows.filter((r) => r.kind === 'brand');
   const heldCall = async (body) => {
     const { data, error } = await callWorker('admin/held-handles', body);
     if (data?.rows) setHeld({ rows: data.rows, emailConfigured: !!data.emailConfigured, error: error || data?.error || null });
@@ -116,8 +124,8 @@ export default function AdminAnalytics() {
     return { data, error: error || data?.error || null };
   };
   const addHeld = async () => {
-    const { error } = await heldCall({ op: 'add', handle: heldDraft.handle, display_name: heldDraft.name, email: heldDraft.email });
-    if (error) setHeld((h) => ({ ...h, error })); else setHeldDraft({ handle: '', name: '', email: '' });
+    const { error } = await heldCall({ op: 'add', handle: heldDraft.handle, display_name: heldDraft.name, email: heldDraft.email, kind: heldDraft.kind || 'family' });
+    if (error) setHeld((h) => ({ ...h, error })); else setHeldDraft({ handle: '', name: '', email: '', kind: heldDraft.kind || 'family' });
   };
   const saveHeldEmail = async (handle) => {
     setHeldBusy(handle);
@@ -181,7 +189,7 @@ export default function AdminAnalytics() {
         const { data: us, error: ue } = await callWorker('admin-user-stats', {});
         setUserStats(ue ? null : us);
       } catch { setUserStats(null); }
-      await loadInbox(); loadReports(); heldCall({ op: 'list' }); sealCall({ op: 'list' });
+      await loadInbox(); loadReports(); heldCall({ op: 'list' }); sealCall({ op: 'list' }); reqCall({ op: 'list' });
       setGeneratedAt(new Date().toISOString());
     } catch (e) {
       setError(e?.message || 'Failed to load analytics');
@@ -480,15 +488,15 @@ export default function AdminAnalytics() {
               ))}
             </Section>
 
-            <Section title={`👑 Held usernames — ${held.rows.filter(r => r.claimed_at).length} claimed of ${held.rows.length}`} icon={UserCheck}
-              empty={held.rows.length === 0 && !held.error ? 'No names on the hold list yet. Add one below — it instantly reads as "taken" to everyone except the email you attach.' : null}>
+            <Section title={`👑 Held usernames — ${famRows.filter(r => r.claimed_at).length} claimed of ${famRows.length}`} icon={UserCheck}
+              empty={famRows.length === 0 && !held.error ? 'No names on the hold list yet. Add one below — it instantly reads as "taken" to everyone except the email you attach.' : null}>
               {held.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{held.error}</div>}
-              {!held.emailConfigured && held.rows.length > 0 && (
+              {!held.emailConfigured && famRows.length > 0 && (
                 <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>
                   ✉️ Invitation email isn&rsquo;t wired yet (needs the RESEND_API_KEY secret) — &ldquo;Compose invite&rdquo; copies the message so you can text/email it yourself.
                 </div>
               )}
-              {held.rows.map((r) => (
+              {famRows.map((r) => (
                 <div key={r.handle} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border}` }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', fontSize: 13 }}>
                     <span style={{ fontWeight: 700, color: COLORS.dark }}>@{r.handle}</span>
@@ -528,9 +536,60 @@ export default function AdminAnalytics() {
                   placeholder="Their first name (for the hello)" aria-label="Display name" style={{ flex: '1 1 170px', minWidth: 150, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
                 <input value={heldDraft.email} onChange={(e) => setHeldDraft((d) => ({ ...d, email: e.target.value }))}
                   placeholder="Email (now or later)" aria-label="Email" style={{ flex: '1 1 190px', minWidth: 160, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {['family', 'brand'].map((k) => (
+                    <button key={k} type="button" onClick={() => setHeldDraft((d) => ({ ...d, kind: k }))}
+                      style={{ padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: (heldDraft.kind || 'family') === k ? COLORS.dark : '#fff', color: (heldDraft.kind || 'family') === k ? '#fff' : COLORS.gray, fontSize: 12, fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize' }}>{k}</button>
+                  ))}
+                </div>
                 <button type="button" onClick={addHeld} disabled={heldDraft.handle.length < 3}
                   style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: COLORS.dark, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: heldDraft.handle.length < 3 ? 0.5 : 1 }}>Hold it</button>
               </div>
+            </Section>
+
+            <Section title={`🏷️ Brand & entity reserve — ${brandRows.length} names held`} icon={UserCheck}
+              empty={brandRows.length === 0 ? 'No brand names held yet.' : null}>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>
+                Sports, parks, hotels, airlines, luxury, officials — all read as &ldquo;taken&rdquo; to everyone. Tap one to attach a partner&rsquo;s email when a deal lands.
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {brandRows.map((r) => (
+                  <button key={r.handle} type="button" onClick={() => setBrandOpen(brandOpen === r.handle ? null : r.handle)}
+                    style={{ padding: '4px 9px', borderRadius: 999, border: `1px solid ${brandOpen === r.handle ? COLORS.accent : COLORS.border}`, background: r.claimed_at ? '#E7F8F0' : '#fff', color: r.claimed_at ? COLORS.green : COLORS.dark, fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+                    @{r.handle}{r.claimed_at ? ' 🎉' : r.email ? ' ✉️' : ''}
+                  </button>
+                ))}
+              </div>
+              {brandOpen && (() => { const r = brandRows.find((x) => x.handle === brandOpen); return r && !r.claimed_at ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${COLORS.border}` }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.dark, alignSelf: 'center' }}>@{r.handle}</span>
+                  <input value={heldEdits[r.handle] ?? r.email ?? ''} onChange={(e) => setHeldEdits((v) => ({ ...v, [r.handle]: e.target.value }))}
+                    placeholder="partner-email@brand.com" aria-label={`Email for @${r.handle}`}
+                    style={{ flex: '1 1 200px', minWidth: 170, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
+                  <button type="button" onClick={() => saveHeldEmail(r.handle)} disabled={heldBusy === r.handle || heldEdits[r.handle] === undefined}
+                    style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: heldEdits[r.handle] === undefined ? 0.5 : 1 }}>Save email</button>
+                  <button type="button" onClick={() => removeHeld(r.handle)} style={{ padding: '7px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.red, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Release</button>
+                </div>
+              ) : null; })()}
+            </Section>
+
+            <Section title={`📨 Username & Seal requests — ${requests.rows.length} open`} icon={Mail}
+              empty={requests.rows.length === 0 && !requests.error ? 'No requests yet. Businesses and people can ask for a username or the Seal from Settings.' : null}>
+              {requests.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{requests.error}</div>}
+              {requests.rows.map((r) => (
+                <div key={r.id} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border}` }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
+                    <span style={{ fontWeight: 700, color: COLORS.dark }}>{r.kind === 'seal' ? '✪ Seal' : `@${r.handle}`}</span>
+                    {r.email && <a href={`mailto:${r.email}`} style={{ color: COLORS.accent }}>{r.email}</a>}
+                    <span style={{ color: COLORS.gray, marginLeft: 'auto' }}>{String(r.created_at || '').slice(0, 10)}</span>
+                  </div>
+                  {r.note && <div style={{ fontSize: 12.5, color: COLORS.dark, whiteSpace: 'pre-wrap', marginTop: 4 }}>{r.note}</div>}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                    <button type="button" onClick={() => reqCall({ op: 'resolve', id: r.id, status: 'done' })} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: COLORS.green, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Done</button>
+                    <button type="button" onClick={() => reqCall({ op: 'resolve', id: r.id, status: 'dismissed' })} style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.gray, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Dismiss</button>
+                  </div>
+                </div>
+              ))}
             </Section>
 
             <Section title={`✪ The GlobeSkimmers Seal — ${seals.rows.length} granted`} icon={UserCheck}

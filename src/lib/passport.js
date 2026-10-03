@@ -105,6 +105,11 @@ export async function getHandle() {
   const { data, error } = await callWorker('social/handle', {});
   return { handle: data?.handle || null, verified: data?.verified === true, error };
 }
+// Request a username (business/official) or the GlobeSkimmers Seal.
+export async function socialRequest({ kind, handle, note }) {
+  const { data, error } = await callWorker('social/request', { kind, handle, note });
+  return { ok: !!data?.ok, error: error || data?.error || null };
+}
 // Is a username being held for THIS account (founder's family list)?
 export async function heldForMe() {
   const { data, error } = await callWorker('social/held-for-me', {});

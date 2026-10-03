@@ -14723,7 +14723,7 @@ async function handleAdminHeldHandles(request, env) {
       if (HANDLE_RESERVED.has(handle) || /^gs_/.test(handle)) return jsonResponse({ error: 'That name is on the system reserved list already' }, 400);
       const own = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}&select=user_id&limit=1`, {});
       if ((own.ok ? await own.json() : []).length) return jsonResponse({ error: 'A user already owns that handle' }, 409);
-      const row = { handle, display_name: String(b.display_name || '').trim().slice(0, 60) || null, email: clean(b.email) || null };
+      const row = { handle, display_name: String(b.display_name || '').trim().slice(0, 60) || null, email: clean(b.email) || null, kind: b.kind === 'brand' ? 'brand' : 'family' };
       const w = await gbRest(env, 'held_handles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
       if (!w.ok) return jsonResponse({ error: w.status === 409 ? 'Already on the list' : 'Could not save' }, w.status === 409 ? 409 : 502);
     } else if (op === 'update') {
@@ -14746,6 +14746,43 @@ async function handleAdminHeldHandles(request, env) {
     }
     const list = await gbRest(env, 'held_handles?select=*&order=created_at.asc', {});
     return jsonResponse({ rows: list.ok ? await list.json() : [], emailConfigured: !!env.RESEND_API_KEY });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /social/request { kind, handle?, note? } — businesses/people may ask
+// for a username (often one we hold) or for the GlobeSkimmers Seal. Stored
+// for the founder's desk; capped at 3 open requests per account.
+async function handleSocialRequest(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const kind = b.kind === 'seal' ? 'seal' : 'username';
+    const handle = String(b.handle || '').toLowerCase().trim().replace(/^@/, '').slice(0, 20) || null;
+    const note = String(b.note || '').trim().slice(0, 500) || null;
+    if (kind === 'username' && !handle) return jsonResponse({ error: 'Which username?' }, 400);
+    const oq = await gbRest(env, `handle_requests?user_id=eq.${user.id}&status=eq.open&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } });
+    const open = parseInt((oq.headers.get('content-range') || '').split('/')[1] || '0', 10);
+    if (open >= 3) return jsonResponse({ error: 'You already have requests waiting — we\u2019ll get back to you first.' }, 429);
+    const w = await gbRest(env, 'handle_requests', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, email: String(user.email || '').toLowerCase() || null, kind, handle, note }) });
+    if (!w.ok) return jsonResponse({ error: 'Could not send the request' }, 502);
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'handle_request', { kind }));
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /admin/handle-requests { op:'list'|'resolve', id?, status? } — the queue.
+async function handleAdminHandleRequests(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  const b = await request.json().catch(() => ({}));
+  try {
+    if (b.op === 'resolve' && b.id) {
+      const status = b.status === 'dismissed' ? 'dismissed' : 'done';
+      await gbRest(env, `handle_requests?id=eq.${encodeURIComponent(String(b.id))}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status, resolved_at: new Date().toISOString() }) });
+    }
+    const q = await gbRest(env, 'handle_requests?status=eq.open&select=*&order=created_at.asc&limit=100', {});
+    return jsonResponse({ rows: q.ok ? await q.json() : [] });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -19517,6 +19554,8 @@ export default {
       if (pathname === '/social/held-for-me' && request.method === 'POST') return await handleSocialHeldForMe(request, env);
       if (pathname === '/admin/held-handles' && request.method === 'POST') return await handleAdminHeldHandles(request, env);
       if (pathname === '/admin/verified' && request.method === 'POST') return await handleAdminVerified(request, env);
+      if (pathname === '/social/request' && request.method === 'POST') return await handleSocialRequest(request, env, ctx);
+      if (pathname === '/admin/handle-requests' && request.method === 'POST') return await handleAdminHandleRequests(request, env);
       if (pathname === '/passport/sets' && request.method === 'POST') return await handlePassportSets(request, env);
       if (pathname === '/social/block' && request.method === 'POST') return await handleSocialBlock(request, env, ctx);
       if (pathname === '/social/age' && request.method === 'POST') return await handleSocialAge(request, env, ctx);

@@ -1027,3 +1027,13 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - **Activate (optional, founder):** `npx wrangler secret put RESEND_API_KEY` (+ later
   Resend domain DNS) to make "Send invitation" email for real.
 - Gates: node --check ✓, eslint ✓, build ✓, cap copy ✓.
+
+## 2026-10-03 — the founder's save list, brand reserve, request door
+- 214 family names + 423 brand/entity names (sports, parks, hotels, airlines, cruise,
+  luxury, travel platforms, figures, government/military/political/monarchy) held via
+  migration 20261003110000 — all read as "taken" app-wide; kind column separates desks.
+  Skipped (impossible): tj, jp, f1 (under 3 chars — unclaimable by anyone), and
+  erikakristadivinagracia, universalstudiosjapan (over 20 — shorter forms held).
+- Admin Analytics: Brand & entity reserve (tap a chip → attach partner email / release),
+  Username & Seal requests queue (Done/Dismiss), kind toggle on the hold form.
+- Settings: "A business or official page?" request door → /social/request (3 open max).

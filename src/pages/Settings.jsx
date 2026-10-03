@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
-import { getHandle, setHandle, setAgeGate, getAgeInfo, setBirthday } from "@/lib/passport";
+import { getHandle, setHandle, setAgeGate, getAgeInfo, setBirthday, socialRequest } from "@/lib/passport";
 import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
@@ -432,6 +432,18 @@ export default function SettingsPage() {
   const [yearDraft, setYearDraft] = useState("");
   // Available alternatives the worker offers when a wanted name is taken.
   const [handleSugs, setHandleSugs] = useState([]);
+  // Request door: businesses/officials may ask for a username or the Seal.
+  const [reqOpen, setReqOpen] = useState(false);
+  const [reqKind, setReqKind] = useState("username");
+  const [reqNote, setReqNote] = useState("");
+  const [reqBusy, setReqBusy] = useState(false);
+  const sendSocialRequest = async () => {
+    setReqBusy(true);
+    const { ok, error } = await socialRequest({ kind: reqKind, handle: reqKind === "username" ? handleDraft.trim() : undefined, note: reqNote.trim() });
+    setReqBusy(false);
+    if (ok) { setReqOpen(false); setReqNote(""); showToast("Request sent — we'll be in touch ✉️", "success"); }
+    else showToast(error || "Could not send the request", "error");
+  };
   const saveHandle = async () => {
     const want = handleDraft.trim().toLowerCase();
     if (!want || want === handle) return;
@@ -855,6 +867,40 @@ export default function SettingsPage() {
                     ))}
                   </div>
                 )}
+                <div style={{ marginTop: 10 }}>
+                  {!reqOpen ? (
+                    <button type="button" onClick={() => setReqOpen(true)}
+                      style={{ background: 'none', border: 0, padding: 0, color: ED_INK3, fontSize: 12, textDecoration: 'underline', textUnderlineOffset: 2 }}>
+                      A business or official page? Request a username or the GlobeSkimmers Seal →
+                    </button>
+                  ) : (
+                    <div className="rounded-xl p-3" style={{ border: `1px solid ${ED_RULE}`, background: '#FFFCF5' }}>
+                      <div className="flex gap-2 flex-wrap">
+                        {[["username", "Request a username"], ["seal", "Request the Seal ✪"]].map(([k, label]) => (
+                          <button key={k} type="button" onClick={() => setReqKind(k)} className="rounded-full px-3 py-1.5"
+                            style={{ border: `1px solid ${ED_RULE}`, background: reqKind === k ? TEAL_DEEP : '#fff', color: reqKind === k ? '#fff' : ED_INK2, fontSize: 12, fontWeight: 600 }}>{label}</button>
+                        ))}
+                      </div>
+                      {reqKind === "username" && (
+                        <p style={{ fontSize: 12, color: ED_INK3, marginTop: 8 }}>
+                          We&rsquo;ll review the name typed above{handleDraft.trim() ? ` (@${handleDraft.trim()})` : ""} for your business or official page.
+                        </p>
+                      )}
+                      <textarea value={reqNote} onChange={(e) => setReqNote(e.target.value.slice(0, 500))} rows={3}
+                        placeholder={reqKind === "seal" ? "Who you are / your business, with a link that proves it" : "Tell us about your business or page (a link helps)"}
+                        aria-label="Request details"
+                        className="w-full rounded-xl px-3 py-2 mt-2 outline-none" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 13 }} />
+                      <div className="flex gap-2 mt-2">
+                        <button type="button" onClick={sendSocialRequest}
+                          disabled={reqBusy || reqNote.trim().length < 3 || (reqKind === "username" && handleDraft.trim().length < 3)}
+                          className="rounded-xl px-4 py-2 font-semibold disabled:opacity-50" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 13, border: 'none' }}>
+                          {reqBusy ? "Sending…" : "Send request"}
+                        </button>
+                        <button type="button" onClick={() => setReqOpen(false)} style={{ color: ED_INK3, fontSize: 12, background: 'none', border: 0 }}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </> ) }}
               last={false}
             />
