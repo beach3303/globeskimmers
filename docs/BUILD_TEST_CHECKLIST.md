@@ -1262,3 +1262,15 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - v5 deployed; its first live run was blocked by the 5-per-network signed-out cap during
   testing — first real run: the founder opening Universal signed in.
 - Cache lives in Cloudflare KV (visit:<version>:<id>); Universal's v4 entry expires Jan 1, 2027.
+
+## 2026-10-03 (late) — New price lookups are signed-in only (6168c67)
+- Founder: "Signed out users can use the app? I thought only signed in users can" — correct
+  (src/App.jsx forced sign-in gate); the worker, though, is public and let any caller start
+  up to 20 paid lookups a day signed-out (5 per network).
+- Now: a saved result is free for anyone to read; a NEW lookup needs a signed-in traveler,
+  checked before any paid call (Claude, search, Google details). Signed-out caps removed;
+  signed-in caps unchanged (20 per traveler, 150 per day). The card falls back to the
+  official-site link on a refusal.
+- Verified live: unsigned POST /attractions/visit-info (uncached id) → 401 {"error":"sign_in"}.
+  Claude can no longer test fresh lookups from the Mac — the first v5 run is the founder
+  opening Universal signed in.
