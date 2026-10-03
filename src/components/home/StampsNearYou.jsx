@@ -73,6 +73,11 @@ export default function StampsNearYou({ onAction, wide = false, onNearest }) {
   const { getActiveLocation } = useLocation();
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
+  // Out of coverage (audit P1 #9): nothing within 25 mi → one wider look so
+  // the first screen still holds a collectible ("the nearest stamps"); only
+  // when even that is empty does a quiet card offer a past trip instead.
+  const [far, setFar] = useState(false);
+  const [none, setNone] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,10 +100,17 @@ export default function StampsNearYou({ onAction, wide = false, onNearest }) {
         const { data, error } = await callWorker("attractions/nearby", { latitude: lat, longitude: lng, radiusKm: 40, limit: 24, includeSecrets: true, stampsOnly: true });
         if (cancelled) return;
         const raw = (!error && Array.isArray(data?.attractions)) ? data.attractions : [];
-        const list = raw.filter((a) => a.tier !== "secret" || (Number.isFinite(a.distanceKm) && a.distanceKm * 1000 <= (a.footprint_radius_m || 150)));
-        // Iconic first, then nearest — the marquee spots read as "worth a stamp".
-        list.sort((a, b) => (Number(!!b.isMarquee) - Number(!!a.isMarquee)) || ((a.distanceMiles ?? 999) - (b.distanceMiles ?? 999)));
-        setItems(list.slice(0, 12));
+        let list = raw.filter((a) => a.tier !== "secret" || (Number.isFinite(a.distanceKm) && a.distanceKm * 1000 <= (a.footprint_radius_m || 150)));
+        let isFar = false;
+        if (!list.length && !error) {
+          const wide2 = await callWorker("attractions/nearby", { latitude: lat, longitude: lng, radiusKm: 250, limit: 12, stampsOnly: true });
+          if (cancelled) return;
+          list = (!wide2.error && Array.isArray(wide2.data?.attractions)) ? wide2.data.attractions.filter((a) => a.tier !== "secret") : [];
+          isFar = list.length > 0;
+        }
+        // Near: iconic first, then nearest. Far: nearest first — the trip is the point.
+        list.sort((a, b) => (isFar ? 0 : (Number(!!b.isMarquee) - Number(!!a.isMarquee))) || ((a.distanceMiles ?? 999) - (b.distanceMiles ?? 999)));
+        setItems(list.slice(0, 12)); setFar(isFar); setNone(!error && !list.length);
         // Feed the passport hero the closest stampable place (by distance, not
         // marquee rank — "next stamp" should be the one you can walk to).
         if (onNearest) {
@@ -110,7 +122,30 @@ export default function StampsNearYou({ onAction, wide = false, onNearest }) {
     return () => { cancelled = true; };
   }, [getActiveLocation]);
 
-  if (!items.length) return null;
+  if (!items.length) {
+    if (!none) return null;
+    return (
+      <div className={wide ? "pb-3" : "px-4 pb-3"}>
+        <div className={wide ? "" : "max-w-md mx-auto"}>
+          <div className="rounded-[16px] px-4 py-3.5" style={{ background: "#F6F0E4", border: "1px solid #E4DAC4" }}>
+            <div className="font-serif text-[calc(17px*var(--fs))] leading-[1.2]" style={{ color: "#16302B" }}>No famous stamps around here yet</div>
+            <p className="text-[calc(12.5px*var(--fs))] mt-1 leading-[1.45]" style={{ color: "#3F5A50" }}>
+              Stamps live at the world&rsquo;s iconic places. Been somewhere before? Add the trip with a photo you took there.
+            </p>
+            <div className="flex gap-2 mt-2.5 flex-wrap">
+              <button type="button" onClick={() => navigate(createPageUrl("Passport"))} className="rounded-full px-3.5 py-2 font-semibold text-[calc(12.5px*var(--fs))]" style={{ background: "#B0472F", color: "#fff" }}>
+                ✍️ Add a past trip
+              </button>
+              <button type="button" onClick={() => onAction?.("Things to Do")} className="rounded-full px-3.5 py-2 font-semibold text-[calc(12.5px*var(--fs))]" style={{ background: "#fff", color: "#16302B", border: "1px solid #E4DAC4" }}>
+                Things to do nearby
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  const nearestMi = far ? Math.round(Math.min(...items.map((x) => (Number.isFinite(x.distanceMiles) ? x.distanceMiles : 999)))) : null;
 
   // Open the attraction so the user can earn the stamp there (GPS "I was here").
   const openStamp = (item) => {
@@ -159,8 +194,8 @@ export default function StampsNearYou({ onAction, wide = false, onNearest }) {
         )}
         <div className="flex items-baseline justify-between mb-2 px-0.5 gap-3">
           <div className="min-w-0">
-            <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1]" style={{ color: "#16302B" }}>Stamps near you</div>
-            <div className="text-[calc(12px*var(--fs))] mt-0.5" style={{ color: "#71827D" }}>Collect these as you explore</div>
+            <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1]" style={{ color: "#16302B" }}>{far ? "The nearest stamps" : "Stamps near you"}</div>
+            <div className="text-[calc(12px*var(--fs))] mt-0.5" style={{ color: "#71827D" }}>{far && nearestMi < 999 ? `${nearestMi} mi away — worth the trip` : "Collect these as you explore"}</div>
           </div>
           <button
             onClick={() => navigate(createPageUrl("Passport"))}
