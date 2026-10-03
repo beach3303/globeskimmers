@@ -3560,7 +3560,8 @@ async function resolveStampGid(env, id) {
     if (r.ok) gid = (await r.json())?.places?.[0]?.id || null;
   } catch { gid = null; }
   if (kv) await kv.put(key, gid || 'none', { expirationTtl: (gid ? 180 : 30) * 86400 }).catch(() => {});
-  if (kv && gid) await kv.put(`gid2d1v2:${gid}`, JSON.stringify(ttdStampSummary(row)), { expirationTtl: 30 * 86400 }).catch(() => {});
+  const stampable = row.tier === 'secret' || ['world', 'national', 'regional'].includes(row.founder_scope || row.scope);
+  if (kv && gid && stampable) await kv.put(`gid2d1v2:${gid}`, JSON.stringify(ttdStampSummary(row)), { expirationTtl: 30 * 86400 }).catch(() => {});
   return gid;
 }
 
@@ -7157,9 +7158,11 @@ async function handleAttractionsGet(request, env) {
 // (a stampable D1 row) get their official stamp instead of the typographic one.
 function ttdIdKind(id) {
   const v = String(id || '');
+  if (/^(places|owned):/.test(v)) return 'tagged';   // "I was here" stamp ids: places:<googleId> / owned:<uuid>
   if (/^[a-z]+:/.test(v) || /^[a-z]{2}-[a-z0-9-]+$/.test(v)) return 'd1';
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return 'owned';
-  if (/^[A-Za-z0-9_-]{16,250}$/.test(v)) return 'google';
+  if (/^[A-Za-z0-9_-]{16,250}$/.test(v) && /[A-Z]/.test(v)) return 'google';   // Google ids are mixed-case
+  if (/^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(v)) return 'variant';                    // landmark variant slugs (stampVariants.js)
   return null;
 }
 async function ttdPlaceDetails(env, gid, origin) {
@@ -7175,7 +7178,9 @@ async function ttdPlaceDetails(env, gid, origin) {
     return p;
   } catch { return null; }
 }
+const ttdUntag = (id) => String(id || '').replace(/^(places|owned):/, '');
 async function ttdGidFor(env, id) {
+  id = ttdUntag(id);
   const k = ttdIdKind(id);
   if (k === 'google') return id;
   if (k === 'd1') return resolveStampGid(env, id).catch(() => null);
@@ -7187,8 +7192,9 @@ async function ttdGidFor(env, id) {
 }
 const ttdStampSummary = (r) => ({ id: r.id, name: r.name, category: r.category || null, footprint_radius_m: r.footprint_radius_m ?? null, city: r.city || null, country: r.country || null, lat: +r.lat, lng: +r.lng });
 // The iconic (stampable) D1 row for a place: same name, inside its footprint.
-async function ttdStampFor(env, gid, name, lat, lng) {
+async function ttdStampFor(env, gid, name, lat, lng, { write = true } = {}) {
   const kv = env.GLOBESKIMMERS_KV, key = gid ? `gid2d1v2:${gid}` : null;
+  const goodInput = Number.isFinite(lat) && Number.isFinite(lng) && !!name;
   if (key && kv) {
     const hit = await kv.get(key).catch(() => null);
     if (hit) return hit === 'none' ? null : JSON.parse(hit);
@@ -7215,7 +7221,7 @@ async function ttdStampFor(env, gid, name, lat, lng) {
     }
     if (best) out = ttdStampSummary(best.r);
   }
-  if (key && kv) await kv.put(key, out ? JSON.stringify(out) : 'none', { expirationTtl: 30 * 86400 }).catch(() => {});
+  if (write && goodInput && key && kv) await kv.put(key, out ? JSON.stringify(out) : 'none', { expirationTtl: 30 * 86400 }).catch(() => {});
   return out;
 }
 // Where a place really is (for the stamp distance check): our D1 row, else Google.
@@ -7226,7 +7232,7 @@ async function ttdPlaceTruth(env, entityId, origin) {
     if (r && Number.isFinite(+r.lat) && Number.isFinite(+r.lng)) return { lat: +r.lat, lng: +r.lng, radius: ppStampRadius(r) };
     return null;
   }
-  const gid = String(entityId).startsWith('places:') ? String(entityId).slice(7) : String(entityId).startsWith('owned:') ? await ttdGidFor(env, String(entityId).slice(6)) : null;
+  let gid = String(entityId).startsWith('places:') ? String(entityId).slice(7) : String(entityId).startsWith('owned:') ? await ttdGidFor(env, entityId) : null;
   const d = gid ? await ttdPlaceDetails(env, gid, origin) : null;
   const lat = Number(d?.latitude ?? d?.location?.latitude), lng = Number(d?.longitude ?? d?.location?.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
@@ -7243,10 +7249,11 @@ async function handleAttractionLink(request, env) {
     if (!k) return jsonResponse({ stamp: null });
     if (k === 'd1') {
       const r = env.ATTRACTIONS_DB ? await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(id).first().catch(() => null) : null;
-      return jsonResponse({ stamp: r ? ttdStampSummary(r) : null });
+      return jsonResponse({ stamp: r ? ttdStampSummary(r) : null, gid: r ? await resolveStampGid(env, id).catch(() => null) : null });
     }
     const gid = k === 'google' ? id : await ttdGidFor(env, id);
-    return jsonResponse({ stamp: await ttdStampFor(env, gid, String(b.name || '').slice(0, 160), Number(b.lat), Number(b.lng)), gid });
+    // Read-only: a client's name/coords never write the shared cache.
+    return jsonResponse({ stamp: await ttdStampFor(env, gid, String(b.name || '').slice(0, 160), Number(b.lat), Number(b.lng), { write: false }), gid: gid || null });
   } catch (e) { return jsonResponse({ stamp: null, error: e.message }); }
 }
 
@@ -7255,7 +7262,7 @@ async function handleAttractionLink(request, env) {
 async function handleActivityOne(request, env) {
   try {
     const b = await request.json().catch(() => ({}));
-    const id = String(b.id || '').trim();
+    const id = ttdUntag(String(b.id || '').trim());
     const k = ttdIdKind(id);
     if (!k) return jsonResponse({ error: 'id required' }, 400);
     const origin = new URL(request.url).origin;
@@ -7274,7 +7281,7 @@ async function handleActivityOne(request, env) {
     }
     if (!activity) return jsonResponse({ activity: null, stamp: row ? ttdStampSummary(row) : null }, 404);
     let stamp = row ? ttdStampSummary(row) : null;
-    if (!stamp && gid) stamp = await ttdStampFor(env, gid, activity.name, Number(activity.lat), Number(activity.lng));
+    if (!stamp && gid) stamp = await ttdStampFor(env, gid, activity.name, Number(activity.lat), Number(activity.lng), { write: !!d });
     return jsonResponse({ activity, stamp });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -13603,38 +13610,34 @@ async function handlePassportStamp(request, env, ctx) {
     }
 
     // Distance check (founder, 2026-10-03: stamp only when GPS shows you're AT
-    // the attraction). Newer apps send the fix they took (`fix` {lat,lng,acc} —
-    // used for this check only, never stored). A recommended attraction is
-    // measured against OUR coordinates and footprint, not the client's. Builds
-    // that send no fix keep the IP-country and travel-speed checks above.
+    // the attraction). Every GPS attraction stamp carries the fix it was taken
+    // with (`fix` {lat,lng,acc} — used for this check only, never stored) and is
+    // measured against OUR coordinates, never the client's: the D1 row for a
+    // stamp id; Google's location for "I was here" ids (places:<gid>/owned:<uuid>,
+    // or a bare Google/owned id); a landmark variant's parent D1 row.
     const fix = b.fix && typeof b.fix === 'object' ? { lat: Number(b.fix.lat), lng: Number(b.fix.lng), acc: Number(b.fix.acc) } : null;
-    // "I was here" at any Things to Do attraction (entity places:<googleId> or
-    // owned:<uuid>): GPS only, measured against Google's own location, and an
-    // iconic place becomes its official stamp (no duplicates).
-    if (kind === 'attraction' && entityId && /^(places|owned):/.test(entityId)) {
+    if (kind === 'attraction' && verified === 'gps') {
       const hasFix = fix && Number.isFinite(fix.lat) && Number.isFinite(fix.lng);
-      if (verified !== 'gps' || !hasFix) return jsonResponse({ error: 'This stamp is earned at the place \u2014 open it there and tap again', code: 'not_here' }, 409);
-      const truth = await ttdPlaceTruth(env, entityId, new URL(request.url).origin);
-      if (!truth) return jsonResponse({ error: 'We can\u2019t place this attraction on the map yet', code: 'not_here' }, 409);
+      if (!hasFix) return jsonResponse({ error: "We couldn\u2019t confirm you\u2019re here \u2014 open the place in the app while you\u2019re there and tap Stamp", code: 'proof_needed' }, 409);
+      const k0 = ttdIdKind(entityId);
+      if (k0 === 'google') entityId = `places:${entityId}`;
+      else if (k0 === 'owned') entityId = `owned:${entityId}`;
+      const k1 = ttdIdKind(entityId);
+      const origin = new URL(request.url).origin;
+      let truth = null;
+      if (k1 === 'tagged' || k1 === 'd1') truth = await ttdPlaceTruth(env, entityId, origin);
+      else if (k1 === 'variant' && ttdIdKind(b.parent_id) === 'd1') truth = await ttdPlaceTruth(env, String(b.parent_id), origin);
+      else if (k1 === 'variant' && Number.isFinite(lat) && Number.isFinite(lng)) truth = { lat, lng, radius: ppStampRadius({ category: b.category }) }; // builds before parent_id
+      if (!truth) return jsonResponse({ error: 'We can\u2019t place this attraction on the map yet, so it can\u2019t be stamped right now', code: 'unlocatable' }, 409);
       const slack = Number.isFinite(fix.acc) && fix.acc >= 0 ? Math.min(fix.acc, 100) : 50;
       const meters = haversineMilesLoc(truth.lat, truth.lng, fix.lat, fix.lng) * 1609.34;
       if (meters > truth.radius + slack) return jsonResponse({ error: 'Your GPS doesn\u2019t show you at this place yet \u2014 stamping opens when you\u2019re here', code: 'not_here', distance_m: Math.round(meters), radius_m: truth.radius }, 409);
-      lat = truth.lat; lng = truth.lng;
-      const iconic = truth.gid ? await ttdStampFor(env, truth.gid, truth.name || name, truth.lat, truth.lng) : null;
-      if (iconic) { entityId = iconic.id; b.entity_type = 'place'; }
-      else b.entity_type = 'local';
-    } else if (kind === 'attraction' && verified === 'gps' && fix && Number.isFinite(fix.lat) && Number.isFinite(fix.lng)) {
-      let pLat = lat, pLng = lng, radius = ppStampRadius({ category: b.category });
-      if (entityId && entityId.length <= 200 && env.ATTRACTIONS_DB) {
-        const r = await env.ATTRACTIONS_DB.prepare('SELECT lat, lng, category, footprint_radius_m FROM attractions WHERE id = ?1 LIMIT 1').bind(entityId).first().catch(() => null);
-        if (r && Number.isFinite(+r.lat) && Number.isFinite(+r.lng)) { pLat = +r.lat; pLng = +r.lng; radius = ppStampRadius(r); }
-      }
-      if (Number.isFinite(pLat) && Number.isFinite(pLng)) {
-        const slack = Number.isFinite(fix.acc) && fix.acc >= 0 ? Math.min(fix.acc, 100) : 50;
-        const meters = haversineMilesLoc(pLat, pLng, fix.lat, fix.lng) * 1609.34;
-        if (meters > radius + slack) {
-          return jsonResponse({ error: 'Your GPS doesn\u2019t show you at this place yet \u2014 stamping opens when you\u2019re here', code: 'not_here', distance_m: Math.round(meters), radius_m: radius }, 409);
-        }
+      if (k1 !== 'variant') { lat = truth.lat; lng = truth.lng; }
+      if (k1 === 'tagged') {
+        // An iconic place becomes its official stamp (no duplicates); others stamp "I was here".
+        const iconic = truth.gid ? await ttdStampFor(env, truth.gid, truth.name || name, truth.lat, truth.lng) : null;
+        if (iconic) { entityId = iconic.id; b.entity_type = 'place'; }
+        else b.entity_type = 'local';
       }
     }
 
@@ -19868,14 +19871,22 @@ async function gbReviewNote(env, text, placeName) {
   finally { clearTimeout(timer); }
 }
 // Email the founder that something waits in the Admin Portal (Resend; capped).
-async function gbNotifyFounder(env, subject, text) {
+async function gbNotifyFounder(env, subject, text, fromUserId = null) {
   if (!env.RESEND_API_KEY) return { sent: false, reason: 'no-key' };
   try {
-    if (env.GLOBESKIMMERS_KV) {
-      const k = `gb:notify:${new Date().toISOString().slice(0, 10)}`;
-      const n = Number(await env.GLOBESKIMMERS_KV.get(k).catch(() => 0)) || 0;
+    const kv = env.GLOBESKIMMERS_KV;
+    if (kv) {
+      const day = new Date().toISOString().slice(0, 10);
+      if (fromUserId) {
+        const uk = `gb:notify:${fromUserId}:${day}`;
+        const un = Number(await kv.get(uk).catch(() => 0)) || 0;
+        if (un >= 3) return { sent: false, reason: 'user-cap' };   // one person can't drown the inbox
+        await kv.put(uk, String(un + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
+      }
+      const k = `gb:notify:${day}`;
+      const n = Number(await kv.get(k).catch(() => 0)) || 0;
       if (n >= 30) return { sent: false, reason: 'cap' };
-      await env.GLOBESKIMMERS_KV.put(k, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
+      await kv.put(k, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
     }
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -19892,9 +19903,10 @@ async function gbNotifyFounder(env, subject, text) {
 // One guestbook per place: a stamp's D1 id ("icon:Q…") and an owned uuid both
 // map to the place's Google id, so the attraction page and the Things to Do card
 // share one book. Writes use the canonical id; reads check both.
+const GB_ENTITY_ID_RE = /^[A-Za-z0-9:_.-]{1,200}$/;
 async function gbEntityIds(env, raw) {
-  const id = String(raw || '').trim().slice(0, 200);
-  if (!id) return null;
+  const id = String(raw || '').trim();
+  if (!GB_ENTITY_ID_RE.test(id)) return null;
   let gid = null;
   if (/^[a-z]+:/.test(id) || /^[a-z]{2}-[a-z0-9-]+$/.test(id)) gid = await resolveStampGid(env, id).catch(() => null);
   else if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id) && env.GLOBESKIMMERS_KV) {
@@ -19902,9 +19914,16 @@ async function gbEntityIds(env, raw) {
     if (m && m !== 'none') gid = m;
   }
   const canon = gid && /^[A-Za-z0-9_-]{10,}$/.test(gid) ? gid : id;
-  return { canon, raw: id, all: [...new Set([canon, id])] };
+  const all = new Set([canon, id]);
+  if (/^[A-Za-z0-9_-]{16,}$/.test(canon) && !/^[a-z]+:/.test(canon)) {
+    all.add(`places:${canon}`);
+    const linked = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(`gid2d1v2:${canon}`).catch(() => null) : null;
+    if (linked && linked !== 'none') { try { const l = JSON.parse(linked); if (l?.id) all.add(String(l.id)); } catch { /* fine */ } }
+  }
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id)) all.add(`owned:${id}`);
+  return { canon, raw: id, all: [...all] };
 }
-const gbInList = (ids) => `in.(${ids.map((x) => `"${String(x).replace(/["\\]/g, '')}"`).join(',')})`;
+const gbInList = (ids) => `in.(${ids.filter((x) => GB_ENTITY_ID_RE.test(String(x))).map((x) => `"${encodeURIComponent(String(x))}"`).join(',')})`;
 const GB_LIST_COLS = 'id,user_id,display_name,home_city,prompt_type,body,verified_visit,created_at,edited_at,photo_url,photo_w,photo_h,is_doodle';
 
 async function handleGuestbookList(request, env) {
@@ -19921,7 +19940,11 @@ async function handleGuestbookList(request, env) {
     ]);
     if (!pub.ok) return jsonResponse({ error: `Supabase ${pub.status}`, details: await pub.text().catch(() => '') }, 502);
     const mine = own && own.ok ? await own.json() : [];
-    const entries = [...mine, ...(await pub.json())].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    const seen = new Set();
+    const entries = [...mine, ...(await pub.json())]
+      .filter((e) => (seen.has(e.id) ? false : seen.add(e.id)))
+      .map(({ user_id, ...e }) => ({ ...e, mine: !!user && user_id === user.id }))
+      .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     return jsonResponse({ entries, entity_id: ids.canon });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -19941,8 +19964,11 @@ async function handleGuestbookSign(request, env, ctx) {
     if (text.length > 1000) return jsonResponse({ error: 'Note too long (max 1000 characters)' }, 400);
     const entityName = gbClean(b.entity_name).slice(0, 160);
 
-    const sp = await gbSocialProfile(env, user.id).catch(() => null);
-    if (sp?.social_tier === 'blocked') return jsonResponse({ error: 'Guestbooks aren\u2019t available on this account' }, 403);
+    // Public posting passes the age gate like every other social surface.
+    const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (sp === undefined) return jsonResponse({ error: 'Couldn\u2019t check your account \u2014 try again' }, 503);
+    if (!sp?.birth_year) return jsonResponse({ error: 'age_required', message: 'Add your birth year in Settings to sign guestbooks.' }, 428);
+    if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Guestbooks aren\u2019t available on this account' }, 403);
     if (env.GLOBESKIMMERS_KV) {
       const ck = `gb:sign:${user.id}:${new Date().toISOString().slice(0, 10)}`;
       const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
@@ -19965,7 +19991,7 @@ async function handleGuestbookSign(request, env, ctx) {
       profileCity = gbClean(p0?.home_city).slice(0, 80) || null;
     } catch { /* fall back to "A traveler" */ }
     const wantsCity = b.show_city === true || (b.show_city === undefined && !!gbClean(b.home_city));
-    const homeCity = wantsCity && sp?.social_tier !== 'teen' ? profileCity : null;
+    const homeCity = wantsCity && sp.social_tier === 'adult' ? profileCity : null;
     // "✓ visited": the traveler holds a proven stamp for this place.
     let verified = false;
     try {
@@ -20002,7 +20028,7 @@ async function handleGuestbookSign(request, env, ctx) {
     const created = (await res.json())[0];
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'guestbook_sign', { entity_type: entityType, entity_id: entityId, place: entityName, prompt: row.prompt_type, verified, held }));
     if (held && ctx) ctx.waitUntil(gbNotifyFounder(env, `Guestbook note to review — ${entityName || 'a place'}`,
-      `A note on ${entityName || entityId} is waiting for you in the Admin Portal (Settings → Admin Portal → Guestbook review).\n\nFrom: ${row.display_name}\nWhy it was held: ${row.review_reason}\n\n"${text}"\n\nIt stays private until you approve it.`));
+      `A note on ${entityName || entityId} is waiting for you in the Admin Portal (Settings → Admin Portal → Guestbook review).\n\nFrom: ${row.display_name}\nWhy it was held: ${row.review_reason}\n\n"${text}"\n\nIt stays private until you approve it.`, user.id));
     return jsonResponse({ entry: created, held });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -20016,23 +20042,36 @@ async function handleGuestbookEdit(request, env, ctx) {
     if (!id || !text) return jsonResponse({ error: 'id and body required' }, 400);
     if (!BL_UUID.test(id)) return jsonResponse({ error: 'Not found or not yours' }, 403);
     if (text.length > 1000) return jsonResponse({ error: 'Too long' }, 400);
-    const cur = await gbRest(env, `guestbook_entries?id=eq.${id}&user_id=eq.${user.id}&deleted_at=is.null&select=entity_name,entity_id`);
+    const cur = await gbRest(env, `guestbook_entries?id=eq.${id}&user_id=eq.${user.id}&deleted_at=is.null&select=entity_name,entity_id,review_status`);
     const was = cur.ok ? (await cur.json())[0] : null;
     if (!was) return jsonResponse({ error: 'Not found or not yours' }, 403);
+    const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (sp === undefined) return jsonResponse({ error: 'Couldn\u2019t check your account \u2014 try again' }, 503);
+    if (!sp?.birth_year) return jsonResponse({ error: 'age_required', message: 'Add your birth year in Settings to edit guestbook notes.' }, 428);
+    if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Guestbooks aren\u2019t available on this account' }, 403);
+    if (env.GLOBESKIMMERS_KV) {
+      const ck = `gb:edit:${user.id}:${new Date().toISOString().slice(0, 10)}`;
+      const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
+      if (n >= 30) return jsonResponse({ error: 'That\u2019s a lot of edits for one day \u2014 try again tomorrow' }, 429);
+      await env.GLOBESKIMMERS_KV.put(ck, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
+    }
     // Every edit gets the same review as a new note.
     const review = await gbReviewNote(env, text, was.entity_name);
     if (review.verdict === 'block') return jsonResponse({ error: 'Let\u2019s keep the guestbook kind \u2014 no profanity or insults, please.' }, 400);
-    const held = review.verdict === 'hold';
+    const kept = was.review_status === 'rejected';   // an admin kept it private — edits don't republish it
+    const held = !kept && review.verdict === 'hold';
     const res = await gbRest(env, `guestbook_entries?id=eq.${id}&user_id=eq.${user.id}`, {
       method: 'PATCH', headers: { Prefer: 'return=representation' },
-      body: JSON.stringify({ body: text, edited_at: new Date().toISOString(), review_status: held ? 'held' : 'ok', review_reason: held ? (review.reason || 'reads as negative').slice(0, 140) : null, reviewed_at: null, reviewed_by: null }),
+      body: JSON.stringify(kept
+        ? { body: text, edited_at: new Date().toISOString() }
+        : { body: text, edited_at: new Date().toISOString(), review_status: held ? 'held' : 'ok', review_reason: held ? (review.reason || 'reads as negative').slice(0, 140) : null, reviewed_at: null, reviewed_by: null }),
     });
     if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}` }, 502);
     const rows = await res.json();
     if (!rows.length) return jsonResponse({ error: 'Not found or not yours' }, 403);
     if (held && ctx) ctx.waitUntil(gbNotifyFounder(env, `Edited guestbook note to review — ${was.entity_name || 'a place'}`,
-      `An edited note on ${was.entity_name || was.entity_id} is waiting in the Admin Portal (Guestbook review).\n\nWhy it was held: ${rows[0].review_reason}\n\n"${text}"`));
-    return jsonResponse({ entry: { ...rows[0], review_status: held ? 'held' : 'ok' }, held });
+      `An edited note on ${was.entity_name || was.entity_id} is waiting in the Admin Portal (Guestbook review).\n\nWhy it was held: ${rows[0].review_reason}\n\n"${text}"`, user.id));
+    return jsonResponse({ entry: { ...rows[0], review_status: kept ? 'rejected' : held ? 'held' : 'ok' }, held });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -20078,7 +20117,10 @@ async function handleGuestbookReport(request, env, ctx) {
     const fresh = (await ins.json()).length > 0;
     if (fresh) {
       const res = await gbRest(env, 'rpc/gb_report', { method: 'POST', body: JSON.stringify({ p_id: id }) });
-      if (!res.ok) return jsonResponse({ error: 'Could not report this note' }, 502);
+      if (!res.ok) {
+        await gbRest(env, `guestbook_reports?entry_id=eq.${id}&reporter_id=eq.${user.id}`, { method: 'DELETE' }).catch(() => {});
+        return jsonResponse({ error: 'Could not report this note \u2014 try again' }, 502);
+      }
       const q = await gbRest(env, `guestbook_entries?id=eq.${id}&select=entity_name,body,hidden,flag_count`);
       const e = q.ok ? (await q.json())[0] : null;
       if (e && e.hidden && e.flag_count === 3 && ctx) ctx.waitUntil(gbNotifyFounder(env, `Guestbook note hidden after 3 reports — ${e.entity_name || 'a place'}`,
@@ -20749,12 +20791,14 @@ export default {
       if (pathname === '/trip/feedback' && request.method === 'POST') return await handleTripFeedback(request, env);
       if (pathname === '/saves/pull' && request.method === 'POST') return await handleSavesPull(request, env);
       if (pathname === '/saves/push' && request.method === 'POST') return await handleSavesPush(request, env);
-      if (pathname === '/viator/match' && request.method === 'POST') return await handleViatorMatch(request, env);
-      if (pathname === '/viator/products' && request.method === 'POST') return await handleViatorProducts(request, env);
-      if (pathname === '/viator/schedule' && request.method === 'POST') return await handleViatorSchedule(request, env);
-      if (pathname === '/viator/availability' && request.method === 'POST') return await handleViatorAvailability(request, env);
+      // No booking (founder, 2026-10-03): older app builds still call these — they get
+      // "nothing to show", so no tour / flight / package UI appears before their OTA.
+      if (pathname === '/viator/match' && request.method === 'POST') return jsonResponse({ match: false });
+      if (pathname === '/viator/products' && request.method === 'POST') return jsonResponse({ match: false, products: [] });
+      if (pathname === '/viator/schedule' && request.method === 'POST') return jsonResponse({ schedules: {} });
+      if (pathname === '/viator/availability' && request.method === 'POST') return jsonResponse({ available: null });
       if (pathname === '/activities/search' && request.method === 'POST') return await handleActivitySearch(request, env, ctx);
-      if (pathname === '/events/search' && request.method === 'POST') return await handleEventsSearch(request, env);
+      if (pathname === '/events/search' && request.method === 'POST') return jsonResponse({ events: [], experiences: [], rows: [] });
       // Deal Radar (airline promos — every claim evidence-gated to the airline's own page)
       // POST included: callWorker (the app's only transport) can ONLY POST — a
       // GET-only route here is a dead route for every client.
@@ -20774,11 +20818,11 @@ export default {
       if (pathname === '/hotels/nuitee/checkout' && request.method === 'GET') return jsonResponse({ error: 'Booking isn\u2019t available in GlobeSkimmers', code: 'booking_removed' }, 410);
       if (pathname === '/hotels/nuitee/return' && request.method === 'GET') return await handleNuiteeReturn(request, env, ctx);
       // Smart Packages (priced drafts only — NO payment; booking stays per-component)
-      if (pathname === '/package/draft' && request.method === 'POST') return await handlePackageDraft(request, env, ctx);
-      if (pathname === '/package/get' && request.method === 'POST') return await handlePackageGet(request, env);
+      if (pathname === '/package/draft' && request.method === 'POST') return jsonResponse({ error: 'Booking isn\u2019t available in GlobeSkimmers', code: 'booking_removed' }, 410);
+      if (pathname === '/package/get' && request.method === 'POST') return jsonResponse({ error: 'Booking isn\u2019t available in GlobeSkimmers', code: 'booking_removed' }, 410);
       // Living-room estimate tease (Wave B) — intel-dated, dry-run-priced cheapest hotel + split-four arithmetic; failures are 200s
-      if (pathname === '/package/estimate' && request.method === 'POST') return await handlePackageEstimate(request, env, ctx);
-      if (pathname === '/flights/months' && request.method === 'POST') return await handleFlightsMonths(request, env, ctx);
+      if (pathname === '/package/estimate' && request.method === 'POST') return jsonResponse({ ok: false, available: false });
+      if (pathname === '/flights/months' && request.method === 'POST') return jsonResponse({ ok: false });
       // Destination planning intel (Wave A) — Anthropic + KV only, hard-validated, always carries the verify-locally guidance line
       if (pathname === '/destination/intel' && request.method === 'POST') return await handleDestinationIntel(request, env, ctx);
       // Stripe payments (Wave 1 — GlobeSkimmers as merchant; hotel stay total of a priced package)
