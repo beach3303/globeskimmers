@@ -1074,3 +1074,19 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   40 km of the home city; stored at the city centre, never the user's position.
 - Gates: node --check, eslint, eslint no-undef, build, cap copy, sim clean install +
   bundle-hash match.
+
+## 2026-10-03 (late) — Mailbox unread, flags, photo comments, Wishlist out, Base44 out
+- Mailbox: /social/unread + dot on the tab + "On your passport · N new" activity; claim
+  @username in Mailbox; invite at zero friends; admin accounts can claim names held for
+  admin emails (@maiza from founder@).
+- Flag stickers: 200 flags in R2 (stamp-art/flags/<cc>.svg, CSP-hardened SVG); home flag
+  + live-country flag by default (profiles.home_city_country, migration applied); earned
+  on airport/border arrival; old plane placements render as the country flag.
+- Photos: captions (moderated), reactions + comments via Blotter ph: targets; purge on
+  photo/stamp delete; visitor visibility filter; reviewed (no authz hole).
+- Wishlist page/hearts/route retired (data + sync kept). 34 dead files removed.
+- Base44: tracker, Contact Us (now → worker /contact), onboarding LocationStep, Money
+  Exchange, Basic Phrases (language detection was dead), price scanner, ATM, 404 — all off.
+- Gates each step: node --check, eslint, eslint no-undef, build exit 0, cap copy, sim
+  clean-install boot with bundle-content check.
+- Founder: `git pull && npm run cap:sync && npm run ota` to ship the app side.
