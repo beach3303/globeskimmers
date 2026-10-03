@@ -318,7 +318,7 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
 
 // ── The doodle pad: four house inks, one undo — constraints make charm ──────
 const INKS = ["#2B4A7E", "#B0472F", "#2E6B4E", "#9A6F1E"];
-function DoodlePad({ onClose, onPost, busy }) {
+export function DoodlePad({ onClose, onPost, busy }) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const strokes = useRef([]);       // [{ color, pts: [{x,y},…] }]

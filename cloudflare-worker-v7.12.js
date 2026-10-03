@@ -6556,10 +6556,7 @@ async function handleAttractionsNearby(request, env, ctx) {
   // the ranking signal the seed was built for. NULL (unranked) rows sort after
   // ranked ones; rating breaks ties.
   const sql = `
-    SELECT id, name, category, lat, lng, city, country, description,
-           why_visit, typical_minutes, photo_url, rating,
-           is_marquee, free_to_visit,
-           popularity, footprint_radius_m, parent_id, tier, qid
+    SELECT *
       FROM attractions
      WHERE ${wheres.join(' AND ')}
   ORDER BY is_marquee DESC, (popularity IS NULL) ASC, popularity DESC, rating DESC
@@ -6610,6 +6607,10 @@ async function handleAttractionsNearby(request, env, ctx) {
       rating: r.rating ?? null,
       isMarquee: r.is_marquee === 1,
       freeToVisit: r.free_to_visit === 1,
+      website: r.website || null,
+      ticket_price: r.ticket_price || null,
+      ticket_url: r.ticket_url || null,
+      parking_text: r.parking_text || null,
       popularity: r.popularity ?? null,
       // Per-row stamp footprint (metres) — read by src/lib/stampRadius.js; the
       // client heuristic stays as fallback for rows without one.
@@ -6997,9 +6998,7 @@ async function handleAttractionsGet(request, env) {
   if (!id || id.length > 200) return jsonResponse({ error: 'id required' }, 400);
   try {
     const row = await env.ATTRACTIONS_DB.prepare(
-      `SELECT id, name, category, lat, lng, city, country, description, why_visit,
-              typical_minutes, photo_url, rating, is_marquee, free_to_visit,
-              popularity, footprint_radius_m, parent_id, tier, qid
+      `SELECT *
          FROM attractions WHERE id = ?1 LIMIT 1`
     ).bind(id).first();
     if (!row) return jsonResponse({ attraction: null }, 404);
@@ -7010,6 +7009,8 @@ async function handleAttractionsGet(request, env) {
       whyVisit: row.why_visit || '', typicalMinutes: row.typical_minutes ?? null,
       photoUrl: row.photo_url || null, rating: row.rating ?? null,
       isMarquee: row.is_marquee === 1, freeToVisit: row.free_to_visit === 1,
+      website: row.website || null, ticket_price: row.ticket_price || null,
+      ticket_url: row.ticket_url || null, parking_text: row.parking_text || null,
       popularity: row.popularity ?? null, footprint_radius_m: row.footprint_radius_m ?? null,
       parentId: row.parent_id || null, tier: row.tier || 'page', qid: row.qid || null,
       film,
@@ -12895,6 +12896,28 @@ async function gbModeratePhoto(env, base64, mediaType) {
   } catch { return { allow: false, reason: 'moderation-exception' }; }
 }
 
+// Moderate a finger DOODLE (fail-closed): drawings are welcome; only sexual,
+// hateful, violent or written-slur content is blocked.
+async function gbModerateDoodle(env, base64, mediaType) {
+  if (!env.ANTHROPIC_API_KEY) return { allow: false, reason: 'moderation-unavailable' };
+  try {
+    const system = 'You review hand-drawn doodles left in a public travel guestbook (flowers, signatures, little sketches). Reply ONLY {"allow":true} or {"allow":false}. Set allow=false ONLY for: sexual or nude drawings, hate symbols or slurs (drawn or written, any language), graphic violence, or harassment aimed at a person. Innocent doodles, names, hearts, stars, landscapes and animals are all allowed.';
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 16, system,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+          { type: 'text', text: 'Is this doodle allowed?' } ] }] }),
+    });
+    if (!r.ok) return { allow: false, reason: 'moderation-error' };
+    const d = await r.json();
+    const t = (d.content && d.content[0] && d.content[0].text) || '';
+    const m = t.match(/"allow"\s*:\s*(true|false)/i);
+    return { allow: m ? m[1].toLowerCase() === 'true' : false };
+  } catch { return { allow: false, reason: 'moderation-exception' }; }
+}
+
 // Upload one guestbook photo → moderate → store in R2 → return a servable URL.
 // The client resizes to ~1280px JPEG before sending (keeps payload small). The photo
 // is NOT attached to an entry here; the returned {key,url} is passed to /guestbook/sign.
@@ -12922,11 +12945,12 @@ async function handleGuestbookPhotoUpload(request, env, ctx) {
     if (bytes.length > 4 * 1024 * 1024) return jsonResponse({ error: 'Photo too large (please pick a smaller image)' }, 400);
     if (bytes.length < 500) return jsonResponse({ error: 'That image is too small' }, 400);
 
-    // Moderate BEFORE storing (fails closed).
-    const mod = await gbModeratePhoto(env, data, mediaType);
+    // Moderate BEFORE storing (fails closed). Doodles get the drawing door.
+    const isDoodle = b.doodle === true;
+    const mod = isDoodle ? await gbModerateDoodle(env, data, mediaType) : await gbModeratePhoto(env, data, mediaType);
     if (!mod.allow) {
-      if (ctx) ctx.waitUntil(gbLogEvent(env, 'guestbook_photo_blocked', { entity_id: entityId, reason: mod.reason || 'content' }));
-      return jsonResponse({ error: "That photo can't be posted. Please share a photo of the food, drink, or place." }, 400);
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'guestbook_photo_blocked', { entity_id: entityId, doodle: isDoodle, reason: mod.reason || 'content' }));
+      return jsonResponse({ error: isDoodle ? "That drawing can't be posted." : "That photo can't be posted. Please share a photo of the food, drink, or place." }, 400);
     }
 
     const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
@@ -18526,7 +18550,7 @@ async function handleGuestbookList(request, env) {
     const entityId = gbClean(body.entity_id);
     if (!entityId) return jsonResponse({ error: 'entity_id required' }, 400);
     const limit = Math.min(parseInt(body.limit, 10) || 50, 100);
-    const q = `guestbook_entries?entity_id=eq.${encodeURIComponent(entityId)}&hidden=is.false&deleted_at=is.null&order=created_at.desc&limit=${limit}&select=id,user_id,display_name,home_city,prompt_type,body,verified_visit,created_at,edited_at,photo_url,photo_w,photo_h`;
+    const q = `guestbook_entries?entity_id=eq.${encodeURIComponent(entityId)}&hidden=is.false&deleted_at=is.null&order=created_at.desc&limit=${limit}&select=id,user_id,display_name,home_city,prompt_type,body,verified_visit,created_at,edited_at,photo_url,photo_w,photo_h,is_doodle`;
     const res = await gbRest(env, q);
     if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
     return jsonResponse({ entries: await res.json() });
@@ -18541,10 +18565,11 @@ async function handleGuestbookSign(request, env, ctx) {
     const entityId = gbClean(b.entity_id);
     const entityType = gbClean(b.entity_type) || 'place';
     const text = gbClean(b.body);
+    const isDoodle = b.is_doodle === true;
     if (!entityId) return jsonResponse({ error: 'entity_id required' }, 400);
-    if (!text || text.length < 2) return jsonResponse({ error: 'Write a short note first' }, 400);
+    if (!isDoodle && (!text || text.length < 2)) return jsonResponse({ error: 'Write a short note first' }, 400);
     if (text.length > 1000) return jsonResponse({ error: 'Note too long (max 1000 characters)' }, 400);
-    if (!(await gbModerate(env, text)).allow) {
+    if (text && !(await gbModerate(env, text)).allow) {
       return jsonResponse({ error: 'Please keep it clean — no profanity, slurs, or abuse. Honest feedback is welcome.' }, 400);
     }
     const verified = b.verified === true;
@@ -18566,10 +18591,12 @@ async function handleGuestbookSign(request, env, ctx) {
       entity_type: entityType, entity_id: entityId, entity_name: entityName,
       user_id: user.id, display_name: gbClean(b.display_name) || 'A traveler',
       home_city: gbClean(b.home_city) || null, prompt_type: gbClean(b.prompt_type) || 'tip',
-      body: text, verified_visit: verified,
+      body: text || null, verified_visit: verified,
+      is_doodle: isDoodle && !!photoKey,
       photo_key: photoKey || null, photo_url: photoUrl || null,
       photo_w: parseInt(b.photo_w, 10) || null, photo_h: parseInt(b.photo_h, 10) || null,
     };
+    if (isDoodle && !photoKey) return jsonResponse({ error: 'Draw something first' }, 400);
     const res = await gbRest(env, 'guestbook_entries', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
     if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
     const created = (await res.json())[0];

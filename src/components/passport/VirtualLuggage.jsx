@@ -353,11 +353,11 @@ export default function VirtualLuggage({ stamps, onClose }) {
       } else if (Math.abs(dy) >= 44 && Math.abs(dy) > Math.abs(dx) * 1.2) {
         setSelected(null);
         setTilt(dy < 0 ? 1 : -1); setTimeout(() => setTilt(0), 330);
-        if (dy < 0) {
-          // swipe up: from the base back to the front, otherwise tip to the lid
+        if (dy > 0) {
+          // swipe down: from the base back to the front, otherwise tip to the lid
           setFaceIdx((i) => (i === -2 ? 0 : -1));
         } else {
-          // swipe down: from the lid back to the front, otherwise roll to the base
+          // swipe up: from the lid back to the front, otherwise roll to the base
           setFaceIdx((i) => (i === -1 ? 0 : -2));
         }
       }
@@ -410,7 +410,7 @@ export default function VirtualLuggage({ stamps, onClose }) {
               position: "relative", width: faceW, height: faceH, touchAction: "none",
               transformStyle: "preserve-3d",
               transform: drag
-                ? `rotateY(${Math.max(-40, Math.min(40, (drag.dx / faceW) * 70)).toFixed(1)}deg) rotateX(${Math.max(-32, Math.min(32, (-drag.dy / faceH) * 55)).toFixed(1)}deg) scale(0.97)`
+                ? `rotateY(${Math.max(-40, Math.min(40, (drag.dx / faceW) * 70)).toFixed(1)}deg) rotateX(${Math.max(-32, Math.min(32, (drag.dy / faceH) * 55)).toFixed(1)}deg) scale(0.97)`
                 : turn ? `rotateY(${turn * -12}deg) scaleX(0.94)` : tilt ? `rotateX(${tilt * 10}deg) scaleY(0.95)` : "rotateY(0deg) scaleX(1)",
               transition: drag ? "none" : "transform 320ms cubic-bezier(.22,.61,.36,1)",
             }}
@@ -465,7 +465,7 @@ export default function VirtualLuggage({ stamps, onClose }) {
             )}
           </div>
           <p style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".05em", color: INK3, marginTop: 8 }}>
-            {edit ? "Drag to place · two fingers to resize & rotate · tap ✓ when done" : "Swipe sideways to walk around · up for the lid, down for the base · ✎ to arrange"}
+            {edit ? "Drag to place · two fingers to resize & rotate · tap ✓ when done" : "Swipe sideways to walk around · down for the lid, up for the base · ✎ to arrange"}
           </p>
         </div>
 

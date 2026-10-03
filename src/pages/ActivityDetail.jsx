@@ -5,7 +5,7 @@ import {
   MapPin, Star, Clock, DollarSign,
   Navigation, Share2, Bookmark, Camera,
   ChevronLeft, ChevronRight,
-  Info, AlertCircle, X, TrendingUp, Sun
+  Info, AlertCircle, X, TrendingUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MapAppSelector from '../components/MapAppSelector';
@@ -17,6 +17,7 @@ import { stampRadiusFor } from "@/lib/stampRadius";
 import { resolveStampVariant } from "@/lib/stampVariants";
 import { countryCode } from "@/lib/countries";
 import { localISODate } from "@/lib/localDate";
+import { createPageUrl } from "@/utils";
 import { showToast } from "../components/Toast";
 import { useDismissable } from '@/lib/dismissStack';
 import useHorizontalSwipe from '@/lib/useHorizontalSwipe';
@@ -262,34 +263,29 @@ export default function ActivityDetailPage() {
     setLoadingDetails(false);
   };
 
-  // "I was here" → an EARNED passport stamp. Takes a fresh GPS fix at tap time:
-  // within ~250m of the place → ✓ Verified; otherwise self-declared (a photo can
-  // upgrade it to ✓ later, in the Passport). Idempotent (worker upserts).
+  // Verified-only stamping (founder doctrine, 2026-10-02): a stamp is EARNED
+  // at the place — GPS inside the footprint — or later in the Passport with a
+  // photo whose own location/vision proves the visit. No honor-system claims.
   const [stamping, setStamping] = useState(false);
   const [stamped, setStamped] = useState(false);
+  const [proofHelp, setProofHelp] = useState(false);
   const handleStamp = async () => {
     if (stamping || stamped) return;
     setStamping(true);
+    setProofHelp(false);
     const placeLat = Number(activity.latitude ?? activityLocation?.latitude);
     const placeLng = Number(activity.longitude ?? activityLocation?.longitude);
-    let verified = 'self';
-    let gpsLat = null, gpsLng = null;
+    let gpsLat = null, gpsLng = null, here = false;
     try {
       const pos = await new Promise((res, rej) => {
         if (!navigator.geolocation) return rej(new Error('no geo'));
-        navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 });
+        navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 7000, maximumAge: 30000 });
       });
       gpsLat = pos.coords.latitude; gpsLng = pos.coords.longitude;
-      // Radius comes from the KIND of place: a 250m circle round a theme park's
-      // centroid excludes visitors who are demonstrably inside the gate.
-      if (metersBetween(gpsLat, gpsLng, placeLat, placeLng) <= stampRadiusFor(activity)) verified = 'gps';
-    } catch { /* no fix → self-declared */ }
-    // Multi-viewpoint landmarks (Grand Canyon rims, Niagara sides) → resolve the
-    // specific variant. Use the live GPS fix only when it corroborates presence
-    // (verified), otherwise the selected place's own coordinates.
-    const vLat = verified === 'gps' ? gpsLat : placeLat;
-    const vLng = verified === 'gps' ? gpsLng : placeLng;
-    const variant = resolveStampVariant({ name: activity.name, lat: vLat, lng: vLng, country: activity.country, verified });
+      here = metersBetween(gpsLat, gpsLng, placeLat, placeLng) <= stampRadiusFor(activity);
+    } catch { /* no fix → not verifiable right now */ }
+    if (!here) { setStamping(false); setProofHelp(true); return; }
+    const variant = resolveStampVariant({ name: activity.name, lat: gpsLat, lng: gpsLng, country: activity.country, verified: 'gps' });
     const { data, error } = await addStamp({
       kind: 'attraction',
       entity_type: variant ? 'landmark' : 'place',
@@ -301,15 +297,14 @@ export default function ActivityDetailPage() {
       cc: stampCC(activity),
       lat: Number.isFinite(placeLat) ? placeLat : null,
       lng: Number.isFinite(placeLng) ? placeLng : null,
-      visited_on: localISODate(), // LOCAL date — UTC says "tomorrow" for an evening tap in the Americas
+      visited_on: localISODate(),
       local_hour: new Date().getHours(),
-      verified,
-      ...(activity.film?.title ? { film: activity.film } : {}),   // movie scene stamp keeps its film
+      verified: 'gps',
+      ...(activity.film?.title ? { film: activity.film } : {}),
     });
     setStamping(false);
     if (error) { showToast(/sign in/i.test(error) ? 'Sign in to stamp your Virtual Passport' : 'Could not add stamp'); return; }
     setStamped(true);
-    // Reflect the server's verdict (GPS ✓ only if corroborated).
     showToast(data?.verified === 'gps' ? '✓ Verified — added to your Virtual Passport 🛂' : 'Added to your Virtual Passport 🛂');
   };
 
@@ -600,15 +595,31 @@ export default function ActivityDetailPage() {
             </div>
           )}
 
-          {/* I was here → earn a passport stamp (GPS ✓ when you're there) */}
-          <button
-            onClick={handleStamp}
-            disabled={stamping || stamped}
-            className="w-full flex items-center justify-center gap-2 rounded-2xl py-3 mb-4 font-bold transition-transform active:scale-[.99]"
-            style={{ background: stamped ? '#E7F3EA' : '#B0472F', color: stamped ? '#266A3B' : '#fff', fontSize: 'calc(15px*var(--fs))' }}
-          >
-            {stamping ? 'Stamping…' : stamped ? '✓ In your Virtual Passport' : '📍 I was here'}
-          </button>
+          {/* Address + today's hours (replaces the old honor-system button) */}
+          {(activity.address || activity.opening_hours?.weekday_text?.length > 0) && (
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 mb-4">
+              {activity.address && (
+                <p className="text-[calc(14px*var(--fs))] font-semibold text-gray-800 flex items-start gap-2">
+                  <MapPin className="w-4 h-4 mt-0.5 text-purple-600 shrink-0" />
+                  <span>{activity.address}</span>
+                </p>
+              )}
+              {(() => {
+                const wt = activity.opening_hours?.weekday_text;
+                if (!wt || !wt.length) return null;
+                const jsDay = new Date().getDay();            // 0 Sun … 6 Sat
+                const idx = (jsDay + 6) % 7;                  // Google lists Mon-first
+                const line = wt[idx] || wt[0];
+                const hours = String(line).split(': ').slice(1).join(': ');
+                return (
+                  <p className="text-[calc(13px*var(--fs))] text-gray-600 flex items-center gap-2 mt-1.5">
+                    <Clock className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span>Today: {hours || line}</span>
+                  </p>
+                );
+              })()}
+            </div>
+          )}
 
           {/* Distance with toggle — only when we have a real distance */}
           {Number.isFinite(activity.distance_km) && (
@@ -630,76 +641,6 @@ export default function ActivityDetailPage() {
               </button>
             </div>
           )}
-
-          {/* Duration & Best Time Cards with thumbnails */}
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="relative bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl p-4 overflow-hidden">
-              {activity.mainPhoto && (
-                <div className="absolute inset-0 opacity-20">
-                  <img src={activity.mainPhoto} alt="" className="w-full h-full object-cover" />
-                </div>
-              )}
-              <div className="relative z-10">
-                <div className="flex items-center gap-2 mb-1">
-                  <Clock className="w-4 h-4 text-white" />
-                  <span className="text-[calc(11px*var(--fs))] text-white/80 font-semibold uppercase">Duration</span>
-                </div>
-                <p className="text-[calc(18px*var(--fs))] font-bold text-white">
-                  {activity.duration || '2-3 hours'}
-                </p>
-              </div>
-            </div>
-
-            <div className="relative bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 overflow-hidden">
-              {activity.mainPhoto && (
-                <div className="absolute inset-0 opacity-20">
-                  <img src={activity.mainPhoto} alt="" className="w-full h-full object-cover" />
-                </div>
-              )}
-              <div className="relative z-10">
-                <div className="flex items-center gap-2 mb-1">
-                  <Sun className="w-4 h-4 text-white" />
-                  <span className="text-[calc(11px*var(--fs))] text-white/80 font-semibold uppercase">Best Time</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <p className="text-[calc(18px*var(--fs))] font-bold text-white">
-                    {activity.best_time || 'Morning'}
-                  </p>
-                  <button
-                    onClick={() => setShowTimeExplanation(!showTimeExplanation)}
-                    className="w-5 h-5 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center hover:bg-white/40 transition-colors"
-                  >
-                    <span className="text-[calc(11px*var(--fs))] font-bold text-white">?</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Time Explanation (expandable) */}
-          <AnimatePresence>
-            {showTimeExplanation && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 overflow-hidden"
-              >
-                <h4 className="text-[calc(14px*var(--fs))] font-bold text-blue-900 mb-2 flex items-center gap-2">
-                  <Info className="w-4 h-4" />
-                  Why {activity.best_time || 'Morning'} is Best
-                </h4>
-                <ul className="space-y-2 text-[calc(13px*var(--fs))] text-blue-800">
-                  {(activity.best_time_reasons || getDefaultTimeReasons(activity.best_time || 'Morning')).map((reason, index) => (
-                    <li key={index} className="flex gap-2">
-                      <span className="text-blue-500">•</span>
-                      <span>{reason}</span>
-                    </li>
-                  ))}
-                </ul>
-              </motion.div>
-            )}
-          </AnimatePresence>
 
           {activity.opening_hours && (
             <div className="mb-4">
@@ -725,7 +666,36 @@ export default function ActivityDetailPage() {
               <Navigation className="w-5 h-5" />
               Get Directions
             </button>
+            {(activity.website || activity.websiteUri) && (
+              <a href={activity.website || activity.websiteUri} target="_blank" rel="noopener noreferrer"
+                className="flex-1 bg-white border border-gray-300 text-gray-800 py-3 rounded-xl font-bold text-[calc(15px*var(--fs))] flex items-center justify-center gap-2 hover:border-purple-500 transition-colors">
+                Website ↗
+              </a>
+            )}
           </div>
+
+          {/* Verified stamping only: earned at the place, or by photo proof later */}
+          <button
+            onClick={handleStamp}
+            disabled={stamping || stamped}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl py-3 mt-3 font-bold transition-transform active:scale-[.99]"
+            style={{ background: stamped ? '#E7F3EA' : '#B0472F', color: stamped ? '#266A3B' : '#fff', fontSize: 'calc(15px*var(--fs))' }}
+          >
+            {stamping ? 'Checking you are here…' : stamped ? '✓ In your Virtual Passport' : '📍 Stamp it — I\'m here'}
+          </button>
+          {proofHelp && (
+            <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-[calc(13px*var(--fs))] text-amber-900">
+                Stamps are earned at the place — your GPS doesn&rsquo;t show you here right now.
+                Been before? Add it from your Passport with a photo from the visit: the photo&rsquo;s
+                own location and what&rsquo;s in it verify you were really there.
+              </p>
+              <button onClick={() => navigate(createPageUrl('Passport'))}
+                className="mt-2 text-[calc(13px*var(--fs))] font-bold text-amber-900 underline underline-offset-2">
+                Open my Passport →
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
@@ -748,23 +718,13 @@ export default function ActivityDetailPage() {
         {/* Tab Content */}
         {activeTab === 'overview' && (
           <div className="space-y-4">
-            <div className="bg-white rounded-xl shadow-md p-5">
-              <h3 className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-3 flex items-center gap-2">
-                <Info className="w-5 h-5 text-purple-600" />
-                About
-              </h3>
-              <p className="text-[calc(15px*var(--fs))] text-gray-700 leading-relaxed">
-                {activity.description}
-              </p>
-            </div>
-
-            {activity.address && (
+            {activity.parking_text && (
               <div className="bg-white rounded-xl shadow-md p-5">
                 <h3 className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-3 flex items-center gap-2">
                   <MapPin className="w-5 h-5 text-purple-600" />
-                  Location
+                  Parking
                 </h3>
-                <p className="text-[calc(14px*var(--fs))] text-gray-700">{activity.address}</p>
+                <p className="text-[calc(14px*var(--fs))] text-gray-700 whitespace-pre-line">{activity.parking_text}</p>
               </div>
             )}
 
@@ -818,22 +778,34 @@ export default function ActivityDetailPage() {
               </div>
             )}
 
-            {/* Pricing Section */}
+            {/* Pricing — real ticket facts when curated; honest fallbacks otherwise */}
             <div className="bg-white rounded-xl shadow-md p-5">
               <h3 className="text-[calc(17px*var(--fs))] font-bold text-gray-900 mb-3 flex items-center gap-2">
                 <DollarSign className="w-5 h-5 text-green-600" />
                 Pricing
               </h3>
-
-              <div className="text-center py-4">
-                <DollarSign className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                <p className="text-[calc(14px*var(--fs))] text-gray-600 mb-2">
-                  Price Level: {getPriceDisplay(activity.price_level)}
-                </p>
-                <p className="text-[calc(13px*var(--fs))] text-gray-500">
-                  Contact venue for detailed pricing information
-                </p>
-              </div>
+              {activity.ticket_price ? (
+                <div>
+                  <p className="text-[calc(22px*var(--fs))] font-bold text-gray-900">{activity.ticket_price}</p>
+                  {activity.ticket_url ? (
+                    <a href={activity.ticket_url} target="_blank" rel="noopener noreferrer"
+                      className="mt-2 inline-block rounded-xl bg-green-600 text-white px-4 py-2 font-bold text-[calc(14px*var(--fs))]">
+                      Get tickets online here ↗
+                    </a>
+                  ) : (
+                    <p className="text-[calc(13px*var(--fs))] text-gray-500 mt-1">Tickets available at the gate.</p>
+                  )}
+                </div>
+              ) : activity.freeToVisit ? (
+                <p className="text-[calc(18px*var(--fs))] font-bold text-green-700">Free to visit</p>
+              ) : (activity.website || activity.websiteUri) ? (
+                <a href={activity.website || activity.websiteUri} target="_blank" rel="noopener noreferrer"
+                  className="text-[calc(14px*var(--fs))] font-semibold text-purple-700 underline underline-offset-2">
+                  See prices &amp; tickets on the official site ↗
+                </a>
+              ) : (
+                <p className="text-[calc(13px*var(--fs))] text-gray-500">Contact the venue for ticket prices.</p>
+              )}
             </div>
 
             {(loadingDetails || llmTips.length > 0 || activity.tip) && (
@@ -864,6 +836,9 @@ export default function ActivityDetailPage() {
                     </>
                   )}
                 </ul>
+                <p className="mt-3 text-[calc(11px*var(--fs))] text-blue-500">
+                  Tips written by Globeskimmers AI — verify details locally.
+                </p>
               </div>
             )}
           </div>
