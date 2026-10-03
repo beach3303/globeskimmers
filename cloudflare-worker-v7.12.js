@@ -1035,8 +1035,28 @@ async function handleAdminUserStats(request, env) {
       signupsByDay = Object.entries(m).map(([day, count]) => ({ day, count })).sort((a, b) => a.day.localeCompare(b.day));
     }
 
+    // Age mix — from the social age gate (social_profiles.birth_year). Only
+    // users who have passed the gate appear; ageKnown says how many that is.
+    let ageMix = [], ageKnown = 0;
+    try {
+      const sp = await gbRest(env, 'social_profiles?select=birth_year', {});
+      const rows = sp.ok ? await sp.json() : [];
+      const yearNow = new Date().getFullYear();
+      const buckets = [['13-17', 13, 17], ['18-24', 18, 24], ['25-34', 25, 34], ['35-44', 35, 44], ['45-54', 45, 54], ['55-64', 55, 64], ['65+', 65, 200]];
+      const counts = {};
+      for (const r of (Array.isArray(rows) ? rows : [])) {
+        const y = Number(r?.birth_year);
+        if (!(y >= 1900 && y <= yearNow)) continue;
+        const a = yearNow - y; ageKnown++;
+        const bk = buckets.find(([, lo, hi]) => a >= lo && a <= hi);
+        if (bk) counts[bk[0]] = (counts[bk[0]] || 0) + 1;
+      }
+      ageMix = buckets.map(([label]) => ({ label, count: counts[label] || 0 })).filter((x) => x.count > 0);
+    } catch { /* best-effort */ }
+
     return jsonResponse({
       totalUsers: list.length,
+      ageMix, ageKnown,
       onboardingCompleted: list.filter((r) => r?.onboarding_completed === true).length,
       byCountry: tally('home_country').slice(0, 15),
       byLanguage: tally('preferred_language').slice(0, 15),
@@ -14557,7 +14577,28 @@ async function handleSocialBlock(request, env, ctx) {
 // POST /social/handle {} reads mine; { handle } claims/changes it.
 // ^[a-z0-9_]{3,20}$, unique (case-insensitive), 2 changes per 30 days, the old
 // handle is released by the overwrite. Worker-side so moderation has one door.
-const HANDLE_RESERVED = new Set(['admin', 'administrator', 'globeskimmers', 'globeskimmer', 'support', 'help', 'official', 'staff', 'mod', 'moderator', 'root', 'system', 'passport', 'maiza', 'founder', 'api', 'null', 'undefined', 'me', 'you', 'user', 'test']);
+const HANDLE_RESERVED = new Set(['admin', 'administrator', 'globeskimmers', 'globeskimmer', 'support', 'help', 'official', 'staff', 'mod', 'moderator', 'root', 'system', 'passport', 'founder', 'api', 'null', 'undefined', 'me', 'you', 'user', 'test']);
+// Handles HELD for specific people (the founder's family). A held name reads
+// as plain "taken" to everyone EXCEPT the exact signed-in email it is held
+// for — that account claims it normally. Add a sibling as 'handle': 'email'.
+const HANDLE_HELD = {
+  maiza: 'maizasimeon@gmail.com',
+};
+// Up to 3 available alternatives offered whenever a wanted handle is taken or
+// reserved — travel-flavored, same charset rules, checked in one query.
+async function gbHandleSuggestions(env, want) {
+  try {
+    const base = String(want || '').slice(0, 14);
+    const n2 = () => String(10 + Math.floor(Math.random() * 90));
+    const cands = [...new Set([`${base}_`, `${base}${n2()}`, `${base}_${n2()}`, `${base}_travels`, `${base}_abroad`])]
+      .map((h) => h.slice(0, 20))
+      .filter((h) => /^[a-z0-9_]{3,20}$/.test(h) && !HANDLE_RESERVED.has(h) && !HANDLE_HELD[h] && !/^gs_/.test(h));
+    if (!cands.length) return [];
+    const q = await gbRest(env, `passport_shares?handle=in.(${cands.map((h) => encodeURIComponent(h)).join(',')})&select=handle`, {});
+    const taken = new Set((q.ok ? await q.json() : []).map((r) => String(r.handle || '').toLowerCase()));
+    return cands.filter((h) => !taken.has(h)).slice(0, 3);
+  } catch { return []; }
+}
 async function handleSocialHandle(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -14571,7 +14612,13 @@ async function handleSocialHandle(request, env, ctx) {
     const sp = await gbSocialProfile(env, user.id);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Usernames aren\'t available on this account' }, 403);
-    if (HANDLE_RESERVED.has(want) || /^gs_/.test(want)) return jsonResponse({ error: 'That name is reserved' }, 400);
+    const heldFor = HANDLE_HELD[want];
+    if (heldFor && String(user.email || '').toLowerCase() !== heldFor) {
+      return jsonResponse({ error: 'That username is taken', suggestions: await gbHandleSuggestions(env, want) }, 409);
+    }
+    if (!heldFor && (HANDLE_RESERVED.has(want) || /^gs_/.test(want))) {
+      return jsonResponse({ error: 'That name is reserved', suggestions: await gbHandleSuggestions(env, want) }, 400);
+    }
     if (mine?.handle && mine.handle.toLowerCase() === want) return jsonResponse({ handle: mine.handle });
     // 2 changes per rolling 30 days (the first claim is free).
     if (mine?.handle) {
@@ -14582,12 +14629,15 @@ async function handleSocialHandle(request, env, ctx) {
     }
     const taken = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(want)}&select=user_id&limit=1`, {});
     const owner = (taken.ok ? await taken.json() : [])[0];
-    if (owner && owner.user_id !== user.id) return jsonResponse({ error: 'That username is taken' }, 409);
+    if (owner && owner.user_id !== user.id) return jsonResponse({ error: 'That username is taken', suggestions: await gbHandleSuggestions(env, want) }, 409);
     const patch = { handle: want, handle_changed_at: new Date().toISOString(), handle_changes: typeof changes === 'number' ? changes : 0, updated_at: new Date().toISOString() };
     let w;
     if (mine) w = await gbRest(env, `passport_shares?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
     else w = await gbRest(env, 'passport_shares', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, slug: crypto.randomUUID().replace(/-/g, '').slice(0, 12), is_public: false, ...patch }) });
-    if (!w.ok) return jsonResponse({ error: w.status === 409 ? 'That username is taken' : 'Could not save the username' }, w.status === 409 ? 409 : 502);
+    if (!w.ok) {
+      if (w.status === 409) return jsonResponse({ error: 'That username is taken', suggestions: await gbHandleSuggestions(env, want) }, 409);
+      return jsonResponse({ error: 'Could not save the username' }, 502);
+    }
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_handle_set', {}));
     return jsonResponse({ handle: want });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }

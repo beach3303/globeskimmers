@@ -362,6 +362,11 @@ export default function AdminAnalytics() {
                       <BarRow key={c.label} label={c.label} count={c.count} max={userStats.byCountry[0]?.count || 1} color={COLORS.green} />
                     ))}
                   </Section>
+                  <Section title={`Age mix${userStats.ageKnown ? ` (${userStats.ageKnown} through the age gate)` : ''}`} icon={Users} empty={(userStats.ageMix?.length ?? 0) === 0 ? 'No one through the age gate yet' : null}>
+                    {(userStats.ageMix || []).map(a => (
+                      <BarRow key={a.label} label={a.label} count={a.count} max={Math.max(...(userStats.ageMix || []).map(x => x.count), 1)} color={COLORS.accent} />
+                    ))}
+                  </Section>
                   <Section title="Preferred languages" icon={Users} empty={(userStats.byLanguage?.length ?? 0) === 0 ? 'No data' : null}>
                     {(userStats.byLanguage || []).map(l => (
                       <BarRow key={l.label} label={l.label} count={l.count} max={userStats.byLanguage[0]?.count || 1} color={COLORS.accent} />

@@ -6,7 +6,7 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, listCitySets, blotterRead } from "@/lib/passport";
+import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
@@ -642,6 +642,42 @@ function PassportInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, readOnly, preview, isAuthenticated]);
 
+  // The birthday ask (founder 2026-10-02): a warm, dismissible card — never a
+  // wall. Appears once the passport holds 2+ stamps, snoozes 45 days on
+  // "Later", and disappears for good once saved. MM-DD earns the yearly
+  // birthday stamp; the year (asked only if the age gate is unset) feeds the
+  // gate — demographics + teen rails — and never shows anywhere.
+  const [bdayAsk, setBdayAsk] = useState(false);
+  const [bdayYearNeeded, setBdayYearNeeded] = useState(false);
+  const [bdayM, setBdayM] = useState(""); const [bdayD, setBdayD] = useState(""); const [bdayY, setBdayY] = useState("");
+  const [bdayBusy, setBdayBusy] = useState(false);
+  useEffect(() => {
+    if (readOnly || preview || !isAuthenticated || loading || stamps.length < 2) return;
+    try { const t = Number(localStorage.getItem("pp_bday_ask_snooze") || 0); if (Date.now() - t < 45 * 864e5) return; } catch { /* fine */ }
+    let gone = false;
+    (async () => {
+      const { set, birth_md, error } = await getAgeInfo();
+      if (gone || error) return;
+      if (!birth_md || !set) { setBdayYearNeeded(!set); setBdayAsk(true); }
+    })();
+    return () => { gone = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, readOnly, preview, isAuthenticated]);
+  const saveBdayAsk = async () => {
+    if (!bdayM || !bdayD || (bdayYearNeeded && bdayY.length !== 4)) return;
+    setBdayBusy(true);
+    if (bdayYearNeeded) {
+      const { error: yErr } = await setAgeGate(Number(bdayY));
+      if (yErr && yErr !== "age_required") { setBdayBusy(false); showToast(yErr, "error"); return; }
+    }
+    const { error } = await setBirthday(`${bdayM}-${bdayD}`);
+    setBdayBusy(false);
+    if (error) { showToast(error, "error"); return; }
+    setBdayAsk(false);
+    showToast("🎂 Saved — your birthday stamp arrives on the day", "success");
+  };
+  const snoozeBdayAsk = () => { try { localStorage.setItem("pp_bday_ask_snooze", String(Date.now())); } catch { /* fine */ } setBdayAsk(false); };
+
   // Two-question claim (2026-09-29): 1) were you there together? 2) add the
   // stamp? Presence feeds combined albums and "with @x"; the stamp is separate.
   const [claimPresence, setClaimPresence] = useState(null); // null → question 1
@@ -763,6 +799,30 @@ function PassportInner() {
               ✈️ You&rsquo;ll get an arrival stamp when you land at an airport in a new country, and you can stamp iconic attractions you visit — you always tap to confirm, we never stamp automatically. Your passport is <b>private</b> (only you can see it) unless you choose to share a link. You can turn suggestions off anytime in Settings.
             </p>
             <button onClick={() => { try { localStorage.setItem("pp_arrival_explained", "1"); } catch { /* ignore */ } setExplainArrivals(false); }} className="mt-2 rounded-lg px-3 py-1.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12) }}>Got it</button>
+          </div>
+        )}
+        {!readOnly && !preview && bdayAsk && (
+          <div className="mb-4 rounded-[16px] p-3.5" style={{ background: "#FFFBF0", border: "1px solid #EAD9AE" }}>
+            <p style={{ color: INK, fontSize: fs(14), fontWeight: 700 }}>🎂 When&rsquo;s your birthday?</p>
+            <p style={{ color: INK2, fontSize: fs(12.5), lineHeight: 1.45, marginTop: 2 }}>
+              A birthday stamp lands in your passport every year. Only the month and day ever show{bdayYearNeeded ? " — the year stays private and keeps GlobeSkimmers age-appropriate" : ""}.
+            </p>
+            <div className="flex gap-2 mt-2.5 items-center flex-wrap">
+              <select value={bdayM} onChange={(e) => setBdayM(e.target.value)} aria-label="Birthday month" className="h-11 rounded-xl px-2" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }}>
+                <option value="">Month</option>
+                {["01","02","03","04","05","06","07","08","09","10","11","12"].map((m, i) => <option key={m} value={m}>{["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][i]}</option>)}
+              </select>
+              <select value={bdayD} onChange={(e) => setBdayD(e.target.value)} aria-label="Birthday day" className="h-11 rounded-xl px-2" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }}>
+                <option value="">Day</option>
+                {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0")).map((d) => <option key={d} value={d}>{Number(d)}</option>)}
+              </select>
+              {bdayYearNeeded && (
+                <input value={bdayY} onChange={(e) => setBdayY(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))} placeholder="Year" inputMode="numeric" aria-label="Year you were born"
+                  className="w-20 h-11 rounded-xl px-3 outline-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }} />
+              )}
+              <button onClick={saveBdayAsk} disabled={bdayBusy || !bdayM || !bdayD || (bdayYearNeeded && bdayY.length !== 4)} className="h-11 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: STAMP, color: "#fff", fontSize: fs(13) }}>{bdayBusy ? "Saving…" : "Save"}</button>
+              <button onClick={snoozeBdayAsk} style={{ color: INK3, fontSize: fs(12) }}>Later</button>
+            </div>
           </div>
         )}
         {stampsView.length > 0 && (

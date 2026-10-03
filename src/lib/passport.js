@@ -168,7 +168,7 @@ export async function reportShared({ slug, kind, ref, reason, note }) {
 }
 export async function setHandle(handle) {
   const { data, error } = await callWorker('social/handle', { handle });
-  return { handle: data?.handle || null, error: error || data?.error || null };
+  return { handle: data?.handle || null, suggestions: data?.suggestions || [], error: error || data?.error || null };
 }
 // My incoming pending tags (the passive "Tagged you" inbox — email path).
 export async function listTags() {

@@ -400,11 +400,18 @@ export default function VirtualLuggage({ stamps, onClose }) {
           </div>
         </div>
 
-        {/* The stage — luggage background + sticker layer, pseudo-3D turn */}
-        <div className="mx-auto mt-4" style={{ width: faceW, perspective: 1200 }}>
+        {/* The stage — luggage background + sticker layer, pseudo-3D turn.
+            The gesture handlers live on this WRAPPER, not the image box: short
+            faces (and the pre-load fallback strip) left most of the area below
+            the trunk swipe-dead, so turning from the lower half did nothing.
+            minHeight guarantees a full-height capture zone on every face. */}
+        <div
+          className="mx-auto mt-4"
+          onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
+          style={{ width: faceW, perspective: 1200, touchAction: "none", minHeight: Math.round(faceW * 0.92), display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
           <div
             ref={stageRef}
-            onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
             onClick={() => setSelected(null)}
             style={{
               position: "relative", width: faceW, height: faceH, touchAction: "none",

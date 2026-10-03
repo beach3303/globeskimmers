@@ -430,6 +430,8 @@ export default function SettingsPage() {
   // after the first write; under-13 and AU-under-16 accounts get no social).
   const [needYear, setNeedYear] = useState(false);
   const [yearDraft, setYearDraft] = useState("");
+  // Available alternatives the worker offers when a wanted name is taken.
+  const [handleSugs, setHandleSugs] = useState([]);
   const saveHandle = async () => {
     const want = handleDraft.trim().toLowerCase();
     if (!want || want === handle) return;
@@ -440,8 +442,9 @@ export default function SettingsPage() {
       if (ageErr && ageErr !== "age_required") { setHandleBusy(false); showToast(ageErr, "error"); return; }
       setNeedYear(false);
     }
-    const { handle: h, error } = await setHandle(want);
+    const { handle: h, suggestions, error } = await setHandle(want);
     setHandleBusy(false);
+    setHandleSugs(error ? (suggestions || []) : []);
     if (error === "age_required") {
       // Prefer the OS's Declared Age Range when the native build carries the
       // plugin — no question asked, and the OS assertion is the stricter one.
@@ -825,7 +828,7 @@ export default function SettingsPage() {
               last={false}
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={AtSign} iconBg={CAT.culture.ink} title="Username" desc="Your @name for tagging and, soon, followers. Letters, numbers and underscore; you can change it twice a month."
-              control={{ below: true, node: (
+              control={{ below: true, node: ( <>
                 <div className="flex gap-2 items-center">
                   <div className="flex-1 flex items-center rounded-xl px-3 h-12" style={{ border: `1px solid ${ED_RULE}`, background: '#fff' }}>
                     <span style={{ color: ED_INK3, fontWeight: 700 }}>@</span>
@@ -843,7 +846,16 @@ export default function SettingsPage() {
                     {handleBusy ? 'Saving…' : handle ? 'Change' : 'Claim'}
                   </button>
                 </div>
-              ) }}
+                {handleSugs.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2 items-center">
+                    <span style={{ color: ED_INK3, fontSize: 12 }}>Still available:</span>
+                    {handleSugs.map((sug) => (
+                      <button key={sug} type="button" onClick={() => { setHandleDraft(sug); setHandleSugs([]); }}
+                        className="rounded-full px-3 py-1.5" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 13, fontWeight: 600, color: ED_INK }}>@{sug}</button>
+                    ))}
+                  </div>
+                )}
+              </> ) }}
               last={false}
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={Check} iconBg={CAT.todo.ink} title="My birthday" desc="Month and day only — it earns your birthday stamp every year. Your birth year stays private behind the age gate."
