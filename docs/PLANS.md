@@ -161,6 +161,27 @@ teens = accepted followers only. Same slim blotter under packet photos. Profile 
 same day (4c587c3): trunk banner on TOP, traveler chips gone, About me + My website,
 free-form unlimited favorites (founder removes their two via ✕), dreams → ON THE HORIZON.
 
+THE QUEUE — founder-agreed 2026-10-03 (build order; strike as shipped):
+  [x] Finder photos phase 1 (match within 250 m, self-healing proxy, locked widths/names,
+      owned-only enrich, restroom photos on load, lazy carousel) — live + verified
+  [ ] Airport trip notes: "what was this trip for?" on airport stamps — private by default,
+      shareable later (founder 2026-10-03)
+  [ ] Top 3 dishes, counted honestly: AI names the dishes, CODE counts mentions in the
+      reviews we have ("in 4 of 5 recent reviews"); our own travelers' dish posts add
+      "ordered by N travelers" (the founder's "mentioned 50 times" grows from our data)
+  [ ] Option C phase 2: traveler photos on places (proof-gated: GPS or photo location),
+      opt-in from stamp/postcard/guestbook photos, "Add your dish" on restaurants; cards
+      prefer traveler photo > Wikimedia > Google (compliant bridge, credited)
+  [ ] City Board: postcards TO a city, proof-gated, Blotter rails, "Postcards from here"
+  [ ] P2: stampable door from finder cards, Perfect Day door, NAV_CLEARANCE, CLAUDE.md truths
+  [ ] Landing page messaging → North Star positioning ("I was there"; places/moments/memories)
+  [ ] Investor metrics: referral links on share cards (share-generated installs), D7/D30
+  [ ] Events v1 at LA venues — Dodger Stadium first (generic stamps, no team marks)
+  [ ] Living postcards: silent 3–6 s loops, frames moderated (audio can't be moderated)
+  [ ] After launch: the traveler marketing push (founder: "massively advertise")
+  Fundraising sequence (agreed): Apple approval → launch → 2–4 wks metrics + Events v1 →
+  60–90 days → pitch Elysian Park + Courtside; YC in parallel. See NORTH_STAR §6b.
+
 THE LIST — before the Apple resubmission (founder: "build first, then submit"):
   [x] Remove AdMob everywhere (build 10)
   [x] Reviewer account replays onboarding each launch
