@@ -9068,9 +9068,11 @@ function gaKm(la1, lo1, la2, lo2) {
 function gaActivityType(name, types) {
   const n = name.toLowerCase(); const t = types.join(' ');
   if (/museum|gallery|exhibit/.test(n) || /museum/.test(t))             return { icon:'🏛️', label:'Museum / Gallery', color:'#7C3AED', category:'culture' };
+  // Theme parks before nature: Google types them amusement_park / water_park, and the
+  // nature test below matches any type containing "park" (Universal was "Nature & Outdoors").
+  if (/theme park|amusement|water park/.test(n) || /amusement_park|water_park/.test(t)) return { icon:'🎢', label:'Theme Park', color:'#DC2626', category:'entertainment' };
   if (/park|garden|nature|reserve|trail|forest|canyon|cave|waterfall|lake|river|volcano|lighthouse|campground|ruins/.test(n) || /park|natural_feature/.test(t)) return { icon:'🌳', label:'Nature & Outdoors', color:'#059669', category:'outdoor' };
   if (/beach|surf|reef|snorkel|dive|coast/.test(n) || /beach/.test(t))  return { icon:'🏖️', label:'Beach & Water', color:'#0891B2', category:'outdoor' };
-  if (/theme park|amusement|water park/.test(n))                        return { icon:'🎢', label:'Theme Park', color:'#DC2626', category:'entertainment' };
   if (/zoo|aquarium|wildlife/.test(n) || /zoo/.test(t))                 return { icon:'🦁', label:'Zoo / Aquarium', color:'#D97706', category:'family' };
   if (/spa|hot spring|onsen|hammam|bath/.test(n))                       return { icon:'♨️', label:'Spa & Wellness', color:'#DB2777', category:'wellness' };
   if (/bar|club|nightlife|brewery|winery|distillery/.test(n))           return { icon:'🍻', label:'Nightlife', color:'#1D4ED8', category:'nightlife' };
