@@ -13802,6 +13802,161 @@ async function handlePassportPhotoCaption(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// ── "Add your dish" (founder, 2026-10-03) ─────────────────────────────────────
+// A traveler's photo of what they ordered, posted only with proof they were
+// there — device GPS within DISH_PROOF_M of the place, or the photo's own
+// location tag within it — and only after the photo review passes AND food or a
+// drink is the main subject. Posts are anonymous; "ordered by N travelers"
+// counts them (one per traveler per dish per place).
+const DISH_PROOF_M = 150;
+const DISH_DAILY_CAP = 12;
+const dishKey = (v) => String(v || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+// Canonical place id: an owned uuid becomes its Google id once one is known,
+// so the same restaurant collects one set of dishes. Reads check both.
+async function dishPlaceIds(env, raw) {
+  const id = String(raw || '').trim();
+  if (!/^[A-Za-z0-9_-]{8,200}$/.test(id)) return null;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id) && env.GLOBESKIMMERS_KV) {
+    const gid = await env.GLOBESKIMMERS_KV.get(`owned2gid:${id}`).catch(() => null);
+    if (gid && gid !== 'none' && /^[A-Za-z0-9_-]{8,200}$/.test(gid)) return { canon: gid, all: [gid, id] };
+  }
+  return { canon: id, all: [id] };
+}
+function dishSummary(rows) {
+  const by = new Map();
+  for (const r of rows) {
+    const g = by.get(r.dish_key) || { dish: r.dish, travelers: new Set(), photos: [], last: r.created_at };
+    g.travelers.add(r.user_id);
+    if (g.photos.length < 6) g.photos.push({ id: r.id, url: r.photo_url });
+    by.set(r.dish_key, g);
+  }
+  return [...by.values()]
+    .map((g) => ({ dish: g.dish, travelers: g.travelers.size, photos: g.photos, last: g.last }))
+    .sort((a, b) => b.travelers - a.travelers || String(b.last).localeCompare(String(a.last)));
+}
+
+// POST /places/dishes { place_id } → { dishes: [{ dish, travelers, photos }], mine: [{ id, dish }] }
+async function handlePlaceDishes(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const ids = await dishPlaceIds(env, b.place_id);
+    if (!ids) return jsonResponse({ dishes: [], mine: [] });
+    const inList = ids.all.map((x) => `"${x}"`).join(',');
+    const q = await gbRest(env, `place_dishes?place_id=in.(${inList})&mod_status=eq.ok&order=created_at.desc&limit=200&select=id,user_id,dish,dish_key,photo_url,created_at`, {});
+    const rows = q.ok ? await q.json() : [];
+    const user = await gbUser(request, env).catch(() => null);
+    const mine = user ? rows.filter((r) => r.user_id === user.id).map((r) => ({ id: r.id, dish: r.dish, url: r.photo_url })) : [];
+    return jsonResponse({ dishes: dishSummary(rows), mine });
+  } catch (e) { return jsonResponse({ error: e.message, dishes: [], mine: [] }, 500); }
+}
+
+// POST /places/dishes/add { place_id, place_name, place_lat, place_lng, kind, dish, image, lat, lng, acc, exif }
+async function handlePlaceDishAdd(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to share your dish' }, 401);
+    if (!env.MEDIA) return jsonResponse({ error: 'Photo storage not configured' }, 500);
+    const b = await request.json().catch(() => ({}));
+    const ids = await dishPlaceIds(env, b.place_id);
+    if (!ids) return jsonResponse({ error: 'Unknown place' }, 400);
+    const kind = b.kind === 'coffee' ? 'coffee' : 'restaurant';
+    const dish = String(b.dish || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const key = dishKey(dish);
+    if (key.length < 2) return jsonResponse({ error: kind === 'coffee' ? 'What did you order?' : 'What dish is this?' }, 400);
+
+    const sp = await gbSocialProfile(env, user.id).catch(() => null);
+    if (sp?.social_tier === 'blocked') return jsonResponse({ error: 'Sharing isn\'t available on this account' }, 403);
+
+    // Where the place is: Google's location from the details cache when we have
+    // it, otherwise the coordinates the finder listed it at.
+    let pLat = Number(b.place_lat), pLng = Number(b.place_lng);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(ids.canon)) {
+      const cached = await getFromCache(env, `details_${ids.canon}`).catch(() => null);
+      const d = cached?.data;
+      if (d && Number.isFinite(+d.latitude) && Number.isFinite(+d.longitude)) { pLat = +d.latitude; pLng = +d.longitude; }
+    }
+    if (!Number.isFinite(pLat) || !Number.isFinite(pLng) || (pLat === 0 && pLng === 0)) return jsonResponse({ error: 'We couldn\'t place this restaurant on the map' }, 400);
+    const metersTo = (lat, lng) => (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) ? haversineMilesLoc(pLat, pLng, lat, lng) * 1609.34 : Infinity;
+    const acc = Number(b.acc);
+    const gpsOk = (!Number.isFinite(acc) || acc <= 100) && metersTo(Number(b.lat), Number(b.lng)) <= DISH_PROOF_M;
+    const exif = b.exif && typeof b.exif === 'object' ? b.exif : null;
+    const exifOk = !!exif && metersTo(Number(exif.lat), Number(exif.lng)) <= DISH_PROOF_M;
+    const proof = gpsOk ? 'gps' : exifOk ? 'photo_loc' : null;
+    if (!proof) return jsonResponse({ error: 'proof_needed', message: 'Share your dish while you\'re here, or pick a photo that has its location on.' }, 409);
+
+    if (env.GLOBESKIMMERS_KV) {
+      const ck = `dish:cap:${user.id}:${new Date().toISOString().slice(0, 10)}`;
+      const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
+      if (n >= DISH_DAILY_CAP) return jsonResponse({ error: 'That\'s a lot of dishes for one day — try again tomorrow' }, 429);
+      await env.GLOBESKIMMERS_KV.put(ck, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
+    }
+
+    let data = String(b.image || '');
+    const m = data.match(/^data:image\/(?:jpeg|jpg);base64,(.*)$/i);
+    if (m) data = m[1];
+    data = data.replace(/\s/g, '');
+    let bytes;
+    try { bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0)); } catch { return jsonResponse({ error: 'Bad image data' }, 400); }
+    if (bytes.length < 500 || bytes.length > 4 * 1024 * 1024 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return jsonResponse({ error: 'Please pick a photo (JPEG, under 4 MB)' }, 400);
+
+    if (!(await gbModerate(env, dish)).allow) return jsonResponse({ error: 'Let’s keep dish names kind' }, 422);
+    const v = await gbModeratePhoto(env, data, 'image/jpeg');
+    if (!v?.allow) return jsonResponse({ error: 'This photo can’t be shared here' }, 422);
+    if (!v.food) return jsonResponse({ error: kind === 'coffee' ? 'Make the drink or treat the star of the photo' : 'Make the dish the star of the photo — get close to the plate' }, 422);
+
+    const photoKey = `dish/${user.id}/${crypto.randomUUID()}.jpg`;
+    await env.MEDIA.put(photoKey, bytes, { httpMetadata: { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' } });
+    const photoUrl = `${new URL(request.url).origin}/dish-photo/${photoKey}`;
+
+    // One post per traveler per dish per place: a new photo replaces the old one.
+    const oq = await gbRest(env, `place_dishes?user_id=eq.${user.id}&place_id=eq.${encodeURIComponent(ids.canon)}&dish_key=eq.${encodeURIComponent(key)}&select=id,photo_key`, {});
+    const old = (oq.ok ? await oq.json() : [])[0];
+    const row = { user_id: user.id, place_id: ids.canon, place_name: String(b.place_name || '').slice(0, 120) || null, kind, dish, dish_key: key, photo_key: photoKey, photo_url: photoUrl, proof, mod_status: 'ok', created_at: new Date().toISOString() };
+    const w = old
+      ? await gbRest(env, `place_dishes?id=eq.${old.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) })
+      : await gbRest(env, 'place_dishes', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
+    if (!w.ok) { await env.MEDIA.delete(photoKey).catch(() => {}); return jsonResponse({ error: 'Could not save — try again' }, 502); }
+    if (old?.photo_key && ctx) ctx.waitUntil(env.MEDIA.delete(old.photo_key).catch(() => {}));
+    const saved = (await w.json())[0] || {};
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'dish_post', { kind, proof, replaced: !!old }));
+    return jsonResponse({ ok: true, id: saved.id, dish, url: photoUrl, proof, replaced: !!old });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /places/dishes/delete { id } — remove your own dish post.
+async function handlePlaceDishDelete(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.id || '');
+    if (!BL_UUID.test(id)) return jsonResponse({ error: 'Not found' }, 404);
+    const q = await gbRest(env, `place_dishes?id=eq.${id}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=representation' } });
+    const rows = q.ok ? await q.json() : [];
+    if (!rows.length) return jsonResponse({ error: 'Not found' }, 404);
+    if (rows[0].photo_key && env.MEDIA) await env.MEDIA.delete(rows[0].photo_key).catch(() => {});
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// Serve a dish photo (public: these passed review before they were stored).
+async function handleDishPhotoServe(request, env) {
+  try {
+    if (!env.MEDIA) return new Response('Not found', { status: 404 });
+    const key = decodeURIComponent(new URL(request.url).pathname.replace(/^\/dish-photo\//, ''));
+    if (!/^dish\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/i.test(key)) return new Response('Bad key', { status: 400 });
+    const obj = await env.MEDIA.get(key);
+    if (!obj) return new Response('Not found', { status: 404 });
+    const headers = new Headers();
+    headers.set('Content-Type', 'image/jpeg');
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    headers.set('Access-Control-Allow-Origin', '*');
+    headers.set('X-Content-Type-Options', 'nosniff');
+    if (obj.httpEtag) headers.set('ETag', obj.httpEtag);
+    return new Response(obj.body, { headers });
+  } catch { return new Response('Error', { status: 500 }); }
+}
+
 // Serve a stamp photo from R2 (unguessable key). Private-by-obscurity.
 async function handlePassportPhotoServe(request, env) {
   try {
@@ -20033,6 +20188,10 @@ export default {
 
       // Passport (personal, private)
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
+      if (pathname.startsWith('/dish-photo/') && request.method === 'GET') return await handleDishPhotoServe(request, env);
+      if (pathname === '/places/dishes' && request.method === 'POST') return await handlePlaceDishes(request, env);
+      if (pathname === '/places/dishes/add' && request.method === 'POST') return await handlePlaceDishAdd(request, env, ctx);
+      if (pathname === '/places/dishes/delete' && request.method === 'POST') return await handlePlaceDishDelete(request, env);
       if (pathname.startsWith('/pc-photo/') && request.method === 'GET') return await handlePostcardPhotoServe(request, env);
       if (pathname.startsWith('/av-photo/') && request.method === 'GET') return await handleAvatarServe(request, env);
       if (pathname.startsWith('/bl-doodle/') && request.method === 'GET') return await handleBlotterDoodleServe(request, env);
