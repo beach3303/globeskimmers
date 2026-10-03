@@ -1169,3 +1169,29 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   "Build your vacation", "Search food, hotels".
 - NOT tested end-to-end with a signed-in account: posting a held note, admin approve, an
   "I was here" stamp at a real place. First real test: founder on a phone after the OTA.
+
+## 2026-10-03 (late) — Review fixes, the shared ChatGPT plan, landing page
+- Three reviews (app, worker security, completeness) → fixed and deployed:
+  CRITICAL guestbook list PostgREST injection (crafted entity_id dropped the hidden/held
+  filters) — ids now strict + URL-encoded; verified live (exploit → 400). Every GPS
+  attraction stamp needs its fix, measured against our/Google's coordinates; places:/owned:
+  ids (all non-iconic "I was here" stamps were rejected before the fix); variant slugs via
+  parent_id; gid2d1v2 written only from server data + stampable rows; guestbook age gate
+  (428), adult-only city, edit cap + blocked check, kept-private stays private, report
+  retry, founder email caps, no author ids in public lists; older builds' Viator/flight/
+  package routes answer "nothing to show".
+- App: pinned card opens once and survives list errors; GPS-only "You're here"; mi/km;
+  owned places get prices; "See this place" on passport stamps; Doodle on every guestbook.
+- Shared plan (ChatGPT, "if you were there, you can stamp it"): memory note on every stamp,
+  "Who can see this stamp: Only me / My passport" (/passport/stamp/visibility), sensitive
+  places (hospital, clinic, school, worship…) start private (Google types first, name as
+  fallback), "How stamps work", restaurants/cafés stamp "I was here" while GPS is inside,
+  warm invite text.
+- Site: founder's 4 screenshots in the phone frames; "If you were there, you can stamp it"
+  with 4 typographic stamps rendered by TypographicStamp; booking copy removed; privacy
+  policy: stamps & location, sensitive places, "No Bookings or Affiliate Links". Live.
+- Stamp layouts: Justified/Banner/Oval no longer take 3-word names (collisions in Chrome).
+- Founder: `git pull && npm run cap:sync && npm run ota`; then test on a phone: an "I was
+  here" stamp at a café, a held guestbook note + Admin Portal → Guestbook review, Only me /
+  My passport on a stamp. Retire one of the duplicate D1 Universal rows (icon:Q639090 vs
+  icon:Q1337576).
