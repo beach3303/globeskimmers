@@ -7313,7 +7313,7 @@ async function handleAttractionVisitInfo(request, env, ctx) {
         fetched: ev.pages.size, raw_prices: Array.isArray(raw?.admission?.prices) ? raw.admission.prices.length : null,
         in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, stop: ask.stop || null, error: ask.error ? ask.error.slice(0, 200) : null,
       }).catch(() => {});
-      const _diag = { fetched: ev.pages.size, seen: ev.seen.size, raw_prices: Array.isArray(raw?.admission?.prices) ? raw.admission.prices.length : null, raw_parking: Array.isArray(raw?.parking?.options) ? raw.parking.options.length : null, in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, stop: ask.stop || null };
+      const _diag = { fetched: ev.pages.size, seen: ev.seen.size, raw_prices: Array.isArray(raw?.admission?.prices) ? raw.admission.prices.length : null, raw_parking: Array.isArray(raw?.parking?.options) ? raw.parking.options.length : null, in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, stop: ask.stop || null, pages: [...ev.pages.keys()].slice(0, 6), text: finalText.slice(0, 1500), kinds: ask.blocks.map((x) => x?.type).slice(0, 30), fetch0: JSON.stringify(ask.blocks.find((x) => x?.type === 'web_fetch_tool_result') || null).slice(0, 600) };
       return ask.error ? { ok: false, error: 'lookup_failed', detail: ask.error.slice(0, 200), official_site: info.official_site, _diag } : { ...out, _diag };
     })();
     if (ctx) ctx.waitUntil(work.catch(() => {}));
