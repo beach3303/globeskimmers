@@ -111,6 +111,13 @@ export default function AdminAnalytics() {
   const [sealTierDraft, setSealTierDraft] = useState('burgundy');
   const [brandOpen, setBrandOpen] = useState(null);   // brand handle with controls expanded
   const [requests, setRequests] = useState({ rows: [], error: null });
+  // Guestbook review: notes held as negative, and notes hidden by 3 reports.
+  const [gbDesk, setGbDesk] = useState({ held: [], reported: [], error: null, busy: null });
+  const gbCall = async (body) => {
+    setGbDesk((d) => ({ ...d, busy: body.id || 'list' }));
+    const { data, error } = await callWorker('admin/guestbook', body);
+    setGbDesk((d) => ({ held: data?.held || d.held, reported: data?.reported || d.reported, error: error || data?.error || null, busy: null }));
+  };
   const reqCall = async (body) => {
     const { data, error } = await callWorker('admin/handle-requests', body || {});
     setRequests({ rows: data?.rows || [], error: error || data?.error || null });
@@ -205,7 +212,7 @@ export default function AdminAnalytics() {
         const { data: us, error: ue } = await callWorker('admin-user-stats', {});
         setUserStats(ue ? null : us);
       } catch { setUserStats(null); }
-      await loadInbox(); loadReports(); heldCall({ op: 'list' }); sealCall({ op: 'list' }); reqCall({ op: 'list' });
+      await loadInbox(); loadReports(); heldCall({ op: 'list' }); sealCall({ op: 'list' }); reqCall({ op: 'list' }); gbCall({ op: 'list' });
       setGeneratedAt(new Date().toISOString());
     } catch (e) {
       setError(e?.message || 'Failed to load analytics');
@@ -587,6 +594,29 @@ export default function AdminAnalytics() {
                   <button type="button" onClick={() => removeHeld(r.handle)} style={{ padding: '7px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.red, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Release</button>
                 </div>
               ) : null; })()}
+            </Section>
+
+            <Section title={`📝 Guestbook review — ${gbDesk.held.length + gbDesk.reported.length} waiting`} icon={Mail}
+              empty={gbDesk.held.length + gbDesk.reported.length === 0 && !gbDesk.error ? 'Nothing waiting. Kind notes post on their own; notes that read as negative, and notes hidden after 3 reports, land here.' : null}>
+              {gbDesk.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{gbDesk.error}</div>}
+              {[...gbDesk.held.map((r) => ({ ...r, _why: `Held: ${r.review_reason || 'reads as negative'}` })),
+                ...gbDesk.reported.map((r) => ({ ...r, _why: `Hidden after ${r.flag_count} reports${r.report_reasons?.length ? ` — ${r.report_reasons.join(' · ')}` : ''}` }))].map((r) => (
+                <div key={r.id} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border}` }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
+                    <span style={{ fontWeight: 700, color: COLORS.dark }}>{r.entity_name || r.entity_id}</span>
+                    <span style={{ color: COLORS.gray }}>{r.display_name}{r.home_city ? ` · ${r.home_city}` : ''}</span>
+                    <span style={{ color: COLORS.gray, marginLeft: 'auto' }}>{String(r.edited_at || r.created_at || '').slice(0, 16).replace('T', ' ')}{r.edited_at ? ' · edited' : ''}</span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: COLORS.amber, fontWeight: 600, marginTop: 3 }}>{r._why}</div>
+                  {r.body && <div style={{ fontSize: 13, color: COLORS.dark, whiteSpace: 'pre-wrap', marginTop: 4 }}>{r.body}</div>}
+                  {r.is_doodle && r.photo_url && <img src={r.photo_url} alt="Doodle" style={{ marginTop: 6, maxWidth: 160, borderRadius: 8, border: `1px solid ${COLORS.border}` }} />}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                    <button type="button" disabled={gbDesk.busy === r.id} onClick={() => gbCall({ op: 'approve', id: r.id })} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: COLORS.green, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Publish</button>
+                    <button type="button" disabled={gbDesk.busy === r.id} onClick={() => gbCall({ op: 'reject', id: r.id })} style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.gray, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Keep private</button>
+                    <button type="button" disabled={gbDesk.busy === r.id} onClick={() => { if (window.confirm('Delete this note for good?')) gbCall({ op: 'delete', id: r.id }); }} style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.red, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Delete</button>
+                  </div>
+                </div>
+              ))}
             </Section>
 
             <Section title={`📨 Username & Seal requests — ${requests.rows.length} open`} icon={Mail}

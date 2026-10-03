@@ -1,7 +1,9 @@
-// Guestbook — public tips-for-the-next-traveler on any place (generic by entity).
-// Read by anyone; signing requires sign-in. Guided prompts, edit/delete your own,
-// report others (Apple 1.2). Optional ONE crowdsourced photo per note (food / drink /
-// place) — resized client-side, moderated + stored server-side. Warm notes, NOT reviews.
+// Guestbook — kind notes for the next traveler on any place (generic by entity).
+// Read by anyone; signing requires sign-in. Guided prompts (a tip, your favorite
+// part, a shout-out, a memory), edit/delete your own, report others (Apple 1.2).
+// Warm notes, NOT reviews: the worker posts kind notes right away and holds any
+// note that reads as negative for an admin to read first (only its author sees
+// it meanwhile, marked as waiting).
 import { useEffect, useState, useCallback } from "react";
 import { callWorker } from "@/lib/callWorker";
 import { useAuth } from "@/lib/AuthContext";
@@ -9,12 +11,15 @@ import { showToast } from "@/components/Toast";
 import { DoodlePad } from "@/components/passport/Blotter";
 
 const PROMPTS = [
-  { key: "tip", label: "💡 Skimmer Tip", hint: "One thing to know before you go…" },
-  { key: "musttry", label: "⭐ Must-Try", hint: "The one thing to do / order here…" },
-  { key: "shoutout", label: "🙌 Shout-out", hint: "Thank the team or a person…" },
-  { key: "story", label: "✍️ My Story", hint: "A memory from your visit…" },
+  { key: "tip", label: "💡 Tip for visitors", hint: "One thing you wish you'd known before you came…" },
+  { key: "favorite", label: "❤️ Favorite part", hint: "What did you love most about it?" },
+  { key: "musttry", label: "⭐ Don't miss", hint: "The one thing every visitor should see or do…" },
+  { key: "shoutout", label: "🙌 Shout-out", hint: "Thank someone who made your visit special…" },
+  { key: "story", label: "✍️ My memory", hint: "A moment from your visit you'll remember…" },
 ];
-const PROMPT_LABEL = Object.fromEntries(PROMPTS.map((p) => [p.key, p.label]));
+const PROMPT_LABEL = { ...Object.fromEntries(PROMPTS.map((p) => [p.key, p.label])), doodle: "✍️ Doodle" };
+
+const HELD_TOAST = "Thank you! Our team takes a quick look before it posts 💛";
 
 function timeAgo(iso) {
   try {
@@ -48,12 +53,13 @@ function resizePhoto(file, maxDim = 1280, quality = 0.82) {
   });
 }
 
-export default function Guestbook({ entityType = "place", entityId, entityName, onCount }) {
+export default function Guestbook({ entityType = "place", entityId, entityName, onCount, startComposing = false }) {
   const { user, profile, isAuthenticated } = useAuth();
   const [entries, setEntries] = useState([]);
-  useEffect(() => { onCount?.(entries.length); }, [entries.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const publicCount = entries.filter((e) => !e.review_status || e.review_status === "ok").length;
+  useEffect(() => { onCount?.(publicCount); }, [publicCount]); // eslint-disable-line react-hooks/exhaustive-deps
   const [loading, setLoading] = useState(true);
-  const [composing, setComposing] = useState(false);
+  const [composing, setComposing] = useState(startComposing);
   const [prompt, setPrompt] = useState("tip");
   const [body, setBody] = useState("");
   const [showCity, setShowCity] = useState(true);
@@ -88,14 +94,18 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
     if (up.error || !up.data?.key) { setDoodleBusy(false); showToast(up.error || "That drawing couldn't be posted", "error"); return; }
     const { data, error } = await callWorker("guestbook/sign", {
       entity_type: entityType, entity_id: String(entityId), entity_name: entityName,
-      display_name: displayName, home_city: showCity ? homeCity : null,
+      display_name: displayName, home_city: showCity ? homeCity : null, show_city: showCity,
       prompt_type: "doodle", is_doodle: true,
       photo_key: up.data.key, photo_url: up.data.url,
       body: body.trim() || undefined,
     });
     setDoodleBusy(false);
     if (error) { showToast(error, "error"); return; }
-    if (data?.entry) { setEntries((prev) => [data.entry, ...prev]); setPad(false); resetCompose(); showToast("Doodle signed in ✍️", "success"); }
+    if (data?.entry) {
+      setEntries((prev) => [{ ...data.entry, review_status: data.held ? "held" : "ok" }, ...prev]);
+      setPad(false); resetCompose();
+      showToast(data.held ? HELD_TOAST : "Doodle signed in ✍️", "success");
+    }
   };
 
   
@@ -105,15 +115,15 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
     setBusy(true);
     const { data, error } = await callWorker("guestbook/sign", {
       entity_type: entityType, entity_id: String(entityId), entity_name: entityName,
-      display_name: displayName, home_city: showCity ? homeCity : null,
+      display_name: displayName, home_city: showCity ? homeCity : null, show_city: showCity,
       prompt_type: prompt, body: text,
     });
     setBusy(false);
     if (error) { showToast(error, "error"); return; }
     if (data?.entry) {
-      setEntries((prev) => [data.entry, ...prev]);
+      setEntries((prev) => [{ ...data.entry, review_status: data.held ? "held" : "ok" }, ...prev]);
       resetCompose();
-      showToast("Thanks for signing the guestbook! ✍️", "success");
+      showToast(data.held ? HELD_TOAST : "Thank you for helping the next visitor 💛", "success");
     }
   };
 
@@ -124,8 +134,9 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
     const { data, error } = await callWorker("guestbook/edit", { id, body: text });
     setBusy(false);
     if (error) { showToast(error, "error"); return; }
-    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, body: text, edited_at: data?.entry?.edited_at } : e)));
+    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, body: text, edited_at: data?.entry?.edited_at, review_status: data?.held ? "held" : "ok" } : e)));
     setEditId(null);
+    if (data?.held) showToast(HELD_TOAST, "success");
   };
 
   const remove = async (id) => {
@@ -136,9 +147,10 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
   };
 
   const report = async (id) => {
-    if (!window.confirm("Report this note for review?")) return;
-    await callWorker("guestbook/report", { id });
-    showToast("Thanks — we'll review it.", "success");
+    if (!window.confirm("Report this note to our team?")) return;
+    const { error } = await callWorker("guestbook/report", { id });
+    if (error) { showToast(error, "error"); return; }
+    showToast("Thank you — our team will take a look.", "success");
   };
 
   return (
@@ -150,19 +162,22 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
             onClick={() => setComposing(true)}
             className="w-full py-3 rounded-xl font-semibold text-white text-[calc(15px*var(--fs))]"
             style={{ background: "linear-gradient(90deg,#667eea,#764ba2)" }}
-          >✍️ Sign our Guestbook</button>
+          >✍️ Sign the guestbook</button>
         ) : (
           <div className="bg-white rounded-xl shadow-md p-4 space-y-3">
             {/* Header with an always-visible exit — so you can back out of writing
                 even while the keyboard covers the Cancel button below. */}
             <div className="flex items-center justify-between">
-              <span className="text-[calc(13.5px*var(--fs))] font-bold text-gray-800">Leave a note</span>
+              <span className="text-[calc(13.5px*var(--fs))] font-bold text-gray-800">Leave a kind note</span>
               <button
                 onClick={resetCompose}
                 aria-label="Close"
                 className="w-8 h-8 -mr-1 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-[calc(18px*var(--fs))] leading-none"
               >✕</button>
             </div>
+            <p className="text-[calc(13px*var(--fs))] text-gray-600 leading-snug -mt-1">
+              Help future visitors — share a tip, or tell us your favorite part{entityName ? ` of ${entityName}` : ""} 💛
+            </p>
             <div className="flex flex-wrap gap-2">
               {PROMPTS.map((p) => (
                 <button
@@ -198,6 +213,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
               </label>
             )}
             <p className="text-[calc(10.5px*var(--fs))] text-gray-400 leading-snug">
+              Kind notes post right away; if a note sounds like a complaint, our team reads it first.
               Notes &amp; doodles post publicly. By posting you grant Globeskimmers a license to display them.
             </p>
             <div className="flex items-center justify-between">
@@ -213,7 +229,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
         )
       ) : (
         <div className="bg-white rounded-xl shadow-md p-5 text-center text-[calc(14px*var(--fs))] text-gray-600">
-          Sign in to leave a tip for the next traveler.
+          Sign in to leave a tip or your favorite part for the next traveler.
         </div>
       )}
 
@@ -222,7 +238,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
         <div className="text-center text-gray-400 text-[calc(13px*var(--fs))] py-6">Loading notes…</div>
       ) : entries.length === 0 ? (
         <div className="bg-white rounded-xl shadow-md p-8 text-center">
-          <p className="text-[calc(15px*var(--fs))] text-gray-600">No notes yet — be the first to sign {entityName ? `${entityName}'s` : "this"} guestbook.</p>
+          <p className="text-[calc(15px*var(--fs))] text-gray-600">No notes yet — be the first to share a tip or your favorite part{entityName ? ` of ${entityName}` : ""} 💛</p>
         </div>
       ) : (
         entries.map((e) => {
@@ -244,6 +260,16 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
                   </div>
                 </div>
               </div>
+              {mine && e.review_status === "held" && (
+                <p className="mt-1 mb-1 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[calc(11.5px*var(--fs))] text-amber-900">
+                  ⏳ Waiting for a quick look from our team — only you can see this for now.
+                </p>
+              )}
+              {mine && e.review_status === "rejected" && (
+                <p className="mt-1 mb-1 rounded-lg bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-[calc(11.5px*var(--fs))] text-gray-600">
+                  Our team kept this note private — only you can see it. You can edit or delete it.
+                </p>
+              )}
               {editId === e.id ? (
                 <div className="mt-2">
                   <textarea value={editBody} onChange={(ev) => setEditBody(ev.target.value)} rows={3} maxLength={1000}
