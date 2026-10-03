@@ -15,11 +15,11 @@ import { countryCode } from "@/lib/countries";
 export const STAMP_DESIGNS = [
   { id: "col", maxWords: 4, maxLine: 12 },  // Column     — stacked caps between rules
   { id: "rng", maxWords: 2, maxLine: 10 },  // Ring       — text traces the circle
-  { id: "ban", maxWords: 3, maxLine: 10 },  // Banner     — ruled top and bottom
-  { id: "jst", maxWords: 3, maxLine: 8  },  // Justified  — lines tracked to one measure
+  { id: "ban", maxWords: 2, maxLine: 10 },  // Banner     — ruled top and bottom (a third line hits the top rule)
+  { id: "jst", maxWords: 2, maxLine: 8  },  // Justified  — lines tracked to one measure (a third line hits the city line)
   { id: "ldg", maxWords: 3, maxLine: 10 },  // Ledger     — left-aligned entry + boxed date
   { id: "spl", maxWords: 2, maxLine: 11 },  // Split rule — rules break around a mark
-  { id: "ovl", maxWords: 3, maxLine: 11 },  // Oval       — flatter cousin of the ring
+  { id: "ovl", maxWords: 2, maxLine: 11 },  // Oval       — flatter cousin of the ring (three lines crowd the date)
   { id: "mrq", maxWords: 2, maxLine: 8  },  // Marquee    — name at maximum size
 ];
 
