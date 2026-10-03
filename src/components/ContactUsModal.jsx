@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { callWorker } from "@/lib/callWorker";
+import { useAuth } from "@/lib/AuthContext";
 import { X, Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useDismissable } from '@/lib/dismissStack';
 
 export default function ContactUsModal({ isOpen, onClose }) {
+  const { user, profile } = useAuth();
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -28,15 +30,18 @@ export default function ContactUsModal({ isOpen, onClose }) {
     setSubmitting(true);
     setErrorMessage("");
     try {
-      const user = await base44.auth.me();
-
-      await base44.entities.ContactMessage.create({
-        subject: subject,
-        message: message,
-        user_email: user.email,
-        user_name: user.full_name || user.email,
-        status: "unread"
+      // The same inbox as the website form (Admin Portal > Website messages).
+      const { data, error } = await callWorker("contact", {
+        who: "traveler",
+        name: profile?.first_name || user?.user_metadata?.full_name || user?.email || "App user",
+        email: user?.email || "",
+        message: `${subject.trim()}\n\n${message.trim()}`,
+        page: "app:contact-us",
       });
+      if (error || !data?.ok) {
+        const why = data?.reason;
+        throw new Error(why === "rate_limited" ? "rate_limited" : why === "too_short" ? "too_short" : "failed");
+      }
 
       setSubmitted(true);
       setSubject("");
@@ -48,7 +53,11 @@ export default function ContactUsModal({ isOpen, onClose }) {
       }, 2000);
     } catch (error) {
       console.error("Error sending message:", error);
-      setErrorMessage("We couldn't send your message right now. Please check your connection and try again.");
+      setErrorMessage(
+        error?.message === "rate_limited" ? "You've sent a few messages already — please try again in an hour."
+        : error?.message === "too_short" ? "Tell us a little more, so we can help."
+        : "We couldn't send your message right now. Please check your connection and try again.",
+      );
     } finally {
       setSubmitting(false);
     }
