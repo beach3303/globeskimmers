@@ -15112,14 +15112,27 @@ async function handleAdminVerified(request, env) {
   const b = await request.json().catch(() => ({}));
   const op = String(b.op || 'list');
   try {
+    if (op === 'recolor') {
+      // Change the ink on an existing Seal — anyone's, the founder's own
+      // included. Never re-sends a letter.
+      const handle = String(b.handle || '').toLowerCase().trim().replace(/^@/, '');
+      if (!handle) return jsonResponse({ error: 'Which @handle?' }, 400);
+      if (!SEAL_TIERS.has(b.seal)) return jsonResponse({ error: 'Unknown seal color' }, 400);
+      const w = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}&verified=eq.true`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ seal: b.seal, updated_at: new Date().toISOString() }) });
+      const rows = w.ok ? await w.json() : [];
+      if (!rows.length) return jsonResponse({ error: 'That account has no Seal to recolor' }, 404);
+    }
     if (op === 'grant' || op === 'revoke') {
       const handle = String(b.handle || '').toLowerCase().trim().replace(/^@/, '');
       if (!handle) return jsonResponse({ error: 'Which @handle?' }, 400);
       const seal = op === 'grant' ? (SEAL_TIERS.has(b.seal) ? b.seal : 'burgundy') : null;
+      // Re-granting someone who already holds a Seal is a recolor: no letter.
+      const before = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}&select=verified`, {});
+      const wasSealed = ((before.ok ? await before.json() : [])[0] || {}).verified === true;
       const w = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ verified: op === 'grant', seal, updated_at: new Date().toISOString() }) });
       const rows = w.ok ? await w.json() : [];
       if (!rows.length) return jsonResponse({ error: 'No user with that handle' }, 404);
-      if (op === 'grant' && (seal === 'gold' || seal === 'burgundy')) {
+      if (op === 'grant' && !wasSealed && (seal === 'gold' || seal === 'burgundy')) {
         // Letters go to gold and burgundy only; House and Sunshine grants are personal.
         // The letter rides the grant. Email from the auth admin API, name
         // from the social profile; failures just fall back to desk copy.

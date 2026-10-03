@@ -625,7 +625,11 @@ export default function AdminAnalytics() {
               {seals.rows.map((r) => (
                 <div key={r.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: `1px solid ${COLORS.border}`, fontSize: 13 }}>
                   <span style={{ fontWeight: 700, color: COLORS.dark, display: 'flex', alignItems: 'center' }}>@{r.handle}<OfficialSeal size={14} tier={r.seal || 'burgundy'} /></span>
-                  <span style={{ fontSize: 11.5, color: COLORS.gray }}>{SEAL_TIER_LABEL[r.seal || 'burgundy']}</span>
+                  <select value={r.seal || 'burgundy'} aria-label={`Seal color for @${r.handle}`}
+                    onChange={async (e) => { const { error } = await sealCall({ op: 'recolor', handle: r.handle, seal: e.target.value }); if (error) setSeals((v) => ({ ...v, error })); else sealCall({ op: 'list' }); }}
+                    style={{ padding: '5px 6px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12, background: '#fff', color: COLORS.dark }}>
+                    {Object.entries(SEAL_TIER_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                  </select>
                   <button type="button" onClick={() => revokeSeal(r.handle)} style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.red, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Revoke</button>
                 </div>
               ))}
