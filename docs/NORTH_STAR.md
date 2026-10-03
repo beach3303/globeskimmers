@@ -232,6 +232,27 @@ the real-world doors.
   attendance. *(The birthday demographic work shipped 2026-10-02 feeds
   exactly this.)*
 
+### 5d. The GlobeSkimmers Seal (verification as a product)
+
+Verification is never a checkmark — it is **the Seal**: a miniature worn-ink
+stamp-seal (dashed ring + star), granted only by the founder's admin desk.
+The ink is the meaning (founder doctrine, 2026-10-03):
+
+- **Gold — Honored.** Not a category: an act. People *or businesses* the
+  founder personally honors. Cannot be bought, applied for, or earned.
+  **Never for sale, ever** — its entire value is that it is given.
+- **Silver — Founding** (reserved, not yet granted): the first official
+  partners who join early, never reissued after — scarcity for outreach.
+- **Burgundy — Official**: businesses, partners, public figures. Included
+  free with partnership deals; later a vetted business-verification program
+  (~$99–199/yr territory) monetizes it without cheapening it.
+- **Sapphire navy — Places** (reserved): official city/country tourism
+  accounts, matching the 600+ held place names.
+- **Teal — House**: GlobeSkimmers' own team accounts.
+
+Ordinary usernames are never marked. We do NOT sell consumer verification
+X-style — the Seal's trust is the same asset the partnership lanes sell.
+
 ## 6. Growth & credibility plan
 
 - **Apply to YC now** (W2027 batch, Jan–Mar in SF; standard deal $500K =

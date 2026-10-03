@@ -4,7 +4,7 @@ import React, { useId } from "react";
 // NOT a social-media checkmark: a miniature official rubber-stamp seal in the
 // house worn-ink style (dashed ring + star), the same visual language as the
 // passport stamps. Granted only through the Admin portal, in three inks:
-//   gold     — Honored: people the founder honors (foil, the rarest)
+//   gold     — Honored: people OR businesses the founder honors (a gift, never a category; foil, the rarest)
 //   burgundy — Official: businesses, partners, public figures
 //   teal     — House: GlobeSkimmers' own team accounts
 // On DARK surfaces every ink brightens a step and gains a faint ink-glow halo
