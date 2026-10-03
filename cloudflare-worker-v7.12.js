@@ -9024,29 +9024,91 @@ const GA_CATEGORY_NEARBY = {
 };
 
 const GA_SIG = {
-  free:        ['free admission','free entry','no charge','no fee','free access','complimentary'],
+  free:        ['free admission','free entry','free to enter','free to visit','admission is free','entry is free','no entry fee','no admission fee','free access'],
   family:      ['family','kids','children','all ages','child-friendly','stroller'],
   outdoor:     ['outdoor','outside','open air','nature','trail',
                'hiking','forest','mountain','lake','river','waterfall','canyon','cave',
                'cliff','scenic','campground','wilderness','reef','snorkel','dive',
                'lighthouse','bird watching','wildlife','fishing','volcano'],
-  indoor:      ['indoor','inside','air conditioned','museum','gallery','theater'],
+  indoor:      ['indoor','air conditioned','museum','gallery','theater'],
   guided:      ['guided','tour guide','expert','led tour','docent','commentary'],
   bucket:      ['bucket list','must see','once in lifetime','world famous','iconic','legendary'],
   hidden:      ['hidden gem','off the beaten','secret','local secret','underrated','undiscovered'],
   photo:       ['photo','instagram','photogenic','beautiful','stunning views','scenic','panoramic'],
   adventure:   ['adventure','thrill','extreme','adrenaline','exciting','challenging'],
   cultural:    ['cultural','traditional','authentic','local','historic','heritage'],
-  budget:      ['free','cheap','affordable','budget','inexpensive','worth every penny'],
-  couples:     ['romantic','date','couples','honeymoon','anniversary','intimate','perfect for couples'],
+  budget:      ['cheap','affordable','budget','inexpensive','worth every penny','good value','great value'],
+  couples:     ['romantic','date night','date spot','couples','honeymoon','anniversary','perfect for couples'],
   petFriendly: ['dog friendly','pet friendly','dogs allowed','pets welcome','bring your dog'],
   groups:      ['group friendly','perfect for groups','large groups','group activity','team building','party','bachelorette','bachelor party','group rate','group discount'],
   singles:     ['solo traveler','solo travelers','solo friendly','meet people','meet new people','hostel','social hostel','make friends','singles welcome'],
   teens:       ['teen','teenager','teenagers','high school','great for teens','escape room','arcade','theme park','water park','zip line','zipline','trampoline park','go kart','laser tag','mini golf','virtual reality','vr arcade','rope course','ropes course','flow rider','indoor skydiving','bowling','axe throwing','rage room','rock climbing'],
-  highlights:  ['amazing','spectacular','breathtaking','incredible','beautiful','must visit','loved it','fantastic','perfect','outstanding','stunning','highly recommend','worth it'],
-  warnings:    ['long line','wait time','crowded','expensive','overpriced','disappointing','avoid','rude','dirty','loud','overcrowded','parking issue','too hot','too cold'],
   adultsOnly:  ['shooting range','gun range','clay shooting','skeet shooting','shooting club','axe throwing','rage room','smash room'],
 };
+
+// Review chips on a Things to Do card, from the reviews we read (Place Details
+// gives five; list results carry none, so list cards show none). A chip needs at
+// least two reviews saying it — one reviewer is not a pattern — and a sentence
+// that negates it ("not crowded", "no long lines") never counts.
+const GA_NEGATION_RE = /\b(not|no|never|without|hardly|barely|isn't|aren't|wasn't|weren't|don't|doesn't|didn't|won't|can't)\b/;
+const GA_CONTRAST_RE = /\b(but|however|although|though|except)\b/;
+const GA_PRAISE_RE = /\b(amazing|awesome|great|incredible|fantastic|beautiful|stunning|breathtaking|spectacular|gorgeous|wonderful|excellent|love|loved|favou?rite|best|fun|exciting|impressive|unforgettable|entertaining|friendly|helpful|knowledgeable|immersive|highlight|must[- ](?:see|do|visit)|delicious|perfect|magical)\b/;
+// What people love: a named part of the place, praised in the same sentence —
+// never a bare "amazing". A null label uses the reviewers' own words ("studio tour").
+const GA_LOVES = [
+  [/\b(?:(?:studio|guided|walking|boat|bus|audio|backstage) )?tours?\b/, null],
+  [/\b(?:rides?|roller ?coasters?)\b/, 'rides'],
+  [/\b(?:shows?|performances?|fireworks)\b/, 'shows'],
+  [/\b(?:views?|vistas?|scenery|panoramas?)\b/, 'views'],
+  [/\b(?:details?|detailed|theming)\b/, 'attention to detail'],
+  [/\b(?:exhibits?|exhibitions?|collections?)\b/, 'exhibits'],
+  [/\b(?:staff|employees|guides?|docents?|rangers?)\b/, 'staff'],
+  [/\b(?:food|snacks|restaurants?)\b/, 'food'],
+  [/\b(?:history|historic|historical)\b/, 'history'],
+  [/\b(?:architecture|buildings?)\b/, 'architecture'],
+  [/\b(?:gardens?|grounds|flowers)\b/, 'gardens'],
+  [/\b(?:animals?|wildlife|sea life)\b/, 'animals'],
+  [/\b(?:sunsets?|sunrises?)\b/, 'sunsets'],
+  [/\b(?:beach|beaches)\b/, 'beach'],
+  [/\b(?:trails?|hikes?|hiking)\b/, 'trails'],
+  [/\b(?:art|artwork|paintings?|murals?|sculptures?)\b/, 'art'],
+  [/\b(?:music|concerts?)\b/, 'music'],
+  [/\b(?:atmosphere|ambiance|ambience|vibe)\b/, 'atmosphere'],
+];
+// Heads up: practical things to plan for — never a verdict on the place.
+const GA_HEADS_UP = [
+  [/\b(?:crowds?|crowded|overcrowded)\b|\bpacked\b(?! with)|\b(?:gets?|very|so|too|extremely) busy\b/, 'crowds'],
+  [/\b(?:expensive|overpriced|pricey|pricy)\b|\bprices? (?:are|is|were|was) (?:\w+ ){0,2}(?:high|steep)\b/, 'pricey'],
+  [/\blong (?:lines?|queues?|waits?)\b|\b(?:lines?|queues?|waits?|wait times?) (?:are|is|were|was|can be|get) (?:\w+ ){0,2}(?:long|huge|insane|crazy|ridiculous)\b|\bwait(?:ed)? (?:for )?(?:over |more than |about |around )?(?:an?|one|two|three|\d+) hours?\b/, 'long lines'],
+  [/\bparking (?:is|was|can be|gets) (?:\w+ ){0,2}(?:hard|difficult|limited|expensive|pricey|tough|a nightmare|a pain|full)\b|\b(?:limited|expensive|pricey) parking\b|\bhard to (?:find )?park\b/, 'tricky parking'],
+];
+// Best time: advice a reviewer gives — not any mention of a time of day.
+const GA_BEST_TIME = [
+  [/\b(?:arriv(?:e|ed|ing)|get(?:ting)? there|go|going|come|coming|be there|show(?:ing)? up)\s+(?:\w+\s+){0,2}early\b|\bbefore (?:it|they|the [a-z ]{1,20}) open(?:s|ed)?\b|\b(?:right )?at opening\b|\brope[- ]drop\b/, 'Go early'],
+  [/\b(?:go|visit|come) on a weekday\b|\bweekdays? (?:are|is) (?:\w+ ){0,2}(?:less|quieter|calmer)\b|\bavoid (?:the )?weekends?\b/, 'Weekdays'],
+  [/\b(?:go|come|visit|stay|be there) (?:\w+ ){0,3}(?:for|at|around) (?:the )?sunset\b|\bbest at sunset\b/, 'Sunset'],
+];
+function gaReviewChips(revArr) {
+  const reviews = revArr.map(r => String(r || '').replace(/[’‘]/g, "'").split(/(?<=[.!?])\s+|\n+/));
+  const reviewsWith = (test) => reviews.filter(ss => ss.some(test)).length;
+  const loves = [];
+  for (const [re, label] of GA_LOVES) {
+    const said = {};
+    const n = reviewsWith(sen => {
+      if (!GA_PRAISE_RE.test(sen) || GA_NEGATION_RE.test(sen) || GA_CONTRAST_RE.test(sen)) return false;
+      const m = sen.match(re);
+      if (!m) return false;
+      const w = label || m[0].replace(/s$/, '');
+      said[w] = (said[w] || 0) + 1;
+      return true;
+    });
+    if (n >= 2) loves.push({ n, label: label || Object.entries(said).sort((a, b) => b[1] - a[1])[0][0] });
+  }
+  const heads = GA_HEADS_UP.map(([re, label]) => ({ n: reviewsWith(sen => re.test(sen) && !GA_NEGATION_RE.test(sen)), label }));
+  const times = GA_BEST_TIME.map(([re, label]) => ({ n: reviewsWith(sen => re.test(sen)), label }));
+  const top = (arr, k) => arr.filter(x => x.n >= 2).sort((a, b) => b.n - a.n).slice(0, k).map(x => x.label);
+  return { highlights: top(loves, 4), warnings: top(heads, 3), bestTime: top(times, 2).join(' · ') };
+}
 
 const GA_NON_NATURE_TYPES = new Set([
   'museum','art_gallery','historical_landmark','monument','cemetery',
@@ -9301,18 +9363,14 @@ function gaMapTieredPlace(p, uLat, uLng) {
   const photos = (p.photos || []).map(ph => ph.url || ph).filter(Boolean).slice(0, 3);
   const hours = p.currentOpeningHours?.weekdayDescriptions || p.regularOpeningHours?.weekdayDescriptions || p.hours || [];
   const editorialSummary = p.editorialSummary?.text || p.editorialSummary || '';
-  const highlights = GA_SIG.highlights.filter(w => rev.includes(w)).slice(0, 5);
-  const warnings = GA_SIG.warnings.filter(w => rev.includes(w)).slice(0, 4);
-  const timeMatches = (rev.match(/\b(morning|afternoon|evening|sunrise|sunset|weekday|weekend|summer|winter|spring|fall|autumn|off.season)\b/gi) || []);
-  const bestTime = timeMatches.length > 0 ? [...new Set(timeMatches.map(s => s.toLowerCase()))].slice(0, 3).join(', ') : '';
+  const { highlights, warnings, bestTime } = gaReviewChips(revArr);
+  // A text property holds when the name carries it or at least two reviews do
+  // (list results carry no reviews, so there it is the name alone, as before).
+  const nm = name.toLowerCase();
+  const sig = (k, min = 1) => gaSc(nm, GA_SIG[k]) >= min || revArr.filter(r => gaSc(r, GA_SIG[k]) > 0).length >= 2;
+  const isFree = sig('free');
+  // Every other badge repeated a property chip (Family Friendly twice); Adults Only has none.
   const badges = [];
-  if (gaSc(txt, GA_SIG.bucket) > 0)    badges.push('🏆 Bucket List');
-  if (gaSc(txt, GA_SIG.hidden) > 0)    badges.push('💎 Hidden Gem');
-  if (gaSc(txt, GA_SIG.photo) > 1)     badges.push('📸 Photo Worthy');
-  if (gaSc(txt, GA_SIG.free) > 0)      badges.push('🆓 Free Entry');
-  if (gaSc(txt, GA_SIG.family) > 0)    badges.push('👨‍👩‍👧 Family Friendly');
-  if (gaSc(txt, GA_SIG.adventure) > 0) badges.push('⚡ Adventure');
-  if (gaSc(txt, GA_SIG.cultural) > 1)  badges.push('🎭 Authentic Culture');
   if (gaSc(txt, GA_SIG.adultsOnly) > 0 || /shooting range|gun club|axe throwing|clay shooting/i.test(name)) badges.push('🔞 Adults Only');
   let qs = 50;
   if (p.rating >= 4.5) qs += 25; else if (p.rating >= 4.0) qs += 15;
@@ -9335,17 +9393,17 @@ function gaMapTieredPlace(p, uLat, uLng) {
     editorialSummary, outdoorContext, types: placeTypes,
     badges, qualityScore: Math.min(qs, 100), highlights, warnings, bestTime,
     props: {
-      isFree: gaSc(txt, GA_SIG.free) > 0, isFamilyFriendly: p.goodForChildren === true || gaSc(txt, GA_SIG.family) > 0,
-      isOutdoor: (() => { if (placeTypes.some(t => GA_NON_NATURE_TYPES.has(t))) return false; return placeTypes.some(t => GA_NATURE_TYPES.includes(t)) || gaSc(txt, GA_SIG.outdoor) >= 2 || at.category === 'outdoor'; })(),
-      isIndoor: gaSc(txt, GA_SIG.indoor) > 0, hasGuidedTour: gaSc(txt, GA_SIG.guided) > 0,
-      isBucketList: gaSc(txt, GA_SIG.bucket) > 0, isHiddenGem: gaSc(txt, GA_SIG.hidden) > 0,
-      isPhotoWorthy: gaSc(txt, GA_SIG.photo) > 1, isAdventure: gaSc(txt, GA_SIG.adventure) > 0,
-      isCultural: gaSc(txt, GA_SIG.cultural) > 1, isAccessible: p.accessibilityOptions?.wheelchairAccessibleEntrance === true,
-      isBudgetFriendly: gaSc(txt, GA_SIG.budget) > 0, isGoodForCouples: gaSc(txt, GA_SIG.couples) > 0,
-      isSeniorFriendly: false /* retired: a life-stage label, and it was text-inferred */, isPetFriendly: gaSc(txt, GA_SIG.petFriendly) > 0,
-      isGoodForGroups: gaSc(txt, GA_SIG.groups) > 0,
-      isGoodForSingles: gaSc(txt, GA_SIG.singles) > 0,
-      isGoodForTeens: gaSc(txt, GA_SIG.teens) > 0,
+      isFree, isFamilyFriendly: p.goodForChildren === true || sig('family'),
+      isOutdoor: (() => { if (placeTypes.some(t => GA_NON_NATURE_TYPES.has(t))) return false; return placeTypes.some(t => GA_NATURE_TYPES.includes(t)) || sig('outdoor', 2) || at.category === 'outdoor'; })(),
+      isIndoor: sig('indoor'), hasGuidedTour: sig('guided'),
+      isBucketList: sig('bucket'), isHiddenGem: sig('hidden'),
+      isPhotoWorthy: sig('photo', 2), isAdventure: sig('adventure'),
+      isCultural: sig('cultural', 2), isAccessible: p.accessibilityOptions?.wheelchairAccessibleEntrance === true,
+      isBudgetFriendly: isFree || sig('budget'), isGoodForCouples: sig('couples'),
+      isSeniorFriendly: false /* retired: a life-stage label, and it was text-inferred */, isPetFriendly: sig('petFriendly'),
+      isGoodForGroups: sig('groups'),
+      isGoodForSingles: sig('singles'),
+      isGoodForTeens: sig('teens'),
     },
     tourMode: GA_TOUR_MODE_BY_QUERY[p._foundByQuery] || undefined,
   };
