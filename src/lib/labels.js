@@ -28,10 +28,6 @@ const yearRoman = (iso) => {
 const when = (s) => s.visited_on || (s.created_at || "").slice(0, 10) || "";
 const byWhen = (a, b) => String(when(a)).localeCompare(String(when(b)));
 
-// The one due-diligence list v1 hand-keys: places whose creature we can name.
-const CREATURES = [
-  { match: /georgia aquarium/i, big: "WHALE SHARK", story: "The only aquarium outside Asia where whale sharks swim — and you stood in front of one." },
-];
 
 export function deriveLabels(stamps) {
   const list = (stamps || []).filter(Boolean).slice().sort(byWhen);
@@ -51,25 +47,11 @@ export function deriveLabels(stamps) {
   // 2 · First Flight — the first airport stamp.
   const flight = list.find((s) => s.kind === "airport");
   if (flight) add({
-    key: "first-flight", shape: "plane", ink: INKS.slate,
+    key: "first-flight", shape: "lozenge", ink: INKS.slate,
     top: String(flight.entity_id || "").toUpperCase().slice(0, 4) || "AIR", big: null, sub: null,
     story: `First wings on the trunk: ${flight.entity_id || flight.name}${flight.city ? `, ${flight.city}` : ""}.`,
     earnedOn: when(flight), place: flight.name,
   });
-
-  // 3 · The creature — an aquarium or zoo visit earns a naturalist's engraving.
-  const aqua = list.find((s) => /aquarium|zoo\b/i.test(String(s.name || "")));
-  if (aqua) {
-    const c = CREATURES.find((x) => x.match.test(String(aqua.name || "")));
-    add({
-      key: "creature", shape: "oval", ink: INKS.steel,
-      top: String(aqua.name || "").toUpperCase().slice(0, 24),
-      big: c ? c.big : null,
-      sub: `${String(aqua.city || "").toUpperCase()}${aqua.city ? " · " : ""}${yearRoman(when(aqua))}`,
-      story: c ? c.story : `A naturalist's mark from ${aqua.name}.`,
-      earnedOn: when(aqua), place: aqua.name,
-    });
-  }
 
   // 4 · Filmed Here — the first scene stamp.
   const film = list.find((s) => s.meta && s.meta.film && s.meta.film.title);

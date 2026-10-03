@@ -13654,6 +13654,11 @@ async function handleStampArtServe(request, env) {
     headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/png');
     headers.set('Cache-Control', 'public, max-age=2592000'); // 30d
     headers.set('Access-Control-Allow-Origin', '*');
+    if (/svg/i.test(headers.get('Content-Type') || '')) {
+      // Flag art is SVG: opened directly it may never run script on our origin.
+      headers.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data:");
+      headers.set('X-Content-Type-Options', 'nosniff');
+    }
     if (obj.httpEtag) headers.set('ETag', obj.httpEtag);
     return new Response(obj.body, { headers });
   } catch { return new Response('Error', { status: 500 }); }

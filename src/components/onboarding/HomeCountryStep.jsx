@@ -27,6 +27,7 @@ export default function HomeCountryStep({ onNext, onSkip, onBack }) {
         autoFocus
         onSelect={(place) => onNext({
           home_country: place.country,
+          home_city_country: place.country,
           home_city: place.city,
           home_lat: place.latitude,
           home_lng: place.longitude,

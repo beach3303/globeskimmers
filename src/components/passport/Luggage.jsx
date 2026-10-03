@@ -17,7 +17,8 @@ import { getShareLink } from "@/lib/passport";
 import { showToast } from "@/components/Toast";
 import { logEvent } from "@/lib/analytics";
 import LuggageLabel from "@/components/passport/LuggageLabel";
-import VirtualLuggage, { buildStickers, LUGGAGE_TYPES } from "@/components/passport/VirtualLuggage";
+import VirtualLuggage, { buildStickers, indexStickers, LUGGAGE_TYPES } from "@/components/passport/VirtualLuggage";
+import { useAuth } from "@/lib/AuthContext";
 import { luggageGet } from "@/lib/passport";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
@@ -28,9 +29,11 @@ const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 const ART_BASE = "https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/luggage";
 
 export default function Luggage({ stamps, readOnly }) {
+  const { profile } = useAuth();
+  const owner = readOnly ? null : profile; // a visitor's flags never land on someone else's trunk
   const labels = useMemo(() => deriveLabels(stamps), [stamps]);
-  const stickers = useMemo(() => buildStickers(stamps), [stamps]);
-  const bySid = useMemo(() => Object.fromEntries(stickers.map((x) => [x.sid, x])), [stickers]);
+  const stickers = useMemo(() => buildStickers(stamps, owner), [stamps, owner]);
+  const bySid = useMemo(() => indexStickers(stickers, stamps), [stickers, stamps]);
   const [lug, setLug] = useState(null);         // { active, placements } — the real trunk
   const [skinAspect, setSkinAspect] = useState(1);
   useEffect(() => { let gone = false; (async () => { const d = await luggageGet(); if (!gone) setLug(d); })(); return () => { gone = true; }; }, []);
@@ -200,7 +203,7 @@ export default function Luggage({ stamps, readOnly }) {
       )}
 
       {/* The walk-around trunk: six styles, five faces, hand-placed stickers */}
-      {openLug && <VirtualLuggage stamps={stamps} onClose={() => setOpenLug(false)} />}
+      {openLug && <VirtualLuggage stamps={stamps} profile={owner} onClose={() => setOpenLug(false)} />}
     </div>
   );
 }

@@ -13,6 +13,19 @@ const PAPER = "#F2E9D2", PAPER_EDGE = "#DCCFAE";
 const fit = (s, box, max, ls = 0) => Math.min(max, (box - String(s || "").length * ls) / (Math.max(1, String(s || "").length) * 0.62));
 
 export default function LuggageLabel({ label, uid }) {
+  if (label.shape === "flag") {
+    // A real vinyl flag sticker: white die-cut border, the true flag, a faint
+    // gloss. HTML (not SVG <image>) so share captures can draw it — the flag
+    // art serves with open CORS for exactly that.
+    return (
+      <div role="img" aria-label={`Flag sticker: ${label.top}`}
+        style={{ position: "relative", background: "#FFFFFF", padding: "7%", borderRadius: "12% / 16%", boxShadow: "0 1px 1.5px rgba(0,0,0,.28), 0 0 0 0.5px rgba(0,0,0,.06)" }}>
+        <img src={label.flag} alt="" crossOrigin="anonymous" draggable={false}
+          style={{ display: "block", width: "100%", aspectRatio: "4 / 3", objectFit: "cover", borderRadius: "6% / 8%", pointerEvents: "none" }} />
+        <span aria-hidden="true" style={{ position: "absolute", inset: 0, borderRadius: "12% / 16%", background: "linear-gradient(155deg, rgba(255,255,255,.38) 0%, rgba(255,255,255,0) 38%)", pointerEvents: "none" }} />
+      </div>
+    );
+  }
   const worn = `lblworn-${uid}`;
   const ink = label.ink;
   const Defs = (

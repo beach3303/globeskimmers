@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { X, PencilLine, Check, Trash2 } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { deriveLabels } from "@/lib/labels";
+import { countryCode } from "@/lib/countries";
 import { luggageGet, luggageSet } from "@/lib/passport";
 import LuggageLabel from "@/components/passport/LuggageLabel";
 
@@ -58,19 +59,36 @@ const STICKER_SHAPES = ["roundel", "lozenge", "diamond"];
 const hash = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); };
 const ROMAN = { 2024: "MMXXIV", 2025: "MMXXV", 2026: "MMXXVI", 2027: "MMXXVII", 2028: "MMXXVIII" };
 
-// The sticker inventory is EARNED, never bought: the storied labels plus one
-// destination sticker per stamped city and one roundel per airport.
-export function buildStickers(stamps) {
+const FLAG_BASE = "https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/flags";
+const ccOf = (s) => {
+  const fromId = s.kind === "country" && /^[a-z]{2}$/i.test(String(s.entity_id || "")) ? String(s.entity_id) : null;
+  return String(fromId || countryCode(s.country || "") || "").toLowerCase();
+};
+
+// The sticker inventory is EARNED, never bought. Flags come first: the home
+// flag and the flag of the country you live in arrive with the trunk (owner
+// view only — never a visitor's flags on someone else's trunk); every other
+// flag is earned by ARRIVING, at an airport or a land border. One flag per
+// country. Then the storied labels, then one label per stamped city.
+export function buildStickers(stamps, profile = null) {
   const out = [];
-  for (const l of deriveLabels(stamps)) out.push({ sid: `label:${l.key}`, label: l, w: 96 });
-  const seenCity = new Set(), seenAir = new Set();
+  const flags = new Map();
+  const addFlag = (cc, country, story) => {
+    const k = String(cc || "").toLowerCase();
+    if (!/^[a-z]{2}$/.test(k) || flags.has(k)) return;
+    flags.set(k, { sid: `flag:${k}`, w: 84, label: { shape: "flag", flag: `${FLAG_BASE}/${k}.svg`, top: country || k.toUpperCase(), story } });
+  };
+  if (profile?.home_country) addFlag(countryCode(profile.home_country), profile.home_country, `Home — ${profile.home_country}.`);
+  if (profile?.home_city_country) addFlag(countryCode(profile.home_city_country), profile.home_city_country, `Where you live — ${profile.home_city_country}.`);
   for (const s of stamps || []) {
-    if (s.kind === "airport") {
-      const iata = String(s.entity_id || "").toUpperCase().slice(0, 4);
-      if (!iata || seenAir.has(iata)) continue;
-      seenAir.add(iata);
-      out.push({ sid: `iata:${iata}`, w: 78, label: { shape: "plane", ink: "#31465F", top: iata, big: null, sub: null, story: `Wings earned at ${s.name || iata}.` } });
-    } else if (s.kind === "city") {
+    const arrival = s.kind === "airport" || (s.kind === "country" && s.entity_type === "border");
+    if (arrival && s.country) addFlag(ccOf(s), s.country, `Arrived in ${s.country}${s.name ? ` — ${s.name}` : ""}.`);
+  }
+  out.push(...flags.values());
+  for (const l of deriveLabels(stamps)) out.push({ sid: `label:${l.key}`, label: l, w: 96 });
+  const seenCity = new Set();
+  for (const s of stamps || []) {
+    if (s.kind === "city") {
       const key = String(s.entity_id || s.name || "").toLowerCase();
       if (!key || key.startsWith("birthday") || seenCity.has(key)) continue;
       seenCity.add(key);
@@ -89,6 +107,19 @@ export function buildStickers(stamps) {
     }
   }
   return out;
+}
+
+// sid → sticker, plus the retired airport-plane sids pointing at their
+// country's flag, so a plane someone already placed shows as that flag.
+export function indexStickers(stickers, stamps) {
+  const by = Object.fromEntries(stickers.map((x) => [x.sid, x]));
+  for (const s of stamps || []) {
+    if (s.kind !== "airport") continue;
+    const iata = String(s.entity_id || "").toUpperCase().slice(0, 4);
+    const flag = by[`flag:${ccOf(s)}`];
+    if (iata && flag && !by[`iata:${iata}`]) by[`iata:${iata}`] = flag;
+  }
+  return by;
 }
 
 // The engraved fallback face — shown only while a face's photo-real render
@@ -166,9 +197,9 @@ function PlacedSticker({ pl, sticker, faceW, edit, selected, onSelect, onTap }) 
   );
 }
 
-export default function VirtualLuggage({ stamps, onClose }) {
-  const stickers = useMemo(() => buildStickers(stamps), [stamps]);
-  const bySid = useMemo(() => Object.fromEntries(stickers.map((s) => [s.sid, s])), [stickers]);
+export default function VirtualLuggage({ stamps, onClose, profile = null }) {
+  const stickers = useMemo(() => buildStickers(stamps, profile), [stamps, profile]);
+  const bySid = useMemo(() => indexStickers(stickers, stamps), [stickers, stamps]);
 
   const [state, setState] = useState(null); // { active, placements }
   const [faceIdx, setFaceIdx] = useState(0); // index into SWIPE_ORDER, or -1 = top

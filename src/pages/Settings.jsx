@@ -597,7 +597,7 @@ export default function SettingsPage() {
     setCountryOpen(false);
     setCountryQuery("");
     setCityResults([]);
-    persist({ home_city: place.city, home_country: place.country, home_lat: place.latitude, home_lng: place.longitude, home_timezone: place.timezone });
+    persist({ home_city: place.city, home_country: place.country, home_city_country: place.country, home_lat: place.latitude, home_lng: place.longitude, home_timezone: place.timezone });
   };
 
   // Pick the home COUNTRY directly (the flag). Leaves the home city and its
