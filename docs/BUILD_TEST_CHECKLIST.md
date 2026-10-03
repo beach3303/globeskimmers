@@ -1237,3 +1237,28 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Trade-off: a fact one reviewer states (Griffith Observatory's free entry) no longer makes a
   chip; the Tickets card carries verified prices.
 - Worker only — no app change. Phones still need `npm run ota` for e3f07ce (the card layout).
+
+## 2026-10-03 (late) — Real prices + parking for JS-built official sites, kept 3 months (1c336b0, a92cd15, 5d59718)
+- Founder: "pull prices and parking details and display … cache every 3 months with a link
+  that says verify most updated info from website". Cause of the link-only cards: Universal's
+  site is a JavaScript app — web_fetch got a 9 KB empty shell, so v3 never found anything.
+- Worker: web_search runs INSIDE the official site (allowed_domains = its domain); each search
+  citation's cited_text (API quote, ≤150 chars) is evidence for its URL like fetched text —
+  every amount must appear in it. No official site → search anywhere but resellers
+  (blocked_domains); reseller pages never count (code check). Profile pages (facebook,
+  instagram, google, yelp, wikipedia) are not treated as the official domain.
+- Kept 90 days when found, 30 days when nothing is found (was 3 — a no-prices place was
+  re-checked and paid for every 3 days). v5: parking gets its own search (4 searches max);
+  any label/note text about the lookup itself ("not stated", "not found in the sources") is
+  cut or dropped; _diag lists the search queries.
+- App (a92cd15, ships with the next OTA): "Verify the latest prices / parking info on the
+  official website ↗" under each card — the source page when it is on the official site.
+- Verified live (v4): Universal → 1-Day from $109, + Express from $199, VIP from $369, 2-Day
+  from $75 a day, kids 2 and under free — all from store.universalstudioshollywood.com; no
+  parking (fixed in v5). Cost: 9 logged lookups average ~$0.15 (Sonnet 5 tokens + $0.01 per
+  search); results shared by everyone for the cache period, so cost tracks distinct
+  attractions opened, not users. Daily caps (150 signed-in, 20 signed-out, 5 per network)
+  bound the worst case at ~$25/day.
+- v5 deployed; its first live run was blocked by the 5-per-network signed-out cap during
+  testing — first real run: the founder opening Universal signed in.
+- Cache lives in Cloudflare KV (visit:<version>:<id>); Universal's v4 entry expires Jan 1, 2027.
