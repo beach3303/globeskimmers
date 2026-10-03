@@ -797,49 +797,7 @@ export default function SettingsPage() {
             <EdRow isTablet={isTablet} step={fontStep} icon={User} iconBg={CAT.culture.ink} title="First Name" desc="Used to greet you across the app"
               control={{ below: true, node: <Input type="text" value={firstName} onFocus={() => { firstNameFocused.current = true; }} onBlur={() => { firstNameFocused.current = false; const v = firstName.trim(); if (v !== (profile?.first_name || "")) persist({ first_name: v }); }} onChange={(e) => setFirstName(e.target.value)} placeholder="Enter your first name" className="h-12 rounded-xl" style={{ borderColor: ED_RULE }} /> }}
             />
-            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.restroom.ink} title="Home Country" desc={homeCity ? "Sets your home flag" : "Sets your home flag · add a home city for exact home time"}
-              control={{ below: true, node: homeCountryDropdown }}
-            />
-            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.money.ink} title="Home City" desc="Sets your local time & fills in your country"
-              control={{ below: true, node: countryDropdown }}
-            />
-            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.transit.ink} title="Show Home Country Time" desc="Display home country time on home page"
-              control={{ node: <EdToggle on={showHomeCountryInfo} onClick={() => { const next = !showHomeCountryInfo; setShowHomeCountryInfo(next); persist({ show_home_country_info: next }); }} label="Toggle home country time" /> }}
-            />
-            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.weather.ink} title="Show Home Country Flag" desc="Display your flag on the home page"
-              control={{ node: <EdToggle on={showHomeFlag} onClick={() => { const next = !showHomeFlag; setShowHomeFlag(next); persist({ show_home_flag: next }); }} label="Toggle home country flag" /> }}
-            />
-            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="When I open the app" desc="Where Globeskimmers starts each time"
-              control={{ below: true, node: (
-                <Select value={openBehavior} onValueChange={(v) => { setOpenBehaviorState(v); writeOpenBehavior(v); }}>
-                  <SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue /></SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    <SelectItem value="ask">Ask me each time</SelectItem>
-                    <SelectItem value="current">Use my current location</SelectItem>
-                    <SelectItem value="continue">Continue where I left off</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) }}
-            />
-            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Update location as I move" desc="Refresh results automatically when you travel to a new city. Off by default — we'll ask before switching."
-              control={{ node: <EdToggle on={autoFollow} onClick={() => setAutoFollow(!autoFollow)} label="Toggle auto-follow location" /> }}
-              last
-            />
-          </EdGroup>
-
-          {/* Virtual Passport group */}
-          <EdGroup kicker="Virtual Passport" isTablet={isTablet}>
-            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Airport arrival stamps" desc="Offer a passport stamp when you land at an airport. Your passport stays private — only you can see it."
-              control={{ node: <EdToggle on={suggestArrivals} onClick={() => { const next = !suggestArrivals; setSuggestArrivals(next); try { localStorage.setItem("pp_suggest_arrivals", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle airport arrival stamps" /> }}
-            />
-            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="New-city pop-ups" desc="Offer a stamp when you arrive in — or open the app in — a new city or country. Turn off to never be prompted (you can still add stamps yourself)."
-              control={{ node: <EdToggle on={cityPrompt} onClick={() => { const next = !cityPrompt; setCityPrompt(next); try { localStorage.setItem("pp_city_prompt", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle new-city pop-ups" /> }}
-            />
-            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Sense nearby stamps" desc="When you open your Passport, offer the attraction or airport you're standing in. Turn off to never see that pop-up (the Passport page has the same switch)."
-              control={{ node: <EdToggle on={suggestNearby} onClick={() => { const next = !suggestNearby; setSuggestNearby(next); try { localStorage.setItem("pp_suggest_nearby", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle nearby stamp sensing" /> }}
-              last={false}
-            />
-            <EdRow isTablet={isTablet} step={fontStep} icon={AtSign} iconBg={CAT.culture.ink} title="Username" desc="Your @name for tagging and, soon, followers. Letters, numbers and underscore; you can change it twice a month."
+            <EdRow isTablet={isTablet} step={fontStep} icon={AtSign} iconBg={CAT.culture.ink} title="Username" desc="How friends find you, follow you, and send you postcards. Letters, numbers and underscore; you can change it twice a month."
               control={{ below: true, node: ( <>
                 <div className="flex gap-2 items-center">
                   <div className="flex-1 flex items-center rounded-xl px-3 h-12" style={{ border: `1px solid ${ED_RULE}`, background: '#fff' }}>
@@ -902,6 +860,48 @@ export default function SettingsPage() {
                   )}
                 </div>
               </> ) }}
+              last={false}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.restroom.ink} title="Home Country" desc={homeCity ? "Sets your home flag" : "Sets your home flag · add a home city for exact home time"}
+              control={{ below: true, node: homeCountryDropdown }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.money.ink} title="Home City" desc="Sets your local time & fills in your country"
+              control={{ below: true, node: countryDropdown }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.transit.ink} title="Show Home Country Time" desc="Display home country time on home page"
+              control={{ node: <EdToggle on={showHomeCountryInfo} onClick={() => { const next = !showHomeCountryInfo; setShowHomeCountryInfo(next); persist({ show_home_country_info: next }); }} label="Toggle home country time" /> }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.weather.ink} title="Show Home Country Flag" desc="Display your flag on the home page"
+              control={{ node: <EdToggle on={showHomeFlag} onClick={() => { const next = !showHomeFlag; setShowHomeFlag(next); persist({ show_home_flag: next }); }} label="Toggle home country flag" /> }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="When I open the app" desc="Where Globeskimmers starts each time"
+              control={{ below: true, node: (
+                <Select value={openBehavior} onValueChange={(v) => { setOpenBehaviorState(v); writeOpenBehavior(v); }}>
+                  <SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue /></SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="ask">Ask me each time</SelectItem>
+                    <SelectItem value="current">Use my current location</SelectItem>
+                    <SelectItem value="continue">Continue where I left off</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Update location as I move" desc="Refresh results automatically when you travel to a new city. Off by default — we'll ask before switching."
+              control={{ node: <EdToggle on={autoFollow} onClick={() => setAutoFollow(!autoFollow)} label="Toggle auto-follow location" /> }}
+              last
+            />
+          </EdGroup>
+
+          {/* Virtual Passport group */}
+          <EdGroup kicker="Virtual Passport" isTablet={isTablet}>
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Airport arrival stamps" desc="Offer a passport stamp when you land at an airport. Your passport stays private — only you can see it."
+              control={{ node: <EdToggle on={suggestArrivals} onClick={() => { const next = !suggestArrivals; setSuggestArrivals(next); try { localStorage.setItem("pp_suggest_arrivals", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle airport arrival stamps" /> }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="New-city pop-ups" desc="Offer a stamp when you arrive in — or open the app in — a new city or country. Turn off to never be prompted (you can still add stamps yourself)."
+              control={{ node: <EdToggle on={cityPrompt} onClick={() => { const next = !cityPrompt; setCityPrompt(next); try { localStorage.setItem("pp_city_prompt", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle new-city pop-ups" /> }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Sense nearby stamps" desc="When you open your Passport, offer the attraction or airport you're standing in. Turn off to never see that pop-up (the Passport page has the same switch)."
+              control={{ node: <EdToggle on={suggestNearby} onClick={() => { const next = !suggestNearby; setSuggestNearby(next); try { localStorage.setItem("pp_suggest_nearby", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle nearby stamp sensing" /> }}
               last={false}
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={Check} iconBg={CAT.todo.ink} title="My birthday" desc="Month and day only — it earns your birthday stamp every year. Your birth year stays private behind the age gate."
