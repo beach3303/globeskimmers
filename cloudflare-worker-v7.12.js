@@ -2875,7 +2875,7 @@ async function handleLabelPhotos(request, env) {
 
 const AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days
 
-const AI_DETAILS_PROMPT_VERSION = 'v11';  // v10 -> v11: each dish also lists the reviews about it; a review counts only if claimed AND it literally names the dish. v9 -> v10: food/coffee name up to 5 candidate dishes with literal match words; CODE counts review mentions and keeps the top 3 (topDishes). v8 -> v9: accessibility claims are never asserted by AI copy ("ADA compliant", "accessible room guaranteed", "wheelchair-friendly"…) — only what the place lists or Google reports. v7 -> v8: added practical.tipping (service charge / cover charge / tip norms). Surfaces the #1 traveler-anxiety cluster ("money surprises") directly in the Practical row instead of relying on it accidentally landing in goodToKnow.
+const AI_DETAILS_PROMPT_VERSION = 'v12';  // v11 -> v12: counts are literal-only again (AI review claims undercounted), with words shared by other dishes or the place's own name/type not counted. v9 -> v10: food/coffee name up to 5 candidate dishes with literal match words; CODE counts review mentions and keeps the top 3 (topDishes). v8 -> v9: accessibility claims are never asserted by AI copy ("ADA compliant", "accessible room guaranteed", "wheelchair-friendly"…) — only what the place lists or Google reports. v7 -> v8: added practical.tipping (service charge / cover charge / tip norms). Surfaces the #1 traveler-anxiety cluster ("money surprises") directly in the Practical row instead of relying on it accidentally landing in goodToKnow.
 
 function buildAIDetailsSystemPrompt(kind) {
   const safeKind = ['restaurant', 'coffee', 'attraction', 'restroom', 'atm'].includes(kind) ? kind : 'restaurant';
@@ -2903,7 +2903,7 @@ function buildAIDetailsSystemPrompt(kind) {
           : '- gsStars 1-5, gsRedFlag false.';
 
   const kindFieldGuidance = isFood
-    ? `- topDishes: up to 5 candidate dishes/drinks that the REVIEWS or editorialSummary actually name, most-mentioned first, as an array of { name, context, match, reviews } objects. name = the dish as reviewers/menu call it (include native script in parens if relevant). context = one short positive line (≤90 chars) — why people love it. match = 1-3 short lowercase words or phrases a review would LITERALLY contain when it talks about this dish (e.g. "Chicken Xiao Long Bao" → ["xiao long bao", "soup dumpling"]; "Tonkotsu Ramen" → ["tonkotsu"]; "Pastrami on Rye (#19)" → ["pastrami", "#19"]). Never a bare category word like "ramen", "pizza" or "coffee". reviews = the "n" of every review snippet that talks about THIS specific dish (not a different dish that shares a word — a mole sampler review is not a Mole Negro review); [] if only the editorialSummary names it. Never invent a dish the data doesn't name; fewer than 5 is fine. Our code counts the mentions — do NOT write counts or numbers of reviews anywhere.
+    ? `- topDishes: up to 5 candidate dishes/drinks that the REVIEWS or editorialSummary actually name, most-mentioned first, as an array of { name, context, match } objects. name = the dish as reviewers/menu call it (include native script in parens if relevant). context = one short positive line (≤90 chars) — why people love it. match = 1-3 short lowercase words or phrases a review would LITERALLY contain when it talks about this dish (e.g. "Chicken Xiao Long Bao" → ["xiao long bao", "soup dumpling"]; "Tonkotsu Ramen" → ["tonkotsu"]; "Pastrami on Rye (#19)" → ["pastrami", "#19"]). Never a bare category word like "ramen", "pizza" or "coffee". Never a word that also names other dishes here (at a mole house, "mole" alone is every mole; use "mole negro"). Never invent a dish the data doesn't name; fewer than 5 is fine. Our code counts the mentions — do NOT write counts or numbers of reviews anywhere.
 - bestDish = null and alsoRecommended = [] (built from topDishes by code).
 - photoWorthy: 1 short line naming any standout photo-worthy dish or drink (visually striking presentation, vibrant colors, unique vessel, frequently photographed). Include the dish name + WHY it's photo-worthy. Examples: "The rainbow milk tea — served in a clear hourglass jar with layered colors, frequently photographed", "Charcoal-black sushi roll plated on a bed of dry ice — a popular shot among visitors". NULL if no reviewer mentions visual / photo / shareable appeal.
 - awards: 1 short line listing notable awards, recognitions, or critical mentions. Examples: "★ 1 Michelin star (2024)", "Bib Gourmand listed (2023)", "James Beard Foundation Award winner — Best Chef Mid-Atlantic", "Top 50 Asia Restaurants 2024 #12", "Featured in Netflix's Chef's Table". NULL if no awards/recognitions are mentioned in reviews/editorialSummary/data.
@@ -2992,7 +2992,7 @@ ${starRules}
 
 OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
 {
-  "topDishes": [ { "name": "<dish>", "context": "<short reason, ≤90 chars>", "match": ["<literal review word>", ...], "reviews": [<n>, ...] }, ... ] (restaurant/coffee only; [] otherwise),
+  "topDishes": [ { "name": "<dish>", "context": "<short reason, ≤90 chars>", "match": ["<literal review word>", ...] }, ... ] (restaurant/coffee only; [] otherwise),
   "bestDish": { "name": "<name>", "context": "<one short positive line, ≤120 chars>" } | null,
   "alsoRecommended": [
     { "name": "<dish/item name>", "context": "<short reason, ≤90 chars>" },
@@ -3050,11 +3050,13 @@ function dishMentioned(text, term) {
   }
   return text.includes(term); // CJK and other unspaced scripts
 }
-// A review counts for a dish only when the AI says it is about that dish AND its
-// text literally contains one of the dish's words. A word shared with another
-// candidate ("mole" in "Mole Negro" and "Sweet Mole") is not distinctive.
-function rankTopDishes(candidates, reviewTexts) {
+// A review counts for a dish when its text literally contains one of the dish's
+// distinctive words. Not distinctive: a word shared with another candidate
+// ("mole" in "Mole Negro" and "Sweet Mole") or with the place's own name or
+// type ("pho" at Pho 79). The AI never supplies a number.
+function rankTopDishes(candidates, reviewTexts, placeWords = '') {
   const texts = reviewTexts.map(dishNorm);
+  const where = dishNorm(placeWords).replace(/_/g, ' ');
   const seen = new Set();
   const list = (Array.isArray(candidates) ? candidates : []).slice(0, 6)
     .map((d, i) => {
@@ -3062,17 +3064,14 @@ function rankTopDishes(candidates, reviewTexts) {
       const key = dishNorm(name);
       if (!name || seen.has(key)) return null;
       seen.add(key);
-      const claimed = Array.isArray(d.reviews) ? new Set(d.reviews.map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n < texts.length)) : null;
       const context = typeof d.context === 'string' && d.context.trim() ? d.context.trim().slice(0, 120) : null;
-      return { name, context, terms: dishTerms(d), claimed, i, bare: key.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim() };
+      return { name, context, terms: dishTerms(d), i, bare: key.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim() };
     })
     .filter(Boolean);
   return list
     .map((d) => {
-      const terms = d.terms.filter((t) => !list.some((o) => o !== d && dishMentioned(o.bare, t)));
-      const mentions = terms.length
-        ? texts.filter((t, n) => (!d.claimed || d.claimed.has(n)) && terms.some((term) => dishMentioned(t, term))).length
-        : 0;
+      const terms = d.terms.filter((t) => !list.some((o) => o !== d && dishMentioned(o.bare, t)) && !(where && !t.includes(' ') && dishMentioned(where, t)));
+      const mentions = terms.length ? texts.filter((t) => terms.some((term) => dishMentioned(t, term))).length : 0;
       return { name: d.name, context: d.context, mentions, i: d.i };
     })
     .sort((a, b) => b.mentions - a.mentions || a.i - b.i)
@@ -3177,7 +3176,7 @@ async function handleAIDetails(request, env) {
     text: r.text || '',
     rating: r.rating,
     when: r.time || '',
-  })).filter(r => r.text).map((r, n) => ({ n, ...r }));
+  })).filter(r => r.text);
 
   const placeMeta = {
     name: place.name || place.displayName?.text,
@@ -3355,7 +3354,7 @@ async function handleAIDetails(request, env) {
     }
 
     if (kind === 'restaurant' || kind === 'coffee') {
-      const top = rankTopDishes(aiDetails.topDishes, reviewSnippets.map((r) => r.text));
+      const top = rankTopDishes(aiDetails.topDishes, reviewSnippets.map((r) => r.text), `${placeMeta.name || ''} ${place.primaryType || ''}`);
       aiDetails.topDishes = top;
       aiDetails.dishReviewsRead = reviewSnippets.length;
       // Older app builds read bestDish / alsoRecommended.
