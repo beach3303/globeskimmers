@@ -1195,3 +1195,25 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   here" stamp at a café, a held guestbook note + Admin Portal → Guestbook review, Only me /
   My passport on a stamp. Retire one of the duplicate D1 Universal rows (icon:Q639090 vs
   icon:Q1337576).
+
+## 2026-10-03 (late) — Stamp taps get the full Things to Do card (54ca826, bae9381, e3f07ce)
+- Founder compared the stamp page with the Things to Do card ("I like that the old things to
+  do pages had open and close hours"). The stamp page was already gone at HEAD; phones were
+  still on the 09:26 PDT OTA (1.0.2610031626), which predates its removal.
+- Worker: /activities/one builds its card with the list's mapper (processPlaceH moved out of
+  handleActivities unchanged as gaMapTieredPlace — checked identical apart from the two
+  location args). Stamp taps gain Family Friendly / Accessible, what people love, heads up,
+  best time. No traveler location → no distance (was "0.0 mi").
+- Worker: theme parks (types amusement_park / water_park) are 🎢 Theme Park, not 🌳 Nature &
+  Outdoors — Universal, Disneyland, Knott's, Six Flags, water parks; Outdoors chip → Fun.
+- App: the opened card drops the gold "1" rank badge (every opened card showed 1), the photo's
+  category tag moves left (the sheet's ✕ covered it), the guestbook comes last (after hours,
+  AI details, website).
+- Verified live: /activities/one icon:Q1337576 → Theme Park, 8.6 mi, ★4.6 (175,388), phone,
+  7-day hours, Family Friendly + Accessible; without userLat → no distance. /activities LA →
+  52 nearby + 37 icons + 20 regional; Disneyland, Knott's, Universal = Theme Park; Griffith
+  Park = Nature; Universal Studio Tour = Tours.
+- Gates: node --check, eslint, no-undef (touched + app-wide 0), build 0. NOT rendered here
+  (sign-in gate) — first visual check is the founder's phone after `npm run ota`.
+- Seen while verifying, not changed: review-word chips can be vague ("Heads up: avoid",
+  "What people love: amazing") — the list already showed them; candidate polish.

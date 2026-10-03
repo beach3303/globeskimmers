@@ -203,7 +203,9 @@ THE QUEUE — founder-agreed 2026-10-03 (build order; strike as shipped):
       verified tickets by audience + discounts + parking with prices (/attractions/visit-info,
       code-checked against the fetched official pages, 30-day cache), the Things to Do AI
       panel (stamp id → Google twin, all 21 LA stamps match), GPS-only stamp re-checked by
-      the worker. NEXT: Things to Do cards that match a stamp should open this page too.
+      the worker. SUPERSEDED the same evening: the stamp pages are gone and every
+      attraction opens its Things to Do card (founder, re-confirmed 2026-10-03 late: "the
+      things to do page replaces all of the stamps page — so goes for all attractions").
   [ ] City Board: postcards TO a city, proof-gated, Blotter rails, "Postcards from here"
   [ ] P2: stampable door from finder cards, Perfect Day door, NAV_CLEARANCE, CLAUDE.md truths
   [ ] Landing page messaging → North Star positioning ("I was there"; places/moments/memories)
