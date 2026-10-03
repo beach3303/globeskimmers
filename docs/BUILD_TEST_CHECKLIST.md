@@ -1114,3 +1114,16 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   Phở 79, Leo's, Blue Bottle [coffee], Sushi Gen, Ichiran Shibuya), spot-checked by hand.
 - Regex "Customer favorites" retired in the worker (returns []) and the card.
 - App side (TOP DISHES / ☕ TOP ORDERS list with the count line) ships with the next OTA.
+
+## 2026-10-03 (night) — "Add your dish" (Option C phase 2, restaurants + cafés)
+- Migration 20261004090000_place_dishes applied by CI. Worker live: POST /places/dishes
+  (200, empty list verified), /places/dishes/add (401 unsigned verified), /places/dishes/
+  delete, GET /dish-photo/<key> (bad key 400, missing 404 verified).
+- A post: photo + dish name; proof = device GPS ≤150 m of the place (Google's cached
+  location when known) or the photo's location tag ≤150 m; photo must pass review with
+  food/drink as the main subject; dish name text-moderated; 12/day; one per traveler per
+  dish per place (new photo replaces old). Anonymous; owner can remove.
+- NOT end-to-end tested with a signed-in account (no test account used). First real
+  test: founder at a restaurant after the OTA → card → "Here now? Add your dish".
+- Gates: node --check, eslint, no-undef (touched + app-wide 0), build 0, cap copy, sim
+  Release clean install boots, bundle contains the route.

@@ -176,9 +176,14 @@ THE QUEUE — founder-agreed 2026-10-03 (build order; strike as shipped):
       only if the AI says it's about that dish AND its text names it (a true lower bound).
       Regex "Customer favorites" chips removed (they showed "Just As Expected"). The
       "ordered by N travelers" half ships with "Add your dish" (next item).
-  [ ] Option C phase 2: traveler photos on places (proof-gated: GPS or photo location),
+  [~] Option C phase 2: traveler photos on places (proof-gated: GPS or photo location),
       opt-in from stamp/postcard/guestbook photos, "Add your dish" on restaurants; cards
       prefer traveler photo > Wikimedia > Google (compliant bridge, credited)
+      DONE 2026-10-03: "Add your dish" on restaurant + café cards (api.place_dishes,
+      /places/dishes*, /dish-photo/) — GPS ≤150 m or photo location, photo review with
+      food/drink as subject, anonymous, "Ordered by N travelers". NOT YET: opt-in from
+      stamp/postcard/guestbook photos; card hero preferring traveler photos (needs a
+      batch summary endpoint); IP-country check on dish GPS (stamps have it).
   [ ] City Board: postcards TO a city, proof-gated, Blotter rails, "Postcards from here"
   [ ] P2: stampable door from finder cards, Perfect Day door, NAV_CLEARANCE, CLAUDE.md truths
   [ ] Landing page messaging → North Star positioning ("I was there"; places/moments/memories)
