@@ -14831,6 +14831,40 @@ async function handleAdminHandleRequests(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// The Seal letters — founder-approved word for word, 2026-10-03. Gold bows,
+// burgundy confirms; teal (House) sends nothing. Sent on grant when Resend
+// is configured, otherwise returned composed for the desk to copy.
+async function gbSendSealLetter(env, { email, name, handle, tier }) {
+  const who = name || 'there';
+  const base = `Hello ${who},
+
+Your account @${handle} now carries the GlobeSkimmers Seal \u2014 our mark of official accounts. It isn't a checkmark; it's a stamp, drawn in the same worn ink as the stamps people collect for the places they've been and the moments they were there.
+
+The Seal means everyone who meets you on GlobeSkimmers knows it's really you \u2014 beside your name everywhere you post, sign, and send.
+
+`;
+  const gold = `Yours is the Gold Seal \u2014 Honored: the highest Seal of Honor and Respect. It can't be bought, applied for, or earned \u2014 it is gifted, and there are very few.
+
+The founder honors you.`;
+  const std = `It's an honor to have you here. Welcome.`;
+  const subject = tier === 'gold' ? '\u272A The Gold Seal \u2014 Honored' : '\u272A Your GlobeSkimmers Seal is official';
+  const text = base + (tier === 'gold' ? gold : std) + `
+
+Maiza & GlobeSkimmers \u2708\uFE0F
+"Collect your world."`;
+  if (!email) return { sent: false, subject, text, reason: 'no-email' };
+  if (!env.RESEND_API_KEY) return { sent: false, subject, text, reason: 'no-key' };
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: env.RESEND_FROM || 'GlobeSkimmers <hello@globeskimmers.io>', to: [email], subject, text }),
+    });
+    if (!r.ok) return { sent: false, subject, text, reason: `resend-${r.status}` };
+    return { sent: true, subject, text };
+  } catch (e) { return { sent: false, subject, text, reason: e.message }; }
+}
+
 // POST /admin/verified { op, handle?, seal? } — the founder's Seal desk.
 // Tiers: gold = Honored (the founder's personal honor), burgundy = Official
 // (businesses, partners, public figures), teal = House (GlobeSkimmers team).
@@ -14849,9 +14883,23 @@ async function handleAdminVerified(request, env) {
       const w = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ verified: op === 'grant', seal, updated_at: new Date().toISOString() }) });
       const rows = w.ok ? await w.json() : [];
       if (!rows.length) return jsonResponse({ error: 'No user with that handle' }, 404);
+      if (op === 'grant' && seal !== 'teal') {
+        // The letter rides the grant. Email from the auth admin API, name
+        // from the social profile; failures just fall back to desk copy.
+        let email = null, name = null;
+        try {
+          const uq = await fetch(`${GB_URL(env)}/auth/v1/admin/users/${rows[0].user_id}`, { headers: { apikey: GB_KEY(env), Authorization: `Bearer ${GB_KEY(env)}` } });
+          if (uq.ok) email = String((await uq.json())?.email || '').toLowerCase() || null;
+        } catch { /* copy fallback */ }
+        try {
+          const pq = await gbRest(env, `social_profiles?user_id=eq.${rows[0].user_id}&select=display_name`, {});
+          name = (pq.ok ? await pq.json() : [])[0]?.display_name || null;
+        } catch { /* fine */ }
+        var letter = await gbSendSealLetter(env, { email, name, handle: rows[0].handle, tier: seal });
+      }
     }
     const list = await gbRest(env, 'passport_shares?verified=eq.true&select=handle,user_id,seal&order=handle.asc', {});
-    return jsonResponse({ rows: list.ok ? await list.json() : [] });
+    return jsonResponse({ rows: list.ok ? await list.json() : [], ...(typeof letter !== 'undefined' && letter ? { letter } : {}) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 

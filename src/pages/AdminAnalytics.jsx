@@ -150,7 +150,19 @@ export default function AdminAnalytics() {
     }
   };
   const removeHeld = async (handle) => { await heldCall({ op: 'remove', handle }); };
-  const grantSeal = async () => { const { error } = await sealCall({ op: 'grant', handle: sealDraft, seal: sealTierDraft }); if (error) setSeals((v) => ({ ...v, error })); else setSealDraft(''); };
+  const [sealLetter, setSealLetter] = useState(null); // { sent, subject, text } from the last grant
+  const grantSeal = async () => {
+    setSealLetter(null);
+    const { data, error } = await sealCall({ op: 'grant', handle: sealDraft, seal: sealTierDraft });
+    if (error) { setSeals((v) => ({ ...v, error })); return; }
+    setSealDraft('');
+    if (data?.letter) {
+      setSealLetter(data.letter);
+      if (!data.letter.sent) {
+        try { await navigator.clipboard.writeText(`Subject: ${data.letter.subject}\n\n${data.letter.text}`); } catch { /* shown below */ }
+      }
+    }
+  };
   const revokeSeal = async (handle) => { await sealCall({ op: 'revoke', handle }); };
 
   const loadInbox = async (markHandled) => {
@@ -599,6 +611,17 @@ export default function AdminAnalytics() {
             <Section title={`✪ The GlobeSkimmers Seal — ${seals.rows.length} granted`} icon={UserCheck}
               empty={seals.rows.length === 0 && !seals.error ? 'No seals granted yet. Reserved for official figures, official businesses, and whoever you choose to gift it to. Users never see a checkmark — they see the Seal.' : null}>
               {seals.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{seals.error}</div>}
+              {sealLetter && (
+                <div style={{ marginBottom: 10, padding: '10px 12px', borderRadius: 10, background: sealLetter.sent ? '#E7F8F0' : '#FFF8E6', border: `1px solid ${COLORS.border}` }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: sealLetter.sent ? COLORS.green : COLORS.amber }}>
+                    {sealLetter.sent ? '✉️ The letter was sent.' : '✉️ Email isn\u2019t configured — the letter was copied to your clipboard to send yourself:'}
+                  </div>
+                  {!sealLetter.sent && (
+                    <textarea readOnly value={`Subject: ${sealLetter.subject}\n\n${sealLetter.text}`} rows={7}
+                      style={{ width: '100%', fontSize: 12, padding: 8, marginTop: 6, borderRadius: 8, border: `1px solid ${COLORS.border}`, color: COLORS.dark }} />
+                  )}
+                </div>
+              )}
               {seals.rows.map((r) => (
                 <div key={r.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: `1px solid ${COLORS.border}`, fontSize: 13 }}>
                   <span style={{ fontWeight: 700, color: COLORS.dark, display: 'flex', alignItems: 'center' }}>@{r.handle}<OfficialSeal size={14} tier={r.seal || 'burgundy'} /></span>

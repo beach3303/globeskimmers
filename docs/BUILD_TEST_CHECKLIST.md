@@ -1051,3 +1051,11 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   zero collisions against all 1,392 held names and a real-name probe set (therapist,
   michelle, bahamas, pakistan, phuket…). osama/jihad stay claimable (real first names;
   binladen/alqaeda blocked); troia/weed/sinaloa stay (real places).
+
+## 2026-10-03 — Seal letters wired to the grant desk
+- Founder-approved letters (word-final): burgundy = official welcome ("It's an honor to
+  have you here. Welcome."), gold = the honor letter ("the highest Seal of Honor and
+  Respect… The founder honors you."). Teal/House grants send nothing.
+- Grant → letter emails via Resend when RESEND_API_KEY exists; otherwise the desk shows
+  the composed letter and copies it to the clipboard. Email via auth admin API, name
+  from social_profiles.
