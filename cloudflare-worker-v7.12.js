@@ -14652,7 +14652,7 @@ Maiza & GlobeSkimmers \u2708\uFE0F`;
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: env.RESEND_FROM || 'GlobeSkimmers <hello@globeskimmers.io>', to: [row.email], subject, text }),
+      body: JSON.stringify({ from: env.RESEND_FROM || 'GlobeSkimmers <hello@globeskimmers.io>', reply_to: env.RESEND_REPLY_TO || 'founder@globeskimmers.io', to: [row.email], subject, text }),
     });
     if (!r.ok) return { sent: false, subject, text, reason: `resend-${r.status}` };
     return { sent: true, subject, text };
@@ -14858,7 +14858,7 @@ Maiza & GlobeSkimmers \u2708\uFE0F
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: env.RESEND_FROM || 'GlobeSkimmers <hello@globeskimmers.io>', to: [email], subject, text }),
+      body: JSON.stringify({ from: env.RESEND_FROM || 'GlobeSkimmers <hello@globeskimmers.io>', reply_to: env.RESEND_REPLY_TO || 'founder@globeskimmers.io', to: [email], subject, text }),
     });
     if (!r.ok) return { sent: false, subject, text, reason: `resend-${r.status}` };
     return { sent: true, subject, text };
