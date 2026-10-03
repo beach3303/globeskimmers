@@ -3560,7 +3560,7 @@ async function resolveStampGid(env, id) {
     if (r.ok) gid = (await r.json())?.places?.[0]?.id || null;
   } catch { gid = null; }
   if (kv) await kv.put(key, gid || 'none', { expirationTtl: (gid ? 180 : 30) * 86400 }).catch(() => {});
-  if (kv && gid) await kv.put(`gid2d1:${gid}`, JSON.stringify(ttdStampSummary(row)), { expirationTtl: 30 * 86400 }).catch(() => {});
+  if (kv && gid) await kv.put(`gid2d1v2:${gid}`, JSON.stringify(ttdStampSummary(row)), { expirationTtl: 30 * 86400 }).catch(() => {});
   return gid;
 }
 
@@ -7189,7 +7189,7 @@ async function ttdGidFor(env, id) {
 const ttdStampSummary = (r) => ({ id: r.id, name: r.name, category: r.category || null, footprint_radius_m: r.footprint_radius_m ?? null, city: r.city || null, country: r.country || null, lat: +r.lat, lng: +r.lng });
 // The iconic (stampable) D1 row for a place: same name, inside its footprint.
 async function ttdStampFor(env, gid, name, lat, lng) {
-  const kv = env.GLOBESKIMMERS_KV, key = gid ? `gid2d1:${gid}` : null;
+  const kv = env.GLOBESKIMMERS_KV, key = gid ? `gid2d1v2:${gid}` : null;
   if (key && kv) {
     const hit = await kv.get(key).catch(() => null);
     if (hit) return hit === 'none' ? null : JSON.parse(hit);
@@ -7209,7 +7209,10 @@ async function ttdStampFor(env, gid, name, lat, lng) {
       if (!rn || !n || !(rn === n || (rn.length >= 6 && n.includes(rn)) || (n.length >= 6 && rn.includes(n)))) continue;
       const m = haversineMilesLoc(lat, lng, +r.lat, +r.lng) * 1609.34;
       if (m > Math.max(600, ppStampRadius(r) * 1.5)) continue;
-      if (!best || m < best.m) best = { m, r };
+      // D1 has a few duplicate rows for one place: the row already resolved to
+      // THIS Google place wins, then the nearest.
+      const tied = gid && kv ? (await kv.get(`d1gid:${r.id}`).catch(() => null)) === gid : false;
+      if (!best || (tied && !best.tied) || (tied === best.tied && m < best.m)) best = { m, r, tied };
     }
     if (best) out = ttdStampSummary(best.r);
   }
