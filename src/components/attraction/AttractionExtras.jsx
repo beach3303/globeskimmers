@@ -258,6 +258,17 @@ function SourceLine({ url, checkedAt }) {
     </p>
   );
 }
+// Prices are kept 3 months (founder, 2026-10-03), so every card that shows them
+// offers the official page to confirm — the source page when it is on the
+// official site (the tickets or parking page itself), else the official site.
+const verifyUrlFor = (src, official) => {
+  const sh = hostOf(src), oh = hostOf(official);
+  return sh && oh && (sh === oh || sh.endsWith(`.${oh}`) || oh.endsWith(`.${sh}`)) ? src : (official || src || null);
+};
+function VerifyLink({ url, label }) {
+  if (!url) return null;
+  return <button type="button" onClick={() => openPartner(url)} style={{ display: "block", marginTop: 6, fontSize: fs(13.5), fontWeight: 600, color: "#6D28D9", textDecoration: "underline", textAlign: "left" }}>{label} ↗</button>;
+}
 function OfficialLink({ url, label }) {
   if (!url) return <p style={{ fontSize: fs(13), color: INK3 }}>Prices aren&rsquo;t listed online — ask at the venue.</p>;
   return <button type="button" onClick={() => openPartner(url)} style={{ fontSize: fs(14), fontWeight: 600, color: "#6D28D9", textDecoration: "underline", textAlign: "left" }}>{label} ↗</button>;
@@ -304,6 +315,7 @@ export function TicketsCard({ visit, website }) {
       {a?.free_days && <p style={{ marginTop: 6, fontSize: fs(13.5), color: INK }}>🗓️ {a.free_days}</p>}
       {a?.reservation && <p style={{ marginTop: 6, fontSize: fs(13.5), color: INK }}>🎟️ {a.reservation}</p>}
       {hasAny && a && <SourceLine url={a.source_url || official} checkedAt={visit.checked_at} />}
+      {hasAny && a && <VerifyLink url={verifyUrlFor(a.source_url, official)} label="Verify the latest prices on the official website" />}
     </Card>
   );
 }
@@ -326,6 +338,7 @@ export function ParkingCard({ visit, website }) {
       ))}
       {pk.note && <p style={{ marginTop: 6, fontSize: fs(13.5), color: INK }}>{pk.note}</p>}
       <SourceLine url={pk.source_url || official} checkedAt={visit.checked_at} />
+      <VerifyLink url={verifyUrlFor(pk.source_url, official)} label="Verify the latest parking info on the official website" />
     </Card>
   );
 }
