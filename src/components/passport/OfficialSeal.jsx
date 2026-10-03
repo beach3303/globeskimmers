@@ -13,8 +13,10 @@ import React, { useId } from "react";
 const TIERS = {
   gold: {
     label: "Honored — the GlobeSkimmers Gold Seal",
-    foil: ["#8A6A12", "#E2C35A", "#A67C1A"],
-    foilDark: ["#B8912A", "#F4DD86", "#D4AF37"],
+    // Rich engraved metal — deep bronze shadow to bright highlight, so gold
+    // always outshines the Sunshine (friends & family) daffodil yellow.
+    foil: ["#6B4F09", "#F2D878", "#9A7414"],
+    foilDark: ["#A87E16", "#FFE98F", "#C9A227"],
     glow: "rgba(226,195,90,.55)",
   },
   burgundy: {
