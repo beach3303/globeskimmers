@@ -7122,8 +7122,10 @@ async function handleAttractionsGet(request, env) {
 // its source is a page that was actually fetched AND that page's text contains
 // the amount. Nothing is estimated: unfound facts stay null and the app sends
 // the traveler to the official site. Cached 30 days (3 when nothing is found).
-const VISIT_INFO_MODEL = 'claude-opus-5';
-const VISIT_INFO_VERSION = 'v2';  // v2: fetch-only from the official site when known (v1's search + code-run fetches burned the budget on rejected URLs)
+// Sonnet 5, not Opus: a lookup reads several whole pages (Opus 5 measured 138k input
+// tokens on Battleship Iowa), and code re-checks every amount against the page text.
+const VISIT_INFO_MODEL = 'claude-sonnet-5';
+const VISIT_INFO_VERSION = 'v3';  // v2: fetch-only from the official site when known (v1's search + code-run fetches burned the budget on rejected URLs)
 const VISIT_INFO_TTL = 30 * 86400, VISIT_INFO_EMPTY_TTL = 3 * 86400;
 const VISIT_INFO_DAILY_CAP = 150;   // fresh lookups per day, all travelers
 const VISIT_INFO_USER_CAP = 20;     // fresh lookups per traveler per day
@@ -7132,7 +7134,7 @@ const VISIT_INFO_IP_CAP = 5;        // … and per network
 const VISIT_AUDIENCES = new Set(['adult', 'child', 'youth', 'student', 'senior', 'military', 'resident', 'family', 'other']);
 const VISIT_INFO_PROMPT = [
   'You find current visitor prices for ONE attraction, for a travel app that never guesses.',
-  'Start from the OFFICIAL website when one is given: web_fetch it, then follow ITS links to the tickets/admission page and the parking (or "plan your visit", "visit", "directions", "FAQ") page. Only fetch URLs that appear in a page you already fetched or in a search result — never guess a URL. With no official website given, use web_search once to find it. Fetch at most 6 pages.',
+  'Start from the OFFICIAL website when one is given: web_fetch it, then follow ITS links to the tickets/admission page and the parking (or "plan your visit", "visit", "directions", "FAQ") page. Only fetch URLs that appear in a page you already fetched or in a search result — never guess a URL. With no official website given, use web_search once to find it. Fetch at most 5 pages.',
   'Report ONLY what a page you fetched states. Never use memory, never estimate, never average. Prefer the official site; use a third-party page only when the official site states nothing, and never a reseller\'s marked-up price.',
   'For every price, give source_url = the exact URL of the fetched page that states it, and amount_text exactly as written there. When prices vary by date, give the lowest "from" price the page states and say "from — varies by date" in note.',
   'Audience is one of: adult, child, youth, student, senior, military, resident, family, other. Put the age range or condition in label (e.g. "Child (3–9)", "Senior (62+)").',
@@ -7178,7 +7180,7 @@ async function visitAsk(env, userText, withSearch) {
         output_config: { effort: 'low' },
         tools: [
           ...(withSearch ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: 2 }] : []),
-          { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 6, max_content_tokens: 12000 },
+          { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 5, max_content_tokens: 8000 },
         ],
         messages,
       }),
@@ -7217,7 +7219,7 @@ function visitVerify(raw, ev) {
   const prices = (Array.isArray(a.prices) ? a.prices : []).map((p) => {
     const t = textOf(p?.source_url); const amount = Number(p?.amount);
     if (!t || !VISIT_AUDIENCES.has(p?.audience) || !(amount >= 0) || !visitAmountIn(t, amount)) return null;
-    return { audience: p.audience, label: str(p.label, 60) || p.audience, amount, amount_text: str(p.amount_text, 40), note: str(p.note, 80), source_url: p.source_url };
+    return { audience: p.audience, label: str(p.label, 60) || p.audience, amount, amount_text: str(p.amount_text, 40), note: str(p.note, 100), source_url: p.source_url };
   }).filter(Boolean).slice(0, 12);
   const discounts = (Array.isArray(a.discounts) ? a.discounts : []).map((x) => {
     const t = textOf(x?.source_url); const label = str(x?.label, 90);
@@ -7232,11 +7234,11 @@ function visitVerify(raw, ev) {
   const free = a.free === true && !!freeSrc && /\bfree\b/i.test(freeSrc) ? true : (prices.length ? false : null);
   const pk = raw?.parking || {};
   const options = (Array.isArray(pk.options) ? pk.options : []).map((o) => {
-    const t = textOf(o?.source_url); const label = str(o?.label, 60);
+    const t = textOf(o?.source_url); const label = str(o?.label, 80);
     if (!t || !label || !/park/i.test(t)) return null;
     const amount = o?.amount == null ? null : Number(o.amount);
     if (amount != null && !(amount >= 0 && visitAmountIn(t, amount))) return { label, price_text: null, amount: null, source_url: o.source_url };
-    return { label, price_text: amount != null ? str(o.price_text, 60) : null, amount, source_url: o.source_url };
+    return { label, price_text: amount != null ? str(o.price_text, 120) : null, amount, source_url: o.source_url };
   }).filter(Boolean).slice(0, 6);
   const keepUrl = (u) => (u && ev.seen.has(visitUrlKey(u)) ? String(u) : null);
   return {
