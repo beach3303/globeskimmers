@@ -131,21 +131,25 @@ export default function MailboxPage() {
             <p style={{ fontSize: fs(13.5), color: INK, fontWeight: 700 }}>Claim your @username</p>
             <p style={{ fontSize: fs(12), color: INK2, marginTop: 2 }}>It&rsquo;s how friends find you, follow you, and send you postcards.</p>
             <div className="flex gap-2 mt-2.5 items-center">
-              <div className="flex-1 flex items-center rounded-xl px-3 h-11" style={{ border: `1px solid ${RULE}`, background: "#fff" }}>
+              <div className="flex-1 min-w-0 flex items-center rounded-xl px-3 h-11" style={{ border: `1px solid ${RULE}`, background: "#fff" }}>
                 <span style={{ color: INK3, fontWeight: 700 }}>@</span>
                 <input value={claimDraft} onChange={(e) => setClaimDraft(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20))}
                   placeholder="yourname" aria-label="Choose your username" autoCapitalize="none" autoCorrect="off"
-                  className="flex-1 outline-none bg-transparent pl-1" style={{ fontSize: fs(14) }} onKeyDown={(e) => e.key === "Enter" && claim()} />
+                  className="flex-1 min-w-0 outline-none bg-transparent pl-1" style={{ fontSize: fs(14) }} onKeyDown={(e) => e.key === "Enter" && claim()} />
               </div>
-              {claimNeedYear && (
-                <input value={claimYear} onChange={(e) => setClaimYear(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))} placeholder="Born" inputMode="numeric" aria-label="Year you were born"
-                  className="w-20 h-11 rounded-xl px-3 outline-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }} />
-              )}
               <button type="button" onClick={claim} disabled={claimBusy || claimDraft.length < 3 || (claimNeedYear && claimYear.length !== 4)}
-                className="h-11 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL, color: "#fff", fontSize: fs(13) }}>
+                className="flex-none h-11 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL, color: "#fff", fontSize: fs(13) }}>
                 {claimBusy ? "…" : "Claim"}
               </button>
             </div>
+            {claimNeedYear && (
+              <div className="mt-2.5">
+                <label htmlFor="gs-mb-birth-year" style={{ display: "block", fontSize: fs(12.5), color: INK, fontWeight: 600 }}>One thing first — the year you were born</label>
+                <p style={{ fontSize: fs(11.5), color: INK3, marginTop: 1 }}>Asked once, never shown.</p>
+                <input id="gs-mb-birth-year" value={claimYear} onChange={(e) => setClaimYear(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))} placeholder="e.g. 1990" inputMode="numeric" autoComplete="bday-year"
+                  className="mt-1.5 w-36 h-11 rounded-xl px-3 outline-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(14) }} />
+              </div>
+            )}
             {claimSugs.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2 items-center">
                 <span style={{ color: INK3, fontSize: fs(11.5) }}>Free right now:</span>

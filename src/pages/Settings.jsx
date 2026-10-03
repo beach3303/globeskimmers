@@ -800,22 +800,29 @@ export default function SettingsPage() {
             <EdRow isTablet={isTablet} step={fontStep} icon={AtSign} iconBg={CAT.culture.ink} title="Username" desc="How friends find you, follow you, and send you postcards. Letters, numbers and underscore; you can change it twice a month."
               control={{ below: true, node: ( <>
                 <div className="flex gap-2 items-center">
-                  <div className="flex-1 flex items-center rounded-xl px-3 h-12" style={{ border: `1px solid ${ED_RULE}`, background: '#fff' }}>
+                  <div className="flex-1 min-w-0 flex items-center rounded-xl px-3 h-12" style={{ border: `1px solid ${ED_RULE}`, background: '#fff' }}>
                     <span style={{ color: ED_INK3, fontWeight: 700 }}>@</span>
                     <input value={handleDraft} onChange={(e) => setHandleDraft(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20))}
                       placeholder="yourname" aria-label="Username" autoCapitalize="none" autoCorrect="off"
-                      className="flex-1 outline-none bg-transparent pl-1" style={{ fontSize: 15 }} />
+                      className="flex-1 min-w-0 outline-none bg-transparent pl-1" style={{ fontSize: 15 }} />
                   </div>
-                  {needYear && (
-                    <input value={yearDraft} onChange={(e) => setYearDraft(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
-                      placeholder="Born (e.g. 1990)" inputMode="numeric" aria-label="Year you were born"
-                      className="w-28 rounded-xl px-3 h-12 outline-none" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 15 }} />
-                  )}
                   <button type="button" onClick={saveHandle} disabled={handleBusy || !handleDraft.trim() || (needYear ? yearDraft.length !== 4 : handleDraft.trim() === handle)}
-                    className="h-12 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>
+                    className="flex-none h-12 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>
                     {handleBusy ? 'Saving…' : handle ? 'Change' : 'Claim'}
                   </button>
                 </div>
+                {needYear && (
+                  <div className="mt-2.5 rounded-xl px-3 py-2.5" style={{ background: '#FFFBF0', border: '1px solid #EAD9AE' }}>
+                    <label htmlFor="gs-birth-year" style={{ display: 'block', fontSize: 13, color: ED_INK, fontWeight: 600 }}>
+                      One thing first — the year you were born
+                    </label>
+                    <p style={{ fontSize: 12, color: ED_INK3, marginTop: 2 }}>Asked once, never shown. It keeps GlobeSkimmers age-appropriate.</p>
+                    <input id="gs-birth-year" value={yearDraft} onChange={(e) => setYearDraft(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                      placeholder="e.g. 1990" inputMode="numeric" autoComplete="bday-year"
+                      className="mt-2 w-40 rounded-xl px-3 h-11 outline-none" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 15 }} />
+                    <p style={{ fontSize: 11.5, color: ED_INK3, marginTop: 6 }}>Then tap {handle ? 'Change' : 'Claim'}.</p>
+                  </div>
+                )}
                 {handleSugs.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2 items-center">
                     <span style={{ color: ED_INK3, fontSize: 12 }}>Free right now:</span>
