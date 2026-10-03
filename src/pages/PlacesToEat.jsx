@@ -488,9 +488,6 @@ function processRest(place, userLat, userLng, isLocal = true) {
     photoUrl: photos[0] || null,
     vibes, dietary,
     badges,
-    customerFavorites: (place.customerFavorites || place.customer_favorites || [])
-      .map(f => ({ ...f, dish: f.dish || f.name || '', name: f.name || f.dish || '' }))
-      .filter(f => f.dish),
     reviews: deduplicatedReviews,
     // Native Google Places API (New) AI fields — passthrough for the
     // expanded-card AI Summary panel. Already covered by ...place spread
@@ -797,17 +794,6 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
           {expanded&&(
             <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
               <div style={{marginTop:fs(20),display:"flex",flexDirection:"column",gap:fs(14)}}>
-
-                {restaurant.customerFavorites?.length>0&&(
-                  <div style={{padding:fs(16),background:"#FEF9EE",borderRadius:"16px",border:"1px solid #FDE68A"}}>
-                    <div style={{fontSize:fs(13),fontWeight:700,color:"#D97706",letterSpacing:"0.5px",marginBottom:fs(9)}}>❤️ CUSTOMER FAVORITES</div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
-                      {restaurant.customerFavorites.slice(0,6).map((f,i)=>{const l=f.dish||f.name||'';return l?(
-                        <span key={i} style={{background:"#FDE68A",color:"#92400E",padding:`${fs(5)} ${fs(13)}`,borderRadius:"999px",fontSize:fs(15),fontWeight:600}}>{l.charAt(0).toUpperCase()+l.slice(1)}{f.mentions>2?` ×${f.mentions}`:''}</span>
-                      ):null;})}
-                    </div>
-                  </div>
-                )}
 
                 {restaurant.bestTimeNote&&(
                   <div style={{padding:fs(16),background:"#E7F3EA",borderRadius:"16px",fontSize:fs(16),color:"#166534"}}>

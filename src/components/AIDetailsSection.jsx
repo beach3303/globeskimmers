@@ -263,6 +263,15 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
     ? [{ name: details.bestDish.name, context: details.bestDish.context }]
     : [];
 
+  // Top dishes (v10): the AI names them, the Worker's code counts how many of
+  // the Google reviews it read mention each one — the only number shown.
+  const topDishes = Array.isArray(details.topDishes) ? details.topDishes.filter((d) => d?.name).slice(0, 3) : [];
+  const read = Number(details.dishReviewsRead) || 0;
+  const mentionLine = (m) => {
+    if (!(m > 0) || !read) return null;
+    return read === 1 ? 'Mentioned in the one Google review we read' : `Mentioned in ${Math.min(m, read)} of the ${read} Google reviews we read`;
+  };
+
   const hasVerdict = (details.gsStars != null || details.gsRedFlag || details.gsVerdict || worthTag);
 
   return (
@@ -315,9 +324,31 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
           is the strongest single recognition signal. */}
       {row('🏆', 'AWARDS', details.awards)}
 
+      {topDishes.length > 0 && (
+        <div style={{ marginBottom: '10px' }}>
+          <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
+            {kind === 'coffee' ? '☕ TOP ORDERS' : '🥘 TOP DISHES'}
+          </div>
+          <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+            {topDishes.map((d, i) => (
+              <li key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <span style={{ flexShrink: 0, width: '20px', height: '20px', borderRadius: '9999px', background: PURPLE_BG, border: `1px solid ${PURPLE_LIGHT}`, color: PURPLE, fontSize: 'calc(11px * var(--fs))', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1px' }}>{i + 1}</span>
+                <span style={{ minWidth: 0, fontSize: 'calc(13px * var(--fs))', lineHeight: '1.5', color: DARK }}>
+                  <strong style={{ fontWeight: '600' }}>{h(d.name)}</strong>
+                  {d.context ? <span style={{ color: '#475569' }}> — {h(d.context)}</span> : null}
+                  {mentionLine(d.mentions) && (
+                    <span style={{ display: 'block', fontSize: 'calc(11.5px * var(--fs))', color: GRAY, marginTop: '1px' }}>{mentionLine(d.mentions)}</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
       {/* BEST DISH — single-bullet outline (one item, formatted like the
-          alsoRecommended list for visual consistency). */}
-      {bestDishItems.length > 0 && (
+          alsoRecommended list for visual consistency). Older cached panels. */}
+      {topDishes.length === 0 && bestDishItems.length > 0 && (
         <div style={{ marginBottom: '8px' }}>
           <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>🥘 BEST DISH</div>
           {renderDishList(bestDishItems)}
@@ -326,7 +357,7 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
 
       {/* ALSO RECOMMENDED — bulleted outline, one bullet per dish/item.
           v5 schema: array of {name, context} objects. */}
-      {details.alsoRecommended?.length > 0 && (
+      {topDishes.length === 0 && details.alsoRecommended?.length > 0 && (
         <div style={{ marginBottom: '8px' }}>
           <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>👍 ALSO RECOMMENDED</div>
           {renderDishList(details.alsoRecommended)}

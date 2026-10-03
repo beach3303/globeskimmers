@@ -339,37 +339,10 @@ function normalizePlace(place, baseUrl = '', includeReviews = false) {
   return normalized;
 }
 
-function extractCustomerFavorites(reviews) {
-  if (!reviews || reviews.length === 0) return [];
-  const dishMentions = {};
-  const dishPatterns = [
-    /(?:the|their|try the|loved the|best|amazing|excellent|fantastic|delicious)\s+([a-zA-Z\s]{3,25}?)(?:\s+(?:is|was|were|are|here)|\.|,|!)/gi,
-    /(?:order(?:ed)?|had|got|tried)\s+(?:the\s+)?([a-zA-Z\s]{3,25}?)(?:\s+and|\.|,|!)/gi
-  ];
-  const skipWords = ['food', 'service', 'place', 'restaurant', 'staff', 'experience', 'time', 'wait', 'price', 'portion', 'atmosphere', 'location', 'parking'];
-
-  for (const review of reviews) {
-    const text = review.text?.text || review.originalText?.text || '';
-    for (const pattern of dishPatterns) {
-      let match;
-      while ((match = pattern.exec(text)) !== null) {
-        const dish = match[1].trim().toLowerCase();
-        if (dish.length >= 3 && dish.length <= 30 && !skipWords.some(w => dish.includes(w))) {
-          dishMentions[dish] = (dishMentions[dish] || 0) + 1;
-        }
-      }
-    }
-  }
-
-  return Object.entries(dishMentions)
-    .filter(([_, count]) => count >= 1)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([dish, count]) => ({
-      dish: dish.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-      mentions: count
-    }));
-}
+// The old regex "customer favorites" is retired: on real places it surfaced
+// phrases like "Just As Expected" and "Back Of The Shop". Dishes now come from
+// the AI Details top-dishes list, whose counts are computed by code below.
+function extractCustomerFavorites() { return []; }
 
 async function handleTextSearch(request, env, ctx) {
   const url = new URL(request.url);
@@ -2902,7 +2875,7 @@ async function handleLabelPhotos(request, env) {
 
 const AI_DETAILS_TTL_SECONDS = 30 * 24 * 60 * 60;  // 30 days
 
-const AI_DETAILS_PROMPT_VERSION = 'v9';  // v8 -> v9: accessibility claims are never asserted by AI copy ("ADA compliant", "accessible room guaranteed", "wheelchair-friendly"…) — only what the place lists or Google reports. v7 -> v8: added practical.tipping (service charge / cover charge / tip norms). Surfaces the #1 traveler-anxiety cluster ("money surprises") directly in the Practical row instead of relying on it accidentally landing in goodToKnow.
+const AI_DETAILS_PROMPT_VERSION = 'v10';  // v9 -> v10: food/coffee name up to 5 candidate dishes with literal match words; CODE counts review mentions and keeps the top 3 (topDishes). v8 -> v9: accessibility claims are never asserted by AI copy ("ADA compliant", "accessible room guaranteed", "wheelchair-friendly"…) — only what the place lists or Google reports. v7 -> v8: added practical.tipping (service charge / cover charge / tip norms). Surfaces the #1 traveler-anxiety cluster ("money surprises") directly in the Practical row instead of relying on it accidentally landing in goodToKnow.
 
 function buildAIDetailsSystemPrompt(kind) {
   const safeKind = ['restaurant', 'coffee', 'attraction', 'restroom', 'atm'].includes(kind) ? kind : 'restaurant';
@@ -2930,8 +2903,8 @@ function buildAIDetailsSystemPrompt(kind) {
           : '- gsStars 1-5, gsRedFlag false.';
 
   const kindFieldGuidance = isFood
-    ? `- bestDish: { name, context } — signature dish/drink. name = the dish (include native script in parens if relevant). context = one short positive line (≤120 chars) — why people love it.
-- alsoRecommended: TOP 4 dishes/drinks beyond bestDish that reviewers mention, as an array of { name, context } objects. Each name = just the dish; context = short reason (≤90 chars). Aim for 4 — fewer only if data is thin.
+    ? `- topDishes: up to 5 candidate dishes/drinks that the REVIEWS or editorialSummary actually name, most-mentioned first, as an array of { name, context, match } objects. name = the dish as reviewers/menu call it (include native script in parens if relevant). context = one short positive line (≤90 chars) — why people love it. match = 1-3 short lowercase words or phrases a review would LITERALLY contain when it talks about this dish (e.g. "Chicken Xiao Long Bao" → ["xiao long bao", "soup dumpling"]; "Tonkotsu Ramen" → ["tonkotsu"]; "Pastrami on Rye (#19)" → ["pastrami", "#19"]). Never a bare category word like "ramen", "pizza" or "coffee". Never invent a dish the data doesn't name; fewer than 5 is fine. Our code counts the mentions — do NOT write counts or numbers of reviews anywhere.
+- bestDish = null and alsoRecommended = [] (built from topDishes by code).
 - photoWorthy: 1 short line naming any standout photo-worthy dish or drink (visually striking presentation, vibrant colors, unique vessel, frequently photographed). Include the dish name + WHY it's photo-worthy. Examples: "The rainbow milk tea — served in a clear hourglass jar with layered colors, frequently photographed", "Charcoal-black sushi roll plated on a bed of dry ice — a popular shot among visitors". NULL if no reviewer mentions visual / photo / shareable appeal.
 - awards: 1 short line listing notable awards, recognitions, or critical mentions. Examples: "★ 1 Michelin star (2024)", "Bib Gourmand listed (2023)", "James Beard Foundation Award winner — Best Chef Mid-Atlantic", "Top 50 Asia Restaurants 2024 #12", "Featured in Netflix's Chef's Table". NULL if no awards/recognitions are mentioned in reviews/editorialSummary/data.
 - worthIt: ONE of "worth_the_stop" | "strong_nearby_pick" | "craving_match" | "know_before_you_go" | "better_if_convenient". Pick the most accurate tier:
@@ -3019,6 +2992,7 @@ ${starRules}
 
 OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
 {
+  "topDishes": [ { "name": "<dish>", "context": "<short reason, ≤90 chars>", "match": ["<literal review word>", ...] }, ... ] (restaurant/coffee only; [] otherwise),
   "bestDish": { "name": "<name>", "context": "<one short positive line, ≤120 chars>" } | null,
   "alsoRecommended": [
     { "name": "<dish/item name>", "context": "<short reason, ≤90 chars>" },
@@ -3050,6 +3024,49 @@ OUTPUT JSON ONLY (no markdown fences, no prose outside the JSON):
 If any field has no positive content to draw from, set it to null/empty. Do NOT fabricate.
 
 Return JSON only.`;
+}
+
+// Top dishes, counted honestly: the AI names candidates, this code counts how many
+// of the reviews we actually read mention each one. No number comes from the AI.
+const DISH_GENERIC = new Set(['food', 'dish', 'dishes', 'meal', 'menu', 'ramen', 'pizza', 'sushi', 'burger', 'taco', 'coffee', 'latte', 'tea', 'drink', 'noodle', 'rice', 'chicken', 'beef', 'pork', 'soup', 'salad', 'bread', 'cake', 'pasta', 'curry', 'bbq', 'steak', 'fish', 'sandwich', 'dessert', 'breakfast', 'brunch', 'lunch', 'dinner', 'special', 'combo', 'plate', 'bowl']);
+const dishNorm = (v) => String(v || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function dishTerms(d) {
+  const out = new Set();
+  for (const raw of [d.name, ...(Array.isArray(d.match) ? d.match.slice(0, 3) : [])]) {
+    const v = dishNorm(raw);
+    const parts = [v.replace(/\([^)]*\)/g, ' '), ...[...v.matchAll(/\(([^)]*)\)/g)].map((m) => m[1])];
+    for (const part of parts) {
+      const t = part.replace(/[#*"\u201c\u201d]/g, ' ').replace(/\s+/g, ' ').trim();
+      const generic = DISH_GENERIC.has(t) || DISH_GENERIC.has(t.replace(/s$/, '')) || DISH_GENERIC.has(t.replace(/es$/, ''));
+      if (t.length >= 3 && !/^\d+$/.test(t) && !generic) out.add(t);
+    }
+  }
+  return [...out];
+}
+function dishMentioned(text, term) {
+  if (/^[a-z0-9 '&.-]+$/.test(term)) {
+    const esc = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '[\\s-]+');
+    return new RegExp(`(^|[^a-z0-9])${esc}(e?s)?($|[^a-z0-9])`).test(text);
+  }
+  return text.includes(term); // CJK and other unspaced scripts
+}
+function rankTopDishes(candidates, reviewTexts) {
+  const texts = reviewTexts.map(dishNorm);
+  const seen = new Set();
+  return (Array.isArray(candidates) ? candidates : [])
+    .map((d, i) => {
+      const name = typeof d?.name === 'string' ? d.name.trim().slice(0, 80) : '';
+      if (!name || seen.has(dishNorm(name))) return null;
+      seen.add(dishNorm(name));
+      const terms = dishTerms(d);
+      const mentions = terms.length ? texts.filter((t) => terms.some((term) => dishMentioned(t, term))).length : 0;
+      const context = typeof d.context === 'string' && d.context.trim() ? d.context.trim().slice(0, 120) : null;
+      return { name, context, mentions, i };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.mentions - a.mentions || a.i - b.i)
+    .slice(0, 3)
+    .map(({ i, ...d }) => d);
 }
 
 async function handleAIDetails(request, env) {
@@ -3324,6 +3341,19 @@ async function handleAIDetails(request, env) {
         })
         .filter(Boolean)
         .slice(0, 4);
+    }
+
+    if (kind === 'restaurant' || kind === 'coffee') {
+      const top = rankTopDishes(aiDetails.topDishes, reviewSnippets.map((r) => r.text));
+      aiDetails.topDishes = top;
+      aiDetails.dishReviewsRead = reviewSnippets.length;
+      // Older app builds read bestDish / alsoRecommended.
+      if (top.length) {
+        aiDetails.bestDish = { name: top[0].name, context: top[0].context };
+        aiDetails.alsoRecommended = top.slice(1).map(({ name, context }) => ({ name, context }));
+      }
+    } else {
+      aiDetails.topDishes = [];
     }
   } catch (e) {
     return jsonResponse({ error: 'Claude parse error: ' + e.message }, 500);
@@ -11354,7 +11384,7 @@ async function handleRestaurantsFull(request, env, ctx) {
       const dist = calcDistance(latitude, longitude, lat, lng);
       const weekdayDescriptions = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
       const photos = (place.photos || []).map((p) => p.url || p).filter(Boolean);
-      const customerFavorites = place.customerFavorites || place.customer_favorites || [];
+      const customerFavorites = []; // retired regex favorites — cached rows may still carry them
       const reviews = (place.reviews || []).map((r) => ({
         rating: r.rating || 0,
         text: r.text?.text || r.text || "",
