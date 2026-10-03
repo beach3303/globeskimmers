@@ -20691,27 +20691,6 @@ export default {
       if (pathname === '/social/request' && request.method === 'POST') return await handleSocialRequest(request, env, ctx);
       if (pathname === '/admin/handle-requests' && request.method === 'POST') return await handleAdminHandleRequests(request, env);
       if (pathname === '/admin/guestbook' && request.method === 'POST') return await handleAdminGuestbook(request, env);
-      if (pathname === '/__gb-review-selftest' && request.method === 'GET') {
-        const samples = [
-          'Go early on weekdays — the line for the tram is short before 10am!',
-          'My favorite part was the Studio Tour, the King Kong 360 bit blew my kids away.',
-          'Bring a jacket, it gets windy at the top.',
-          'Parking fills up by 10 — take the Metro Red Line to Universal City.',
-          'Thank you to Maria at guest services who found our lost stroller 🙏',
-          'Way overpriced and the staff were rude. Not worth it.',
-          'Beautiful views but the bathrooms were filthy.',
-          'Skip this place, total tourist trap.',
-          'Oh great, another 3 hour line. Fantastic. Loved it.',
-          'Check out my travel blog at www.example.com for more!',
-          'This place is f***ing amazing',
-          'Try the spicy ramen at the food court!',
-          'Food was cold and took forever.',
-          'We got engaged here at sunset ❤️ best day of our lives',
-        ];
-        const out = [];
-        for (const t of samples) out.push({ t, ...(await gbReviewNote(env, t, 'Universal Studios Hollywood')) });
-        return jsonResponse({ out });
-      }
       if (pathname === '/passport/sets' && request.method === 'POST') return await handlePassportSets(request, env);
       if (pathname === '/social/block' && request.method === 'POST') return await handleSocialBlock(request, env, ctx);
       if (pathname === '/social/age' && request.method === 'POST') return await handleSocialAge(request, env, ctx);
