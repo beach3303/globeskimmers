@@ -463,13 +463,80 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
   const activeTags=PROP_TAGS.filter(t=>a.props?.[t.key]);
   const aColor=a.activityColor||T.accent;
   const photos=(a.photos||[]).filter(Boolean);
-  const medalGrad=index===0?"linear-gradient(135deg,#FFD700,#FFA000)":index===1?"linear-gradient(135deg,#B0BEC5,#78909C)":index===2?"linear-gradient(135deg,#FFAB40,#F57C00)":aColor;
   const openText=st.label;
   const photoH=t(360,200);   // tablet 360px, phone ~200px
   const radius=t("28px","20px");
 
   const Tag=({bg,color,children})=>(
     <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(t(9,6))} ${fs(t(16,12))}`,fontSize:fs(t(15.5,12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
+  );
+
+  // Expanded details (what people love, address, daily hours, AI, website) —
+  // a const so the attraction extras can place them above the guestbook.
+  const details=(
+    <AnimatePresence>
+      {exp&&(
+        <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
+          {/* Inside the attraction extras their own gap spaces it like the cards around it. */}
+          <div style={{marginTop:forceExpanded?0:fs(t(20,14)),display:"flex",flexDirection:"column",gap:fs(t(14,12))}}>
+
+            {a.highlights?.length>0&&(
+              <div style={{padding:fs(t(16,14)),background:"#F0FDF4",borderRadius:t("16px","14px"),border:"1px solid #BBF7D0"}}>
+                <div style={{fontSize:fs(t(13,11.5)),fontWeight:700,color:"#059669",letterSpacing:"0.5px",marginBottom:fs(9),textTransform:"uppercase"}}>💚 What People Love</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
+                  {a.highlights.map((h,i)=><span key={i} style={{background:"#D1FAE5",color:"#065F46",padding:`${fs(5)} ${fs(t(13,11))}`,borderRadius:"999px",fontSize:fs(t(15,12.5)),fontWeight:600,textTransform:"capitalize"}}>{h}</span>)}
+                </div>
+              </div>
+            )}
+
+            {a.warnings?.length>0&&(
+              <div style={{padding:fs(t(16,14)),background:"#FFF7ED",borderRadius:t("16px","14px"),border:"1px solid #FED7AA"}}>
+                <div style={{fontSize:fs(t(13,11.5)),fontWeight:700,color:"#D97706",letterSpacing:"0.5px",marginBottom:fs(9),textTransform:"uppercase"}}>⚠️ Heads Up</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
+                  {a.warnings.map((w,i)=><span key={i} style={{background:"#FEF3C7",color:"#92400E",padding:`${fs(5)} ${fs(t(13,11))}`,borderRadius:"999px",fontSize:fs(t(15,12.5)),fontWeight:600,textTransform:"capitalize"}}>{w}</span>)}
+                </div>
+              </div>
+            )}
+
+            {a.bestTime&&(
+              <div style={{padding:fs(t(16,14)),background:"#EFF6FF",borderRadius:t("16px","14px"),border:"1px solid #BFDBFE",fontSize:fs(t(16,13)),color:"#1E40AF"}}>
+                <span style={{fontWeight:700}}>🕐 Best time · </span>{a.bestTime}
+              </div>
+            )}
+
+            {a.formattedAddress&&(
+              <div style={{display:"flex",alignItems:"flex-start",gap:fs(10),padding:fs(t(16,14)),background:"#FAF7F0",borderRadius:t("16px","14px"),border:`1px solid ${ED_RULE}`}}>
+                <span style={{fontSize:fs(t(20,16)),flexShrink:0}}>📍</span>
+                <span style={{fontSize:fs(t(16,13)),color:ED_INK2,lineHeight:1.5,fontWeight:500}}>{a.formattedAddress}</span>
+              </div>
+            )}
+
+            {a.hours?.length>0&&(
+              <div style={{padding:fs(t(16,14)),background:"#FAF7F0",borderRadius:t("16px","14px")}}>
+                <button onClick={()=>setHoursExp(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
+                  <span style={{fontSize:fs(t(13,11.5)),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
+                  <span style={{fontSize:fs(t(13,11.5)),color:ED_INK3}}>{hoursExp?"▲":"▼"}</span>
+                </button>
+                {hoursExp&&(
+                  <div style={{marginTop:fs(8)}}>
+                    {a.hours.map((d,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(n=>d.toLowerCase().startsWith(n.toLowerCase()));const isT=di===today;const pts=d.split(":");const dn2=pts[0];const hrs=pts.slice(1).join(":").trim();return(<div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(t(15,12.5)),fontWeight:isT?700:400,color:isT?T.accentD:ED_INK2,borderBottom:i<a.hours.length-1?`1px solid ${ED_RULE}`:"none"}}><span>{dn2}</span><span style={{color:hrs.toLowerCase()==="closed"?"#C2392F":isT?T.accentD:ED_INK3}}>{hrs}</span></div>);})}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <AttractionAIDetails placeId={a.placeId||a.id} placeName={name} page="ThingsToDo"/>
+
+            {a.websiteUri&&(
+              <a href={a.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(t(16,14)),background:T.accentL,borderRadius:t("16px","14px"),textDecoration:"none",color:T.accentD,border:`1px solid ${T.accent}40`}}>
+                <span style={{fontSize:fs(t(22,18))}}>🌐</span>
+                <span><span style={{display:"block",fontWeight:600,fontSize:fs(t(16,13.5))}}>Visit Website</span><span style={{fontSize:fs(t(14,12)),color:ED_INK3}}>Hours, prices &amp; details</span></span>
+              </a>
+            )}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 
   return(
@@ -492,10 +559,10 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
         ):(
           <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:fs(t(96,56))}}>{a.activityIcon||"⭐"}</div>
         )}
-        {/* Rank badge */}
-        <div style={{position:"absolute",top:fs(t(14,12)),left:fs(t(14,12)),background:medalGrad,color:"#fff",width:fs(t(40,30)),height:fs(t(40,30)),borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:fs(t(16,13)),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
-        {/* Category tag */}
-        {a.activityLabel&&<div style={{position:"absolute",top:fs(t(14,12)),right:fs(t(14,12)),background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:`${fs(t(5,4))} ${fs(t(13,10))}`,borderRadius:"999px",fontSize:fs(t(14,11)),fontWeight:700,color:aColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{a.activityIcon} {a.activityLabel}</div>}
+        {/* No rank badge: this card only opens one at a time (always "1"), and a
+            pinned stamp card has no rank. Category tag on the LEFT — the sheet's
+            ✕ sits top-right and used to cover it. */}
+        {a.activityLabel&&<div style={{position:"absolute",top:fs(t(14,12)),left:fs(t(14,12)),background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:`${fs(t(5,4))} ${fs(t(13,10))}`,borderRadius:"999px",fontSize:fs(t(14,11)),fontWeight:700,color:aColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{a.activityIcon} {a.activityLabel}</div>}
         {photos.length>1&&<div style={{position:"absolute",bottom:fs(t(12,10)),right:fs(t(12,10)),background:"rgba(0,0,0,0.6)",color:"#fff",padding:`${fs(t(4,3))} ${fs(t(11,9))}`,borderRadius:"999px",fontSize:fs(t(13,11)),fontWeight:600,cursor:"pointer"}} onClick={()=>setGallery({open:true,idx:0})}>📷 {photos.length} photos</div>}
       </div>
 
@@ -556,72 +623,9 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
         </div>
 
         {/* The attraction page (founder, 2026-10-03): GPS-only stamp, verified
-            prices + parking for planning a day and a budget, and the guestbook. */}
-        {forceExpanded&&<AttractionExtras a={a} formatDistance={formatDistance} isTablet={isTablet}/>}
-
-        {/* Expanded details */}
-        <AnimatePresence>
-          {exp&&(
-            <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{marginTop:fs(t(20,14)),display:"flex",flexDirection:"column",gap:fs(t(14,12))}}>
-
-                {a.highlights?.length>0&&(
-                  <div style={{padding:fs(t(16,14)),background:"#F0FDF4",borderRadius:t("16px","14px"),border:"1px solid #BBF7D0"}}>
-                    <div style={{fontSize:fs(t(13,11.5)),fontWeight:700,color:"#059669",letterSpacing:"0.5px",marginBottom:fs(9),textTransform:"uppercase"}}>💚 What People Love</div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
-                      {a.highlights.map((h,i)=><span key={i} style={{background:"#D1FAE5",color:"#065F46",padding:`${fs(5)} ${fs(t(13,11))}`,borderRadius:"999px",fontSize:fs(t(15,12.5)),fontWeight:600,textTransform:"capitalize"}}>{h}</span>)}
-                    </div>
-                  </div>
-                )}
-
-                {a.warnings?.length>0&&(
-                  <div style={{padding:fs(t(16,14)),background:"#FFF7ED",borderRadius:t("16px","14px"),border:"1px solid #FED7AA"}}>
-                    <div style={{fontSize:fs(t(13,11.5)),fontWeight:700,color:"#D97706",letterSpacing:"0.5px",marginBottom:fs(9),textTransform:"uppercase"}}>⚠️ Heads Up</div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
-                      {a.warnings.map((w,i)=><span key={i} style={{background:"#FEF3C7",color:"#92400E",padding:`${fs(5)} ${fs(t(13,11))}`,borderRadius:"999px",fontSize:fs(t(15,12.5)),fontWeight:600,textTransform:"capitalize"}}>{w}</span>)}
-                    </div>
-                  </div>
-                )}
-
-                {a.bestTime&&(
-                  <div style={{padding:fs(t(16,14)),background:"#EFF6FF",borderRadius:t("16px","14px"),border:"1px solid #BFDBFE",fontSize:fs(t(16,13)),color:"#1E40AF"}}>
-                    <span style={{fontWeight:700}}>🕐 Best time · </span>{a.bestTime}
-                  </div>
-                )}
-
-                {a.formattedAddress&&(
-                  <div style={{display:"flex",alignItems:"flex-start",gap:fs(10),padding:fs(t(16,14)),background:"#FAF7F0",borderRadius:t("16px","14px"),border:`1px solid ${ED_RULE}`}}>
-                    <span style={{fontSize:fs(t(20,16)),flexShrink:0}}>📍</span>
-                    <span style={{fontSize:fs(t(16,13)),color:ED_INK2,lineHeight:1.5,fontWeight:500}}>{a.formattedAddress}</span>
-                  </div>
-                )}
-
-                {a.hours?.length>0&&(
-                  <div style={{padding:fs(t(16,14)),background:"#FAF7F0",borderRadius:t("16px","14px")}}>
-                    <button onClick={()=>setHoursExp(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
-                      <span style={{fontSize:fs(t(13,11.5)),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
-                      <span style={{fontSize:fs(t(13,11.5)),color:ED_INK3}}>{hoursExp?"▲":"▼"}</span>
-                    </button>
-                    {hoursExp&&(
-                      <div style={{marginTop:fs(8)}}>
-                        {a.hours.map((d,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(n=>d.toLowerCase().startsWith(n.toLowerCase()));const isT=di===today;const pts=d.split(":");const dn2=pts[0];const hrs=pts.slice(1).join(":").trim();return(<div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(t(15,12.5)),fontWeight:isT?700:400,color:isT?T.accentD:ED_INK2,borderBottom:i<a.hours.length-1?`1px solid ${ED_RULE}`:"none"}}><span>{dn2}</span><span style={{color:hrs.toLowerCase()==="closed"?"#C2392F":isT?T.accentD:ED_INK3}}>{hrs}</span></div>);})}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <AttractionAIDetails placeId={a.placeId||a.id} placeName={name} page="ThingsToDo"/>
-
-                {a.websiteUri&&(
-                  <a href={a.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(t(16,14)),background:T.accentL,borderRadius:t("16px","14px"),textDecoration:"none",color:T.accentD,border:`1px solid ${T.accent}40`}}>
-                    <span style={{fontSize:fs(t(22,18))}}>🌐</span>
-                    <span><span style={{display:"block",fontWeight:600,fontSize:fs(t(16,13.5))}}>Visit Website</span><span style={{fontSize:fs(t(14,12)),color:ED_INK3}}>Hours, prices &amp; details</span></span>
-                  </a>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            prices + parking for planning a day and a budget, the card's own
+            details (hours, AI, website), and the guestbook last — the longest part. */}
+        {forceExpanded?<AttractionExtras a={a} formatDistance={formatDistance} isTablet={isTablet}>{details}</AttractionExtras>:details}
       </div>
       <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",latitude:a.lat,longitude:a.lng}} userLat={userLat} userLng={userLng}/>
       <PhotoGalleryModal photos={a.photos||[]} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>

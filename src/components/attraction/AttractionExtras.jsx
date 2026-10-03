@@ -330,8 +330,9 @@ export function ParkingCard({ visit, website }) {
   );
 }
 
-// Everything above, for one attraction card.
-export default function AttractionExtras({ a, formatDistance, isTablet }) {
+// Everything above, for one attraction card. children: the card's own details
+// (hours, AI, website) — they sit above the guestbook, which comes last.
+export default function AttractionExtras({ a, formatDistance, isTablet, children }) {
   const link = useAttractionLink(a);
   const pid = String(a.placeId || a.id || "");
   const kind = idKind(pid);
@@ -345,6 +346,7 @@ export default function AttractionExtras({ a, formatDistance, isTablet }) {
       {link !== undefined && <StampHereButton a={a} link={link} formatDistance={formatDistance} isTablet={isTablet} />}
       <TicketsCard visit={visit} website={a.websiteUri} />
       <ParkingCard visit={visit} website={a.websiteUri} />
+      {children}
       <div>
         <div style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".12em", textTransform: "uppercase", color: INK3, margin: "6px 2px 8px" }}>📖 Guestbook</div>
         {link !== undefined && <Guestbook entityType="attraction" entityId={link.gid || pid} entityName={name} />}
