@@ -25,7 +25,6 @@
   },
   "dependencies": {
     "@base44/sdk": "^0.8.32",
-    "@capacitor-community/camera-preview": "^8.0.1",
     "@capacitor/android": "^8.4.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/browser": "^8.0.3",

@@ -9,7 +9,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  X, ChevronRight, Utensils, Coffee, DollarSign, CreditCard, ScanLine, Compass, ShoppingBag, Globe, Store, Toilet, CloudSun, Languages, Landmark, Camera,
+  X, ChevronRight, Utensils, Coffee, DollarSign, CreditCard, Compass, ShoppingBag, Globe, Store, Toilet, CloudSun, Languages, Landmark,
 } from 'lucide-react';
 import { useDismissable } from '@/lib/dismissStack';
 import { IVORY, IVORY_2, TEAL_DEEP } from '@/components/redesign/constants';
@@ -30,7 +30,6 @@ const GROUPS = [
     items: [
       { icon: DollarSign, title: 'Money Exchange', sub: 'Compare rates near you', action: 'Money Exchange' },
       { icon: CreditCard, title: 'ATM Finder', sub: 'Skip the fees', action: 'ATM' },
-      { icon: ScanLine, title: 'Price scanner', sub: 'Convert any price', action: 'Smart Price Scanner' },
     ],
   },
   {
@@ -49,7 +48,6 @@ const GROUPS = [
       { icon: CloudSun, title: 'Weather', sub: 'Local forecast', action: 'Weather' },
       { icon: Languages, title: 'Phrases', sub: '50 essentials', action: 'Basic Phrases' },
       { icon: Landmark, title: 'Cultural Info', sub: 'Museums · sights', action: 'Culture Information' },
-      { icon: Camera, title: 'Text scanner', sub: 'Menus · signs · labels', action: 'Smart Text Scanner' },
     ],
   },
 ];

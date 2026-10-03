@@ -40,7 +40,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Globeskimmers uses your camera to translate signs and menus, scan prices for currency conversion, and take photos for your Virtual Passport.</string>
+	<string>Globeskimmers uses your camera so you can take photos for your Virtual Passport stamps, postcards, dish posts and profile picture.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Globeskimmers uses your location only while you are using the app, to show what is near you and to verify Virtual Passport stamps at the places you visit. It never tracks you in the background.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

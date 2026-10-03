@@ -41,8 +41,6 @@ const EXPLORE = [
   { grad: `linear-gradient(135deg, ${CAT.shopping.ink} 0%, #A855F7 60%, #C084FC 100%)`, emoji: '🛍️', title: 'Shopping',             sub: 'Markets · malls',        action: 'Shopping' },
   { grad: `linear-gradient(135deg, ${CAT.culture.ink} 0%, #D97706 60%, #FBBF24 100%)`,  emoji: '🏛️', title: 'Cultural Info',        sub: 'Museums · sights',       action: 'Culture Information' },
   { grad: `linear-gradient(135deg, ${CAT.phrases.ink} 0%, #CA8A04 60%, #EAB308 100%)`,  emoji: '💬', title: 'Basic Language Phrases', sub: '50 essentials',        action: 'Basic Phrases' },
-  { grad: 'linear-gradient(135deg, #0F766E 0%, #14B8A6 60%, #2DD4BF 100%)',             emoji: '💲', title: 'Price scanner',        sub: 'Convert any price',      action: 'Smart Price Scanner' },
-  { grad: 'linear-gradient(135deg, #6D28D9 0%, #8B5CF6 60%, #A78BFA 100%)',             emoji: '🔤', title: 'Text scanner',         sub: 'Menus · signs · labels', action: 'Smart Text Scanner' },
 ];
 
 export default function HomeTablet({

@@ -97,7 +97,7 @@ const CHAIN_INFO = {
 
 // Used ONLY as the /places/photo img-src base (an <img> src can't go through
 // callWorker) — the data fetch itself goes through callWorker like every other
-// finder. Same constant PlacesToEat/SmartPriceScanner keep as WORKER_URL.
+// finder. Same constant PlacesToEat keeps as WORKER_URL.
 const API_BASE_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
 
 // ============================================================================

@@ -13,7 +13,6 @@ export const ROUTE = {
   getAttractionAIDetails: 'attraction-ai-details',
   getCafeWorkProfile: 'cafe-work-profile',
   getNameInfo: 'name-info',
-  analyzePrice: 'analyze-price',
 
   // Chunk 2 — logging (live)
   logEvent: 'log-event',

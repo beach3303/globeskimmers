@@ -53,11 +53,10 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
-    <!-- Camera — used by SmartTextScanner (translate signs/menus) and
-         SmartPriceScanner (freeze + convert prices). The hardware feature
-         is declared non-required so phones / tablets without rear cameras
-         can still install the app even though those scanners won't work
-         on those devices. -->
+    <!-- Camera — "Take photo" in the app's photo pickers (passport stamps,
+         postcards, dish posts, profile picture); the WebView asks for it at
+         capture time. The hardware feature is declared non-required so
+         devices without a camera can still install the app. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />

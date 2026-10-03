@@ -121,23 +121,6 @@
   }
 }
 
-/* Native camera preview transparency. @capacitor-community/camera-preview
-   renders the live camera in a NATIVE layer BEHIND the WebView. For it to show
-   through, the page itself must be transparent while a scanner camera is open.
-   The scanner toggles `gs-camera-open` on <html> on mount and removes it on
-   leave (which also restores the normal opaque background). */
-html.gs-camera-open,
-html.gs-camera-open body,
-html.gs-camera-open #root,
-html.gs-camera-open .gs-app-bg {
-  background: transparent !important;
-}
-/* Hide the fixed brand banner while the native camera is live — it sits behind
-   the transparent webview and would otherwise block the camera preview. */
-html.gs-camera-open .gs-app-banner {
-  display: none !important;
-}
-
 /* ============================================================================
    GLOBESKIMMERS THEME CSS
    ============================================================================ */

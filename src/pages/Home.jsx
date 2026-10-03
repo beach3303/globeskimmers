@@ -461,7 +461,6 @@ export default function HomePage() {
   const handleQuickAction = (actionLabel) => {
     trackEvent('feature_used', { feature_name: actionLabel.toLowerCase().replace(/\s+/g, '_') });
     const routes = {
-      "Smart Price Scanner": "SmartPriceScanner",
       "Money Exchange": "MoneyExchange",
       "Basic Phrases": "BasicPhrases",
       "Convenience Store": "ConvenienceStore",
@@ -474,7 +473,6 @@ export default function HomePage() {
       "Restroom": "RestroomFinder",
       "Places to Eat": "PlacesToEat",
       "Shopping": "Shopping",
-      "Smart Text Scanner": "SmartTextScanner",
     };
     if (routes[actionLabel]) navigate(createPageUrl(routes[actionLabel]));
   };

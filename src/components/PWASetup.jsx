@@ -96,13 +96,6 @@ export default function PWASetup() {
           icons: [{ src: `${baseIconUrl}?width=96&height=96`, sizes: "96x96" }]
         },
         {
-          name: "Price Scanner",
-          short_name: "Scanner",
-          description: "Scan and convert prices",
-          url: "/SmartPriceScanner",
-          icons: [{ src: `${baseIconUrl}?width=96&height=96`, sizes: "96x96" }]
-        },
-        {
           name: "Convenience Stores",
           short_name: "Stores",
           description: "Find nearby stores",

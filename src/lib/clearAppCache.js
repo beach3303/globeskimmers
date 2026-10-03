@@ -14,7 +14,7 @@ const CACHE_PREFIXES = [
   'culture_cache_',                    // Culture info
   'phrases_v14_',                      // Basic phrases translations
   'tts_audio_',                        // Basic phrases cached audio
-  'globeskimmers_exchange_rates',      // FX caches (price scanner _v2 + transportation)
+  'globeskimmers_exchange_rates',      // leftover FX caches (removed price scanner + transportation)
 ];
 
 export function clearAppCache() {

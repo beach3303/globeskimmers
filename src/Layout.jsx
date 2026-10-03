@@ -61,13 +61,10 @@ export default function Layout({ children, currentPageName }) {
 
   // Global text-size (glasses) control in the banner — available on every page
   // so the user can resize text from ANYWHERE (the size is global + persisted).
-  // Home has its own glasses inside the hello card; the camera scanners use a
-  // full-screen dark UI, so skip those.
+  // Home has its own glasses inside the hello card.
   const showGlobalFontBtn =
     !isOnboarding &&
-    currentPageName !== "Home" &&
-    currentPageName !== "SmartTextScanner" &&
-    currentPageName !== "SmartPriceScanner";
+    currentPageName !== "Home";
 
   // Account-tied onboarding gate. Drives off the Supabase profile flag, which
   // is set once-ever when onboarding completes (survives reinstall / 2nd

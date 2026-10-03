@@ -66,12 +66,7 @@ export default function FloatingNav({ active, dark = false }) {
   };
   const activeTab = detectActive();
 
-  // Hide the floating nav on screens where it would actively interfere:
-  //
-  //   - Camera-led pages (Smart Text Scanner / Smart Price Scanner) need
-  //     the bottom of the screen for their primary CTA ("Freeze & translate"
-  //     / "Freeze & convert price"). The user exits via the page's own X
-  //     button at the top.
+  // Hide the floating nav where it would actively interfere:
   //
   //   - Onboarding flow (multi-step form: referral source, location, home
   //     country, currency, language, temperature). Showing the nav during
@@ -80,11 +75,7 @@ export default function FloatingNav({ active, dark = false }) {
   //     viewports (Galaxy S10 reported this hiding the country dropdown /
   //     language list behind it). The "Skip for now" link inside each step is
   //     the intentional escape hatch.
-  if (
-    path.includes('smarttextscanner') ||
-    path.includes('smartpricescanner') ||
-    path.includes('onboarding')
-  ) {
+  if (path.includes('onboarding')) {
     return null;
   }
 
