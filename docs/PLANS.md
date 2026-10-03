@@ -187,8 +187,11 @@ ota/native build — the worker side is live now):
       45-day snooze, gone once saved); Admin Analytics now shows the age mix
   [ ] FOUNDER run-once (D1 attraction facts columns):
       npx wrangler d1 execute globeskimmers-attractions --file=scripts/city-icons/data/add_attraction_facts.sql --remote
-  [ ] FOUNDER: share the ChatGPT plans/monetization conversation (share link or paste) →
-      Claude studies it, saves docs/NORTH_STAR.md + memory
+  [x] North Star captured (2026-10-02 eve): founder shared the ChatGPT strategy
+      conversation → docs/NORTH_STAR.md (distilled register: brand language system,
+      KEEP GlobeSkimmers, six monetization layers, luggage/park/event lanes, moat,
+      guardrails) + raw transcript at docs/reference/chatgpt-northstar-transcript-2026-10-02.md.
+      Read NORTH_STAR.md before any monetization/brand/partnership work.
   Data follow-up (Claude): seed ticket_price/ticket_url/parking_text/website for top attractions.
 
 ADS REMOVED ENTIRELY (founder, 2026-10-02): AdMob is out of the app, the configs,
@@ -427,6 +430,7 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 - Car-to-Door: https://claude.ai/code/artifact/0b957900-b0e4-44d0-9f01-09d0c1a935c3
 - Who We Can Serve: https://claude.ai/code/artifact/3550974b-a863-4f4e-a0f5-f7848739594f
 - My Trips Ledger: https://claude.ai/code/artifact/50256292-130d-4c34-ab35-cf2436dad91e
+- North Star (brand + monetization register, 2026-10-02): docs/NORTH_STAR.md
 - The Google of Travel brief: https://claude.ai/code/artifact/7b3b4221-403e-457b-9d65-838879a0d4a9
 - Global Stamp Atlas: https://claude.ai/code/artifact/d49af076-9c43-4742-b0ba-5c44b1a40e8e
 - The Passport Standard: https://claude.ai/code/artifact/d501e554-4e86-4b1a-be4c-ae5f43c97328
