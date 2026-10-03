@@ -10,7 +10,6 @@ const JUMPS = [
   { emoji: "🍽️", label: "Eat", action: "Places to Eat" },
   { emoji: "☕", label: "Coffee", action: "Coffee" },
   { emoji: "🎭", label: "Things to do", action: "Things to Do" },
-  { emoji: "🏨", label: "Stay", action: "Find a Hotel" },
   { emoji: "🛍️", label: "Shopping", action: "Shopping" },
 ];
 

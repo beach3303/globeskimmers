@@ -36,7 +36,7 @@ const FEATURES = [
 
 // Explore More — 3-up gradient cards (same gradients as the phone GradCards).
 const EXPLORE = [
-  { grad: `linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 60%, #FF7DB1 100%)`,     emoji: '🎟️', title: 'Things to do',         sub: 'Sights · tours',         action: 'Things to Do' },
+  { grad: `linear-gradient(135deg, ${CAT.todo.ink} 0%, #E84393 60%, #FF7DB1 100%)`,     emoji: '🎟️', title: 'Things to do',         sub: 'Sights · attractions',         action: 'Things to Do' },
   { grad: 'linear-gradient(135deg, #8B3A1E 0%, #B0472F 60%, #D98A6A 100%)',             emoji: '🛂', title: 'Virtual Passport',       sub: 'Stamps · memories',      action: 'Passport' },
   { grad: `linear-gradient(135deg, ${CAT.shopping.ink} 0%, #A855F7 60%, #C084FC 100%)`, emoji: '🛍️', title: 'Shopping',             sub: 'Markets · malls',        action: 'Shopping' },
   { grad: `linear-gradient(135deg, ${CAT.culture.ink} 0%, #D97706 60%, #FBBF24 100%)`,  emoji: '🏛️', title: 'Cultural Info',        sub: 'Museums · sights',       action: 'Culture Information' },

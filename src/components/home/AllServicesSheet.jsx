@@ -36,7 +36,7 @@ const GROUPS = [
   {
     header: 'Explore',
     items: [
-      { icon: Compass, title: 'Things to do', sub: 'Sights · tours', action: 'Things to Do' },
+      { icon: Compass, title: 'Things to do', sub: 'Sights · attractions', action: 'Things to Do' },
       { icon: ShoppingBag, title: 'Shopping', sub: 'Markets · malls', action: 'Shopping' },
       { icon: Globe, title: 'Virtual Passport', sub: 'Stamps · memories', action: 'Passport' },
     ],

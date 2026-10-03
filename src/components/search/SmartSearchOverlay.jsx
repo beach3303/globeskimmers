@@ -36,7 +36,7 @@ const SCOPES = [
   { id: "named_place", label: "A place…", icon: Globe },
 ];
 // Starter suggestions (shown until the user has recents) — each seeds the input.
-const SUGGESTIONS = ["Coffee near me", "Things to do", "Where to stay", "Best dinner", "Viral desserts", "ATM"];
+const SUGGESTIONS = ["Coffee near me", "Things to do", "Best dinner", "Viral desserts", "Restroom", "ATM"];
 
 function readRecents() {
   try { return JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]"); } catch { return []; }
@@ -177,7 +177,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
               value={q}
               onChange={(e) => { setQ(e.target.value); setDream(null); }}
               onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-              placeholder="Search food, hotels, a whole city…"
+              placeholder="Search food, sights, a whole city…"
               className="flex-1 bg-transparent outline-none text-[calc(15px*var(--fs))]"
               style={{ color: INK }}
               enterKeyHint="search"

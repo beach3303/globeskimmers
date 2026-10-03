@@ -1,6 +1,6 @@
 // SmartSearchBar — the "spine": a single search entry pinned at the top of Home.
 // It's just the trigger; tapping it opens the full-screen SmartSearchOverlay.
-// One search that understands food / hotels / things-to-do / a whole city, and
+// One search that understands food / coffee / things-to-do / a whole city, and
 // routes you into the right world scoped to the right place.
 import React from "react";
 import { Search } from "lucide-react";
@@ -17,7 +17,7 @@ export default function SmartSearchBar({ onOpen, wide = false }) {
         >
           <Search className="w-[18px] h-[18px] flex-none" style={{ color: "#17A38F" }} strokeWidth={2.4} />
           <span className="text-[calc(14.5px*var(--fs))] truncate" style={{ color: "#8A93A6" }}>
-            Search food, hotels, a whole city&hellip;
+            Search food, sights, a whole city&hellip;
           </span>
         </button>
       </div>
