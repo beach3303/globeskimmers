@@ -7236,7 +7236,7 @@ async function ttdPlaceTruth(env, entityId, origin) {
   const d = gid ? await ttdPlaceDetails(env, gid, origin) : null;
   const lat = Number(d?.latitude ?? d?.location?.latitude), lng = Number(d?.longitude ?? d?.location?.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { lat, lng, radius: ppStampRadius({ category: [d.primaryType, ...(d.types || [])].filter(Boolean).join(' ') }), gid, name: d.name || null };
+  return { lat, lng, radius: ppStampRadius({ category: [d.primaryType, ...(d.types || [])].filter(Boolean).join(' ') }), gid, name: d.name || null, types: [d.primaryType, ...(d.types || [])].filter(Boolean) };
 }
 
 // POST /attractions/link { placeId, name, lat, lng } → { stamp: {id,…} | null }
@@ -13560,6 +13560,22 @@ function ppStampRadius(place) {
   return 250;
 }
 
+// Sensitive places start PRIVATE (founder + the plan she shared, 2026-10-03):
+// a hospital, clinic, school, shelter, treatment centre, place of worship… —
+// GPS verifies the visit, never the reason; the traveler can share it later.
+// Only for "I was here" and Stamp-a-place visits (iconic stamps aren't checked).
+const PP_SENSITIVE_TYPES = new Set(['hospital', 'general_hospital', 'doctor', 'dental_clinic', 'dentist', 'medical_lab', 'medical_clinic', 'physiotherapist', 'chiropractor', 'pharmacy', 'drugstore', 'health', 'school', 'primary_school', 'secondary_school', 'preschool', 'child_care_agency', 'courthouse', 'police', 'place_of_worship', 'church', 'mosque', 'synagogue', 'hindu_temple', 'buddhist_temple', 'funeral_home']);
+const PP_SENSITIVE_NAME = /\b(hospitals?|medical cent(?:er|re)|clinics?|urgent care|emergency room|health cent(?:er|re)|oncology|cancer|dialysis|hospice|fertility|ivf|planned parenthood|abortion|maternity|psychiatric|mental health|behavioral health|counsell?ing|rehab(?:ilitation)?|recovery cent(?:er|re)|treatment cent(?:er|re)|detox|addiction|sober living|shelter|crisis cent(?:er|re)|elementary school|middle school|high school|primary school|secondary school|preschool|kindergarten|daycare|courthouse|jail|prison|detention cent(?:er|re)|police station|immigration|church|mosque|synagogue|temple|chapel|parish|funeral home|mortuary)\b/i;
+// Not sensitive whatever the name says ("Temple Bar", "Shelter Island Brewery").
+const PP_SENSITIVE_NOT = /\b(bar|brewery|brewing|pub|tavern|restaurant|caf[eé]|coffee|grill|kitchen|bistro|bakery|island|beach|street|road|avenue|hotel|museum|park)\b/i;
+function ppSensitivePlace(name, types) {
+  const t = (types || []).map(String).filter(Boolean);
+  // Google's own place types decide when we have them; the name is the fallback.
+  if (t.length) return t.some((x) => PP_SENSITIVE_TYPES.has(x));
+  const n = String(name || '');
+  return PP_SENSITIVE_NAME.test(n) && !PP_SENSITIVE_NOT.test(n);
+}
+
 // Create or update a stamp (idempotent per user+kind+entity). Keeps the STRONGEST
 // verification when re-stamping (gps > photo > self).
 async function handlePassportStamp(request, env, ctx) {
@@ -13616,6 +13632,8 @@ async function handlePassportStamp(request, env, ctx) {
     // stamp id; Google's location for "I was here" ids (places:<gid>/owned:<uuid>,
     // or a bare Google/owned id); a landmark variant's parent D1 row.
     const fix = b.fix && typeof b.fix === 'object' ? { lat: Number(b.fix.lat), lng: Number(b.fix.lng), acc: Number(b.fix.acc) } : null;
+    // Stamp-a-place visits (kind city / entity_type visit) are checked by name.
+    let startPrivate = kind === 'city' && String(b.entity_type || '') === 'visit' && ppSensitivePlace(name, []);
     if (kind === 'attraction' && verified === 'gps') {
       const hasFix = fix && Number.isFinite(fix.lat) && Number.isFinite(fix.lng);
       if (!hasFix) return jsonResponse({ error: "We couldn\u2019t confirm you\u2019re here \u2014 open the place in the app while you\u2019re there and tap Stamp", code: 'proof_needed' }, 409);
@@ -13637,7 +13655,7 @@ async function handlePassportStamp(request, env, ctx) {
         // An iconic place becomes its official stamp (no duplicates); others stamp "I was here".
         const iconic = truth.gid ? await ttdStampFor(env, truth.gid, truth.name || name, truth.lat, truth.lng) : null;
         if (iconic) { entityId = iconic.id; b.entity_type = 'place'; }
-        else b.entity_type = 'local';
+        else { b.entity_type = 'local'; startPrivate = ppSensitivePlace(truth.name || name, truth.types); }
       }
     }
 
@@ -13670,6 +13688,7 @@ async function handlePassportStamp(request, env, ctx) {
       country: b.country ? String(b.country).slice(0, 120) : null,
       lat, lng,
       visited_on: visitedOn, verified,
+      ...(startPrivate ? { hidden: true } : {}),
     };
     // No stamp without proof (founder doctrine, 2026-10-03). A new stamp is
     // either GPS-corroborated, or arrives with a proof photo (await_proof —
@@ -13694,7 +13713,23 @@ async function handlePassportStamp(request, env, ctx) {
     // Stamps are airport-arrival + iconic-attraction only — we do NOT auto-stamp cities.
     const localHour = Number.isFinite(+b.local_hour) && +b.local_hour >= 0 && +b.local_hour <= 23 ? Math.floor(+b.local_hour) : null;
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, country: row.country, city: row.city, name: row.name, verified: result.verified, updated: !!result.updated, local_hour: localHour }));
-    return jsonResponse({ id: result.id, created: !!result.created, updated: !!result.updated, verified: result.verified });
+    return jsonResponse({ id: result.id, created: !!result.created, updated: !!result.updated, verified: result.verified, private: !!(result.created && startPrivate) });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /passport/stamp/visibility { stamp_id, hidden } — who sees a stamp:
+// hidden = only me; shown = my shared passport (and friends' feeds).
+async function handlePassportStampVisibility(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.stamp_id || '');
+    if (!BL_UUID.test(id) || typeof b.hidden !== 'boolean') return jsonResponse({ error: 'stamp_id + hidden required' }, 400);
+    const w = await gbRest(env, `passport_stamps?id=eq.${id}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ hidden: b.hidden }) });
+    const rows = w.ok ? await w.json() : [];
+    if (!rows.length) return jsonResponse({ error: 'Not found' }, 404);
+    return jsonResponse({ ok: true, hidden: rows[0].hidden === true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -20887,6 +20922,7 @@ export default {
       if (pathname === '/passport/photo/delete' && request.method === 'POST') return await handlePassportPhotoDelete(request, env, ctx);
       if (pathname === '/passport/photo/caption' && request.method === 'POST') return await handlePassportPhotoCaption(request, env);
       if (pathname === '/passport/stamp/note' && request.method === 'POST') return await handlePassportStampNote(request, env);
+      if (pathname === '/passport/stamp/visibility' && request.method === 'POST') return await handlePassportStampVisibility(request, env);
       if (pathname === '/passport/stamp/check-photos' && request.method === 'POST') return await handlePassportCheckPhotos(request, env, ctx);
       if (pathname === '/passport/tag' && request.method === 'POST') return await handlePassportTag(request, env, ctx);
       if (pathname === '/passport/tags' && request.method === 'POST') return await handlePassportTagsList(request, env);
