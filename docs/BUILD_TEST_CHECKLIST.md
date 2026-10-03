@@ -1274,3 +1274,19 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Verified live: unsigned POST /attractions/visit-info (uncached id) → 401 {"error":"sign_in"}.
   Claude can no longer test fresh lookups from the Mac — the first v5 run is the founder
   opening Universal signed in.
+
+## 2026-10-03 (late) — Text and price scanners removed completely (eab98c0, 132e0ef)
+- Founder: "Remove text scanner and remove price scanner from the app completely."
+- App: SmartTextScanner + SmartPriceScanner pages deleted and unrouted; doors closed (All
+  services sheet, tablet Home tiles, Home quick actions, web-app shortcut); useCameraPreview,
+  gs-camera-open CSS, Layout/FloatingNav exceptions, ROUTE.analyzePrice, and the
+  @capacitor-community/camera-preview plugin removed (cap sync both platforms: iOS 9 plugins).
+- Worker: the scanner block (774 lines) and 21 scanner analytics queries removed; /scan-text,
+  /scan-prices, /describe-item, /analyze-price answer 410. sha256Hex kept (shared).
+- iOS NSCameraUsageDescription now: photos for passport stamps, postcards, dish posts and the
+  profile picture — takes effect with the NEXT native build (build 11 still says "translate
+  signs and menus, scan prices").
+- Founder, before resubmitting 1.0.3: App Store Connect description drops "and a camera scanner
+  that translates signs and converts prices" (docs/STORE_LISTING_COPY.md updated).
+- Gates: eslint (touched) clean, no-undef touched + app-wide 0, build 0, cap sync clean.
+- Ships: worker on push; app with the next `npm run ota`.

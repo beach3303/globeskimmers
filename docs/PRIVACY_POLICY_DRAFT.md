@@ -22,7 +22,7 @@ We only collect what we need to make the app work for you.
 ### Information we collect automatically
 
 - **Approximate and precise location** — only when you grant permission. Used to find nearby restaurants, ATMs, attractions, restrooms, money exchange spots, and convenience stores. We do not record your location history; we only use your current location to answer your current query.
-- **Camera images** — only when you actively use the Smart Price Scanner or Smart Text Scanner. Images are sent to our backend for OCR processing and translation/conversion, then discarded. We do not store your scanned images.
+- **Photos you add** — only the ones you choose (passport stamps, postcards, dish posts, your profile picture). (The Smart Price and Text Scanners were removed on 2026-10-03; the app no longer scans images.)
 - **App usage events** — anonymized events like which feature you opened, when you started a session, and roughly how long a session lasted. Used to understand which features are useful and to fix bugs.
 - **Device info** — your device model, OS version, and a session identifier that resets when you reinstall the app. Used for debugging and to comply with platform policies.
 

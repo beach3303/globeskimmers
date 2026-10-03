@@ -82,7 +82,7 @@ SHARE IT, YOUR WAY
 • Virtual Luggage — a photoreal trunk that wears the stickers every destination earns
 
 THE TRAVEL TOOLKIT
-Everything you need the moment you land: nearby restaurants ranked for authenticity, coffee, ATMs, restrooms, convenience stores, live exchange-rate comparisons, weather, cultural know-how, and a camera scanner that translates signs and converts prices.
+Everything you need the moment you land: nearby restaurants ranked for authenticity, coffee, ATMs, restrooms, convenience stores, live exchange-rate comparisons, weather, and cultural know-how.
 
 PRIVATE BY DEFAULT
 Your passport is yours alone until you choose to share it. Photos you add stay in your private journal; anything made public passes automated review first. Every profile can be blocked, every item reported. Travelers under 18 get extra protections: their passports can't be made public and new followers need their approval. We never sell your data and never track you across other apps.
@@ -106,7 +106,6 @@ Reasoning on each:
 - **travel** — the highest-volume term in your category
 - **currency converter** — competitive but you ARE one
 - **translator** — same
-- **scanner** — captures camera-scan searchers
 - **price** — captures shopping-trip searchers
 - **exchange** — Money Exchange feature
 - **ATM** — high-intent searchers

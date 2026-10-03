@@ -18,7 +18,8 @@ pages), Smart Packages (it is the hotel booking flow), Insights, Events / concer
 sports / shows (the Ticketmaster rail), Travel Essentials (eSIM, bags, spaces), and the
 "Today in {city}" card. KEPT: restaurants, coffee, ATM, money exchange, convenience,
 restrooms, shopping malls, things to do, weather, basic crisis phrases, cultural info,
-text scanner, Home, Passport, Settings.
+Home, Passport, Settings. (Text scanner and price scanner removed
+completely 2026-10-03 — founder.)
 
 Anything in the sections below that builds on hotels, rides, transit, events, packages
 or trips is **shelved by this pivot**, not deleted from history: booking emails, hotel
@@ -174,6 +175,10 @@ FOUNDER DECISIONS — 2026-10-03 (evening), supersede anything older:
   - Guestbook on every attraction: kind prompts (tip, favorite part…); negative notes are
     held for the Admin Portal → Guestbook review (+ founder email); abuse is blocked.
   - Hotels are out of search.
+  - Text scanner and price scanner removed from the app completely (late): pages, Home
+    doors, worker routes (now 410) and their analytics; the camera-preview plugin is gone.
+    The App Store description must drop "a camera scanner that translates signs and
+    converts prices" before the resubmission.
 
 THE QUEUE — founder-agreed 2026-10-03 (build order; strike as shipped):
   [x] Finder photos phase 1 (match within 250 m, self-healing proxy, locked widths/names,
