@@ -3535,6 +3535,34 @@ Rules for _sources tagging:
 Return JSON only.`;
 }
 
+// D1 stamp id → Google place id (for the AI panel): an IDs-only text search for
+// the name, restricted to a box sized to the attraction's footprint. A
+// "places:<googleId>" id already carries it. Cached 180 days ('none' 30).
+async function resolveStampGid(env, id) {
+  const direct = id.match(/^places:([A-Za-z0-9_-]{10,})$/);
+  if (direct) return direct[1];
+  const kv = env.GLOBESKIMMERS_KV, key = `d1gid:${id}`;
+  const hit = kv ? await kv.get(key).catch(() => null) : null;
+  if (hit) return hit === 'none' ? null : hit;
+  if (!env.ATTRACTIONS_DB || !env.GOOGLE_API_KEY) return null;
+  const row = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(id).first().catch(() => null);
+  if (!row || !row.name || !Number.isFinite(+row.lat) || !Number.isFinite(+row.lng)) return null;
+  const lat = +row.lat, lng = +row.lng;
+  const m = Math.max(400, Math.min(ppStampRadius(row), 3000));
+  const dLat = m / 111320, dLng = m / (111320 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+  let gid = null;
+  try {
+    const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': 'places.id', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ textQuery: String(row.name), pageSize: 1, locationRestriction: { rectangle: { low: { latitude: lat - dLat, longitude: lng - dLng }, high: { latitude: lat + dLat, longitude: lng + dLng } } } }),
+    });
+    if (r.ok) gid = (await r.json())?.places?.[0]?.id || null;
+  } catch { gid = null; }
+  if (kv) await kv.put(key, gid || 'none', { expirationTtl: (gid ? 180 : 30) * 86400 }).catch(() => {});
+  return gid;
+}
+
 async function handleAttractionAIDetails(request, env) {
   if (!env.ANTHROPIC_API_KEY) {
     return jsonResponse({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
@@ -3543,9 +3571,17 @@ async function handleAttractionAIDetails(request, env) {
   try { body = await request.json(); } catch (_e) {
     return jsonResponse({ error: 'Invalid JSON body' }, 400);
   }
-  const placeId = body?.placeId;
+  let placeId = body?.placeId;
   if (!placeId) {
     return jsonResponse({ error: 'placeId required' }, 400);
+  }
+  // A stamp's attraction page passes its D1 id: resolve the Google twin so the
+  // page shares the same AI panel (and cache) as the Things to Do card.
+  // (auto-seeded rows use all-lowercase "cc-city-name" slugs; Google ids are mixed-case)
+  if (/^(curated|icon|wikidata|osm|places):/.test(String(placeId)) || /^[a-z]{2}-[a-z0-9-]+$/.test(String(placeId))) {
+    const gid = await resolveStampGid(env, String(placeId));
+    if (!gid) return jsonResponse({ error: 'No details for this place yet' }, 404);
+    placeId = gid;
   }
 
   // 0) D1 permanent cache — Phase C. Pay Haiku once per placeId, ever.
