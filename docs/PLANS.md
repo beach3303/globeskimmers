@@ -161,6 +161,20 @@ teens = accepted followers only. Same slim blotter under packet photos. Profile 
 same day (4c587c3): trunk banner on TOP, traveler chips gone, About me + My website,
 free-form unlimited favorites (founder removes their two via ✕), dreams → ON THE HORIZON.
 
+FOUNDER DECISIONS — 2026-10-03 (evening), supersede anything older:
+  - NO BOOKING anywhere in the app: no Viator, hotels, flights, packages, "vacation builder".
+    Prices are shown only so travelers can plan a day and a budget. Worker refuses new
+    bookings (410); the Nuitée webhook/cancel/booking/return routes stay for the one
+    confirmed stay (Kawada Hotel, Dec 10–11).
+  - Things to Do's card IS the page for an attraction. Stamp taps anywhere open it
+    (/ThingsToDo?focus=<id>); the stamp pages (ActivityDetail) are deleted (old links redirect).
+  - Every Things to Do attraction gives a typographic "I was here" stamp — GPS only, checked
+    by the worker against Google's location; iconic places give their official stamp.
+    (Supersedes "local spots never stamp" — they now stamp typographically, never with art.)
+  - Guestbook on every attraction: kind prompts (tip, favorite part…); negative notes are
+    held for the Admin Portal → Guestbook review (+ founder email); abuse is blocked.
+  - Hotels are out of search.
+
 THE QUEUE — founder-agreed 2026-10-03 (build order; strike as shipped):
   [x] Finder photos phase 1 (match within 250 m, self-healing proxy, locked widths/names,
       owned-only enrich, restroom photos on load, lazy carousel) — live + verified

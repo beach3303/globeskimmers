@@ -1147,3 +1147,25 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - "Add your order" copy + "Did you like it?" (migration 20261004100000 applied; worker live).
 - Gates: node --check, eslint, no-undef (app-wide 0), build 0, cap copy, sim clean boot,
   bundle contains visit-info + "Add your order". App side ships with the next OTA.
+
+## 2026-10-03 (evening) — No booking; Things to Do = the attraction page; kind guestbooks
+- Guestbook: migration 20261004110000 applied; worker live. Verified live: list maps a stamp
+  id to the Google id; report/sign/admin need sign-in (401); anon PostgREST reads of
+  guestbook_entries and the gb_report RPC now "permission denied". Review self-test on 14
+  canned notes: tips/favorites/shout-outs publish; complaints, "skip it", sarcasm hold; spam
+  link + profanity block. Admin Portal → 📝 Guestbook review (Publish / Keep private / Delete).
+- Things to Do: /activities/one (verified: icon:Q1337576 → Universal card, 3 photos, 8.8 mi,
+  stamp linked), /attractions/link (Universal → icon:Q1337576 after the D1-duplicate fix;
+  D1 also has icon:Q639090 for the same place — founder: retire one), visit-info for Google ids.
+- Booking: /hotels/nuitee/prebook → 410 booking_removed (verified); /activities/search
+  returns places only (verified 20 places, 0 products).
+- App (ships with the next OTA): stamp taps open the pinned Things to Do card; card shows
+  GPS stamp + prices + parking + guestbook; "You're here — get the stamp" on list cards;
+  Viator/ExperiencesRow/DreamGallery builder/affiliate libs removed; hotels out of search;
+  stray "0" on search suggestion chips fixed.
+- Gates: node --check, eslint (src clean; android build artifact lint error pre-existing),
+  no-undef app-wide 0 (caught a removed IVORY_2 import in DreamGallery), build 0, cap copy,
+  sim clean-install Release boot, bundle has the new routes and none of viator/products,
+  "Build your vacation", "Search food, hotels".
+- NOT tested end-to-end with a signed-in account: posting a held note, admin approve, an
+  "I was here" stamp at a real place. First real test: founder on a phone after the OTA.
