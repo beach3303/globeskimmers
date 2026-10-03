@@ -14869,7 +14869,7 @@ Maiza & GlobeSkimmers \u2708\uFE0F
 // Tiers: gold = Honored (the founder's personal honor), burgundy = Official
 // (businesses, partners, public figures), teal = House (GlobeSkimmers team).
 // No user-facing path ever writes verified or seal.
-const SEAL_TIERS = new Set(['gold', 'burgundy', 'teal']);
+const SEAL_TIERS = new Set(['gold', 'burgundy', 'teal', 'sunshine-heart', 'sunshine-star']);
 async function handleAdminVerified(request, env) {
   const denied = await requireAdmin(request, env);
   if (denied) return denied;
@@ -14883,7 +14883,8 @@ async function handleAdminVerified(request, env) {
       const w = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ verified: op === 'grant', seal, updated_at: new Date().toISOString() }) });
       const rows = w.ok ? await w.json() : [];
       if (!rows.length) return jsonResponse({ error: 'No user with that handle' }, 404);
-      if (op === 'grant' && seal !== 'teal') {
+      if (op === 'grant' && (seal === 'gold' || seal === 'burgundy')) {
+        // Letters go to gold and burgundy only; House and Sunshine grants are personal.
         // The letter rides the grant. Email from the auth admin API, name
         // from the social profile; failures just fall back to desk copy.
         let email = null, name = null;

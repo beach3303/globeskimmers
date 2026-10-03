@@ -19,7 +19,7 @@ import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, D
 import { isAdminEmail } from '@/lib/admins';
 import OfficialSeal from '@/components/passport/OfficialSeal';
 
-const SEAL_TIER_LABEL = { gold: 'Gold · Honored', burgundy: 'Burgundy · Official', teal: 'Teal · GlobeSkimmers team' };
+const SEAL_TIER_LABEL = { gold: 'Gold · Honored', burgundy: 'Burgundy · Official', teal: 'Teal · GlobeSkimmers team', 'sunshine-heart': 'Sunshine ♥ · Friends & Family', 'sunshine-star': 'Sunshine ★ · Friends & Family' };
 
 const COLORS = {
   bg: '#F0F4F8',
@@ -637,6 +637,8 @@ export default function AdminAnalytics() {
                   <option value="gold">Gold — Honored</option>
                   <option value="burgundy">Burgundy — Official</option>
                   <option value="teal">Teal — GlobeSkimmers team</option>
+                  <option value="sunshine-heart">Sunshine ♥ — Friends & Family</option>
+                  <option value="sunshine-star">Sunshine ★ — Friends & Family</option>
                 </select>
                 <button type="button" onClick={grantSeal} disabled={!sealDraft.trim()}
                   style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: sealDraft.trim() ? 1 : 0.5 }}>Grant</button>
