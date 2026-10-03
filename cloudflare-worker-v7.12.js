@@ -7274,7 +7274,13 @@ async function handleActivityOne(request, env) {
     let activity = null;
     if (d) {
       const pl = Number(d.latitude ?? d.location?.latitude), pg = Number(d.longitude ?? d.location?.longitude);
-      activity = gaMapSearchPlace(d, uLat ?? pl, uLng ?? pg);
+      if (Number.isFinite(pl) && Number.isFinite(pg)) {
+        activity = gaMapTieredPlace(d, uLat ?? pl, uLng ?? pg);
+        const mi = activity.distanceMiles;
+        activity.travelType = mi > 100 ? '100+ mi away' : mi > 50 ? '≈50–100 mi' : mi > 15 ? '≈15–50 mi' : '📍 Nearby';
+        // Without the traveler's location there is no distance to show (not "0.0 mi").
+        if (uLat == null || uLng == null) Object.assign(activity, { distanceKm: null, distanceMiles: null, distance: null, travelType: null });
+      }
     } else if (row) {
       const distMi = uLat != null ? haversineMilesLoc(uLat, uLng, +row.lat, +row.lng) : 0;
       activity = gaMapD1ToActivity({ ...row, photoUrl: row.photo_url || null, whyVisit: row.why_visit || '', typicalMinutes: row.typical_minutes ?? null, distanceMiles: distMi });
@@ -9275,6 +9281,76 @@ async function gaAttractions(env, ctx, origin, { latitude, longitude, cityName, 
   } catch { return null; }
 }
 
+// One Google place → the Things to Do card. The list's tiers and /activities/one
+// (a stamp tap anywhere) share it, so a stamp opens exactly the card the list
+// shows: hours, phone, Family Friendly / Accessible, what people love. uLat/uLng
+// = the traveler, for the distance.
+function gaMapTieredPlace(p, uLat, uLng) {
+  const lat = p.location?.latitude || 0, lng = p.location?.longitude || 0;
+  const d = gaKm(uLat, uLng, lat, lng);
+  const name = p.displayName?.text || p.name || '';
+  const revArr = (p.reviews || []).map(r => gaSafeLower(r?.text?.text ?? r?.text ?? ''));
+  const rev = revArr.join(' ');
+  const txt = `${name.toLowerCase()} ${rev}`;
+  const placeTypes = p.types || [];
+  const at = gaActivityType(name, placeTypes);
+  const isSmallFeature = /waterfall|fountain|pond|stream|creek/.test(name.toLowerCase());
+  const isWilderness = placeTypes.some(t => ['national_park','hiking_area','state_park','natural_feature'].includes(t));
+  const isInsideManagedPark = placeTypes.some(t => ['botanical_garden','amusement_park','zoo'].includes(t));
+  const outdoorContext = isSmallFeature && !isWilderness ? 'Walk-through inside a park' : isSmallFeature && isInsideManagedPark ? 'Managed Park / Walk-through' : null;
+  const photos = (p.photos || []).map(ph => ph.url || ph).filter(Boolean).slice(0, 3);
+  const hours = p.currentOpeningHours?.weekdayDescriptions || p.regularOpeningHours?.weekdayDescriptions || p.hours || [];
+  const editorialSummary = p.editorialSummary?.text || p.editorialSummary || '';
+  const highlights = GA_SIG.highlights.filter(w => rev.includes(w)).slice(0, 5);
+  const warnings = GA_SIG.warnings.filter(w => rev.includes(w)).slice(0, 4);
+  const timeMatches = (rev.match(/\b(morning|afternoon|evening|sunrise|sunset|weekday|weekend|summer|winter|spring|fall|autumn|off.season)\b/gi) || []);
+  const bestTime = timeMatches.length > 0 ? [...new Set(timeMatches.map(s => s.toLowerCase()))].slice(0, 3).join(', ') : '';
+  const badges = [];
+  if (gaSc(txt, GA_SIG.bucket) > 0)    badges.push('🏆 Bucket List');
+  if (gaSc(txt, GA_SIG.hidden) > 0)    badges.push('💎 Hidden Gem');
+  if (gaSc(txt, GA_SIG.photo) > 1)     badges.push('📸 Photo Worthy');
+  if (gaSc(txt, GA_SIG.free) > 0)      badges.push('🆓 Free Entry');
+  if (gaSc(txt, GA_SIG.family) > 0)    badges.push('👨‍👩‍👧 Family Friendly');
+  if (gaSc(txt, GA_SIG.adventure) > 0) badges.push('⚡ Adventure');
+  if (gaSc(txt, GA_SIG.cultural) > 1)  badges.push('🎭 Authentic Culture');
+  if (gaSc(txt, GA_SIG.adultsOnly) > 0 || /shooting range|gun club|axe throwing|clay shooting/i.test(name)) badges.push('🔞 Adults Only');
+  let qs = 50;
+  if (p.rating >= 4.5) qs += 25; else if (p.rating >= 4.0) qs += 15;
+  if (p.userRatingCount > 1000) qs += 10; else if (p.userRatingCount > 200) qs += 5;
+  if (gaSc(txt, GA_SIG.bucket) > 0) qs += 10;
+  if (gaSc(txt, GA_SIG.photo) > 0)  qs += 5;
+  if (gaSc(txt, GA_SIG.hidden) > 0) qs += 5;
+  return {
+    id: p.id, placeId: p.id, displayName: p.displayName || { text: name },
+    name, location: { latitude: lat, longitude: lng }, lat, lng,
+    formattedAddress: p.formattedAddress || '', shortFormattedAddress: p.shortFormattedAddress || '',
+    distanceKm: d, distanceMiles: d * 0.621371, distance: `${(d * 0.621371).toFixed(1)} mi`,
+    rating: p.rating || null, userRatingCount: p.userRatingCount || 0,
+    isOpen: p.isOpen ?? null, hours,
+    currentOpeningHours: { openNow: p.isOpen, weekdayDescriptions: hours }, utcOffsetMinutes: p.utcOffsetMinutes ?? null,
+    photos, photoUrl: photos[0] || null, photoUrl2: photos[1] || null,
+    nationalPhoneNumber: p.nationalPhoneNumber || '',
+    websiteUri: p.websiteUri || '', googleMapsUri: p.googleMapsUri || '',
+    activityIcon: at.icon, activityLabel: at.label, activityColor: at.color, activityCategory: at.category,
+    editorialSummary, outdoorContext, types: placeTypes,
+    badges, qualityScore: Math.min(qs, 100), highlights, warnings, bestTime,
+    props: {
+      isFree: gaSc(txt, GA_SIG.free) > 0, isFamilyFriendly: p.goodForChildren === true || gaSc(txt, GA_SIG.family) > 0,
+      isOutdoor: (() => { if (placeTypes.some(t => GA_NON_NATURE_TYPES.has(t))) return false; return placeTypes.some(t => GA_NATURE_TYPES.includes(t)) || gaSc(txt, GA_SIG.outdoor) >= 2 || at.category === 'outdoor'; })(),
+      isIndoor: gaSc(txt, GA_SIG.indoor) > 0, hasGuidedTour: gaSc(txt, GA_SIG.guided) > 0,
+      isBucketList: gaSc(txt, GA_SIG.bucket) > 0, isHiddenGem: gaSc(txt, GA_SIG.hidden) > 0,
+      isPhotoWorthy: gaSc(txt, GA_SIG.photo) > 1, isAdventure: gaSc(txt, GA_SIG.adventure) > 0,
+      isCultural: gaSc(txt, GA_SIG.cultural) > 1, isAccessible: p.accessibilityOptions?.wheelchairAccessibleEntrance === true,
+      isBudgetFriendly: gaSc(txt, GA_SIG.budget) > 0, isGoodForCouples: gaSc(txt, GA_SIG.couples) > 0,
+      isSeniorFriendly: false /* retired: a life-stage label, and it was text-inferred */, isPetFriendly: gaSc(txt, GA_SIG.petFriendly) > 0,
+      isGoodForGroups: gaSc(txt, GA_SIG.groups) > 0,
+      isGoodForSingles: gaSc(txt, GA_SIG.singles) > 0,
+      isGoodForTeens: gaSc(txt, GA_SIG.teens) > 0,
+    },
+    tourMode: GA_TOUR_MODE_BY_QUERY[p._foundByQuery] || undefined,
+  };
+}
+
 async function handleActivities(request, env, ctx) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -9353,71 +9429,7 @@ async function handleActivities(request, env, ctx) {
       if (MONUMENT_RE_H.test(nm) && revs < MONUMENT_MIN_REVIEWS_H) return false;
       return true;
     });
-    const processPlaceH = (p) => {
-      const lat = p.location?.latitude || 0, lng = p.location?.longitude || 0;
-      const d = gaKm(latitude, longitude, lat, lng);
-      const name = p.displayName?.text || p.name || '';
-      const revArr = (p.reviews || []).map(r => gaSafeLower(r?.text?.text ?? r?.text ?? ''));
-      const rev = revArr.join(' ');
-      const txt = `${name.toLowerCase()} ${rev}`;
-      const placeTypes = p.types || [];
-      const at = gaActivityType(name, placeTypes);
-      const isSmallFeature = /waterfall|fountain|pond|stream|creek/.test(name.toLowerCase());
-      const isWilderness = placeTypes.some(t => ['national_park','hiking_area','state_park','natural_feature'].includes(t));
-      const isInsideManagedPark = placeTypes.some(t => ['botanical_garden','amusement_park','zoo'].includes(t));
-      const outdoorContext = isSmallFeature && !isWilderness ? 'Walk-through inside a park' : isSmallFeature && isInsideManagedPark ? 'Managed Park / Walk-through' : null;
-      const photos = (p.photos || []).map(ph => ph.url || ph).filter(Boolean).slice(0, 3);
-      const hours = p.currentOpeningHours?.weekdayDescriptions || p.regularOpeningHours?.weekdayDescriptions || p.hours || [];
-      const editorialSummary = p.editorialSummary?.text || p.editorialSummary || '';
-      const highlights = GA_SIG.highlights.filter(w => rev.includes(w)).slice(0, 5);
-      const warnings = GA_SIG.warnings.filter(w => rev.includes(w)).slice(0, 4);
-      const timeMatches = (rev.match(/\b(morning|afternoon|evening|sunrise|sunset|weekday|weekend|summer|winter|spring|fall|autumn|off.season)\b/gi) || []);
-      const bestTime = timeMatches.length > 0 ? [...new Set(timeMatches.map(s => s.toLowerCase()))].slice(0, 3).join(', ') : '';
-      const badges = [];
-      if (gaSc(txt, GA_SIG.bucket) > 0)    badges.push('🏆 Bucket List');
-      if (gaSc(txt, GA_SIG.hidden) > 0)    badges.push('💎 Hidden Gem');
-      if (gaSc(txt, GA_SIG.photo) > 1)     badges.push('📸 Photo Worthy');
-      if (gaSc(txt, GA_SIG.free) > 0)      badges.push('🆓 Free Entry');
-      if (gaSc(txt, GA_SIG.family) > 0)    badges.push('👨‍👩‍👧 Family Friendly');
-      if (gaSc(txt, GA_SIG.adventure) > 0) badges.push('⚡ Adventure');
-      if (gaSc(txt, GA_SIG.cultural) > 1)  badges.push('🎭 Authentic Culture');
-      if (gaSc(txt, GA_SIG.adultsOnly) > 0 || /shooting range|gun club|axe throwing|clay shooting/i.test(name)) badges.push('🔞 Adults Only');
-      let qs = 50;
-      if (p.rating >= 4.5) qs += 25; else if (p.rating >= 4.0) qs += 15;
-      if (p.userRatingCount > 1000) qs += 10; else if (p.userRatingCount > 200) qs += 5;
-      if (gaSc(txt, GA_SIG.bucket) > 0) qs += 10;
-      if (gaSc(txt, GA_SIG.photo) > 0)  qs += 5;
-      if (gaSc(txt, GA_SIG.hidden) > 0) qs += 5;
-      return {
-        id: p.id, placeId: p.id, displayName: p.displayName || { text: name },
-        name, location: { latitude: lat, longitude: lng }, lat, lng,
-        formattedAddress: p.formattedAddress || '', shortFormattedAddress: p.shortFormattedAddress || '',
-        distanceKm: d, distanceMiles: d * 0.621371, distance: `${(d * 0.621371).toFixed(1)} mi`,
-        rating: p.rating || null, userRatingCount: p.userRatingCount || 0,
-        isOpen: p.isOpen ?? null, hours,
-        currentOpeningHours: { openNow: p.isOpen, weekdayDescriptions: hours }, utcOffsetMinutes: p.utcOffsetMinutes ?? null,
-        photos, photoUrl: photos[0] || null, photoUrl2: photos[1] || null,
-        nationalPhoneNumber: p.nationalPhoneNumber || '',
-        websiteUri: p.websiteUri || '', googleMapsUri: p.googleMapsUri || '',
-        activityIcon: at.icon, activityLabel: at.label, activityColor: at.color, activityCategory: at.category,
-        editorialSummary, outdoorContext, types: placeTypes,
-        badges, qualityScore: Math.min(qs, 100), highlights, warnings, bestTime,
-        props: {
-          isFree: gaSc(txt, GA_SIG.free) > 0, isFamilyFriendly: p.goodForChildren === true || gaSc(txt, GA_SIG.family) > 0,
-          isOutdoor: (() => { if (placeTypes.some(t => GA_NON_NATURE_TYPES.has(t))) return false; return placeTypes.some(t => GA_NATURE_TYPES.includes(t)) || gaSc(txt, GA_SIG.outdoor) >= 2 || at.category === 'outdoor'; })(),
-          isIndoor: gaSc(txt, GA_SIG.indoor) > 0, hasGuidedTour: gaSc(txt, GA_SIG.guided) > 0,
-          isBucketList: gaSc(txt, GA_SIG.bucket) > 0, isHiddenGem: gaSc(txt, GA_SIG.hidden) > 0,
-          isPhotoWorthy: gaSc(txt, GA_SIG.photo) > 1, isAdventure: gaSc(txt, GA_SIG.adventure) > 0,
-          isCultural: gaSc(txt, GA_SIG.cultural) > 1, isAccessible: p.accessibilityOptions?.wheelchairAccessibleEntrance === true,
-          isBudgetFriendly: gaSc(txt, GA_SIG.budget) > 0, isGoodForCouples: gaSc(txt, GA_SIG.couples) > 0,
-          isSeniorFriendly: false /* retired: a life-stage label, and it was text-inferred */, isPetFriendly: gaSc(txt, GA_SIG.petFriendly) > 0,
-          isGoodForGroups: gaSc(txt, GA_SIG.groups) > 0,
-          isGoodForSingles: gaSc(txt, GA_SIG.singles) > 0,
-          isGoodForTeens: gaSc(txt, GA_SIG.teens) > 0,
-        },
-        tourMode: GA_TOUR_MODE_BY_QUERY[p._foundByQuery] || undefined,
-      };
-    };
+    const processPlaceH = (p) => gaMapTieredPlace(p, latitude, longitude);
     const popScoreH = (a) => (a.rating || 0) * Math.log10((a.userRatingCount || 0) + 1);
 
     // ── STAGE B (concurrent): National Icons → Regional Gems ──
