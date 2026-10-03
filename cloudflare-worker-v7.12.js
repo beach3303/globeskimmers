@@ -3560,6 +3560,7 @@ async function resolveStampGid(env, id) {
     if (r.ok) gid = (await r.json())?.places?.[0]?.id || null;
   } catch { gid = null; }
   if (kv) await kv.put(key, gid || 'none', { expirationTtl: (gid ? 180 : 30) * 86400 }).catch(() => {});
+  if (kv && gid) await kv.put(`gid2d1:${gid}`, JSON.stringify(ttdStampSummary(row)), { expirationTtl: 30 * 86400 }).catch(() => {});
   return gid;
 }
 
@@ -7151,6 +7152,131 @@ async function handleAttractionsGet(request, env) {
   }
 }
 
+// ── Things to Do is the attraction page (founder, 2026-10-03) ─────────────────
+// A stamp tap opens that attraction's Things to Do card; every Things to Do
+// attraction can be stamped "I was here" when GPS puts you there; iconic ones
+// (a stampable D1 row) get their official stamp instead of the typographic one.
+function ttdIdKind(id) {
+  const v = String(id || '');
+  if (/^[a-z]+:/.test(v) || /^[a-z]{2}-[a-z0-9-]+$/.test(v)) return 'd1';
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return 'owned';
+  if (/^[A-Za-z0-9_-]{16,250}$/.test(v)) return 'google';
+  return null;
+}
+async function ttdPlaceDetails(env, gid, origin) {
+  if (ttdIdKind(gid) !== 'google') return null;
+  const cached = await getFromCache(env, `details_${gid}`).catch(() => null);
+  if (cached?.data) return cached.data;
+  if (!env.GOOGLE_API_KEY) return null;
+  try {
+    const r = await fetch(`https://places.googleapis.com/v1/places/${gid}?languageCode=en`, { headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': CONFIG.DETAILS_FIELD_MASK } });
+    if (!r.ok) return null;
+    const p = normalizePlace(await r.json(), origin || '', true);
+    await setInCache(env, `details_${gid}`, p, CONFIG.CACHE_TTL.DETAILS);
+    return p;
+  } catch { return null; }
+}
+async function ttdGidFor(env, id) {
+  const k = ttdIdKind(id);
+  if (k === 'google') return id;
+  if (k === 'd1') return resolveStampGid(env, id).catch(() => null);
+  if (k === 'owned' && env.GLOBESKIMMERS_KV) {
+    const m = await env.GLOBESKIMMERS_KV.get(`owned2gid:${id}`).catch(() => null);
+    return m && m !== 'none' ? m : null;
+  }
+  return null;
+}
+const ttdStampSummary = (r) => ({ id: r.id, name: r.name, category: r.category || null, footprint_radius_m: r.footprint_radius_m ?? null, city: r.city || null, country: r.country || null, lat: +r.lat, lng: +r.lng });
+// The iconic (stampable) D1 row for a place: same name, inside its footprint.
+async function ttdStampFor(env, gid, name, lat, lng) {
+  const kv = env.GLOBESKIMMERS_KV, key = gid ? `gid2d1:${gid}` : null;
+  if (key && kv) {
+    const hit = await kv.get(key).catch(() => null);
+    if (hit) return hit === 'none' ? null : JSON.parse(hit);
+  }
+  let out = null;
+  if (env.ATTRACTIONS_DB && Number.isFinite(lat) && Number.isFinite(lng) && name) {
+    const dLat = 0.03, dLng = 0.03 / Math.max(0.2, Math.cos(lat * Math.PI / 180));
+    const q = await env.ATTRACTIONS_DB.prepare(
+      `SELECT * FROM attractions WHERE lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4
+         AND (tier = 'secret' OR coalesce(founder_scope, scope) IN ('world','national','regional')) LIMIT 80`
+    ).bind(lat - dLat, lat + dLat, lng - dLng, lng + dLng).all().catch(() => null);
+    const norm = (v) => String(v || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/^the\s+/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    const n = norm(name);
+    let best = null;
+    for (const r of q?.results || []) {
+      const rn = norm(r.name);
+      if (!rn || !n || !(rn === n || (rn.length >= 6 && n.includes(rn)) || (n.length >= 6 && rn.includes(n)))) continue;
+      const m = haversineMilesLoc(lat, lng, +r.lat, +r.lng) * 1609.34;
+      if (m > Math.max(600, ppStampRadius(r) * 1.5)) continue;
+      if (!best || m < best.m) best = { m, r };
+    }
+    if (best) out = ttdStampSummary(best.r);
+  }
+  if (key && kv) await kv.put(key, out ? JSON.stringify(out) : 'none', { expirationTtl: 30 * 86400 }).catch(() => {});
+  return out;
+}
+// Where a place really is (for the stamp distance check): our D1 row, else Google.
+async function ttdPlaceTruth(env, entityId, origin) {
+  const k = ttdIdKind(entityId);
+  if (k === 'd1' && env.ATTRACTIONS_DB) {
+    const r = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(entityId).first().catch(() => null);
+    if (r && Number.isFinite(+r.lat) && Number.isFinite(+r.lng)) return { lat: +r.lat, lng: +r.lng, radius: ppStampRadius(r) };
+    return null;
+  }
+  const gid = String(entityId).startsWith('places:') ? String(entityId).slice(7) : String(entityId).startsWith('owned:') ? await ttdGidFor(env, String(entityId).slice(6)) : null;
+  const d = gid ? await ttdPlaceDetails(env, gid, origin) : null;
+  const lat = Number(d?.latitude ?? d?.location?.latitude), lng = Number(d?.longitude ?? d?.location?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng, radius: ppStampRadius({ category: [d.primaryType, ...(d.types || [])].filter(Boolean).join(' ') }), gid, name: d.name || null };
+}
+
+// POST /attractions/link { placeId, name, lat, lng } → { stamp: {id,…} | null }
+// Is this Things to Do place one of our iconic stamps?
+async function handleAttractionLink(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.placeId || '').trim();
+    const k = ttdIdKind(id);
+    if (!k) return jsonResponse({ stamp: null });
+    if (k === 'd1') {
+      const r = env.ATTRACTIONS_DB ? await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(id).first().catch(() => null) : null;
+      return jsonResponse({ stamp: r ? ttdStampSummary(r) : null });
+    }
+    const gid = k === 'google' ? id : await ttdGidFor(env, id);
+    return jsonResponse({ stamp: await ttdStampFor(env, gid, String(b.name || '').slice(0, 160), Number(b.lat), Number(b.lng)), gid });
+  } catch (e) { return jsonResponse({ stamp: null, error: e.message }); }
+}
+
+// POST /activities/one { id, name?, lat?, lng?, userLat?, userLng? } → { activity, stamp }
+// One attraction in the Things to Do card shape, for a stamp tap anywhere in the app.
+async function handleActivityOne(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.id || '').trim();
+    const k = ttdIdKind(id);
+    if (!k) return jsonResponse({ error: 'id required' }, 400);
+    const origin = new URL(request.url).origin;
+    let row = null;
+    if (k === 'd1' && env.ATTRACTIONS_DB) row = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(id).first().catch(() => null);
+    const gid = await ttdGidFor(env, id);
+    const d = gid ? await ttdPlaceDetails(env, gid, origin) : null;
+    const uLat = Number.isFinite(+b.userLat) ? +b.userLat : null, uLng = Number.isFinite(+b.userLng) ? +b.userLng : null;
+    let activity = null;
+    if (d) {
+      const pl = Number(d.latitude ?? d.location?.latitude), pg = Number(d.longitude ?? d.location?.longitude);
+      activity = gaMapSearchPlace(d, uLat ?? pl, uLng ?? pg);
+    } else if (row) {
+      const distMi = uLat != null ? haversineMilesLoc(uLat, uLng, +row.lat, +row.lng) : 0;
+      activity = gaMapD1ToActivity({ ...row, photoUrl: row.photo_url || null, whyVisit: row.why_visit || '', typicalMinutes: row.typical_minutes ?? null, distanceMiles: distMi });
+    }
+    if (!activity) return jsonResponse({ activity: null, stamp: row ? ttdStampSummary(row) : null }, 404);
+    let stamp = row ? ttdStampSummary(row) : null;
+    if (!stamp && gid) stamp = await ttdStampFor(env, gid, activity.name, Number(activity.lat), Number(activity.lng));
+    return jsonResponse({ activity, stamp });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // ── Tickets + parking for a stampable attraction (founder, 2026-10-03) ────────
 // POST /attractions/visit-info { id } — admission by audience (adult, child,
 // student, senior, military …), discounts, and parking with prices. Claude
@@ -7314,7 +7440,15 @@ async function handleAttractionVisitInfo(request, env, ctx) {
 
     // SELECT * — the facts columns (website, ticket_price, parking_text) only
     // exist once scripts/city-icons/data/add_attraction_facts.sql has run.
-    const row = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(id).first().catch(() => null);
+    // Any Things to Do place works too: a Google id reads its name and website
+    // from Google's details.
+    let row = null;
+    if (ttdIdKind(id) === 'google') {
+      const d = await ttdPlaceDetails(env, id, new URL(request.url).origin);
+      if (d) row = { id, name: d.name, address: d.formattedAddress || d.address || '', website: d.websiteUri || d.website || null };
+    } else {
+      row = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(id).first().catch(() => null);
+    }
     if (!row) return jsonResponse({ error: 'Not found' }, 404);
     const user = await gbUser(request, env);
     if (!env.ANTHROPIC_API_KEY) return jsonResponse({ error: 'not configured' }, 500);
@@ -7340,7 +7474,7 @@ async function handleAttractionVisitInfo(request, env, ctx) {
 
     const work = (async () => {
       const site = await visitOfficialSite(row);
-      const where = [row.city, row.country].filter(Boolean).join(', ');
+      const where = row.address || [row.city, row.country].filter(Boolean).join(', ');
       const ask = await visitAsk(env, `Attraction: ${row.name}${where ? `\nWhere: ${where}` : ''}${site ? `\nOfficial website (from Wikidata/our records): ${site}` : ''}\nFind admission prices by audience, discounts, and parking with prices.`, !site);
       const finalText = ask.blocks.filter((x) => x?.type === 'text').map((x) => x.text).join('\n');
       const m = finalText.match(/<json>([\s\S]*?)<\/json>/);
@@ -13429,10 +13563,10 @@ async function handlePassportStamp(request, env, ctx) {
     const kind = PP_KINDS.includes(String(b.kind || '').toLowerCase()) ? String(b.kind).toLowerCase() : 'attraction';
     const tier = kind === 'attraction' ? 'mark' : 'page';
     let verified = ['gps', 'photo', 'self'].includes(b.verified) ? b.verified : 'self';
-    const entityId = b.entity_id != null && String(b.entity_id) ? String(b.entity_id) : null;
+    let entityId = b.entity_id != null && String(b.entity_id) ? String(b.entity_id).slice(0, 220) : null;
     const visitedOn = ppDate(b.visited_on);
-    const lat = Number.isFinite(+b.lat) ? +b.lat : null;
-    const lng = Number.isFinite(+b.lng) ? +b.lng : null;
+    let lat = Number.isFinite(+b.lat) ? +b.lat : null;
+    let lng = Number.isFinite(+b.lng) ? +b.lng : null;
 
     // Anti-spoof: GPS is client-reported and spoofable, so a claimed 'gps' ✓ must be
     // corroborated. We cross-check against (1) the request's IP country (free via
@@ -13472,7 +13606,22 @@ async function handlePassportStamp(request, env, ctx) {
     // measured against OUR coordinates and footprint, not the client's. Builds
     // that send no fix keep the IP-country and travel-speed checks above.
     const fix = b.fix && typeof b.fix === 'object' ? { lat: Number(b.fix.lat), lng: Number(b.fix.lng), acc: Number(b.fix.acc) } : null;
-    if (kind === 'attraction' && verified === 'gps' && fix && Number.isFinite(fix.lat) && Number.isFinite(fix.lng)) {
+    // "I was here" at any Things to Do attraction (entity places:<googleId> or
+    // owned:<uuid>): GPS only, measured against Google's own location, and an
+    // iconic place becomes its official stamp (no duplicates).
+    if (kind === 'attraction' && entityId && /^(places|owned):/.test(entityId)) {
+      const hasFix = fix && Number.isFinite(fix.lat) && Number.isFinite(fix.lng);
+      if (verified !== 'gps' || !hasFix) return jsonResponse({ error: 'This stamp is earned at the place \u2014 open it there and tap again', code: 'not_here' }, 409);
+      const truth = await ttdPlaceTruth(env, entityId, new URL(request.url).origin);
+      if (!truth) return jsonResponse({ error: 'We can\u2019t place this attraction on the map yet', code: 'not_here' }, 409);
+      const slack = Number.isFinite(fix.acc) && fix.acc >= 0 ? Math.min(fix.acc, 100) : 50;
+      const meters = haversineMilesLoc(truth.lat, truth.lng, fix.lat, fix.lng) * 1609.34;
+      if (meters > truth.radius + slack) return jsonResponse({ error: 'Your GPS doesn\u2019t show you at this place yet \u2014 stamping opens when you\u2019re here', code: 'not_here', distance_m: Math.round(meters), radius_m: truth.radius }, 409);
+      lat = truth.lat; lng = truth.lng;
+      const iconic = truth.gid ? await ttdStampFor(env, truth.gid, truth.name || name, truth.lat, truth.lng) : null;
+      if (iconic) { entityId = iconic.id; b.entity_type = 'place'; }
+      else b.entity_type = 'local';
+    } else if (kind === 'attraction' && verified === 'gps' && fix && Number.isFinite(fix.lat) && Number.isFinite(fix.lng)) {
       let pLat = lat, pLng = lng, radius = ppStampRadius({ category: b.category });
       if (entityId && entityId.length <= 200 && env.ATTRACTIONS_DB) {
         const r = await env.ATTRACTIONS_DB.prepare('SELECT lat, lng, category, footprint_radius_m FROM attractions WHERE id = ?1 LIMIT 1').bind(entityId).first().catch(() => null);
@@ -20670,6 +20819,8 @@ export default {
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
       if (pathname.startsWith('/dish-photo/') && request.method === 'GET') return await handleDishPhotoServe(request, env);
       if (pathname === '/attractions/visit-info' && request.method === 'POST') return await handleAttractionVisitInfo(request, env, ctx);
+      if (pathname === '/attractions/link' && request.method === 'POST') return await handleAttractionLink(request, env);
+      if (pathname === '/activities/one' && request.method === 'POST') return await handleActivityOne(request, env);
       if (pathname === '/places/dishes' && request.method === 'POST') return await handlePlaceDishes(request, env);
       if (pathname === '/places/dishes/add' && request.method === 'POST') return await handlePlaceDishAdd(request, env, ctx);
       if (pathname === '/places/dishes/delete' && request.method === 'POST') return await handlePlaceDishDelete(request, env);
