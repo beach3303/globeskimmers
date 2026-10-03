@@ -168,7 +168,11 @@ THE LIST — before the Apple resubmission (founder: "build first, then submit")
   [x] Luggage: all six trunks photoreal (R2), BOTTOM face added, finger-follow turning
   [x] Profile banner = the ACTIVE trunk's real front + placed stickers (cartoon gone)
   [x] Collection loop: fill a trunk (12 stickers) to unlock the next; in-use trunks grandfathered
-  [ ] FOUNDER: git pull && npm run cap:sync → Xcode Archive 1.0.3 (10) → Upload
+  [x] 1.0.3 (11) archived + uploaded by Claude from the CLI (2026-10-02 23:56): store-signed
+      entitlements verified (no age-range), Release build cold-launched twice on the sim
+      with zero crash reports; build 10 superseded (ITMS-90683 Always-location string +
+      outdated purpose strings fixed in 11). TestFlight skipped (not required).
+  [ ] FOUNDER: version page → build 11 (not 10)
   [ ] FOUNDER: TestFlight build 10 on the iPhone — launch twice (not required by
       Apple, but the only way to run the exact store-signed binary after a 2.1)
   [ ] FOUNDER: version page → build 10, description last line → "Free to use.",
