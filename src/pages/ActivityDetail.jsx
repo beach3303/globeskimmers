@@ -43,6 +43,15 @@ export default function ActivityDetailPage() {
   const [showFullGallery, setShowFullGallery] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [gbCount, setGbCount] = useState(0); // the Guestbook tab wears its count
+  useEffect(() => {
+    if (!activity?.id) return undefined;
+    let gone = false;
+    callWorker("guestbook/list", { entity_id: String(activity.id) }).then(({ data }) => {
+      if (!gone && Array.isArray(data?.entries)) setGbCount(data.entries.length);
+    });
+    return () => { gone = true; };
+  }, [activity?.id]);
   const [showShareModal, setShowShareModal] = useState(false);
   const [enhancedDetails, setEnhancedDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -583,6 +592,28 @@ export default function ActivityDetailPage() {
             </div>
           )}
 
+          {/* Verified stamping only: earned at the place, or by photo proof later */}
+          <button
+            onClick={handleStamp}
+            disabled={stamping || stamped}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl py-3 mt-1 mb-3 font-bold transition-transform active:scale-[.99]"
+            style={{ background: stamped ? '#E7F3EA' : '#B0472F', color: stamped ? '#266A3B' : '#fff', fontSize: 'calc(15px*var(--fs))' }}
+          >
+            {stamping ? 'Checking you are here…' : stamped ? '✓ In your Virtual Passport' : '📍 Stamp it — I\'m here'}
+          </button>
+          {proofHelp && (
+            <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-[calc(13px*var(--fs))] text-amber-900">
+                Stamps are earned at the place — your GPS doesn&rsquo;t show you here right now.
+                Been before? Add it from your Passport with a photo from the visit: the photo&rsquo;s
+                own location and what&rsquo;s in it verify you were really there.
+              </p>
+              <button onClick={() => navigate(createPageUrl('Passport'))}
+                className="mt-2 text-[calc(13px*var(--fs))] font-bold text-amber-900 underline underline-offset-2">
+                Open my Passport →
+              </button>
+            </div>
+          )}
           {/* Movie scene spot: the film behind the place (plain text — no stills, no logos) */}
           {activity.film?.title && (
             <div className="rounded-2xl px-4 py-3 mb-3" style={{ background: '#F6F0E4', border: '1px solid rgba(22,17,13,.08)' }}>
@@ -678,33 +709,11 @@ export default function ActivityDetailPage() {
             )}
           </div>
 
-          {/* Verified stamping only: earned at the place, or by photo proof later */}
-          <button
-            onClick={handleStamp}
-            disabled={stamping || stamped}
-            className="w-full flex items-center justify-center gap-2 rounded-2xl py-3 mt-3 font-bold transition-transform active:scale-[.99]"
-            style={{ background: stamped ? '#E7F3EA' : '#B0472F', color: stamped ? '#266A3B' : '#fff', fontSize: 'calc(15px*var(--fs))' }}
-          >
-            {stamping ? 'Checking you are here…' : stamped ? '✓ In your Virtual Passport' : '📍 Stamp it — I\'m here'}
-          </button>
-          {proofHelp && (
-            <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-[calc(13px*var(--fs))] text-amber-900">
-                Stamps are earned at the place — your GPS doesn&rsquo;t show you here right now.
-                Been before? Add it from your Passport with a photo from the visit: the photo&rsquo;s
-                own location and what&rsquo;s in it verify you were really there.
-              </p>
-              <button onClick={() => navigate(createPageUrl('Passport'))}
-                className="mt-2 text-[calc(13px*var(--fs))] font-bold text-amber-900 underline underline-offset-2">
-                Open my Passport →
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Tabs */}
         <div className="flex gap-2 mb-4 mt-4 overflow-x-auto scrollbar-hide">
-          {[['overview', 'Overview'], ['guestbook', 'Guestbook']].map(([tab, label]) => (
+          {[['overview', 'Overview'], ['guestbook', gbCount ? `Guestbook · ${gbCount}` : 'Guestbook']].map(([tab, label]) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -849,7 +858,7 @@ export default function ActivityDetailPage() {
         )}
 
         {activeTab === 'guestbook' && (
-          <Guestbook entityType="attraction" entityId={activity.id} entityName={activity.name} />
+          <Guestbook entityType="attraction" entityId={activity.id} entityName={activity.name} onCount={setGbCount} />
         )}
       </div>
 
