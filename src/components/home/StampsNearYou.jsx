@@ -151,7 +151,7 @@ export default function StampsNearYou({ onAction, wide = false, onNearest }) {
   // Open the attraction's Things to Do card — the stamp is earned there by GPS.
   const openStamp = (item) => {
     logDiscover("home_stamp_tap", { place_id: item.id, place_name: item.name });
-    if (!openAttraction(navigate, item)) onAction?.("Things to Do");
+    if (!openAttraction(navigate, item, "Stamps near you")) onAction?.("Things to Do");
   };
 
   return (

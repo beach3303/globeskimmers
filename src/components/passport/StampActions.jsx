@@ -7,7 +7,9 @@
 // Every write goes through src/lib/passport.js; onChanged() reloads the
 // passport so the booklet repacks (a solo stamp moves to its own page at once).
 import React, { useRef, useState } from "react";
-import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck, ScanSearch, ArrowUpDown } from "lucide-react";
+import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck, ScanSearch, ArrowUpDown, MapPin } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { openAttraction } from "@/lib/openAttraction";
 import { showToast } from "@/components/Toast";
 import { addStamp, metersBetween, uploadStampPhoto, deleteStamp, deleteStampPhoto, setStampLayout, setStampPos, isPhotoFirst, checkStampPhotos, isVerified, proofToast } from "@/lib/passport";
 import { readPhotoExif } from "@/lib/photoExif";
@@ -45,6 +47,9 @@ function Row({ icon: Icon, label, sub, onClick, disabled, tone }) {
 }
 
 export default function StampActions({ stamp, onClose, onChanged, onDetails, onEnlarge, readOnly }) {
+  const navigate = useNavigate();
+  // An attraction stamp opens its place's Things to Do card (prices, guestbook…).
+  const canSeePlace = stamp.kind === "attraction" && !!stamp.entity_id;
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(null); // "photos" | "layout" | "delete" | null
   const [confirmDel, setConfirmDel] = useState(false);
@@ -283,6 +288,10 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
             <Row icon={busy === "check" ? Loader2 : ScanSearch} label="Check my photos for proof"
               sub="Looks for the place itself in your photos — selfies alone can't prove it"
               onClick={checkPhotos} disabled={busy === "check"} />
+          )}
+          {canSeePlace && (
+            <Row icon={MapPin} label="See this place" sub="Prices, parking, tips and its guestbook"
+              onClick={() => { onClose?.(); openAttraction(navigate, { id: stamp.entity_id, name: stamp.name, lat: stamp.lat, lng: stamp.lng }, "From your passport"); }} />
           )}
           {!readOnly && (
             <Row icon={PencilLine} label="Send as a postcard" sub="This place's photo on the front, your words on the back" onClick={openCompose} />

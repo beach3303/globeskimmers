@@ -20,6 +20,8 @@ const PROMPTS = [
 const PROMPT_LABEL = { ...Object.fromEntries(PROMPTS.map((p) => [p.key, p.label])), doodle: "✍️ Doodle" };
 
 const HELD_TOAST = "Thank you! Our team takes a quick look before it posts 💛";
+// The worker's age gate answers 428 { error: "age_required", message }.
+const errText = (data, error) => (data?.error === "age_required" ? (data.message || "Add your birth year in Settings to sign guestbooks.") : error);
 
 function timeAgo(iso) {
   try {
@@ -100,7 +102,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
       body: body.trim() || undefined,
     });
     setDoodleBusy(false);
-    if (error) { showToast(error, "error"); return; }
+    if (error) { showToast(errText(data, error), "error"); return; }
     if (data?.entry) {
       setEntries((prev) => [{ ...data.entry, review_status: data.held ? "held" : "ok" }, ...prev]);
       setPad(false); resetCompose();
@@ -119,7 +121,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
       prompt_type: prompt, body: text,
     });
     setBusy(false);
-    if (error) { showToast(error, "error"); return; }
+    if (error) { showToast(errText(data, error), "error"); return; }
     if (data?.entry) {
       setEntries((prev) => [{ ...data.entry, review_status: data.held ? "held" : "ok" }, ...prev]);
       resetCompose();
@@ -133,8 +135,8 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
     setBusy(true);
     const { data, error } = await callWorker("guestbook/edit", { id, body: text });
     setBusy(false);
-    if (error) { showToast(error, "error"); return; }
-    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, body: text, edited_at: data?.entry?.edited_at, review_status: data?.held ? "held" : "ok" } : e)));
+    if (error) { showToast(errText(data, error), "error"); return; }
+    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, body: text, edited_at: data?.entry?.edited_at, review_status: data?.entry?.review_status || (data?.held ? "held" : "ok") } : e)));
     setEditId(null);
     if (data?.held) showToast(HELD_TOAST, "success");
   };
@@ -249,7 +251,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
         </div>
       ) : (
         entries.map((e) => {
-          const mine = user && e.user_id === user.id;
+          const mine = !!e.mine || (!!user && e.user_id === user.id);
           return (
             <div key={e.id} className="bg-white rounded-xl shadow-md p-4">
               <div className="flex items-center justify-between mb-1">

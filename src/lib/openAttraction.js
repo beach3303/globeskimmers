@@ -7,7 +7,8 @@ export function attractionUrl(id) {
   return `${createPageUrl("ThingsToDo")}?focus=${encodeURIComponent(String(id))}`;
 }
 
-export function openAttraction(navigate, item) {
+// from: a short label for where the tap came from ("Stamps near you"…), shown on the card.
+export function openAttraction(navigate, item, from = null) {
   const id = item?.id != null ? String(item.id) : "";
   if (!id) return false;
   navigate(attractionUrl(id), {
@@ -18,6 +19,7 @@ export function openAttraction(navigate, item) {
         lat: item.lat ?? item.latitude ?? null,
         lng: item.lng ?? item.longitude ?? null,
         photo: item.photoUrl || (Array.isArray(item.photos) ? item.photos[0] : null) || null,
+        from,
       },
     },
   });

@@ -18,6 +18,7 @@ import { countryCode } from "@/lib/countries";
 import { localISODate } from "@/lib/localDate";
 import { getCurrentPositionSmart } from "@/lib/geolocation";
 import { showToast } from "@/components/Toast";
+import { openPartner } from "@/lib/openPartner";
 import Guestbook from "@/components/Guestbook";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
@@ -29,7 +30,7 @@ const idKind = (id) => {
   const v = String(id || "");
   if (/^[a-z]+:/.test(v) || /^[a-z]{2}-[a-z0-9-]+$/.test(v)) return "d1";
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return "owned";
-  return v.length >= 16 ? "google" : null;
+  return v.length >= 16 && /[A-Z]/.test(v) && /^[A-Za-z0-9_-]+$/.test(v) ? "google" : null;   // Google ids are mixed-case
 };
 
 // "6100 Woodley Ave, Van Nuys, CA 91406, USA" → { city, region, country }.
@@ -42,21 +43,29 @@ function placeParts(address) {
   return { city, region, country };
 }
 
-// The attraction's stamp record (iconic) or null; `undefined` while checking.
+// { stamp, gid } for an attraction — its iconic stamp record (or null) and its
+// Google id (or null; owned places resolve by name + coords) — `undefined`
+// while checking.
 export function useAttractionLink(a) {
   const pid = a?.placeId || a?.id;
-  const [link, setLink] = useState(a?.stamp !== undefined ? a.stamp : undefined);
+  const [link, setLink] = useState(undefined);
   useEffect(() => {
-    if (a?.stamp !== undefined || !pid) return undefined;
+    if (!pid) { setLink({ stamp: null, gid: null }); return undefined; }
     let gone = false;
+    setLink(undefined);
     callWorker("attractions/link", { placeId: String(pid), name: a.displayName?.text || a.name, lat: a.lat, lng: a.lng })
-      .then(({ data }) => { if (!gone) setLink(data?.stamp || null); });
+      .then(({ data }) => {
+        if (gone) return;
+        const stamp = a?.stamp !== undefined && a.stamp !== null ? a.stamp : (data?.stamp || null);
+        setLink({ stamp, gid: data?.gid || (idKind(pid) === "google" ? String(pid) : null) });
+      });
     return () => { gone = true; };
   }, [pid]); // eslint-disable-line react-hooks/exhaustive-deps
   return link;
 }
 
-export function StampHereButton({ a, link, formatDistance, isTablet }) {
+export function StampHereButton({ a, link: resolved, formatDistance, isTablet }) {
+  const link = resolved?.stamp || null;
   const [busy, setBusy] = useState(false);
   const [stamped, setStamped] = useState(false);
   const [notHere, setNotHere] = useState(null); // null | { meters } | { noFix: true }
@@ -84,9 +93,10 @@ export function StampHereButton({ a, link, formatDistance, isTablet }) {
     const parts = placeParts(a.formattedAddress);
     const country = link?.country || parts.country || null;
     const variant = iconic ? resolveStampVariant({ name: link.name, lat: fix.lat, lng: fix.lng, country, verified: "gps" }) : null;
+    const gid = resolved?.gid || (kind === "google" ? pid : null);
     const entityId = variant ? variant.entity_id
       : iconic ? link.id
-      : kind === "google" ? `places:${pid}`
+      : gid ? `places:${gid}`
       : kind === "owned" ? `owned:${pid}`
       : pid;
     const { data, error } = await addStamp({
@@ -104,11 +114,12 @@ export function StampHereButton({ a, link, formatDistance, isTablet }) {
       local_hour: new Date().getHours(),
       verified: "gps",
       category: (link?.category || a.activityCategory || (a.types || [])[0]) || undefined,
+      ...(variant && link?.id ? { parent_id: link.id } : {}),   // the worker measures a variant from its parent
       fix,
     });
     setBusy(false);
-    if (data?.code === "not_here") { setNotHere({ meters: Number.isFinite(data.distance_m) ? data.distance_m : null }); return; }
-    if (data?.code === "proof_needed") { setNotHere({ meters: null }); return; }
+    if (data?.code === "not_here" && Number.isFinite(data.distance_m)) { setNotHere({ meters: data.distance_m }); return; }
+    if (data?.code === "not_here" || data?.code === "unlocatable" || data?.code === "proof_needed") { setNotHere({ message: data.error || null }); return; }
     if (error) { showToast(/sign in/i.test(error) ? "Sign in to stamp your Virtual Passport" : error, "error"); return; }
     setStamped(true);
     showToast(iconic ? "✓ Verified — added to your Virtual Passport 🛂" : "✓ “I was here” — added to your Virtual Passport 🛂", "success");
@@ -130,6 +141,7 @@ export function StampHereButton({ a, link, formatDistance, isTablet }) {
         <p style={{ marginTop: 8, borderRadius: 12, border: "1px solid #FCD9A8", background: "#FFF8EC", padding: "10px 12px", fontSize: fs(13), color: "#7A4A0C" }}>
           {notHere.noFix
             ? "We need your location to stamp this — turn on Location for Globeskimmers, then tap again."
+            : notHere.message ? notHere.message
             : `This stamp is earned at the place${Number.isFinite(notHere.meters) ? ` — you're about ${formatDistance ? formatDistance(notHere.meters / 1609.34) : `${(notHere.meters / 1000).toFixed(1)} km`} away` : ""}. Tap again when you're here.`}
         </p>
       )}
@@ -155,7 +167,7 @@ export function useVisitInfo(id) {
       for (let attempt = 0; attempt < 4; attempt++) {
         const { data } = await callWorker("attractions/visit-info", { id }, { timeoutMs: 90000 });
         if (gone) return;
-        if (data?.pending) { await new Promise((r) => setTimeout(r, 8000)); continue; }
+        if (data?.pending) { await new Promise((r) => setTimeout(r, 8000)); if (gone) return; continue; }
         setVisit(data && data.ok ? data : { ok: false, official_site: data?.official_site || null });
         return;
       }
@@ -179,14 +191,14 @@ function SourceLine({ url, checkedAt }) {
   if (!host) return null;
   return (
     <p style={{ marginTop: 10, fontSize: fs(11.5), color: INK3 }}>
-      From <a href={url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline" }}>{host}</a>
+      From <button type="button" onClick={() => openPartner(url)} style={{ textDecoration: "underline", color: "inherit" }}>{host}</button>
       {checkedAt ? ` · checked ${checkedOn(checkedAt)}` : ""} · prices can change
     </p>
   );
 }
 function OfficialLink({ url, label }) {
   if (!url) return <p style={{ fontSize: fs(13), color: INK3 }}>Prices aren&rsquo;t listed online — ask at the venue.</p>;
-  return <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: fs(14), fontWeight: 600, color: "#6D28D9", textDecoration: "underline" }}>{label} ↗</a>;
+  return <button type="button" onClick={() => openPartner(url)} style={{ fontSize: fs(14), fontWeight: 600, color: "#6D28D9", textDecoration: "underline", textAlign: "left" }}>{label} ↗</button>;
 }
 
 export function TicketsCard({ visit, website }) {
@@ -262,8 +274,8 @@ export default function AttractionExtras({ a, formatDistance, isTablet }) {
   const pid = String(a.placeId || a.id || "");
   const kind = idKind(pid);
   // Prices key on the stamp record when there is one (shared with its stamp
-  // taps), else on the Google place; an unmatched owned place has none.
-  const visitId = link === undefined ? null : (link?.id || (kind === "google" || kind === "d1" ? pid : null));
+  // taps), else on the Google place (owned places resolve to theirs).
+  const visitId = link === undefined ? null : (link.stamp?.id || link.gid || (kind === "d1" ? pid : null));
   const visit = useVisitInfo(visitId);
   const name = a.displayName?.text || a.name || "";
   return (
@@ -273,7 +285,7 @@ export default function AttractionExtras({ a, formatDistance, isTablet }) {
       <ParkingCard visit={visit} website={a.websiteUri} />
       <div>
         <div style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".12em", textTransform: "uppercase", color: INK3, margin: "6px 2px 8px" }}>📖 Guestbook</div>
-        <Guestbook entityType="attraction" entityId={pid} entityName={name} />
+        {link !== undefined && <Guestbook entityType="attraction" entityId={link.gid || pid} entityName={name} />}
       </div>
     </div>
   );

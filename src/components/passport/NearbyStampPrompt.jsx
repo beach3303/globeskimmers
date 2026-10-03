@@ -108,6 +108,7 @@ export default function NearbyStampPrompt({ stamps, onStamped }) {
         lat: Number.isFinite(+a.lat) ? +a.lat : null, lng: Number.isFinite(+a.lng) ? +a.lng : null,
         visited_on: localISODate(), local_hour: new Date().getHours(), verified: "gps",
         category: a.category || undefined,
+        ...(v && a.id ? { parent_id: a.id } : {}),
         ...(fix ? { fix } : {}), // the worker re-checks the distance (never stored)
         ...(a.film ? { film: a.film } : {}),
       });

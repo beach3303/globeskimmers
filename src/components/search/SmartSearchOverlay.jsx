@@ -274,7 +274,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
             <DreamAnswerCard
               destination={dream.destination}
               onView={() => {
-                openAttraction(navigate, dream.destination);
+                openAttraction(navigate, dream.destination, "From your search");
                 onClose();
               }}
               onPerfectDay={() => { navigate(createPageUrl("PerfectDay")); onClose(); }}

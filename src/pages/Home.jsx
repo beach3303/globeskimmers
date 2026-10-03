@@ -482,7 +482,7 @@ export default function HomePage() {
   // Dream-shelf tap → the attraction's Things to Do card.
   const openDreamActivity = (item) => {
     trackEvent("dream_shelf_open_detail", { place_id: item.id, place_name: item.name });
-    if (!openAttraction(navigate, item)) handleQuickAction("Things to Do");
+    if (!openAttraction(navigate, item, "From your dream shelf")) handleQuickAction("Things to Do");
   };
 
 

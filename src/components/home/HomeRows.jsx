@@ -103,7 +103,7 @@ export default function HomeRows({ onAction, wide = false }) {
   const openFullPage = (card) => {
     trackEvent("home_row_open_detail", { place_id: card.id, place_name: card.name });
     setDetail(null);
-    if (!openAttraction(navigate, card)) onAction?.("Things to Do");
+    if (!openAttraction(navigate, card, "Picked for you")) onAction?.("Things to Do");
   };
 
 

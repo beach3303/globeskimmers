@@ -634,7 +634,7 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
 // Old verb keys stay so payloads cached before the change still color.
 const TRAVEL_COLORS={'100+ mi away':{bg:'#FEE2E2',color:'#DC2626'},'≈50–100 mi':{bg:'#FED7AA',color:'#C2410C'},'≈15–50 mi':{bg:'#FEF3C7',color:'#D97706'},'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'✈️ Flights Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'},'📍 Nearby':{bg:'#D1FAE5',color:'#059669'}};
 
-function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,cardRef=null,pinned=false}){
+function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,cardRef=null,pinnedLabel=null,gpsLat=null,gpsLng=null,fmt=null}){
   const [dirs,setDirs]=useState(false);
   const [gallery,setGallery]=useState({open:false,idx:0});
   // fs()-style scaler for the editorial body (used at both widths now).
@@ -675,12 +675,10 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
   const photo1=_photos[0]||null;
   const photo2=_photos[1]||null;
   const photo3=_photos[2]||null;
-  // Inline distance formatter for the expanded modal — TierSection isn't
-  // wired to the parent's useDistanceUnit hook, so use a simple miles
-  // formatter (matches the compact card's "X.X mi" rendering).
-  const fmtDist=(d)=>`${d.toFixed(1)} mi`;
-  // Standing at it? (the location in use is the user's own GPS fix) → offer the stamp.
-  const here=Number.isFinite(userLat)&&Number.isFinite(a.lat)&&metersBetween(userLat,userLng,a.lat,a.lng)<=stampRadiusFor({types:a.types,category:a.activityCategory,footprint_radius_m:a.stamp?.footprint_radius_m});
+  // The page's mi/km formatter when given; miles otherwise.
+  const fmtDist=fmt||((d)=>`${d.toFixed(1)} mi`);
+  // Standing at it? Only the device's own GPS fix counts (never a picked place).
+  const here=Number.isFinite(gpsLat)&&Number.isFinite(gpsLng)&&Number.isFinite(a.lat)&&metersBetween(gpsLat,gpsLng,a.lat,a.lng)<=stampRadiusFor({types:a.types,category:a.activityCategory,footprint_radius_m:a.stamp?.footprint_radius_m});
   // ── Editorial tier card (responsive) ────────────────────────────────────
   // Same DATA + handlers as before (open-modal onClick, photo-gallery taps,
   // Directions, Website) — restyled with the editorial tokens (serif name,
@@ -710,7 +708,7 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
         )}
       </div>
       <div style={{padding:t(`${fs(20)} ${fs(22)} ${fs(22)}`,`${fs(14)} ${fs(14)} ${fs(14)}`)}}>
-        {pinned&&<div style={{fontFamily:ED_MONO,fontSize:fs(t(12,10)),letterSpacing:".12em",textTransform:"uppercase",color:ED_INK3,marginBottom:fs(6)}}>From your stamps</div>}
+        {pinnedLabel&&<div style={{fontFamily:ED_MONO,fontSize:fs(t(12,10)),letterSpacing:".12em",textTransform:"uppercase",color:ED_INK3,marginBottom:fs(6)}}>{pinnedLabel}</div>}
         {a.activityLabel&&<div style={{fontSize:fs(t(14,11.5)),fontWeight:600,color:ED_TODO,letterSpacing:"0.2px",marginBottom:fs(4)}}>{a.activityIcon} {a.activityLabel}</div>}
         <div style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(t(26,21)),lineHeight:1.08,color:ED_INK,marginBottom:fs(10),display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
         {a.travelType&&<div style={{marginBottom:fs(8)}}><span style={{background:tc.bg,color:tc.color,padding:`${fs(5)} ${fs(t(12,10))}`,borderRadius:"999px",fontSize:fs(t(13,11)),fontWeight:700,display:"inline-block"}}>{a.travelType} · {a.distance}</span></div>}
@@ -754,7 +752,7 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
   );
 }
 
-function TierSection({title,icon,items,userLat,userLng,isTablet,defaultCollapsed=false}){
+function TierSection({title,icon,items,userLat,userLng,isTablet,defaultCollapsed=false,gpsLat=null,gpsLng=null,fmt=null}){
   const persona=usePersona();
   const [collapsed,setCollapsed]=useState(defaultCollapsed);
   if(!items?.length) return null;
@@ -785,7 +783,7 @@ function TierSection({title,icon,items,userLat,userLng,isTablet,defaultCollapsed
       </div>
       <AnimatePresence>{!collapsed&&(
         <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-          <div style={itemsLayout}>{personaRank(items,persona).map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} isTablet={isTablet}/>)}</div>
+          <div style={itemsLayout}>{personaRank(items,persona).map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} isTablet={isTablet} gpsLat={gpsLat} gpsLng={gpsLng} fmt={fmt}/>)}</div>
         </motion.div>
       )}</AnimatePresence>
     </div>
@@ -832,12 +830,15 @@ export default function ThingsToDoFinder() {
   // A stamp tapped anywhere in the app opens HERE (founder, 2026-10-03): that
   // attraction's card, pinned on top and opened. ?focus=<id> or router state.
   const [focusCard,setFocusCard]=useState(null);
+  const [focusOpen,setFocusOpen]=useState(false);       // one-shot: opens the pinned card once
+  const [focusWaited,setFocusWaited]=useState(false);   // stop waiting for a location after a moment
   const [searchPlaces,setSearchPlaces]=useState([]); // live Google Places keyword results
   const [searchError,setSearchError]=useState(null); // callWorker envelope error for the last search — distinct from "no results"
   const cardRefs=useRef({});
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
-  const {activeLocation}=useLocation();
+  const {activeLocation,currentGpsLocation}=useLocation();
   const routerLocation=useRouterLocation();
+  const gpsLat=currentGpsLocation?.coordinates?.latitude??null; const gpsLng=currentGpsLocation?.coordinates?.longitude??null;
   const lat=activeLocation?.coordinates?.latitude; const lng=activeLocation?.coordinates?.longitude;
   const locLabel=getLocationLabel(activeLocation);
   const isCity=isCityLocation(activeLocation);
@@ -1051,19 +1052,23 @@ export default function ThingsToDoFinder() {
     runActivitySearch(String(pq).trim());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[routerLocation.state?.presetQuery,lat,lng]);
-  // The stamp hand-off: load that ONE attraction as a Things to Do card.
+  // The stamp hand-off: load that ONE attraction as a Things to Do card — once
+  // the location is known (its distance is measured from it), or after 2.5 s.
   const focusRanRef=useRef(null);
+  useEffect(()=>{const t=setTimeout(()=>setFocusWaited(true),2500);return()=>clearTimeout(t);},[]);
+  useEffect(()=>{if(!focusOpen)return;const t=setTimeout(()=>setFocusOpen(false),0);return()=>clearTimeout(t);},[focusOpen]);
   useEffect(()=>{
     const fid=routerLocation.state?.focus?.id||new URLSearchParams(routerLocation.search||"").get("focus");
     if(!fid||focusRanRef.current===fid) return;
+    if(!Number.isFinite(lat)&&!focusWaited) return;
     focusRanRef.current=fid;
     const hint=routerLocation.state?.focus||{};
     callWorker('activities/one',{id:String(fid),userLat:lat,userLng:lng}).then(({data})=>{
-      if(data?.activity) setFocusCard({...data.activity,stamp:data.stamp??null});
-      else if(Number.isFinite(+hint.lat)) setFocusCard({id:String(fid),placeId:String(fid),name:hint.name||"Attraction",displayName:{text:hint.name||"Attraction"},lat:+hint.lat,lng:+hint.lng,photos:hint.photo?[hint.photo]:[],activityIcon:"⭐",stamp:data?.stamp??null});
+      if(data?.activity){ setFocusCard({...data.activity,stamp:data.stamp??null}); setFocusOpen(true); }
+      else if(Number.isFinite(+hint.lat)){ setFocusCard({id:String(fid),placeId:String(fid),name:hint.name||"Attraction",displayName:{text:hint.name||"Attraction"},lat:+hint.lat,lng:+hint.lng,photos:hint.photo?[hint.photo]:[],activityIcon:"⭐",stamp:data?.stamp??null}); setFocusOpen(true); }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[routerLocation.state?.focus?.id,routerLocation.search]);
+  },[routerLocation.state?.focus?.id,routerLocation.search,lat,focusWaited]);
 
   return(
     <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
@@ -1165,16 +1170,16 @@ export default function ThingsToDoFinder() {
           render falls through to the list view below, with the
           existing "Fetching new spots" chip at the top covering
           ongoing background refresh state. */}
+      {focusCard&&viewMode==="list"&&(
+        <div style={isTablet?{maxWidth:1024,margin:"0 auto",padding:"14px 24px 0"}:{padding:"14px 12px 0"}}>
+          <TierCard key={focusCard.id} a={focusCard} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={focusOpen} pinnedLabel={routerLocation.state?.focus?.from||null} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance}/>
+        </div>
+      )}
       {loading&&activities.length===0&&nationalIcons.length===0?(<TtdSkeleton/>)
       :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"calc(16px*var(--fs))"}}>{error}</div>{/* radius starts AT the 25mi ceiling here, so "Expand" would be a no-op — offer a plain retry instead (no forceRefresh: a retry mustn't bust caches). */}<button onClick={radius<25?()=>setRadius(r=>Math.min(r+5,25)):()=>setRefreshTick(t=>t+1)} style={{marginTop:"14px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{radius<25?"Expand Radius":"Try Again"}</button></div>)
       :viewMode==="list"?(<div style={isTablet
         ? {maxWidth:1024,margin:"0 auto",padding:"14px 24px 170px",display:"flex",flexDirection:"column",gap:"4px"}
         : {padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"4px"}}>
-        {focusCard&&(
-          <div style={{marginBottom:isTablet?"22px":"14px"}}>
-            <TierCard a={focusCard} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen pinned/>
-          </div>
-        )}
         {submitted&&(
           <div style={{marginBottom:"2px"}}>
             {filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Places matching &ldquo;{submitted}&rdquo;</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
@@ -1183,9 +1188,9 @@ export default function ThingsToDoFinder() {
         )}
         {browseFilterActive&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🔧</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Filtered results</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
         {!submitted&&!browseFilterActive&&(nationalIcons.length>0||regionalGems.length>0||nearbyAttractions.length>0)&&<PersonaChooser/>}
-        {!submitted&&!browseFilterActive&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
-        {!submitted&&!browseFilterActive&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet} defaultCollapsed/>}
-        {!submitted&&!browseFilterActive&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet}/>}
+        {!submitted&&!browseFilterActive&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} defaultCollapsed/>}
+        {!submitted&&!browseFilterActive&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} defaultCollapsed/>}
+        {!submitted&&!browseFilterActive&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance}/>}
         {!submitted&&!browseFilterActive&&(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Near You</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
         {/* Empty state */}
         {submitted
@@ -1205,7 +1210,7 @@ export default function ThingsToDoFinder() {
           const showBeyondHeader=submitted&&searchBeyond.length>0&&i===filtered.length;
           return (<React.Fragment key={a.id||i}>
             {showBeyondHeader&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:isTablet?"14px 4px 4px":"6px 4px 2px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🧭</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>A bit farther — worth the trip</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({searchBeyond.length})</span></div>}
-            <TierCard a={a} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={expandedIdx===i} cardRef={(el)=>cardRefs.current[i]=el}/>
+            <TierCard a={a} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={expandedIdx===i} cardRef={(el)=>cardRefs.current[i]=el} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance}/>
           </React.Fragment>);
         })}</div>
 
