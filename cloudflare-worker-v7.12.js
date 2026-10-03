@@ -13939,6 +13939,10 @@ async function handlePostcardSend(request, env, ctx) {
       toUser = t.user_id;
     } else if (sp.social_tier === 'teen') {
       return jsonResponse({ error: 'Address your postcard to a friend — broadcast opens at 18' }, 403);
+    } else {
+      const fq = await gbRest(env, `user_follows?followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, { headers: { Prefer: 'count=exact', Range: '0-0' } });
+      const followers = parseInt((fq.headers.get('content-range') || '').split('/')[1] || '0', 10);
+      if (!followers) return jsonResponse({ error: 'no_followers' }, 409);
     }
 
     // The front photo.

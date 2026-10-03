@@ -15,6 +15,7 @@ import AirportStamp from "@/components/passport/AirportStamp";
 import PassportBook from "@/components/passport/PassportBook";
 import BlotterStrip from "@/components/passport/Blotter";
 import { isAdminEmail } from "@/lib/admins";
+import { countryCode } from "@/lib/countries";
 import { localISODate } from "@/lib/localDate";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { resizePhoto } from "@/lib/resizePhoto";
@@ -738,6 +739,25 @@ function PassportInner() {
     try { window.scrollTo({ top: Math.max(0, top), behavior: "auto" }); } catch { window.scrollTo(0, Math.max(0, top)); }
   }, [loading]);
   const [showStampPlace, setShowStampPlace] = useState(false); // "Stamp a place" form
+  // Page one for an owner whose onboarding mint never happened — the same
+  // origin stamp Onboarding.jsx creates (cover page, not an achievement).
+  const [mintingHome, setMintingHome] = useState(false);
+  const mintHomeCity = async () => {
+    if (!profile?.home_city || mintingHome) return;
+    setMintingHome(true);
+    const { error } = await addStamp({
+      kind: "city", entity_type: "origin", entity_id: `origin:${profile.home_city}`,
+      name: profile.home_city, city: profile.home_city,
+      country: profile.home_country || undefined,
+      cc: countryCode(profile.home_country || "") || undefined,
+      lat: profile.home_lat ?? undefined, lng: profile.home_lng ?? undefined,
+      visited_on: localISODate(), verified: "self", origin: true,
+    });
+    setMintingHome(false);
+    if (error) { showToast(error, "error"); return; }
+    showToast("Page one — your home city 🛂", "success");
+    load();
+  };
   const stampsView = preview ? SAMPLE_STAMPS : stamps;
   const statsView = preview ? SAMPLE_STATS : stats;
   // Flat, newest-first stamp list — PassportBook paginates it to fit each page
@@ -913,12 +933,10 @@ function PassportInner() {
               <>
                 <p style={{ fontFamily: SERIF, fontSize: fs(22), color: INK, marginTop: 6 }}>Your Virtual Passport is empty</p>
                 <p style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.5, marginTop: 6 }}>
-                  {isAuthenticated
-                    ? <>Tap <b>“📍 I was here”</b> at iconic attractions and landmarks you’ve visited — and you’ll get an arrival stamp when you land at an airport in a new country. Every place adds to your story.</>
-                    : <>Sign in to start collecting stamps — a permanent record of everywhere you’ve been, with your own photos.</>}
+                  Sign in to start collecting stamps — a permanent record of everywhere you’ve been, with your own photos.
                 </p>
-                <button onClick={() => navigate(createPageUrl("ThingsToDo"))} className="mt-4 rounded-xl px-5 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>
-                  Find places to stamp
+                <button onClick={() => navigate(createPageUrl("Home"))} className="mt-4 rounded-xl px-5 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>
+                  Find stamps near me
                 </button>
                 <p style={{ color: INK3, fontSize: fs(11.5), lineHeight: 1.5, marginTop: 12 }}>
                   Went somewhere before you had the app? Add a stamp, drop in your photo, and set the real date — a lasting keepsake of every trip you’ve taken.
@@ -940,6 +958,28 @@ function PassportInner() {
                 <BlotterStrip slug={blSlug} stamps={pgStamps} blotter={blotter} ownerView={!readOnly} onChanged={refreshBlotter} />
               ) : null}
             />
+            {!readOnly && isAuthenticated && !preview && stamps.length === 0 && (
+              <div className="mt-4 rounded-[18px] p-4 text-center" style={{ background: "#FFFBF0", border: "1px solid #EAD9AE" }}>
+                <p style={{ fontFamily: SERIF, fontSize: fs(19), color: INK }}>Your passport is ready</p>
+                <p style={{ color: INK2, fontSize: fs(13), lineHeight: 1.5, marginTop: 4 }}>
+                  Stamps are earned by being there. Start with page one — your home city — then stamp places as you go, or add a trip from before with a photo from that day.
+                </p>
+                <div className="flex gap-2 justify-center flex-wrap mt-3">
+                  {profile?.home_city ? (
+                    <button onClick={mintHomeCity} disabled={mintingHome} className="rounded-full px-4 py-2.5 font-semibold disabled:opacity-60" style={{ background: STAMP, color: "#fff", fontSize: fs(13) }}>
+                      {mintingHome ? "Stamping…" : `🏠 Stamp ${profile.home_city}`}
+                    </button>
+                  ) : (
+                    <button onClick={() => navigate(createPageUrl("Settings"))} className="rounded-full px-4 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13) }}>
+                      🏠 Set your home city
+                    </button>
+                  )}
+                  <button onClick={() => navigate(createPageUrl("Home"))} className="rounded-full px-4 py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>
+                    📍 Stamps near me
+                  </button>
+                </div>
+              </div>
+            )}
             {!readOnly && isAuthenticated && !preview && (
               <div className="text-center mt-4">
                 <button onClick={() => setShowStampPlace(true)} className="rounded-full px-5 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>✍️ Stamp a place</button>

@@ -16,7 +16,7 @@ const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13
 const TEAL = "#0E7C86", IVORY = "#FFFCF7", SOFT = "#F6F0E4";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 
-export default function PostcardCompose({ open, onClose, onSent, following = [], preset }) {
+export default function PostcardCompose({ open, onClose, onSent, following = [], preset, followerCount = null }) {
   const fileRef = useRef(null);
   const [image, setImage] = useState(preset?.image || null);
   const [message, setMessage] = useState("");
@@ -45,6 +45,7 @@ export default function PostcardCompose({ open, onClose, onSent, following = [],
     });
     setBusy(false);
     if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
+    if (error === "no_followers") { showToast("No one follows you yet — address it to a friend, or invite one first", "error"); return; }
     if (error) { showToast(error, "error"); return; }
     showToast(to ? `Postcard sent to @${to} ✉️` : "Postcard sent to your followers ✉️", "success");
     onSent?.(); onClose();
@@ -98,7 +99,12 @@ export default function PostcardCompose({ open, onClose, onSent, following = [],
           ))}
         </div>
 
-        <button type="button" onClick={send} disabled={busy || !image} className="w-full rounded-[14px] py-3 font-semibold mt-4 disabled:opacity-60"
+        {to === "" && followerCount === 0 && (
+          <p style={{ fontSize: fs(12), color: "#8A5410", marginTop: 8, lineHeight: 1.45 }}>
+            No one follows you yet, so this postcard has nowhere to go. Pick a friend above — or invite someone first.
+          </p>
+        )}
+        <button type="button" onClick={send} disabled={busy || !image || (to === "" && followerCount === 0)} className="w-full rounded-[14px] py-3 font-semibold mt-4 disabled:opacity-60"
           style={{ background: TEAL, color: "#fff", fontSize: fs(14.5) }}>
           {busy ? <span className="inline-flex items-center gap-2"><Loader2 size={15} className="animate-spin" /> Sending…</span> : "Send it ✉️"}
         </button>

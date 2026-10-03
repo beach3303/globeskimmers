@@ -152,7 +152,7 @@ export default function MailboxPage() {
         </div>
 
         {/* Following list */}
-        <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={load} following={lists.following} />
+        <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={load} following={lists.following} followerCount={lists.followers.length} />
 
         {lists.following.length > 0 && (
           <div className="mt-7">

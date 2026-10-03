@@ -410,8 +410,17 @@ const shareMeta = (p) => ({
 const revokeSlides = (slides) => (slides || []).forEach((x) => { try { if (x?.url) URL.revokeObjectURL(x.url); } catch { /* ignore */ } });
 
 // Blank ivory page — trailing fresh pages waiting for stamps.
-function EmptyCollectionPage({ coverH, pageNo, watermark }) {
-  return <Paper coverH={coverH} pageNo={pageNo} watermark={watermark} />;
+function EmptyCollectionPage({ coverH, pageNo, watermark, first = false }) {
+  return (
+    <Paper coverH={coverH} pageNo={pageNo} watermark={watermark}>
+      {first && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8" style={{ pointerEvents: "none" }}>
+          <p style={{ fontFamily: SERIF, fontSize: fs(20), color: INK, lineHeight: 1.25 }}>Your first stamp lands here.</p>
+          <p style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".14em", color: INK3, marginTop: 8, textTransform: "uppercase" }}>Earned by being there</p>
+        </div>
+      )}
+    </Paper>
+  );
 }
 
 export default function PassportBook({
@@ -547,7 +556,7 @@ export default function PassportBook({
     if (idx === 0) return <OwnershipPage holder={holder} homeCountry={homeCountry} countries={countries} totalStamps={totalStamps} coverH={coverH} pageNo={pageNo} watermark={watermark} />;
     const ci = idx - 1; // 0-based index into the collection (stamp pages, then blanks)
     if (ci < stampCount) return <StampPage pg={bookPages[ci]} onOpenStamp={onOpenStamp} coverH={coverH} pageNo={pageNo} watermark={watermark} pageW={pageW} />;
-    return <EmptyCollectionPage coverH={coverH} pageNo={pageNo} watermark={watermark} />;
+    return <EmptyCollectionPage coverH={coverH} pageNo={pageNo} watermark={watermark} first={ci === stampCount && stampCount === 0} />;
   };
 
   const pageLabel = `Page ${page + 1} of ${total}`;

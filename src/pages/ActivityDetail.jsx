@@ -31,6 +31,9 @@ const stampCC = (a) =>
 
 export default function ActivityDetailPage() {
   const navigate = useNavigate();
+  // A cold deep link (shared ?id=, push, QR) has no history to go back to —
+  // react-router's idx is 0 there, so Back lands on Home instead of nothing.
+  const goBack = () => ((window.history.state?.idx ?? 0) > 0 ? navigate(-1) : navigate(createPageUrl("Home")));
   const location = useLocation();
   const [activity, setActivity] = useState(null);
   const [activityLocation, setActivityLocation] = useState(null);
@@ -392,7 +395,7 @@ export default function ActivityDetailPage() {
         <p className="text-[calc(18px*var(--fs))] font-bold text-gray-900 mb-2">Activity Not Found</p>
         <p className="text-[calc(14px*var(--fs))] text-gray-600 mb-4">We couldn't find this activity.</p>
         <button
-          onClick={() => navigate(-1)}
+          onClick={goBack}
           className="px-6 py-3 bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white rounded-xl font-semibold"
         >
           Go Back
@@ -425,7 +428,7 @@ export default function ActivityDetailPage() {
             they're always reachable; a fixed top-0 header was hidden behind it). */}
         <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
           <button
-            onClick={() => navigate(-1)}
+            onClick={goBack}
             aria-label="Close"
             className="pointer-events-auto w-11 h-11 rounded-full bg-white/90 backdrop-blur-md hover:bg-white flex items-center justify-center transition-all shadow-lg"
           >
