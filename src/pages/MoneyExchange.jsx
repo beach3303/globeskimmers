@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
+import { legacyUser } from "@/lib/legacyUser";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { useNavigate } from "react-router-dom";
@@ -241,6 +242,7 @@ function MapCenterController({ center, zoom }) {
 }
 
 export default function MoneyExchangePage() {
+  const { user: authUser, profile } = useAuth();
   const navigate = useNavigate();
   // iPad: wider centered editorial column + money-green accent (design handoff).
   // Phone layout is unchanged — every tablet branch is gated on this.
@@ -329,7 +331,7 @@ export default function MoneyExchangePage() {
 
   const loadUserAndLocation = async () => {
     try {
-      const userData = await base44.auth.me();
+      const userData = legacyUser(authUser, profile) || {};
       setUser(userData);
       
       // Set distance unit preference from user profile

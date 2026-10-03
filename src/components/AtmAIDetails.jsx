@@ -29,7 +29,9 @@
  *     redesign.
  */
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { useAuth } from '@/lib/AuthContext';
+import { legacyUser } from '@/lib/legacyUser';
+import { supabase } from '@/lib/supabaseClient';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { logEvent } from '@/lib/analytics';
@@ -381,12 +383,9 @@ function ZoneCalculator({ details }) {
   // Lazy-load the user profile (once per panel open) so we can read
   // primary_banking_currency. Avoid a top-of-Body load to keep the
   // calculator self-contained.
+  const { user: authUser, profile } = useAuth();
   const [user, setUser] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    base44.auth.me().then(u => { if (!cancelled) setUser(u); }).catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
+  useEffect(() => { setUser(legacyUser(authUser, profile)); }, [authUser, profile]);
 
   // Defaults. fromCurrency = user.primary_banking_currency (fallback to
   // preferred_currencies[0], then USD). toCurrency = ATM's local currency
@@ -589,6 +588,7 @@ function ResultRow({ label, value, bold, accent, muted }) {
 }
 
 function BankingCurrencyPrompt({ user, onSet }) {
+  const { refreshProfile } = useAuth();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState(user?.preferred_currencies?.[0] || 'USD');
   const [saving, setSaving] = useState(false);
@@ -596,7 +596,9 @@ function BankingCurrencyPrompt({ user, onSet }) {
   const save = async () => {
     setSaving(true);
     try {
-      await base44.auth.updateMe({ primary_banking_currency: picked });
+      const { error } = await supabase.from('profiles').update({ primary_banking_currency: picked }).eq('id', user?.id);
+      if (error) throw error;
+      refreshProfile?.();
       onSet?.(picked);
       setOpen(false);
     } catch (_e) {

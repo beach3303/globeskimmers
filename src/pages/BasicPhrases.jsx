@@ -10,7 +10,8 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
+import { legacyUser } from "@/lib/legacyUser";
 import { invokeLLM } from "@/lib/callWorker";
 import { supabase } from "@/lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
@@ -629,6 +630,7 @@ const AVAILABLE_LANGUAGES = [
 ];
 
 export default function BasicPhrasesPage() {
+  const { user: authUser, profile } = useAuth();
   const navigate = useNavigate();
   const isTablet = useIsTablet();
   const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
@@ -702,12 +704,7 @@ export default function BasicPhrasesPage() {
 
   const loadLocationAndLanguage = async () => {
     try {
-      const isAuthenticated = await base44.auth.isAuthenticated();
-      if (!isAuthenticated) {
-        setLoading(false);
-        return;
-      }
-      const userData = await base44.auth.me();
+      const userData = legacyUser(authUser, profile) || {};
       setUserProfile(userData);
       
       const userHomeCountry = userData?.home_country || "";

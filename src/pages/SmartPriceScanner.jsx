@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
+import { legacyUser } from "@/lib/legacyUser";
 import { supabase } from "@/lib/supabaseClient";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
@@ -266,6 +267,7 @@ async function getCachedExchangeRate(fromCurrency, toCurrency) {
 // ============================================================================
 
 export default function SmartPriceScannerPage() {
+  const { user: authUser, profile } = useAuth();
   const navigate = useNavigate();
   const { activeLocation } = useLocation();
   // Tablet (iPad) gate. EVERY presentation branch below is keyed off this so
@@ -360,7 +362,7 @@ export default function SmartPriceScannerPage() {
 
     try {
       // Auth is guaranteed by the app-wide sign-in gate; never redirect here.
-      const userData = await base44.auth.me();
+      const userData = legacyUser(authUser, profile);
       setUser(userData);
     } catch (error) {
       console.warn("User prefs unavailable:", error?.message || error);
@@ -527,13 +529,10 @@ export default function SmartPriceScannerPage() {
     // side effect that must NEVER gate opening the camera — on native the
     // Base44 profile write rejects (the app moved off Base44 auth), and the
     // old code awaited it, so the throw skipped setStep and the camera never
-    // opened. Persist locally (survives restarts on native), then best-effort
-    // sync to Base44 without blocking.
+    // opened. Persisted locally (survives restarts on native).
     setAnalysisOnly(false);
     try { localStorage.setItem(STORAGE_KEY_PRICE_CURRENCY, selectedCurrency); } catch { /* private mode */ }
     setStep('scanning');
-    Promise.resolve(base44.auth.updateMe({ price_scanner_currency: selectedCurrency }))
-      .catch((e) => console.warn('Save currency pref failed (non-fatal):', e?.message || e));
   };
 
   // "Skip price conversion" — go straight to a scan-and-analyze flow. No
