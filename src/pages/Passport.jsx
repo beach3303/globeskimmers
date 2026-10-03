@@ -641,38 +641,11 @@ function PassportInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, readOnly, preview, isAuthenticated]);
 
-  // The birthday stamp (founder queue #7): if today is the traveler's saved
-  // MM-DD and this year's stamp doesn't exist yet, mint it quietly. Guarded by
-  // localStorage so a failed mint retries at most once a day.
-  useEffect(() => {
-    if (readOnly || preview || !isAuthenticated || loading) return;
-    let gone = false;
-    (async () => {
-      const now = new Date();
-      const md = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-      const guard = `pp_bday_try_${now.getFullYear()}`;
-      try { if (localStorage.getItem(guard) === md) return; } catch { /* fine */ }
-      const { birth_md } = await getAgeInfo();
-      if (gone || !birth_md || birth_md !== md) return;
-      const entity = `birthday:${now.getFullYear()}`;
-      if (stamps.some((s) => s.entity_id === entity)) return;
-      try { localStorage.setItem(guard, md); } catch { /* fine */ }
-      const { error } = await addStamp({
-        kind: "city", entity_type: "birthday", entity_id: entity,
-        name: "My Birthday", city: profile?.home_city || undefined, country: profile?.home_country || undefined,
-        visited_on: now.toISOString().slice(0, 10), verified: "self", birthday: true,
-      });
-      if (!error) { showToast("🎂 Happy birthday — this year's stamp is yours", "success"); load(); }
-    })();
-    return () => { gone = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, readOnly, preview, isAuthenticated]);
-
   // The birthday ask (founder 2026-10-02): a warm, dismissible card — never a
   // wall. Appears once the passport holds 2+ stamps, snoozes 45 days on
-  // "Later", and disappears for good once saved. MM-DD earns the yearly
-  // birthday stamp; the year (asked only if the age gate is unset) feeds the
-  // gate — demographics + teen rails — and never shows anywhere.
+  // "Later", and disappears for good once saved. No stamp (founder,
+  // 2026-10-03): the birthday is private data — the year feeds the age gate
+  // (minor detection, teen rails) and both feed demographics; never shown.
   const [bdayAsk, setBdayAsk] = useState(false);
   const [bdayYearNeeded, setBdayYearNeeded] = useState(false);
   const [bdayM, setBdayM] = useState(""); const [bdayD, setBdayD] = useState(""); const [bdayY, setBdayY] = useState("");
@@ -700,7 +673,7 @@ function PassportInner() {
     setBdayBusy(false);
     if (error) { showToast(error, "error"); return; }
     setBdayAsk(false);
-    showToast("🎂 Saved — your birthday stamp arrives on the day", "success");
+    showToast("🎂 Thanks — saved privately", "success");
   };
   const snoozeBdayAsk = () => { try { localStorage.setItem("pp_bday_ask_snooze", String(Date.now())); } catch { /* fine */ } setBdayAsk(false); };
 
@@ -868,7 +841,7 @@ function PassportInner() {
           <div className="mb-4 rounded-[16px] p-3.5" style={{ background: "#FFFBF0", border: "1px solid #EAD9AE" }}>
             <p style={{ color: INK, fontSize: fs(14), fontWeight: 700 }}>🎂 When&rsquo;s your birthday?</p>
             <p style={{ color: INK2, fontSize: fs(12.5), lineHeight: 1.45, marginTop: 2 }}>
-              A birthday stamp lands in your passport every year. Only the month and day ever show{bdayYearNeeded ? " — the year stays private and keeps GlobeSkimmers age-appropriate" : ""}.
+              It keeps GlobeSkimmers age-appropriate and helps us build for travelers like you. It&rsquo;s private — never shown on your profile or passport.
             </p>
             <div className="flex gap-2 mt-2.5 items-center flex-wrap">
               <select value={bdayM} onChange={(e) => setBdayM(e.target.value)} aria-label="Birthday month" className="h-11 rounded-xl px-2" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }}>

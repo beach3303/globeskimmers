@@ -13137,8 +13137,8 @@ async function handlePassportStamp(request, env, ctx) {
     // No stamp without proof (founder doctrine, 2026-10-03). A new stamp is
     // either GPS-corroborated, or arrives with a proof photo (await_proof —
     // the client uploads it next and deletes the stamp if it proves nothing).
-    // The birthday page is a calendar page, not a place claim.
-    if (verified !== 'gps' && b.birthday !== true && b.await_proof !== true) {
+    // No exceptions: birthday stamps were retired (founder, 2026-10-03).
+    if (verified !== 'gps' && b.await_proof !== true) {
       let exists = false;
       if (entityId) {
         const ex = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&kind=eq.${kind}&entity_id=eq.${encodeURIComponent(entityId)}&select=id&limit=1`, {});
@@ -13841,7 +13841,7 @@ async function handleSocialAge(request, env, ctx) {
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
     const mine = await gbSocialProfile(env, user.id);
-    // birth_md ('MM-DD') is the birthday-stamp date — editable anytime, never
+    // birth_md ('MM-DD') is private demographic data — editable anytime, never
     // locked (only the YEAR locks; md alone reveals no age).
     if (b.birth_md !== undefined && b.birth_year === undefined) {
       const md = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(String(b.birth_md)) ? String(b.birth_md) : null;

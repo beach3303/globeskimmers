@@ -418,13 +418,13 @@ export default function SettingsPage() {
   const [handleBusy, setHandleBusy] = useState(false);
   useEffect(() => { (async () => { const { handle: h } = await getHandle(); if (h) { setHandleState(h); setHandleDraft(h); } })(); }, []);
   // Birthday (MM-DD only — the year lives behind the locked age gate). Saving
-  // it earns the yearly birthday stamp; the passport mints it on the day.
+  // it is private data (age-appropriate rules + demographics), never shown.
   const [bMonth, setBMonth] = useState(""); const [bDay, setBDay] = useState("");
   useEffect(() => { (async () => { const { birth_md } = await getAgeInfo(); if (birth_md) { setBMonth(birth_md.slice(0, 2)); setBDay(birth_md.slice(3, 5)); } })(); }, []);
   const saveBirthday = async () => {
     if (!bMonth || !bDay) return;
     const { error } = await setBirthday(`${bMonth}-${bDay}`);
-    showToast(error || "Saved — your birthday stamp arrives on the day 🎂", error ? "error" : "success");
+    showToast(error || "Saved privately 🎂", error ? "error" : "success");
   };
   // The worker answers 'age_required' until the birth year is set (it locks
   // after the first write; under-13 and AU-under-16 accounts get no social).
@@ -911,7 +911,7 @@ export default function SettingsPage() {
               control={{ node: <EdToggle on={suggestNearby} onClick={() => { const next = !suggestNearby; setSuggestNearby(next); try { localStorage.setItem("pp_suggest_nearby", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle nearby stamp sensing" /> }}
               last={false}
             />
-            <EdRow isTablet={isTablet} step={fontStep} icon={Check} iconBg={CAT.todo.ink} title="My birthday" desc="Month and day only — it earns your birthday stamp every year. Your birth year stays private behind the age gate."
+            <EdRow isTablet={isTablet} step={fontStep} icon={Check} iconBg={CAT.todo.ink} title="My birthday" desc="Private — never shown. It keeps GlobeSkimmers age-appropriate."
               control={{ below: true, node: (
                 <div className="flex gap-2 items-center">
                   <select value={bMonth} onChange={(e) => setBMonth(e.target.value)} aria-label="Birthday month" className="h-12 rounded-xl px-2" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 14 }}>
