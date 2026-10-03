@@ -36,6 +36,7 @@ import SmartSearchBar from "@/components/search/SmartSearchBar";
 import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
 import DestinationStrip from "@/components/search/DestinationStrip";
 import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
+import FriendsTravels from "@/components/home/FriendsTravels";
 
 // Translation mapping for greetings — shown next to the mono "Hello" kicker
 // when the active location's country has a non-English primary language.
@@ -807,6 +808,9 @@ export default function HomePage() {
           stampable place StampsNearYou reports up. Quiet ivory card: serif
           count, mono next-stamp line, the whole card opens the Passport. */}
       <PassportHero total={passportTotal} nearest={nearestStamp} onOpen={() => { trackEvent('feature_used', { feature_name: 'passport_hero' }); navigate(createPageUrl('Passport')); }} />
+
+      {/* ── FRIENDS' TRAVELS — the humans on Home (audit P1 #7) ───────── */}
+      <FriendsTravels />
 
       {/* ── ZONE 1: NEARBY NOW ─────────────────────────────────────────── */}
       <ZoneKicker label="NEARBY NOW" />

@@ -6,6 +6,7 @@ import FontScaleButton from '@/components/a11y/FontScaleButton';
 import HomeRows from '@/components/home/HomeRows';
 import StampsNearYou from '@/components/home/StampsNearYou';
 import PassportHero from '@/components/home/PassportHero';
+import FriendsTravels from '@/components/home/FriendsTravels';
 import ExperiencesRow from '@/components/home/ExperiencesRow';
 import SmartSearchBar from '@/components/search/SmartSearchBar';
 import SmartSearchOverlay from '@/components/search/SmartSearchOverlay';
@@ -193,6 +194,7 @@ export default function HomeTablet({
           iPad — and only grow a little in height as the text scale increases.
           Weather rides along as a 7th small tile (no longer full-width). ──── */}
       <PassportHero wide total={passportTotal} nearest={nearestStamp} onOpen={() => onAction('Passport')} />
+      <FriendsTravels wide />
 
       <div className="grid grid-cols-3 gap-5 mt-6">
         {/* Money Exchange leads the grid (rides left with the 2026-09-29 pivot) */}
