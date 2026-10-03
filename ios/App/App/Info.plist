@@ -40,11 +40,13 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Globeskimmers uses your camera to scan price tags for instant currency conversion and to translate signs, menus, and labels into your language.</string>
+	<string>Globeskimmers uses your camera to translate signs and menus, scan prices for currency conversion, and take photos for your Virtual Passport.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Globeskimmers uses your location only while you are using the app, to show what is near you and to verify Virtual Passport stamps at the places you visit. It never tracks you in the background.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Globeskimmers uses your location to find nearby restaurants, ATMs, attractions, restrooms, and money exchange spots so we can show you the closest, most relevant results.</string>
+	<string>Globeskimmers uses your location to show nearby places to eat, restrooms, ATMs and attractions, and to verify a Virtual Passport stamp when you are at a place.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Globeskimmers uses your photo library so you can save translation screenshots and scanned prices for offline reference.</string>
+	<string>Globeskimmers uses your photo library so you can add your travel photos to your Virtual Passport stamps, postcards and profile, and to verify a stamp with a photo you took at the place.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
