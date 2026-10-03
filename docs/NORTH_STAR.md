@@ -107,6 +107,14 @@ A Disney-only system ends at Disney. GlobeSkimmers follows the traveler for
 life — which also makes the passport **more valuable every year the user owns
 it** (the retention/switching-cost engine: at 20, 18 stamps; at 45, 742).
 
+**No stamp without proof** (founder doctrine, 2026-10-03). Every NEW stamp is
+earned by corroborated GPS at the place, or by a photo taken there (its
+location tag, or the place recognized in it). Page one — the home city — is
+stamped by GPS while home. A friend's tag records that you were there
+together; the stamp itself takes your own proof. The only exception is the
+birthday page (a calendar page, not a place claim). Stamps made before this
+rule stay in travelers' passports untouched (grandfathered, shown without ✓).
+
 **GlobeSkimmers Verified Presence** is the technical moat: geofence + event
 time + rotating QR + NFC + beacon + ticket + partner API (mix per event).
 Verified ✓ vs. added manually. *(The 2026-10-02 verified-stamps doctrine —

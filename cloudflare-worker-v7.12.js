@@ -13039,6 +13039,22 @@ async function ppUpsertStamp(env, row) {
   return { id: created.id, created: true, verified: row.verified };
 }
 
+let PP_CC_BY_NAME = null;
+function ppCcForCountryName(name) {
+  if (!name) return null;
+  if (!PP_CC_BY_NAME) {
+    PP_CC_BY_NAME = new Map();
+    try {
+      const dn = new Intl.DisplayNames(['en'], { type: 'region' });
+      for (let a = 65; a <= 90; a++) for (let c = 65; c <= 90; c++) {
+        const code = String.fromCharCode(a, c);
+        try { const n = dn.of(code); if (n && n !== code) PP_CC_BY_NAME.set(n.toLowerCase(), code); } catch { /* not a region */ }
+      }
+    } catch { /* no ICU: the exemption just never applies */ }
+  }
+  return PP_CC_BY_NAME.get(String(name).toLowerCase().trim()) || null;
+}
+
 // Create or update a stamp (idempotent per user+kind+entity). Keeps the STRONGEST
 // verification when re-stamping (gps > photo > self).
 async function handlePassportStamp(request, env, ctx) {
@@ -13066,7 +13082,13 @@ async function handlePassportStamp(request, env, ctx) {
       const claimCC = String(b.cc || '').toUpperCase();
       // (1) GPS vs IP country — only when both are real 2-letter codes
       if (/^[A-Z]{2}$/.test(ipCC) && ipCC !== 'XX' && ipCC !== 'T1' && /^[A-Z]{2}$/.test(claimCC) && ipCC !== claimCC) {
-        verified = 'self';
+        let roamingHome = false;
+        try {
+          const pr = await fetch(`${GB_URL(env)}/rest/v1/profiles?id=eq.${user.id}&select=home_country`, { headers: { apikey: GB_KEY(env), Authorization: `Bearer ${GB_KEY(env)}` } });
+          const home = pr.ok ? (await pr.json())[0]?.home_country : null;
+          roamingHome = !!home && ppCcForCountryName(home) === ipCC;
+        } catch { /* treat as a mismatch */ }
+        if (!roamingHome) verified = 'self';
       }
       // (2) impossible travel vs the most-recent GPS stamp (>620 mph = faster than a jet)
       if (verified === 'gps' && lat != null && lng != null) {
@@ -13112,6 +13134,25 @@ async function handlePassportStamp(request, env, ctx) {
       lat, lng,
       visited_on: visitedOn, verified,
     };
+    // No stamp without proof (founder doctrine, 2026-10-03). A new stamp is
+    // either GPS-corroborated, or arrives with a proof photo (await_proof —
+    // the client uploads it next and deletes the stamp if it proves nothing).
+    // The birthday page is a calendar page, not a place claim.
+    if (verified !== 'gps' && b.birthday !== true && b.await_proof !== true) {
+      let exists = false;
+      if (entityId) {
+        const ex = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&kind=eq.${kind}&entity_id=eq.${encodeURIComponent(entityId)}&select=id&limit=1`, {});
+        exists = ex.ok ? (await ex.json()).length > 0 : false;
+      }
+      if (!exists) {
+        return jsonResponse({
+          error: b.verified === 'gps'
+            ? "We couldn\u2019t confirm you\u2019re here \u2014 add a photo you took here to earn this stamp"
+            : 'Stamps need proof \u2014 be there, or add a photo you took there',
+          code: 'proof_needed',
+        }, 409);
+      }
+    }
     const result = await ppUpsertStamp(env, row);
     // Stamps are airport-arrival + iconic-attraction only — we do NOT auto-stamp cities.
     const localHour = Number.isFinite(+b.local_hour) && +b.local_hour >= 0 && +b.local_hour <= 23 ? Math.floor(+b.local_hour) : null;
@@ -14992,22 +15033,15 @@ async function handlePassportTagClaim(request, env, ctx) {
         const e2 = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&kind=eq.${tag.kind}&entity_id=eq.${encodeURIComponent(tag.entity_id)}&select=id`, {});
         exists = (e2.ok ? await e2.json() : [])[0] || null;
       }
-      if (!exists) {
-        const row = {
-          user_id: user.id, kind: tag.kind || 'attraction', tier: tag.tier || 'mark',
-          entity_type: tag.entity_type, entity_id: tag.entity_id, name: tag.name,
-          city: tag.city, region: tag.region, country: tag.country, lat: tag.lat, lng: tag.lng,
-          visited_on: tag.visited_on, verified: 'self', tagged_by: tag.from_user_id,
-        };
-        await gbRest(env, 'passport_stamps', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
-      }
+      // No stamp is minted from a tag (no stamp without proof): the tag records
+      // presence; the traveler earns the stamp with their own proof photo.
+      var needsProof = !exists;
     }
     await gbRest(env, `passport_tags?token=eq.${token}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: accept ? 'accepted' : 'declined', presence, to_user_id: user.id, responded_at: new Date().toISOString() }) });
     if (ctx) {
       ctx.waitUntil(gbLogEvent(env, 'passport_tag_claim', { accept }));
-      if (accept) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind: tag.kind, country: tag.country, city: tag.city, name: tag.name, verified: 'self', via: 'tag' }));
     }
-    return jsonResponse({ ok: true, accepted: accept });
+    return jsonResponse({ ok: true, accepted: accept, needs_proof: accept && typeof needsProof !== 'undefined' ? needsProof : false, place: accept ? { name: tag.name, city: tag.city, country: tag.country, lat: tag.lat, lng: tag.lng, visited_on: tag.visited_on } : null });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -15070,19 +15104,13 @@ async function handlePassportTagRespond(request, env, ctx) {
         const eq = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&kind=eq.${tag.kind}&entity_id=eq.${encodeURIComponent(tag.entity_id)}&select=id`, {});
         exists = (eq.ok ? await eq.json() : [])[0] || null;
       }
-      if (!exists) {
-        const row = {
-          user_id: user.id, kind: tag.kind || 'attraction', tier: tag.tier || 'mark',
-          entity_type: tag.entity_type, entity_id: tag.entity_id, name: tag.name,
-          city: tag.city, region: tag.region, country: tag.country, lat: tag.lat, lng: tag.lng,
-          visited_on: tag.visited_on, verified: 'self', tagged_by: tag.from_user_id,
-        };
-        await gbRest(env, 'passport_stamps', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
-      }
+      // No stamp is minted from a tag (no stamp without proof): the tag records
+      // presence; the traveler earns the stamp with their own proof photo.
+      var needsProof = !exists;
     }
     await gbRest(env, `passport_tags?id=eq.${tagId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: accept ? 'accepted' : 'declined', responded_at: new Date().toISOString() }) });
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag_respond', { accept }));
-    return jsonResponse({ ok: true, accepted: accept });
+    return jsonResponse({ ok: true, accepted: accept, needs_proof: accept && typeof needsProof !== 'undefined' ? needsProof : false, place: accept ? { name: tag.name, city: tag.city, country: tag.country, lat: tag.lat, lng: tag.lng, visited_on: tag.visited_on } : null });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 

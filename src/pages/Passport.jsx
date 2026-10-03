@@ -309,17 +309,21 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
 
 // "Tagged you" inbox card — someone tagged you at a place; Allow → the stamp is
 // minted on your passport, Decline → nothing.
-function TagInbox({ tag, onDone }) {
+function TagInbox({ tag, onDone, onProve }) {
   const [busy, setBusy] = useState(false);
   const k = KIND[tag.kind] || KIND.attraction;
   const place = [tag.city, tag.country].filter(Boolean).join(", ");
   const who = tag.from_name || "A traveler";
   const respond = async (action) => {
     setBusy(true);
-    const { error } = await respondTag(tag.id, action);
+    const { data, error } = await respondTag(tag.id, action);
     setBusy(false);
-    if (error) showToast(error, "error");
-    else { showToast(action === "accept" ? "Added to your Virtual Passport 🛂" : "Declined", "success"); onDone(); }
+    if (error) { showToast(error, "error"); return; }
+    if (action === "accept" && data?.needs_proof) {
+      showToast("Noted — you were there together. Add a photo from that day to earn the stamp", "success");
+      onProve?.(data.place || null);
+    } else showToast(action === "accept" ? "You already have this stamp 🛂" : "Declined", "success");
+    onDone();
   };
   return (
     <div className="rounded-[18px] p-3.5" style={{ boxShadow: SHADOW_CARD_SOFT, border: "1px solid #EAD9AE", background: "#FFFBF0" }}>
@@ -360,17 +364,17 @@ const SAMPLE_STATS = { countries: 3, verified: 6 };
 // "Stamp a place" — a user-initiated (never prompted) stamp for a city or spot
 // you visited. Free OSM place search + free-text; date + memory photos. Creates
 // a kind:'city' stamp rendered as a borderless fat-ink line.
-function StampPlaceModal({ onClose, onDone }) {
-  const [cityQ, setCityQ] = useState("");
-  const [city, setCity] = useState("");
-  const [country, setCountry] = useState("");
+function StampPlaceModal({ onClose, onDone, preset = null }) {
+  const [cityQ, setCityQ] = useState(preset?.city || "");
+  const [city, setCity] = useState(preset?.city || "");
+  const [country, setCountry] = useState(preset?.country || "");
   const [cc, setCc] = useState("");
-  const [coords, setCoords] = useState(null);
-  const [venue, setVenue] = useState("");
+  const [coords, setCoords] = useState(Number.isFinite(+preset?.lat) && Number.isFinite(+preset?.lng) ? { lat: +preset.lat, lng: +preset.lng } : null);
+  const [venue, setVenue] = useState(preset?.name && preset.name !== preset.city ? preset.name : "");
   // The venue's OWN point and type, for the on-the-spot GPS check — `coords`
   // keeps the city centre when the city was picked first.
-  const [venueSpot, setVenueSpot] = useState(null);
-  const [dateVal, setDateVal] = useState(localISODate());
+  const [venueSpot, setVenueSpot] = useState(Number.isFinite(+preset?.lat) && Number.isFinite(+preset?.lng) ? { lat: +preset.lat, lng: +preset.lng, category: null } : null);
+  const [dateVal, setDateVal] = useState(preset?.visited_on || localISODate());
   const [results, setResults] = useState(null);
   const [searchFor, setSearchFor] = useState(null);
   const [searching, setSearching] = useState(false);
@@ -395,6 +399,8 @@ function StampPlaceModal({ onClose, onDone }) {
     const cityName = (city || cityQ).trim();
     if (!cityName) { showToast("Add a city first", "error"); return; }
     setBusy(true);
+    // No stamp without proof (founder, 2026-10-03): being there now (GPS at the
+    // picked venue, today), or a photo taken there. Nothing is created unproven.
     const sl = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     const entity_id = `visit:${sl(cityName)}:${sl(venue)}:${dateVal}`;
     // Verify on the spot (founder, 2026-09-28: the Georgia Aquarium stamp got no
@@ -411,12 +417,18 @@ function StampPlaceModal({ onClose, onDone }) {
       });
       if (pos && metersBetween(pos.coords.latitude, pos.coords.longitude, spot.lat, spot.lng) <= stampRadiusFor({ name: venue, category: spot.category })) verified = "gps";
     }
+    if (verified !== "gps" && photos.length === 0) {
+      setBusy(false);
+      showToast("Stamps need proof — add a photo you took there (with its location on), or stamp it while you're there", "error");
+      return;
+    }
     const { data, error } = await addStamp({
       kind: "city", entity_type: "visit", entity_id,
       name: venue.trim() || cityName, city: cityName, region: null,
       country: country || null, cc: cc || undefined,
       lat: spot?.lat ?? coords?.lat ?? null, lng: spot?.lng ?? coords?.lng ?? null,
       visited_on: dateVal, local_hour: new Date().getHours(), verified,
+      ...(verified !== "gps" ? { await_proof: true } : {}),
     });
     if (error || !data?.id) { setBusy(false); showToast(error || "Could not add stamp", "error"); return; }
     let proof = null;
@@ -427,6 +439,14 @@ function StampPlaceModal({ onClose, onDone }) {
         const up = await uploadStampPhoto({ stamp_id: data.id, image, visited_on: dateVal, exif });
         if (up?.data?.proof && !proof) proof = up.data.proof;
       } catch { /* skip a bad photo */ }
+    }
+    // A photo-path stamp that no photo proved is removed — unless it was an
+    // existing (grandfathered) stamp being re-stamped, which stays as it was.
+    if (data.verified !== "gps" && !proof && data.created) {
+      await deleteStamp(data.id).catch(() => {});
+      setBusy(false);
+      showToast("We couldn't confirm this place from those photos — use one you took there, with its location on", "error");
+      return;
     }
     setBusy(false); showToast(data.verified === "gps" ? "✓ Verified — place stamped 🛂" : (proofToast(proof) || "Place stamped 🛂"), "success"); onDone();
   };
@@ -468,7 +488,10 @@ function StampPlaceModal({ onClose, onDone }) {
         <label style={labelStyle}>Date</label>
         <input type="date" value={dateVal} max={localISODate()} onChange={(e) => setDateVal(e.target.value)} style={{ ...inputStyle, marginTop: 4 }} />
 
-        <label style={labelStyle}>Memory photos (up to 4)</label>
+        <label style={labelStyle}>Proof photo — taken there (up to 4)</label>
+        <p style={{ color: INK3, fontSize: fs(11.5), lineHeight: 1.45, marginTop: 4 }}>
+          Stamped today at the place? Your GPS is the proof. A past trip needs a photo you took there — its location tag, or the place itself in the picture.
+        </p>
         <div className="flex gap-2 mt-1 flex-wrap items-center">
           {photos.map((f, i) => (
             <div key={i} className="relative">
@@ -685,11 +708,15 @@ function PassportInner() {
   const [claimPresence, setClaimPresence] = useState(null); // null → question 1
   const respondClaim = async (action, presence) => {
     if (!claim) return;
-    const { error } = await claimTag(claim.token, action, presence);
+    const { data, error } = await claimTag(claim.token, action, presence);
     try { sessionStorage.removeItem("pp_claim_token"); } catch { /* ignore */ }
     setClaim(null); setClaimPresence(null);
-    if (error) showToast(error, "error");
-    else { showToast(action === "accept" ? "Added to your Virtual Passport 🛂" : presence ? "Noted — no stamp added" : "Declined", "success"); load(); }
+    if (error) { showToast(error, "error"); return; }
+    if (action === "accept" && data?.needs_proof) {
+      showToast("Noted — you were there together. Add a photo from that day to earn the stamp", "success");
+      setStampPreset(data.place || null); setShowStampPlace(true);
+    } else showToast(action === "accept" ? "You already have this stamp 🛂" : presence ? "Noted — no stamp added" : "Declined", "success");
+    load();
   };
   const blockClaim = async () => {
     if (!claim) return;
@@ -739,19 +766,32 @@ function PassportInner() {
     try { window.scrollTo({ top: Math.max(0, top), behavior: "auto" }); } catch { window.scrollTo(0, Math.max(0, top)); }
   }, [loading]);
   const [showStampPlace, setShowStampPlace] = useState(false); // "Stamp a place" form
+  const [stampPreset, setStampPreset] = useState(null);         // a tag's place, handed to the form
   // Page one for an owner whose onboarding mint never happened — the same
   // origin stamp Onboarding.jsx creates (cover page, not an achievement).
   const [mintingHome, setMintingHome] = useState(false);
   const mintHomeCity = async () => {
     if (!profile?.home_city || mintingHome) return;
     setMintingHome(true);
+    // Page one is earned at home, like every stamp: one GPS fix within the
+    // home city (40 km of its saved centre).
+    const pos = await new Promise((res) => {
+      if (!navigator.geolocation) return res(null);
+      navigator.geolocation.getCurrentPosition(res, () => res(null), { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+    });
+    const home = Number.isFinite(+profile.home_lat) && Number.isFinite(+profile.home_lng);
+    if (!pos || !home || metersBetween(pos.coords.latitude, pos.coords.longitude, +profile.home_lat, +profile.home_lng) > 40000) {
+      setMintingHome(false);
+      showToast(`Page one is stamped at home — open this when you're in ${profile.home_city}`, "error");
+      return;
+    }
     const { error } = await addStamp({
       kind: "city", entity_type: "origin", entity_id: `origin:${profile.home_city}`,
       name: profile.home_city, city: profile.home_city,
       country: profile.home_country || undefined,
       cc: countryCode(profile.home_country || "") || undefined,
       lat: profile.home_lat ?? undefined, lng: profile.home_lng ?? undefined,
-      visited_on: localISODate(), verified: "self", origin: true,
+      visited_on: localISODate(), verified: "gps", origin: true, // the fix proves home; the stamp keeps the city centre, never the doorstep
     });
     setMintingHome(false);
     if (error) { showToast(error, "error"); return; }
@@ -898,7 +938,7 @@ function PassportInner() {
               <p style={{ color: INK3, fontSize: fs(12), marginTop: 1 }}>Add this stamp to your Virtual Passport?</p>
               <div className="flex gap-2 mt-3">
                 <button onClick={() => respondClaim("decline", true)} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13.5) }}>Not this one</button>
-                <button onClick={() => respondClaim("accept", true)} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>Add the stamp ✓</button>
+                <button onClick={() => respondClaim("accept", true)} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>Prove it with a photo ✓</button>
               </div>
             </>)}
             <button onClick={blockClaim} className="w-full text-center mt-2.5" style={{ background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
@@ -911,7 +951,7 @@ function PassportInner() {
         {tags.length > 0 && (
           <div className="mb-4 space-y-2">
             <p className="uppercase font-semibold px-1" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", color: STAMP }}>🙌 Tagged you</p>
-            {tags.map((t) => <TagInbox key={t.id} tag={t} onDone={load} />)}
+            {tags.map((t) => <TagInbox key={t.id} tag={t} onDone={load} onProve={(place) => { setStampPreset(place); setShowStampPlace(true); }} />)}
           </div>
         )}
 
@@ -962,7 +1002,7 @@ function PassportInner() {
               <div className="mt-4 rounded-[18px] p-4 text-center" style={{ background: "#FFFBF0", border: "1px solid #EAD9AE" }}>
                 <p style={{ fontFamily: SERIF, fontSize: fs(19), color: INK }}>Your passport is ready</p>
                 <p style={{ color: INK2, fontSize: fs(13), lineHeight: 1.5, marginTop: 4 }}>
-                  Stamps are earned by being there. Start with page one — your home city — then stamp places as you go, or add a trip from before with a photo from that day.
+                  Stamps are earned by being there. Page one is your home city, stamped while you're home — then stamp places as you go, or add a trip from before with a photo you took there.
                 </p>
                 <div className="flex gap-2 justify-center flex-wrap mt-3">
                   {profile?.home_city ? (
@@ -1042,7 +1082,7 @@ function PassportInner() {
       )}
 
       {/* Stamp a place — manual city/spot visit stamp */}
-      {showStampPlace && <StampPlaceModal onClose={() => setShowStampPlace(false)} onDone={() => { setShowStampPlace(false); load(); }} />}
+      {showStampPlace && <StampPlaceModal preset={stampPreset} onClose={() => { setShowStampPlace(false); setStampPreset(null); }} onDone={() => { setShowStampPlace(false); setStampPreset(null); load(); }} />}
 
       {/* Friend view: the quiet report door (and the sheet of reasons) */}
       {readOnly && (

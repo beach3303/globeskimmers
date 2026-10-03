@@ -7,6 +7,7 @@ import { extractFirstName } from "@/lib/extractFirstName";
 import { inferProfileDefaults } from "@/lib/inferProfileDefaults";
 import { addStamp } from "@/lib/passport";
 import { countryCode } from "@/lib/countries";
+import { metersBetween } from "@/lib/passport";
 
 // Essential steps only — the rest is inferred or deferred.
 import LocationStep from "../components/onboarding/LocationStep";
@@ -114,11 +115,17 @@ export default function OnboardingPage() {
     }
 
     // Page one = the home-city origin stamp (meaning model: "make your
-    // passport"). Best-effort: a failed mint never blocks the account — the
-    // passport page can mint it later. verified stays 'self'; origin marks it
-    // as the cover page, not an achievement.
+    // passport"). No stamp without proof: it mints only when a GPS fix puts
+    // the traveler inside their home city (40 km of its centre); otherwise the
+    // Passport offers it later, at home. A failed mint never blocks the account.
     try {
-      if (collected.home_city) {
+      const pos = collected.home_city && collected.home_lat != null && collected.home_lng != null
+        ? await new Promise((res) => {
+            if (!navigator.geolocation) return res(null);
+            navigator.geolocation.getCurrentPosition(res, () => res(null), { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+          })
+        : null;
+      if (pos && metersBetween(pos.coords.latitude, pos.coords.longitude, +collected.home_lat, +collected.home_lng) <= 40000) {
         await addStamp({
           kind: "city", entity_type: "origin", entity_id: `origin:${collected.home_city}`,
           name: collected.home_city, city: collected.home_city,
@@ -126,7 +133,7 @@ export default function OnboardingPage() {
           cc: countryCode(collected.home_country || "") || undefined,
           lat: collected.home_lat ?? undefined, lng: collected.home_lng ?? undefined,
           visited_on: new Date().toISOString().slice(0, 10),
-          verified: "self", origin: true,
+          verified: "gps", origin: true,
         });
       }
     } catch { /* the passport can mint page one later */ }

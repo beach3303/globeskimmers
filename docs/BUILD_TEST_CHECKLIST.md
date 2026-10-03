@@ -1059,3 +1059,18 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Grant → letter emails via Resend when RESEND_API_KEY exists; otherwise the desk shows
   the composed letter and copies it to the clipboard. Email via auth admin API, name
   from social_profiles.
+
+## 2026-10-03 — No stamp without proof
+- Worker lock (handlePassportStamp): a NEW stamp needs corroborated GPS or `await_proof`
+  (photo next); birthday exempt; existing stamps (incl. grandfathered unverified) can
+  always be re-stamped/upgraded. Failed GPS corroboration now refuses (409 proof_needed)
+  instead of downgrading to an unverified stamp.
+- Roaming exemption: IP country == traveler's home country (home SIM abroad) no longer
+  counts as a GPS spoof (profiles.home_country → ICU region code).
+- Tags (claim + inbox): no stamp minted; presence recorded; the app opens Stamp a place
+  prefilled with the tag's place/date for photo proof.
+- Stamp a place: GPS today at the venue, or ≥1 photo that proves it; an unproven new
+  stamp is deleted after upload. Page one (onboarding + Passport button): GPS within
+  40 km of the home city; stored at the city centre, never the user's position.
+- Gates: node --check, eslint, eslint no-undef, build, cap copy, sim clean install +
+  bundle-hash match.

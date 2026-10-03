@@ -306,6 +306,7 @@ export default function ActivityDetailPage() {
       ...(activity.film?.title ? { film: activity.film } : {}),
     });
     setStamping(false);
+    if (data?.code === 'proof_needed') { setProofHelp(true); return; }
     if (error) { showToast(/sign in/i.test(error) ? 'Sign in to stamp your Virtual Passport' : 'Could not add stamp'); return; }
     setStamped(true);
     showToast(data?.verified === 'gps' ? '✓ Verified — added to your Virtual Passport 🛂' : 'Added to your Virtual Passport 🛂');
