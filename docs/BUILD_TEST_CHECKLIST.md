@@ -1001,3 +1001,16 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Carries: location-primer fix (5.1.1(iv) reply posted in-thread), Declared Age Range capability + plugin, Capgo updater (first store binary with OTA inside), passport-era listing (copy/keywords/screenshots/support URL), UGC = YES flips, 13+ age rating, App Privacy + User Content/User ID.
 - On approval: existing users update once via the store; all future releases flow by OTA.
 - Play Store: blocked on founder's D-U-N-S/organization-account decision (old account closed for inactivity 2021; signed .aab + keystore + listing assets all ready).
+
+## 2026-10-02 (evening) — verified stamps batch + social polish (ec962a8, ee48f5b)
+- Attraction page: verified-only stamping (GPS at the place; no honor button), address+hours hero,
+  Website/Parking/real Pricing cards, AI provenance on Good to Know; guestbook = notes + finger
+  doodles (photo upload removed, doodle moderation door live).
+- **Activate:** `npx wrangler d1 execute globeskimmers-attractions --file=scripts/city-icons/data/add_attraction_facts.sql --remote` (once; founder).
+  The guestbook `is_doodle` Supabase migration applied itself via CI on push.
+- Usernames: held-for-family mechanism (HANDLE_HELD), suggestions on taken/reserved names,
+  Settings chips. Worker live on push; app chips ride the next OTA.
+- Birthday ask card on Passport (2+ stamps, snoozable), age-mix bars in Admin Analytics.
+- Virtual Luggage: swipe capture wrapper (fixes dead lower half) + inverted vertical mapping.
+- Gates: node --check ✓, eslint --quiet ✓, npm run build ✓, cap copy ✓. App-side changes reach
+  devices on the next `npm run ota` / native build — not yet on any phone at write time.

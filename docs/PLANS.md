@@ -176,6 +176,21 @@ THE LIST — before the Apple resubmission (founder: "build first, then submit")
   [ ] FOUNDER: reply in thread (crash note) → Resubmit
   After approval: npm run ota keeps working; D-U-N-S wait continues for Play.
 
+SHIPPED 2026-10-02 (evening, both on main; app side reaches phones on the NEXT
+ota/native build — the worker side is live now):
+  [x] Verified-only stamps + attraction facts page + guestbook doodles (ec962a8)
+  [x] Luggage: swipe capture zone fixed (turning works from the lower half) + vertical invert (ee48f5b)
+  [x] Usernames: HANDLE_HELD (family names claimable only by their email — maiza seeded;
+      WAITING ON FOUNDER: sibling handle+email pairs, one line each in cloudflare-worker-v7.12.js)
+  [x] Taken username → up to 3 available suggestions, tap-to-fill chips in Settings
+  [x] Birthday ask: warm dismissible card on Passport at 2+ stamps (MM-DD + year if gate unset,
+      45-day snooze, gone once saved); Admin Analytics now shows the age mix
+  [ ] FOUNDER run-once (D1 attraction facts columns):
+      npx wrangler d1 execute globeskimmers-attractions --file=scripts/city-icons/data/add_attraction_facts.sql --remote
+  [ ] FOUNDER: share the ChatGPT plans/monetization conversation (share link or paste) →
+      Claude studies it, saves docs/NORTH_STAR.md + memory
+  Data follow-up (Claude): seed ticket_price/ticket_url/parking_text/website for top attractions.
+
 ADS REMOVED ENTIRELY (founder, 2026-10-02): AdMob is out of the app, the configs,
 the copy and the privacy policy. iOS build 10 / Android versionCode 10 carry it.
 Store flips change accordingly: ASC App Privacy drops advertising identifiers;
