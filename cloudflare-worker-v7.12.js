@@ -14600,9 +14600,9 @@ To claim it: download GlobeSkimmers, sign in with this email address (${row.emai
 
 If you already use another username, claiming will change it to @${row.handle}.
 
-"The world is a book, and those who do not travel read only one page."
+"The world is a book, and those who do not travel read only one page." \u2014 Saint Augustine
 
-Enjoy stamping your world,
+Enjoy stamping your world and making memories,
 Maiza & GlobeSkimmers \u2708\uFE0F`;
   if (!env.RESEND_API_KEY) return { sent: false, subject, text, reason: 'no-key' };
   try {

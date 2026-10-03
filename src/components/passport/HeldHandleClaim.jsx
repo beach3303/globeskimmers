@@ -69,9 +69,10 @@ export default function HeldHandleClaim({ fs = (n) => n }) {
         </p>
         <p style={{ color: INK3, fontSize: fs(12), fontStyle: "italic", lineHeight: 1.5, marginTop: 8 }}>
           &ldquo;The world is a book, and those who do not travel read only one page.&rdquo;
+          <span style={{ display: "block", fontStyle: "normal", fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".12em", marginTop: 3 }}>— SAINT AUGUSTINE</span>
         </p>
         <p style={{ color: INK2, fontSize: fs(13), fontWeight: 600, marginTop: 8 }}>
-          Now go stamp your world and make some memories. ✈️
+          Enjoy stamping your world and making memories. ✈️
         </p>
         <button type="button" onClick={() => setHeld(null)} className="mt-3 rounded-xl px-5 py-2 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13) }}>
           Let&rsquo;s go
