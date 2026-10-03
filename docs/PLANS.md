@@ -431,6 +431,7 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 - Who We Can Serve: https://claude.ai/code/artifact/3550974b-a863-4f4e-a0f5-f7848739594f
 - My Trips Ledger: https://claude.ai/code/artifact/50256292-130d-4c34-ab35-cf2436dad91e
 - North Star (brand + monetization register, 2026-10-02): docs/NORTH_STAR.md
+- Full app audit — flows, engagement, components (2026-10-03): docs/APP_AUDIT_2026-10-03.md
 - The Google of Travel brief: https://claude.ai/code/artifact/7b3b4221-403e-457b-9d65-838879a0d4a9
 - Global Stamp Atlas: https://claude.ai/code/artifact/d49af076-9c43-4742-b0ba-5c44b1a40e8e
 - The Passport Standard: https://claude.ai/code/artifact/d501e554-4e86-4b1a-be4c-ae5f43c97328
