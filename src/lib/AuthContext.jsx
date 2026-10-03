@@ -4,7 +4,7 @@
 // accounts, sessions, the onboarding flag, and the CRM all live in the project's
 // own Supabase project now. Export names (AuthProvider / useAuth) and the
 // isAuthenticated / isLoadingAuth shape are preserved so existing consumers
-// (App.jsx, ProtectedRoute, NavigationTracker) keep working unchanged.
+// (App.jsx and every useAuth caller) keep working unchanged.
 //
 // Responsibilities:
 //   - restore + track the Supabase session (persisted in native device storage)
