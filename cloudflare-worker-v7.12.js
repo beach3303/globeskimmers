@@ -7115,6 +7115,210 @@ async function handleAttractionsGet(request, env) {
   }
 }
 
+// ── Tickets + parking for a stampable attraction (founder, 2026-10-03) ────────
+// POST /attractions/visit-info { id } — admission by audience (adult, child,
+// student, senior, military …), discounts, and parking with prices. Claude
+// searches and FETCHES the official pages; CODE then keeps a price only when
+// its source is a page that was actually fetched AND that page's text contains
+// the amount. Nothing is estimated: unfound facts stay null and the app sends
+// the traveler to the official site. Cached 30 days (3 when nothing is found).
+const VISIT_INFO_MODEL = 'claude-opus-5';
+const VISIT_INFO_VERSION = 'v1';
+const VISIT_INFO_TTL = 30 * 86400, VISIT_INFO_EMPTY_TTL = 3 * 86400;
+const VISIT_INFO_DAILY_CAP = 150;   // fresh lookups per day, all travelers
+const VISIT_INFO_USER_CAP = 20;     // fresh lookups per traveler per day
+const VISIT_INFO_ANON_CAP = 20;     // fresh lookups per day without sign-in (all networks)
+const VISIT_INFO_IP_CAP = 5;        // … and per network
+const VISIT_AUDIENCES = new Set(['adult', 'child', 'youth', 'student', 'senior', 'military', 'resident', 'family', 'other']);
+const VISIT_INFO_PROMPT = [
+  'You find current visitor prices for ONE attraction, for a travel app that never guesses.',
+  'Use web_search to find the attraction\'s OFFICIAL website (or its official ticketing page), then web_fetch the actual tickets/admission page and the parking (or "plan your visit"/"directions") page. Fetch at most 4 pages.',
+  'Report ONLY what a page you fetched states. Never use memory, never estimate, never average. Prefer the official site; use a third-party page only when the official site states nothing, and never a reseller\'s marked-up price.',
+  'For every price, give source_url = the exact URL of the fetched page that states it, and amount_text exactly as written there. When prices vary by date, give the lowest "from" price the page states and say "from — varies by date" in note.',
+  'Audience is one of: adult, child, youth, student, senior, military, resident, family, other. Put the age range or condition in label (e.g. "Child (3–9)", "Senior (62+)").',
+  'Military, veteran, teacher, first-responder, resident, AAA or similar offers go in discounts unless they have their own price.',
+  'If admission is free, set free=true. If something is not stated, use null or an empty list.',
+  'Finish with ONLY the JSON object inside <json></json> tags, in this shape:',
+  '{"official_site":"url|null","admission":{"free":true|false|null,"currency":"USD","prices":[{"audience":"adult","label":"Adult (10+)","amount":25,"amount_text":"$25","note":null,"source_url":"url"}],"discounts":[{"label":"Military — free with ID","source_url":"url"}],"free_days":null,"reservation":null,"buy_url":null,"source_url":null},"parking":{"options":[{"label":"On-site lot","price_text":"$25 per car","amount":25,"source_url":"url"}],"note":null,"source_url":null}}',
+].join(' ');
+
+const visitUrlKey = (u) => {
+  try { const x = new URL(String(u)); return (x.hostname.replace(/^www\./, '') + x.pathname.replace(/\/+$/, '')).toLowerCase(); } catch { return null; }
+};
+const visitHost = (u) => { try { return new URL(String(u)).hostname.replace(/^www\./, ''); } catch { return null; } };
+function visitAmountIn(text, amount) {
+  if (!Number.isFinite(amount)) return false;
+  if (amount === 0) return /\bfree\b/i.test(text);
+  const whole = Math.trunc(amount), cents = Math.round((amount - whole) * 100);
+  const intPart = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, '[,.\\s]?');
+  const re = cents ? new RegExp(`(?<![\\d.,])${intPart}[.,]${String(cents).padStart(2, '0')}(?!\\d)`) : new RegExp(`(?<![\\d.,])${intPart}(?:[.,]00)?(?![\\d.,]?\\d)`);
+  return re.test(text);
+}
+async function visitOfficialSite(row) {
+  if (row.website && /^https?:\/\//i.test(row.website)) return row.website;
+  const q = String(row.qid || (String(row.id).match(/Q\d+/) || [])[0] || '');
+  if (!/^Q\d+$/.test(q)) return null;
+  try {
+    const e = await wikiJson(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${q}&props=claims&format=json`);
+    const v = e?.entities?.[q]?.claims?.P856?.[0]?.mainsnak?.datavalue?.value;
+    return typeof v === 'string' && /^https?:\/\//i.test(v) ? v : null;
+  } catch { return null; }
+}
+// One Claude turn with web search + fetch; continues across pause_turn.
+async function visitAsk(env, userText) {
+  const messages = [{ role: 'user', content: userText }];
+  const blocks = [];
+  let usage = { input_tokens: 0, output_tokens: 0 };
+  for (let round = 0; round < 4; round++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: VISIT_INFO_MODEL, max_tokens: 4000, system: VISIT_INFO_PROMPT,
+        output_config: { effort: 'low' },
+        tools: [
+          { type: 'web_search_20260209', name: 'web_search', max_uses: 3 },
+          { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 4 },
+        ],
+        messages,
+      }),
+    });
+    if (!res.ok) return { error: `anthropic ${res.status}: ${(await res.text().catch(() => '')).slice(0, 300)}`, blocks, usage };
+    const d = await res.json();
+    usage = { input_tokens: usage.input_tokens + (d.usage?.input_tokens || 0), output_tokens: usage.output_tokens + (d.usage?.output_tokens || 0) };
+    blocks.push(...(d.content || []));
+    if (d.stop_reason !== 'pause_turn') return { blocks, usage, stop: d.stop_reason };
+    messages.push({ role: 'assistant', content: d.content });
+  }
+  return { blocks, usage, stop: 'rounds' };
+}
+// Pages the model actually fetched → { urlKey: text }, plus every URL it saw.
+function visitEvidence(blocks) {
+  const pages = new Map(), seen = new Set();
+  for (const b of blocks) {
+    if (b?.type === 'web_fetch_tool_result') {
+      const c = b.content;
+      const url = c?.url || c?.content?.source?.url;
+      const src = c?.content?.source;
+      const text = src?.type === 'text' ? String(src.data || '') : '';
+      const k = visitUrlKey(url);
+      if (k && text) pages.set(k, (pages.get(k) || '') + '\n' + text);
+      if (k) seen.add(k);
+    } else if (b?.type === 'web_search_tool_result' && Array.isArray(b.content)) {
+      for (const r of b.content) { const k = visitUrlKey(r?.url); if (k) seen.add(k); }
+    }
+  }
+  return { pages, seen };
+}
+function visitVerify(raw, ev) {
+  const textOf = (u) => ev.pages.get(visitUrlKey(u)) || null;
+  const str = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
+  const a = raw?.admission || {};
+  const prices = (Array.isArray(a.prices) ? a.prices : []).map((p) => {
+    const t = textOf(p?.source_url); const amount = Number(p?.amount);
+    if (!t || !VISIT_AUDIENCES.has(p?.audience) || !(amount >= 0) || !visitAmountIn(t, amount)) return null;
+    return { audience: p.audience, label: str(p.label, 60) || p.audience, amount, amount_text: str(p.amount_text, 40), note: str(p.note, 80), source_url: p.source_url };
+  }).filter(Boolean).slice(0, 12);
+  const discounts = (Array.isArray(a.discounts) ? a.discounts : []).map((x) => {
+    const t = textOf(x?.source_url); const label = str(x?.label, 90);
+    if (!t || !label) return null;
+    const nums = label.match(/\d+(?:[.,]\d+)?/g) || [];
+    const words = label.toLowerCase().match(/[a-z]{5,}/g) || [];
+    const tl = t.toLowerCase();
+    if (nums.some((n) => !t.includes(n)) || (words.length && !words.some((w) => tl.includes(w)))) return null;
+    return { label, source_url: x.source_url };
+  }).filter(Boolean).slice(0, 8);
+  const freeSrc = textOf(a.source_url) || (prices[0] && textOf(prices[0].source_url));
+  const free = a.free === true && !!freeSrc && /\bfree\b/i.test(freeSrc) ? true : (prices.length ? false : null);
+  const pk = raw?.parking || {};
+  const options = (Array.isArray(pk.options) ? pk.options : []).map((o) => {
+    const t = textOf(o?.source_url); const label = str(o?.label, 60);
+    if (!t || !label || !/park/i.test(t)) return null;
+    const amount = o?.amount == null ? null : Number(o.amount);
+    if (amount != null && !(amount >= 0 && visitAmountIn(t, amount))) return { label, price_text: null, amount: null, source_url: o.source_url };
+    return { label, price_text: amount != null ? str(o.price_text, 60) : null, amount, source_url: o.source_url };
+  }).filter(Boolean).slice(0, 6);
+  const keepUrl = (u) => (u && ev.seen.has(visitUrlKey(u)) ? String(u) : null);
+  return {
+    official_site: keepUrl(raw?.official_site) || null,
+    admission: {
+      free, currency: str(a.currency, 3), prices, discounts,
+      free_days: a.free_days && textOf(a.source_url) ? str(a.free_days, 120) : null,
+      reservation: a.reservation && textOf(a.source_url) ? str(a.reservation, 120) : null,
+      buy_url: keepUrl(a.buy_url),
+      source_url: textOf(a.source_url) ? a.source_url : (prices[0]?.source_url || null),
+    },
+    parking: {
+      options,
+      note: pk.note && textOf(pk.source_url) ? str(pk.note, 140) : null,
+      source_url: textOf(pk.source_url) ? pk.source_url : (options[0]?.source_url || null),
+    },
+  };
+}
+
+async function handleAttractionVisitInfo(request, env, ctx) {
+  try {
+    if (!env.ATTRACTIONS_DB) return jsonResponse({ error: 'not configured' }, 500);
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.id || '').trim();
+    if (!id || id.length > 200) return jsonResponse({ error: 'id required' }, 400);
+    const cacheKey = `visit:${VISIT_INFO_VERSION}:${id}`;
+    const kv = env.GLOBESKIMMERS_KV;
+    const cached = kv ? await kv.get(cacheKey, { type: 'json' }).catch(() => null) : null;
+    if (cached) return jsonResponse({ ...cached, _cache: 'hit' });
+
+    const row = await env.ATTRACTIONS_DB.prepare('SELECT id, name, city, country, qid, website, free_to_visit FROM attractions WHERE id = ?1 LIMIT 1').bind(id).first().catch(() => null);
+    if (!row) return jsonResponse({ error: 'Not found' }, 404);
+    const user = await gbUser(request, env);
+    if (!env.ANTHROPIC_API_KEY) return jsonResponse({ error: 'not configured' }, 500);
+    let who = user?.id;
+    if (!who) {
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`visit:${ip}`));
+      who = 'ip-' + [...new Uint8Array(h)].slice(0, 8).map((x) => x.toString(16).padStart(2, '0')).join('');
+    }
+
+    if (kv) {
+      if (await kv.get(`visit:lock:${id}`).catch(() => null)) return jsonResponse({ pending: true });
+      const day = new Date().toISOString().slice(0, 10);
+      const gk = user ? `visit:cap:${day}` : `visit:cap:anon:${day}`, uk = `visit:cap:${who}:${day}`;
+      const [g, u] = await Promise.all([kv.get(gk).catch(() => 0), kv.get(uk).catch(() => 0)]);
+      if ((Number(g) || 0) >= (user ? VISIT_INFO_DAILY_CAP : VISIT_INFO_ANON_CAP) || (Number(u) || 0) >= (user ? VISIT_INFO_USER_CAP : VISIT_INFO_IP_CAP)) return jsonResponse({ error: 'busy', message: 'Price lookups are paused for today — check the official site' }, 429);
+      await Promise.all([
+        kv.put(gk, String((Number(g) || 0) + 1), { expirationTtl: 2 * 86400 }),
+        kv.put(uk, String((Number(u) || 0) + 1), { expirationTtl: 2 * 86400 }),
+        kv.put(`visit:lock:${id}`, '1', { expirationTtl: 120 }),
+      ]).catch(() => {});
+    }
+
+    const work = (async () => {
+      const site = await visitOfficialSite(row);
+      const where = [row.city, row.country].filter(Boolean).join(', ');
+      const ask = await visitAsk(env, `Attraction: ${row.name}${where ? `\nWhere: ${where}` : ''}${site ? `\nOfficial website (from Wikidata/our records): ${site}` : ''}\nFind admission prices by audience, discounts, and parking with prices.`);
+      const finalText = ask.blocks.filter((x) => x?.type === 'text').map((x) => x.text).join('\n');
+      const m = finalText.match(/<json>([\s\S]*?)<\/json>/);
+      let raw = null;
+      try { raw = m ? JSON.parse(m[1]) : null; } catch { raw = null; }
+      const ev = visitEvidence(ask.blocks);
+      const info = visitVerify(raw, ev);
+      if (!info.official_site && site) info.official_site = site;
+      const found = info.admission.prices.length > 0 || info.admission.free === true || info.parking.options.length > 0;
+      const out = { ok: true, found, checked_at: new Date().toISOString(), ...info };
+      if (kv && !ask.error) await kv.put(cacheKey, JSON.stringify(out), { expirationTtl: found ? VISIT_INFO_TTL : VISIT_INFO_EMPTY_TTL }).catch(() => {});
+      if (kv) await kv.delete(`visit:lock:${id}`).catch(() => {});
+      await gbLogEvent(env, 'visit_info_lookup', {
+        id, found, prices: info.admission.prices.length, parking: info.parking.options.length,
+        fetched: ev.pages.size, raw_prices: Array.isArray(raw?.admission?.prices) ? raw.admission.prices.length : null,
+        in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, stop: ask.stop || null, error: ask.error ? ask.error.slice(0, 200) : null,
+      }).catch(() => {});
+      const _diag = { fetched: ev.pages.size, seen: ev.seen.size, raw_prices: Array.isArray(raw?.admission?.prices) ? raw.admission.prices.length : null, raw_parking: Array.isArray(raw?.parking?.options) ? raw.parking.options.length : null, in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, stop: ask.stop || null };
+      return ask.error ? { ok: false, error: 'lookup_failed', detail: ask.error.slice(0, 200), official_site: info.official_site, _diag } : { ...out, _diag };
+    })();
+    if (ctx) ctx.waitUntil(work.catch(() => {}));
+    return jsonResponse(await work);
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleHomeRows(request, env, ctx) {
   const startedAt = Date.now();
   let body;
@@ -20232,6 +20436,7 @@ export default {
       // Passport (personal, private)
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
       if (pathname.startsWith('/dish-photo/') && request.method === 'GET') return await handleDishPhotoServe(request, env);
+      if (pathname === '/attractions/visit-info' && request.method === 'POST') return await handleAttractionVisitInfo(request, env, ctx);
       if (pathname === '/places/dishes' && request.method === 'POST') return await handlePlaceDishes(request, env);
       if (pathname === '/places/dishes/add' && request.method === 'POST') return await handlePlaceDishAdd(request, env, ctx);
       if (pathname === '/places/dishes/delete' && request.method === 'POST') return await handlePlaceDishDelete(request, env);
