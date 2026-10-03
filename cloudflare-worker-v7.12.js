@@ -7123,7 +7123,7 @@ async function handleAttractionsGet(request, env) {
 // the amount. Nothing is estimated: unfound facts stay null and the app sends
 // the traveler to the official site. Cached 30 days (3 when nothing is found).
 const VISIT_INFO_MODEL = 'claude-opus-5';
-const VISIT_INFO_VERSION = 'v1';
+const VISIT_INFO_VERSION = 'v2';  // v2: fetch-only from the official site when known (v1's search + code-run fetches burned the budget on rejected URLs)
 const VISIT_INFO_TTL = 30 * 86400, VISIT_INFO_EMPTY_TTL = 3 * 86400;
 const VISIT_INFO_DAILY_CAP = 150;   // fresh lookups per day, all travelers
 const VISIT_INFO_USER_CAP = 20;     // fresh lookups per traveler per day
@@ -7132,7 +7132,7 @@ const VISIT_INFO_IP_CAP = 5;        // … and per network
 const VISIT_AUDIENCES = new Set(['adult', 'child', 'youth', 'student', 'senior', 'military', 'resident', 'family', 'other']);
 const VISIT_INFO_PROMPT = [
   'You find current visitor prices for ONE attraction, for a travel app that never guesses.',
-  'Use web_search to find the attraction\'s OFFICIAL website (or its official ticketing page), then web_fetch the actual tickets/admission page and the parking (or "plan your visit"/"directions") page. Fetch at most 4 pages.',
+  'Start from the OFFICIAL website when one is given: web_fetch it, then follow ITS links to the tickets/admission page and the parking (or "plan your visit", "visit", "directions", "FAQ") page. Only fetch URLs that appear in a page you already fetched or in a search result — never guess a URL. With no official website given, use web_search once to find it. Fetch at most 6 pages.',
   'Report ONLY what a page you fetched states. Never use memory, never estimate, never average. Prefer the official site; use a third-party page only when the official site states nothing, and never a reseller\'s marked-up price.',
   'For every price, give source_url = the exact URL of the fetched page that states it, and amount_text exactly as written there. When prices vary by date, give the lowest "from" price the page states and say "from — varies by date" in note.',
   'Audience is one of: adult, child, youth, student, senior, military, resident, family, other. Put the age range or condition in label (e.g. "Child (3–9)", "Senior (62+)").',
@@ -7165,20 +7165,20 @@ async function visitOfficialSite(row) {
   } catch { return null; }
 }
 // One Claude turn with web search + fetch; continues across pause_turn.
-async function visitAsk(env, userText) {
+async function visitAsk(env, userText, withSearch) {
   const messages = [{ role: 'user', content: userText }];
   const blocks = [];
   let usage = { input_tokens: 0, output_tokens: 0 };
   for (let round = 0; round < 4; round++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'web-fetch-2025-09-10', 'content-type': 'application/json' },
       body: JSON.stringify({
         model: VISIT_INFO_MODEL, max_tokens: 4000, system: VISIT_INFO_PROMPT,
         output_config: { effort: 'low' },
         tools: [
-          { type: 'web_search_20260209', name: 'web_search', max_uses: 3 },
-          { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 4 },
+          ...(withSearch ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: 2 }] : []),
+          { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 6, max_content_tokens: 12000 },
         ],
         messages,
       }),
@@ -7296,7 +7296,7 @@ async function handleAttractionVisitInfo(request, env, ctx) {
     const work = (async () => {
       const site = await visitOfficialSite(row);
       const where = [row.city, row.country].filter(Boolean).join(', ');
-      const ask = await visitAsk(env, `Attraction: ${row.name}${where ? `\nWhere: ${where}` : ''}${site ? `\nOfficial website (from Wikidata/our records): ${site}` : ''}\nFind admission prices by audience, discounts, and parking with prices.`);
+      const ask = await visitAsk(env, `Attraction: ${row.name}${where ? `\nWhere: ${where}` : ''}${site ? `\nOfficial website (from Wikidata/our records): ${site}` : ''}\nFind admission prices by audience, discounts, and parking with prices.`, !site);
       const finalText = ask.blocks.filter((x) => x?.type === 'text').map((x) => x.text).join('\n');
       const m = finalText.match(/<json>([\s\S]*?)<\/json>/);
       let raw = null;
