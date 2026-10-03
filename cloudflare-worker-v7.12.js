@@ -3578,7 +3578,7 @@ async function handleAttractionAIDetails(request, env) {
   // A stamp's attraction page passes its D1 id: resolve the Google twin so the
   // page shares the same AI panel (and cache) as the Things to Do card.
   // (auto-seeded rows use all-lowercase "cc-city-name" slugs; Google ids are mixed-case)
-  if (/^(curated|icon|wikidata|osm|places):/.test(String(placeId)) || /^[a-z]{2}-[a-z0-9-]+$/.test(String(placeId))) {
+  if (/^[a-z]+:/.test(String(placeId)) || /^[a-z]{2}-[a-z0-9-]+$/.test(String(placeId))) {
     const gid = await resolveStampGid(env, String(placeId));
     if (!gid) return jsonResponse({ error: 'No details for this place yet' }, 404);
     placeId = gid;
@@ -13174,7 +13174,8 @@ const GB_URL = (env) => env.SUPABASE_URL || 'https://bkaxadiyehddzkiuheea.supaba
 const GB_KEY = (env) => env.SUPABASE_SERVICE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
 // Light auto-guard for hate slurs only — the real moderation is report→admin, and
 // we deliberately KEEP honest negativity ("slow service"), removing only abuse.
-const GB_BLOCK = /\b(nigg|faggot|\bretard|kike|spic|chink|wetback)\w*/i;
+// Whole-word forms only: the old prefix match blocked "spicy", "spice", "niggle", "retardant".
+const GB_BLOCK = /\b(nigg(?:a|ah|as|az|er|ers|uh|uz)|faggots?|retards?|retarded|kikes?|spics?|chinks?|wetbacks?)\b/i;
 function gbClean(s) { return String(s || '').replace(/ /g, '').trim(); }
 function gbRest(env, path, opts = {}) {
   return fetch(`${GB_URL(env)}/rest/v1/${path}`, {
@@ -19703,16 +19704,99 @@ async function handleSavesPush(request, env) {
   } catch (e) { return jsonResponse({ ok: false, error: e.message }, 500); }
 }
 
+// ── Kind guestbooks (founder, 2026-10-03) ────────────────────────────────────
+// Every note gets ONE verdict: "block" (abuse — never stored), "hold" (anything
+// negative: a complaint, criticism, "skip it" — stored but only the author and
+// the admins see it until an admin approves), or "publish" (kind tips, favorite
+// parts, shout-outs, memories, helpful practical advice). The check fails
+// toward HOLD: if it can't run, a person reads the note before it posts.
+const GB_REVIEW_PROMPT = [
+  'You review notes for the public guestbook of a place in a travel app. The guestbook is for KIND notes that help future visitors: tips, favorite parts, things not to miss, shout-outs, memories.',
+  'Decide one verdict:',
+  '"block" — profanity or curse words, slurs, insults or harassment of anyone, threats, sexual content, someone\'s private contact details, spam or ads (in ANY language, incl. leetspeak).',
+  '"hold" — anything negative: a complaint or criticism of the place, its staff, prices, food, cleanliness, safety or service; a bad experience; telling people to avoid or skip it; sarcasm; a note that mixes praise with a complaint; any web link.',
+  '"publish" — kind, positive or neutral-helpful notes, including practical advice phrased helpfully without criticism ("Go early to beat the line", "Bring a jacket, it gets windy", "Parking fills up by 10 — take the Metro").',
+  'Reply with ONLY {"verdict":"publish"|"hold"|"block","reason":"<at most 12 words, why>"}.',
+].join(' ');
+async function gbReviewNote(env, text, placeName) {
+  if (GB_BLOCK.test(text)) return { verdict: 'block', reason: 'slur' };
+  if (!env.ANTHROPIC_API_KEY) return { verdict: 'hold', reason: 'review unavailable' };
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12000);
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', signal: ctrl.signal,
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001', max_tokens: 60, system: GB_REVIEW_PROMPT,
+        messages: [{ role: 'user', content: `PLACE: ${String(placeName || 'a place').slice(0, 120)}\nNOTE:\n${text}` }],
+      }),
+    });
+    if (!r.ok) return { verdict: 'hold', reason: 'review unavailable' };
+    const d = await r.json();
+    const t = (d.content && d.content[0] && d.content[0].text) || '';
+    const v = (t.match(/"verdict"\s*:\s*"(publish|hold|block)"/i) || [])[1];
+    const why = (t.match(/"reason"\s*:\s*"([^"]{0,140})"/) || [])[1] || null;
+    return v ? { verdict: v.toLowerCase(), reason: why } : { verdict: 'hold', reason: 'unclear review' };
+  } catch { return { verdict: 'hold', reason: 'review unavailable' }; }
+  finally { clearTimeout(timer); }
+}
+// Email the founder that something waits in the Admin Portal (Resend; capped).
+async function gbNotifyFounder(env, subject, text) {
+  if (!env.RESEND_API_KEY) return { sent: false, reason: 'no-key' };
+  try {
+    if (env.GLOBESKIMMERS_KV) {
+      const k = `gb:notify:${new Date().toISOString().slice(0, 10)}`;
+      const n = Number(await env.GLOBESKIMMERS_KV.get(k).catch(() => 0)) || 0;
+      if (n >= 30) return { sent: false, reason: 'cap' };
+      await env.GLOBESKIMMERS_KV.put(k, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
+    }
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: env.RESEND_FROM || 'GlobeSkimmers <hello@globeskimmers.io>',
+        to: [env.ADMIN_NOTIFY_TO || 'founder@globeskimmers.io'],
+        subject, text,
+      }),
+    });
+    return { sent: r.ok };
+  } catch { return { sent: false, reason: 'error' }; }
+}
+// One guestbook per place: a stamp's D1 id ("icon:Q…") and an owned uuid both
+// map to the place's Google id, so the attraction page and the Things to Do card
+// share one book. Writes use the canonical id; reads check both.
+async function gbEntityIds(env, raw) {
+  const id = String(raw || '').trim().slice(0, 200);
+  if (!id) return null;
+  let gid = null;
+  if (/^[a-z]+:/.test(id) || /^[a-z]{2}-[a-z0-9-]+$/.test(id)) gid = await resolveStampGid(env, id).catch(() => null);
+  else if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id) && env.GLOBESKIMMERS_KV) {
+    const m = await env.GLOBESKIMMERS_KV.get(`owned2gid:${id}`).catch(() => null);
+    if (m && m !== 'none') gid = m;
+  }
+  const canon = gid && /^[A-Za-z0-9_-]{10,}$/.test(gid) ? gid : id;
+  return { canon, raw: id, all: [...new Set([canon, id])] };
+}
+const gbInList = (ids) => `in.(${ids.map((x) => `"${String(x).replace(/["\\]/g, '')}"`).join(',')})`;
+const GB_LIST_COLS = 'id,user_id,display_name,home_city,prompt_type,body,verified_visit,created_at,edited_at,photo_url,photo_w,photo_h,is_doodle';
+
 async function handleGuestbookList(request, env) {
   try {
     const body = await request.json().catch(() => ({}));
-    const entityId = gbClean(body.entity_id);
-    if (!entityId) return jsonResponse({ error: 'entity_id required' }, 400);
+    const ids = await gbEntityIds(env, gbClean(body.entity_id));
+    if (!ids) return jsonResponse({ error: 'entity_id required' }, 400);
     const limit = Math.min(parseInt(body.limit, 10) || 50, 100);
-    const q = `guestbook_entries?entity_id=eq.${encodeURIComponent(entityId)}&hidden=is.false&deleted_at=is.null&order=created_at.desc&limit=${limit}&select=id,user_id,display_name,home_city,prompt_type,body,verified_visit,created_at,edited_at,photo_url,photo_w,photo_h,is_doodle`;
-    const res = await gbRest(env, q);
-    if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
-    return jsonResponse({ entries: await res.json() });
+    const base = `guestbook_entries?entity_id=${gbInList(ids.all)}&hidden=is.false&deleted_at=is.null`;
+    const user = await gbUser(request, env).catch(() => null);
+    const [pub, own] = await Promise.all([
+      gbRest(env, `${base}&review_status=eq.ok&order=created_at.desc&limit=${limit}&select=${GB_LIST_COLS}`),
+      user ? gbRest(env, `${base}&user_id=eq.${user.id}&review_status=neq.ok&order=created_at.desc&limit=20&select=${GB_LIST_COLS},review_status`) : null,
+    ]);
+    if (!pub.ok) return jsonResponse({ error: `Supabase ${pub.status}`, details: await pub.text().catch(() => '') }, 502);
+    const mine = own && own.ok ? await own.json() : [];
+    const entries = [...mine, ...(await pub.json())].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    return jsonResponse({ entries, entity_id: ids.canon });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -19721,18 +19805,47 @@ async function handleGuestbookSign(request, env, ctx) {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in to leave a note' }, 401);
     const b = await request.json().catch(() => ({}));
-    const entityId = gbClean(b.entity_id);
+    const ids = await gbEntityIds(env, gbClean(b.entity_id));
     const entityType = gbClean(b.entity_type) || 'place';
     const text = gbClean(b.body);
     const isDoodle = b.is_doodle === true;
-    if (!entityId) return jsonResponse({ error: 'entity_id required' }, 400);
+    if (!ids) return jsonResponse({ error: 'entity_id required' }, 400);
+    const entityId = ids.canon;
     if (!isDoodle && (!text || text.length < 2)) return jsonResponse({ error: 'Write a short note first' }, 400);
     if (text.length > 1000) return jsonResponse({ error: 'Note too long (max 1000 characters)' }, 400);
-    if (text && !(await gbModerate(env, text)).allow) {
-      return jsonResponse({ error: 'Please keep it clean — no profanity, slurs, or abuse. Honest feedback is welcome.' }, 400);
+    const entityName = gbClean(b.entity_name).slice(0, 160);
+
+    const sp = await gbSocialProfile(env, user.id).catch(() => null);
+    if (sp?.social_tier === 'blocked') return jsonResponse({ error: 'Guestbooks aren\u2019t available on this account' }, 403);
+    if (env.GLOBESKIMMERS_KV) {
+      const ck = `gb:sign:${user.id}:${new Date().toISOString().slice(0, 10)}`;
+      const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
+      if (n >= 15) return jsonResponse({ error: 'That\u2019s a lot of notes for one day \u2014 try again tomorrow' }, 429);
+      await env.GLOBESKIMMERS_KV.put(ck, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
     }
-    const verified = b.verified === true;
-    const entityName = gbClean(b.entity_name);
+    // One review decides: block (never stored), hold (waits for an admin), publish.
+    let review = { verdict: 'publish', reason: null };
+    if (text) {
+      review = await gbReviewNote(env, text, entityName);
+      if (review.verdict === 'block') return jsonResponse({ error: 'Let\u2019s keep the guestbook kind \u2014 no profanity or insults, please.' }, 400);
+    }
+    const held = review.verdict === 'hold';
+    // Name and city come from the profile, never the client. Teens never show a city.
+    let profileName = null, profileCity = null;
+    try {
+      const pr = await gbRest(env, `profiles?id=eq.${user.id}&select=first_name,home_city`, { headers: { 'Accept-Profile': 'public' } });
+      const p0 = pr.ok ? (await pr.json())[0] : null;
+      profileName = gbClean(p0?.first_name).slice(0, 40) || null;
+      profileCity = gbClean(p0?.home_city).slice(0, 80) || null;
+    } catch { /* fall back to "A traveler" */ }
+    const wantsCity = b.show_city === true || (b.show_city === undefined && !!gbClean(b.home_city));
+    const homeCity = wantsCity && sp?.social_tier !== 'teen' ? profileCity : null;
+    // "✓ visited": the traveler holds a proven stamp for this place.
+    let verified = false;
+    try {
+      const vq = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&entity_id=${gbInList(ids.all)}&verified=in.(gps,photo_loc,photo_ai)&select=id&limit=1`);
+      verified = vq.ok ? (await vq.json()).length > 0 : false;
+    } catch { verified = false; }
 
     // Record/mark the visit (eligibility token + "sign later" reminder queue).
     await gbRest(env, 'guestbook_visits', {
@@ -19746,11 +19859,13 @@ async function handleGuestbookSign(request, env, ctx) {
     let photoUrl = String(b.photo_url || '').trim();
     if (!photoKey.startsWith('gb/') || !/\/gb-photo\/gb\//.test(photoUrl)) { photoKey = ''; photoUrl = ''; }
 
+    const promptType = ['tip', 'favorite', 'musttry', 'shoutout', 'story', 'doodle'].includes(gbClean(b.prompt_type)) ? gbClean(b.prompt_type) : 'tip';
     const row = {
       entity_type: entityType, entity_id: entityId, entity_name: entityName,
-      user_id: user.id, display_name: gbClean(b.display_name) || 'A traveler',
-      home_city: gbClean(b.home_city) || null, prompt_type: gbClean(b.prompt_type) || 'tip',
+      user_id: user.id, display_name: profileName || 'A traveler',
+      home_city: homeCity, prompt_type: promptType,
       body: text || null, verified_visit: verified,
+      review_status: held ? 'held' : 'ok', review_reason: held ? (review.reason || 'reads as negative').slice(0, 140) : null,
       is_doodle: isDoodle && !!photoKey,
       photo_key: photoKey || null, photo_url: photoUrl || null,
       photo_w: parseInt(b.photo_w, 10) || null, photo_h: parseInt(b.photo_h, 10) || null,
@@ -19759,30 +19874,39 @@ async function handleGuestbookSign(request, env, ctx) {
     const res = await gbRest(env, 'guestbook_entries', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
     if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
     const created = (await res.json())[0];
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'guestbook_sign', { entity_type: entityType, entity_id: entityId, place: entityName, prompt: row.prompt_type, verified }));
-    return jsonResponse({ entry: created });
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'guestbook_sign', { entity_type: entityType, entity_id: entityId, place: entityName, prompt: row.prompt_type, verified, held }));
+    if (held && ctx) ctx.waitUntil(gbNotifyFounder(env, `Guestbook note to review — ${entityName || 'a place'}`,
+      `A note on ${entityName || entityId} is waiting for you in the Admin Portal (Settings → Admin Portal → Guestbook review).\n\nFrom: ${row.display_name}\nWhy it was held: ${row.review_reason}\n\n"${text}"\n\nIt stays private until you approve it.`));
+    return jsonResponse({ entry: created, held });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
-async function handleGuestbookEdit(request, env) {
+async function handleGuestbookEdit(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
     const id = gbClean(b.id), text = gbClean(b.body);
     if (!id || !text) return jsonResponse({ error: 'id and body required' }, 400);
+    if (!BL_UUID.test(id)) return jsonResponse({ error: 'Not found or not yours' }, 403);
     if (text.length > 1000) return jsonResponse({ error: 'Too long' }, 400);
-    if (!(await gbModerate(env, text)).allow) {
-      return jsonResponse({ error: 'Please keep it clean — no profanity, slurs, or abuse.' }, 400);
-    }
-    const res = await gbRest(env, `guestbook_entries?id=eq.${encodeURIComponent(id)}&user_id=eq.${user.id}`, {
+    const cur = await gbRest(env, `guestbook_entries?id=eq.${id}&user_id=eq.${user.id}&deleted_at=is.null&select=entity_name,entity_id`);
+    const was = cur.ok ? (await cur.json())[0] : null;
+    if (!was) return jsonResponse({ error: 'Not found or not yours' }, 403);
+    // Every edit gets the same review as a new note.
+    const review = await gbReviewNote(env, text, was.entity_name);
+    if (review.verdict === 'block') return jsonResponse({ error: 'Let\u2019s keep the guestbook kind \u2014 no profanity or insults, please.' }, 400);
+    const held = review.verdict === 'hold';
+    const res = await gbRest(env, `guestbook_entries?id=eq.${id}&user_id=eq.${user.id}`, {
       method: 'PATCH', headers: { Prefer: 'return=representation' },
-      body: JSON.stringify({ body: text, edited_at: new Date().toISOString() }),
+      body: JSON.stringify({ body: text, edited_at: new Date().toISOString(), review_status: held ? 'held' : 'ok', review_reason: held ? (review.reason || 'reads as negative').slice(0, 140) : null, reviewed_at: null, reviewed_by: null }),
     });
     if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}` }, 502);
     const rows = await res.json();
     if (!rows.length) return jsonResponse({ error: 'Not found or not yours' }, 403);
-    return jsonResponse({ entry: rows[0] });
+    if (held && ctx) ctx.waitUntil(gbNotifyFounder(env, `Edited guestbook note to review — ${was.entity_name || 'a place'}`,
+      `An edited note on ${was.entity_name || was.entity_id} is waiting in the Admin Portal (Guestbook review).\n\nWhy it was held: ${rows[0].review_reason}\n\n"${text}"`));
+    return jsonResponse({ entry: { ...rows[0], review_status: held ? 'held' : 'ok' }, held });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -19814,13 +19938,73 @@ async function handleGuestbookDelete(request, env) {
 
 async function handleGuestbookReport(request, env, ctx) {
   try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to report a note' }, 401);
     const b = await request.json().catch(() => ({}));
     const id = gbClean(b.id);
-    if (!id) return jsonResponse({ error: 'id required' }, 400);
-    const res = await gbRest(env, 'rpc/gb_report', { method: 'POST', body: JSON.stringify({ p_id: id }) });
-    if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'guestbook_report', { id, reason: gbClean(b.reason) }));
+    if (!BL_UUID.test(id)) return jsonResponse({ error: 'id required' }, 400);
+    const reason = gbClean(b.reason).slice(0, 200) || null;
+    const ins = await gbRest(env, 'guestbook_reports', {
+      method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+      body: JSON.stringify({ entry_id: id, reporter_id: user.id, reason }),
+    });
+    if (!ins.ok) return jsonResponse({ error: 'Could not report this note' }, 502);
+    const fresh = (await ins.json()).length > 0;
+    if (fresh) {
+      const res = await gbRest(env, 'rpc/gb_report', { method: 'POST', body: JSON.stringify({ p_id: id }) });
+      if (!res.ok) return jsonResponse({ error: 'Could not report this note' }, 502);
+      const q = await gbRest(env, `guestbook_entries?id=eq.${id}&select=entity_name,body,hidden,flag_count`);
+      const e = q.ok ? (await q.json())[0] : null;
+      if (e && e.hidden && e.flag_count === 3 && ctx) ctx.waitUntil(gbNotifyFounder(env, `Guestbook note hidden after 3 reports — ${e.entity_name || 'a place'}`,
+        `Three travelers reported a note on ${e.entity_name || 'a place'}, so it is hidden until you look (Admin Portal → Guestbook review).\n\n"${e.body || '(doodle)'}"`));
+    }
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'guestbook_report', { id, reason, fresh }));
     return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /admin/guestbook { op: 'list' | 'approve' | 'reject' | 'delete', id? }
+// The review desk: notes held as negative, and notes hidden by reports.
+async function handleAdminGuestbook(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  try {
+    const b = await request.json().catch(() => ({}));
+    const op = String(b.op || 'list');
+    const id = gbClean(b.id);
+    let who = 'admin';
+    try { const u = await gbUser(request, env); if (u?.email) who = String(u.email).toLowerCase(); } catch { /* fine */ }
+    if (op !== 'list') {
+      if (!BL_UUID.test(id)) return jsonResponse({ error: 'id required' }, 400);
+      const now = new Date().toISOString();
+      let patch = null;
+      if (op === 'approve') patch = { review_status: 'ok', hidden: false, flag_count: 0, reviewed_at: now, reviewed_by: who };
+      else if (op === 'reject') patch = { review_status: 'rejected', reviewed_at: now, reviewed_by: who };
+      else if (op === 'delete') patch = { deleted_at: now, photo_key: null, photo_url: null, reviewed_at: now, reviewed_by: who };
+      else return jsonResponse({ error: 'unknown op' }, 400);
+      let photoKey = null;
+      if (op === 'delete') {
+        const pq = await gbRest(env, `guestbook_entries?id=eq.${id}&select=photo_key`);
+        photoKey = pq.ok ? (await pq.json())[0]?.photo_key || null : null;
+      }
+      const w = await gbRest(env, `guestbook_entries?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
+      if (!w.ok) return jsonResponse({ error: `Supabase ${w.status}` }, 502);
+      if (photoKey && env.MEDIA) await env.MEDIA.delete(photoKey).catch(() => {});
+    }
+    const cols = 'id,entity_id,entity_type,entity_name,display_name,home_city,prompt_type,body,is_doodle,photo_url,review_status,review_reason,flag_count,hidden,created_at,edited_at';
+    const [hq, rq] = await Promise.all([
+      gbRest(env, `guestbook_entries?review_status=eq.held&deleted_at=is.null&order=created_at.asc&limit=100&select=${cols}`),
+      gbRest(env, `guestbook_entries?hidden=is.true&review_status=neq.rejected&deleted_at=is.null&order=created_at.asc&limit=100&select=${cols}`),
+    ]);
+    const held = hq.ok ? await hq.json() : [];
+    const reported = (rq.ok ? await rq.json() : []).filter((r) => r.review_status !== 'held');
+    const repIds = reported.map((r) => r.id);
+    let reasons = {};
+    if (repIds.length) {
+      const xq = await gbRest(env, `guestbook_reports?entry_id=in.(${repIds.join(',')})&select=entry_id,reason,created_at&order=created_at.asc`);
+      for (const x of (xq.ok ? await xq.json() : [])) (reasons[x.entry_id] = reasons[x.entry_id] || []).push(x.reason || null);
+    }
+    return jsonResponse({ held, reported: reported.map((r) => ({ ...r, report_reasons: (reasons[r.id] || []).filter(Boolean).slice(0, 5) })), emailConfigured: !!env.RESEND_API_KEY });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -20477,7 +20661,7 @@ export default {
       if (pathname === '/stripe/domain/register' && request.method === 'POST') return await handleStripeDomainRegister(request, env);
       if (pathname === '/guestbook/list' && request.method === 'POST') return await handleGuestbookList(request, env);
       if (pathname === '/guestbook/sign' && request.method === 'POST') return await handleGuestbookSign(request, env, ctx);
-      if (pathname === '/guestbook/edit' && request.method === 'POST') return await handleGuestbookEdit(request, env);
+      if (pathname === '/guestbook/edit' && request.method === 'POST') return await handleGuestbookEdit(request, env, ctx);
       if (pathname === '/guestbook/delete' && request.method === 'POST') return await handleGuestbookDelete(request, env);
       if (pathname === '/guestbook/report' && request.method === 'POST') return await handleGuestbookReport(request, env, ctx);
       if (pathname === '/guestbook/visit' && request.method === 'POST') return await handleGuestbookVisit(request, env);
@@ -20506,6 +20690,7 @@ export default {
       if (pathname === '/admin/verified' && request.method === 'POST') return await handleAdminVerified(request, env);
       if (pathname === '/social/request' && request.method === 'POST') return await handleSocialRequest(request, env, ctx);
       if (pathname === '/admin/handle-requests' && request.method === 'POST') return await handleAdminHandleRequests(request, env);
+      if (pathname === '/admin/guestbook' && request.method === 'POST') return await handleAdminGuestbook(request, env);
       if (pathname === '/passport/sets' && request.method === 'POST') return await handlePassportSets(request, env);
       if (pathname === '/social/block' && request.method === 'POST') return await handleSocialBlock(request, env, ctx);
       if (pathname === '/social/age' && request.method === 'POST') return await handleSocialAge(request, env, ctx);
