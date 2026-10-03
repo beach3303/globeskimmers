@@ -22,7 +22,6 @@ import { matchesQuery } from "@/lib/searchText";
 import { ChevronLeft, MapPin, Star, CalendarDays, X } from "lucide-react";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
-import WishlistButton from "@/components/WishlistButton";
 import PersonaChooser from "@/components/PersonaChooser";
 import { usePersona, personaRank } from "@/lib/persona";
 
@@ -875,18 +874,9 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
   // 340px width / generous sizes; phone is a compact ~240px card. Fixed-width
   // flex child so the tier row scrolls horizontally.
   const photoH=t(220,150);   // tablet 220px, phone ~150px photo block
-  // Tier-card activities carry location only in formattedAddress (no city/country
-  // fields), so derive them — otherwise the wishlist demand signal + affiliate
-  // attribution lose geo. Last comma-part ~= country, second-to-last ~= city.
-  const _wlAddr=(a.formattedAddress||"").split(",").map(s=>s.trim()).filter(Boolean);
-  const wlCity=a.city||(_wlAddr.length>=2?_wlAddr[_wlAddr.length-2]:"");
-  const wlCountry=a.country||(_wlAddr.length>=1?_wlAddr[_wlAddr.length-1]:"");
   const editorialBody=(
     <div ref={cardRef} onClick={()=>setExpanded(true)} style={{flexShrink:0,width:fullWidth?"100%":t("340px","240px"),background:"#fff",borderRadius:t("24px","20px"),boxShadow:t("0 18px 40px -26px rgba(22,17,13,.4)","0 10px 26px -18px rgba(22,17,13,.4)"),overflow:"hidden",border:`1px solid ${ED_RULE}`,cursor:"pointer"}}>
       <div style={{position:"relative",height:fs(photoH),background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
-        <div style={{position:"absolute",top:8,right:8,zIndex:15}} onClick={(e)=>e.stopPropagation()}>
-          <WishlistButton item={{kind:"attraction",id:a.placeId||a.id,title:name,city:wlCity,country:wlCountry,image:photo1}} size={17}/>
-        </div>
         {photo1&&photo2&&photo3?(
           <div style={{display:"grid",gridTemplateColumns:"50% 50%",gridTemplateRows:`${fs(photoH/2)} ${fs(photoH/2)}`,height:fs(photoH),gap:"2px",background:"#fff"}}>
             <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",gridRow:"span 2",minWidth:0}}/>

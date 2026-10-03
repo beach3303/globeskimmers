@@ -5,11 +5,10 @@ import { useIsTablet } from '@/lib/useIsTablet';
 import { socialUnread } from '@/lib/passport';
 
 // Floating pill nav — fixed, centered, 22px above bottom safe area.
-// 4 anchors: Home, Trips, Passport, Settings.
-// NOT Search — that was explicitly removed (per the Claude-design spec).
-// Saved now lives inside Trips (its SAVED tab); /SavedLocations stays routed
-// for management + deep links. The old admin-gated Refresh action moved to
-// Settings ("Refresh app data").
+// 5 anchors: Home, Mailbox, Passport, Profile, Settings (Mailbox carries the
+// unread dot). NOT Search — that was explicitly removed (per the Claude-design
+// spec). /SavedLocations is reached from Settings. The old admin-gated Refresh
+// action moved to Settings ("Refresh app data").
 //
 // Active state is derived from useLocation().pathname so Layout can render
 // <FloatingNav /> without prop wiring. Pass `dark` over dark/map surfaces
@@ -54,9 +53,7 @@ export default function FloatingNav({ active, dark = false }) {
     { id: 'settings', emoji: '⚙️', label: 'Settings', route: 'Settings' },
   ];
 
-  // Auto-detect active tab from route. The Trips anchor also lights up on the
-  // surfaces it absorbed (MyTrip / Wishlist / SavedLocations stay routed for
-  // deep links), so the pill never loses the highlight on those pages.
+  // Auto-detect active tab from route; any other page highlights no tab.
   const path = location.pathname.toLowerCase();
   const detectActive = () => {
     if (active) return active;

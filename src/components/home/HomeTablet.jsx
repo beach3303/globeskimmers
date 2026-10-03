@@ -6,7 +6,6 @@ import FontScaleButton from '@/components/a11y/FontScaleButton';
 import HomeRows from '@/components/home/HomeRows';
 import StampsNearYou from '@/components/home/StampsNearYou';
 import PassportHero from '@/components/home/PassportHero';
-import WishlistCard from '@/components/home/WishlistCard';
 import ExperiencesRow from '@/components/home/ExperiencesRow';
 import SmartSearchBar from '@/components/search/SmartSearchBar';
 import SmartSearchOverlay from '@/components/search/SmartSearchOverlay';
@@ -208,7 +207,6 @@ export default function HomeTablet({
              cold-start; re-centers as the user moves) ─────────────────── */}
       <div className="mt-9">
         {discoverOrder.map((k) => SEC[k])}
-        <WishlistCard wide />
       </div>
 
       {/* ── EXPLORE MORE — 3-col gradient cards ───────────────────────── */}

@@ -15,8 +15,7 @@
  * v9 (Passport Standard): shared finder primitives — FinderHeader (3-block top
  * + stale-gated mono count), PhotoOrIcon card photo, shared PhotoGalleryModal
  * (local swipe gallery deleted), FinderEmptyState for no-location / error /
- * zero-results, ATM + Hot Food moved into FilterSheet behind a Filters chip,
- * WishlistButton on every card.
+ * zero-results, ATM + Hot Food moved into FilterSheet behind a Filters chip.
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -36,7 +35,6 @@ import FinderHeader from '@/components/finder/FinderHeader';
 import PhotoOrIcon from '@/components/finder/PhotoOrIcon';
 import FinderEmptyState from '@/components/finder/FinderEmptyState';
 import FilterSheet from '@/components/finder/FilterSheet';
-import WishlistButton from '@/components/WishlistButton';
 import { MapPin, Store, Clock, Moon, CreditCard, Flame, SlidersHorizontal, Check, AlertCircle, SearchX } from 'lucide-react';
 import { CAT, TEAL_DEEP, IVORY } from '@/components/redesign/constants';
 import { useIsTablet } from '@/lib/useIsTablet';
@@ -290,12 +288,6 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
     : 'Convenience Store');
   const openText = store.is24Hours ? 'Open 24/7' : (store.isOpen ? 'Open' : 'Closed');
 
-  // Wishlist geo (same derivation as Shopping's ShopCardTablet): stores carry
-  // location only in the address — last comma-part ~= country, second-to-last
-  // ~= city.
-  const _wlAddr = (store.address || '').split(',').map((s) => s.trim()).filter(Boolean);
-  const wlCity = _wlAddr.length >= 2 ? _wlAddr[_wlAddr.length - 2] : '';
-  const wlCountry = _wlAddr.length >= 1 ? _wlAddr[_wlAddr.length - 1] : '';
 
   const rank = (index ?? 0) + 1;
 
@@ -347,10 +339,6 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
           {/* Rank badge — numeric on gradient medals for the top 3 (Shopping's shape) */}
           <div style={{ position: "absolute", top: "14px", left: "14px", width: fs(SZ.medalMin), height: fs(SZ.medalMin), borderRadius: "50%", background: rank === 1 ? "linear-gradient(135deg,#FFD700,#FFA000)" : rank === 2 ? "linear-gradient(135deg,#B0BEC5,#78909C)" : rank === 3 ? "linear-gradient(135deg,#FFAB40,#F57C00)" : ED_CONV, color: "#fff", fontWeight: 800, fontSize: rank <= 3 ? fs(SZ.medalBig) : fs(SZ.medalSmall), display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.25)", border: "2px solid #fff" }}>{rank}</div>
 
-          {/* Save to wishlist */}
-          <div style={{ position: "absolute", top: "14px", right: "14px", zIndex: 15 }} onClick={(e) => e.stopPropagation()}>
-            <WishlistButton item={{ kind: "other", id: store.placeId || store.id, title: store.name, city: wlCity, country: wlCountry, image: photos[0] || null, meta: { finder: "convenience" } }} size={17} />
-          </div>
 
           {/* Chain tag (left of the heart — the "Dish Specialist"-style tag analog) */}
           {chainInfo.chain && (

@@ -202,19 +202,6 @@ export default function SavedLocationsPage() {
           </button>
 
 
-          {/* Wishlist — places & experiences the user is dreaming of */}
-          <button
-            onClick={() => navigate(createPageUrl('Wishlist'))}
-            className="w-full mb-6 p-4 rounded-[18px] flex items-center justify-between transition-colors hover:bg-black/[0.02]"
-            style={{ background: '#FFFFFF', border: `1px solid ${ED_RULE}` }}
-          >
-            <span className="flex items-center gap-3">
-              <span className="text-[18px] leading-none">❤️</span>
-              <span className="font-semibold uppercase" style={{ fontFamily: ED_MONO, fontSize: t(fs(11.5), fs(11)), letterSpacing: '.08em', color: ED_INK }}>Wishlist</span>
-            </span>
-            <ChevronLeft size={18} color={ED_INK3} strokeWidth={2.2} style={{ transform: 'rotate(180deg)' }} />
-          </button>
-
           {savedLocations.length === 0 ? (
             <div className="text-center py-16">
               <div className="w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ background: ED_IVORY2 }}>

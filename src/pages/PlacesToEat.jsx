@@ -52,7 +52,6 @@ import { useIsTablet } from "@/lib/useIsTablet";
 import FinderHeader from "@/components/finder/FinderHeader";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import FilterSheet from "@/components/finder/FilterSheet";
-import WishlistButton from "@/components/WishlistButton";
 
 // iPad editorial design tokens (design handoff: "Places to Eat · iPad").
 const ED_SERIF = '"Instrument Serif", Georgia, serif';
@@ -719,12 +718,6 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
   // Google's weekdayDescriptions start on Monday; getDay() is Sunday-based.
   const todayHrs = openInfo.todayHours || (weekdays.length && today!=null ? ((weekdays[(today+6)%7]||'').split(': ').slice(1).join(': ')||null) : null);
   const openText = is24 ? 'Open 24/7' : (openNow===true ? 'Open' : openNow===false ? 'Closed' : '');
-  // Wishlist geo (demand signal) — restaurants carry location only in the address
-  // string; last comma-part ~= country, second-to-last ~= city (same derivation
-  // as CoffeeFinder's card).
-  const _wlAddr=(restaurant.formattedAddress||restaurant.shortFormattedAddress||"").split(",").map(s=>s.trim()).filter(Boolean);
-  const wlCity=restaurant.city||(_wlAddr.length>=2?_wlAddr[_wlAddr.length-2]:"");
-  const wlCountry=restaurant.country||(_wlAddr.length>=1?_wlAddr[_wlAddr.length-1]:"");
 
   const Tag=({bg,color,children})=>(
     <span style={{background:bg,color,borderRadius:"999px",padding:`${t(fs(9),fs(5))} ${t(fs(16),fs(11))}`,fontSize:t(fs(15.5),fs(12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
@@ -738,9 +731,6 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
           height, with the wishlist heart overlaid top-right (smart badges shift left of it) */}
       <div style={{position:"relative"}}>
         <PhotoCarousel photos={photosToShow} rank={rank} badges={restaurant.badges||[]} height={t(360,200)}/>
-        <div style={{position:"absolute",top:"10px",right:"10px",zIndex:15}} onClick={(e)=>e.stopPropagation()}>
-          <WishlistButton item={{kind:"food",id:restaurant.placeId||restaurant.id,title:name,city:wlCity,country:wlCountry,image:photosToShow.find(p=>typeof p==="string")||null,meta:{finder:"eat"}}} size={17}/>
-        </div>
       </div>
 
       <div style={{padding:t(`${fs(28)} ${fs(32)} ${fs(32)}`,`${fs(16)} ${fs(16)} ${fs(18)}`)}}>

@@ -71,7 +71,6 @@ import SmartPriceScanner from './pages/SmartPriceScanner';
 import SmartTextScanner from './pages/SmartTextScanner';
 import ThingsToDo from './pages/ThingsToDo';
 import Weather from './pages/Weather';
-import Wishlist from './pages/Wishlist';
 import __Layout from './Layout.jsx';
 
 
@@ -100,7 +99,6 @@ export const PAGES = {
     "SmartTextScanner": SmartTextScanner,
     "ThingsToDo": ThingsToDo,
     "Weather": Weather,
-    "Wishlist": Wishlist,
 }
 
 export const pagesConfig = {

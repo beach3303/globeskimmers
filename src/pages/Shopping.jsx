@@ -18,7 +18,6 @@ import FinderHeader from "@/components/finder/FinderHeader";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import FilterSheet from "@/components/finder/FilterSheet";
-import WishlistButton from "@/components/WishlistButton";
 
 // iPad editorial design tokens (design handoff — shared across all finders).
 const ED_SERIF = '"Instrument Serif", Georgia, serif';
@@ -145,11 +144,6 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
   const activeTags=PROP_TAGS.filter(t=>p.props?.[t.key]);
   const vColor=p.venueColor||T.accent;
   const phone=p.nationalPhoneNumber||p.internationalPhoneNumber||"";
-  // Wishlist geo (same derivation as ThingsToDo's TierCard): shops carry location
-  // only in formattedAddress — last comma-part ~= country, second-to-last ~= city.
-  const _wlAddr=(p.formattedAddress||"").split(",").map(s=>s.trim()).filter(Boolean);
-  const wlCity=_wlAddr.length>=2?_wlAddr[_wlAddr.length-2]:"";
-  const wlCountry=_wlAddr.length>=1?_wlAddr[_wlAddr.length-1]:"";
 
   // Responsive token picker: tablet value | phone value. Every text size stays
   // wrapped in fs() so the 4-step glasses control scales card text gracefully.
@@ -167,9 +161,6 @@ function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userL
       <div style={{position:"relative"}}>
         <PhotoOrIcon photos={photos} alt={name} fallbackIcon={ShoppingBag} tint={p.venueColor||CAT.shopping} height={v(360,200)} iconSize={v(64,48)}/>
         <div style={{position:"absolute",top:fs(14),left:fs(14),width:v(fs(38),fs(32)),height:v(fs(38),fs(32)),borderRadius:"50%",background:index===0?"linear-gradient(135deg,#FFD700,#FFA000)":index===1?"linear-gradient(135deg,#B0BEC5,#78909C)":index===2?"linear-gradient(135deg,#FFAB40,#F57C00)":T.accent,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",fontSize:v(fs(16),fs(13)),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
-        <div style={{position:"absolute",top:fs(14),right:fs(14),zIndex:15}} onClick={(e)=>e.stopPropagation()}>
-          <WishlistButton item={{kind:"other",id:p.placeId||p.id,title:name,city:wlCity,country:wlCountry,image:(photos||[]).find(Boolean)}} size={17}/>
-        </div>
         {p.venueLabel&&<div style={{position:"absolute",top:fs(14),right:`calc(${fs(14)} + ${fs(48)})`,background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:v(`${fs(5)} ${fs(12)}`,`${fs(4)} ${fs(10)}`),borderRadius:"999px",fontSize:v(fs(14),fs(11)),fontWeight:"800",color:vColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{p.venueIcon} {p.venueLabel}</div>}
       </div>
 

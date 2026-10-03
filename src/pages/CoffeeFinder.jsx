@@ -24,7 +24,6 @@ import FinderHeader from "@/components/finder/FinderHeader";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import FilterSheet from "@/components/finder/FilterSheet";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
-import WishlistButton from "@/components/WishlistButton";
 
 // iPad editorial design tokens (design handoff — modeled on "Places to Eat · iPad").
 const ED_SERIF = '"Instrument Serif", Georgia, serif';
@@ -265,12 +264,6 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
         ? shop.primaryType.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())
         : 'Café');
   const openText = is24 ? 'Open 24/7' : (openNow===true ? 'Open' : openNow===false ? 'Closed' : '');
-  // Wishlist geo (demand signal) — cafés carry location only in the address
-  // string; last comma-part ~= country, second-to-last ~= city (same derivation
-  // as ThingsToDo's tier cards).
-  const _wlAddr=(shop.formattedAddress||address||"").split(",").map(s=>s.trim()).filter(Boolean);
-  const wlCity=shop.city||(_wlAddr.length>=2?_wlAddr[_wlAddr.length-2]:"");
-  const wlCountry=shop.country||(_wlAddr.length>=1?_wlAddr[_wlAddr.length-1]:"");
 
   const Tag=({bg,color,children})=>(
     <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(z(9,6))} ${fs(z(16,11))}`,fontSize:fs(z(15.5,12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
@@ -288,7 +281,6 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
         <div style={{position:"absolute",top:fs(z(14,11)),left:fs(z(14,11)),background:ACCENT,color:"#fff",width:fs(z(38,30)),height:fs(z(38,30)),borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:fs(z(16,13)),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
         <div style={{position:"absolute",top:fs(z(14,11)),right:fs(z(14,11)),display:"flex",alignItems:"center",gap:fs(8)}}>
           {shop.tier===1&&<div style={{display:"inline-flex",alignItems:"center",gap:fs(4),background:"rgba(255,255,255,0.95)",padding:`${fs(z(4,3))} ${fs(z(11,9))}`,borderRadius:"8px",fontSize:fs(z(14,11.5)),fontWeight:700,color:ACCENT,boxShadow:"0 1px 4px rgba(0,0,0,0.12)"}}><Sparkles size={12} strokeWidth={2}/>Specialty</div>}
-          <WishlistButton item={{kind:"food",id:shop.placeId||shop.id,title:name,city:wlCity,country:wlCountry,image:photos[0]||null,meta:{finder:"coffee"}}} size={17}/>
         </div>
       </div>
 
