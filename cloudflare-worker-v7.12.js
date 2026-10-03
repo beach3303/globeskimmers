@@ -7214,12 +7214,17 @@ function visitEvidence(blocks) {
 }
 function visitVerify(raw, ev) {
   const textOf = (u) => ev.pages.get(visitUrlKey(u)) || null;
-  const str = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
+  const str = (v, n) => (typeof v === 'string' && v.trim() && !/^https?:\/\//i.test(v.trim()) ? v.trim().slice(0, n) : null);
+  // Every number in a line must appear in the page it cites.
+  const numsIn = (line, t) => !!line && !!t && (line.match(/\d+(?:[.,]\d+)?/g) || []).every((n) => visitAmountIn(t, Number(n.replace(',', '.'))));
+  const wordsIn = (line, t) => { const w = String(line || '').toLowerCase().match(/[a-z]{4,}/g) || []; const tl = t.toLowerCase(); return !w.length || w.some((x) => tl.includes(x)); };
+  const cap = (v) => v.charAt(0).toUpperCase() + v.slice(1);
   const a = raw?.admission || {};
   const prices = (Array.isArray(a.prices) ? a.prices : []).map((p) => {
     const t = textOf(p?.source_url); const amount = Number(p?.amount);
     if (!t || !VISIT_AUDIENCES.has(p?.audience) || !(amount >= 0) || !visitAmountIn(t, amount)) return null;
-    return { audience: p.audience, label: str(p.label, 60) || p.audience, amount, amount_text: str(p.amount_text, 40), note: str(p.note, 100), source_url: p.source_url };
+    const label = str(p.label, 60);
+    return { audience: p.audience, label: label && numsIn(label, t) ? label : cap(p.audience), amount, amount_text: str(p.amount_text, 40), note: str(p.note, 100), source_url: p.source_url };
   }).filter(Boolean).slice(0, 12);
   const discounts = (Array.isArray(a.discounts) ? a.discounts : []).map((x) => {
     const t = textOf(x?.source_url); const label = str(x?.label, 90);
@@ -7235,24 +7240,26 @@ function visitVerify(raw, ev) {
   const pk = raw?.parking || {};
   const options = (Array.isArray(pk.options) ? pk.options : []).map((o) => {
     const t = textOf(o?.source_url); const label = str(o?.label, 80);
-    if (!t || !label || !/park/i.test(t)) return null;
+    if (!t || !label || !/park/i.test(t) || !wordsIn(label, t)) return null;
     const amount = o?.amount == null ? null : Number(o.amount);
-    if (amount != null && !(amount >= 0 && visitAmountIn(t, amount))) return { label, price_text: null, amount: null, source_url: o.source_url };
-    return { label, price_text: amount != null ? str(o.price_text, 120) : null, amount, source_url: o.source_url };
+    const okAmount = amount != null && amount >= 0 && visitAmountIn(t, amount);
+    const text = str(o.price_text, 120);
+    const okText = text && /\d/.test(text) && numsIn(text, t);
+    return { label, price_text: okText ? text : null, amount: okAmount ? amount : null, source_url: o.source_url };
   }).filter(Boolean).slice(0, 6);
   const keepUrl = (u) => (u && ev.seen.has(visitUrlKey(u)) ? String(u) : null);
   return {
     official_site: keepUrl(raw?.official_site) || null,
     admission: {
       free, currency: str(a.currency, 3), prices, discounts,
-      free_days: a.free_days && textOf(a.source_url) ? str(a.free_days, 120) : null,
-      reservation: a.reservation && textOf(a.source_url) ? str(a.reservation, 120) : null,
+      free_days: str(a.free_days, 120) && textOf(a.source_url) && numsIn(a.free_days, textOf(a.source_url)) ? str(a.free_days, 120) : null,
+      reservation: str(a.reservation, 140) && textOf(a.source_url) && numsIn(a.reservation, textOf(a.source_url)) ? str(a.reservation, 140) : null,
       buy_url: keepUrl(a.buy_url),
       source_url: textOf(a.source_url) ? a.source_url : (prices[0]?.source_url || null),
     },
     parking: {
       options,
-      note: pk.note && textOf(pk.source_url) ? str(pk.note, 140) : null,
+      note: str(pk.note, 160) && textOf(pk.source_url) && numsIn(pk.note, textOf(pk.source_url)) ? str(pk.note, 160) : null,
       source_url: textOf(pk.source_url) ? pk.source_url : (options[0]?.source_url || null),
     },
   };
@@ -7315,7 +7322,7 @@ async function handleAttractionVisitInfo(request, env, ctx) {
         fetched: ev.pages.size, raw_prices: Array.isArray(raw?.admission?.prices) ? raw.admission.prices.length : null,
         in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, stop: ask.stop || null, error: ask.error ? ask.error.slice(0, 200) : null,
       }).catch(() => {});
-      const _diag = { fetched: ev.pages.size, seen: ev.seen.size, raw_prices: Array.isArray(raw?.admission?.prices) ? raw.admission.prices.length : null, raw_parking: Array.isArray(raw?.parking?.options) ? raw.parking.options.length : null, in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, stop: ask.stop || null, pages: [...ev.pages.keys()].slice(0, 6), text: finalText.slice(0, 1500), kinds: ask.blocks.map((x) => x?.type).slice(0, 30), fetch0: JSON.stringify(ask.blocks.find((x) => x?.type === 'web_fetch_tool_result') || null).slice(0, 600) };
+      const _diag = { fetched: ev.pages.size, seen: ev.seen.size, raw_prices: Array.isArray(raw?.admission?.prices) ? raw.admission.prices.length : null, raw_parking: Array.isArray(raw?.parking?.options) ? raw.parking.options.length : null, in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, stop: ask.stop || null, pages: [...ev.pages.keys()].slice(0, 6) };
       return ask.error ? { ok: false, error: 'lookup_failed', detail: ask.error.slice(0, 200), official_site: info.official_site, _diag } : { ...out, _diag };
     })();
     if (ctx) ctx.waitUntil(work.catch(() => {}));
