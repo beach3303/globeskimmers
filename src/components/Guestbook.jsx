@@ -158,11 +158,18 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
       {/* Sign CTA */}
       {isAuthenticated ? (
         !composing ? (
-          <button
-            onClick={() => setComposing(true)}
-            className="w-full py-3 rounded-xl font-semibold text-white text-[calc(15px*var(--fs))]"
-            style={{ background: "linear-gradient(90deg,#667eea,#764ba2)" }}
-          >✍️ Sign the guestbook</button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setComposing(true)}
+              className="flex-1 py-3 rounded-xl font-semibold text-white text-[calc(15px*var(--fs))]"
+              style={{ background: "linear-gradient(90deg,#667eea,#764ba2)" }}
+            >✍️ Sign the guestbook</button>
+            {/* Every guestbook takes a doodle too (founder, 2026-10-03). */}
+            <button
+              onClick={() => setPad(true)} disabled={doodleBusy}
+              className="flex-none px-4 py-3 rounded-xl font-semibold text-[calc(15px*var(--fs))] border border-purple-300 bg-white text-purple-700 disabled:opacity-60"
+            >{doodleBusy ? "Posting…" : "🎨 Doodle"}</button>
+          </div>
         ) : (
           <div className="bg-white rounded-xl shadow-md p-4 space-y-3">
             {/* Header with an always-visible exit — so you can back out of writing

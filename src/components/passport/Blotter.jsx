@@ -290,8 +290,8 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
             className="flex-1 min-w-0 rounded-xl px-3 py-2.5"
             style={{ background: CARD, border: `1px solid ${RULE}`, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(15), color: INK }} />
           <button type="button" onClick={() => setPad(true)} aria-label="Draw a doodle instead"
-            className="flex-none rounded-xl p-2.5 active:scale-95 transition-transform" style={{ background: CARD, border: `1px solid ${RULE}` }}>
-            <PencilLine size={17} color="#0E7C86" />
+            className="flex-none rounded-xl px-2.5 py-2 active:scale-95 transition-transform inline-flex items-center gap-1" style={{ background: CARD, border: `1px solid ${RULE}`, color: "#0E7C86", fontSize: fs(12), fontWeight: 600 }}>
+            <PencilLine size={16} color="#0E7C86" /> Draw
           </button>
           <button type="button" onClick={() => sign(undefined)} disabled={busy}
             className="flex-none rounded-xl px-3.5 py-2.5 font-semibold active:scale-95 transition-transform"
