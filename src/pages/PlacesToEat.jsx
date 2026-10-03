@@ -532,10 +532,10 @@ function PhotoCarousel({ photos=[], rank, badges=[], height=180 }) {
     <div style={{position:"relative",background:"#F1F5F9"}}>
       {valid.length>0?(
         <div ref={ref} onScroll={()=>ref.current&&setCur(Math.round(ref.current.scrollLeft/ref.current.offsetWidth))} style={{display:"flex",overflowX:"auto",scrollSnapType:"x mandatory",scrollbarWidth:"none",height:H}}>
-          {valid.map((p,i)=><img key={i} src={p} onError={()=>setErrs(e=>({...e,[photos.indexOf(p)]:true}))} onClick={()=>setLightbox(true)} style={{minWidth:"100%",height:H,objectFit:"cover",scrollSnapAlign:"start",flexShrink:0,cursor:"zoom-in"}} alt=""/>)}
+          {valid.map((p,i)=><img key={i} src={p} loading={i===0?"eager":"lazy"} onError={()=>setErrs(e=>({...e,[photos.indexOf(p)]:true}))} onClick={()=>setLightbox(true)} style={{minWidth:"100%",height:H,objectFit:"cover",scrollSnapAlign:"start",flexShrink:0,cursor:"zoom-in"}} alt=""/>)}
         </div>
       ):(
-        <div style={{height:"120px",background:"linear-gradient(135deg,#EFF6FF,#DBEAFE)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(48px*var(--fs))"}}>🍽️</div>
+        <div style={{height:H,background:"linear-gradient(135deg,#EFF6FF,#DBEAFE)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(48px*var(--fs))"}}>🍽️</div>
       )}
       {/* Rank badge */}
       <div style={{position:"absolute",top:"10px",left:"10px",width:"36px",height:"36px",borderRadius:"50%",background:rank<=3?medalColors[rank-1]:BLUE,color:rank<=3?"#fff":"#fff",fontWeight:"800",fontSize:rank<=3?"18px":"13px",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{rankLabel}</div>

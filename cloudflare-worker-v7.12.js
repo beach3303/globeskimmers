@@ -561,16 +561,27 @@ async function handlePlaceDetails(request, env) {
   }
 }
 
+// Photo widths we serve (each is a separate Google charge + cache entry): a
+// request snaps UP to the nearest one, so nobody can bill arbitrary widths.
+const PHOTO_WIDTHS = [200, 400, 800, 1200];
 async function handlePhotoProxy(request, env) {
   const url = new URL(request.url);
   const photoName = url.searchParams.get('name');
-  const maxWidth = url.searchParams.get('maxWidth') || '400';
+  const asked = parseInt(url.searchParams.get('maxWidth') || '400', 10) || 400;
+  const maxWidth = String(PHOTO_WIDTHS.find((w) => w >= asked) || PHOTO_WIDTHS[PHOTO_WIDTHS.length - 1]);
 
   if (!photoName) {
     return jsonResponse({ error: 'Photo name required' }, 400);
   }
+  // Only a real Places photo name may reach a Google URL signed with our key.
+  if (!/^places\/[A-Za-z0-9_-]{10,300}\/photos\/[A-Za-z0-9_-]{10,1200}$/.test(photoName)) {
+    return jsonResponse({ error: 'Bad photo name' }, 400);
+  }
 
-  const cacheKey = `photo_${photoName}_${maxWidth}`;
+  // KV keys cap at 512 bytes; long photo names hash so they still cache (an
+  // uncacheable name was a fresh Google charge on every single view).
+  const rawKey = `photo_${photoName}_${maxWidth}`;
+  const cacheKey = rawKey.length > 480 ? `photo_h_${(await sha256Hex(photoName)).slice(0, 40)}_${maxWidth}` : rawKey;
 
   if (env.GLOBESKIMMERS_KV) {
     try {
@@ -589,7 +600,21 @@ async function handlePhotoProxy(request, env) {
   const photoUrl = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${maxWidth}&key=${apiKey}`;
 
   try {
-    const photoRes = await fetch(photoUrl);
+    let photoRes = await fetch(photoUrl);
+    if (!photoRes.ok && (photoRes.status === 400 || photoRes.status === 404)) {
+      // Google photo names go stale. Self-heal: ask the place for a fresh
+      // photo list (the photos field rides the IDs-only Details tier) and
+      // serve its first photo — then the bytes cache under the STALE key too,
+      // so every later request for this old link is a free KV hit.
+      const pid = photoName.split('/')[1];
+      try {
+        const fr = await fetch(`https://places.googleapis.com/v1/places/${pid}`, { headers: { 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': 'photos' } });
+        const fresh = fr.ok ? (await fr.json())?.photos?.[0]?.name : null;
+        if (fresh && /^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_-]+$/.test(fresh)) {
+          photoRes = await fetch(`https://places.googleapis.com/v1/${fresh}/media?maxWidthPx=${maxWidth}&key=${apiKey}`);
+        }
+      } catch { /* fall through to not-found */ }
+    }
     if (!photoRes.ok) {
       return jsonResponse({ error: 'Photo not found' }, 404);
     }
@@ -12692,18 +12717,29 @@ async function handleOwnedFinder(request, env, rpc, tag) {
 // Resolve an owned (UUID) place id → a Google place id (cached 180d), for on-tap
 // panels that still need Google data (reviews-based café work profile, AI details).
 // Returns the id unchanged if it's already a Google id, or null if unresolvable.
+// A text search for an owned place's Google twin, restricted to a ~700 m box
+// around our coordinates (a bias let same-named places across town win).
+function ownedSearchPayload(name, lat, lng) {
+  const payload = { textQuery: String(name) };
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    const dLat = 0.0032, dLng = 0.0032 / Math.max(0.2, Math.cos(lat * Math.PI / 180));
+    payload.locationRestriction = { rectangle: { low: { latitude: lat - dLat, longitude: lng - dLng }, high: { latitude: lat + dLat, longitude: lng + dLng } } };
+  }
+  return payload;
+}
+// Photos/match are trusted only within this distance of our own coordinates.
+const OWNED_MATCH_MAX_M = 250;
 async function resolveOwnedGid(env, id, name, lat, lng) {
   id = String(id || '');
   if (!id) return null;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id)) return id; // already a Google id
   const mapKey = `owned2gid:${id}`;
   let gid = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(mapKey).catch(() => null) : null;
+  if (gid === 'none') return null;
   if (gid) return gid;
   if (!name || !env.GOOGLE_API_KEY) return null;
   try {
-    const payload = { textQuery: String(name) };
-    const la = parseFloat(lat), ln = parseFloat(lng);
-    if (Number.isFinite(la) && Number.isFinite(ln)) payload.locationBias = { circle: { center: { latitude: la, longitude: ln }, radius: 800 } };
+    const payload = ownedSearchPayload(name, parseFloat(lat), parseFloat(lng));
     const sr = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST', headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': 'places.id', 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -12740,10 +12776,10 @@ async function enrichOwnedOne(env, origin, b) {
   if (!gid && id) {
     const mapKey = `owned2gid:${id}`;
     gid = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(mapKey).catch(() => null) : null;
+    if (gid === 'none') return { matched: false, photos: [], hours: null };
     if (!gid && name && env.GOOGLE_API_KEY) {
       try {
-        const payload = { textQuery: name };
-        if (Number.isFinite(lat) && Number.isFinite(lng)) payload.locationBias = { circle: { center: { latitude: lat, longitude: lng }, radius: 800 } };
+        const payload = ownedSearchPayload(name, lat, lng);
         const sr = await fetch('https://places.googleapis.com/v1/places:searchText', {
           method: 'POST', headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': 'places.id', 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -12766,6 +12802,17 @@ async function enrichOwnedOne(env, origin, b) {
     if (!dr.ok) return { matched: false, photos: [], hours: null };
     place = normalizePlace(await dr.json(), origin, true);
     await setInCache(env, dk, place, CONFIG.CACHE_TTL.DETAILS);
+  }
+
+  // The twin must actually be HERE: a match farther than OWNED_MATCH_MAX_M is a
+  // different place with the same name — remember "no match" for 30 days
+  // (so it never bills again) and show no one else's photos.
+  if (!looksGoogle && Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(place.latitude) && Number.isFinite(place.longitude)) {
+    const meters = haversineMilesLoc(lat, lng, place.latitude, place.longitude) * 1609.34;
+    if (meters > OWNED_MATCH_MAX_M) {
+      if (env.GLOBESKIMMERS_KV && id) await env.GLOBESKIMMERS_KV.put(`owned2gid:${id}`, 'none', { expirationTtl: 30 * 24 * 60 * 60 }).catch(() => {});
+      return { matched: false, photos: [], hours: null, reason: 'too_far' };
+    }
   }
 
   // Photos: Google's real photos of this exact place (owner + customer), cached

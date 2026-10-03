@@ -238,7 +238,9 @@ function ATMCardTablet({ atm, index, onShowOnMap, isHighlighted, cardRef, forceE
   // owned→Google once; details+photos cached 90d, so repeat views are free. Skips
   // records that already have a photo (e.g. Google-sourced venues).
   useEffect(() => {
-    if (enriched || (atm.photos && atm.photos.length)) return;
+    // Owned rows only: a Google record without photos is Google saying it has
+    // none — asking again bought the same empty list at Details prices.
+    if (enriched || (atm.photos && atm.photos.length) || !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(atm.id || atm.placeId || ''))) return;
     callWorker('places/enrich-owned', { id: atm.id || atm.placeId, name: atm.displayName?.text || atm.name, lat: atm.lat, lng: atm.lng, maxPhotos: 3 })
       .then(({ data }) => { if (data && data.matched) setEnriched(data); }).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

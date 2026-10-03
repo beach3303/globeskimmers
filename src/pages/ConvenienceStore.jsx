@@ -234,7 +234,9 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
     // Enrich when the record has no photo yet (owned records carry none). Source-
     // agnostic: convenience owned rows tag `_source`, not `source`, so a source
     // check silently skipped them and no photo ever loaded.
-    if (enriched || (rawStore.photos && rawStore.photos.length)) return;
+    // Owned rows only (uuid ids — robust to the _source/source split): a Google
+    // record without photos already told us it has none.
+    if (enriched || (rawStore.photos && rawStore.photos.length) || !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(rawStore.id || rawStore.placeId || ''))) return;
     callWorker('places/enrich-owned', {
       id: rawStore.id || rawStore.placeId,
       name: rawStore.name || rawStore.displayName?.text,

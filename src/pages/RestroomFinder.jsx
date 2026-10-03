@@ -150,14 +150,14 @@ function RestroomCardTablet({ r, index, onShowOnMap, isHighlighted, cardRef, for
   const fs = (n) => `calc(${n}px*var(--fs))`;
 
   useEffect(() => { if (forceExpanded) setExpanded(true); }, [forceExpanded]);
-  // On first expand of an OWNED restroom, fetch real Google photos + hours
-  // (resolves owned→Google once, cached). Keeps the list free; only opened
-  // cards cost. The RestroomAIDetails panel below still receives the raw `r`.
+  // An OWNED restroom fetches its real photo + hours when the card mounts (like
+  // Eat/Coffee), so the list shows photos — not only after a tap to expand.
+  // Owned→Google resolves once and is cached. RestroomAIDetails still gets `r`.
   useEffect(() => {
-    if (!expanded || enriched || r.source !== 'owned') return;
+    if (enriched || r.source !== 'owned') return;
     callWorker('places/enrich-owned', { id: r.id || r.placeId, name: r.name, lat: r.lat, lng: r.lng, maxPhotos: 3 })
       .then(({ data }) => { if (data && data.matched) setEnriched(data); }).catch(() => {});
-  }, [expanded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const name = r.name || "Restroom";
   const address = r.formattedAddress || "";
