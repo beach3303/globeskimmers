@@ -13143,6 +13143,28 @@ function ppCcForCountryName(name) {
   return PP_CC_BY_NAME.get(String(name).toLowerCase().trim()) || null;
 }
 
+// Server copy of src/lib/stampRadius.js (keep the two in step): metres within
+// which a GPS fix counts as "you were there", by footprint, else by category.
+const PP_FOOTPRINTS = [
+  [/national_park|national_forest|nature_reserve|wildlife_refuge/, 6000],
+  [/ski_resort|state_park|regional_park|botanical_garden|arboretum/, 2500],
+  [/beach|lake|waterfall|mountain|natural_feature|island/, 1800],
+  [/theme_park|amusement_park|water_park|resort_world/, 900],
+  [/airport|international_airport/, 2500],
+  [/university|college|campus|fairground|convention_center/, 800],
+  [/zoo|aquarium|safari|golf_course|cemetery|historical_park|archaeolog/, 600],
+  [/(?:^|[^a-z])(?:park|garden|viewpoint)(?![a-z])/, 600],
+  [/stadium|arena|race_track|marina|pier|market|bazaar|souk/, 400],
+  [/shopping_mall|department_store|casino|monastery|temple_complex/, 350],
+];
+function ppStampRadius(place) {
+  const explicit = Number(place?.footprint_radius_m);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  const hay = String(place?.category || '').toLowerCase();
+  if (hay) for (const [pattern, metres] of PP_FOOTPRINTS) if (pattern.test(hay)) return metres;
+  return 250;
+}
+
 // Create or update a stamp (idempotent per user+kind+entity). Keeps the STRONGEST
 // verification when re-stamping (gps > photo > self).
 async function handlePassportStamp(request, env, ctx) {
@@ -13189,6 +13211,27 @@ async function handlePassportStamp(request, env, ctx) {
             if (hrs > 0 && miles / hrs > 620) verified = 'self';
           }
         } catch { /* best-effort */ }
+      }
+    }
+
+    // Distance check (founder, 2026-10-03: stamp only when GPS shows you're AT
+    // the attraction). Newer apps send the fix they took (`fix` {lat,lng,acc} —
+    // used for this check only, never stored). A recommended attraction is
+    // measured against OUR coordinates and footprint, not the client's. Builds
+    // that send no fix keep the IP-country and travel-speed checks above.
+    const fix = b.fix && typeof b.fix === 'object' ? { lat: Number(b.fix.lat), lng: Number(b.fix.lng), acc: Number(b.fix.acc) } : null;
+    if (kind === 'attraction' && verified === 'gps' && fix && Number.isFinite(fix.lat) && Number.isFinite(fix.lng)) {
+      let pLat = lat, pLng = lng, radius = ppStampRadius({ category: b.category });
+      if (entityId && entityId.length <= 200 && env.ATTRACTIONS_DB) {
+        const r = await env.ATTRACTIONS_DB.prepare('SELECT lat, lng, category, footprint_radius_m FROM attractions WHERE id = ?1 LIMIT 1').bind(entityId).first().catch(() => null);
+        if (r && Number.isFinite(+r.lat) && Number.isFinite(+r.lng)) { pLat = +r.lat; pLng = +r.lng; radius = ppStampRadius(r); }
+      }
+      if (Number.isFinite(pLat) && Number.isFinite(pLng)) {
+        const slack = Number.isFinite(fix.acc) && fix.acc >= 0 ? Math.min(fix.acc, 100) : 50;
+        const meters = haversineMilesLoc(pLat, pLng, fix.lat, fix.lng) * 1609.34;
+        if (meters > radius + slack) {
+          return jsonResponse({ error: 'Your GPS doesn\u2019t show you at this place yet \u2014 stamping opens when you\u2019re here', code: 'not_here', distance_m: Math.round(meters), radius_m: radius }, 409);
+        }
       }
     }
 
