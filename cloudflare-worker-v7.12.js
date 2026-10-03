@@ -14586,6 +14586,7 @@ const HANDLE_RESERVED = new Set(['admin', 'administrator', 'globeskimmers', 'glo
 // 'hell' would hit michelle, 'ass' hits cassandra, 'hamas' hits bahamas —
 // those live in EXACT).
 const HANDLE_BLOCKED_EXACT = new Set([
+  'osama', 'jihadgo', // founder override 2026-10-03: blocked by name
   '1488', '666', 'al_qaeda', 'amk', 'anal', 'antichrist', 'arsch', 'arse', 'ass', 'baphomet',
   'beaner', 'beelzebub', 'bellend', 'bloods', 'boko', 'boner', 'bullshit', 'camorra', 'cartel',
   'cazzo', 'chinga', 'chink', 'chuj', 'chut', 'cocaine', 'cock', 'connard', 'coon', 'cosanostra',
@@ -14602,6 +14603,7 @@ const HANDLE_BLOCKED_EXACT = new Set([
   'thedevil', 'thot', 'tits', 'tranny', 'twat', 'unabomber', 'verga', 'wank', 'wetback', 'yakuza',
 ]);
 const HANDLE_BLOCKED_SUB = [
+  'jihad', // founder override 2026-10-03
   'alqaeda', 'alqaida', 'alshabaab', 'arschloch', 'asshole', 'bestiality', 'bhenchod', 'binladen',
   'bitch', 'blowjob', 'blyat', 'bokoharam', 'buceta', 'cabron', 'caonima', 'caralho', 'childporn',
   'chutiya', 'cocksucker', 'cunt', 'daesh', 'dickhead', 'dildo', 'encule', 'faggot', 'filhodaputa',
