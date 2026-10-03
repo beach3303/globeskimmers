@@ -164,8 +164,11 @@ free-form unlimited favorites (founder removes their two via ✕), dreams → ON
 THE QUEUE — founder-agreed 2026-10-03 (build order; strike as shipped):
   [x] Finder photos phase 1 (match within 250 m, self-healing proxy, locked widths/names,
       owned-only enrich, restroom photos on load, lazy carousel) — live + verified
-  [ ] Airport trip notes: "what was this trip for?" on airport stamps — private by default,
-      shareable later (founder 2026-10-03)
+  [x] Airport trip notes: "what was this trip for?" on airport stamps — private by default,
+      shareable later (founder 2026-10-03). Live 40c0be8: asked right after the arrival
+      stamp, editable in the stamp sheet (airport + border), "Show on my shared passport"
+      passes text moderation; the public booklet strips unshared notes server-side.
+      Ships to phones with the next OTA.
   [ ] Top 3 dishes, counted honestly: AI names the dishes, CODE counts mentions in the
       reviews we have ("in 4 of 5 recent reviews"); our own travelers' dish posts add
       "ordered by N travelers" (the founder's "mentioned 50 times" grows from our data)

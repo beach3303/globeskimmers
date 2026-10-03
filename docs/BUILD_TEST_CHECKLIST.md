@@ -1090,3 +1090,15 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Gates each step: node --check, eslint, eslint no-undef, build exit 0, cap copy, sim
   clean-install boot with bundle-content check.
 - Founder: `git pull && npm run cap:sync && npm run ota` to ship the app side.
+
+## 2026-10-03 (night) — Trip notes on arrival stamps (40c0be8)
+- Migration 20261003210000_stamp_trip_note (passport_stamps.note, note_public default
+  false) applied by CI. Worker POST /passport/stamp/note live (401 unsigned, verified).
+- After an airport stamp: "What brings you to {city}?" — saved owner-only. The stamp sheet
+  (airport + border stamps) edits it; "Show on my shared passport" runs text moderation
+  first (422 + nothing saved if refused). The public booklet strips every unshared note.
+- Gates: node --check, eslint, eslint no-undef (touched + app-wide = 0), build exit 0,
+  cap copy, sim clean-install Release boot to sign-in, bundle contains the new route.
+- To test on a phone (after OTA): land at an airport or use the Passport arrival prompt →
+  write a note → Skip/Save; open the stamp → toggle sharing → view your public link.
+- Founder: `git pull && npm run cap:sync && npm run ota` to ship the app side.
