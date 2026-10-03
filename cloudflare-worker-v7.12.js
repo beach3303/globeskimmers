@@ -7302,8 +7302,13 @@ async function handleActivityOne(request, env) {
 // Sonnet 5, not Opus: a lookup reads several whole pages (Opus 5 measured 138k input
 // tokens on Battleship Iowa), and code re-checks every amount against the page text.
 const VISIT_INFO_MODEL = 'claude-sonnet-5';
-const VISIT_INFO_VERSION = 'v3';  // v2: fetch-only from the official site when known (v1's search + code-run fetches burned the budget on rejected URLs)
-const VISIT_INFO_TTL = 30 * 86400, VISIT_INFO_EMPTY_TTL = 3 * 86400;
+const VISIT_INFO_VERSION = 'v4';  // v4: + web search INSIDE the official site, cited excerpts as evidence (sites built with JavaScript, like Universal's, fetch as an empty shell); v2: fetch-only from the official site when known (v1's open search burned the budget on rejected URLs)
+// Kept 90 days (founder, 2026-10-03: "every 3 months"); 3 days when nothing was found.
+const VISIT_INFO_TTL = 90 * 86400, VISIT_INFO_EMPTY_TTL = 3 * 86400;
+// Never a price source — sellers' marked-up or bundled prices (search filter + code check).
+const VISIT_RESELLERS = ['viator.com', 'getyourguide.com', 'klook.com', 'tiqets.com', 'headout.com', 'musement.com', 'undercovertourist.com', 'getawaytoday.com', 'tripadvisor.com', 'expedia.com', 'groupon.com', 'go-city.com', 'citypass.com', 'stubhub.com', 'vividseats.com', 'ticketnetwork.com'];
+// An "official site" on one of these is a profile page, not the venue's own site.
+const VISIT_PLATFORMS = ['facebook.com', 'instagram.com', 'x.com', 'twitter.com', 'linktr.ee', 'google.com', 'yelp.com', 'wikipedia.org'];
 const VISIT_INFO_DAILY_CAP = 150;   // fresh lookups per day, all travelers
 const VISIT_INFO_USER_CAP = 20;     // fresh lookups per traveler per day
 const VISIT_INFO_ANON_CAP = 20;     // fresh lookups per day without sign-in (all networks)
@@ -7311,9 +7316,11 @@ const VISIT_INFO_IP_CAP = 5;        // … and per network
 const VISIT_AUDIENCES = new Set(['adult', 'child', 'youth', 'student', 'senior', 'military', 'resident', 'family', 'other']);
 const VISIT_INFO_PROMPT = [
   'You find current visitor prices for ONE attraction, for a travel app that never guesses.',
-  'Start from the OFFICIAL website when one is given: web_fetch it, then follow ITS links to the tickets/admission page and the parking (or "plan your visit", "visit", "directions", "FAQ") page. Only fetch URLs that appear in a page you already fetched or in a search result — never guess a URL. With no official website given, use web_search once to find it. Fetch at most 5 pages.',
-  'Report ONLY what a page you fetched states. Never use memory, never estimate, never average. Prefer the official site; use a third-party page only when the official site states nothing, and never a reseller\'s marked-up price.',
-  'For every price, give source_url = the exact URL of the fetched page that states it, and amount_text exactly as written there. When prices vary by date, give the lowest "from" price the page states and say "from — varies by date" in note.',
+  'Start from the OFFICIAL website when one is given: web_fetch it, then follow ITS links to the tickets/admission page and the parking (or "plan your visit", "visit", "directions", "FAQ") page. Only fetch URLs that appear in a page you already fetched or in a search result — never guess a URL. With no official website given, use web_search to find it. Fetch at most 5 pages.',
+  'Many official sites are built with JavaScript and fetch as an empty shell. When an official website is given, web_search searches ONLY that site: search it for the attraction\'s ticket prices and its parking whenever a fetched page shows no prices — right away if the home page fetches nearly empty.',
+  'Report ONLY what a page you fetched or a search result you cite states. Never use memory, never estimate, never average. Prefer the official site; use a third-party page only when the official site states nothing, and never a reseller\'s marked-up price.',
+  'Before the JSON, write one short sentence for each price and parking fact you report, quoting the amount exactly as the source writes it, and cite the search result it comes from (facts from a fetched page need no citation). A fact with neither a citation nor a fetched page is dropped.',
+  'For every price, give source_url = the exact URL of the fetched page or the cited search result that states it, and amount_text exactly as written there. When prices vary by date, give the lowest "from" price the source states and say "from — varies by date" in note.',
   'Audience is one of: adult, child, youth, student, senior, military, resident, family, other. Put the age range or condition in label (e.g. "Child (3–9)", "Senior (62+)").',
   'Military, veteran, teacher, first-responder, resident, AAA or similar offers go in discounts unless they have their own price.',
   'If admission is free, set free=true. If something is not stated, use null or an empty list.',
@@ -7344,10 +7351,12 @@ async function visitOfficialSite(row) {
   } catch { return null; }
 }
 // One Claude turn with web search + fetch; continues across pause_turn.
-async function visitAsk(env, userText, withSearch) {
+// host: the official site's domain — web search then searches only that site. No
+// host: search anywhere except resellers (to find the official site first).
+async function visitAsk(env, userText, host) {
   const messages = [{ role: 'user', content: userText }];
   const blocks = [];
-  let usage = { input_tokens: 0, output_tokens: 0 };
+  let usage = { input_tokens: 0, output_tokens: 0, searches: 0 };
   for (let round = 0; round < 4; round++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -7356,7 +7365,7 @@ async function visitAsk(env, userText, withSearch) {
         model: VISIT_INFO_MODEL, max_tokens: 4000, system: VISIT_INFO_PROMPT,
         output_config: { effort: 'low' },
         tools: [
-          ...(withSearch ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: 2 }] : []),
+          { type: 'web_search_20250305', name: 'web_search', max_uses: 3, ...(host ? { allowed_domains: [host] } : { blocked_domains: VISIT_RESELLERS }) },
           { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 5, max_content_tokens: 8000 },
         ],
         messages,
@@ -7364,7 +7373,7 @@ async function visitAsk(env, userText, withSearch) {
     });
     if (!res.ok) return { error: `anthropic ${res.status}: ${(await res.text().catch(() => '')).slice(0, 300)}`, blocks, usage };
     const d = await res.json();
-    usage = { input_tokens: usage.input_tokens + (d.usage?.input_tokens || 0), output_tokens: usage.output_tokens + (d.usage?.output_tokens || 0) };
+    usage = { input_tokens: usage.input_tokens + (d.usage?.input_tokens || 0), output_tokens: usage.output_tokens + (d.usage?.output_tokens || 0), searches: usage.searches + (d.usage?.server_tool_use?.web_search_requests || 0) };
     blocks.push(...(d.content || []));
     if (d.stop_reason !== 'pause_turn') return { blocks, usage, stop: d.stop_reason };
     messages.push({ role: 'assistant', content: d.content });
@@ -7385,12 +7394,20 @@ function visitEvidence(blocks) {
       if (k) seen.add(k);
     } else if (b?.type === 'web_search_tool_result' && Array.isArray(b.content)) {
       for (const r of b.content) { const k = visitUrlKey(r?.url); if (k) seen.add(k); }
+    } else if (b?.type === 'text' && Array.isArray(b.citations)) {
+      // A search result's own words, quoted by the API (up to 150 characters) —
+      // evidence for its URL exactly like a fetched page's text.
+      for (const c of b.citations) {
+        const k = visitUrlKey(c?.url);
+        if (k && c?.cited_text) { pages.set(k, (pages.get(k) || '') + '\n' + String(c.cited_text)); seen.add(k); }
+      }
     }
   }
   return { pages, seen };
 }
+const visitOnList = (u, list) => { const h = visitHost(u); return !!h && list.some((d) => h === d || h.endsWith('.' + d)); };
 function visitVerify(raw, ev) {
-  const textOf = (u) => ev.pages.get(visitUrlKey(u)) || null;
+  const textOf = (u) => (visitOnList(u, VISIT_RESELLERS) ? null : ev.pages.get(visitUrlKey(u)) || null);
   const str = (v, n) => (typeof v === 'string' && v.trim() && !/^https?:\/\//i.test(v.trim()) ? v.trim().slice(0, n) : null);
   // Every number in a line must appear in the page it cites.
   const numsIn = (line, t) => !!line && !!t && (line.match(/\d+(?:[.,]\d+)?/g) || []).every((n) => visitAmountIn(t, Number(n.replace(',', '.'))));
@@ -7490,7 +7507,8 @@ async function handleAttractionVisitInfo(request, env, ctx) {
     const work = (async () => {
       const site = await visitOfficialSite(row);
       const where = row.address || [row.city, row.country].filter(Boolean).join(', ');
-      const ask = await visitAsk(env, `Attraction: ${row.name}${where ? `\nWhere: ${where}` : ''}${site ? `\nOfficial website (from Wikidata/our records): ${site}` : ''}\nFind admission prices by audience, discounts, and parking with prices.`, !site);
+      const host = site && !visitOnList(site, VISIT_PLATFORMS) ? visitHost(site) : null;
+      const ask = await visitAsk(env, `Attraction: ${row.name}${where ? `\nWhere: ${where}` : ''}${site ? `\nOfficial website (from Wikidata/our records): ${site}` : ''}\nFind admission prices by audience, discounts, and parking with prices.`, host);
       const finalText = ask.blocks.filter((x) => x?.type === 'text').map((x) => x.text).join('\n');
       const m = finalText.match(/<json>([\s\S]*?)<\/json>/);
       let raw = null;
@@ -7505,7 +7523,7 @@ async function handleAttractionVisitInfo(request, env, ctx) {
       await gbLogEvent(env, 'visit_info_lookup', {
         id, found, prices: info.admission.prices.length, parking: info.parking.options.length,
         fetched: ev.pages.size, raw_prices: Array.isArray(raw?.admission?.prices) ? raw.admission.prices.length : null,
-        in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, stop: ask.stop || null, error: ask.error ? ask.error.slice(0, 200) : null,
+        in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, searches: ask.usage?.searches || 0, stop: ask.stop || null, error: ask.error ? ask.error.slice(0, 200) : null,
       }).catch(() => {});
       const _diag = { fetched: ev.pages.size, seen: ev.seen.size, raw_prices: Array.isArray(raw?.admission?.prices) ? raw.admission.prices.length : null, raw_parking: Array.isArray(raw?.parking?.options) ? raw.parking.options.length : null, in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0, stop: ask.stop || null, pages: [...ev.pages.keys()].slice(0, 6) };
       return ask.error ? { ok: false, error: 'lookup_failed', detail: ask.error.slice(0, 200), official_site: info.official_site, _diag } : { ...out, _diag };
