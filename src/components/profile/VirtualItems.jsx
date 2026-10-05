@@ -25,6 +25,7 @@ const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13,.12)", IVORY = "#FFFCF7";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 const PETS_BASE = "https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/pets";
+const GEAR_BASE = "https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/gear";
 
 const svgFor = (kind, variant, colorKey) => {
   const c = colorOf(colorKey);
@@ -37,10 +38,20 @@ const svgFor = (kind, variant, colorKey) => {
 function GearArt({ kind, item, width, stickersBySid, edit = false, selected = null, onSelect = null, boxRef = null }) {
   const variant = item?.variant || "tumbler";
   const placements = item?.placements || [];
+  // The founder's photo-real render wins when one is on R2 (per item, per
+  // color: gear/<item>/<color>.png); the drawn shape is the fallback.
+  const shapeKey = kind === "laptop" ? "laptop" : variant;
+  const renderUrl = `${GEAR_BASE}/${shapeKey}/${item?.color || "blue"}.png`;
+  const [artFail, setArtFail] = useState(false);
+  useEffect(() => { setArtFail(false); }, [renderUrl]);
   return (
     <div ref={boxRef} style={{ position: "relative", width, height: width, touchAction: edit ? "none" : undefined }}>
-      <svg viewBox="0 0 340 340" width={width} height={width} style={{ display: "block" }} aria-hidden="true"
-        dangerouslySetInnerHTML={{ __html: svgFor(kind, variant, item?.color) }} />
+      {!artFail ? (
+        <img src={renderUrl} alt="" onError={() => setArtFail(true)} style={{ width, height: width, objectFit: "contain", display: "block" }} />
+      ) : (
+        <svg viewBox="0 0 340 340" width={width} height={width} style={{ display: "block" }} aria-hidden="true"
+          dangerouslySetInnerHTML={{ __html: svgFor(kind, variant, item?.color) }} />
+      )}
       {placements.map((pl) => {
         const st = stickersBySid[pl.sid];
         if (!st) return null;
@@ -64,11 +75,16 @@ function GearArt({ kind, item, width, stickersBySid, edit = false, selected = nu
 
 // A pet: the uploaded breed render when R2 has one, else the drawn chibi.
 export function PetArt({ buddy, width }) {
-  const [artFail, setArtFail] = useState(false);
+  // Render ladder: coat-specific breed render → breed render → the drawn chibi.
+  const [step, setStep] = useState(0);
   const coat = coatOf(buddy.species, buddy.coat);
-  const url = `${PETS_BASE}/${buddy.species}/${buddy.breed || "any"}/${buddy.pose}.webp`;
-  if (!artFail) {
-    return <img src={url} alt="" onError={() => setArtFail(true)} style={{ width, height: width, objectFit: "contain", display: "block" }} />;
+  const urls = [
+    buddy.coat ? `${PETS_BASE}/${buddy.species}/${buddy.breed || "any"}/${buddy.coat}/${buddy.pose}.webp` : null,
+    `${PETS_BASE}/${buddy.species}/${buddy.breed || "any"}/${buddy.pose}.webp`,
+  ].filter(Boolean);
+  useEffect(() => { setStep(0); }, [buddy.species, buddy.breed, buddy.coat, buddy.pose]);
+  if (step < urls.length) {
+    return <img src={urls[step]} alt="" onError={() => setStep(step + 1)} style={{ width, height: width, objectFit: "contain", display: "block" }} />;
   }
   const fn = PET_SHAPES[buddy.species] || PET_SHAPES.dog;
   return <svg viewBox="0 0 340 340" width={width} height={width} style={{ display: "block" }} aria-hidden="true"

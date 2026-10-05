@@ -1536,3 +1536,12 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   carries the newest stamp id per destination.
 - Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0. Ships: worker +
   migration on push; app with `npm run ota`.
+
+## 2026-10-05 — Virtual items & pets: the founder's renders take over on upload
+- Founder: the drawn art isn't realistic enough — PNG renders coming.
+- App: GearArt tries R2 gear/<item>/<color>.png per color (32 files) before the drawn shape;
+  PetArt ladder: pets/<species>/<breed>/<coat>/<pose> → pets/<species>/<breed>/<pose> → chibi.
+  The art server is already extension-forgiving (webp/png/jpg).
+- Kit: docs/VIRTUAL_ITEMS_ART_KIT.md + scripts/stamp-art/virtual-items-filelist.csv
+  (1,205 exact paths; starter_set=YES marks the ~160-file first batch).
+- Gates: eslint clean, no-undef 0, build 0.
