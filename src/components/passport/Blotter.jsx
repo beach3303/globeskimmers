@@ -328,7 +328,8 @@ const INKS = ["#2B4A7E", "#B0472F", "#2E6B4E", "#9A6F1E"];
 // A starter line in handwriting, small in the top-left corner (founder,
 // 2026-10-05: the guestbook pad opens with "I was here!" so it reads as a
 // guestbook and leaves the page for a flower, a name, an "I love this"). It is
-// part of the drawing and posts with it; undo and the eraser leave it alone.
+// part of the drawing and posts with it; undo and the eraser leave it alone,
+// and its little × takes it off the page.
 const HAND = '"Caveat", "Bradley Hand", "Noteworthy", cursive';
 export function DoodlePad({ onClose, onPost, busy, title = "Draw in the margin", eyebrow = null, note = null, starter = null }) {
   const canvasRef = useRef(null);
@@ -338,6 +339,9 @@ export function DoodlePad({ onClose, onPost, busy, title = "Draw in the margin",
   const [ink, setInk] = useState(INKS[0]);
   const inkRef = useRef(INKS[0]);
   const [nStrokes, setNStrokes] = useState(0);
+  const [showStarter, setShowStarter] = useState(!!starter);
+  const starterOn = useRef(!!starter);
+  const [starterW, setStarterW] = useState(0);   // drawn width, to place its ×
   useEffect(() => { inkRef.current = ink; }, [ink]);
 
   const redraw = () => {
@@ -348,7 +352,7 @@ export function DoodlePad({ onClose, onPost, busy, title = "Draw in the margin",
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = CARD;
     ctx.fillRect(0, 0, cv.width / dpr, cv.height / dpr);
-    if (starter) {
+    if (starter && starterOn.current) {
       ctx.save();
       ctx.translate(14, 31);
       ctx.rotate(-0.07);
@@ -356,6 +360,7 @@ export function DoodlePad({ onClose, onPost, busy, title = "Draw in the margin",
       ctx.font = `600 23px ${HAND}`;
       ctx.fillText(starter, 0, 0);
       const w = ctx.measureText(starter).width;
+      setStarterW((prev) => (Math.abs(prev - w) > 1 ? w : prev));
       ctx.strokeStyle = INKS[0]; ctx.lineWidth = 1.6; ctx.lineCap = "round";
       ctx.beginPath(); ctx.moveTo(2, 7); ctx.quadraticCurveTo(w * 0.5, 11, w + 2, 5); ctx.stroke();
       ctx.restore();
@@ -424,8 +429,18 @@ export function DoodlePad({ onClose, onPost, busy, title = "Draw in the margin",
           </button>
         </div>
         {note && <p className="mb-2.5" style={{ color: INK3, fontSize: fs(13), lineHeight: 1.4 }}>{note}</p>}
-        <canvas ref={canvasRef} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onPointerLeave={up}
-          className="w-full rounded-xl" style={{ border: "1.5px solid #D9CCA9", background: CARD, touchAction: "none", display: "block" }} />
+        <div className="relative">
+          <canvas ref={canvasRef} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onPointerLeave={up}
+            className="w-full rounded-xl" style={{ border: "1.5px solid #D9CCA9", background: CARD, touchAction: "none", display: "block" }} />
+          {showStarter && starterW > 0 && (
+            <button type="button" aria-label={`Remove “${starter}”`}
+              onClick={() => { starterOn.current = false; setShowStarter(false); redraw(); }}
+              className="absolute flex items-center justify-center rounded-full"
+              style={{ left: 14 + starterW + 9, top: Math.max(2, 10 - starterW * 0.07), width: 22, height: 22, background: CARD, border: `1px solid ${RULE}` }}>
+              <X size={11} color={INK3} strokeWidth={2.4} />
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-2 mt-2.5">
           {INKS.map((c) => (
             <button key={c} type="button" onClick={() => setInk(c)} aria-label={`Ink ${c}`} aria-pressed={ink === c}

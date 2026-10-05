@@ -1383,7 +1383,8 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   isn't dimmed under it.
 - Guestbook's pad now reads: "GUESTBOOK · <place>" / "Sign the guestbook" / "Draw your name,
   a little art, or something you loved about this place." and opens with a small handwritten
-  "I was here!" (Caveat, navy ink, top-left) that posts with the drawing; undo/eraser leave it,
+  "I was here!" (Caveat, navy ink, top-left) that posts with the drawing; its small × removes it
+  (founder, 2026-10-05); undo/eraser leave it,
   and a stroke of your own is still required to post. Caveat 600 added to the Google Fonts
   link in index.html (fallback Bradley Hand / cursive). Passport-page doodles keep "Draw in
   the margin" and a blank page.
