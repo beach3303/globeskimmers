@@ -21,7 +21,7 @@ import { resizePhoto } from "@/lib/resizePhoto";
 import { useDismissable } from "@/lib/dismissStack";
 import PostcardCompose from "@/components/passport/PostcardCompose";
 import { socialFollow, setStampNote, setStampVisibility, setStampArt } from "@/lib/passport";
-import { memorialFor } from "@/lib/memorials";
+import { respectPlaceFor } from "@/lib/respectPlaces";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -101,7 +101,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   const stampPos = stamp.meta?.stamp_pos === "top" || stamp.meta?.stamp_pos === "bottom" ? stamp.meta.stamp_pos : "auto";
   const place = [stamp.city, stamp.region, stamp.country].filter(Boolean).join(", ");
   // A memorial site (founder, 2026-10-04): the owner picks illustrated or text only.
-  const memorial = memorialFor(stamp);
+  const memorial = respectPlaceFor(stamp)?.kind === "memorial";
   const artStyle = stamp.meta?.art === "plain" ? "plain" : "art";
 
   const onPick = async (e) => {

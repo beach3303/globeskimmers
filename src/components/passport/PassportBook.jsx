@@ -9,7 +9,7 @@ import { SHARE_TARGETS, targetById, shareUseLabel, composeShare, MAX_PHOTO_SLIDE
 import { getShareLink } from "@/lib/passport";
 import { countryCode } from "@/lib/countries";
 import { stampArtUrl } from "@/lib/stampArt";
-import { isPlainArt } from "@/lib/memorials";
+import { isPlainArt } from "@/lib/respectPlaces";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
 import { isPhotoFirst } from "@/lib/passport";
 import { calmEdge } from "@/lib/photoEdge";
@@ -96,7 +96,7 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
   const rot = ((idx * 47 + 3) % 9) - 4;   // deterministic -4..+4°
   const nudge = ((idx * 53) % 26) - 13;    // deterministic -13..+12px horizontal
   // A memorial stamp its owner chose to keep as text only prints typographic.
-  const art = stamp.kind === "country" || isPlainArt(stamp) ? null : stampArtUrl(stamp.name);
+  const art = stamp.kind === "country" || isPlainArt(stamp) ? null : stampArtUrl(stamp.name, { entityId: stamp.entity_id, country: stamp.country });
   const showArt = !!art && !artFail;
   const flag = stamp.kind === "country" ? flagFor(stamp.country || stamp.name) : null;
   // No bespoke art and not a country -> the typographic stamp carries its own

@@ -12,8 +12,8 @@ import React, { useEffect, useState } from "react";
 import { DollarSign, MapPin } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { addStamp, metersBetween, setStampNote, setStampArt } from "@/lib/passport";
-import { memorialFor } from "@/lib/memorials";
-import MemorialStampSheet from "@/components/passport/MemorialStampSheet";
+import { respectPlaceFor } from "@/lib/respectPlaces";
+import RespectPlaceSheet from "@/components/passport/RespectPlaceSheet";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { resolveStampVariant } from "@/lib/stampVariants";
 import { countryCode } from "@/lib/countries";
@@ -78,12 +78,13 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
   const [memBusy, setMemBusy] = useState(false);
   const [memSaved, setMemSaved] = useState(false);
   const [howOpen, setHowOpen] = useState(false);
-  const [memorial, setMemorial] = useState(null);   // { mem, stamp } — a memorial site just stamped
+  const [respect, setRespect] = useState(null);   // { place, stamp } — a place of respect just stamped
   const chooseArt = async (art) => {
-    const { error } = await setStampArt(memorial.stamp.id, art);
+    const { error } = await setStampArt(respect.stamp.id, art);
     if (error) { showToast(error, "error"); return; }
-    setMemorial(null);
-    showToast(art === "plain" ? "Your stamp shows as text only" : "Your stamp keeps its illustration", "success");
+    const memorial = respect.place.kind === "memorial";
+    setRespect(null);
+    if (memorial) showToast(art === "plain" ? "Your stamp shows as text only" : "Your stamp keeps its illustration", "success");
   };
   const saveMemory = async () => {
     if (!stampedId || !memory.trim() || memBusy) return;
@@ -151,14 +152,14 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
     setStampedId(data?.id || null);
     setStartedPrivate(data?.private === true);
     showToast(iconic ? "✓ Verified — added to your Virtual Passport 🛂" : "✓ “I was here” — added to your Virtual Passport 🛂", "success");
-    // A memorial site (founder, 2026-10-04): honor the place, then ask illustrated or text only.
-    const mem = memorialFor({ kind: "attraction", name: stampName });
-    if (mem && data?.id) setMemorial({ mem, stamp: { id: data.id, name: stampName, city: link?.city || parts.city, country, entity_id: entityId } });
+    // A place of respect (founder, 2026-10-04): its message first; a memorial also asks illustrated or text only.
+    const place = respectPlaceFor({ kind: "attraction", name: stampName });
+    if (place && data?.id) setRespect({ place, stamp: { id: data.id, name: stampName, city: link?.city || parts.city, country, entity_id: entityId } });
   };
 
   return (
     <div>
-      {memorial && <MemorialStampSheet stamp={memorial.stamp} memorial={memorial.mem} onChoose={chooseArt} onLater={() => setMemorial(null)} />}
+      {respect && <RespectPlaceSheet stamp={respect.stamp} place={respect.place} onChoose={chooseArt} onLater={() => setRespect(null)} />}
       <button type="button" onClick={stamp} disabled={busy || stamped}
         style={{ width: "100%", borderRadius: isTablet ? 16 : 14, padding: fs(isTablet ? 15 : 12), border: "none", cursor: "pointer", fontFamily: "inherit",
           fontSize: fs(isTablet ? 18 : 14.5), fontWeight: 700, background: stamped ? "#E7F3EA" : STAMP, color: stamped ? "#266A3B" : "#fff" }}>

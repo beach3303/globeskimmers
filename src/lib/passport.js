@@ -65,7 +65,7 @@ export async function setStampPos(stamp_id, stamp_pos) {
   const { data, error } = await callWorker('passport/stamp/layout', { stamp_id, stamp_pos });
   return { data, error: error || (data && data.ok === false ? data.error || 'Could not move the stamp' : null) };
 }
-// Memorial stamps (src/lib/memorials.js): 'art' keeps the illustration,
+// Places of respect (src/lib/respectPlaces.js): 'art' keeps the illustration,
 // 'plain' prints the stamp as text only (the typographic stamp).
 export async function setStampArt(stamp_id, art) {
   const { data, error } = await callWorker('passport/stamp/layout', { stamp_id, art });
