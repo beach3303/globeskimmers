@@ -13872,6 +13872,85 @@ async function handlePostcardPhotoServe(request, env) {
 const LG_TYPES = new Set(['classic', 'cognac', 'midnight', 'expedition', 'voyager', 'explorer']);
 const LG_FACES = new Set(['front', 'right', 'back', 'left', 'top', 'bottom']);
 
+// ── "My virtual items" + travel buddies (founder, 2026-10-05) ────────────────
+// The profile's laptop + drink container (color, variant, stickers) and up to
+// six named pets. Stored like the luggage: one row, validated shapes. A sticker
+// lives on ONE gear item at a time (the app enforces it against the luggage
+// too); pets never take stickers.
+const GEAR_KINDS = new Set(['laptop', 'drink']);
+const GEAR_COLORS_W = new Set(['pink', 'white', 'black', 'yellow', 'blue', 'purple', 'green', 'orange']);
+const DRINK_VARIANTS_W = new Set(['tumbler', 'straw-bottle', 'lid-bottle']);
+const PET_SPECIES_W = new Set(['dog', 'cat', 'hamster', 'bird', 'reptile']);
+const PET_POSES_W = new Set(['sitting', 'laying', 'belly-up']);
+
+async function handleGearGet(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in first' }, 401);
+    const q = await gbRest(env, `profile_gear?user_id=eq.${user.id}&select=gear,buddies,layout`, {});
+    const row = (q.ok ? await q.json() : [])[0];
+    return jsonResponse({ gear: row?.gear || {}, buddies: row?.buddies || [], layout: row?.layout || {} });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+async function handleGearSet(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in first' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+    const patch = { user_id: user.id, updated_at: new Date().toISOString() };
+    if (b.gear !== undefined) {
+      const src = b.gear && typeof b.gear === 'object' && !Array.isArray(b.gear) ? b.gear : {};
+      const out = {};
+      const seen = new Set();   // a sticker sits on one item only — last writer wins
+      for (const kind of ['drink', 'laptop']) {
+        const g = src[kind];
+        if (!g || typeof g !== 'object') continue;
+        const o = { color: GEAR_COLORS_W.has(g.color) ? g.color : 'blue' };
+        if (kind === 'drink') o.variant = DRINK_VARIANTS_W.has(g.variant) ? g.variant : 'tumbler';
+        const pls = [];
+        for (const pl of (Array.isArray(g.placements) ? g.placements : []).slice(0, 200)) {
+          const sid = String(pl?.sid || '').slice(0, 80);
+          if (!sid || seen.has(sid)) continue;
+          seen.add(sid);
+          pls.push({ sid, x: num(pl.x, 0, 1, 0.5), y: num(pl.y, 0, 1, 0.5), scale: num(pl.scale, 0.3, 3, 1), rot: num(pl.rot, -180, 180, 0), z: num(pl.z, 0, 999, 0) });
+        }
+        if (pls.length) o.placements = pls;
+        out[kind] = o;
+      }
+      if (JSON.stringify(out).length > 80000) return jsonResponse({ error: 'Too many stickers to save' }, 400);
+      patch.gear = out;
+    }
+    if (b.buddies !== undefined) {
+      const src = Array.isArray(b.buddies) ? b.buddies : [];
+      const out = [];
+      for (const p of src.slice(0, 6)) {
+        if (!p || !PET_SPECIES_W.has(p.species)) continue;
+        const name = String(p.name || '').replace(/\s+/g, ' ').trim().slice(0, 24);
+        if (name && !(await gbModerate(env, name)).allow) return jsonResponse({ error: 'Let’s keep pet names kind' }, 422);
+        out.push({
+          id: String(p.id || crypto.randomUUID()).slice(0, 40),
+          species: p.species,
+          breed: String(p.breed || '').slice(0, 60),
+          coat: String(p.coat || '').slice(0, 30),
+          name: name || 'Buddy',
+          pose: PET_POSES_W.has(p.pose) ? p.pose : 'sitting',
+        });
+      }
+      patch.buddies = out;
+    }
+    if (b.layout !== undefined) {
+      const src = b.layout && typeof b.layout === 'object' ? b.layout : {};
+      const order = (Array.isArray(src.order) ? src.order : []).filter((k) => ['luggage', 'laptop', 'drink'].includes(k)).slice(0, 3);
+      patch.layout = order.length ? { order } : {};
+    }
+    const w = await gbRest(env, 'profile_gear?on_conflict=user_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(patch) });
+    if (!w.ok) return jsonResponse({ error: w.status === 404 || w.status === 400 ? 'Virtual items open in a few minutes — try again shortly' : 'Could not save' }, 502);
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleLuggageGet(request, env) {
   try {
     const user = await gbUser(request, env);
@@ -20097,6 +20176,8 @@ export default {
       if (pathname === '/blotter/cosign' && request.method === 'POST') return await handleBlotterCosign(request, env, ctx);
       if (pathname === '/blotter/sweep' && request.method === 'POST') return await handleBlotterSweep(request, env, ctx);
       if (pathname === '/luggage/get' && request.method === 'POST') return await handleLuggageGet(request, env);
+      if (pathname === '/gear/get' && request.method === 'POST') return await handleGearGet(request, env);
+      if (pathname === '/gear/set' && request.method === 'POST') return await handleGearSet(request, env);
       if (pathname === '/luggage/set' && request.method === 'POST') return await handleLuggageSet(request, env, ctx);
       if (pathname === '/admin/reports' && request.method === 'POST') return await handleAdminReports(request, env);
       if (pathname === '/passport/stamp/delete' && request.method === 'POST') return await handlePassportDelete(request, env, ctx);
