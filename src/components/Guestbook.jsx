@@ -328,7 +328,11 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
       )}
 
       {/* Lightbox */}
-      {pad && <DoodlePad busy={doodleBusy} onClose={() => setPad(false)} onPost={postDoodle} />}
+      {pad && (
+        <DoodlePad busy={doodleBusy} onClose={() => setPad(false)} onPost={postDoodle}
+          title="Sign the guestbook" eyebrow={entityName ? `Guestbook · ${entityName}` : "Guestbook"}
+          note="Draw your name, a little art, or a hello for the next visitor." />
+      )}
 
       {lightbox && (
         <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>

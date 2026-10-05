@@ -8,6 +8,7 @@
 // CO-SIGNS — you put your name under someone's words, tap again to lift your
 // pen, and who-signed is always visible. The owner can sweep anything.
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Undo2, Eraser, PencilLine } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { blotterMark, blotterSign, blotterCosign, blotterSweep } from "@/lib/passport";
@@ -319,8 +320,12 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
 }
 
 // ── The doodle pad: four house inks, one undo — constraints make charm ──────
+// Rendered on document.body: inside a card whose overlay has a backdrop blur, a
+// fixed sheet pins to that card's top instead of the screen (founder, 2026-10-05:
+// "the doodle box goes all the way to the top of the page"). It opens over
+// wherever the traveler is, near the bottom on a phone.
 const INKS = ["#2B4A7E", "#B0472F", "#2E6B4E", "#9A6F1E"];
-export function DoodlePad({ onClose, onPost, busy }) {
+export function DoodlePad({ onClose, onPost, busy, title = "Draw in the margin", eyebrow = null, note = null }) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const strokes = useRef([]);       // [{ color, pts: [{x,y},…] }]
@@ -384,16 +389,21 @@ export function DoodlePad({ onClose, onPost, busy }) {
     catch { showToast("Couldn't save the doodle", "error"); }
   };
 
-  return (
-    <div className="fixed inset-0 z-[75] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Draw a doodle">
+  return createPortal(
+    <div className="fixed inset-0 z-[10010] flex items-end sm:items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label={title}
+      style={{ paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
       <button aria-label="Cancel" onClick={onClose} className="absolute inset-0" style={{ background: "rgba(22,17,13,.55)" }} />
       <div ref={wrapRef} className="relative w-full max-w-sm rounded-2xl p-3" style={{ background: PAPER }}>
         <div className="flex items-center justify-between mb-2">
-          <div style={{ fontFamily: SERIF, fontSize: fs(17), color: INK }}>Draw in the margin</div>
-          <button onClick={onClose} aria-label="Cancel the doodle" className="rounded-full p-1.5" style={{ background: CARD, border: `1px solid ${RULE}` }}>
+          <div className="min-w-0">
+            {eyebrow && <div className="truncate" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".12em", textTransform: "uppercase", color: INK3 }}>{eyebrow}</div>}
+            <div style={{ fontFamily: SERIF, fontSize: fs(19), color: INK, lineHeight: 1.15 }}>{title}</div>
+          </div>
+          <button onClick={onClose} aria-label="Cancel the doodle" className="flex-none rounded-full p-1.5" style={{ background: CARD, border: `1px solid ${RULE}` }}>
             <X size={15} color={INK} />
           </button>
         </div>
+        {note && <p className="mb-2.5" style={{ color: INK3, fontSize: fs(13), lineHeight: 1.4 }}>{note}</p>}
         <canvas ref={canvasRef} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onPointerLeave={up}
           className="w-full rounded-xl" style={{ border: "1.5px solid #D9CCA9", background: CARD, touchAction: "none", display: "block" }} />
         <div className="flex items-center gap-2 mt-2.5">
@@ -415,7 +425,8 @@ export function DoodlePad({ onClose, onPost, busy }) {
           Finger-drawn, posts small in the margin — anyone can tap it to enlarge.
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
