@@ -3133,7 +3133,7 @@ async function resolveStampGid(env, id) {
   } catch { gid = null; }
   if (kv) await kv.put(key, gid || 'none', { expirationTtl: (gid ? 180 : 30) * 86400 }).catch(() => {});
   const stampable = row.tier === 'secret' || ['world', 'national', 'regional'].includes(row.founder_scope || row.scope);
-  if (kv && gid && stampable) await kv.put(`gid2d1v2:${gid}`, JSON.stringify(ttdStampSummary(row)), { expirationTtl: 30 * 86400 }).catch(() => {});
+  if (kv && gid && stampable) await kv.put(`gid2d1v3:${gid}`, JSON.stringify(ttdStampSummary(row)), { expirationTtl: 30 * 86400 }).catch(() => {});
   return gid;
 }
 
@@ -5997,7 +5997,9 @@ async function ttdGidFor(env, id) {
 const ttdStampSummary = (r) => ({ id: r.id, name: r.name, category: r.category || null, footprint_radius_m: r.footprint_radius_m ?? null, city: r.city || null, country: r.country || null, lat: +r.lat, lng: +r.lng });
 // The iconic (stampable) D1 row for a place: same name, inside its footprint.
 async function ttdStampFor(env, gid, name, lat, lng, { write = true } = {}) {
-  const kv = env.GLOBESKIMMERS_KV, key = gid ? `gid2d1v2:${gid}` : null;
+  // v3 (2026-10-04): the art review made 182 more Top-1,000 places stampable and
+  // re-pinned 46 rows — every cached link (and 'none') is recomputed.
+  const kv = env.GLOBESKIMMERS_KV, key = gid ? `gid2d1v3:${gid}` : null;
   const goodInput = Number.isFinite(lat) && Number.isFinite(lng) && !!name;
   if (key && kv) {
     const hit = await kv.get(key).catch(() => null);
@@ -18858,7 +18860,8 @@ async function gbEntityIds(env, raw) {
   const all = new Set([canon, id]);
   if (/^[A-Za-z0-9_-]{16,}$/.test(canon) && !/^[a-z]+:/.test(canon)) {
     all.add(`places:${canon}`);
-    const linked = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(`gid2d1v2:${canon}`).catch(() => null) : null;
+    // v2 links (before the 2026-10-04 re-pin) still name the right row for older entries.
+    const linked = env.GLOBESKIMMERS_KV ? (await env.GLOBESKIMMERS_KV.get(`gid2d1v3:${canon}`).catch(() => null)) || (await env.GLOBESKIMMERS_KV.get(`gid2d1v2:${canon}`).catch(() => null)) : null;
     if (linked && linked !== 'none') { try { const l = JSON.parse(linked); if (l?.id) all.add(String(l.id)); } catch { /* fine */ } }
   }
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id)) all.add(`owned:${id}`);
