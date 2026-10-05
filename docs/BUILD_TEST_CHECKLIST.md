@@ -1407,3 +1407,29 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   the owned places DB (free) and those rows carry no photos; Google photos load only when a
   restaurant is opened (paid per place). Options in the reply; nothing changed yet.
 - Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0.
+
+## 2026-10-05 — Passport booklet: two stamps to a page, shares stay big, move stamps between pages
+- Founder: two stamps per page, not always centred (one in the top half, one in the bottom);
+  the "I was here" stamp with memory photos was too big in the booklet; keep the shared image
+  size; move a stamp onto another page; a note that shares print big.
+- App (PassportBook): booklet stamps print compact (art 0.40 of the page, airport 0.62, photos
+  one small row, captions ×0.8 and scaled with Settings → text size). Two stamps share a page
+  when their heights fit together; each gets its own region sized to it, at a spot and tilt
+  fixed from its id. A lone stamp takes the top or bottom half. Photo-first scene stamps and
+  'own page' stamps keep a page to themselves.
+- Shares: a hidden copy of the open page at the old share size is what gets captured (same
+  look as before). If its two stamps can't fit one page at that size, the share opens on the
+  first stamp at full size (the preview still offers the other stamp and the whole page).
+  Note under the booklet: "Shared pages print big: a story fills the whole screen, a post
+  fills the frame."
+- Move: stamp options → "Move to another page" lists pages holding one stamp it fits beside
+  ("Page N · beside …"); the pair lands on that stamp's page. Worker /passport/stamp/layout
+  takes page_with (meta.page_with + page_with_at; newest move wins; own-page / back-to-flow
+  clears it; a solo target becomes shared).
+- Instagram's "Sharing as …" screen (Reel/Post/Story/Message) is Instagram's own sheet — we
+  can't add an X; swipe down closes it.
+- Reviewed by an independent agent; its 6 findings fixed (spot index sign bug, pair order,
+  half-size math incl. border/text size, share-size overflow, share copy −38px, top padding,
+  eager images in share copies, partial-move error).
+- Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0, packing tested on
+  sample passports. Ships: worker on push; app with `npm run ota`.

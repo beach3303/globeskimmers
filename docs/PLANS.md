@@ -180,6 +180,21 @@ FOUNDER DECISIONS — 2026-10-03 (evening), supersede anything older:
     The App Store description must drop "a camera scanner that translates signs and
     converts prices" before the resubmission.
 
+AIRPORT STAMPS — ARRIVING / DEPARTING (founder, 2026-10-05), mockup awaiting a pick:
+  https://claude.ai/artifact/8R54tb9J4zbR8QwPwdKFN5 — all six shapes both ways (word, plane
+  nose down/up, navy vs red ink, dotted inner rule on departures) + the "Arriving / Departing /
+  Not now" prompt. Open: ink by direction replaces ink by country; a round trip needs the
+  airport prompt to come back on the way home.
+
+RESTAURANT OWNERS (founder idea, 2026-10-05) — under consideration:
+  - Private feedback to the owner (never posted; screened; sender told it's private) — ~1 day.
+  - Claim (verify via the owner's Google Business sign-in), burgundy "Owner verified" seal,
+    owner tools paid $20–100/mo (favorite-dish report: top 3, "favorite of N"). Claude's
+    advice: reading private feedback free once claimed (paying to read complaints reads as
+    extortion; FTC 2024 review rule — say plainly that negative feedback isn't posted);
+    charge for the tools; lawyer review of claim terms. Printable guestbook PDF optional
+    (founder: skip if it's a lot of work).
+
 STAMP ART — 2026-10-04 (founder):
   - All 1,000 places on the Top 1,000 list (docs/PASSPORT_ICON_LIST.md) have art on R2.
     Page: https://claude.ai/artifact/B8J6PntsJPetxLfwQ6SbYw
