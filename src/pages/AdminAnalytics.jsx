@@ -13,6 +13,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
+import { exportCsv } from '@/lib/adminExport';
 import { callWorker } from '@/lib/callWorker';
 import { createPageUrl } from '@/utils';
 import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap, Users, UserCheck, Mail } from 'lucide-react';
@@ -73,6 +74,9 @@ const OV_LABELS = {
   dish_photos_restaurant: 'Dish photos (restaurants)', dish_photos_coffee: 'Dish photos (cafés)',
   dish_photos_store: 'Store finds', owner_messages: 'Owner messages',
 };
+const xbtn = { borderRadius: 8, padding: '5px 11px', fontSize: 12, fontWeight: 600, border: '1px solid #d8d2c6', background: '#fff', color: '#3A3128', cursor: 'pointer' };
+const today = () => new Date().toISOString().slice(0, 10);
+
 function ActivityOverview() {
   const [ov, setOv] = React.useState(null);
   const [gran, setGran] = React.useState('month');
@@ -113,6 +117,20 @@ function ActivityOverview() {
           <button key={g} type="button" onClick={() => setGran(g)} style={{ borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.border || '#ddd'}`, background: gran === g ? COLORS.dark : '#fff', color: gran === g ? '#fff' : COLORS.dark }}>{g === 'day' ? 'Days' : g === 'week' ? 'Weeks' : 'Months'}</button>
         ))}
         {ov.truncated && <span style={{ fontSize: 11, color: '#B0472F', alignSelf: 'center' }}>window truncated at 40k rows — numbers are a floor</span>}
+        <span style={{ flex: 1 }} />
+        <button type="button" style={xbtn} onClick={() => {
+          const keys = [...new Set(['total', ...['day', 'week', 'month'].flatMap((g) => (ov[g] || []).flatMap((r) => Object.keys(r))).filter((k) => k !== 'key')])];
+          const rows = ['day', 'week', 'month'].flatMap((g) => (ov[g] || []).map((r) => [g, r.key, ...keys.map((k) => r[k] || 0)]));
+          exportCsv(`globeskimmers-activity-${today()}.csv`, ['granularity', 'period', ...keys.map((k) => OV_LABELS[k] || k)], rows);
+        }}>⬇ Activity CSV</button>
+        <button type="button" style={xbtn} onClick={() => {
+          const rows = [
+            ...(ov.topCountries || []).map((x) => ['country', x.name, x.n]),
+            ...(ov.topCities || []).map((x) => ['city', x.name, x.n]),
+            ...(ov.topPlaces || []).map((x) => ['place', x.name, x.n]),
+          ];
+          exportCsv(`globeskimmers-activity-by-place-${today()}.csv`, ['level', 'name', 'stamps (12 mo)'], rows);
+        }}>⬇ Countries &amp; places CSV</button>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums', fontSize: 12.5, minWidth: 420 }}>
@@ -157,6 +175,10 @@ function TravelerPull() {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="@handle or user id" aria-label="Handle or user id"
           style={{ flex: 1, border: `1px solid ${COLORS.border || '#ddd'}`, borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
         <button type="button" onClick={pull} disabled={busy || !q.trim()} style={{ borderRadius: 8, padding: '8px 14px', fontWeight: 600, fontSize: 13, background: COLORS.dark, color: '#fff', border: 'none', opacity: busy ? 0.6 : 1 }}>{busy ? 'Pulling…' : 'Pull'}</button>
+        {res && !res.error && (
+          <button type="button" style={xbtn} onClick={() => exportCsv(`globeskimmers-traveler-${(res.handle || res.user_id).replace(/[^a-z0-9_-]/gi, '')}-${today()}.csv`,
+            ['date', 'activity', 'place', 'detail'], (res.timeline || []).map((t) => [t.date, t.type, t.name, t.detail]))}>⬇ CSV</button>
+        )}
       </div>
       {res?.error && <div style={{ color: '#B0472F', fontSize: 13, marginTop: 8 }}>{res.error}</div>}
       {res && !res.error && (
@@ -805,6 +827,14 @@ export default function AdminAnalytics() {
             </Section>
 
             <Section title="Active users per day (30d)" icon={Eye} empty={activeByDay.length === 0 ? 'No active-user data yet.' : null}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+                <button type="button" style={xbtn} onClick={() => {
+                  const signups = new Map((userStats?.signupsByDay || []).map((d) => [d.day, d.count]));
+                  const rows = activeByDay.map((d) => [d.day, d.active, signups.get(d.day) ?? '']);
+                  rows.push([], ['DAU today', activeUsers.dau ?? ''], ['WAU (7d)', activeUsers.wau ?? ''], ['MAU (30d)', activeUsers.mau ?? ''], ['Return rate 7d %', returnRate], ['Stickiness %', stickiness]);
+                  exportCsv(`globeskimmers-active-users-${today()}.csv`, ['day', 'active users', 'sign-ups'], rows);
+                }}>⬇ Active users CSV</button>
+              </div>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 100 }}>
                 {activeByDay.map(d => (
                   <div key={d.day} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>

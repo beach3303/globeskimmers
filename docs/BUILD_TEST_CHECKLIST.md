@@ -1495,3 +1495,21 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   Sits above the audit pull.
 - Yearly view = the 12-month row of the month table; longer horizons accrue as the app ages.
 - Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0.
+
+## 2026-10-05 — Admin: everything exports as a spreadsheet
+- Founder: all captured data exportable via spreadsheet — individual activity vs aggregate
+  activity vs activity per country vs active users.
+- App: src/lib/adminExport.js (CSV with UTF-8 BOM; native = Filesystem cache + share sheet
+  — Save to Files/AirDrop/mail; web = plain download). Buttons: Activity overview → "⬇
+  Activity CSV" (day+week+month × every metric) and "⬇ Countries & places CSV" (stamps by
+  country/city/place, 12-mo, up to 300 each); Traveler pull → "⬇ CSV" (the full timeline:
+  date, activity, place, detail — worker now returns it, capped 5,000 rows); Active users
+  per day → "⬇ Active users CSV" (day × active × sign-ups + DAU/WAU/MAU/return/stickiness).
+- Worker: /admin/user-activity adds timeline; overview top lists raised from 10 → 300 for
+  export (UI still shows 6).
+- Founder's location check (verified in code, nothing changed): stamping is allowed anywhere
+  WITH GPS proof; iOS NSLocationWhenInUse string says it verifies stamps and shows nearby
+  places; the Always string says "never tracks you in the background"; Android has
+  COARSE+FINE only (no BACKGROUND permission); runtime checkPermissions/requestPermissions
+  before first use; no watchPosition/background modes; sensitive places auto-start private.
+- Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0.

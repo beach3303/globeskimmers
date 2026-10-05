@@ -19272,10 +19272,10 @@ async function handleAdminActivityOverview(request, env) {
       if (d >= weekFloor) add(bucket.week, weekOf(iso), metric);
     }
     // Which places get stamped: top cities and top named places, 12-month window.
-    const topN = (rows, key) => {
+    const topN = (rows, key, cap = 300) => {
       const by = {};
       for (const r of rows) { const v = String(r[key] || '').trim(); if (v) by[v] = (by[v] || 0) + 1; }
-      return Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, n]) => ({ name, n }));
+      return Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, cap).map(([name, n]) => ({ name, n }));
     };
     const attractionish = st.rows.filter((r) => r.kind !== 'country' && r.kind !== 'airport');
     const series = (map) => Object.entries(map).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([key, v]) => ({ key, ...v }));
@@ -19328,11 +19328,20 @@ async function handleAdminUserActivity(request, env) {
       date: r.visited_on || String(r.created_at || '').slice(0, 10),
       verified: r.verified,
     }));
+    // Every activity as one row, for the spreadsheet export.
+    const day = (r) => r.visited_on || String(r.created_at || '').slice(0, 10);
+    const timeline = [
+      ...stamps.map((r) => ({ date: day(r), type: `stamp (${r.kind || 'attraction'})`, name: r.name || String(r.entity_id || '').split(':')[0], detail: [(r.meta && r.meta.direction) || null, r.verified].filter(Boolean).join(' · ') })),
+      ...notes.map((r) => ({ date: day(r), type: r.is_doodle ? 'doodle' : 'guestbook note', name: r.entity_name || '', detail: '' })),
+      ...dishes.map((r) => ({ date: day(r), type: 'dish photo', name: r.place_name || '', detail: r.dish || '' })),
+      ...ownerNotes.map((r) => ({ date: day(r), type: 'owner message', name: r.entity_name || '', detail: r.status })),
+    ].sort((a, b) => (a.date < b.date ? -1 : 1)).slice(0, 5000);
     return jsonResponse({
       user_id: userId, handle,
       byYear: { stamps: tally(stamps, 'created_at'), guestbook_notes: tally(notes, 'created_at'), dish_photos: tally(dishes, 'created_at'), owner_messages: tally(ownerNotes, 'created_at') },
       totals: { stamps: stamps.length, airports: airports.length, guestbook_notes: notes.length, dish_photos: dishes.length, owner_messages: ownerNotes.length },
       airport_sequence: airports,
+      timeline,
     });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
