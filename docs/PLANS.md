@@ -188,13 +188,22 @@ STAMP ART — 2026-10-04 (founder):
     Naoshima. Their art is kept at R2 archive/stamp-art/<slug>.png (not served) and in
     ~/Downloads/"GlobeSkimmers held stamp art (licence pending)"; to restore, copy back to
     stamp-art/<slug>.png.
-  - Sensitive (founder reviewing the art): Masjid al-Haram (#637), Al-Masjid an-Nabawi
-    (#638); Claude recommends keeping their art (non-figurative, how the sites present
-    themselves).
-  - Auschwitz-Birkenau (#586), DECIDED 2026-10-04: the traveler gets the illustrated stamp,
-    reads a short message honoring the victims, and chooses Illustrated or Text only
-    (the typographic stamp); changeable later in the stamp's options. The list of memorial
-    places is src/lib/memorials.js — add a site there to give it the same treatment.
+  - Places of respect, DECIDED 2026-10-04 (list: src/lib/respectPlaces.js — add a site
+    there to give it the same treatment):
+    · Auschwitz-Birkenau (#586): the traveler gets the illustrated stamp, reads "This is a
+      place of remembrance. At least 1.1 million people were murdered here…", and chooses
+      Illustrated or Text only (the typographic stamp); changeable in the stamp's options.
+    · Masjid al-Haram (#637) and Al-Masjid an-Nabawi (#638): keep their illustrations;
+      stamping either pops up "This is not a place for sightseeing. It is a place of
+      worship…" once.
+  - Art ↔ place matching, 2026-10-04 (founder: "ensure the correct art matches their
+    names"): every illustration reviewed against the attractions table — the app picks art
+    by row, name and country (scripts/stamp-art/), so same-named places elsewhere never
+    borrow it. scripts/stamp-art/d1-art-fixes.sql makes the missing places stampable and
+    fixes mis-pinned rows — FOUNDER RUNS IT ONCE (see BUILD_TEST_CHECKLIST).
+  - Art to redo (founder): 36 stamps — wrong landmark drawn (18), misspelled (2), frame cut
+    off (12), damaged file (Montserrat, held as text-only), small text (3). List + thumbnails
+    on the Stamp Art Toolbox page ("Needs a redo", with a copy button for Grok).
   - TO DO, after both stores are live (partnerships wait for that), ask permission:
     [ ] Hollywood Sign: Hollywood Chamber of Commerce licensing
         (hollywoodchamber.net/licensing-information)
