@@ -1572,3 +1572,15 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   sheet rendered. Ships: worker on push; app with `npm run ota`.
 - Note: state detection uses the reverse geocoder's address.state, which arrives when the
   app is opened in the new state/country — the prompt fires on the next open after crossing.
+
+## 2026-10-05 — Border stamps: no transport guessing; Stamp-a-place starts at the sensed city
+- Founder: we can't know car vs train vs ship — drop RAILWAY CROSSING / PORT OF ENTRY and the
+  mode chips. Country checkpoint stamps now always read "BORDER CROSSING · CC"; no glyphs.
+  (Worker still tolerates a mode field; nothing sends it.)
+- Toggles already existed and cover the new prompts: Settings → "Toggle airport arrival
+  stamps" (pp_suggest_arrivals) and "Toggle new-city pop-ups" (pp_city_prompt — country AND
+  state/nation crossings share it), plus the in-prompt "Turn off crossing pop-ups".
+- Stamp a place: opened without a preset it now starts from the GPS-sensed city
+  (activeLocation.address) — filled, not locked; the submit-time GPS/photo-proof check is
+  unchanged, so users can only mint a city stamp where they actually are.
+- Gates: eslint (touched) clean, no-undef app-wide 0, build 0.

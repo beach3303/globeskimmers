@@ -210,8 +210,8 @@ function StampToken({ stamp, idx, onOpen, pageW, compact = false }) {
       ) : isLand ? (
         <div className="flex flex-col items-center">
           {stamp.kind === "state"
-            ? <LandStamp template="state" name={stamp.region || stamp.name} date={stamp.visited_on} direction={stamp.meta?.direction || null} mode={stamp.meta?.mode || null} width={airportW} />
-            : <LandStamp template="country" name={String(stamp.name || "").split(" · ")[0]} countryCode={String(stamp.entity_id || "").split(":")[0]} date={stamp.visited_on} direction={stamp.meta?.direction || null} mode={stamp.meta?.mode || null} width={airportW} />}
+            ? <LandStamp template="state" name={stamp.region || stamp.name} date={stamp.visited_on} direction={stamp.meta?.direction || null} width={airportW} />
+            : <LandStamp template="country" name={String(stamp.name || "").split(" · ")[0]} countryCode={String(stamp.entity_id || "").split(":")[0]} date={stamp.visited_on} direction={stamp.meta?.direction || null} width={airportW} />}
         </div>
       ) : isCity ? (
         // A city / place visit (everything minted by "Stamp a place"). This

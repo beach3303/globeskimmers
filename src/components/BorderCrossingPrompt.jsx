@@ -29,14 +29,11 @@ const flagFor = (cc) => (/^[a-z]{2}$/i.test(cc || "")
   ? String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
   : "🌍");
 
-const MODES = [["car", "🚗 Car"], ["train", "🚆 Train"], ["ship", "🚢 Ship"]];
-
 export default function BorderCrossingPrompt() {
   const { activeLocation, locationMode } = useLocation();
   const { isAuthenticated } = useAuth();
   // { type:'country', cc, country, lat, lng } | { type:'region', cc, country, region, info, lat, lng }
   const [pending, setPending] = useState(null);
-  const [mode, setMode] = useState("car");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -56,14 +53,12 @@ export default function BorderCrossingPrompt() {
         if (cancelled) return;
         writeLS(LAST_REGION, regionKey);
         if (ap) { writeLS(LAST, cc); return; }
-        setMode("car");
         setPending({ type: "country", cc, country: regionName(cc), lat: c.latitude, lng: c.longitude });
         return;
       }
       // Same country — a new state / nation inside it (US + UK only).
       const info = regionInfo(cc, region);
       if (info && regionKey && lastR && regionKey !== lastR) {
-        setMode("car");
         setPending({ type: "region", cc, country: regionName(cc), region, info, lat: c.latitude, lng: c.longitude });
         return;
       }
@@ -89,12 +84,12 @@ export default function BorderCrossingPrompt() {
       kind: "state", tier: "page", entity_type: "border", entity_id: pending.info.abbr,
       name: pending.region, region: pending.region, country: pending.country, cc: pending.cc,
       lat: pending.lat, lng: pending.lng, visited_on: today, verified: "gps",
-      local_hour: new Date().getHours(), direction, mode: mode === "ship" ? "car" : mode,
+      local_hour: new Date().getHours(), direction,
     } : {
       kind: "country", tier: "page", entity_type: "border", entity_id: pending.cc,
       name: `${pending.country} · Border Crossing`, city: null, country: pending.country, cc: pending.cc,
       lat: pending.lat, lng: pending.lng, visited_on: today, verified: "gps",
-      local_hour: new Date().getHours(), direction, mode,
+      local_hour: new Date().getHours(), direction,
     });
     setBusy(false);
     const what = isRegion ? pending.region : pending.country;
@@ -108,8 +103,8 @@ export default function BorderCrossingPrompt() {
   const today = new Date().toISOString().slice(0, 10);
   const isRegion = pending.type === "region";
   const stampFor = (direction) => (isRegion
-    ? <LandStamp template="state" name={pending.region} sub={pending.info.nickname} date={today} direction={direction} mode={mode} width={134} />
-    : <LandStamp template="country" name={pending.country} countryCode={pending.cc} date={today} direction={direction} mode={mode} width={134} />);
+    ? <LandStamp template="state" name={pending.region} sub={pending.info.nickname} date={today} direction={direction} width={134} />
+    : <LandStamp template="country" name={pending.country} countryCode={pending.cc} date={today} direction={direction} width={134} />);
   const choice = (direction, label, sub) => (
     <button onClick={() => add(direction)} disabled={!!busy}
       style={{ flex: 1, minWidth: 0, borderRadius: 16, padding: "10px 6px 9px", background: "#fff", border: "1.5px solid rgba(22,17,13,.16)", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, opacity: busy && busy !== direction ? 0.55 : 1 }}>
@@ -127,13 +122,7 @@ export default function BorderCrossingPrompt() {
         <p style={{ color: "#3A3128", fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
           {isRegion && pending.info.nickname ? `${pending.info.nickname} · ` : ""}Stamp the crossing? Entry or exit goes on the stamp.
         </p>
-        <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 10 }}>
-          {(isRegion ? MODES.slice(0, 2) : MODES).map(([k, label]) => (
-            <button key={k} onClick={() => setMode(k)} disabled={!!busy} aria-pressed={mode === k}
-              style={{ borderRadius: 999, padding: "5px 12px", fontSize: 12.5, fontWeight: 600, border: "1px solid rgba(22,17,13,.16)", background: mode === k ? "#16110D" : "#fff", color: mode === k ? "#fff" : "#3A3128" }}>{label}</button>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           {choice("arrival", "Entry", isRegion ? "Just crossed in" : "Entering the country")}
           {choice("departure", "Exit", isRegion ? "Heading out" : "Leaving the country")}
         </div>

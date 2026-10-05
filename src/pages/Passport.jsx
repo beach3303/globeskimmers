@@ -16,6 +16,7 @@ import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
 import LandStamp from "@/components/passport/LandStamp";
+import { useLocation } from "@/components/location/LocationContext";
 import PassportBook, { packBookPages, readFontScale, fitsTogether } from "@/components/passport/PassportBook";
 import BlotterStrip from "@/components/passport/Blotter";
 import { isAdminEmail } from "@/lib/admins";
@@ -171,8 +172,8 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
     return (
       <div className="bg-white rounded-[20px] p-3 flex flex-col items-center" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
         {stamp.kind === "state"
-          ? <LandStamp template="state" name={stamp.region || stamp.name} date={stamp.visited_on} direction={stamp.meta?.direction || null} mode={stamp.meta?.mode || null} width={264} />
-          : <LandStamp template="country" name={String(stamp.name || "").split(" · ")[0]} countryCode={String(stamp.entity_id || "").split(":")[0]} date={stamp.visited_on} direction={stamp.meta?.direction || null} mode={stamp.meta?.mode || null} width={264} />}
+          ? <LandStamp template="state" name={stamp.region || stamp.name} date={stamp.visited_on} direction={stamp.meta?.direction || null} width={264} />
+          : <LandStamp template="country" name={String(stamp.name || "").split(" · ")[0]} countryCode={String(stamp.entity_id || "").split(":")[0]} date={stamp.visited_on} direction={stamp.meta?.direction || null} width={264} />}
         <div className="flex items-center gap-2 mt-1.5">
           <VerifiedBadge verified={stamp.verified} />
           {!readOnly && (
@@ -414,11 +415,22 @@ const SAMPLE_STATS = { countries: 3, verified: 6 };
 // you visited. Free OSM place search + free-text; date + memory photos. Creates
 // a kind:'city' stamp rendered as a borderless fat-ink line.
 function StampPlaceModal({ onClose, onDone, preset = null }) {
-  const [cityQ, setCityQ] = useState(preset?.city || "");
-  const [city, setCity] = useState(preset?.city || "");
-  const [country, setCountry] = useState(preset?.country || "");
+  // No preset → start from where GPS says you are (founder, 2026-10-05:
+  // "provide them the city where they currently are"). The city field is
+  // filled, not locked — the GPS check at submit is what verifies the stamp.
+  const { activeLocation } = useLocation();
+  const sensed = !preset && activeLocation?.address?.city ? {
+    city: activeLocation.address.city,
+    country: activeLocation.address.country || "",
+    lat: activeLocation.coordinates?.latitude, lng: activeLocation.coordinates?.longitude,
+  } : null;
+  const [cityQ, setCityQ] = useState(preset?.city || sensed?.city || "");
+  const [city, setCity] = useState(preset?.city || sensed?.city || "");
+  const [country, setCountry] = useState(preset?.country || sensed?.country || "");
   const [cc, setCc] = useState("");
-  const [coords, setCoords] = useState(Number.isFinite(+preset?.lat) && Number.isFinite(+preset?.lng) ? { lat: +preset.lat, lng: +preset.lng } : null);
+  const [coords, setCoords] = useState(
+    Number.isFinite(+preset?.lat) && Number.isFinite(+preset?.lng) ? { lat: +preset.lat, lng: +preset.lng }
+    : Number.isFinite(+sensed?.lat) && Number.isFinite(+sensed?.lng) ? { lat: +sensed.lat, lng: +sensed.lng } : null);
   const [venue, setVenue] = useState(preset?.name && preset.name !== preset.city ? preset.name : "");
   // The venue's OWN point and type, for the on-the-spot GPS check — `coords`
   // keeps the city centre when the city was picked first.
