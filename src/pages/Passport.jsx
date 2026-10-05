@@ -1113,7 +1113,7 @@ function PassportInner() {
             <Luggage stamps={stampsView} readOnly={readOnly || preview} />
             {/* The photo packets — a friend's payload only carries reviewed
                 photos, so this shelf is safe on both views for free. */}
-            <PhotoPackets stamps={stampsView} title={readOnly ? "Their photo packets" : "Photo packets"} owner={!readOnly && !preview} onChanged={load} />
+            <PhotoPackets stamps={stampsView} title={readOnly ? "Their photo packets" : "Photo packets"} owner={!readOnly && !preview} onChanged={load} social={!preview && blSlug ? { slug: blSlug, blotter, onBlotterChanged: refreshBlotter } : null} />
             {isDev && !readOnly && !preview && (
               <div className="text-center mt-3">
                 <button onClick={() => setPreview(true)} className="rounded-full px-4 py-2" style={{ background: "#fff", border: `1px solid ${RULE}`, color: INK2, fontSize: fs(12.5), fontWeight: 600 }}>👁 See a sample passport (admin)</button>

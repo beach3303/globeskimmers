@@ -13,6 +13,7 @@ import { uploadStampPhoto } from "@/lib/passport";
 import { readPhotoExif } from "@/lib/photoExif";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { showToast } from "@/components/Toast";
+import PhotoFooter from "@/components/passport/PhotoFooter";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -47,7 +48,8 @@ function Envelope({ packet, onOpen }) {
   );
 }
 
-export default function PhotoPackets({ stamps, title = "Photo packets", owner = false, onChanged = null }) {
+export default function PhotoPackets({ stamps, title = "Photo packets", owner = false, onChanged = null, social = null }) {
+  // social: { slug, blotter, onBlotterChanged } — the per-photo guestbook inside an open album.
   const packets = useMemo(() => derivePackets(stamps), [stamps]);
   const [open, setOpen] = useState(null); // { photos, index, city }
   // Add prints straight from a packet (founder, 2026-10-05): they land on the
@@ -84,7 +86,7 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
       <div className="flex gap-3 overflow-x-auto pt-3 pb-2" style={{ scrollbarWidth: "none" }}>
         {packets.map((p) => (
           <div key={p.key} style={{ position: "relative" }}>
-            <Envelope packet={p} onOpen={() => setOpen({ photos: p.photos, index: 0, city: p.city, range: p.range })} />
+            <Envelope packet={p} onOpen={() => setOpen({ photos: p.photos, index: 0, city: p.city, range: p.range, packet: p })} />
             {owner && p.stampId && (
               <button type="button" onClick={() => pickFor(p)} disabled={!!busyKey} aria-label={`Add prints to ${p.city}`}
                 style={{ position: "absolute", top: -4, right: -4, zIndex: 3, width: 28, height: 28, borderRadius: 999, background: "#fff", border: "1.5px solid #C9B583", display: "grid", placeItems: "center", boxShadow: "0 2px 6px rgba(0,0,0,.18)" }}>
@@ -105,6 +107,22 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
           onIndexChange={(i) => setOpen((o) => (o ? { ...o, index: i } : o))}
           title={open.city}
           credit={open.range || undefined}
+          renderFooter={(ph) => (
+            <div>
+              {/* Inside the album too (founder, 2026-10-05): add prints without
+                  leaving it, and every photo keeps its own guestbook. */}
+              {owner && open.packet?.stampId && (
+                <button type="button" onClick={() => pickFor(open.packet)} disabled={!!busyKey}
+                  style={{ display: "block", margin: "0 auto 8px", borderRadius: 999, padding: "7px 16px", fontWeight: 600, fontSize: "calc(12.5px*var(--fs))", background: "rgba(255,255,255,.92)", border: "none", color: "#16110D" }}>
+                  {busyKey ? "Adding…" : `＋ Add prints to ${open.city}`}
+                </button>
+              )}
+              {social?.slug && ph?.id && (
+                <PhotoFooter photo={ph} slug={social.slug} blotter={social.blotter} ownerView={owner} onChanged={social.onBlotterChanged}
+                  onCaption={(id, caption) => setOpen((o) => (o ? { ...o, photos: o.photos.map((x) => (x.id === id ? { ...x, caption } : x)) } : o))} />
+              )}
+            </div>
+          )}
         />
       )}
     </div>

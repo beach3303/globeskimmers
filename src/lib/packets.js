@@ -19,7 +19,7 @@ export function derivePackets(stamps) {
     const key = `${city}|${(s.country || "").trim()}`;
     if (!groups.has(key)) groups.set(key, { key, city, country: (s.country || "").trim(), photos: [], dates: [], stampId: null, stampWhen: "" });
     const g = groups.get(key);
-    for (const p of photos) g.photos.push({ src: p.photo_url, caption: s.name });
+    for (const p of photos) g.photos.push({ src: p.photo_url, photo_url: p.photo_url, id: p.id, caption: p.caption || null, place: s.name, food: Number(p.food_subject) === 1 });
     if (s.visited_on) g.dates.push(String(s.visited_on).slice(0, 10));
     // The packet's newest stamp receives prints added from the packet itself
     // (founder, 2026-10-05: upload from the profile, not only from the stamp).

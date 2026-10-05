@@ -1594,3 +1594,14 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   layout). /passport/stamp/layout takes film:'remove'.
 - Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0. Worker ships on
   push; the option with `npm run ota`.
+
+## 2026-10-05 — Albums: add prints and a guestbook on every photo inside
+- Founder: adding photos must work inside an opened album, and each photo (at least each
+  album) needs the guestbook instead of plain captions.
+- App: an open packet's lightbox now carries a footer per photo — the owner's "＋ Add prints
+  to <city>" button (same upload/review path) and the existing per-photo PhotoFooter: the
+  Blotter guestbook (kind notes + doodles + co-signs, visitors per the passport's privacy)
+  plus the owner's caption line. packets.js photos now carry their ids.
+- Note: the + chip on envelopes and this album footer both reach phones with the next OTA —
+  the founder's screenshot predates it.
+- Gates: eslint (touched) clean, no-undef app-wide 0, build 0. Held with the next batch.
