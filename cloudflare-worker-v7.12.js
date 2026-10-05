@@ -12392,7 +12392,7 @@ async function handleGuestbookPhotoServe(request, env) {
 // scoped to the user_id resolved from their JWT via gbUser). Tiered stamps (page
 // vs attraction mark); three earning paths — gps / photo-proof / self — where gps
 // and photo earn the ✓. See docs/PASSPORT_MEANING_MODEL.md.
-const PP_KINDS = ['country', 'city', 'airport', 'icon', 'wonder', 'attraction'];
+const PP_KINDS = ['country', 'city', 'airport', 'icon', 'wonder', 'attraction', 'state'];
 // Verification strength (founder, 2026-09-28: three ways to earn the ✓). gps =
 // the phone was at the place; photo_loc = a photo's own location tag puts it
 // there on the visit date; photo_ai = the place is recognised in the photo;
@@ -12579,16 +12579,20 @@ async function handlePassportStamp(request, env, ctx) {
         scene: cleanTxt(b.film.scene, 240),
       };
     }
-    // Airport direction (founder, 2026-10-05): arrival or departure prints on
-    // the stamp, and the stamp is keyed per visit (IATA:date:arr|dep) so a round
-    // trip collects both — and an audit can replay the sequence (LAX in, ATL,
-    // LAX out) from entity_id + meta.direction + visited_on. Legacy airport
-    // stamps keep their plain-IATA ids and their look.
-    const direction = kind === 'airport' && ['arrival', 'departure'].includes(b.direction) ? b.direction : null;
+    // Direction (founder, 2026-10-05): arrival/departure prints on airport
+    // stamps; entry/exit on land borders (country crossings and US-state / UK-
+    // nation lines, kind 'state'). A directed stamp is keyed per visit
+    // (BASE:date:arr|dep) so a round trip collects both — and an audit can
+    // replay the sequence from entity_id + meta.direction + visited_on. Legacy
+    // stamps keep their plain ids and their look. meta.mode remembers car /
+    // train / ship for the checkpoint stamp's glyph.
+    const mayDirect = kind === 'airport' || kind === 'state' || (kind === 'country' && b.entity_type === 'border');
+    const direction = mayDirect && ['arrival', 'departure'].includes(b.direction) ? b.direction : null;
+    const mode = direction && ['car', 'train', 'ship'].includes(b.mode) ? b.mode : null;
     if (direction && entityId) entityId = `${entityId.split(':')[0]}:${visitedOn || new Date().toISOString().slice(0, 10)}:${direction === 'departure' ? 'dep' : 'arr'}`;
     // The page-one home-city stamp (onboarding "make your passport") marks
     // itself origin:true — the app renders it as the cover page, not a brag.
-    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}), ...(direction ? { direction } : {}) };
+    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}), ...(direction ? { direction } : {}), ...(mode ? { mode } : {}) };
     const row = {
       user_id: user.id, kind, tier,
       entity_type: b.entity_type ? String(b.entity_type) : null,
@@ -12682,6 +12686,7 @@ async function ppLoad(env, userId) {
     countries: distinct(() => true, (s) => (s.country || '').toLowerCase()),
     cities: distinct((s) => s.kind === 'city', (s) => (s.entity_id || s.name || '').toLowerCase()),
     airports: out.filter((s) => s.kind === 'airport').length,
+    states: out.filter((s) => s.kind === 'state').length,
     icons: out.filter((s) => s.kind === 'icon').length,
     wonders: out.filter((s) => s.kind === 'wonder').length,
     attractions: out.filter((s) => s.kind === 'attraction').length,

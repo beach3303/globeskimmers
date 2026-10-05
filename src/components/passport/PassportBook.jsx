@@ -14,6 +14,7 @@ import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
 import { isPhotoFirst } from "@/lib/passport";
 import { calmEdge } from "@/lib/photoEdge";
 import AirportStamp from "@/components/passport/AirportStamp";
+import LandStamp from "@/components/passport/LandStamp";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 
 // ============================================================================
@@ -61,8 +62,12 @@ const HERO_FRAC = 0.76;
 const BOOK = { art: 0.40, airport: 0.62, thumb: 0.10, text: 0.8 };
 
 const KIND = {
-  country: "🌍", city: "🏙️", airport: "✈️", icon: "🗽", wonder: "🏔️", attraction: "📍",
+  country: "🌍", city: "🏙️", airport: "✈️", icon: "🗽", wonder: "🏔️", attraction: "📍", state: "🛣️",
 };
+// A border crossing prints the LandStamp (founder, 2026-10-05): state/nation
+// lines always; a country stamp only when it carries a direction — legacy
+// border stamps keep their flag badge.
+const isLandCrossing = (s) => s.kind === "state" || (s.kind === "country" && s.entity_type === "border" && s.meta?.direction);
 const flagFor = (country) => {
   const cc = countryCode(country);
   if (!cc || !/^[a-z]{2}$/i.test(cc)) return "🗺️";
@@ -110,7 +115,7 @@ const compactH = (s, pageW, fsScale = 1) => {
   const n = Math.min(4, (s.photos || []).length);
   const photosH = n ? BOOK.thumb * pageW + 8 : 0;
   const withTag = s.tagged_by_name || s.tagged_by_handle ? 18 * t : 0;
-  if (s.kind === "airport") return 0.659 * BOOK.airport * pageW + 8 + photosH + withTag;
+  if (s.kind === "airport" || isLandCrossing(s)) return 0.659 * BOOK.airport * pageW + 8 + photosH + withTag;
   // A place visit: "VISITED <city>, <country>" can wrap to two lines, then the
   // venue and the date. Everything else: "I was here!" and the date.
   const caption = (s.kind === "city" ? 84 : 50) * t;
@@ -172,11 +177,12 @@ function StampToken({ stamp, idx, onOpen, pageW, compact = false }) {
   // A memorial stamp its owner chose to keep as text only prints typographic.
   const art = stamp.kind === "country" || isPlainArt(stamp) ? null : stampArtUrl(stamp.name, { entityId: stamp.entity_id, country: stamp.country });
   const showArt = !!art && !artFail;
-  const flag = stamp.kind === "country" ? flagFor(stamp.country || stamp.name) : null;
+  const flag = stamp.kind === "country" && !isLand ? flagFor(stamp.country || stamp.name) : null;
   // No bespoke art and not a country -> the typographic stamp carries its own
   // date and "I was here!" strike, so the duplicate lines below are suppressed.
   const showTypo = !showArt && !flag;
   const isAirport = stamp.kind === "airport";
+  const isLand = isLandCrossing(stamp);
   const isCity = stamp.kind === "city";
   const venue = isCity && stamp.name && stamp.name !== stamp.city ? stamp.name : null;
   const cityInk = CITY_INKS[hashStr(stamp.id || stamp.entity_id || stamp.name) % CITY_INKS.length];
@@ -200,6 +206,12 @@ function StampToken({ stamp, idx, onOpen, pageW, compact = false }) {
       {isAirport ? (
         <div className="flex flex-col items-center">
           <AirportStamp iata={String(stamp.entity_id || "").split(":")[0]} city={stamp.city} country={stamp.country} countryCode={stamp.country} date={stamp.visited_on} direction={stamp.meta?.direction || null} width={airportW} />
+        </div>
+      ) : isLand ? (
+        <div className="flex flex-col items-center">
+          {stamp.kind === "state"
+            ? <LandStamp template="state" name={stamp.region || stamp.name} date={stamp.visited_on} direction={stamp.meta?.direction || null} mode={stamp.meta?.mode || null} width={airportW} />
+            : <LandStamp template="country" name={String(stamp.name || "").split(" · ")[0]} countryCode={String(stamp.entity_id || "").split(":")[0]} date={stamp.visited_on} direction={stamp.meta?.direction || null} mode={stamp.meta?.mode || null} width={airportW} />}
         </div>
       ) : isCity ? (
         // A city / place visit (everything minted by "Stamp a place"). This

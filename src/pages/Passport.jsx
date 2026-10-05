@@ -15,6 +15,7 @@ import { setStampArt } from "@/lib/passport";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
+import LandStamp from "@/components/passport/LandStamp";
 import PassportBook, { packBookPages, readFontScale, fitsTogether } from "@/components/passport/PassportBook";
 import BlotterStrip from "@/components/passport/Blotter";
 import { isAdminEmail } from "@/lib/admins";
@@ -164,6 +165,29 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
     const { error } = await deleteStampPhoto(photoId);
     if (error) showToast(error, "error"); else { showToast("Photo removed", "success"); onChanged(); }
   };
+
+  // Border crossings render the land stamp (state welcome sign / checkpoint).
+  if (stamp.kind === "state" || (stamp.kind === "country" && stamp.entity_type === "border" && stamp.meta?.direction)) {
+    return (
+      <div className="bg-white rounded-[20px] p-3 flex flex-col items-center" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
+        {stamp.kind === "state"
+          ? <LandStamp template="state" name={stamp.region || stamp.name} date={stamp.visited_on} direction={stamp.meta?.direction || null} mode={stamp.meta?.mode || null} width={264} />
+          : <LandStamp template="country" name={String(stamp.name || "").split(" · ")[0]} countryCode={String(stamp.entity_id || "").split(":")[0]} date={stamp.visited_on} direction={stamp.meta?.direction || null} mode={stamp.meta?.mode || null} width={264} />}
+        <div className="flex items-center gap-2 mt-1.5">
+          <VerifiedBadge verified={stamp.verified} />
+          {!readOnly && (
+            <button onClick={() => setConfirmDel(true)} className="rounded-lg px-2.5 py-1" style={{ background: IVORY_2, color: INK2, fontSize: fs(11.5) }} aria-label="Remove this stamp">Remove</button>
+          )}
+        </div>
+        {confirmDel && !readOnly && (
+          <span className="inline-flex items-center gap-1.5 mt-1.5">
+            <button onClick={removeStamp} disabled={busy} className="rounded-lg px-2.5 py-1 font-semibold" style={{ background: "#B0472F", color: "#fff", fontSize: fs(11.5) }}>Yes, remove</button>
+            <button onClick={() => setConfirmDel(false)} className="rounded-lg px-2.5 py-1" style={{ background: IVORY_2, color: INK2, fontSize: fs(11.5) }}>Keep</button>
+          </span>
+        )}
+      </div>
+    );
+  }
 
   // Airport arrival stamps render the authentic in-app stamp; memory photos welcome.
   if (stamp.kind === "airport") {

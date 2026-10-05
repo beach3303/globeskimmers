@@ -1545,3 +1545,30 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Kit: docs/VIRTUAL_ITEMS_ART_KIT.md + scripts/stamp-art/virtual-items-filelist.csv
   (1,205 exact paths; starter_set=YES marks the ~160-file first batch).
 - Gates: eslint clean, no-undef 0, build 0.
+
+## 2026-10-05 — Border crossings: entry/exit stamps on the ground + visited flags
+- Founder: after (never before) crossing a country border by car/train/cruise, ask Entry or
+  Exit or Not now (San Diego → Tijuana); same for US STATE lines (California → Nevada) with
+  each state's claim ("The Silver State") and for UK nations (England → Scotland); designs
+  must differ from airport stamps; every entered country drops a flag sticker — "Visited
+  <Country>" above the flag unless it's home/residence.
+- App: LandStamp.jsx — two new designs: state = roadside welcome sign on posts (ENTRY/EXIT,
+  name, italic claim, date, "I was here!"); country = checkpoint with a diagonal-striped
+  barrier bar, LAND BORDER / RAILWAY CROSSING / PORT OF ENTRY by mode, car/train/ship glyph,
+  drawn ✓. Proof-rendered and eyeballed. src/lib/stateNicknames.js: 51 state claims + UK
+  nations (SUBREGIONS US+GB).
+- BorderCrossingPrompt rewritten: detects a COUNTRY change (GPS already across; airports
+  defer to AirportArrivalPrompt) or a US-state/UK-nation change; mode chips 🚗🚆🚢 (ship for
+  countries — covers cruise stops ashore); Entry/Exit buttons preview the exact stamp;
+  "Not now" and the pop-up kill-switch stay. Cruise ships = the country flow when they step
+  ashore.
+- Worker: kind 'state' added; direction+mode allowed for airports, states, and border country
+  stamps (entity_id keyed BASE:date:arr|dep so every crossing is its own stamp); stats gains
+  states count. Booklet + stamp card render LandStamp; legacy flag-badge border stamps
+  unchanged.
+- Stickers: arrival flags now print "VISITED <NAME>" above the flag; home/residence flags
+  stay plain (an earlier plain flag never doubles).
+- Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0, stamp proof
+  sheet rendered. Ships: worker on push; app with `npm run ota`.
+- Note: state detection uses the reverse geocoder's address.state, which arrives when the
+  app is opened in the new state/country — the prompt fires on the next open after crossing.

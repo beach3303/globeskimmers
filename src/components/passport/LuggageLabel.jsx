@@ -16,10 +16,17 @@ export default function LuggageLabel({ label, uid }) {
   if (label.shape === "flag") {
     // A real vinyl flag sticker: white die-cut border, the true flag, a faint
     // gloss. HTML (not SVG <image>) so share captures can draw it — the flag
-    // art serves with open CORS for exactly that.
+    // art serves with open CORS for exactly that. A country that isn't home or
+    // residence prints "VISITED <NAME>" above its flag (founder, 2026-10-05);
+    // home flags stay plain.
     return (
-      <div role="img" aria-label={`Flag sticker: ${label.top}`}
+      <div role="img" aria-label={label.visited ? `Sticker: visited ${label.top}` : `Flag sticker: ${label.top}`}
         style={{ position: "relative", background: "#FFFFFF", padding: "7%", borderRadius: "12% / 16%", boxShadow: "0 1px 1.5px rgba(0,0,0,.28), 0 0 0 0.5px rgba(0,0,0,.06)" }}>
+        {label.visited && (
+          <span style={{ display: "block", textAlign: "center", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 700, fontSize: "clamp(6.5px, 0.72em, 11px)", lineHeight: 1.15, letterSpacing: ".04em", color: "#2B3A52", padding: "0 1% 4%", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            Visited {label.top}
+          </span>
+        )}
         <img src={label.flag} alt="" crossOrigin="anonymous" draggable={false}
           style={{ display: "block", width: "100%", aspectRatio: "4 / 3", objectFit: "cover", borderRadius: "6% / 8%", pointerEvents: "none" }} />
         <span aria-hidden="true" style={{ position: "absolute", inset: 0, borderRadius: "12% / 16%", background: "linear-gradient(155deg, rgba(255,255,255,.38) 0%, rgba(255,255,255,0) 38%)", pointerEvents: "none" }} />
