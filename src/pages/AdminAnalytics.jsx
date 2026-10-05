@@ -63,6 +63,79 @@ function BarRow({ label, count, max, color = COLORS.accent }) {
   );
 }
 
+// The whole app's activity, aggregated (founder, 2026-10-05) — the investor
+// view: how many activities per day/week/month, which kinds, which places.
+// Counts only; no per-user data.
+const OV_LABELS = {
+  total: 'All activity', stamps_attraction: 'Attraction stamps', stamps_city: 'City stamps',
+  stamps_airport: 'Airport stamps', stamps_country: 'Country stamps', stamps_icon: 'Icon stamps',
+  stamps_wonder: 'Wonder stamps', guestbook_notes: 'Guestbook notes', doodles: 'Doodles',
+  dish_photos_restaurant: 'Dish photos (restaurants)', dish_photos_coffee: 'Dish photos (cafés)',
+  dish_photos_store: 'Store finds', owner_messages: 'Owner messages',
+};
+function ActivityOverview() {
+  const [ov, setOv] = React.useState(null);
+  const [gran, setGran] = React.useState('month');
+  React.useEffect(() => {
+    (async () => {
+      const { data, error } = await callWorker('admin/activity-overview', {});
+      setOv(error || data?.error ? { error: error || data.error } : data);
+    })();
+  }, []);
+  if (!ov) return <Section title="📈 Activity overview" icon={Activity}><div style={{ color: COLORS.gray, fontSize: 13 }}>Counting…</div></Section>;
+  if (ov.error) return <Section title="📈 Activity overview" icon={Activity}><div style={{ color: '#B0472F', fontSize: 13 }}>{ov.error}</div></Section>;
+  const rows = ov[gran] || [];
+  const shown = gran === 'day' ? rows.slice(-14) : rows.slice(-12);
+  const metrics = ['total', ...Object.keys(OV_LABELS).filter((k) => k !== 'total' && shown.some((r) => r[k]))];
+  const keyLabel = (k) => (gran === 'month' ? k.slice(2) : k.slice(5));
+  const delta = (k) => {
+    const m = ov.month;
+    if (!m || m.length < 2) return null;
+    const cur = m[m.length - 1][k] || 0, prev = m[m.length - 2][k] || 0;
+    if (!prev) return null;
+    const pct = Math.round(((cur - prev) / prev) * 100);
+    return `${pct >= 0 ? '+' : ''}${pct}%`;
+  };
+  const top = (list, title) => (
+    <div style={{ minWidth: 150 }}>
+      <div style={{ fontWeight: 700, fontSize: 11, letterSpacing: '.05em', textTransform: 'uppercase', color: COLORS.gray, marginBottom: 4 }}>{title}</div>
+      {(list || []).slice(0, 6).map((x) => <div key={x.name} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', gap: 10 }}><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{x.name}</span><b>{x.n}</b></div>)}
+    </div>
+  );
+  return (
+    <Section title="📈 Activity overview — the investor view" icon={Activity}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'baseline', marginBottom: 8, fontSize: 13 }}>
+        <span>All-time: <b>{ov.allTime.stamps ?? '—'}</b> stamps · <b>{ov.allTime.guestbook ?? '—'}</b> notes &amp; doodles · <b>{ov.allTime.dish_photos ?? '—'}</b> food photos · <b>{ov.allTime.owner_messages ?? '—'}</b> owner messages</span>
+        <span style={{ color: COLORS.gray }}>This month vs last: {delta('total') || '—'} overall{delta('stamps_airport') ? `, airports ${delta('stamps_airport')}` : ''}{delta('dish_photos_restaurant') ? `, food ${delta('dish_photos_restaurant')}` : ''}</span>
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        {['day', 'week', 'month'].map((g) => (
+          <button key={g} type="button" onClick={() => setGran(g)} style={{ borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.border || '#ddd'}`, background: gran === g ? COLORS.dark : '#fff', color: gran === g ? '#fff' : COLORS.dark }}>{g === 'day' ? 'Days' : g === 'week' ? 'Weeks' : 'Months'}</button>
+        ))}
+        {ov.truncated && <span style={{ fontSize: 11, color: '#B0472F', alignSelf: 'center' }}>window truncated at 40k rows — numbers are a floor</span>}
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums', fontSize: 12.5, minWidth: 420 }}>
+          <thead><tr><th style={{ textAlign: 'left', paddingRight: 12 }}></th>{shown.map((r) => <th key={r.key} style={{ textAlign: 'right', padding: '0 7px', color: COLORS.gray, fontWeight: 600 }}>{keyLabel(r.key)}</th>)}</tr></thead>
+          <tbody>
+            {metrics.map((k) => (
+              <tr key={k} style={k === 'total' ? { fontWeight: 700, borderBottom: `1px solid ${COLORS.border || '#eee'}` } : {}}>
+                <td style={{ paddingRight: 12, whiteSpace: 'nowrap', color: k === 'total' ? COLORS.dark : COLORS.gray }}>{OV_LABELS[k] || k}</td>
+                {shown.map((r) => <td key={r.key} style={{ textAlign: 'right', padding: '2px 7px' }}>{r[k] || ''}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, marginTop: 12 }}>
+        {top(ov.topCities, 'Top stamped cities · 12 mo')}
+        {top(ov.topPlaces, 'Top stamped places · 12 mo')}
+        {top(ov.topCountries, 'Top countries · 12 mo')}
+      </div>
+    </Section>
+  );
+}
+
 // One traveler's activity record, pulled on demand (founder, 2026-10-05) —
 // for legal requests and audits only. Computed when asked; nothing is stored.
 function TravelerPull() {
@@ -525,6 +598,8 @@ export default function AdminAnalytics() {
               <KpiCard icon={Activity} label="Stickiness" value={`${stickiness}%`} color={COLORS.green} />
               <KpiCard icon={Sparkles} label="Taps/session" value={avgRowsTaps} color={COLORS.accent} />
             </div>
+
+            <ActivityOverview />
 
             <TravelerPull />
 

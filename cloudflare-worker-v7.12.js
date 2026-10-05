@@ -19207,6 +19207,90 @@ async function handleGuestbookReport(request, env, ctx) {
 // guestbook notes, dish photos and owner messages. Built for legal requests and
 // audits only: computed when asked, from data the product already stores —
 // no standing profiles are kept (deliberate: see docs/LAWYER_BRIEF.md §5).
+// POST /admin/activity-overview — the whole app's activity, aggregated (founder,
+// 2026-10-05: "how many activities are happening in a day, week, month, year —
+// are people stamping more? writing on food more? which city more?"). Built for
+// the investor/VC view: counts only, no names, no per-user rows — aggregates
+// aren't personal data. Reads the four content tables (durable, unlike D1
+// events' 90-day window) over the last 12 months and buckets by day/week/month;
+// all-time totals come from PostgREST exact counts.
+async function handleAdminActivityOverview(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  try {
+    const now = new Date();
+    const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1)).toISOString();
+    const readAll = async (path) => {
+      const rows = [];
+      for (let page = 0; page < 40; page++) {
+        const q = await gbRest(env, `${path}&created_at=gte.${encodeURIComponent(since)}&order=created_at.asc&limit=1000&offset=${page * 1000}`, {});
+        if (!q.ok) return { rows, truncated: false, failed: true };
+        const part = await q.json().catch(() => []);
+        rows.push(...part);
+        if (part.length < 1000) return { rows, truncated: false };
+      }
+      return { rows, truncated: true };
+    };
+    const countAll = async (table) => {
+      const q = await gbRest(env, `${table}?select=id&limit=1`, { headers: { Prefer: 'count=exact' } });
+      const m = String(q.headers.get('content-range') || '').match(/\/(\d+)$/);
+      return m ? Number(m[1]) : null;
+    };
+    const [st, gb, dp, on] = await Promise.all([
+      readAll('passport_stamps?select=created_at,kind,city,country,name'),
+      readAll('guestbook_entries?select=created_at,is_doodle'),
+      readAll('place_dishes?select=created_at,kind'),
+      readAll('owner_notes?select=created_at'),
+    ]);
+    const [stN, gbN, dpN, onN] = await Promise.all([countAll('passport_stamps'), countAll('guestbook_entries'), countAll('place_dishes'), countAll('owner_notes')]);
+    // One activity = one row; a metric is a named slice of one table.
+    const metricOf = [];
+    for (const r of st.rows) metricOf.push([r.created_at, `stamps_${r.kind || 'other'}`, r]);
+    for (const r of gb.rows) metricOf.push([r.created_at, r.is_doodle ? 'doodles' : 'guestbook_notes', r]);
+    for (const r of dp.rows) metricOf.push([r.created_at, `dish_photos_${r.kind || 'restaurant'}`, r]);
+    for (const r of on.rows) metricOf.push([r.created_at, 'owner_messages', r]);
+    const dayOf = (iso) => String(iso || '').slice(0, 10);
+    const monthOf = (iso) => String(iso || '').slice(0, 7);
+    const weekOf = (iso) => {
+      // The week's Monday, as a date — readable in a table header.
+      const d = new Date(dayOf(iso) + 'T00:00:00Z');
+      if (Number.isNaN(+d)) return '?';
+      d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+      return d.toISOString().slice(0, 10);
+    };
+    const bucket = { day: {}, week: {}, month: {} };
+    const add = (map, key, metric) => {
+      const x = map[key] || (map[key] = { total: 0 });
+      x.total += 1; x[metric] = (x[metric] || 0) + 1;
+    };
+    const dayFloor = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const weekFloor = new Date(Date.now() - 12 * 7 * 86400000).toISOString().slice(0, 10);
+    for (const [iso, metric] of metricOf) {
+      add(bucket.month, monthOf(iso), metric);
+      const d = dayOf(iso);
+      if (d >= dayFloor) add(bucket.day, d, metric);
+      if (d >= weekFloor) add(bucket.week, weekOf(iso), metric);
+    }
+    // Which places get stamped: top cities and top named places, 12-month window.
+    const topN = (rows, key) => {
+      const by = {};
+      for (const r of rows) { const v = String(r[key] || '').trim(); if (v) by[v] = (by[v] || 0) + 1; }
+      return Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, n]) => ({ name, n }));
+    };
+    const attractionish = st.rows.filter((r) => r.kind !== 'country' && r.kind !== 'airport');
+    const series = (map) => Object.entries(map).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([key, v]) => ({ key, ...v }));
+    return jsonResponse({
+      since,
+      truncated: !!(st.truncated || gb.truncated || dp.truncated || on.truncated),
+      allTime: { stamps: stN, guestbook: gbN, dish_photos: dpN, owner_messages: onN },
+      day: series(bucket.day), week: series(bucket.week), month: series(bucket.month),
+      topCities: topN(attractionish, 'city'),
+      topPlaces: topN(attractionish, 'name'),
+      topCountries: topN(st.rows, 'country'),
+    });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleAdminUserActivity(request, env) {
   const denied = await requireAdmin(request, env);
   if (denied) return denied;
@@ -19987,6 +20071,7 @@ export default {
       if (pathname === '/admin/handle-requests' && request.method === 'POST') return await handleAdminHandleRequests(request, env);
       if (pathname === '/admin/guestbook' && request.method === 'POST') return await handleAdminGuestbook(request, env);
       if (pathname === '/admin/user-activity' && request.method === 'POST') return await handleAdminUserActivity(request, env);
+      if (pathname === '/admin/activity-overview' && request.method === 'POST') return await handleAdminActivityOverview(request, env);
       if (pathname === '/passport/sets' && request.method === 'POST') return await handlePassportSets(request, env);
       if (pathname === '/social/block' && request.method === 'POST') return await handleSocialBlock(request, env, ctx);
       if (pathname === '/social/age' && request.method === 'POST') return await handleSocialAge(request, env, ctx);

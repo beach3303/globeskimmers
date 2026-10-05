@@ -1480,3 +1480,18 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0.
 - Test after OTA: at any airport, the prompt shows both stamps; pick one; return days later →
   asked again. Old airport stamps unchanged in the booklet.
+
+## 2026-10-05 — Activity overview: the investor view (aggregate, counts only)
+- Founder: not only courts — investors/VCs need the whole picture: activities per day/week/
+  month/year, which kinds, trends (stamping more? food more? airports? which city?).
+- Worker: POST /admin/activity-overview (admin-gated) reads the four content tables over the
+  last 12 months (paged, 40k-row ceiling with a truncated flag) + PostgREST exact counts for
+  all-time. Returns day (30d) / week (12w) / month (12m) series per metric (stamps by kind,
+  guestbook notes, doodles, dish photos by kind, owner messages), top stamped cities, places
+  and countries (12-month window). Counts only — no names, no per-user rows; durable Supabase
+  tables, not the 90-day D1 events.
+- Admin page: "📈 Activity overview — the investor view": all-time line, this-month-vs-last
+  deltas (overall, airports, food), Days/Weeks/Months toggle, metric × period table, top lists.
+  Sits above the audit pull.
+- Yearly view = the 12-month row of the month table; longer horizons accrue as the app ages.
+- Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0.
