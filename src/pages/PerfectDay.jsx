@@ -88,7 +88,7 @@ const restSource = (r) => (r && r._source === "owned" ? "GlobeSkimmers data" : "
 // a dashed "not yet earned" ring, typographic stamp when a spot has no art yet.
 function StampVisual({ item, size = 84 }) {
   const [fail, setFail] = useState(false);
-  const art = stampArtUrl(item.name);
+  const art = stampArtUrl(item.name, { entityId: item.id, country: item.country });
   return (
     <div
       className="mx-auto flex items-center justify-center"

@@ -52,7 +52,7 @@ function CollectedTag({ overlay }) {
 function DreamCard({ item, collected, onOpen }) {
   const [photoFail, setPhotoFail] = useState(false);
   const [artFail, setArtFail] = useState(false);
-  const art = stampArtUrl(item.name);
+  const art = stampArtUrl(item.name, { entityId: item.id, country: item.country });
 
   if (item.photoUrl && !photoFail) {
     return (

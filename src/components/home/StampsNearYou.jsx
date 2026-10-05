@@ -25,7 +25,7 @@ const INK = "#243447", INK3 = "#66717D", STAMP = "#B0472F", PAPER = "#FBF6EC";
 // falls back to a clean rubber-stamp placeholder when a spot has no art yet.
 function StampChip({ item, wide, onOpen }) {
   const [fail, setFail] = useState(false);
-  const art = stampArtUrl(item.name);
+  const art = stampArtUrl(item.name, { entityId: item.id, country: item.country });
   const size = wide ? 116 : 100;
   const miles = Number.isFinite(item.distanceMiles) ? `${item.distanceMiles.toFixed(1)} mi` : null;
   return (

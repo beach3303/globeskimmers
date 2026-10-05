@@ -41,7 +41,7 @@ const regionName = (cc) => { try { return new Intl.DisplayNames(["en"], { type: 
 
 function PlaceArt({ name, city, country, id, width, film }) {
   const [fail, setFail] = useState(false);
-  const art = film ? null : stampArtUrl(name);   // a film spot shows its Scene stamp
+  const art = film ? null : stampArtUrl(name, { entityId: id, country });   // a film spot shows its Scene stamp
   if (art && !fail) return <img src={art} alt="" onError={() => setFail(true)} style={{ width, height: width, objectFit: "contain" }} />;
   return <TypographicStamp name={name} city={city} country={country} entityId={id || name} width={width} strength={STAMP_INK_STRENGTH} film={film || null} />;
 }
