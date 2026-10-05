@@ -1433,3 +1433,25 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   eager images in share copies, partial-move error).
 - Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0, packing tested on
   sample passports. Ships: worker on push; app with `npm run ota`.
+
+## 2026-10-05 — Private messages to owners; guestbooks + photos on convenience stores
+- Founder: only kind feedback public; a private channel to the business owner (screened,
+  anonymous unless signed, collected until owners claim); same guestbook/doodle/photo
+  treatment for coffee shops and convenience stores ("photo of what you got").
+- App: every Guestbook (attractions, restaurants, cafés, NOW stores) gets a quiet door —
+  "🔒 Something for the owner's ears? Send a private message" → OwnerNoteSheet (sheet on
+  document.body: message, "Sign it with my first name" checkbox, the promise line "Sent
+  privately to the owner when they join GlobeSkimmers… We screen messages for threats and
+  abuse before delivering them"). ConvenienceStore cards gain TravelerDishes (kind="store",
+  "Add a photo of what you got here", "What did you get? e.g. Matcha Kit Kat") + a Guestbook.
+- Worker: POST /places/owner-note — age gate, 10/day cap, Haiku screen (complaints ALLOWED;
+  threats/slurs/extortion/personal details blocked; staff insults + crime accusations held
+  for admin); name from the profile only when signed AND 18+; rows in api.owner_notes
+  (status ok|held|blocked) awaiting the owner-claim build. /places/dishes/add takes
+  kind='store' (food-subject check skipped — a store find can be anything).
+- Migrations: 20261005100000_owner_notes.sql, 20261005100100_place_dishes_store_kind.sql
+  (gs:allow-destructive: re-creates the kind check). Apply via deploy-migrations on push;
+  the worker answers "opens in a few minutes" until they land.
+- docs/LAWYER_BRIEF.md started (founder: collect lawyer questions on the side) — reviews/FTC,
+  claiming, stamp IP, UGC, minors/privacy, insurance; update it when decisions touch it.
+- Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0.
