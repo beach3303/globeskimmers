@@ -1584,3 +1584,13 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   (activeLocation.address) — filled, not locked; the submit-time GPS/photo-proof check is
   unchanged, so users can only mint a city stamp where they actually are.
 - Gates: eslint (touched) clean, no-undef app-wide 0, build 0.
+
+## 2026-10-05 — Dodger Stadium: film note removed; owners can drop any movie note
+- Founder: Dodger Stadium is a ballgame destination now — remove "filmed here".
+- D1 (applied live): DELETE FROM film_scenes for icon:Q247420 — new Dodger stamps carry no
+  film. (It was the "Star Trek" scene row.)
+- App + worker: stamps already minted with a movie note get a fix — stamp options →
+  "Remove the movie note" (keeps the stamp, drops the "scene from…" line and the photo-first
+  layout). /passport/stamp/layout takes film:'remove'.
+- Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0. Worker ships on
+  push; the option with `npm run ota`.

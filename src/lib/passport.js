@@ -71,6 +71,12 @@ export async function setStampPos(stamp_id, stamp_pos) {
   const { data, error } = await callWorker('passport/stamp/layout', { stamp_id, stamp_pos });
   return { data, error: error || (data && data.ok === false ? data.error || 'Could not move the stamp' : null) };
 }
+// Drop a scene stamp's movie note (founder, 2026-10-05): the stamp stays, the
+// "scene from…" line and photo-first layout go.
+export async function clearStampFilm(stamp_id) {
+  const { data, error } = await callWorker('passport/stamp/layout', { stamp_id, film: 'remove' });
+  return { data, error: error || (data && data.ok === false ? data.error || 'Could not update the stamp' : null) };
+}
 // Places of respect (src/lib/respectPlaces.js): 'art' keeps the illustration,
 // 'plain' prints the stamp as text only (the typographic stamp).
 export async function setStampArt(stamp_id, art) {

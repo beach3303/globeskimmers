@@ -11,7 +11,7 @@ import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, Badge
 import { useNavigate } from "react-router-dom";
 import { openAttraction } from "@/lib/openAttraction";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, uploadStampPhoto, deleteStamp, deleteStampPhoto, setStampLayout, setStampPos, setStampPageWith, isPhotoFirst, checkStampPhotos, isVerified, proofToast } from "@/lib/passport";
+import { addStamp, metersBetween, uploadStampPhoto, deleteStamp, deleteStampPhoto, setStampLayout, setStampPos, setStampPageWith, clearStampFilm, isPhotoFirst, checkStampPhotos, isVerified, proofToast } from "@/lib/passport";
 import { readPhotoExif } from "@/lib/photoExif";
 import { logEvent } from "@/lib/analytics";
 import { stampRadiusFor } from "@/lib/stampRadius";
@@ -359,6 +359,18 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
               label={solo ? "Share a page with other stamps" : "Give this stamp its own page"}
               sub={solo ? "Back into the flow — it packs in beside other stamps" : "A solo page, nothing else on it"}
               onClick={toggleLayout} disabled={busy === "layout"} />
+          )}
+          {!readOnly && stamp.meta?.film && (
+            <Row icon={busy === "film" ? Loader2 : PencilLine} label="Remove the movie note"
+              sub={`Keeps the stamp — drops “${String(stamp.meta.film.title || "the scene").slice(0, 40)}”`}
+              onClick={async () => {
+                setBusy("film");
+                const { error } = await clearStampFilm(stamp.id);
+                setBusy(null);
+                if (error) { showToast(error, "error"); return; }
+                showToast("Movie note removed", "success");
+                onChanged?.();
+              }} disabled={busy === "film"} />
           )}
           {canMove && !moving && (
             <Row icon={ArrowRightLeft} label="Move to another page"

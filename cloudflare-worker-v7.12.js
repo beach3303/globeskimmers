@@ -13500,11 +13500,14 @@ async function handlePassportStampLayout(request, env) {
     // art (founder, 2026-10-04): a memorial stamp (Auschwitz-Birkenau…) keeps its
     // illustration ('art') or prints as text only ('plain') — the traveler's choice.
     const art = ['art', 'plain'].includes(b.art) ? b.art : null;
+    // film: 'remove' (founder, 2026-10-05: Dodger Stadium is a ballgame now, not
+    // a film set) — the owner drops the "scene from…" note; the stamp stays.
+    const dropFilm = b.film === 'remove';
     // page_with (founder, 2026-10-05: "move one stamp into another page"): this
     // stamp shares the booklet page of that one — two stamps to a page. Both
     // must be the traveler's own; the newest move wins a contested page.
     const pageWith = b.page_with != null && BL_UUID.test(String(b.page_with)) ? String(b.page_with) : null;
-    if (!stampId || (!layout && !pos && !art && !pageWith)) return jsonResponse({ error: 'stamp_id + layout (auto|solo), stamp_pos (top|bottom|auto), art (art|plain) or page_with (a stamp id) required' }, 400);
+    if (!stampId || (!layout && !pos && !art && !pageWith && !dropFilm)) return jsonResponse({ error: 'stamp_id + layout (auto|solo), stamp_pos (top|bottom|auto), art (art|plain), film (remove) or page_with (a stamp id) required' }, 400);
     if (pageWith === stampId) return jsonResponse({ ok: false, error: 'Pick a different page' }, 400);
     const own = async (id) => {
       const q = await gbRest(env, `passport_stamps?id=eq.${id}&user_id=eq.${user.id}&select=id,layout,meta`, {});
@@ -13515,6 +13518,7 @@ async function handlePassportStampLayout(request, env) {
     const meta = { ...(cur.meta && typeof cur.meta === 'object' ? cur.meta : {}) };
     const patch = { updated_at: new Date().toISOString() };
     if (pos) { if (pos === 'auto') delete meta.stamp_pos; else meta.stamp_pos = pos; }
+    if (dropFilm) { delete meta.film; delete meta.stamp_pos; }
     if (art) meta.art = art;
     let partner = null;
     if (pageWith) {
@@ -13527,7 +13531,7 @@ async function handlePassportStampLayout(request, env) {
       patch.layout = layout;
       delete meta.page_with; delete meta.page_with_at;
     }
-    if (pos || art || pageWith || layout) patch.meta = Object.keys(meta).length ? meta : null;
+    if (pos || art || pageWith || layout || dropFilm) patch.meta = Object.keys(meta).length ? meta : null;
     const r = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
     if (!r.ok) return jsonResponse({ ok: false, error: r.status === 400 ? 'Page layout isn\'t available yet — try again later' : 'update failed' });
     // A stamp given its own page also releases any stamp that was paired onto it;
