@@ -65,10 +65,25 @@ export function stampArtSlug(name, { entityId, country } = {}) {
   return art;
 }
 
+// Art is cached on phones for 30 days, so a redrawn file gets a new URL.
+// 2026-10-05: the founder's redraws (wrong landmark, misspelling, cut-off frame,
+// Montserrat's damaged file).
+const REDRAWN = { "2026-10-05": [
+  "anne-frank-house", "blyde-river-canyon", "cancun", "cape-of-good-hope", "ciudad-perdida",
+  "corinth-canal", "gergeti-trinity-church", "golden-roof", "ise-grand-shrine", "jebel-jais",
+  "kalandula-falls", "kuwait-towers", "lake-titicaca", "lauterbrunnen-valley",
+  "le-morne-brabant", "loango-national-park", "malbork-castle", "monte-alban", "montserrat",
+  "mount-elbrus", "mount-koya", "museum-of-the-future", "notre-dame-cathedral",
+  "perito-moreno-glacier", "rhine-falls", "rijksmuseum", "selaron-steps", "shah-i-zinda",
+  "somapura-mahavihara", "the-wave", "uxmal", "verona-arena", "zuma-rock",
+] };
+const REVISION = Object.fromEntries(Object.entries(REDRAWN).flatMap(([rev, list]) => list.map((s) => [s, rev])));
+
 // Returns a stamp-art URL (a candidate — the caller falls back on <img>
 // onError). Only for place-like stamps (icons/attractions/wonders/cities) —
 // country stamps use the flag, not bespoke art.
 export function stampArtUrl(name, opts) {
   const art = stampArtSlug(name, opts);
-  return art ? `${WORKER}/stamp-art/${art}.png` : null;
+  if (!art) return null;
+  return `${WORKER}/stamp-art/${art}.png${REVISION[art] ? `?r=${REVISION[art]}` : ""}`;
 }
