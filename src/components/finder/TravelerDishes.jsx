@@ -18,7 +18,7 @@ const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13,.12)";
 const IVORY = "#FAF7F0", STAMP = "#B0472F";
 const fs = (n) => `calc(${n}px*var(--fs))`;
-const travelers = (n, loved) => `Ordered by ${n} traveler${n === 1 ? "" : "s"}${loved > 0 ? ` · ${loved === n ? (n === 1 ? "loved it" : "all loved it") : `${loved} loved it`}` : ""}`;
+const travelers = (n, loved, fav = 0) => `Ordered by ${n} traveler${n === 1 ? "" : "s"}${loved > 0 ? ` · ${loved === n ? (n === 1 ? "loved it" : "all loved it") : `${loved} loved it`}` : ""}${fav > 0 ? ` · ⭐ favorite of ${fav}` : ""}`;
 
 export default function TravelerDishes({ place, kind = "restaurant" }) {
   const rootRef = useRef(null);
@@ -66,7 +66,7 @@ export default function TravelerDishes({ place, kind = "restaurant" }) {
                 </button>
                 <div className="min-w-0">
                   <div className="truncate" style={{ fontFamily: SERIF, fontSize: fs(17), color: INK, lineHeight: 1.15 }}>{d.dish}</div>
-                  <div style={{ fontSize: fs(12), color: INK3, marginTop: 2 }}>{travelers(d.travelers, d.loved || 0)}{d.photos.length > 1 ? ` · ${d.photos.length} photos` : ""}</div>
+                  <div style={{ fontSize: fs(12), color: INK3, marginTop: 2 }}>{travelers(d.travelers, d.loved || 0, d.favorites || 0)}{d.photos.length > 1 ? ` · ${d.photos.length} photos` : ""}</div>
                 </div>
               </div>
             ))}
@@ -82,7 +82,7 @@ export default function TravelerDishes({ place, kind = "restaurant" }) {
       <button type="button" onClick={() => setAdding(true)}
         className="w-full mt-2 rounded-[12px] py-2.5 font-semibold"
         style={{ background: "#fff", color: STAMP, border: `1.5px dashed ${STAMP}55`, fontSize: fs(13.5) }}>
-        📸 Add your order
+        📸 Add a photo of what you ordered
       </button>
       {!dishes.length && (
         <p style={{ fontSize: fs(11.5), color: INK3, textAlign: "center", marginTop: 4, lineHeight: 1.4 }}>
@@ -120,6 +120,7 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded }) {
   const [preview, setPreview] = useState(null);
   const [dish, setDish] = useState("");
   const [liked, setLiked] = useState(null); // true = loved it, false = it was OK
+  const [favorite, setFavorite] = useState(false); // "this is my favorite dish here"
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);
 
@@ -143,7 +144,7 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded }) {
         const pos = await getCurrentPositionSmart({ timeout: 8000 });
         if (pos?.coords) gps = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy };
       } catch { /* no GPS — the photo's own location can still prove it */ }
-      const { data, error, proofNeeded } = await addDish({ place, kind, dish: dish.trim(), liked, image, gps, exif });
+      const { data, error, proofNeeded } = await addDish({ place, kind, dish: dish.trim(), liked, favorite, image, gps, exif });
       if (proofNeeded) { setNote(error); return; }
       if (error) { setNote(error); return; }
       showToast(data?.replaced ? "Photo updated 📸" : "Thank you! Your order is up 🍽️", "success");
@@ -159,7 +160,7 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded }) {
     <div className="fixed inset-0 flex items-end justify-center" style={{ zIndex: 9997, background: "rgba(22,17,13,.5)" }} onClick={onClose}>
       <div className="w-full max-w-md rounded-t-[22px] px-5 pt-4 pb-6" style={{ background: "#F3EEE1", paddingBottom: "max(24px, env(safe-area-inset-bottom))" }} onClick={(e) => e.stopPropagation()}>
         <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "rgba(22,17,13,.18)" }} />
-        <div style={{ fontFamily: SERIF, fontSize: fs(24), color: INK, lineHeight: 1.1 }}>Add your order</div>
+        <div style={{ fontFamily: SERIF, fontSize: fs(24), color: INK, lineHeight: 1.1 }}>Add a photo of what you ordered</div>
         <div className="truncate" style={{ fontSize: fs(12.5), color: INK3, marginTop: 2 }}>{place.name}</div>
         <p style={{ fontSize: fs(13), color: INK2, lineHeight: 1.45, marginTop: 6 }}>
           Help everyone find delicious {goods}! Add a photo of what you ordered — and let us know if you loved it 😊
@@ -193,6 +194,15 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded }) {
               style={{ background: liked === v ? INK : "#fff", color: liked === v ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>{label}</button>
           ))}
         </div>
+
+        {/* Founder, 2026-10-05: "a check box … this is my favorite dish in this
+            restaurant". One per traveler per place — a new pick replaces the old. */}
+        <label className="flex items-center gap-2.5 mt-3 rounded-xl px-3 py-2.5 cursor-pointer" style={{ background: "#fff", border: `1px solid ${favorite ? STAMP : RULE}` }}>
+          <input type="checkbox" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} style={{ width: 18, height: 18, accentColor: STAMP }} />
+          <span style={{ fontSize: fs(13.5), color: INK }}>
+            ⭐ This is my favorite {kind === "coffee" ? "here" : "dish at this restaurant"}
+          </span>
+        </label>
 
         <p style={{ fontSize: fs(11.5), color: INK3, lineHeight: 1.45, marginTop: 10 }}>
           📍 We check that you're here — your location now, or where the photo was taken. Shared without your name, after a quick photo review.

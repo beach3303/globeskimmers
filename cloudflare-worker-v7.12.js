@@ -13196,7 +13196,9 @@ async function handlePassportPhotoCaption(request, env) {
 // location tag within it — and only after the photo review passes AND food or a
 // drink is the main subject. Posts are anonymous; "ordered by N travelers"
 // counts them (one per traveler per dish per place); "· N loved it" counts the
-// travelers who said so — the only verdict ever shown.
+// travelers who said so — the only verdict ever shown; "⭐ favorite of N" counts
+// the travelers who called it their favorite dish here (one per traveler per
+// place, founder 2026-10-05).
 const DISH_PROOF_M = 150;
 const DISH_DAILY_CAP = 12;
 const dishKey = (v) => String(v || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -13214,15 +13216,16 @@ async function dishPlaceIds(env, raw) {
 function dishSummary(rows) {
   const by = new Map();
   for (const r of rows) {
-    const g = by.get(r.dish_key) || { dish: r.dish, travelers: new Set(), loved: new Set(), photos: [], last: r.created_at };
+    const g = by.get(r.dish_key) || { dish: r.dish, travelers: new Set(), loved: new Set(), favorite: new Set(), photos: [], last: r.created_at };
     g.travelers.add(r.user_id);
     if (r.liked === true) g.loved.add(r.user_id);
+    if (r.favorite === true) g.favorite.add(r.user_id);
     if (g.photos.length < 6) g.photos.push({ id: r.id, url: r.photo_url });
     by.set(r.dish_key, g);
   }
   return [...by.values()]
-    .map((g) => ({ dish: g.dish, travelers: g.travelers.size, loved: g.loved.size, photos: g.photos, last: g.last }))
-    .sort((a, b) => b.travelers - a.travelers || b.loved - a.loved || String(b.last).localeCompare(String(a.last)));
+    .map((g) => ({ dish: g.dish, travelers: g.travelers.size, loved: g.loved.size, favorites: g.favorite.size, photos: g.photos, last: g.last }))
+    .sort((a, b) => b.travelers - a.travelers || b.favorites - a.favorites || b.loved - a.loved || String(b.last).localeCompare(String(a.last)));
 }
 
 // POST /places/dishes { place_id } → { dishes: [{ dish, travelers, photos }], mine: [{ id, dish }] }
@@ -13232,7 +13235,10 @@ async function handlePlaceDishes(request, env) {
     const ids = await dishPlaceIds(env, b.place_id);
     if (!ids) return jsonResponse({ dishes: [], mine: [] });
     const inList = ids.all.map((x) => `"${x}"`).join(',');
-    const q = await gbRest(env, `place_dishes?place_id=in.(${inList})&mod_status=eq.ok&order=created_at.desc&limit=200&select=id,user_id,dish,dish_key,photo_url,liked,created_at`, {});
+    const base = `place_dishes?place_id=in.(${inList})&mod_status=eq.ok&order=created_at.desc&limit=200&select=id,user_id,dish,dish_key,photo_url,liked,created_at`;
+    // favorite arrives with migration 20261005090000; until then read without it.
+    let q = await gbRest(env, `${base},favorite`, {});
+    if (!q.ok) q = await gbRest(env, base, {});
     const rows = q.ok ? await q.json() : [];
     const user = await gbUser(request, env).catch(() => null);
     const mine = user ? rows.filter((r) => r.user_id === user.id).map((r) => ({ id: r.id, dish: r.dish, url: r.photo_url })) : [];
@@ -13240,7 +13246,7 @@ async function handlePlaceDishes(request, env) {
   } catch (e) { return jsonResponse({ error: e.message, dishes: [], mine: [] }, 500); }
 }
 
-// POST /places/dishes/add { place_id, place_name, place_lat, place_lng, kind, dish, liked, image, lat, lng, acc, exif }
+// POST /places/dishes/add { place_id, place_name, place_lat, place_lng, kind, dish, liked, favorite, image, lat, lng, acc, exif }
 async function handlePlaceDishAdd(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -13250,6 +13256,7 @@ async function handlePlaceDishAdd(request, env, ctx) {
     const ids = await dishPlaceIds(env, b.place_id);
     if (!ids) return jsonResponse({ error: 'Unknown place' }, 400);
     const kind = b.kind === 'coffee' ? 'coffee' : 'restaurant';
+    const favorite = b.favorite === true;
     const dish = String(b.dish || '').replace(/\s+/g, ' ').trim().slice(0, 60);
     const key = dishKey(dish);
     if (key.length < 2) return jsonResponse({ error: kind === 'coffee' ? 'What did you order?' : 'What dish is this?' }, 400);
@@ -13302,13 +13309,20 @@ async function handlePlaceDishAdd(request, env, ctx) {
     const oq = await gbRest(env, `place_dishes?user_id=eq.${user.id}&place_id=eq.${encodeURIComponent(ids.canon)}&dish_key=eq.${encodeURIComponent(key)}&select=id,photo_key`, {});
     const old = (oq.ok ? await oq.json() : [])[0];
     const row = { user_id: user.id, place_id: ids.canon, place_name: String(b.place_name || '').slice(0, 120) || null, kind, dish, dish_key: key, photo_key: photoKey, photo_url: photoUrl, proof, mod_status: 'ok', created_at: new Date().toISOString(), ...(typeof b.liked === 'boolean' ? { liked: b.liked } : {}) };
-    const w = old
-      ? await gbRest(env, `place_dishes?id=eq.${old.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) })
-      : await gbRest(env, 'place_dishes', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
+    const save = (r) => (old
+      ? gbRest(env, `place_dishes?id=eq.${old.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(r) })
+      : gbRest(env, 'place_dishes', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(r) }));
+    let w = await save({ ...row, favorite });
+    if (!w.ok && w.status === 400) w = await save(row);   // before the favorite column lands
     if (!w.ok) { await env.MEDIA.delete(photoKey).catch(() => {}); return jsonResponse({ error: 'Could not save — try again' }, 502); }
     if (old?.photo_key && ctx) ctx.waitUntil(env.MEDIA.delete(old.photo_key).catch(() => {}));
     const saved = (await w.json())[0] || {};
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'dish_post', { kind, proof, replaced: !!old }));
+    // One favorite per traveler per place: this one replaces any earlier pick.
+    if (favorite && saved.id) {
+      const inList = ids.all.map((x) => `"${x}"`).join(',');
+      await gbRest(env, `place_dishes?user_id=eq.${user.id}&place_id=in.(${inList})&favorite=eq.true&id=neq.${saved.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ favorite: false }) }).catch(() => {});
+    }
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'dish_post', { kind, proof, replaced: !!old, favorite }));
     return jsonResponse({ ok: true, id: saved.id, dish, url: photoUrl, proof, replaced: !!old });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }

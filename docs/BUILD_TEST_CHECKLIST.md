@@ -1391,3 +1391,19 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Test on a phone after OTA: open an attraction, scroll to the guestbook, tap 🎨 Doodle —
   the pad appears on screen at the bottom; also from "Doodle with your finger instead".
 - Gates: eslint (touched) clean, no-undef app-wide 0, build 0. Ships with `npm run ota`.
+
+## 2026-10-05 — Dish photos: "Add a photo of what you ordered" + favorite dish
+- Founder: "instead of add your order … add a photo of what you ordered … a check box … this
+  is my favorite dish in this restaurant".
+- App (TravelerDishes, restaurants + cafés): the button and sheet read "Add a photo of what you
+  ordered"; the sheet has "⭐ This is my favorite dish at this restaurant" (cafés: "…favorite
+  here"). "From travelers" lines add "· ⭐ favorite of N".
+- Worker: /places/dishes/add takes favorite; one favorite per traveler per place (a new pick
+  clears the old); /places/dishes returns favorites per dish and sorts by travelers, then
+  favorites, then loved. Both read/write without the column until the migration lands.
+- Migration supabase/migrations/20261005090000_place_dishes_favorite.sql (favorite boolean
+  not null default false) — applies via deploy-migrations on push.
+- Founder's question "why are there no photos in places to eat?": restaurant lists come from
+  the owned places DB (free) and those rows carry no photos; Google photos load only when a
+  restaurant is opened (paid per place). Options in the reply; nothing changed yet.
+- Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0.

@@ -11,10 +11,11 @@ export async function listDishes(placeId) {
 // exif: { lat, lng, taken_at } read from the ORIGINAL file (src/lib/photoExif.js).
 // gps: { lat, lng, acc } from getCurrentPositionSmart, or null.
 // liked: true = loved it, false = it was OK, null = didn't say.
-export async function addDish({ place, kind, dish, liked, image, gps, exif }) {
+// favorite: true = "this is my favorite dish here" (one per traveler per place).
+export async function addDish({ place, kind, dish, liked, favorite = false, image, gps, exif }) {
   const { data, error } = await callWorker("places/dishes/add", {
     place_id: place.id, place_name: place.name, place_lat: place.lat, place_lng: place.lng,
-    kind, dish, image, ...(typeof liked === "boolean" ? { liked } : {}),
+    kind, dish, image, ...(typeof liked === "boolean" ? { liked } : {}), ...(favorite ? { favorite: true } : {}),
     lat: gps?.lat, lng: gps?.lng, acc: gps?.acc,
     exif: exif || undefined,
   });
