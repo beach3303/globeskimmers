@@ -17,10 +17,14 @@ export function derivePackets(stamps) {
     if (!photos.length) continue;
     const city = (s.city || "").trim() || s.name;
     const key = `${city}|${(s.country || "").trim()}`;
-    if (!groups.has(key)) groups.set(key, { key, city, country: (s.country || "").trim(), photos: [], dates: [] });
+    if (!groups.has(key)) groups.set(key, { key, city, country: (s.country || "").trim(), photos: [], dates: [], stampId: null, stampWhen: "" });
     const g = groups.get(key);
     for (const p of photos) g.photos.push({ src: p.photo_url, caption: s.name });
     if (s.visited_on) g.dates.push(String(s.visited_on).slice(0, 10));
+    // The packet's newest stamp receives prints added from the packet itself
+    // (founder, 2026-10-05: upload from the profile, not only from the stamp).
+    const when = String(s.visited_on || s.created_at || "");
+    if (s.id && when >= g.stampWhen) { g.stampId = s.id; g.stampWhen = when; }
   }
   return [...groups.values()]
     .map((g) => {
