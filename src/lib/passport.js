@@ -58,6 +58,12 @@ export async function setStampLayout(stamp_id, layout) {
   const { data, error } = await callWorker('passport/stamp/layout', { stamp_id, layout });
   return { data, error: error || (data && data.ok === false ? data.error || 'Could not change the page layout' : null) };
 }
+// Move a stamp onto another stamp's booklet page (founder, 2026-10-05): the two
+// share that page, one in each half.
+export async function setStampPageWith(stamp_id, page_with) {
+  const { data, error } = await callWorker('passport/stamp/layout', { stamp_id, page_with });
+  return { data, error: error || (data && data.ok === false ? data.error || 'Could not move the stamp' : null) };
+}
 // Scene stamps with photos print photo-first; this pins the stamp above
 // ('top') or below ('bottom') the open photo, or hands it back to the app's
 // own pick ('auto').

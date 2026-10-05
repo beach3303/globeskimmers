@@ -13393,7 +13393,7 @@ async function handlePassportStampDate(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
-// POST /passport/stamp/layout { stamp_id, layout?: 'auto' | 'solo', stamp_pos?: 'top' | 'bottom' | 'auto', art?: 'art' | 'plain' } — how the
+// POST /passport/stamp/layout { stamp_id, layout?: 'auto' | 'solo', stamp_pos?: 'top' | 'bottom' | 'auto', art?: 'art' | 'plain', page_with?: <stamp id> } — how the
 // booklet lays this stamp out: 'solo' = a page of its own, 'auto' = packed with
 // other stamps (the default). Founder ask 2026-09-26 ("move to solo page",
 // "move back to share a page"). The column lands with migration
@@ -13414,21 +13414,50 @@ async function handlePassportStampLayout(request, env) {
     // art (founder, 2026-10-04): a memorial stamp (Auschwitz-Birkenau…) keeps its
     // illustration ('art') or prints as text only ('plain') — the traveler's choice.
     const art = ['art', 'plain'].includes(b.art) ? b.art : null;
-    if (!stampId || (!layout && !pos && !art)) return jsonResponse({ error: 'stamp_id + layout (auto|solo), stamp_pos (top|bottom|auto) or art (art|plain) required' }, 400);
+    // page_with (founder, 2026-10-05: "move one stamp into another page"): this
+    // stamp shares the booklet page of that one — two stamps to a page. Both
+    // must be the traveler's own; the newest move wins a contested page.
+    const pageWith = b.page_with != null && BL_UUID.test(String(b.page_with)) ? String(b.page_with) : null;
+    if (!stampId || (!layout && !pos && !art && !pageWith)) return jsonResponse({ error: 'stamp_id + layout (auto|solo), stamp_pos (top|bottom|auto), art (art|plain) or page_with (a stamp id) required' }, 400);
+    if (pageWith === stampId) return jsonResponse({ ok: false, error: 'Pick a different page' }, 400);
+    const own = async (id) => {
+      const q = await gbRest(env, `passport_stamps?id=eq.${id}&user_id=eq.${user.id}&select=id,layout,meta`, {});
+      return q.ok ? (await q.json())[0] || null : null;
+    };
+    const cur = await own(stampId);
+    if (!cur) return jsonResponse({ ok: false, error: 'Stamp not found' }, 404);
+    const meta = { ...(cur.meta && typeof cur.meta === 'object' ? cur.meta : {}) };
     const patch = { updated_at: new Date().toISOString() };
-    if (layout) patch.layout = layout;
-    if (pos || art) {
-      const q = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}&select=meta`, {});
-      const cur = q.ok ? (await q.json())[0] : null;
-      if (!cur) return jsonResponse({ ok: false, error: 'Stamp not found' }, 404);
-      const meta = { ...(cur.meta && typeof cur.meta === 'object' ? cur.meta : {}) };
-      if (pos) { if (pos === 'auto') delete meta.stamp_pos; else meta.stamp_pos = pos; }
-      if (art) meta.art = art;
-      patch.meta = Object.keys(meta).length ? meta : null;
+    if (pos) { if (pos === 'auto') delete meta.stamp_pos; else meta.stamp_pos = pos; }
+    if (art) meta.art = art;
+    let partner = null;
+    if (pageWith) {
+      partner = await own(pageWith);
+      if (!partner) return jsonResponse({ ok: false, error: 'That page is gone — reopen the passport' }, 404);
+      meta.page_with = pageWith; meta.page_with_at = patch.updated_at;
+      patch.layout = 'auto';
+    } else if (layout) {
+      // Its own page, or back into the flow: either way it leaves any pairing.
+      patch.layout = layout;
+      delete meta.page_with; delete meta.page_with_at;
     }
+    if (pos || art || pageWith || layout) patch.meta = Object.keys(meta).length ? meta : null;
     const r = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
     if (!r.ok) return jsonResponse({ ok: false, error: r.status === 400 ? 'Page layout isn\'t available yet — try again later' : 'update failed' });
-    return jsonResponse({ ok: true, layout, stamp_pos: pos, art });
+    // A stamp given its own page also releases any stamp that was paired onto it;
+    // a solo page that receives a stamp becomes a shared page.
+    if (layout === 'solo' && !pageWith) {
+      const q = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&meta->>page_with=eq.${stampId}&select=id,meta`, {});
+      for (const row of (q.ok ? await q.json() : [])) {
+        const m = { ...(row.meta || {}) }; delete m.page_with; delete m.page_with_at;
+        await gbRest(env, `passport_stamps?id=eq.${row.id}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ meta: Object.keys(m).length ? m : null, updated_at: patch.updated_at }) });
+      }
+    }
+    if (partner && partner.layout === 'solo') {
+      const pr = await gbRest(env, `passport_stamps?id=eq.${partner.id}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ layout: 'auto', updated_at: patch.updated_at }) });
+      if (!pr.ok) return jsonResponse({ ok: false, error: 'Could not join that page — try again' });
+    }
+    return jsonResponse({ ok: true, layout: patch.layout || null, stamp_pos: pos, art, page_with: pageWith });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
