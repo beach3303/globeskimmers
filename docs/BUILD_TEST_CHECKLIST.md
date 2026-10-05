@@ -1382,8 +1382,11 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   (safe-area aware), centred on tablets. Toasts raised to z 10050 so "Draw something first"
   isn't dimmed under it.
 - Guestbook's pad now reads: "GUESTBOOK · <place>" / "Sign the guestbook" / "Draw your name,
-  a little art, or a hello for the next visitor." (Passport-page doodles keep "Draw in the
-  margin".)
+  a little art, or something you loved about this place." and opens with a small handwritten
+  "I was here!" (Caveat, navy ink, top-left) that posts with the drawing; undo/eraser leave it,
+  and a stroke of your own is still required to post. Caveat 600 added to the Google Fonts
+  link in index.html (fallback Bradley Hand / cursive). Passport-page doodles keep "Draw in
+  the margin" and a blank page.
 - Test on a phone after OTA: open an attraction, scroll to the guestbook, tap 🎨 Doodle —
   the pad appears on screen at the bottom; also from "Doodle with your finger instead".
 - Gates: eslint (touched) clean, no-undef app-wide 0, build 0. Ships with `npm run ota`.
