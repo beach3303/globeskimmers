@@ -7,11 +7,11 @@
 // Every write goes through src/lib/passport.js; onChanged() reloads the
 // passport so the booklet repacks (a solo stamp moves to its own page at once).
 import React, { useRef, useState } from "react";
-import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck, ScanSearch, ArrowUpDown, MapPin, Type } from "lucide-react";
+import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck, ScanSearch, ArrowUpDown, MapPin, Type, ArrowRightLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { openAttraction } from "@/lib/openAttraction";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, uploadStampPhoto, deleteStamp, deleteStampPhoto, setStampLayout, setStampPos, isPhotoFirst, checkStampPhotos, isVerified, proofToast } from "@/lib/passport";
+import { addStamp, metersBetween, uploadStampPhoto, deleteStamp, deleteStampPhoto, setStampLayout, setStampPos, setStampPageWith, isPhotoFirst, checkStampPhotos, isVerified, proofToast } from "@/lib/passport";
 import { readPhotoExif } from "@/lib/photoExif";
 import { logEvent } from "@/lib/analytics";
 import { stampRadiusFor } from "@/lib/stampRadius";
@@ -47,7 +47,7 @@ function Row({ icon: Icon, label, sub, onClick, disabled, tone }) {
   );
 }
 
-export default function StampActions({ stamp, onClose, onChanged, onDetails, onEnlarge, readOnly }) {
+export default function StampActions({ stamp, onClose, onChanged, onDetails, onEnlarge, readOnly, pages = null, fits = null }) {
   const navigate = useNavigate();
   // An attraction stamp opens its place's Things to Do card (prices, guestbook…).
   const canSeePlace = stamp.kind === "attraction" && !!stamp.entity_id;
@@ -125,6 +125,25 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   const removePhoto = async (photoId) => {
     const { error } = await deleteStampPhoto(photoId);
     if (error) showToast(error, "error"); else { showToast("Photo removed", "success"); onChanged?.(); }
+  };
+  // Move to another page (founder, 2026-10-05): a page holding a single stamp
+  // has room for one more when the two fit together (`fits`). `pages` is the
+  // booklet as packed (packBookPages).
+  const [moving, setMoving] = useState(false);
+  const myPage = (pages || []).find((pg) => pg.stamps.some((x) => x.id === stamp.id)) || null;
+  const canMove = !readOnly && !photoFirst && !!myPage && !myPage.full;
+  const targets = canMove
+    ? pages.map((pg, i) => ({ ...pg, pageNo: i + 2 }))
+      .filter((pg) => pg.key !== myPage.key && pg.stamps.length === 1 && !pg.full && !isPhotoFirst(pg.stamps[0]) && (!fits || fits(stamp, pg.stamps[0])))
+    : [];
+  const moveTo = async (pg) => {
+    setBusy("move");
+    const { error } = await setStampPageWith(stamp.id, pg.stamps[0].id);
+    setBusy(null);
+    if (error) { showToast(error, "error"); return; }
+    setMoving(false);
+    showToast(`Moved beside ${pg.stamps[0].name}`, "success");
+    onChanged?.();
   };
   const toggleLayout = async () => {
     setBusy("layout");
@@ -340,6 +359,30 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
               label={solo ? "Share a page with other stamps" : "Give this stamp its own page"}
               sub={solo ? "Back into the flow — it packs in beside other stamps" : "A solo page, nothing else on it"}
               onClick={toggleLayout} disabled={busy === "layout"} />
+          )}
+          {canMove && !moving && (
+            <Row icon={ArrowRightLeft} label="Move to another page"
+              sub={targets.length ? "Put it beside a stamp that has a page to itself" : "No page has room for it right now"}
+              onClick={() => setMoving(true)} disabled={!targets.length} />
+          )}
+          {canMove && moving && (
+            <div className="w-full rounded-[14px] px-3.5 py-3" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold" style={{ color: INK, fontSize: fs(14.5) }}>Move to which page?</span>
+                <button type="button" onClick={() => setMoving(false)} className="font-semibold" style={{ color: INK3, fontSize: fs(13), fontFamily: "inherit" }}>Cancel</button>
+              </div>
+              <div className="grid gap-1.5 mt-2.5 overflow-y-auto" style={{ maxHeight: 264 }}>
+                {targets.map((pg) => (
+                  <button key={pg.key} type="button" onClick={() => moveTo(pg)} disabled={busy === "move"}
+                    className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left disabled:opacity-60"
+                    style={{ background: IVORY, border: `1px solid ${RULE}`, fontFamily: "inherit" }}>
+                    <span className="flex-none" style={{ fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace', fontSize: fs(11), color: INK3, minWidth: 54 }}>Page {pg.pageNo}</span>
+                    <span className="min-w-0 flex-1 truncate" style={{ color: INK, fontSize: fs(13.5) }}>beside {pg.stamps[0].name}</span>
+                    {busy === "move" && <Loader2 size={14} className="animate-spin flex-none" color={INK3} />}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           {canVerify && (
             <Row icon={busy === "verify" ? Loader2 : BadgeCheck} label="Verify I'm here"

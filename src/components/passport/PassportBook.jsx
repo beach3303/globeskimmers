@@ -54,6 +54,11 @@ const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 const ART_FRAC = 0.56;
 // The hidden hero page a single-stamp share captures — Updated B's scale.
 const HERO_FRAC = 0.76;
+// The booklet itself (founder, 2026-10-05): two stamps to a page — one in the
+// top half, one in the bottom, each at its own spot — so stamps print compact
+// here. A share captures a hidden copy of the page at the sizes above, so the
+// shared image stays exactly as big as before.
+const BOOK = { art: 0.40, airport: 0.62, thumb: 0.10, text: 0.8 };
 
 const KIND = {
   country: "🌍", city: "🏙️", airport: "✈️", icon: "🗽", wonder: "🏔️", attraction: "📍",
@@ -72,29 +77,98 @@ const coverBg = (url) => ({ backgroundImage: `url("${String(url || "").replace(/
 // The context under a scene stamp (founder, 2026-09-29: "include the
 // context"): the work, one line on the scene, the two leads. The photo-first
 // page prints its own fuller version; this is for a scene stamp with no photos.
-function FilmCaption({ film }) {
+function FilmCaption({ film, t = 1 }) {
   if (!film || !film.title) return null;
   const cast = (film.cast || []).filter((c) => c && c.actor).slice(0, 2).map((c) => (c.role ? `${c.actor} as ${c.role}` : c.actor)).join(" · ");
   return (
     <div style={{ textAlign: "center", marginTop: 8, padding: "0 6px", maxWidth: "100%" }}>
-      <div style={{ fontFamily: SERIF, fontSize: fs(16), color: INK, lineHeight: 1.15 }}>
+      <div style={{ fontFamily: SERIF, fontSize: fs(16 * t), color: INK, lineHeight: 1.15 }}>
         The scene from <i>{film.title}</i>{film.year ? ` (${film.year})` : ""}
       </div>
-      {film.scene && <div style={{ fontFamily: SANS, fontSize: fs(11.5), color: "#3F4A52", lineHeight: 1.35, marginTop: 3 }}>{clip(film.scene, 110)}</div>}
-      {cast && <div style={{ fontFamily: MONO, fontSize: fs(9.5), color: "#2E6B4E", letterSpacing: ".02em", lineHeight: 1.4, marginTop: 4 }}>{cast}</div>}
+      {film.scene && <div style={{ fontFamily: SANS, fontSize: fs(11.5 * t), color: "#3F4A52", lineHeight: 1.35, marginTop: 3 }}>{clip(film.scene, 110)}</div>}
+      {cast && <div style={{ fontFamily: MONO, fontSize: fs(9.5 * t), color: "#2E6B4E", letterSpacing: ".02em", lineHeight: 1.4, marginTop: 4 }}>{cast}</div>}
     </div>
   );
 }
 const filmCaptionH = (film) => (film && film.title ? 30 + (film.scene ? 34 : 0) + ((film.cast || []).length ? 18 : 0) : 0);
 
+// ── Booklet pages: two stamps to a page ─────────────────────────────────────
+// The page's usable height: the paper (border-box: 18px padding + 1px border,
+// top and bottom), a 10px top pad and the 26px page-number strip. Two stamps
+// share it with a 12px gap; each sits in its own region with 2+2px padding.
+const HALF_PAD = { top: 10, bottom: 26, gap: 12 };
+const SLOT_PAD = 4;
+const pageInner = (pageW) => pageW * 1.6 - 38 - HALF_PAD.top - HALF_PAD.bottom;
+const halfH = (pageW) => (pageInner(pageW) - HALF_PAD.gap) / 2 - SLOT_PAD;
+// The reader's text size (Settings → text size sets --fs, 1–1.45): captions grow with it.
+export const readFontScale = () => {
+  try { return Math.max(1, parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fs")) || 1); } catch { return 1; }
+};
+// A compact stamp's height, over-counted a little so a half never overflows.
+const compactH = (s, pageW, fsScale = 1) => {
+  const t = BOOK.text * fsScale;
+  const n = Math.min(4, (s.photos || []).length);
+  const photosH = n ? BOOK.thumb * pageW + 8 : 0;
+  const withTag = s.tagged_by_name || s.tagged_by_handle ? 18 * t : 0;
+  if (s.kind === "airport") return 0.659 * BOOK.airport * pageW + 8 + photosH + withTag;
+  // A place visit: "VISITED <city>, <country>" can wrap to two lines, then the
+  // venue and the date. Everything else: "I was here!" and the date.
+  const caption = (s.kind === "city" ? 84 : 50) * t;
+  return BOOK.art * pageW + caption + photosH + withTag + filmCaptionH(s.meta && s.meta.film) * t + 6;
+};
+// Two stamps fit one page when their heights together fit it (a tall photo stamp
+// can share with an airport stamp; two tall ones can't).
+export const fitsTogether = (a, b, pageW, fsScale = 1) =>
+  compactH(a, pageW, fsScale) + compactH(b, pageW, fsScale) + HALF_PAD.gap + 2 * SLOT_PAD <= pageInner(pageW);
+// Pages in booklet order. A scene stamp with photos (photo-first) or a stamp too
+// tall for a page fills one; 'solo' keeps a page to itself; two stamps the
+// traveler put together ("Move to another page" → meta.page_with) share one,
+// the newest move winning a contested page; everything else pairs up in order
+// when the two fit, a later stamp back-filling the first page with room.
+export function packBookPages(stamps, pageW, fsScale = 1) {
+  const list = stamps || [];
+  const full = (s) => isPhotoFirst(s) || compactH(s, pageW, fsScale) + SLOT_PAD > pageInner(pageW);
+  const fits = (a, b) => fitsTogether(a, b, pageW, fsScale);
+  const byId = new Map(list.map((s) => [s.id, s]));
+  const asked = list
+    .filter((s) => s.meta && s.meta.page_with && s.meta.page_with !== s.id && byId.has(s.meta.page_with))
+    .sort((a, b) => String(b.meta.page_with_at || "").localeCompare(String(a.meta.page_with_at || "")));
+  // mover → the stamp it was moved beside. The pair lands on the page where that
+  // stamp sits, so the page the traveler picked is the page it joins.
+  const moverTo = new Map(), joinedBy = new Map();
+  for (const a of asked) {
+    const b = byId.get(a.meta.page_with);
+    const taken = (x) => moverTo.has(x.id) || joinedBy.has(x.id);
+    if (taken(a) || taken(b) || full(a) || full(b) || a.layout === "solo" || b.layout === "solo" || !fits(a, b)) continue;
+    moverTo.set(a.id, b.id); joinedBy.set(b.id, a.id);
+  }
+  const pages = [];
+  const placed = new Set();
+  for (const s of list) {
+    if (placed.has(s.id) || moverTo.has(s.id)) continue;
+    placed.add(s.id);
+    const mid = joinedBy.get(s.id);
+    if (mid) { pages.push({ items: [s, byId.get(mid)], pinned: true }); placed.add(mid); continue; }
+    if (full(s)) { pages.push({ items: [s], solo: true, full: true }); continue; }
+    if (s.layout === "solo") { pages.push({ items: [s], solo: true }); continue; }
+    const open = pages.find((pg) => !pg.solo && !pg.pinned && pg.items.length === 1 && fits(pg.items[0], s));
+    if (open) open.items.push(s); else pages.push({ items: [s] });
+  }
+  return pages.map((p, i) => ({ key: `pg-${i}`, stamps: p.items, solo: !!p.solo, full: !!p.full }));
+}
+
 // A large stamp pressed onto the page, sized off the page width so heights are a
 // constant fraction across phones (lets pagination fit each page with no scroll).
 // Airport ≈ ⅓ page; iconic ≈ ½ page with "I was here!", a big ink date, and up
 // to 4 memory photos in a 2×2 grid.
-function StampToken({ stamp, idx, onOpen, pageW }) {
+function StampToken({ stamp, idx, onOpen, pageW, compact = false }) {
   const [artFail, setArtFail] = useState(false);
-  const rot = ((idx * 47 + 3) % 9) - 4;   // deterministic -4..+4°
-  const nudge = ((idx * 53) % 26) - 13;    // deterministic -13..+12px horizontal
+  // In the booklet each stamp keeps its own tilt (its half of the page places
+  // it); on a shared page the tilt and nudge follow its order on the page.
+  const h = hashStr(stamp.id || stamp.entity_id || stamp.name);
+  const rot = compact ? (h % 9) - 4 : ((idx * 47 + 3) % 9) - 4;   // deterministic -4..+4°
+  const nudge = compact ? 0 : ((idx * 53) % 26) - 13;            // deterministic -13..+12px horizontal
+  const t = compact ? BOOK.text : 1;                              // caption type scale
   // A memorial stamp its owner chose to keep as text only prints typographic.
   const art = stamp.kind === "country" || isPlainArt(stamp) ? null : stampArtUrl(stamp.name, { entityId: stamp.entity_id, country: stamp.country });
   const showArt = !!art && !artFail;
@@ -112,10 +186,10 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
     ? new Date(stamp.visited_on + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "";
   const photos = (stamp.photos || []).slice(0, 4);
-  const artW = Math.round(ART_FRAC * pageW);
-  const badgeW = Math.round(0.5 * pageW);
-  const airportW = Math.round(0.82 * pageW);
-  const thumbW = Math.round(0.185 * pageW);
+  const artW = Math.round((compact ? BOOK.art : ART_FRAC) * pageW);
+  const badgeW = Math.round((compact ? 0.36 : 0.5) * pageW);
+  const airportW = Math.round((compact ? BOOK.airport : 0.82) * pageW);
+  const thumbW = Math.round((compact ? BOOK.thumb : 0.185) * pageW);
   return (
     <button
       onClick={() => onOpen(stamp)}
@@ -136,7 +210,7 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
         // "Visited / I was here @" typography kept as the caption.
         <div className="flex flex-col items-center text-center" style={{ maxWidth: airportW, padding: "0 6px" }}>
           {showArt ? (
-            <img src={art} alt={stamp.name} loading="lazy" onError={() => setArtFail(true)} style={{ width: artW, height: artW, objectFit: "contain" }} />
+            <img src={art} alt={stamp.name} loading={compact ? "lazy" : "eager"} onError={() => setArtFail(true)} style={{ width: artW, height: artW, objectFit: "contain" }} />
           ) : (
             // No bespoke art yet → the typographic stamp (carries its own name,
             // date and "I was here!" strike). Auto-upgrades when a PNG lands on R2.
@@ -149,25 +223,25 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
           {showArt ? (
             // Under the engraving: the full caption.
             <>
-              <div style={{ fontFamily: SANS, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".012em", color: cityInk, fontSize: fs(15), lineHeight: 1.08, marginTop: 8 }}>
+              <div style={{ fontFamily: SANS, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".012em", color: cityInk, fontSize: fs(15 * t), lineHeight: 1.08, marginTop: 8 * t }}>
                 Visited {stamp.city || stamp.name}{stamp.country ? `, ${stamp.country}` : ""}
               </div>
-              {venue && <div style={{ fontFamily: SERIF, fontStyle: "italic", color: cityInk, fontSize: fs(17), marginTop: 4, lineHeight: 1.1 }}>I was here @ {venue}</div>}
-              {bigDate && <div style={{ fontFamily: MONO, color: cityInk, opacity: 0.7, fontSize: fs(11.5), letterSpacing: ".03em", marginTop: 6 }}>{bigDate}</div>}
+              {venue && <div style={{ fontFamily: SERIF, fontStyle: "italic", color: cityInk, fontSize: fs(17 * t), marginTop: 4 * t, lineHeight: 1.1 }}>I was here @ {venue}</div>}
+              {bigDate && <div style={{ fontFamily: MONO, color: cityInk, opacity: 0.7, fontSize: fs(11.5 * t), letterSpacing: ".03em", marginTop: 6 * t }}>{bigDate}</div>}
             </>
           ) : (
             // The typographic stamp already says the name + date + "I was
             // here!" — only add the city context when the stamp is a specific
             // spot within a city (e.g. LAKE LOUISE → "Visited Banff, Canada").
             venue && stamp.city && (
-              <div style={{ fontFamily: MONO, color: cityInk, opacity: 0.95, fontSize: fs(13), letterSpacing: ".04em", textTransform: "uppercase", marginTop: 8 }}>
+              <div style={{ fontFamily: MONO, color: cityInk, opacity: 0.95, fontSize: fs(13 * t), letterSpacing: ".04em", textTransform: "uppercase", marginTop: 8 * t }}>
                 Visited {stamp.city}{stamp.country ? `, ${stamp.country}` : ""}
               </div>
             )
           )}
-          <FilmCaption film={stamp.meta?.film} />
+          <FilmCaption film={stamp.meta?.film} t={t} />
           {(stamp.tagged_by_name || stamp.tagged_by_handle) && (
-            <div style={{ fontFamily: MONO, fontSize: fs(10), color: "#2E6B4E", letterSpacing: ".06em", marginTop: 6, textTransform: "uppercase" }}>
+            <div style={{ fontFamily: MONO, fontSize: fs(10 * t), color: "#2E6B4E", letterSpacing: ".06em", marginTop: 6 * t, textTransform: "uppercase" }}>
               WITH {(stamp.tagged_by_name || `@${stamp.tagged_by_handle}`).toUpperCase()}
             </div>
           )}
@@ -175,12 +249,12 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
       ) : (
         <div className="flex flex-col items-center">
           {showArt ? (
-            <img src={art} alt={stamp.name} loading="lazy" onError={() => setArtFail(true)} style={{ width: artW, height: artW, objectFit: "contain" }} />
+            <img src={art} alt={stamp.name} loading={compact ? "lazy" : "eager"} onError={() => setArtFail(true)} style={{ width: artW, height: artW, objectFit: "contain" }} />
           ) : flag ? (
             // Country stamp with no bespoke art → flag badge.
             <div className="flex flex-col items-center justify-center text-center" style={{ width: badgeW, height: badgeW, borderRadius: 20, border: `2.5px solid ${STAMP}`, background: "rgba(255,255,255,.45)", padding: 12 }}>
               <span style={{ fontSize: Math.round(0.1 * pageW), lineHeight: 1 }}>{flag}</span>
-              <span className="leading-tight" style={{ fontFamily: SERIF, fontSize: fs(22), color: STAMP, marginTop: 4 }}>{stamp.name}</span>
+              <span className="leading-tight" style={{ fontFamily: SERIF, fontSize: fs(22 * t), color: STAMP, marginTop: 4 }}>{stamp.name}</span>
             </div>
           ) : (
             // Iconic place, bespoke art not uploaded yet → an inked rubber-stamp
@@ -192,24 +266,27 @@ function StampToken({ stamp, idx, onOpen, pageW }) {
             />
           )}
           {!showTypo && (<>
-            <div style={{ fontFamily: SERIF, fontStyle: "italic", color: iconicInk, fontSize: fs(19), marginTop: 6, lineHeight: 1 }}>I was here!</div>
-            {bigDate && <div style={{ fontFamily: SERIF, color: iconicInk, fontSize: fs(23), letterSpacing: ".01em", marginTop: 2, lineHeight: 1 }}>{bigDate}</div>}
+            <div style={{ fontFamily: SERIF, fontStyle: "italic", color: iconicInk, fontSize: fs(19 * t), marginTop: 6 * t, lineHeight: 1 }}>I was here!</div>
+            {bigDate && <div style={{ fontFamily: SERIF, color: iconicInk, fontSize: fs(23 * t), letterSpacing: ".01em", marginTop: 2, lineHeight: 1 }}>{bigDate}</div>}
           </>)}
-          <FilmCaption film={stamp.meta?.film} />
+          <FilmCaption film={stamp.meta?.film} t={t} />
           {(stamp.tagged_by_name || stamp.tagged_by_handle) && (
-            <div style={{ fontFamily: MONO, fontSize: fs(10), color: "#2E6B4E", letterSpacing: ".06em", marginTop: 6, textTransform: "uppercase" }}>
+            <div style={{ fontFamily: MONO, fontSize: fs(10 * t), color: "#2E6B4E", letterSpacing: ".06em", marginTop: 6 * t, textTransform: "uppercase" }}>
               WITH {(stamp.tagged_by_name || `@${stamp.tagged_by_handle}`).toUpperCase()}
             </div>
           )}
         </div>
       )}
 
-      {/* Memory photos — 2×2 grid, max 4, under the date */}
+      {/* Memory photos, max 4, under the date — a 2×2 grid on a shared page,
+          one small row in the booklet. */}
       {photos.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12, width: thumbW * 2 + 8, marginLeft: "auto", marginRight: "auto" }}>
+        <div style={compact
+          ? { display: "grid", gridTemplateColumns: `repeat(${photos.length}, ${thumbW}px)`, gap: 6, marginTop: 8, justifyContent: "center" }
+          : { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12, width: thumbW * 2 + 8, marginLeft: "auto", marginRight: "auto" }}>
           {photos.map((p) => (
             <span key={p.id} role="img" aria-label="Memory photo"
-              style={{ display: "block", width: thumbW, height: thumbW, borderRadius: 10, border: `1px solid ${PAPER_EDGE}`, ...coverBg(p.photo_url) }} />
+              style={{ display: "block", width: thumbW, height: thumbW, borderRadius: compact ? 7 : 10, border: `1px solid ${PAPER_EDGE}`, ...coverBg(p.photo_url) }} />
           ))}
         </div>
       )}
@@ -307,18 +384,18 @@ function PhotoFirstToken({ stamp, onOpen, pageW }) {
 
 // Ivory paper wrapper shared by every interior page. Carries a faint alternating
 // ✈️/🌍 watermark and a page number in the lower outer (right) corner.
-function Paper({ children, coverH, pageNo, watermark }) {
+function Paper({ children, coverH, pageNo, watermark, grow = false }) {
   return (
     <div style={{
       background: PAPER, border: `1px solid ${PAPER_EDGE}`, borderRadius: 16,
       padding: 18, position: "relative", overflow: "hidden",
-      minHeight: coverH, height: "100%",
+      minHeight: coverH, height: grow ? "auto" : "100%",
       boxShadow: "inset 13px 0 22px -18px rgba(0,0,0,.4), inset -6px 0 14px -12px rgba(0,0,0,.2)",
     }}>
       {watermark && (
         <div aria-hidden style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: 0.06, fontSize: 180, pointerEvents: "none" }}>{watermark}</div>
       )}
-      <div style={{ position: "relative", height: "100%", overflow: "hidden" }}>{children}</div>
+      <div style={{ position: "relative", height: grow ? "auto" : "100%", overflow: grow ? "visible" : "hidden" }}>{children}</div>
       {pageNo != null && (
         <div aria-hidden style={{ position: "absolute", bottom: 10, [pageNo % 2 === 0 ? "left" : "right"]: 16, fontFamily: MONO, fontSize: fs(10.5), color: INK3, opacity: 0.75, pointerEvents: "none" }}>{pageNo}</div>
       )}
@@ -362,20 +439,51 @@ function OwnershipPage({ holder, homeCountry, countries, totalStamps, coverH, pa
   );
 }
 
-// A page of big stamps — can mix countries (each stamp carries its own place).
-// Pagination upstream guarantees the stamps fit, so there is never any scrolling.
-function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW }) {
-  return (
-    <Paper coverH={coverH} pageNo={pageNo} watermark={watermark}>
-      {pg.stamps.length === 1 && isPhotoFirst(pg.stamps[0]) ? (
+// A page of stamps — can mix countries (each stamp carries its own place).
+// In the booklet: two halves, top and bottom, each stamp compact and placed at
+// its own spot in its half (from its id, so it never jumps); a lone stamp takes
+// one half. share: the hidden copy a page share captures — the stamps at full
+// share size, centred, the way pages were shared before (it may grow taller than
+// a page; the share frame scales it to fit).
+const SPOT = ["flex-start", "center", "flex-end"];
+function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW, share = false }) {
+  if (pg.stamps.length === 1 && isPhotoFirst(pg.stamps[0])) {
+    return (
+      <Paper coverH={coverH} pageNo={pageNo} watermark={watermark}>
         <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 18 }}>
           <PhotoFirstToken stamp={pg.stamps[0]} onOpen={() => onOpenStamp(pg.stamps[0].id)} pageW={pageW} />
         </div>
-      ) : (
-        <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: pg.stamps.length <= 1 ? "center" : "space-around", gap: 18, paddingTop: 12, paddingBottom: 22 }}>
-          {pg.stamps.map((s, j) => <StampToken key={s.id} stamp={s} idx={j} onOpen={() => onOpenStamp(s.id)} pageW={pageW} />)}
+      </Paper>
+    );
+  }
+  if (share) {
+    return (
+      <Paper coverH={coverH} pageNo={pageNo} watermark={watermark} grow>
+        <div style={{ position: "relative", minHeight: `calc(${coverH} - 38px)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: pg.stamps.length <= 1 ? "center" : "space-around", gap: 18, paddingTop: 12, paddingBottom: 22 }}>
+          {pg.stamps.map((s, j) => <StampToken key={s.id} stamp={s} idx={j} onOpen={() => {}} pageW={pageW} />)}
         </div>
-      )}
+      </Paper>
+    );
+  }
+  const spot = (s) => { const h = hashStr(s.id || s.name); return { justifyContent: SPOT[h % 3], alignItems: SPOT[(h >>> 3) % 3] }; };
+  // Two stamps: one region each, sized to what each needs. One stamp: the top
+  // or the bottom half (from its id), or the whole page when it's taller.
+  const fsScale = readFontScale();
+  const need = (s) => compactH(s, pageW, fsScale) + SLOT_PAD;
+  const lone = pg.stamps.length === 1 ? pg.stamps[0] : null;
+  const halves = pg.full || (lone && need(lone) > halfH(pageW)) ? [pg.stamps[0]]
+    : !lone ? pg.stamps.slice(0, 2)
+    : hashStr(lone.id || lone.name) % 2 ? [null, lone] : [lone, null];
+  const rows = halves.length === 1 ? "1fr" : !lone ? `${Math.round(need(halves[0]))}fr ${Math.round(need(halves[1]))}fr` : "1fr 1fr";
+  return (
+    <Paper coverH={coverH} pageNo={pageNo} watermark={watermark}>
+      <div style={{ position: "relative", height: "100%", display: "grid", gridTemplateRows: rows, gap: HALF_PAD.gap, paddingTop: HALF_PAD.top, paddingBottom: HALF_PAD.bottom }}>
+        {halves.map((s, j) => (
+          <div key={s ? s.id : `empty-${j}`} style={{ display: "flex", minHeight: 0, padding: "2px 4px", ...(s ? spot(s) : {}), ...(pg.full ? { justifyContent: "center", alignItems: "center" } : {}) }}>
+            {s && <StampToken stamp={s} idx={j} onOpen={() => onOpenStamp(s.id)} pageW={pageW} compact />}
+          </div>
+        ))}
+      </div>
     </Paper>
   );
 }
@@ -451,42 +559,9 @@ export default function PassportBook({
     return () => { window.removeEventListener("resize", onR); window.removeEventListener("orientationchange", onR); };
   }, []);
 
-  // First-fit packing: each stamp goes on the earliest page it fits (so a later
-  // small stamp can back-fill an earlier page's gap); if it fits nowhere, a new
-  // page. Estimated heights slightly over-count so a page never overflows.
-  const bookPages = useMemo(() => {
-    const pageH = pageW * 1.6, USABLE = pageH - 70, GAP = 18;
-    const thumbW = 0.185 * pageW, airportW = 0.82 * pageW;
-    const estH = (s) => {
-      const n = Math.min(4, (s.photos || []).length);
-      const rows = n > 0 ? Math.ceil(n / 2) : 0;
-      const photosH = rows > 0 ? rows * thumbW + (rows - 1) * 8 + 14 : 0;
-      if (s.kind === "airport") return (0.659 * airportW + 14 + photosH) * 1.03;
-      // City/place stamps render the same art-or-typographic stamp as iconic
-      // ones (plus a caption line), so they are estimated at the stamp's real
-      // height — the old 110px guess predates that and let pages overflow.
-      const filmH = s.kind === "airport" ? 0 : filmCaptionH(s.meta && s.meta.film);
-      if (s.kind === "city") return (ART_FRAC * pageW + 46 + photosH + filmH) * 1.05;
-      return (ART_FRAC * pageW + 52 + photosH + filmH) * 1.03;
-    };
-    // A stamp whose layout is 'solo' (founder, 2026-09-26: "move a stamp to a
-    // solo page") always gets a page of its own, and no later stamp back-fills
-    // that page. 'auto' (the default) packs as before.
-    const packed = [];
-    for (const s of (stamps || [])) {
-      const h = estH(s);
-      // A scene stamp with photos is photo-first, which fills a page.
-      const solo = s.layout === "solo" || isPhotoFirst(s);
-      let placed = false;
-      if (!solo) for (const pg of packed) {
-        if (pg.solo) continue;
-        const cost = h + (pg.items.length ? GAP : 0);
-        if (pg.used + cost <= USABLE) { pg.items.push(s); pg.used += cost; placed = true; break; }
-      }
-      if (!placed) packed.push({ items: [s], used: h, solo });
-    }
-    return packed.map((p, i) => ({ key: `pg-${i}`, stamps: p.items, solo: p.solo }));
-  }, [stamps, pageW]);
+  // Two stamps to a page (packBookPages above). The page width drives every
+  // stamp size, so a half always fits its stamp — no scrolling, on any phone.
+  const bookPages = useMemo(() => packBookPages(stamps, pageW, readFontScale()), [stamps, pageW]);
 
   const stampCount = bookPages.length;
   const MIN_TOTAL = 10; // a fresh passport ships as a 10-page booklet to flip through
@@ -578,6 +653,10 @@ export default function PassportBook({
   // (offscreen) so html2canvas can draw it with the booklet's exact fonts.
   const heroRef = useRef(null);
   const [heroStamp, setHeroStamp] = useState(null);
+  // The hidden share page: the open page at share size (StampPage share). A page
+  // share captures this, not the compact page on screen, so shared pages stay as
+  // big as before (founder, 2026-10-05). A photo-first page shares as it shows.
+  const sharePageRef = useRef(null);
   const [sharing, setSharing] = useState(false);
   // preview: { status: "rendering" } | { status: "ready", url, blob, dataUrl } | { status: "error", message }
   // The overlay appears the instant Share is tapped (founder, 2026-09-27: the
@@ -588,11 +667,21 @@ export default function PassportBook({
     if (sharing) return;
     // The page element: the ref first, else the DOM marker (a forwarded ref
     // that misses would otherwise make the button a silent no-op).
-    const el = activePageRef.current || (typeof document !== "undefined" ? document.querySelector("[data-pp-active-page]") : null);
+    let el = sharePageRef.current || activePageRef.current || (typeof document !== "undefined" ? document.querySelector("[data-pp-active-page]") : null);
     if (!el) { setPreview({ status: "error", message: "The page isn't on screen yet — open the passport and try again." }); return; }
+    // Two stamps too big to share together at full size would print smaller
+    // (the share frame scales a tall page down). Open on the first stamp at full
+    // size instead; the preview still offers the other stamp and the whole page.
+    const pgNow = page >= 1 && page - 1 < bookPages.length ? bookPages[page - 1] : null;
+    const heroFirst = el === sharePageRef.current && pgNow && pgNow.stamps.length > 1 && el.offsetHeight > pageW * 1.6 + 4 ? pgNow.stamps[0] : null;
     setSharing(true);
     setPreview({ status: "rendering" });
     try {
+      if (heroFirst) {
+        setHeroStamp(heroFirst);
+        await new Promise((r) => setTimeout(r, 60)); // let the hero node paint
+        el = heroRef.current || el;
+      }
       const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error("rendering took too long")), 25000));
       const pageCanvas = await Promise.race([
         // onclone drops the page's inset spine shadow from the copy that is
@@ -600,7 +689,7 @@ export default function PassportBook({
         // over the whole page (measured 2026-09-28). The screen keeps it.
         html2canvas(el, {
           useCORS: true, backgroundColor: "#FBF6EC", scale: 2, logging: false, imageTimeout: 8000,
-          onclone: (doc) => { doc.querySelectorAll("[data-pp-active-page] *").forEach((n) => { if (n.style && /inset/.test(n.style.boxShadow || "")) n.style.boxShadow = "none"; }); },
+          onclone: (doc) => { doc.querySelectorAll("[data-pp-active-page] *, [data-pp-share-page] *").forEach((n) => { if (n.style && /inset/.test(n.style.boxShadow || "")) n.style.boxShadow = "none"; }); },
         }),
         timeout,
       ]);
@@ -608,19 +697,19 @@ export default function PassportBook({
       // The memory photos on THIS page, in page order — the carousel's slides 2+.
       const pg = page >= 1 && page - 1 < bookPages.length ? bookPages[page - 1] : null;
       const photos = pg ? pg.stamps.flatMap((st) => (st.photos || []).filter((ph) => ph && ph.photo_url).map((ph) => ({ src: ph.photo_url, stamp: st }))) : [];
-      setHeroStamp(null);
+      if (!heroFirst) setHeroStamp(null);
       // The growth link: every share carries the traveler's landing URL —
       // the research's one multiplier (installs-per-share). Fetched lazily,
       // never blocks the render.
       let shareUrl = null;
       try { const { data: sl } = await getShareLink(); shareUrl = sl?.url || null; } catch { /* the image still shares */ }
-      setPreview({ status: "ready", target: "instagram", use: "story", preset: "story_meta", subject: "page", shareUrl, pageStamps: pg ? pg.stamps : [], pageCanvas, photos, mix: photos.length > 0 ? "both" : "page", slides: null, slidesPreset: null, slidesBusy: false, slideFailed: 0, ...img });
+      setPreview({ status: "ready", target: "instagram", use: "story", preset: "story_meta", subject: heroFirst ? heroFirst.id : "page", shareUrl, pageStamps: pg ? pg.stamps : [], pageCanvas, photos, mix: photos.length > 0 ? "both" : "page", slides: null, slidesPreset: null, slidesBusy: false, slideFailed: 0, ...img });
       logEvent("passport_share_open", { photos_on_page: photos.length }, "Passport");
     } catch (e) {
       try { console.error("[passport share] render failed", e); } catch { /* ignore */ }
       setPreview({ status: "error", message: e?.message || String(e) });
     } finally { setSharing(false); }
-  }, [sharing, page, bookPages]);
+  }, [sharing, page, bookPages, pageW]);
   // Re-render the preview around ONE stamp (subject) or back to the page.
   const chooseSubject = useCallback(async (stampOrNull) => {
     if (!preview || preview.status !== "ready") return;
@@ -628,7 +717,7 @@ export default function PassportBook({
     setPreview((p) => ({ ...p, status: "rendering", subject: stampOrNull ? stampOrNull.id : "page" }));
     try {
       await new Promise((r) => setTimeout(r, 60)); // let the hero node paint
-      const el = stampOrNull ? heroRef.current : (activePageRef.current || document.querySelector("[data-pp-active-page]"));
+      const el = stampOrNull ? heroRef.current : (sharePageRef.current || activePageRef.current || document.querySelector("[data-pp-active-page]"));
       if (!el) throw new Error("nothing to render");
       const pageCanvas = await html2canvas(el, {
         useCORS: true, backgroundColor: "#FBF6EC", scale: 2, logging: false, imageTimeout: 8000,
@@ -805,6 +894,12 @@ export default function PassportBook({
           </div>
         )}
 
+        {open && page >= 1 && page - 1 < bookPages.length && !(bookPages[page - 1].stamps.length === 1 && isPhotoFirst(bookPages[page - 1].stamps[0])) && (
+          <div ref={sharePageRef} data-pp-share-page="" aria-hidden style={{ position: "absolute", left: -10000, top: 0, width: pageW }}>
+            <StampPage pg={bookPages[page - 1]} onOpenStamp={() => {}} coverH={coverH} pageNo={page + 1} watermark={page % 2 === 0 ? "🌍" : "✈️"} pageW={pageW} share />
+          </div>
+        )}
+
         {/* Front cover — hinged at the left spine */}
         <AnimatePresence initial={false}>
           {!open && (
@@ -888,6 +983,11 @@ export default function PassportBook({
           >
             <X size={14} color={GOLD} strokeWidth={2.4} /> Close
           </button>
+          {!currentIsBlank && (
+            <p className="w-full text-center" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".04em", color: INK3, lineHeight: 1.5, marginTop: 2 }}>
+              Shared pages print big: a story fills the whole screen, a post fills the frame.
+            </p>
+          )}
         </div>
       )}
 

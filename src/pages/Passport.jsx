@@ -15,7 +15,7 @@ import { setStampArt } from "@/lib/passport";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
-import PassportBook from "@/components/passport/PassportBook";
+import PassportBook, { packBookPages, readFontScale, fitsTogether } from "@/components/passport/PassportBook";
 import BlotterStrip from "@/components/passport/Blotter";
 import { isAdminEmail } from "@/lib/admins";
 import { countryCode } from "@/lib/countries";
@@ -1138,6 +1138,8 @@ function PassportInner() {
       {actionsStamp && !memorialAsk && (
         <StampActions
           stamp={actionsStamp}
+          pages={packBookPages(bookStamps, Math.min(0.94 * window.innerWidth, 440), readFontScale())}
+          fits={(a, b) => fitsTogether(a, b, Math.min(0.94 * window.innerWidth, 440), readFontScale())}
           readOnly={readOnly || preview}
           onClose={() => setActionsId(null)}
           onChanged={load}
