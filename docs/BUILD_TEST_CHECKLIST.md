@@ -1356,3 +1356,19 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0, resolver tested on
   the review's cases (Notre-Dame Paris ✓ / Lausanne ✗, Parthenon Nashville ✗, Opéra Garnier ✓,
   Grand Canyon South Rim → Grand Canyon).
+
+## 2026-10-05 — Founder's redraws uploaded (33 stamps)
+- ~/Downloads/stamps-fixes-18-white 1 (and "2", byte-identical) + stamps-fixes-frames-white:
+  18 wrong-landmark redraws, Notre-Dame + Perito Moreno spelling, 12 frame re-exports,
+  Montserrat. All 784×1168 PNG; frames measured clean (no ink on the side edges; the old
+  ones had 14–39%).
+- Reviewed twice (Claude + an independent reviewer): 28 right. 5 are closer but need one
+  more try — The Wave (reads as ocean surf), Blyde River Canyon (cones, not the Rondavels;
+  stray dot), Ciudad Perdida (terraces look like wells), Ise (temple roof, curved torii),
+  Somapura (pointed pyramid). Mount Koya prints "CATALOG NUMBER". Briefs on the Toolbox page.
+- R2: the 32 replaced files archived at archive/stamp-art/replaced-2026-10-05/<slug>.png,
+  then all 33 uploaded to stamp-art/<slug>.png (live server verified byte-for-byte).
+  Montserrat is back (its broken file stays at archive/stamp-art/montserrat.png).
+- App: art is cached on phones 30 days, so redrawn slugs get ?r=2026-10-05 (REDRAWN in
+  src/lib/stampArt.js — add a dated list for the next round). Ships with the next `npm run ota`.
+- Gates: no-undef app-wide 0, build 0, tagged URLs tested.

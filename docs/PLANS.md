@@ -201,9 +201,10 @@ STAMP ART — 2026-10-04 (founder):
     by row, name and country (scripts/stamp-art/), so same-named places elsewhere never
     borrow it. scripts/stamp-art/d1-art-fixes.sql makes the missing places stampable and
     fixes mis-pinned rows — FOUNDER RUNS IT ONCE (see BUILD_TEST_CHECKLIST).
-  - Art to redo (founder): 36 stamps — wrong landmark drawn (18), misspelled (2), frame cut
-    off (12), damaged file (Montserrat, held as text-only), small text (3). List + thumbnails
-    on the Stamp Art Toolbox page ("Needs a redo", with a copy button for Grok).
+  - Art redo: founder redrew 33 on 2026-10-05 — all live; 28 right. ONE MORE TRY for 5:
+    The Wave, Blyde River Canyon, Ciudad Perdida, Ise Grand Shrine, Somapura (+ Mount
+    Koya's "CATALOG NUMBER" label). Briefs + copy button on the Stamp Art Toolbox page.
+    Next round: add the slugs to a new dated REDRAWN list in src/lib/stampArt.js.
   - TO DO, after both stores are live (partnerships wait for that), ask permission:
     [ ] Hollywood Sign: Hollywood Chamber of Commerce licensing
         (hollywoodchamber.net/licensing-information)
