@@ -14,6 +14,8 @@ import { countryCode } from "@/lib/countries";
 import { listPassport, getHandle, getSocialProfile, setSocialProfile, getShareLink, setAgeGate, socialFollow, setAvatar } from "@/lib/passport";
 import Luggage from "@/components/passport/Luggage";
 import VirtualItems from "@/components/profile/VirtualItems";
+
+const SHOW_VIRTUAL_ITEMS = false; // held for the founder's renders (2026-10-05)
 import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import InviteButton from "@/components/passport/InviteButton";
@@ -145,8 +147,10 @@ export default function ProfilePage() {
       {/* The trunk is the banner — who you are before a word is read
           (founder, 2026-09-30: luggage on TOP of the profile). */}
       <Luggage stamps={stamps} readOnly={false} />
-      {/* The rest of the shelf: laptop, bottle, travel buddies (founder, 2026-10-05) */}
-      <VirtualItems stamps={stamps} />
+      {/* The rest of the shelf — laptop, bottle, travel buddies — is built but
+          HELD until the founder's photo-real renders land (founder, 2026-10-05:
+          "hold all virtual items"). Re-enable: set SHOW_VIRTUAL_ITEMS true. */}
+      {SHOW_VIRTUAL_ITEMS && <VirtualItems stamps={stamps} />}
       <div className="max-w-md mx-auto px-4 pt-4">
         {/* Header */}
         <div className="flex items-center gap-4">
