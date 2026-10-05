@@ -325,7 +325,12 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
 // "the doodle box goes all the way to the top of the page"). It opens over
 // wherever the traveler is, near the bottom on a phone.
 const INKS = ["#2B4A7E", "#B0472F", "#2E6B4E", "#9A6F1E"];
-export function DoodlePad({ onClose, onPost, busy, title = "Draw in the margin", eyebrow = null, note = null }) {
+// A starter line in handwriting, small in the top-left corner (founder,
+// 2026-10-05: the guestbook pad opens with "I was here!" so it reads as a
+// guestbook and leaves the page for a flower, a name, an "I love this"). It is
+// part of the drawing and posts with it; undo and the eraser leave it alone.
+const HAND = '"Caveat", "Bradley Hand", "Noteworthy", cursive';
+export function DoodlePad({ onClose, onPost, busy, title = "Draw in the margin", eyebrow = null, note = null, starter = null }) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const strokes = useRef([]);       // [{ color, pts: [{x,y},…] }]
@@ -343,6 +348,18 @@ export function DoodlePad({ onClose, onPost, busy, title = "Draw in the margin",
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = CARD;
     ctx.fillRect(0, 0, cv.width / dpr, cv.height / dpr);
+    if (starter) {
+      ctx.save();
+      ctx.translate(14, 31);
+      ctx.rotate(-0.07);
+      ctx.fillStyle = INKS[0];
+      ctx.font = `600 23px ${HAND}`;
+      ctx.fillText(starter, 0, 0);
+      const w = ctx.measureText(starter).width;
+      ctx.strokeStyle = INKS[0]; ctx.lineWidth = 1.6; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(2, 7); ctx.quadraticCurveTo(w * 0.5, 11, w + 2, 5); ctx.stroke();
+      ctx.restore();
+    }
     ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.lineWidth = 3.5;
     for (const s of strokes.current) {
       ctx.strokeStyle = s.color;
@@ -361,6 +378,9 @@ export function DoodlePad({ onClose, onPost, busy, title = "Draw in the margin",
     cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
     cv.style.width = `${w}px`; cv.style.height = `${h}px`;
     redraw();
+    // The handwriting font may still be loading; draw again once it's in.
+    if (starter && document.fonts?.load) document.fonts.load(`600 23px ${HAND}`).then(() => redraw()).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const pos = (ev) => {
