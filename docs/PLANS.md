@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-09-29
+Last updated: 2026-10-04
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -179,6 +179,27 @@ FOUNDER DECISIONS — 2026-10-03 (evening), supersede anything older:
     doors, worker routes (now 410) and their analytics; the camera-preview plugin is gone.
     The App Store description must drop "a camera scanner that translates signs and
     converts prices" before the resubmission.
+
+STAMP ART — 2026-10-04 (founder):
+  - All 1,000 places on the Top 1,000 list (docs/PASSPORT_ICON_LIST.md) have art on R2.
+    Page: https://claude.ai/artifact/B8J6PntsJPetxLfwQ6SbYw
+  - Six are PLAIN TYPOGRAPHIC until the owner gives permission ("so that we don't get in
+    trouble"): Hollywood Sign, Walt Disney World, Graceland, Fenway Park, Dotonbori,
+    Naoshima. Their art is kept at R2 archive/stamp-art/<slug>.png (not served) and in
+    ~/Downloads/"GlobeSkimmers held stamp art (licence pending)"; to restore, copy back to
+    stamp-art/<slug>.png.
+  - Sensitive (founder reviewing the art): Auschwitz-Birkenau (#586), Masjid al-Haram
+    (#637), Al-Masjid an-Nabawi (#638).
+  - TO DO, after both stores are live (partnerships wait for that), ask permission:
+    [ ] Hollywood Sign: Hollywood Chamber of Commerce licensing
+        (hollywoodchamber.net/licensing-information)
+    [ ] Walt Disney World: Disney (rides with the Disneyland pilot in NORTH_STAR §5b)
+    [ ] Graceland: Elvis Presley Enterprises (Graceland's operator)
+    [ ] Fenway Park: Boston Red Sox / Fenway Sports Group
+    [ ] Dotonbori: Ezaki Glico (the Running Man sign), or redraw the canal without the sign
+        (no permission needed)
+    [ ] Naoshima: Yayoi Kusama's studio / Benesse Art Site Naoshima (the pumpkin), or redraw
+        the island without the sculpture (no permission needed)
 
 THE QUEUE — founder-agreed 2026-10-03 (build order; strike as shipped):
   [x] Finder photos phase 1 (match within 250 m, self-healing proxy, locked widths/names,
