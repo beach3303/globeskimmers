@@ -1372,3 +1372,18 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - App: art is cached on phones 30 days, so redrawn slugs get ?r=2026-10-05 (REDRAWN in
   src/lib/stampArt.js — add a dated list for the next round). Ships with the next `npm run ota`.
 - Gates: no-undef app-wide 0, build 0, tagged URLs tested.
+
+## 2026-10-05 — Guestbook doodle opens where you are + says whose guestbook it is
+- Founder (screenshots, Chesebrough Park): tapping Doodle put the pad at the TOP of the
+  attraction card — off screen for someone who scrolled down to the guestbook.
+- Cause: the card's overlay (ThingsToDo, backdropFilter blur) makes `position: fixed`
+  children pin to the card, not the screen. Fix: DoodlePad renders on document.body
+  (createPortal), above the card (z 10010), anchored near the bottom on phones
+  (safe-area aware), centred on tablets. Toasts raised to z 10050 so "Draw something first"
+  isn't dimmed under it.
+- Guestbook's pad now reads: "GUESTBOOK · <place>" / "Sign the guestbook" / "Draw your name,
+  a little art, or a hello for the next visitor." (Passport-page doodles keep "Draw in the
+  margin".)
+- Test on a phone after OTA: open an attraction, scroll to the guestbook, tap 🎨 Doodle —
+  the pad appears on screen at the bottom; also from "Doodle with your finger instead".
+- Gates: eslint (touched) clean, no-undef app-wide 0, build 0. Ships with `npm run ota`.
