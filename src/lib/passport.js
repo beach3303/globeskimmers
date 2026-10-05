@@ -65,6 +65,12 @@ export async function setStampPos(stamp_id, stamp_pos) {
   const { data, error } = await callWorker('passport/stamp/layout', { stamp_id, stamp_pos });
   return { data, error: error || (data && data.ok === false ? data.error || 'Could not move the stamp' : null) };
 }
+// Memorial stamps (src/lib/memorials.js): 'art' keeps the illustration,
+// 'plain' prints the stamp as text only (the typographic stamp).
+export async function setStampArt(stamp_id, art) {
+  const { data, error } = await callWorker('passport/stamp/layout', { stamp_id, art });
+  return { data, error: error || (data && data.ok === false ? data.error || 'Could not change the stamp' : null) };
+}
 // A scene stamp (it carries a film) with at least one memory photo gets the
 // photo-first page: one photo open, the second as a thumbnail, the stamp on
 // the photo's calmer edge. Always a page of its own.

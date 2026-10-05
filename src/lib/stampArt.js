@@ -28,6 +28,9 @@ const ALIAS = {
   "ayers-rock": "uluru",
   "giza-pyramids": "pyramids-of-giza", "the-pyramids-of-giza": "pyramids-of-giza",
   "statue-of-liberty-national-monument": "statue-of-liberty",
+  // The attractions DB names the memorial three ways (checked 2026-10-04).
+  "auschwitz-birkenau-memorial": "auschwitz-birkenau", "auschwitz-i": "auschwitz-birkenau",
+  "auschwitz-ii-birkenau": "auschwitz-birkenau", "auschwitz-birkenau-memorial-and-museum": "auschwitz-birkenau",
 };
 
 // Returns a stamp-art URL for a stamp name (always a candidate URL; the caller

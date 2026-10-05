@@ -7,7 +7,7 @@
 // Every write goes through src/lib/passport.js; onChanged() reloads the
 // passport so the booklet repacks (a solo stamp moves to its own page at once).
 import React, { useRef, useState } from "react";
-import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck, ScanSearch, ArrowUpDown, MapPin } from "lucide-react";
+import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck, ScanSearch, ArrowUpDown, MapPin, Type } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { openAttraction } from "@/lib/openAttraction";
 import { showToast } from "@/components/Toast";
@@ -20,7 +20,8 @@ import { localISODate } from "@/lib/localDate";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { useDismissable } from "@/lib/dismissStack";
 import PostcardCompose from "@/components/passport/PostcardCompose";
-import { socialFollow, setStampNote, setStampVisibility } from "@/lib/passport";
+import { socialFollow, setStampNote, setStampVisibility, setStampArt } from "@/lib/passport";
+import { memorialFor } from "@/lib/memorials";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -99,6 +100,9 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   const photoFirst = isPhotoFirst(stamp);
   const stampPos = stamp.meta?.stamp_pos === "top" || stamp.meta?.stamp_pos === "bottom" ? stamp.meta.stamp_pos : "auto";
   const place = [stamp.city, stamp.region, stamp.country].filter(Boolean).join(", ");
+  // A memorial site (founder, 2026-10-04): the owner picks illustrated or text only.
+  const memorial = memorialFor(stamp);
+  const artStyle = stamp.meta?.art === "plain" ? "plain" : "art";
 
   const onPick = async (e) => {
     const files = [...(e.target.files || [])].slice(0, room);
@@ -128,6 +132,15 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
     setBusy(null);
     if (error) { showToast(error, "error"); return; }
     showToast(solo ? "This stamp now shares a page" : "This stamp has its own page", "success");
+    onChanged?.();
+  };
+  const setArt = async (next) => {
+    if (next === artStyle && stamp.meta?.art) return;
+    setBusy("art");
+    const { error } = await setStampArt(stamp.id, next);
+    setBusy(null);
+    if (error) { showToast(error, "error"); return; }
+    showToast(next === "plain" ? "This stamp now shows as text only" : "This stamp shows its illustration", "success");
     onChanged?.();
   };
   const movePos = async (next) => {
@@ -294,6 +307,28 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
                   <button key={v} type="button" role="radio" aria-checked={stampPos === v} disabled={busy === "pos"} onClick={() => movePos(v)}
                     className="rounded-lg py-2 font-semibold disabled:opacity-60"
                     style={{ fontSize: fs(12.5), fontFamily: "inherit", background: stampPos === v ? INK : IVORY, color: stampPos === v ? "#fff" : INK2, border: `1px solid ${stampPos === v ? INK : RULE}` }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {!readOnly && memorial && (
+            <div className="w-full rounded-[14px] px-3.5 py-3" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
+              <div className="flex items-center gap-3">
+                <span className="flex-none w-9 h-9 rounded-full flex items-center justify-center" style={{ background: IVORY_2 }}>
+                  {busy === "art" ? <Loader2 size={17} color={INK} strokeWidth={2.1} className="animate-spin" /> : <Type size={17} color={INK} strokeWidth={2.1} />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold" style={{ color: INK, fontSize: fs(14.5) }}>How this stamp appears</span>
+                  <span className="block" style={{ color: INK3, fontSize: fs(11.5), lineHeight: 1.35, marginTop: 1 }}>A place of remembrance: its illustration, or text only</span>
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 mt-2.5" role="radiogroup" aria-label="How this stamp appears">
+                {[["art", "Illustrated"], ["plain", "Text only"]].map(([v, l]) => (
+                  <button key={v} type="button" role="radio" aria-checked={artStyle === v} disabled={busy === "art"} onClick={() => setArt(v)}
+                    className="rounded-lg py-2 font-semibold disabled:opacity-60"
+                    style={{ fontSize: fs(12.5), fontFamily: "inherit", background: artStyle === v ? INK : IVORY, color: artStyle === v ? "#fff" : INK2, border: `1px solid ${artStyle === v ? INK : RULE}` }}>
                     {l}
                   </button>
                 ))}

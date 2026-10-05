@@ -9,6 +9,9 @@ import { showToast } from "@/components/Toast";
 import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
+import { memorialFor, needsArtChoice, isPlainArt } from "@/lib/memorials";
+import MemorialStampSheet from "@/components/passport/MemorialStampSheet";
+import { setStampArt } from "@/lib/passport";
 import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
@@ -102,7 +105,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
   const k = KIND[stamp.kind] || KIND.attraction;
   // Bespoke landmark stamp art (falls back to the category emoji if none exists).
   // Country stamps use the flag, not bespoke art.
-  const artUrl = stamp.kind === "country" ? null : stampArtUrl(stamp.name);
+  const artUrl = stamp.kind === "country" || isPlainArt(stamp) ? null : stampArtUrl(stamp.name);
   const [artFailed, setArtFailed] = useState(false);
   const showArt = !!artUrl && !artFailed;
   // Country stamps keep the flag; every other kind falls back to a typographic
@@ -653,6 +656,30 @@ function PassportInner() {
     } catch { /* dismissed */ }
   };
 
+  // Memorial stamps (founder, 2026-10-04): the first time one sits in the
+  // passport without a choice, honor the place and ask illustrated or text
+  // only. "Decide later" stays quiet for the rest of the session.
+  const [memorialAsk, setMemorialAsk] = useState(null);
+  const memorialLater = useRef(new Set());
+  useEffect(() => {
+    if (readOnly || preview || !isAuthenticated || loading || memorialAsk) return;
+    const s = stamps.find((x) => needsArtChoice(x) && !memorialLater.current.has(x.id));
+    if (s) setMemorialAsk(s);
+  }, [loading, readOnly, preview, isAuthenticated, stamps, memorialAsk]);
+  const chooseMemorialArt = async (art) => {
+    const s = memorialAsk;
+    if (!s) return;
+    const { error } = await setStampArt(s.id, art);
+    if (error) { showToast(error, "error"); return; }
+    setStamps((prev) => prev.map((x) => (x.id === s.id ? { ...x, meta: { ...(x.meta || {}), art } } : x)));
+    setMemorialAsk(null);
+    showToast(art === "plain" ? "Your stamp shows as text only" : "Your stamp keeps its illustration", "success");
+  };
+  const laterMemorial = () => {
+    if (memorialAsk) memorialLater.current.add(memorialAsk.id);
+    setMemorialAsk(null);
+  };
+
   // City sets — the collection joy ("7 of 10 Atlanta icons"), no streaks.
   const [citySets, setCitySets] = useState([]);
   useEffect(() => {
@@ -1102,8 +1129,13 @@ function PassportInner() {
         </div>
       )}
 
+      {/* A memorial stamp is honored before anything else opens (founder, 2026-10-04) */}
+      {memorialAsk && (
+        <MemorialStampSheet stamp={memorialAsk} memorial={memorialFor(memorialAsk)} onChoose={chooseMemorialArt} onLater={laterMemorial} />
+      )}
+
       {/* Stamp options — one tap on a stamp in the booklet */}
-      {actionsStamp && (
+      {actionsStamp && !memorialAsk && (
         <StampActions
           stamp={actionsStamp}
           readOnly={readOnly || preview}

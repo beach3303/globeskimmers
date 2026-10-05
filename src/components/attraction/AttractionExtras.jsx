@@ -11,7 +11,9 @@
 import React, { useEffect, useState } from "react";
 import { DollarSign, MapPin } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
-import { addStamp, metersBetween, setStampNote } from "@/lib/passport";
+import { addStamp, metersBetween, setStampNote, setStampArt } from "@/lib/passport";
+import { memorialFor } from "@/lib/memorials";
+import MemorialStampSheet from "@/components/passport/MemorialStampSheet";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { resolveStampVariant } from "@/lib/stampVariants";
 import { countryCode } from "@/lib/countries";
@@ -76,6 +78,13 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
   const [memBusy, setMemBusy] = useState(false);
   const [memSaved, setMemSaved] = useState(false);
   const [howOpen, setHowOpen] = useState(false);
+  const [memorial, setMemorial] = useState(null);   // { mem, stamp } — a memorial site just stamped
+  const chooseArt = async (art) => {
+    const { error } = await setStampArt(memorial.stamp.id, art);
+    if (error) { showToast(error, "error"); return; }
+    setMemorial(null);
+    showToast(art === "plain" ? "Your stamp shows as text only" : "Your stamp keeps its illustration", "success");
+  };
   const saveMemory = async () => {
     if (!stampedId || !memory.trim() || memBusy) return;
     setMemBusy(true);
@@ -115,11 +124,12 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
       : gid ? `places:${gid}`
       : kind === "owned" ? `owned:${pid}`
       : pid;
+    const stampName = variant ? variant.name : (link?.name || name);
     const { data, error } = await addStamp({
       kind: "attraction",
       entity_type: variant ? "landmark" : "place",
       entity_id: entityId,
-      name: variant ? variant.name : (link?.name || name),
+      name: stampName,
       city: link?.city || parts.city,
       region: parts.region,
       country,
@@ -141,10 +151,14 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
     setStampedId(data?.id || null);
     setStartedPrivate(data?.private === true);
     showToast(iconic ? "✓ Verified — added to your Virtual Passport 🛂" : "✓ “I was here” — added to your Virtual Passport 🛂", "success");
+    // A memorial site (founder, 2026-10-04): honor the place, then ask illustrated or text only.
+    const mem = memorialFor({ kind: "attraction", name: stampName });
+    if (mem && data?.id) setMemorial({ mem, stamp: { id: data.id, name: stampName, city: link?.city || parts.city, country, entity_id: entityId } });
   };
 
   return (
     <div>
+      {memorial && <MemorialStampSheet stamp={memorial.stamp} memorial={memorial.mem} onChoose={chooseArt} onLater={() => setMemorial(null)} />}
       <button type="button" onClick={stamp} disabled={busy || stamped}
         style={{ width: "100%", borderRadius: isTablet ? 16 : 14, padding: fs(isTablet ? 15 : 12), border: "none", cursor: "pointer", fontFamily: "inherit",
           fontSize: fs(isTablet ? 18 : 14.5), fontWeight: 700, background: stamped ? "#E7F3EA" : STAMP, color: stamped ? "#266A3B" : "#fff" }}>
