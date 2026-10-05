@@ -13255,11 +13255,13 @@ async function handlePlaceDishAdd(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const ids = await dishPlaceIds(env, b.place_id);
     if (!ids) return jsonResponse({ error: 'Unknown place' }, 400);
-    const kind = b.kind === 'coffee' ? 'coffee' : 'restaurant';
+    // store (founder, 2026-10-05): a convenience store — "what you got here",
+    // which can be anything, so the food-as-subject check is skipped.
+    const kind = b.kind === 'coffee' ? 'coffee' : b.kind === 'store' ? 'store' : 'restaurant';
     const favorite = b.favorite === true;
     const dish = String(b.dish || '').replace(/\s+/g, ' ').trim().slice(0, 60);
     const key = dishKey(dish);
-    if (key.length < 2) return jsonResponse({ error: kind === 'coffee' ? 'What did you order?' : 'What dish is this?' }, 400);
+    if (key.length < 2) return jsonResponse({ error: kind === 'coffee' ? 'What did you order?' : kind === 'store' ? 'What did you get?' : 'What dish is this?' }, 400);
 
     const sp = await gbSocialProfile(env, user.id).catch(() => null);
     if (sp?.social_tier === 'blocked') return jsonResponse({ error: 'Sharing isn\'t available on this account' }, 403);
@@ -13299,7 +13301,7 @@ async function handlePlaceDishAdd(request, env, ctx) {
     if (!(await gbModerate(env, dish)).allow) return jsonResponse({ error: 'Let’s keep dish names kind' }, 422);
     const v = await gbModeratePhoto(env, data, 'image/jpeg');
     if (!v?.allow) return jsonResponse({ error: 'This photo can’t be shared here' }, 422);
-    if (!v.food) return jsonResponse({ error: kind === 'coffee' ? 'Make the drink or treat the star of the photo' : 'Make the dish the star of the photo — get close to the plate' }, 422);
+    if (!v.food && kind !== 'store') return jsonResponse({ error: kind === 'coffee' ? 'Make the drink or treat the star of the photo' : 'Make the dish the star of the photo — get close to the plate' }, 422);
 
     const photoKey = `dish/${user.id}/${crypto.randomUUID()}.jpg`;
     await env.MEDIA.put(photoKey, bytes, { httpMetadata: { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' } });
@@ -13314,7 +13316,7 @@ async function handlePlaceDishAdd(request, env, ctx) {
       : gbRest(env, 'place_dishes', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(r) }));
     let w = await save({ ...row, favorite });
     if (!w.ok && w.status === 400) w = await save(row);   // before the favorite column lands
-    if (!w.ok) { await env.MEDIA.delete(photoKey).catch(() => {}); return jsonResponse({ error: 'Could not save — try again' }, 502); }
+    if (!w.ok) { await env.MEDIA.delete(photoKey).catch(() => {}); return jsonResponse({ error: kind === 'store' && w.status === 400 ? 'Store photos open in a few minutes — try again shortly' : 'Could not save — try again' }, 502); }
     if (old?.photo_key && ctx) ctx.waitUntil(env.MEDIA.delete(old.photo_key).catch(() => {}));
     const saved = (await w.json())[0] || {};
     // One favorite per traveler per place: this one replaces any earlier pick.
@@ -13324,6 +13326,78 @@ async function handlePlaceDishAdd(request, env, ctx) {
     }
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'dish_post', { kind, proof, replaced: !!old, favorite }));
     return jsonResponse({ ok: true, id: saved.id, dish, url: photoUrl, proof, replaced: !!old });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// ── Private messages to a place's owner (founder, 2026-10-05) ────────────────
+// A traveler writes to the owner of a restaurant, café, store or attraction.
+// Never posted. Screened first: complaints and blunt criticism are fine (that is
+// what this is for); threats, slurs, sexual content, extortion, spam and
+// personal details of staff are blocked; insults aimed at staff and accusations
+// of crimes wait for our team. Fails closed to 'hold'. Kept until the owner
+// claims and verifies the place. Anonymous unless the traveler signs it.
+async function ownerNoteScreen(env, text, placeName) {
+  if (!env.ANTHROPIC_API_KEY) return { verdict: 'hold', reason: 'screen-unavailable' };
+  try {
+    const system = 'You screen PRIVATE messages from customers to the owner of a business (' + String(placeName || 'a place').slice(0, 80) + '). The owner reads them; they are never published. Complaints, criticism, bad experiences, suggestions and compliments are ALLOWED, even blunt ones, even with mild profanity. Reply with ONLY {"verdict":"ok"|"hold"|"block","reason":"<3-6 words>"}. block: threats of violence or harm, hate slurs, sexual content, extortion or demands for money, spam/ads, or personal details of staff (home addresses, phone numbers). hold: insults or harassment aimed at a named or described staff member, accusations of crimes (theft, poisoning, assault), or heavy abusive profanity. ok: everything else.';
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 40, system, messages: [{ role: 'user', content: `MESSAGE:\n${text}` }] }),
+    });
+    if (!r.ok) return { verdict: 'hold', reason: 'screen-error' };
+    const d = await r.json();
+    const t = (d.content && d.content[0] && d.content[0].text) || '';
+    const v = (t.match(/"verdict"\s*:\s*"(ok|hold|block)"/i) || [])[1];
+    const reason = ((t.match(/"reason"\s*:\s*"([^"]{0,80})"/i) || [])[1]) || null;
+    return { verdict: v ? v.toLowerCase() : 'hold', reason };
+  } catch { return { verdict: 'hold', reason: 'screen-exception' }; }
+}
+
+// POST /places/owner-note { entity_type, entity_id, entity_name, body, include_name }
+async function handleOwnerNote(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to send a private message' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const ids = await gbEntityIds(env, gbClean(b.entity_id));
+    if (!ids) return jsonResponse({ error: 'Unknown place' }, 400);
+    const entityType = ['attraction', 'restaurant', 'coffee', 'store'].includes(b.entity_type) ? b.entity_type : 'place';
+    const text = String(b.body || '').replace(/\s+/g, ' ').trim();
+    if (text.length < 2) return jsonResponse({ error: 'Write a short message first' }, 400);
+    if (text.length > 1000) return jsonResponse({ error: 'Message too long (max 1000 characters)' }, 400);
+    const entityName = gbClean(b.entity_name).slice(0, 160) || null;
+
+    const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (sp === undefined) return jsonResponse({ error: 'Couldn’t check your account — try again' }, 503);
+    if (!sp?.birth_year) return jsonResponse({ error: 'age_required', message: 'Add your birth year in Settings to send messages.' }, 428);
+    if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Messages aren’t available on this account' }, 403);
+    if (env.GLOBESKIMMERS_KV) {
+      const ck = `ownernote:${user.id}:${new Date().toISOString().slice(0, 10)}`;
+      const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
+      if (n >= 10) return jsonResponse({ error: 'That’s a lot of messages for one day — try again tomorrow' }, 429);
+      await env.GLOBESKIMMERS_KV.put(ck, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
+    }
+
+    const screen = await ownerNoteScreen(env, text, entityName);
+    if (screen.verdict === 'block') return jsonResponse({ error: 'We can’t send this — messages can’t include threats, slurs or anyone’s personal details.' }, 422);
+
+    // The name comes from the profile, never the client — and only when the
+    // traveler chose to sign. Under-18s are always anonymous.
+    const age = sp.birth_year ? new Date().getUTCFullYear() - Number(sp.birth_year) : null;
+    let senderName = null;
+    if (b.include_name === true && age != null && age >= 18) {
+      try {
+        const pr = await gbRest(env, `profiles?id=eq.${user.id}&select=first_name`, { headers: { 'Accept-Profile': 'public' } });
+        senderName = ((pr.ok ? await pr.json() : [])[0] || {}).first_name || null;
+      } catch { /* sent anonymously */ }
+    }
+    const row = { user_id: user.id, entity_type: entityType, entity_id: ids.canon, entity_name: entityName, body: text, sender_name: senderName,
+      status: screen.verdict === 'ok' ? 'ok' : 'held', screen_reason: screen.reason };
+    const w = await gbRest(env, 'owner_notes', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+    if (!w.ok) return jsonResponse({ error: w.status === 404 || w.status === 400 ? 'Private messages open in a few minutes — try again shortly' : 'Could not send — try again' }, 502);
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'owner_note', { entity_type: entityType, status: row.status, signed: !!senderName }));
+    return jsonResponse({ ok: true, held: row.status === 'held', signed: !!senderName });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -19824,6 +19898,7 @@ export default {
       if (pathname === '/guestbook/delete' && request.method === 'POST') return await handleGuestbookDelete(request, env);
       if (pathname === '/guestbook/report' && request.method === 'POST') return await handleGuestbookReport(request, env, ctx);
       if (pathname === '/guestbook/visit' && request.method === 'POST') return await handleGuestbookVisit(request, env);
+      if (pathname === '/places/owner-note' && request.method === 'POST') return await handleOwnerNote(request, env, ctx);
 
       // Passport (personal, private)
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);

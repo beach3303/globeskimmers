@@ -38,6 +38,8 @@ import FilterSheet from '@/components/finder/FilterSheet';
 import { MapPin, Store, Clock, Moon, CreditCard, Flame, SlidersHorizontal, Check, AlertCircle, SearchX } from 'lucide-react';
 import { CAT, TEAL_DEEP, IVORY } from '@/components/redesign/constants';
 import { useIsTablet } from '@/lib/useIsTablet';
+import TravelerDishes from '@/components/finder/TravelerDishes';
+import Guestbook from '@/components/Guestbook';
 
 // iPad editorial design tokens (design handoff: "Places to Eat · iPad").
 // Shared verbatim across finders so every tablet card matches.
@@ -396,6 +398,16 @@ function StoreCardTablet({ store: rawStore, isExpanded, userLat, userLng, onShow
               <span><span style={{ display: "block", fontSize: fs(SZ.phoneBar), fontWeight: 600, color: "#2E6FE0" }}>{store.phone}</span><span style={{ fontSize: fs(t ? 15 : 12), color: ED_INK3 }}>Tap to call</span></span>
             </a>
           )}
+
+          {/* Traveler finds + the guestbook (founder, 2026-10-05): stores get the
+              same kind-notes + doodles + private-message door as restaurants. */}
+          <div style={{ marginTop: fs(t ? 16 : 12) }}>
+            <TravelerDishes place={{ id: store.placeId || store.id, name: store.name, lat: store.lat, lng: store.lng }} kind="store" />
+          </div>
+          <div style={{ marginTop: fs(t ? 14 : 10) }}>
+            <div style={{ fontSize: fs(13), fontWeight: 700, color: ED_INK3, letterSpacing: "0.5px", marginBottom: fs(8) }}>📖 GUESTBOOK</div>
+            <Guestbook entityType="store" entityId={store.placeId || store.id} entityName={store.name} />
+          </div>
 
           {/* Actions */}
           <div style={{ display: "flex", gap: fs(t ? 12 : 8), marginTop: fs(t ? 20 : 14) }}>

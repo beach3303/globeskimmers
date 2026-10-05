@@ -9,6 +9,7 @@ import { callWorker } from "@/lib/callWorker";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
 import { DoodlePad } from "@/components/passport/Blotter";
+import OwnerNoteSheet from "@/components/OwnerNoteSheet";
 
 const PROMPTS = [
   { key: "tip", label: "💡 Tip for visitors", hint: "One thing you wish you'd known before you came…" },
@@ -69,6 +70,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
   const [editId, setEditId] = useState(null);
   const [editBody, setEditBody] = useState("");
   const [pad, setPad] = useState(false);                   // the finger-doodle sheet
+  const [ownerNote, setOwnerNote] = useState(false);       // the private message to the owner
   const [doodleBusy, setDoodleBusy] = useState(false);
   const [openDoodle, setOpenDoodle] = useState(null);      // entry id expanded full-width
   const [lightbox, setLightbox] = useState(null);          // full-size photo url
@@ -328,6 +330,18 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
       )}
 
       {/* Lightbox */}
+      {/* The quiet door for anything not kind (founder, 2026-10-05): a private
+          message to the owner — never posted; screened before delivery. */}
+      {isAuthenticated && !composing && (
+        <button type="button" onClick={() => setOwnerNote(true)}
+          className="w-full mt-2 py-1.5 text-center"
+          style={{ fontSize: "calc(12px*var(--fs))", color: "#736657", fontFamily: "inherit" }}>
+          🔒 Something for the owner&rsquo;s ears? Send a private message
+        </button>
+      )}
+      {ownerNote && (
+        <OwnerNoteSheet entityType={entityType} entityId={entityId} entityName={entityName} onClose={() => setOwnerNote(false)} />
+      )}
       {pad && (
         <DoodlePad busy={doodleBusy} onClose={() => setPad(false)} onPost={postDoodle}
           title="Sign the guestbook" eyebrow={entityName ? `Guestbook · ${entityName}` : "Guestbook"}

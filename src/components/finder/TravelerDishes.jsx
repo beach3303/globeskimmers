@@ -26,7 +26,8 @@ export default function TravelerDishes({ place, kind = "restaurant" }) {
   const [state, setState] = useState(null); // { dishes, mine } once loaded
   const [adding, setAdding] = useState(false);
   const [view, setView] = useState(null);   // { photos, index, title }
-  const goods = kind === "coffee" ? "drinks and treats" : "dishes";
+  const store = kind === "store";
+  const goods = kind === "coffee" ? "drinks and treats" : store ? "finds" : "dishes";
 
   useEffect(() => {
     const el = rootRef.current;
@@ -82,11 +83,11 @@ export default function TravelerDishes({ place, kind = "restaurant" }) {
       <button type="button" onClick={() => setAdding(true)}
         className="w-full mt-2 rounded-[12px] py-2.5 font-semibold"
         style={{ background: "#fff", color: STAMP, border: `1.5px dashed ${STAMP}55`, fontSize: fs(13.5) }}>
-        📸 Add a photo of what you ordered
+        📸 {kind === "store" ? "Add a photo of what you got here" : "Add a photo of what you ordered"}
       </button>
       {!dishes.length && (
         <p style={{ fontSize: fs(11.5), color: INK3, textAlign: "center", marginTop: 4, lineHeight: 1.4 }}>
-          Help everyone find delicious {goods} — snap what you ordered and tell us if you loved it 😋
+          {store ? "Picked up something good? Snap it and let others know how you liked it 😊" : `Help everyone find delicious ${goods} — snap what you ordered and tell us if you loved it 😋`}
         </p>
       )}
       {mine.length > 0 && (
@@ -160,10 +161,10 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded }) {
     <div className="fixed inset-0 flex items-end justify-center" style={{ zIndex: 9997, background: "rgba(22,17,13,.5)" }} onClick={onClose}>
       <div className="w-full max-w-md rounded-t-[22px] px-5 pt-4 pb-6" style={{ background: "#F3EEE1", paddingBottom: "max(24px, env(safe-area-inset-bottom))" }} onClick={(e) => e.stopPropagation()}>
         <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "rgba(22,17,13,.18)" }} />
-        <div style={{ fontFamily: SERIF, fontSize: fs(24), color: INK, lineHeight: 1.1 }}>Add a photo of what you ordered</div>
+        <div style={{ fontFamily: SERIF, fontSize: fs(24), color: INK, lineHeight: 1.1 }}>{kind === "store" ? "Add a photo of what you got" : "Add a photo of what you ordered"}</div>
         <div className="truncate" style={{ fontSize: fs(12.5), color: INK3, marginTop: 2 }}>{place.name}</div>
         <p style={{ fontSize: fs(13), color: INK2, lineHeight: 1.45, marginTop: 6 }}>
-          Help everyone find delicious {goods}! Add a photo of what you ordered — and let us know if you loved it 😊
+          {kind === "store" ? "Could be anything — a snack, a drink, a find. We\u2019ll let others know how you liked it 😊" : `Help everyone find delicious ${goods}! Add a photo of what you ordered — and let us know if you loved it 😊`}
         </p>
 
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pick} />
@@ -175,7 +176,7 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded }) {
         </button>
 
         <input value={dish} onChange={(e) => setDish(e.target.value.slice(0, 60))} maxLength={60}
-          placeholder={kind === "coffee" ? "What did you order? e.g. Iced oat latte" : "What did you order? e.g. Al pastor tacos"} aria-label="What you ordered"
+          placeholder={kind === "coffee" ? "What did you order? e.g. Iced oat latte" : kind === "store" ? "What did you get? e.g. Matcha Kit Kat" : "What did you order? e.g. Al pastor tacos"} aria-label={kind === "store" ? "What you got" : "What you ordered"}
           className="w-full mt-3 rounded-xl px-3 h-11 outline-none" style={{ background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(15), color: INK }} />
         {known.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2">
@@ -200,7 +201,7 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded }) {
         <label className="flex items-center gap-2.5 mt-3 rounded-xl px-3 py-2.5 cursor-pointer" style={{ background: "#fff", border: `1px solid ${favorite ? STAMP : RULE}` }}>
           <input type="checkbox" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} style={{ width: 18, height: 18, accentColor: STAMP }} />
           <span style={{ fontSize: fs(13.5), color: INK }}>
-            ⭐ This is my favorite {kind === "coffee" ? "here" : "dish at this restaurant"}
+            ⭐ This is my favorite {kind === "restaurant" ? "dish at this restaurant" : "here"}
           </span>
         </label>
 
