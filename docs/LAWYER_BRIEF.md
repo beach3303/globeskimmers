@@ -102,19 +102,32 @@ and this inventory, and have them rank the real exposure. Everything below feeds
 | Airport prompts | GPS detection at airports | nothing obvious; confirm |
 | Price/visit info | AI-extracted from official sites | accuracy claims; "verify on official site" link exists |
 
-## Insurance (preliminary — a sourced 2026 research pass is running and will update this)
+## Insurance (researched 2026-10-05 — full sourced version: docs/INSURANCE_RESEARCH_2026-10.md)
 
-Claude's working view, 2026-10-05; verify with a broker:
-- **Tech E&O bundled with media liability** is the core policy — media liability is the part
-  that defends copyright/trademark/defamation claims arising from content (stamps, UGC).
-  Patent claims are excluded everywhere; true patent-defense insurance exists but is not
-  practical at this size.
-- **Cyber liability** (user data: GPS, photos) — often bundled with the above.
-- **General liability** — cheap, required by some partners/landlords.
-- Startup-focused carriers to quote: **Vouch**, **Embroker**, **Hiscox**, **Coalition**
-  (cyber-led), **Chubb** via broker. Ask each: does media liability cover user-generated
-  content, and is there a UGC or "failure to moderate" exclusion? Disclose the six held
-  stamps plainly; concealing a known risk voids coverage faster than the risk itself.
-- Realistic budget: a small app can usually get Tech E&O + media + cyber at $1M limits for
-  roughly $100–250/mo total; $20–100/mo buys partial cover (GL + thin cyber) but usually not
-  meaningful media liability. Pending the research file for exact 2026 figures.
+- **Buy one bundled policy: Tech E&O + cyber with media liability, $1M limits.** Media
+  liability is what defends trademark/trade-dress/copyright and defamation claims arising
+  from content — the stamp art and user feedback. Patent is excluded everywhere (irrelevant
+  here). Plain general liability does NOT cover IP ("advertising injury" is endorsed away);
+  umbrella doesn't extend E&O/media/cyber, so skip it.
+- **Quotes:** Hiscox direct first (tech E&O includes cyber at no extra cost; from ~$22.50/mo —
+  the only real fit for a $20–100/mo budget), then Vouch (startup-native, Hiscox-backed,
+  broader wording at the ~$3–7k/yr tier) and Embroker as the comparison.
+- **Realistic cost:** ~$600–1,200/yr for a $1M bundled E&O/cyber with a media component plus
+  cheap GL (~$180/yr). Standalone IP-defense insurance runs ~1–2% of the limit
+  ($10–20k/yr) — not practical now. Context for the stakes: defending even a small
+  trademark suit averages ~$327k, which is why the media-liability route matters.
+- **Two must-dos on the application:**
+  1. Disclose the stamp hold-back practice as a risk control ("we review stamp art for
+     protected designs and withhold matches"). Hiding a known circumstance triggers the
+     prior-knowledge exclusion and can void coverage — courts enforce this, including on a
+     known trademark dispute. Insure BEFORE any demand letter ever arrives; a known dispute
+     gets excluded.
+  2. Get written confirmation that hosted user content (guestbook notes, doodles, dish
+     photos, private feedback) is inside the policy's "media content" definition — base
+     forms often cover only content the insured created; platforms need the expanded-UGC
+     endorsement.
+- **Not insurable:** FTC Consumer Reviews Rule penalties ($53,088/violation; first warning
+  letters Dec 2025). The kind-notes-public / negatives-private design is a lawyer question,
+  not a policy question (see topic 1). Cyber's regulatory sublimit does cover privacy
+  regulators — relevant to COPPA (amended rule in force since June 2025; the 13+ age gate
+  helps underwriting, and carriers are scrutinizing children's-data sublimits post-TikTok).
