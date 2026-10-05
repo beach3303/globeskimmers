@@ -188,8 +188,13 @@ STAMP ART — 2026-10-04 (founder):
     Naoshima. Their art is kept at R2 archive/stamp-art/<slug>.png (not served) and in
     ~/Downloads/"GlobeSkimmers held stamp art (licence pending)"; to restore, copy back to
     stamp-art/<slug>.png.
-  - Sensitive (founder reviewing the art): Auschwitz-Birkenau (#586), Masjid al-Haram
-    (#637), Al-Masjid an-Nabawi (#638).
+  - Sensitive (founder reviewing the art): Masjid al-Haram (#637), Al-Masjid an-Nabawi
+    (#638); Claude recommends keeping their art (non-figurative, how the sites present
+    themselves).
+  - Auschwitz-Birkenau (#586), DECIDED 2026-10-04: the traveler gets the illustrated stamp,
+    reads a short message honoring the victims, and chooses Illustrated or Text only
+    (the typographic stamp); changeable later in the stamp's options. The list of memorial
+    places is src/lib/memorials.js — add a site there to give it the same treatment.
   - TO DO, after both stores are live (partnerships wait for that), ask permission:
     [ ] Hollywood Sign: Hollywood Chamber of Commerce licensing
         (hollywoodchamber.net/licensing-information)

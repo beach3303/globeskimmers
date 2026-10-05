@@ -1290,3 +1290,25 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   that translates signs and converts prices" (docs/STORE_LISTING_COPY.md updated).
 - Gates: eslint (touched) clean, no-undef touched + app-wide 0, build 0, cap sync clean.
 - Ships: worker on push; app with the next `npm run ota`.
+
+## 2026-10-04 — Auschwitz-Birkenau: honor message + illustrated or text-only stamp
+- Founder: "for Auschwitz let's give the user the stamp but also ask them if they feel
+  comfortable in keeping it or … just have a text stamp … leave a message that we honor …"
+- App: src/lib/memorials.js lists memorial places (Auschwitz-Birkenau only; matches the
+  three names the attractions DB uses: "Auschwitz-Birkenau Memorial", "Auschwitz I",
+  "Auschwitz II-Birkenau"). Stamping one opens a sheet: "A place of remembrance", the
+  message ("At least 1.1 million people were murdered here, about one million of them Jews.
+  We honor their memory, and we're grateful you came to remember."), then Illustrated vs
+  Text only, neither pre-selected; "Decide later" closes it. The Passport asks once more on
+  open while the choice is unmade; the stamp's options gain "How this stamp appears".
+  Text only = the typographic stamp in the card, booklet, enlarged view and shared passport.
+- Fixed with it: none of those three names matched the art file (auschwitz-birkenau), so the
+  stamp showed text only with no choice. src/lib/stampArt.js aliases them now.
+- Worker: POST /passport/stamp/layout accepts art: 'art' | 'plain', saved in the stamp's
+  meta.art (no migration — meta is an existing jsonb column).
+- Gates: node --check, eslint (touched) clean, no-undef touched + app-wide 0, build 0.
+- Ships: worker on push; app with the next `npm run ota`.
+- Test: can't be run end to end from home — stamping needs GPS at the site. After the OTA,
+  check that other stamps look unchanged. The first real check is the first visitor; any
+  Auschwitz stamp made before the OTA gets the question the next time its owner opens the
+  Passport.
