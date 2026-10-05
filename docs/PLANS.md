@@ -186,6 +186,12 @@ AIRPORT STAMPS — ARRIVING / DEPARTING (founder, 2026-10-05), mockup awaiting a
   Not now" prompt. Open: ink by direction replaces ink by country; a round trip needs the
   airport prompt to come back on the way home.
 
+VIRTUAL ITEMS (founder, 2026-10-05) — shipped v1: luggage + laptop + drink container +
+  up to 6 travel-buddy pets on the profile. Monetization later: water-bottle/laptop brands
+  pay to offer branded versions travelers can pick (never auto-applied). Per-breed pet art:
+  generate with the stamp-art pipeline and upload to stamp-art/pets/<species>/<breed>/<pose>
+  .webp — the app upgrades automatically; the generic chibi fallback ships meanwhile.
+
 RESTAURANT OWNERS (founder idea, 2026-10-05) — under consideration:
   - Private feedback to the owner (never posted; screened; sender told it's private) — ~1 day.
   - Claim (verify via the owner's Google Business sign-in), burgundy "Owner verified" seal,

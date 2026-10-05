@@ -1513,3 +1513,26 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   COARSE+FINE only (no BACKGROUND permission); runtime checkPermissions/requestPermissions
   before first use; no watchPosition/background modes; sensitive places auto-start private.
 - Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0.
+
+## 2026-10-05 — Profile: My virtual items + travel buddies; prints from a packet
+- Founder: at least 3 openable items (luggage + laptop + drink container); generic shapes
+  only — NOT Apple/HP/Yeti/Stanley trade dress (LAWYER_BRIEF §3 bar); 8 colors (pink white
+  black yellow blue purple green orange); stickers per item, one home per sticker (a flag
+  can't ride two items); enlarge; drag to rearrange; up to 6 named virtual pets — all dog/cat
+  breeds, hamsters, pet birds, iguanas/dragons — poses sitting/laying/belly-up by swipe.
+- App: src/components/profile/ — gearShapes.js (laptop + tumbler + straw bottle + lid bottle,
+  recolorable SVG), petShapes.js (5 species × 3 poses chibi fallback art), VirtualItems.jsx
+  (shelf under the trunk, enlarge/edit sheet: colors, drink variant, sticker picker from the
+  SAME earned inventory as the luggage with "on your luggage/laptop/bottle" exclusivity,
+  drag/size/turn/remove; buddies strip: species → searchable breed → coat → name, swipe =
+  pose, tap = manage). src/lib/petCatalog.js: 278 dog breeds, 73 cat, 5 hamster, 25 bird,
+  10 reptile + coat palettes. Pet names pass gbModerate.
+- Per-breed art pipeline: upload renders to R2 stamp-art/pets/<species>/<breed-key>/<pose>.webp
+  and they take over from the drawn fallback automatically (same as luggage skins).
+- Worker: /gear/get, /gear/set (validates colors/variants/species/poses, 6-buddy cap, one
+  item per sticker, name moderation). Migration 20261005110000_profile_gear.sql.
+- Photo packets: a + chip on each envelope (owner only) uploads up to 10 prints straight to
+  that destination's newest stamp (same EXIF + review path as StampActions); packets.js now
+  carries the newest stamp id per destination.
+- Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0. Ships: worker +
+  migration on push; app with `npm run ota`.
