@@ -63,6 +63,54 @@ function BarRow({ label, count, max, color = COLORS.accent }) {
   );
 }
 
+// One traveler's activity record, pulled on demand (founder, 2026-10-05) —
+// for legal requests and audits only. Computed when asked; nothing is stored.
+function TravelerPull() {
+  const [q, setQ] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [res, setRes] = React.useState(null);
+  const pull = async () => {
+    if (!q.trim() || busy) return;
+    setBusy(true);
+    const { data, error } = await callWorker('admin/user-activity', { q: q.trim() });
+    setBusy(false);
+    setRes(error || data?.error ? { error: error || data.error } : data);
+  };
+  const years = res && !res.error ? [...new Set(Object.values(res.byYear).flatMap((o) => Object.keys(o)))].sort() : [];
+  return (
+    <Section title="🔎 Traveler activity — audit pull" icon={Eye}>
+      <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>On-demand only (legal requests, audits). Handle or user id; nothing is saved from this view.</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="@handle or user id" aria-label="Handle or user id"
+          style={{ flex: 1, border: `1px solid ${COLORS.border || '#ddd'}`, borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
+        <button type="button" onClick={pull} disabled={busy || !q.trim()} style={{ borderRadius: 8, padding: '8px 14px', fontWeight: 600, fontSize: 13, background: COLORS.dark, color: '#fff', border: 'none', opacity: busy ? 0.6 : 1 }}>{busy ? 'Pulling…' : 'Pull'}</button>
+      </div>
+      {res?.error && <div style={{ color: '#B0472F', fontSize: 13, marginTop: 8 }}>{res.error}</div>}
+      {res && !res.error && (
+        <div style={{ marginTop: 10, fontSize: 13, color: COLORS.dark }}>
+          <div style={{ fontWeight: 700 }}>{res.handle ? `@${res.handle}` : res.user_id}</div>
+          <table style={{ marginTop: 6, borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums' }}>
+            <thead><tr><th style={{ textAlign: 'left', paddingRight: 14 }}></th>{years.map((y) => <th key={y} style={{ textAlign: 'right', paddingRight: 14 }}>{y}</th>)}<th style={{ textAlign: 'right' }}>All</th></tr></thead>
+            <tbody>
+              {[['Stamps', 'stamps'], ['Guestbook notes', 'guestbook_notes'], ['Dish photos', 'dish_photos'], ['Owner messages', 'owner_messages']].map(([label, k]) => (
+                <tr key={k}><td style={{ paddingRight: 14, color: COLORS.gray }}>{label}</td>{years.map((y) => <td key={y} style={{ textAlign: 'right', paddingRight: 14 }}>{res.byYear[k]?.[y] || 0}</td>)}<td style={{ textAlign: 'right', fontWeight: 700 }}>{res.totals[k === 'stamps' ? 'stamps' : k]}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          {res.airport_sequence?.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Airport sequence</div>
+              <div style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12.5, lineHeight: 1.7 }}>
+                {res.airport_sequence.map((a, i) => <span key={i}>{a.date} {a.iata}{a.direction ? (a.direction === 'departure' ? ' ⬈ out' : ' ⬊ in') : ''}{a.verified === 'gps' ? ' ✓' : ''}{i < res.airport_sequence.length - 1 ? '  →  ' : ''}</span>)}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Section>
+  );
+}
+
 function Section({ title, icon: Icon, children, empty }) {
   return (
     <div style={{ background: COLORS.card, borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
@@ -477,6 +525,8 @@ export default function AdminAnalytics() {
               <KpiCard icon={Activity} label="Stickiness" value={`${stickiness}%`} color={COLORS.green} />
               <KpiCard icon={Sparkles} label="Taps/session" value={avgRowsTaps} color={COLORS.accent} />
             </div>
+
+            <TravelerPull />
 
             <Section title={`🛡️ Safety reports — ${reports.rows.length} open`} icon={Mail} empty={reports.error ? `Couldn't load reports: ${reports.error}` : reports.rows.length === 0 ? 'No open reports. Shared-passport reports land here; a child-safety reason gets 24h triage.' : null}>
               {reports.rows.map((r) => (

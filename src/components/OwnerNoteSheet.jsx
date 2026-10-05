@@ -50,11 +50,11 @@ export default function OwnerNoteSheet({ entityType, entityId, entityName, onClo
           </button>
         </div>
         <p style={{ color: INK2, fontSize: fs(13), lineHeight: 1.45, marginTop: 6 }}>
-          Something they should know — good or not. It isn&rsquo;t posted anywhere.
+          Private messages, compliments and requests — straight to the owner, never posted.
         </p>
 
         <textarea value={body} onChange={(e) => setBody(e.target.value.slice(0, 1000))} rows={5} maxLength={1000} aria-label="Your message"
-          placeholder="e.g. The patio heater was broken tonight — worth a look."
+          placeholder="A compliment, a request, or something only they should hear…"
           className="w-full mt-3 rounded-xl px-3 py-2.5 outline-none resize-none" style={{ background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(14.5), color: INK }} />
 
         <label className="flex items-center gap-2.5 mt-2.5 cursor-pointer" style={{ fontSize: fs(13.5), color: INK }}>

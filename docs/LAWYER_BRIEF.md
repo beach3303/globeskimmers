@@ -81,6 +81,24 @@ and this inventory, and have them rank the real exposure. Everything below feeds
   an AI vision model for moderation/recognition, analytics events.
 - Mecca/Medina and other sensitive-place stamps: any liability angle, or purely reputational?
 
+### 5b. Activity records, audits and legal requests (added 2026-10-05)
+- The founder wants the ability to reconstruct a traveler's activity — e.g. the airport
+  sequence of a round trip (LAX in → ATL → LAX out), stamps/posts per year — "in case a court
+  would request it." Built as an ON-DEMAND admin pull (computed from existing product data
+  when asked; airport stamps now record arrival/departure). Claude's position, for the lawyer
+  to confirm: do NOT keep standing per-user dossiers — CPRA data minimization disfavors
+  retention without an operational purpose, a standing profile raises breach and discovery
+  exposure, and nothing requires pre-building what a subpoena could ask for. Questions:
+  - Is the on-demand model the right posture? Any duty to pre-preserve more?
+  - The privacy policy now discloses legal-process disclosure (draft updated 2026-10-05) —
+    is the wording sufficient? Does an on-demand activity view trigger CPRA/GDPR "profiling"
+    disclosures, and must aggregate analytics ("travelers stamp N times a year") stay
+    de-identified to avoid them?
+  - Process for a solo founder receiving a subpoena: who validates it, minimum response,
+    user notification policy (warrant canary-type questions), retention schedule to adopt.
+  - The privacy draft is stale in spots (names Base44; says camera images are never stored,
+    but dish/guestbook photos now are) — have the lawyer review the rewrite.
+
 ### 6. Formation and money
 - LLC (or current structure) adequacy for the above; CA specifics.
 - Stripe Tax questions are with the accountant (2026-09-27) — ask the lawyer only where tax

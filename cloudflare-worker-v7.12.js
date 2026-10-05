@@ -12579,9 +12579,16 @@ async function handlePassportStamp(request, env, ctx) {
         scene: cleanTxt(b.film.scene, 240),
       };
     }
+    // Airport direction (founder, 2026-10-05): arrival or departure prints on
+    // the stamp, and the stamp is keyed per visit (IATA:date:arr|dep) so a round
+    // trip collects both — and an audit can replay the sequence (LAX in, ATL,
+    // LAX out) from entity_id + meta.direction + visited_on. Legacy airport
+    // stamps keep their plain-IATA ids and their look.
+    const direction = kind === 'airport' && ['arrival', 'departure'].includes(b.direction) ? b.direction : null;
+    if (direction && entityId) entityId = `${entityId.split(':')[0]}:${visitedOn || new Date().toISOString().slice(0, 10)}:${direction === 'departure' ? 'dep' : 'arr'}`;
     // The page-one home-city stamp (onboarding "make your passport") marks
     // itself origin:true — the app renders it as the cover page, not a brag.
-    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}) };
+    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}), ...(direction ? { direction } : {}) };
     const row = {
       user_id: user.id, kind, tier,
       entity_type: b.entity_type ? String(b.entity_type) : null,
@@ -19194,6 +19201,58 @@ async function handleGuestbookReport(request, env, ctx) {
 
 // POST /admin/guestbook { op: 'list' | 'approve' | 'reject' | 'delete', id? }
 // The review desk: notes held as negative, and notes hidden by reports.
+// POST /admin/user-activity { q } — one traveler's activity record, on demand
+// (founder, 2026-10-05): the airport sequence (round trips readable from
+// entity_id + meta.direction + visited_on) and per-year counts of stamps,
+// guestbook notes, dish photos and owner messages. Built for legal requests and
+// audits only: computed when asked, from data the product already stores —
+// no standing profiles are kept (deliberate: see docs/LAWYER_BRIEF.md §5).
+async function handleAdminUserActivity(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  try {
+    const b = await request.json().catch(() => ({}));
+    const q = String(b.q || '').trim();
+    if (!q) return jsonResponse({ error: 'q required (handle or user id)' }, 400);
+    let userId = null, handle = null;
+    if (BL_UUID.test(q)) userId = q;
+    else {
+      const hq = await gbRest(env, `passport_shares?handle=eq.${encodeURIComponent(q.toLowerCase().replace(/^@/, ''))}&select=user_id,handle`, {});
+      const row = (hq.ok ? await hq.json() : [])[0];
+      if (row) { userId = row.user_id; handle = row.handle; }
+    }
+    if (!userId) return jsonResponse({ error: 'No traveler found for that handle or id' }, 404);
+    const yr = (iso) => String(iso || '').slice(0, 4) || '?';
+    const tally = (rows, key) => {
+      const by = {};
+      for (const r of rows) { const y = yr(r[key]); by[y] = (by[y] || 0) + 1; }
+      return by;
+    };
+    const [stq, gbq, dq, onq] = await Promise.all([
+      gbRest(env, `passport_stamps?user_id=eq.${userId}&order=created_at.asc&limit=2000&select=kind,entity_id,name,visited_on,created_at,verified,meta`, {}),
+      gbRest(env, `guestbook_entries?user_id=eq.${userId}&order=created_at.asc&limit=2000&select=created_at,entity_name,is_doodle`, {}),
+      gbRest(env, `place_dishes?user_id=eq.${userId}&order=created_at.asc&limit=2000&select=created_at,place_name,dish`, {}),
+      gbRest(env, `owner_notes?user_id=eq.${userId}&order=created_at.asc&limit=2000&select=created_at,entity_name,status`, {}),
+    ]);
+    const stamps = stq.ok ? await stq.json() : [];
+    const notes = gbq.ok ? await gbq.json() : [];
+    const dishes = dq.ok ? await dq.json() : [];
+    const ownerNotes = onq.ok ? await onq.json() : [];
+    const airports = stamps.filter((r) => r.kind === 'airport').map((r) => ({
+      iata: String(r.entity_id || '').split(':')[0],
+      direction: (r.meta && r.meta.direction) || null,   // null = pre-2026-10 stamp (direction unknown)
+      date: r.visited_on || String(r.created_at || '').slice(0, 10),
+      verified: r.verified,
+    }));
+    return jsonResponse({
+      user_id: userId, handle,
+      byYear: { stamps: tally(stamps, 'created_at'), guestbook_notes: tally(notes, 'created_at'), dish_photos: tally(dishes, 'created_at'), owner_messages: tally(ownerNotes, 'created_at') },
+      totals: { stamps: stamps.length, airports: airports.length, guestbook_notes: notes.length, dish_photos: dishes.length, owner_messages: ownerNotes.length },
+      airport_sequence: airports,
+    });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleAdminGuestbook(request, env) {
   const denied = await requireAdmin(request, env);
   if (denied) return denied;
@@ -19927,6 +19986,7 @@ export default {
       if (pathname === '/social/request' && request.method === 'POST') return await handleSocialRequest(request, env, ctx);
       if (pathname === '/admin/handle-requests' && request.method === 'POST') return await handleAdminHandleRequests(request, env);
       if (pathname === '/admin/guestbook' && request.method === 'POST') return await handleAdminGuestbook(request, env);
+      if (pathname === '/admin/user-activity' && request.method === 'POST') return await handleAdminUserActivity(request, env);
       if (pathname === '/passport/sets' && request.method === 'POST') return await handlePassportSets(request, env);
       if (pathname === '/social/block' && request.method === 'POST') return await handleSocialBlock(request, env, ctx);
       if (pathname === '/social/age' && request.method === 'POST') return await handleSocialAge(request, env, ctx);

@@ -1455,3 +1455,28 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - docs/LAWYER_BRIEF.md started (founder: collect lawyer questions on the side) — reviews/FTC,
   claiming, stamp IP, UGC, minors/privacy, insurance; update it when decisions touch it.
 - Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0.
+
+## 2026-10-05 — Airport stamps: Arriving or Departing; round trips; audit pull
+- Founder: offer the stamp any time GPS senses an airport; the traveler picks Arriving or
+  Departing and it prints on the stamp; round trips collect both; and an admin must be able
+  to reconstruct the sequence later (LAX in → ATL → LAX out).
+- App: AirportStamp takes direction (all six designs: the word — Panel says ENTRY/EXIT — the
+  plane turned to land/take off over a runway line, arrow-meets-bar on Schengen/Panel, dotted
+  inner border on departures). No direction = pre-change look, pixel-identical; country inks
+  KEPT (the mockup's ink-by-direction swap is NOT in — founder hasn't decided; one-line change).
+  AirportArrivalPrompt asks "which way are you flying?" with both mini stamps; re-asks at the
+  same airport on a later day (guard is now IATA:date, old forever-guard retired). Booklet +
+  stamp card parse the IATA from suffixed ids and pass meta.direction.
+- Worker: /passport/stamp with kind=airport + direction keys the stamp per visit
+  (IATA:date:arr|dep) and stores meta.direction — legacy stamps untouched; same-day same-
+  direction re-tap updates instead of duplicating. NearbyStampPrompt airports still stamp
+  directionless (legacy look) for now.
+- Audit: POST /admin/user-activity { q: handle|user_id } (admin-gated) → airport sequence with
+  directions + per-year counts (stamps, guestbook notes, dish photos, owner messages).
+  ON DEMAND only — no standing profiles (see LAWYER_BRIEF §5b). AdminAnalytics gains
+  "🔎 Traveler activity — audit pull".
+- Privacy: PRIVACY_POLICY_DRAFT gains the legal-requests disclosure; LAWYER_BRIEF §5b adds
+  the data-profile questions (minimization, profiling disclosures, subpoena process).
+- Gates: node --check, eslint (touched) clean, no-undef app-wide 0, build 0.
+- Test after OTA: at any airport, the prompt shows both stamps; pick one; return days later →
+  asked again. Old airport stamps unchanged in the booklet.

@@ -169,7 +169,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
   if (stamp.kind === "airport") {
     return (
       <div className="bg-white rounded-[20px] p-3 flex flex-col items-center" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
-        <AirportStamp iata={stamp.entity_id} city={stamp.city} country={stamp.country} countryCode={stamp.country} date={stamp.visited_on} width={264} />
+        <AirportStamp iata={String(stamp.entity_id || "").split(":")[0]} city={stamp.city} country={stamp.country} countryCode={stamp.country} date={stamp.visited_on} width={264}  direction={stamp.meta?.direction || null} />
         <div className="flex items-center gap-2 mt-1.5">
           <VerifiedBadge verified={stamp.verified} />
           {!readOnly && (confirmDel ? (

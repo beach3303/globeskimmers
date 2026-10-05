@@ -199,7 +199,7 @@ function StampToken({ stamp, idx, onOpen, pageW, compact = false }) {
     >
       {isAirport ? (
         <div className="flex flex-col items-center">
-          <AirportStamp iata={stamp.entity_id} city={stamp.city} country={stamp.country} countryCode={stamp.country} date={stamp.visited_on} width={airportW} />
+          <AirportStamp iata={String(stamp.entity_id || "").split(":")[0]} city={stamp.city} country={stamp.country} countryCode={stamp.country} date={stamp.visited_on} direction={stamp.meta?.direction || null} width={airportW} />
         </div>
       ) : isCity ? (
         // A city / place visit (everything minted by "Stamp a place"). This

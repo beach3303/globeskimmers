@@ -56,7 +56,9 @@ Globeskimmers uses a small number of well-known third-party services to deliver 
 
 - **Booking partners** (Viator, GetYourGuide, Stay22, and partners reached through the Travelpayouts network such as Booking.com and Agoda) — receive a random click ID and ordinary web request information when you tap an affiliate link, so a booking can be credited to the App. They never receive your name, email, or account details from us.
 
-We never share your personal information with advertisers, data brokers, or any other party not listed above.
+**Legal requests** — we may preserve or disclose account information and activity records (such as stamps, posts, and messages) when the law requires it — for example a valid subpoena or court order — or when necessary to protect the safety of our users. We review every request and disclose only what the law requires.
+
+We never share your personal information with advertisers, data brokers, or any other party not listed above, except as required by law.
 
 ## Affiliate links
 
