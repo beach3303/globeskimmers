@@ -241,7 +241,10 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
       style={{ background: "rgba(22,17,13,.6)", backdropFilter: "blur(3px)" }} onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl p-4 overflow-y-auto" style={{ background: "#F3EEE1", maxHeight: "92vh" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3">
-          <div style={{ fontFamily: SERIF, fontSize: fs(21), color: INK }}>{isNew ? "Add your travel buddy" : name || "Your buddy"}</div>
+          <div className="min-w-0">
+            <div className="truncate" style={{ fontFamily: SERIF, fontSize: fs(21), color: INK }}>{isNew ? "Add your travel buddy" : name || "Your buddy"}</div>
+            {!isNew && species && <div className="truncate" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".06em", color: INK3, textTransform: "uppercase" }}>{breedName(species, breed) || species}</div>}
+          </div>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-full p-1.5" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
             <X size={16} color={INK} />
           </button>
@@ -278,8 +281,10 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
                   style={{ width: 25, height: 25, background: c.body, border: coat === c.key ? `3px solid ${INK}` : `2px solid rgba(22,17,13,.18)` }} />
               ))}
             </div>
-            <input value={name} onChange={(e) => setName(e.target.value.slice(0, 24))} placeholder="Name your buddy…" aria-label="Pet name"
-              className="w-full mt-2.5 rounded-xl px-3 h-11 outline-none" style={{ background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(15), color: INK }} />
+            {/* The name is the identity (founder, 2026-10-05) — the breed is just a pick. */}
+            <div style={{ fontFamily: SERIF, fontSize: fs(17), color: INK, marginTop: 14 }}>What&rsquo;s your travel buddy&rsquo;s name?</div>
+            <input value={name} onChange={(e) => setName(e.target.value.slice(0, 24))} placeholder="Peanut, Luna, Captain Fluff…" aria-label="Your travel buddy's name" autoCapitalize="words"
+              className="w-full mt-1.5 rounded-xl px-3 h-12 outline-none" style={{ background: "#fff", border: `1.5px solid rgba(22,17,13,.25)`, fontSize: fs(17), color: INK, fontFamily: SERIF }} />
           </>
         )}
 
@@ -433,15 +438,14 @@ export default function VirtualItems({ stamps }) {
       </div>
       <div className="flex gap-2.5 mt-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
         {buddies.map((b) => (
-          <div key={b.id} role="button" tabIndex={0} aria-label={`${b.name} the ${breedName(b.species, b.breed) || b.species}`}
+          <div key={b.id} role="button" tabIndex={0} aria-label={b.name}
             onPointerDown={petDown} onPointerUp={petUp(b)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setBuddyOpen(b); } }}
             className="flex-none rounded-2xl p-2.5 text-center select-none" style={{ width: 118, background: IVORY, border: `1px solid ${RULE}`, cursor: "pointer", touchAction: "pan-y" }}>
             <div className="pointer-events-none"><PetArt buddy={b} width={92} /></div>
-            <div className="truncate" style={{ fontFamily: SERIF, fontSize: fs(14.5), color: INK }}>{b.name}</div>
-            <div className="truncate" style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".04em", color: INK3, textTransform: "uppercase" }}>
-              {breedName(b.species, b.breed) || b.species} · {POSE_NAMES[b.pose]}
-            </div>
+            {/* The name tag carries the card — the breed lives in the manage sheet. */}
+            <div className="truncate" style={{ fontFamily: SERIF, fontSize: fs(16), color: INK }}>{b.name}</div>
+            <div className="truncate" style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".06em", color: INK3, textTransform: "uppercase" }}>{POSE_NAMES[b.pose]}</div>
           </div>
         ))}
         {buddies.length < 6 && (
