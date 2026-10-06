@@ -154,6 +154,122 @@ function ActivityOverview() {
   );
 }
 
+// Virtual items report (founder, 2026-10-05): what travelers pick — laptops,
+// tumblers, bottles, buddies — current totals from profile_gear plus the pick
+// stream per day / week / month and per city / country, all CSV-exportable.
+const GEAR_LABELS = { laptop: 'Laptop', tumbler: 'XL coffee tumbler', 'straw-bottle': 'XXL straw bottle', 'lid-bottle': 'Water bottle' };
+function VirtualItemsReport() {
+  const [rep, setRep] = React.useState(null);
+  const [gran, setGran] = React.useState('month');
+  React.useEffect(() => {
+    (async () => {
+      const { data, error } = await callWorker('admin/gear-report', {});
+      setRep(error || data?.error ? { error: error || data.error } : data);
+    })();
+  }, []);
+  if (!rep) return <Section title="🧳 Virtual items" icon={Sparkles}><div style={{ color: COLORS.gray, fontSize: 13 }}>Counting…</div></Section>;
+  if (rep.error) return <Section title="🧳 Virtual items" icon={Sparkles}><div style={{ color: '#B0472F', fontSize: 13 }}>{rep.error}</div></Section>;
+  const cur = rep.current || {};
+  const ev = rep.events || {};
+  const fmt = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(' · ') || '—';
+  // Weeks are derived from the daily rows (the week's Monday, like the activity table).
+  const weekOf = (d) => {
+    const x = new Date(d + 'T00:00:00Z');
+    if (Number.isNaN(+x)) return '?';
+    x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7));
+    return x.toISOString().slice(0, 10);
+  };
+  const weekly = {};
+  for (const r of ev.itemsByDay || []) {
+    const k = weekOf(r.k), it = r.item || '?';
+    ((weekly[k] ||= {})[it] ||= { n: 0 }).n += r.n;
+  }
+  const byWeek = Object.entries(weekly).sort().flatMap(([k, items]) => Object.entries(items).map(([item, v]) => ({ k, item, n: v.n })));
+  const source = gran === 'day' ? ev.itemsByDay : gran === 'week' ? byWeek : ev.itemsByMonth;
+  const periods = [...new Set((source || []).map((r) => r.k))].sort().slice(gran === 'day' ? -14 : -12);
+  const cell = {};
+  for (const r of source || []) (cell[r.item || '?'] ||= {})[r.k] = r.n;
+  const items = Object.keys(cell).sort();
+  const topPlace = (list, title) => (
+    <div style={{ minWidth: 170 }}>
+      <div style={{ fontWeight: 700, fontSize: 11, letterSpacing: '.05em', textTransform: 'uppercase', color: COLORS.gray, marginBottom: 4 }}>{title}</div>
+      {Object.entries((list || []).reduce((m, r) => { (m[r.k] ||= { n: 0 }).n += r.n; return m; }, {}))
+        .sort((a, b) => b[1].n - a[1].n).slice(0, 6)
+        .map(([name, v]) => <div key={name} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', gap: 10 }}><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span><b>{v.n}</b></div>)}
+    </div>
+  );
+  return (
+    <Section title="🧳 Virtual items — what travelers pick" icon={Sparkles}>
+      <div style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 8 }}>
+        <div><b>{cur.travelers ?? 0}</b> travelers have set up items · <b>{cur.laptop?.n ?? 0}</b> laptops · <b>{cur.drink?.n ?? 0}</b> drink containers · <b>{cur.buddies?.n ?? 0}</b> travel buddies with <b>{cur.buddies?.travelers ?? 0}</b> travelers</div>
+        <div style={{ color: COLORS.gray, fontSize: 12 }}>Drinks: {fmt(cur.drink?.variants)} &nbsp;·&nbsp; Laptop colors: {fmt(cur.laptop?.colors)} &nbsp;·&nbsp; Buddies: {fmt(cur.buddies?.species)}</div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+        {['day', 'week', 'month'].map((g) => (
+          <button key={g} type="button" onClick={() => setGran(g)} style={{ borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.border || '#ddd'}`, background: gran === g ? COLORS.dark : '#fff', color: gran === g ? '#fff' : COLORS.dark }}>{g === 'day' ? 'Days' : g === 'week' ? 'Weeks' : 'Months'}</button>
+        ))}
+        <span style={{ flex: 1 }} />
+        <button type="button" style={xbtn} onClick={() => {
+          const rows = [['travelers with items', '', cur.travelers ?? 0], ['laptops', '', cur.laptop?.n ?? 0],
+            ...Object.entries(cur.laptop?.colors || {}).map(([k, n]) => ['laptop color', k, n]),
+            ['drink containers', '', cur.drink?.n ?? 0],
+            ...Object.entries(cur.drink?.variants || {}).map(([k, n]) => ['drink', GEAR_LABELS[k] || k, n]),
+            ...Object.entries(cur.drink?.colors || {}).map(([k, n]) => ['drink color', k, n]),
+            ['travel buddies', '', cur.buddies?.n ?? 0],
+            ...Object.entries(cur.buddies?.species || {}).map(([k, n]) => ['buddy species', k, n]),
+            ...Object.entries(cur.buddies?.breeds || {}).map(([k, n]) => ['buddy breed', k, n])];
+          exportCsv(`globeskimmers-items-current-${today()}.csv`, ['what', 'which', 'count'], rows);
+        }}>⬇ Current items CSV</button>
+        <button type="button" style={xbtn} onClick={() => {
+          const rows = [
+            ...(ev.itemsByDay || []).map((r) => ['day', r.k, GEAR_LABELS[r.item] || r.item, r.n, r.travelers ?? '']),
+            ...byWeek.map((r) => ['week', r.k, GEAR_LABELS[r.item] || r.item, r.n, '']),
+            ...(ev.itemsByMonth || []).map((r) => ['month', r.k, GEAR_LABELS[r.item] || r.item, r.n, r.travelers ?? '']),
+          ];
+          exportCsv(`globeskimmers-item-picks-${today()}.csv`, ['granularity', 'period', 'item', 'picks', 'travelers'], rows);
+        }}>⬇ Picks CSV</button>
+        <button type="button" style={xbtn} onClick={() => {
+          const rows = [
+            ...(ev.itemsByCity || []).map((r) => ['city', r.k, GEAR_LABELS[r.item] || r.item, r.n, r.travelers ?? '']),
+            ...(ev.itemsByCountry || []).map((r) => ['country', r.k, GEAR_LABELS[r.item] || r.item, r.n, r.travelers ?? '']),
+            ...(ev.buddiesByCity || []).map((r) => ['city (buddies)', r.k, r.species, r.n, '']),
+          ];
+          exportCsv(`globeskimmers-item-picks-by-place-${today()}.csv`, ['level', 'name', 'item', 'picks', 'travelers'], rows);
+        }}>⬇ By city &amp; country CSV</button>
+        <button type="button" style={xbtn} onClick={() => {
+          const rows = [
+            ...(ev.buddiesByDay || []).map((r) => ['day', r.k, r.species, r.n]),
+            ...(ev.buddiesByMonth || []).map((r) => ['month', r.k, r.species, r.n]),
+            ...(ev.buddiesBySpecies || []).map((r) => ['breed', r.k, r.breed, r.n]),
+          ];
+          exportCsv(`globeskimmers-buddies-${today()}.csv`, ['slice', 'period or species', 'detail', 'count'], rows);
+        }}>⬇ Buddies CSV</button>
+      </div>
+      {items.length === 0 ? (
+        <div style={{ color: COLORS.gray, fontSize: 12.5 }}>No picks logged yet — the stream starts with the next app update.</div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums', fontSize: 12.5, minWidth: 420 }}>
+            <thead><tr><th style={{ textAlign: 'left', paddingRight: 12 }}></th>{periods.map((p) => <th key={p} style={{ textAlign: 'right', padding: '0 7px', color: COLORS.gray, fontWeight: 600 }}>{gran === 'month' ? p.slice(2) : p.slice(5)}</th>)}</tr></thead>
+            <tbody>
+              {items.map((it) => (
+                <tr key={it}>
+                  <td style={{ paddingRight: 12, whiteSpace: 'nowrap', color: COLORS.gray }}>{GEAR_LABELS[it] || it}</td>
+                  {periods.map((p) => <td key={p} style={{ textAlign: 'right', padding: '2px 7px' }}>{cell[it]?.[p] || ''}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, marginTop: 12 }}>
+        {topPlace(ev.itemsByCity, 'Top cities · item picks')}
+        {topPlace(ev.itemsByCountry, 'Top countries · item picks')}
+      </div>
+    </Section>
+  );
+}
+
 // One traveler's activity record, pulled on demand (founder, 2026-10-05) —
 // for legal requests and audits only. Computed when asked; nothing is stored.
 function TravelerPull() {
@@ -176,8 +292,16 @@ function TravelerPull() {
           style={{ flex: 1, border: `1px solid ${COLORS.border || '#ddd'}`, borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
         <button type="button" onClick={pull} disabled={busy || !q.trim()} style={{ borderRadius: 8, padding: '8px 14px', fontWeight: 600, fontSize: 13, background: COLORS.dark, color: '#fff', border: 'none', opacity: busy ? 0.6 : 1 }}>{busy ? 'Pulling…' : 'Pull'}</button>
         {res && !res.error && (
-          <button type="button" style={xbtn} onClick={() => exportCsv(`globeskimmers-traveler-${(res.handle || res.user_id).replace(/[^a-z0-9_-]/gi, '')}-${today()}.csv`,
-            ['date', 'activity', 'place', 'detail'], (res.timeline || []).map((t) => [t.date, t.type, t.name, t.detail]))}>⬇ CSV</button>
+          <button type="button" style={xbtn} onClick={() => {
+            const vi = res.virtual_items;
+            const viRows = vi ? [
+              ...(vi.laptop ? [['', 'virtual item', 'laptop', `${vi.laptop.color} · ${vi.laptop.stickers} stickers`]] : []),
+              ...(vi.drink ? [['', 'virtual item', vi.drink.variant, `${vi.drink.color} · ${vi.drink.stickers} stickers`]] : []),
+              ...(vi.buddies || []).map((bd) => ['', 'travel buddy', `${bd.species}/${bd.breed}`, bd.coat || '']),
+            ] : [];
+            exportCsv(`globeskimmers-traveler-${(res.handle || res.user_id).replace(/[^a-z0-9_-]/gi, '')}-${today()}.csv`,
+              ['date', 'activity', 'place', 'detail'], [...(res.timeline || []).map((t) => [t.date, t.type, t.name, t.detail]), ...viRows]);
+          }}>⬇ CSV</button>
         )}
       </div>
       {res?.error && <div style={{ color: '#B0472F', fontSize: 13, marginTop: 8 }}>{res.error}</div>}
@@ -192,6 +316,14 @@ function TravelerPull() {
               ))}
             </tbody>
           </table>
+          {res.virtual_items && (
+            <div style={{ marginTop: 8, fontSize: 12.5 }}>
+              <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Virtual items</div>
+              {res.virtual_items.laptop && <span>💻 {res.virtual_items.laptop.color} laptop ({res.virtual_items.laptop.stickers} stickers) &nbsp;</span>}
+              {res.virtual_items.drink && <span>🥤 {res.virtual_items.drink.color} {res.virtual_items.drink.variant} ({res.virtual_items.drink.stickers} stickers) &nbsp;</span>}
+              {(res.virtual_items.buddies || []).length > 0 && <span>🐾 {res.virtual_items.buddies.map((bd) => `${bd.breed || bd.species}${bd.coat ? ` (${bd.coat})` : ''}`).join(', ')}</span>}
+            </div>
+          )}
           {res.airport_sequence?.length > 0 && (
             <div style={{ marginTop: 8 }}>
               <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Airport sequence</div>
@@ -622,6 +754,8 @@ export default function AdminAnalytics() {
             </div>
 
             <ActivityOverview />
+
+            <VirtualItemsReport />
 
             <TravelerPull />
 
