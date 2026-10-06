@@ -828,6 +828,40 @@ async function handleRestaurantSearch(request, env, ctx) {
 //
 // Once the binding is live, env.DB will be defined and the endpoint will
 // actually persist rows. ts is server-issued (don't trust client clocks).
+// ── The founder's bell (founder, 2026-10-05) ────────────────────────────────
+// Instant alerts to the founder's own phone: a new phone's first open (the
+// real-time face of a store download — stores only report counts next day) and
+// every stamp. Transport: ntfy push when NTFY_TOPIC is set (free; the ntfy app
+// subscribes to the secret topic) and/or a Twilio SMS when TWILIO_SID,
+// TWILIO_TOKEN, TWILIO_FROM and FOUNDER_PHONE are set. Capped at 400/day so a
+// busy day can never flood a phone or a bill; never blocks the request.
+async function founderAlert(env, text, tag = 'bell') {
+  try {
+    if (!env.NTFY_TOPIC && !env.TWILIO_SID) return;
+    if (env.GLOBESKIMMERS_KV) {
+      const ck = `bell:cap:${new Date().toISOString().slice(0, 10)}`;
+      const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
+      if (n >= 400) return;
+      await env.GLOBESKIMMERS_KV.put(ck, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
+    }
+    const jobs = [];
+    if (env.NTFY_TOPIC) {
+      jobs.push(fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, {
+        method: 'POST', body: text,
+        headers: { Title: 'GlobeSkimmers', Tags: tag === 'new' ? 'tada' : 'round_pushpin', Priority: tag === 'new' ? '4' : '3' },
+      }));
+    }
+    if (env.TWILIO_SID && env.TWILIO_TOKEN && env.TWILIO_FROM && env.FOUNDER_PHONE) {
+      jobs.push(fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_SID}/Messages.json`, {
+        method: 'POST',
+        headers: { Authorization: 'Basic ' + btoa(`${env.TWILIO_SID}:${env.TWILIO_TOKEN}`), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ To: env.FOUNDER_PHONE, From: env.TWILIO_FROM, Body: text }),
+      }));
+    }
+    await Promise.allSettled(jobs);
+  } catch { /* the bell never breaks the app */ }
+}
+
 async function handleLogEvent(request, env) {
   try {
     const body = await request.json();
@@ -863,6 +897,20 @@ async function handleLogEvent(request, env) {
          VALUES (?, ?, ?, ?, ?, ?, ?)`
       ).bind(...base).run();
     }
+    // A device we've never seen before = someone just downloaded and opened
+    // the app. KV remembers forever; the alert fires once per phone.
+    try {
+      const anon = String(body.anon_id || '').slice(0, 64);
+      if (anon && env.GLOBESKIMMERS_KV && (env.NTFY_TOPIC || env.TWILIO_SID)) {
+        const seen = await env.GLOBESKIMMERS_KV.get(`bell:dev:${anon}`);
+        if (!seen) {
+          await env.GLOBESKIMMERS_KV.put(`bell:dev:${anon}`, '1');
+          const ua = String(body.ua_summary || '').slice(0, 60);
+          const os = /iphone|ios|ipad/i.test(ua) ? 'iPhone' : /android/i.test(ua) ? 'Android' : (ua || 'unknown device');
+          await founderAlert(env, `🎉 New phone opened GlobeSkimmers — ${os}`, 'new');
+        }
+      }
+    } catch { /* never blocks logging */ }
     return jsonResponse({ logged: true, ts });
   } catch (e) {
     return jsonResponse({ logged: false, error: e.message }, 500);
@@ -12628,6 +12676,7 @@ async function handlePassportStamp(request, env, ctx) {
     // Stamps are airport-arrival + iconic-attraction only — we do NOT auto-stamp cities.
     const localHour = Number.isFinite(+b.local_hour) && +b.local_hour >= 0 && +b.local_hour <= 23 ? Math.floor(+b.local_hour) : null;
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, country: row.country, city: row.city, name: row.name, verified: result.verified, updated: !!result.updated, local_hour: localHour }));
+    if (ctx && result.created) ctx.waitUntil(founderAlert(env, `📍 ${row.name}${row.city ? ` · ${row.city}` : ''}${row.country ? `, ${row.country}` : ''} — ${kind} stamp${result.verified === 'gps' ? ' ✓' : ''}${direction ? ` (${direction === 'departure' ? 'exit' : 'entry'})` : ''}`));
     return jsonResponse({ id: result.id, created: !!result.created, updated: !!result.updated, verified: result.verified, private: !!(result.created && startPrivate) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }

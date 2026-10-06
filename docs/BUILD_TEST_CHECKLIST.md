@@ -1605,3 +1605,21 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Note: the + chip on envelopes and this album footer both reach phones with the next OTA —
   the founder's screenshot predates it.
 - Gates: eslint (touched) clean, no-undef app-wide 0, build 0. Held with the next batch.
+
+## 2026-10-05 — The founder's bell: instant alerts for first opens and stamps
+- Founder: "text me every download and every stamp." Stores don't expose downloads in real
+  time (daily counts only, for every app) — the live signal is a NEW PHONE'S FIRST OPEN,
+  minutes after install. The worker now sends the founder an instant alert on each first
+  open ("🎉 New phone opened GlobeSkimmers — iPhone") and on every newly created stamp
+  ("📍 Stone Mountain Park · Stone Mountain, US — attraction stamp ✓"). 400/day cap; the
+  bell can never break a request.
+- Transports: ntfy push (free, instant) when NTFY_TOPIC is set; Twilio SMS too when
+  TWILIO_SID/TWILIO_TOKEN/TWILIO_FROM/FOUNDER_PHONE are set.
+- **Activate (founder, two steps):**
+  1. `npx wrangler secret put NTFY_TOPIC` → paste: gs-bell-8eb3166e0b96b7ba
+  2. Install the "ntfy" app (App Store), + → Subscribe to topic → gs-bell-8eb3166e0b96b7ba
+  (For literal SMS later: make a twilio.com account, buy a number, complete US A2P
+  registration, then set the four TWILIO_* secrets the same way.)
+- Daily true-download digest from App Store Connect / Play Console is possible as a
+  follow-up (API keys + a cron) — not built.
+- Held with the current batch; works once pushed + secrets set.
