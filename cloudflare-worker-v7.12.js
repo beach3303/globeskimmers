@@ -907,7 +907,7 @@ async function handleLogEvent(request, env) {
           await env.GLOBESKIMMERS_KV.put(`bell:dev:${anon}`, '1');
           const ua = String(body.ua_summary || '').slice(0, 60);
           const os = /iphone|ios|ipad/i.test(ua) ? 'iPhone' : /android/i.test(ua) ? 'Android' : (ua || 'unknown device');
-          await founderAlert(env, `🎉 New phone opened GlobeSkimmers — ${os}`, 'new');
+          await founderAlert(env, `🎉 New download! First open on ${os}`, 'new');
         }
       }
     } catch { /* never blocks logging */ }
