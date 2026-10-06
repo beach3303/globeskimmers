@@ -1623,3 +1623,12 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Daily true-download digest from App Store Connect / Play Console is possible as a
   follow-up (API keys + a cron) — not built.
 - Held with the current batch; works once pushed + secrets set.
+
+## 2026-10-05 — Profile: view first, edit on request
+- Founder: "place an edit profile but don't leave the save button on display constantly."
+- App: the Profile opens as a clean page — name as text, bio as text, website as a link,
+  favorites/horizons as plain chips (empty sections hidden), no inputs, no Save. A quiet
+  "✎ Edit profile" button switches to edit mode: name/bio/website fields, add/remove chips,
+  avatar shows a PHOTO ribbon, and Save + Cancel appear only there. Save closes edit mode;
+  Cancel restores what was on screen before.
+- Gates: eslint (touched) clean, no-undef app-wide 0, build 0. Held with the batch.

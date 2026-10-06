@@ -50,6 +50,16 @@ export default function ProfilePage() {
   const [dreamDraft, setDreamDraft] = useState("");
   const [website, setWebsite] = useState("");
   const [saving, setSaving] = useState(false);
+  // View first, edit on request (founder, 2026-10-05: "place an edit profile
+  // but don't leave the save button on display constantly").
+  const [edit, setEdit] = useState(false);
+  const editSnap = React.useRef(null);
+  const startEdit = () => { editSnap.current = { name, bio, website, favorites, dreams }; setEdit(true); };
+  const cancelEdit = () => {
+    const d = editSnap.current;
+    if (d) { setName(d.name); setBio(d.bio); setWebsite(d.website); setFavorites(d.favorites); setDreams(d.dreams); }
+    setFavDraft(""); setDreamDraft(""); setEdit(false);
+  };
   const [share, setShare] = useState({ is_public: false, url: null });
   const [shareBusy, setShareBusy] = useState(false);
   const [counts, setCounts] = useState({ followers: null, following: null });
@@ -101,6 +111,7 @@ export default function ProfilePage() {
     });
     setSaving(false);
     showToast(error || "Profile saved", error ? "error" : "success");
+    if (!error) setEdit(false);
   };
 
   const toggleShare = async () => {
@@ -154,18 +165,23 @@ export default function ProfilePage() {
       <div className="max-w-md mx-auto px-4 pt-4">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <button type="button" onClick={() => avatarRef.current?.click()} aria-label="Change your photo"
-            className="flex-none w-16 h-16 rounded-full flex items-center justify-center overflow-hidden"
+          <button type="button" onClick={() => (edit ? avatarRef.current?.click() : startEdit())} aria-label={edit ? "Change your photo" : "Edit profile"}
+            className="relative flex-none w-16 h-16 rounded-full flex items-center justify-center overflow-hidden"
             style={{ background: STAMP, color: "#FFF6EC", fontFamily: SERIF, fontSize: fs(26), border: 0, padding: 0 }}>
             {avatar
               ? <img src={avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               : (name || "T").slice(0, 1).toUpperCase()}
+            {edit && <span className="absolute inset-x-0 bottom-0 text-center" style={{ background: "rgba(22,17,13,.55)", color: "#fff", fontSize: fs(8.5), fontFamily: MONO, padding: "2px 0" }}>PHOTO</span>}
           </button>
           <input ref={avatarRef} type="file" accept="image/*" className="hidden" onChange={pickAvatar} />
           <div className="min-w-0 flex-1">
-            <input value={name} onChange={(e) => setName(e.target.value.slice(0, 40))} placeholder="Your name"
-              aria-label="Display name"
-              className="w-full bg-transparent outline-none" style={{ fontFamily: SERIF, fontSize: fs(24), color: INK }} />
+            {edit ? (
+              <input value={name} onChange={(e) => setName(e.target.value.slice(0, 40))} placeholder="Your name"
+                aria-label="Display name"
+                className="w-full rounded-lg px-2 outline-none" style={{ fontFamily: SERIF, fontSize: fs(24), color: INK, background: "#fff", border: `1px solid ${RULE}` }} />
+            ) : (
+              <div className="truncate" style={{ fontFamily: SERIF, fontSize: fs(24), color: INK }}>{name || "Your name"}</div>
+            )}
             <div style={{ fontFamily: MONO, fontSize: fs(11.5), color: INK3, marginTop: 2 }}>
               {handle ? (<>
                 @{handle}
@@ -180,15 +196,37 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Bio + chips */}
-        <div className="uppercase mt-4" style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".16em", color: INK3 }}>About me</div>
-        <textarea value={bio} onChange={(e) => setBio(e.target.value.slice(0, 200))} placeholder="Tell the world who's holding this passport…"
-          aria-label="About me" rows={3}
-          className="w-full mt-1.5 rounded-xl px-3 py-2 outline-none resize-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(14), color: INK2 }} />
-        <div className="uppercase mt-3" style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".16em", color: INK3 }}>My website</div>
-        <input value={website} onChange={(e) => setWebsite(e.target.value.slice(0, 120))} placeholder="https://…"
-          aria-label="My website" inputMode="url" autoCapitalize="none" autoCorrect="off"
-          className="w-full mt-1.5 rounded-xl px-3 py-2.5 outline-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontFamily: MONO, fontSize: fs(12.5), color: INK2 }} />
+        {/* Edit door — quiet in view, Save/Cancel appear only while editing. */}
+        {!edit && (
+          <button type="button" onClick={startEdit}
+            className="w-full rounded-[12px] py-2 mt-3 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(12.5) }}>
+            ✎ Edit profile
+          </button>
+        )}
+
+        {/* Bio + website */}
+        {edit ? (
+          <>
+            <div className="uppercase mt-4" style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".16em", color: INK3 }}>About me</div>
+            <textarea value={bio} onChange={(e) => setBio(e.target.value.slice(0, 200))} placeholder="Tell the world who's holding this passport…"
+              aria-label="About me" rows={3}
+              className="w-full mt-1.5 rounded-xl px-3 py-2 outline-none resize-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(14), color: INK2 }} />
+            <div className="uppercase mt-3" style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".16em", color: INK3 }}>My website</div>
+            <input value={website} onChange={(e) => setWebsite(e.target.value.slice(0, 120))} placeholder="https://…"
+              aria-label="My website" inputMode="url" autoCapitalize="none" autoCorrect="off"
+              className="w-full mt-1.5 rounded-xl px-3 py-2.5 outline-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontFamily: MONO, fontSize: fs(12.5), color: INK2 }} />
+          </>
+        ) : (
+          <>
+            {bio && <p className="mt-3" style={{ fontSize: fs(14), color: INK2, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{bio}</p>}
+            {website && (
+              <a href={/^https?:/i.test(website) ? website : `https://${website}`} target="_blank" rel="noreferrer"
+                className="inline-block mt-1.5" style={{ fontFamily: MONO, fontSize: fs(12), color: TEAL, textDecoration: "underline", textUnderlineOffset: 2, overflowWrap: "anywhere" }}>
+                {website}
+              </a>
+            )}
+          </>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-2 mt-4">
@@ -201,57 +239,67 @@ export default function ProfilePage() {
         </div>
 
         {/* Favorites — anything, as many as you like */}
+        {(edit || favorites.length > 0) && (
         <div className="mt-6">
           <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: "#8A5410" }}>My favorite places</div>
-          <div className="flex gap-2 mt-2">
+          {edit && <div className="flex gap-2 mt-2">
             <input value={favDraft} onChange={(e) => setFavDraft(e.target.value.slice(0, 60))}
               placeholder="Anywhere you love — a city, a beach, a diner…" aria-label="Add a favorite place"
               onKeyDown={(e) => { if (e.key === "Enter" && favDraft.trim()) { setFavorites([...favorites, favDraft.trim()]); setFavDraft(""); } }}
               className="flex-1 rounded-xl px-3 py-2.5 outline-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13.5) }} />
             <button type="button" disabled={!favDraft.trim()} onClick={() => { setFavorites([...favorites, favDraft.trim()]); setFavDraft(""); }}
               className="rounded-xl px-4 font-semibold disabled:opacity-50" style={{ background: TEAL, color: "#fff", fontSize: fs(13) }}>Add</button>
-          </div>
+          </div>}
           {favorites.length > 0 && (
             <div className="flex gap-1.5 flex-wrap mt-2">
               {favorites.map((f, i) => (
                 <span key={`${f}-${i}`} className="inline-flex items-center gap-1.5 rounded-full pl-3 pr-2 py-1.5" style={{ background: SOFT, border: `1px solid ${RULE}`, fontSize: fs(12), color: INK2, fontWeight: 600 }}>
                   {f}
-                  <button type="button" onClick={() => setFavorites(favorites.filter((_, j) => j !== i))} aria-label={`Remove ${f}`}
-                    style={{ background: "none", border: 0, color: INK3, fontSize: fs(12), padding: 0, lineHeight: 1 }}>✕</button>
+                  {edit && <button type="button" onClick={() => setFavorites(favorites.filter((_, j) => j !== i))} aria-label={`Remove ${f}`}
+                    style={{ background: "none", border: 0, color: INK3, fontSize: fs(12), padding: 0, lineHeight: 1 }}>✕</button>}
                 </span>
               ))}
             </div>
           )}
         </div>
+        )}
 
         {/* On the Horizon — optional, free-form */}
+        {(edit || dreams.length > 0) && (
         <div className="mt-5">
           <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: "#8A5410" }}>On the horizon</div>
-          <p style={{ fontSize: fs(11.5), color: INK3, marginTop: 2 }}>The places still waiting for you — optional, and yours to dream.</p>
-          <div className="flex gap-2 mt-2">
+          {edit && <p style={{ fontSize: fs(11.5), color: INK3, marginTop: 2 }}>The places still waiting for you — optional, and yours to dream.</p>}
+          {edit && <div className="flex gap-2 mt-2">
             <input value={dreamDraft} onChange={(e) => setDreamDraft(e.target.value.slice(0, 60))}
               placeholder="Santorini… Kyoto… the Northern Lights…" aria-label="Add a horizon"
               onKeyDown={(e) => { if (e.key === "Enter" && dreamDraft.trim()) { setDreams([...dreams, dreamDraft.trim()]); setDreamDraft(""); } }}
               className="flex-1 rounded-xl px-3 py-2.5 outline-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13.5) }} />
             <button type="button" disabled={!dreamDraft.trim()} onClick={() => { setDreams([...dreams, dreamDraft.trim()]); setDreamDraft(""); }}
               className="rounded-xl px-4 font-semibold disabled:opacity-50" style={{ background: TEAL, color: "#fff", fontSize: fs(13) }}>Add</button>
-          </div>
+          </div>}
           {dreams.length > 0 && (
             <div className="flex gap-1.5 flex-wrap mt-2">
               {dreams.map((d, i) => (
                 <span key={`${d}-${i}`} className="inline-flex items-center gap-1.5 rounded-full pl-3 pr-2 py-1.5" style={{ background: "#E2E9F5", border: "1px solid #C6D4EC", fontSize: fs(12), color: "#2B4A7E", fontWeight: 600 }}>
                   ✈ {d}
-                  <button type="button" onClick={() => setDreams(dreams.filter((_, j) => j !== i))} aria-label={`Remove ${d}`}
-                    style={{ background: "none", border: 0, color: "#2B4A7E", fontSize: fs(12), padding: 0, lineHeight: 1 }}>✕</button>
+                  {edit && <button type="button" onClick={() => setDreams(dreams.filter((_, j) => j !== i))} aria-label={`Remove ${d}`}
+                    style={{ background: "none", border: 0, color: "#2B4A7E", fontSize: fs(12), padding: 0, lineHeight: 1 }}>✕</button>}
                 </span>
               ))}
             </div>
           )}
         </div>
+        )}
 
-        <button type="button" onClick={save} disabled={saving} className="w-full rounded-[14px] py-3 font-semibold mt-4 disabled:opacity-60" style={{ background: TEAL, color: "#fff", fontSize: fs(14.5) }}>
-          {saving ? "Saving…" : "Save profile"}
-        </button>
+        {/* Save + Cancel exist only while editing. */}
+        {edit && (
+          <div className="flex gap-2 mt-4">
+            <button type="button" onClick={cancelEdit} disabled={saving} className="flex-1 rounded-[14px] py-3 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>Cancel</button>
+            <button type="button" onClick={save} disabled={saving} className="flex-1 rounded-[14px] py-3 font-semibold disabled:opacity-60" style={{ background: TEAL, color: "#fff", fontSize: fs(14.5) }}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        )}
 
         {/* Visibility */}
         <div className="rounded-[16px] p-4 mt-6" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
