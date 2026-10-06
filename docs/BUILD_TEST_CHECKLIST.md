@@ -1644,3 +1644,23 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - **Activate (founder): docs/STORE_DIGEST_SETUP.md** — Apple: ASC_ISSUER_ID / ASC_KEY_ID /
   ASC_VENDOR_NUMBER / ASC_PRIVATE_KEY; Play: GPLAY_BUCKET / GPLAY_SA_EMAIL / GPLAY_SA_KEY.
 - Gates: node --check clean. Ships on push.
+
+## 2026-10-05 — Virtual items LIVE: the founder's renders + parks art + pick analytics
+- Founder delivered ~430 photo renders in ~/Downloads and said: upload all, arrange by
+  type, make selection easy, track picks, export spreadsheets, rename the luggage share,
+  mock a profile.
+- R2 (done, live now, no deploy needed): 28 national-park stamps at stamp-art/<slug>.png
+  (all of the needed list EXCEPT the 4 Grand Canyon rims — still to draw); 368 virtual-item
+  files at stamp-art/gear/* and stamp-art/pets/* (laptops 9 colors open+closed, tumblers 8,
+  straw bottles 10 incl. silver+red, lid bottles 4; 86 pet breeds × sitting/standing;
+  71 breeds with named real coats, incl. doberman cropped-ears as a coat; wave9's 18
+  unnamed files identified off its contact sheet; wave10 was a byte-identical dupe of 9).
+- Code (committed 475bb9b/6ca5a7f/ca69c7f/d27544a, NOT pushed): per-breed coat registry
+  src/lib/petCoats.js; VirtualItems per-breed picker + render ladder (coat/pose → breed/pose
+  → coat/sitting → breed/sitting → chibi); POSES = sitting/standing; SHOW_VIRTUAL_ITEMS=true;
+  red+silver in gearShapes AND the worker's GEAR_COLORS_W; gear_select/buddy_add events with
+  city+country; worker /admin/gear-report; audit pull includes items (never buddy names);
+  Admin "Virtual items" panel with 4 CSV exports; luggage shares titled "My Virtual Luggage".
+- Mockup with the real art: https://claude.ai/artifact/JbNVAfKZ2mLwbZurh9FfuX
+- Gates: eslint clean, no-undef 0, node --check clean, build 0.
+- **Activate: push** (worker deploys), then OTA for phones.
