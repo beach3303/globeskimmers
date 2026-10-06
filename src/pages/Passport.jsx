@@ -750,13 +750,13 @@ function PassportInner() {
   const saveBdayAsk = async () => {
     if (!bdayM || !bdayD || (bdayYearNeeded && bdayY.length !== 4)) return;
     setBdayBusy(true);
-    if (bdayYearNeeded) {
-      const { error: yErr } = await setAgeGate(Number(bdayY));
-      if (yErr && yErr !== "age_required") { setBdayBusy(false); showToast(yErr, "error"); return; }
-    }
-    const { error } = await setBirthday(`${bdayM}-${bdayD}`);
+    // The gate wants the FULL birthday in one write (founder, 2026-10-05) —
+    // year + month/day together; month/day alone completes a year-only account.
+    const { error } = bdayYearNeeded
+      ? await setAgeGate(Number(bdayY), `${bdayM}-${bdayD}`)
+      : await setBirthday(`${bdayM}-${bdayD}`);
     setBdayBusy(false);
-    if (error) { showToast(error, "error"); return; }
+    if (error && error !== "age_required") { showToast(error, "error"); return; }
     setBdayAsk(false);
     showToast("🎂 Thanks — saved privately", "success");
   };

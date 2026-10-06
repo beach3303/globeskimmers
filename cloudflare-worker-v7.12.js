@@ -13550,10 +13550,10 @@ async function handleOwnerNote(request, env, ctx) {
     if (screen.verdict === 'block') return jsonResponse({ error: 'We can’t send this — messages can’t include threats, slurs or anyone’s personal details.' }, 422);
 
     // The name comes from the profile, never the client — and only when the
-    // traveler chose to sign. Under-18s are always anonymous.
-    const age = sp.birth_year ? new Date().getUTCFullYear() - Number(sp.birth_year) : null;
+    // traveler chose to sign. Under-18s are always anonymous. Tier, not raw
+    // year math: the tier is exact-birthday aware (founder, 2026-10-05).
     let senderName = null;
-    if (b.include_name === true && age != null && age >= 18) {
+    if (b.include_name === true && sp.social_tier === 'adult') {
       try {
         const pr = await gbRest(env, `profiles?id=eq.${user.id}&select=first_name`, { headers: { 'Accept-Profile': 'public' } });
         senderName = ((pr.ok ? await pr.json() : [])[0] || {}).first_name || null;
@@ -13772,10 +13772,17 @@ const PP_IOS_URL = 'https://apps.apple.com/us/app/globeskimmers/id6753154199';
 // PUBLIC passport (friends comes with P2) and stricter defaults; Australians
 // under 16 get no social at all (their law is live). Birth year locks after
 // the first write — age-up edits go through support.
-function socialTierFor(year, country) {
+function socialTierFor(year, country, md) {
   const y = Math.round(Number(year));
   if (!(y >= 1900 && y <= new Date().getFullYear())) return null;
-  const age = new Date().getFullYear() - y;
+  // EXACT age from the full birthday (founder, 2026-10-05: year alone let a
+  // December-born 17-year-old count as 18 all year). Month/day unknown =
+  // assume the birthday hasn't happened yet — conservative, never older.
+  const now = new Date();
+  let age = now.getUTCFullYear() - y;
+  const m = /^(\d{2})-(\d{2})$/.exec(String(md || ''));
+  const passed = m ? (now.getUTCMonth() + 1 > Number(m[1]) || (now.getUTCMonth() + 1 === Number(m[1]) && now.getUTCDate() >= Number(m[2]))) : false;
+  if (!passed) age -= 1;
   if (age < 13) return 'blocked';
   if (age < 16 && String(country || '').toUpperCase() === 'AU') return 'blocked';
   if (age < 18) return 'teen';
@@ -13783,7 +13790,19 @@ function socialTierFor(year, country) {
 }
 async function gbSocialProfile(env, userId) {
   const q = await gbRest(env, `social_profiles?user_id=eq.${userId}&select=*`, {});
-  return (q.ok ? await q.json() : [])[0] || null;
+  const row = (q.ok ? await q.json() : [])[0] || null;
+  // The tier is DERIVED from the birthday, never trusted stale: a teen turns
+  // adult ON their 18th birthday, an under-13 turns teen at 13, and a row
+  // without month/day counts as not-yet-had (conservative). The stored copy
+  // is refreshed lazily so bulk readers (feed, mailbox) catch up too.
+  if (row?.birth_year) {
+    const t = socialTierFor(row.birth_year, row.country_at_gate, row.birth_md);
+    if (t && t !== row.social_tier) {
+      row.social_tier = t;
+      try { await gbRest(env, `social_profiles?user_id=eq.${userId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ social_tier: t, updated_at: new Date().toISOString() }) }); } catch { /* derived value still used this request */ }
+    }
+  }
+  return row;
 }
 
 // POST /social/age { birth_year? } — read my gate state, or set it once.
@@ -13793,23 +13812,31 @@ async function handleSocialAge(request, env, ctx) {
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
     const mine = await gbSocialProfile(env, user.id);
-    // birth_md ('MM-DD') is private demographic data — editable anytime, never
-    // locked (only the YEAR locks; md alone reveals no age).
+    const MD_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
+    // birth_md ('MM-DD') is part of the AGE now (founder, 2026-10-05: full
+    // birthday, not just the year — a December-born 17-year-old must not
+    // count as 18 all year). It writes ONCE: completing a legacy year-only
+    // row recomputes the tier exactly, then it locks with the year.
     if (b.birth_md !== undefined && b.birth_year === undefined) {
-      const md = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(String(b.birth_md)) ? String(b.birth_md) : null;
-      if (!md && b.birth_md !== null) return jsonResponse({ error: 'Use MM-DD' }, 400);
+      const md = MD_RE.test(String(b.birth_md)) ? String(b.birth_md) : null;
+      if (!md) return jsonResponse({ error: 'Use MM-DD' }, 400);
+      if (mine?.birth_md) return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null, birth_md: mine.birth_md, locked: true });
+      const patch = { birth_md: md, updated_at: new Date().toISOString() };
+      if (mine?.birth_year) patch.social_tier = socialTierFor(mine.birth_year, mine.country_at_gate || request.headers.get('cf-ipcountry') || '', md) || mine.social_tier;
       const w = mine
-        ? await gbRest(env, `social_profiles?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ birth_md: md, updated_at: new Date().toISOString() }) })
+        ? await gbRest(env, `social_profiles?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) })
         : await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, birth_md: md }) });
       if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
-      return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null, birth_md: md });
+      return jsonResponse({ set: !!mine?.birth_year, tier: patch.social_tier || mine?.social_tier || null, birth_md: md });
     }
-    if (b.birth_year === undefined) return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null, birth_md: mine?.birth_md || null });
+    if (b.birth_year === undefined) return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null, birth_md: mine?.birth_md || null, need_birthday: !!(mine?.birth_year && !mine?.birth_md) });
     if (mine?.birth_year) return jsonResponse({ set: true, tier: mine.social_tier, locked: true, birth_md: mine?.birth_md || null });
+    const md = MD_RE.test(String(b.birth_md || '')) ? String(b.birth_md) : null;
+    if (!md) return jsonResponse({ error: 'Enter your full birthday' }, 400);
     const country = request.headers.get('cf-ipcountry') || '';
-    const tier = socialTierFor(b.birth_year, country);
-    if (!tier) return jsonResponse({ error: 'Enter the year you were born' }, 400);
-    const row = { user_id: user.id, birth_year: Math.round(Number(b.birth_year)), birth_year_at: new Date().toISOString(), social_tier: tier, country_at_gate: country, updated_at: new Date().toISOString() };
+    const tier = socialTierFor(b.birth_year, country, md);
+    if (!tier) return jsonResponse({ error: 'Enter your full birthday' }, 400);
+    const row = { user_id: user.id, birth_year: Math.round(Number(b.birth_year)), birth_year_at: new Date().toISOString(), birth_md: md, social_tier: tier, country_at_gate: country, updated_at: new Date().toISOString() };
     const w = mine
       ? await gbRest(env, `social_profiles?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) })
       : await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });

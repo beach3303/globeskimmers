@@ -11,7 +11,7 @@ import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
 import { countryCode } from "@/lib/countries";
-import { listPassport, getHandle, getSocialProfile, setSocialProfile, getShareLink, setAgeGate, socialFollow, setAvatar } from "@/lib/passport";
+import { listPassport, getHandle, getSocialProfile, setSocialProfile, getShareLink, setAgeGate, splitDob, socialFollow, setAvatar } from "@/lib/passport";
 import Luggage from "@/components/passport/Luggage";
 import VirtualItems from "@/components/profile/VirtualItems";
 
@@ -118,7 +118,9 @@ export default function ProfilePage() {
     if (shareBusy) return;
     setShareBusy(true);
     if (needYear) {
-      const { error: ageErr } = await setAgeGate(Number(yearDraft));
+      const dob = splitDob(yearDraft);
+      if (!dob) { setShareBusy(false); showToast("Enter your full birthday", "error"); return; }
+      const { error: ageErr } = await setAgeGate(dob.year, dob.md);
       if (ageErr && ageErr !== "age_required") { setShareBusy(false); showToast(ageErr, "error"); return; }
       setNeedYear(false);
     }
@@ -132,7 +134,7 @@ export default function ProfilePage() {
         const { error: ageErr } = await setAgeGate(osYear);
         if (!ageErr) { setShareBusy(false); toggleShare(); return; }
       }
-      setNeedYear(true); showToast("One thing first — the year you were born", "success"); return;
+      setNeedYear(true); showToast("One thing first — your birthday", "success"); return;
     }
     if (error) { showToast(error, "error"); return; }
     setShare({ is_public: !!data.is_public, url: data.url || null });
@@ -319,10 +321,10 @@ export default function ProfilePage() {
           </div>
           {needYear && (
             <div className="flex gap-2 mt-3">
-              <input value={yearDraft} onChange={(e) => setYearDraft(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
-                placeholder="Year you were born" inputMode="numeric" aria-label="Year you were born"
+              <input type="date" value={yearDraft} onChange={(e) => setYearDraft(e.target.value)}
+                min="1900-01-01" max={new Date().toISOString().slice(0, 10)} aria-label="Your birthday"
                 className="flex-1 rounded-xl px-3 py-2.5 outline-none" style={{ border: `1px solid ${RULE}`, background: IVORY, fontSize: fs(14) }} />
-              <button type="button" onClick={toggleShare} disabled={yearDraft.length !== 4 || shareBusy} className="rounded-xl px-4 font-semibold disabled:opacity-50" style={{ background: TEAL, color: "#fff", fontSize: fs(13) }}>Continue</button>
+              <button type="button" onClick={toggleShare} disabled={!splitDob(yearDraft) || shareBusy} className="rounded-xl px-4 font-semibold disabled:opacity-50" style={{ background: TEAL, color: "#fff", fontSize: fs(13) }}>Continue</button>
             </div>
           )}
           {share.is_public && share.url && (

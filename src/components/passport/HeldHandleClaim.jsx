@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { heldForMe, setHandle, setAgeGate } from "@/lib/passport";
+import { heldForMe, setHandle, setAgeGate, splitDob } from "@/lib/passport";
 import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { showToast } from "@/components/Toast";
 
@@ -46,7 +46,9 @@ export default function HeldHandleClaim({ fs = (n) => n }) {
   const claim = async () => {
     setBusy(true);
     if (needYear) {
-      const { error: yErr } = await setAgeGate(Number(year));
+      const dob = splitDob(year);
+      if (!dob) { setBusy(false); showToast("Enter your full birthday", "error"); return; }
+      const { error: yErr } = await setAgeGate(dob.year, dob.md);
       if (yErr && yErr !== "age_required") { setBusy(false); showToast(yErr, "error"); return; }
       setNeedYear(false);
     }
@@ -108,11 +110,11 @@ export default function HeldHandleClaim({ fs = (n) => n }) {
       )}
       <div className="flex gap-2 mt-3 items-center flex-wrap">
         {needYear && (
-          <input value={year} onChange={(e) => setYear(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
-            placeholder="Born (e.g. 1990)" inputMode="numeric" aria-label="Year you were born"
-            className="w-32 h-11 rounded-xl px-3 outline-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }} />
+          <input type="date" value={year} onChange={(e) => setYear(e.target.value)}
+            min="1900-01-01" max={new Date().toISOString().slice(0, 10)} aria-label="Your birthday"
+            className="w-44 h-11 rounded-xl px-3 outline-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }} />
         )}
-        <button type="button" onClick={claim} disabled={busy || (needYear && year.length !== 4)}
+        <button type="button" onClick={claim} disabled={busy || (needYear && !splitDob(year))}
           className="h-11 px-5 rounded-xl font-semibold disabled:opacity-50" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>
           {busy ? "Claiming…" : `Claim @${held.handle}`}
         </button>
@@ -122,7 +124,7 @@ export default function HeldHandleClaim({ fs = (n) => n }) {
         </button>
       </div>
       {needYear && (
-        <p style={{ color: INK3, fontSize: fs(10.5), marginTop: 6 }}>One thing first — usernames need the year you were born (asked once, never shown).</p>
+        <p style={{ color: INK3, fontSize: fs(10.5), marginTop: 6 }}>One thing first — usernames need your birthday (asked once, never shown).</p>
       )}
     </div>
   );

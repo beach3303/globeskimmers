@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
-import { getHandle, setHandle, setAgeGate, getAgeInfo, setBirthday, socialRequest } from "@/lib/passport";
+import { getHandle, setHandle, setAgeGate, splitDob, getAgeInfo, setBirthday, socialRequest } from "@/lib/passport";
 import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
@@ -417,13 +417,17 @@ export default function SettingsPage() {
   const [handleDraft, setHandleDraft] = useState("");
   const [handleBusy, setHandleBusy] = useState(false);
   useEffect(() => { (async () => { const { handle: h } = await getHandle(); if (h) { setHandleState(h); setHandleDraft(h); } })(); }, []);
-  // Birthday (MM-DD only — the year lives behind the locked age gate). Saving
-  // it is private data (age-appropriate rules + demographics), never shown.
+  // Birthday (MM-DD — the year lives behind the locked age gate). It is part
+  // of the AGE now (founder, 2026-10-05: full birthday, not just the year), so
+  // it saves ONCE and locks like the year; accounts from before the change
+  // complete theirs here and their tier is recomputed exactly.
   const [bMonth, setBMonth] = useState(""); const [bDay, setBDay] = useState("");
-  useEffect(() => { (async () => { const { birth_md } = await getAgeInfo(); if (birth_md) { setBMonth(birth_md.slice(0, 2)); setBDay(birth_md.slice(3, 5)); } })(); }, []);
+  const [bLocked, setBLocked] = useState(false);
+  useEffect(() => { (async () => { const { birth_md } = await getAgeInfo(); if (birth_md) { setBMonth(birth_md.slice(0, 2)); setBDay(birth_md.slice(3, 5)); setBLocked(true); } })(); }, []);
   const saveBirthday = async () => {
-    if (!bMonth || !bDay) return;
+    if (!bMonth || !bDay || bLocked) return;
     const { error } = await setBirthday(`${bMonth}-${bDay}`);
+    if (!error) setBLocked(true);
     showToast(error || "Saved privately 🎂", error ? "error" : "success");
   };
   // The worker answers 'age_required' until the birth year is set (it locks
@@ -449,8 +453,9 @@ export default function SettingsPage() {
     if (!want || want === handle) return;
     setHandleBusy(true);
     if (needYear) {
-      const y = Number(yearDraft);
-      const { error: ageErr } = await setAgeGate(y);
+      const dob = splitDob(yearDraft);
+      if (!dob) { setHandleBusy(false); showToast("Enter your full birthday", "error"); return; }
+      const { error: ageErr } = await setAgeGate(dob.year, dob.md);
       if (ageErr && ageErr !== "age_required") { setHandleBusy(false); showToast(ageErr, "error"); return; }
       setNeedYear(false);
     }
@@ -466,7 +471,7 @@ export default function SettingsPage() {
         const { error: ageErr } = await setAgeGate(osYear);
         if (!ageErr) { saveHandle(); return; }
       }
-      setNeedYear(true); showToast("One thing first — the year you were born", "success"); return;
+      setNeedYear(true); showToast("One thing first — your birthday", "success"); return;
     }
     if (error) { showToast(error, "error"); return; }
     setHandleState(h); setHandleDraft(h);
@@ -806,7 +811,7 @@ export default function SettingsPage() {
                       placeholder="yourname" aria-label="Username" autoCapitalize="none" autoCorrect="off"
                       className="flex-1 min-w-0 outline-none bg-transparent pl-1" style={{ fontSize: 15 }} />
                   </div>
-                  <button type="button" onClick={saveHandle} disabled={handleBusy || !handleDraft.trim() || (needYear ? yearDraft.length !== 4 : handleDraft.trim() === handle)}
+                  <button type="button" onClick={saveHandle} disabled={handleBusy || !handleDraft.trim() || (needYear ? !splitDob(yearDraft) : handleDraft.trim() === handle)}
                     className="flex-none h-12 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>
                     {handleBusy ? 'Saving…' : handle ? 'Change' : 'Claim'}
                   </button>
@@ -814,12 +819,12 @@ export default function SettingsPage() {
                 {needYear && (
                   <div className="mt-2.5 rounded-xl px-3 py-2.5" style={{ background: '#FFFBF0', border: '1px solid #EAD9AE' }}>
                     <label htmlFor="gs-birth-year" style={{ display: 'block', fontSize: 13, color: ED_INK, fontWeight: 600 }}>
-                      One thing first — the year you were born
+                      One thing first — your birthday
                     </label>
                     <p style={{ fontSize: 12, color: ED_INK3, marginTop: 2 }}>Asked once, never shown. It keeps GlobeSkimmers age-appropriate.</p>
-                    <input id="gs-birth-year" value={yearDraft} onChange={(e) => setYearDraft(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
-                      placeholder="e.g. 1990" inputMode="numeric" autoComplete="bday-year"
-                      className="mt-2 w-40 rounded-xl px-3 h-11 outline-none" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 15 }} />
+                    <input id="gs-birth-year" type="date" value={yearDraft} onChange={(e) => setYearDraft(e.target.value)} autoComplete="bday"
+                      min="1900-01-01" max={new Date().toISOString().slice(0, 10)}
+                      className="mt-2 w-48 rounded-xl px-3 h-11 outline-none" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 15 }} />
                     <p style={{ fontSize: 11.5, color: ED_INK3, marginTop: 6 }}>Then tap {handle ? 'Change' : 'Claim'}.</p>
                   </div>
                 )}
@@ -911,18 +916,18 @@ export default function SettingsPage() {
               control={{ node: <EdToggle on={suggestNearby} onClick={() => { const next = !suggestNearby; setSuggestNearby(next); try { localStorage.setItem("pp_suggest_nearby", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle nearby stamp sensing" /> }}
               last={false}
             />
-            <EdRow isTablet={isTablet} step={fontStep} icon={Check} iconBg={CAT.todo.ink} title="My birthday" desc="Private — never shown. It keeps GlobeSkimmers age-appropriate."
+            <EdRow isTablet={isTablet} step={fontStep} icon={Check} iconBg={CAT.todo.ink} title="My birthday" desc={bLocked ? "Private — never shown. Saved once; changes go through support." : "Private — never shown. It keeps GlobeSkimmers age-appropriate. Saved once, like the year."}
               control={{ below: true, node: (
                 <div className="flex gap-2 items-center">
-                  <select value={bMonth} onChange={(e) => setBMonth(e.target.value)} aria-label="Birthday month" className="h-12 rounded-xl px-2" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 14 }}>
+                  <select value={bMonth} onChange={(e) => setBMonth(e.target.value)} disabled={bLocked} aria-label="Birthday month" className="h-12 rounded-xl px-2 disabled:opacity-60" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 14 }}>
                     <option value="">Month</option>
                     {["01","02","03","04","05","06","07","08","09","10","11","12"].map((m, i) => <option key={m} value={m}>{["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][i]}</option>)}
                   </select>
-                  <select value={bDay} onChange={(e) => setBDay(e.target.value)} aria-label="Birthday day" className="h-12 rounded-xl px-2" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 14 }}>
+                  <select value={bDay} onChange={(e) => setBDay(e.target.value)} disabled={bLocked} aria-label="Birthday day" className="h-12 rounded-xl px-2 disabled:opacity-60" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 14 }}>
                     <option value="">Day</option>
                     {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((d) => <option key={d} value={d}>{Number(d)}</option>)}
                   </select>
-                  <button type="button" onClick={saveBirthday} disabled={!bMonth || !bDay} className="h-12 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>Save</button>
+                  {!bLocked && <button type="button" onClick={saveBirthday} disabled={!bMonth || !bDay} className="h-12 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>Save</button>}
                 </div>
               ) }}
               last

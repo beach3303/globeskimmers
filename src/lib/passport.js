@@ -164,10 +164,17 @@ export async function getAgeGate() {
   const { data, error } = await callWorker('social/age', {});
   return { set: !!data?.set, tier: data?.tier || null, error };
 }
-export async function setAgeGate(birth_year) {
-  const { data, error } = await callWorker('social/age', { birth_year });
+// The gate takes the FULL birthday (founder, 2026-10-05): year + 'MM-DD'.
+// Both lock after the first write — age-up happens on the real birthday.
+export async function setAgeGate(birth_year, birth_md) {
+  const { data, error } = await callWorker('social/age', { birth_year, birth_md });
   return { set: !!data?.set, tier: data?.tier || null, error: error || data?.error || null };
 }
+// 'YYYY-MM-DD' (a date input's value) → setAgeGate args, or null if not a date.
+export const splitDob = (s) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ""));
+  return m ? { year: Number(m[1]), md: `${m[2]}-${m[3]}` } : null;
+};
 // City sets: "5 of 10 Atlanta icons" — derived server-side, no streaks.
 export async function listCitySets() {
   const { data, error } = await callWorker('passport/sets', {});
@@ -194,8 +201,10 @@ export async function socialFeed() {
   const { data, error } = await callWorker('social/feed', {});
   return { rows: data?.rows || [], error };
 }
-// Birthday (MM-DD, editable; only the YEAR locks): read via getAgeGate's
-// birth_md; set here. The Passport mints the birthday stamp on the day.
+// Birthday (MM-DD): read via getAgeGate's birth_md; set here ONCE — it is part
+// of the age now, so it locks like the year (founder, 2026-10-05). Completing
+// a legacy year-only account recomputes the tier exactly. The Passport mints
+// the birthday stamp on the day.
 export async function setBirthday(birth_md) {
   const { data, error } = await callWorker('social/age', { birth_md });
   return { birth_md: data?.birth_md ?? null, error: error || data?.error || null };
