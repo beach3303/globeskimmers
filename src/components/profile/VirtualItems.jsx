@@ -341,6 +341,7 @@ export default function VirtualItems({ stamps }) {
   const [luggageSids, setLuggageSids] = useState(new Set());
   const [open, setOpen] = useState(null);             // 'laptop' | 'drink'
   const [buddyOpen, setBuddyOpen] = useState(null);   // 'new' | buddy object
+  const [coffeeOpen, setCoffeeOpen] = useState(null); // string[] — the enlarged coffee card
   const saveTimer = useRef(null);
 
   useEffect(() => {
@@ -465,18 +466,29 @@ export default function VirtualItems({ stamps }) {
         onPointerDown={cardDown(kind)} onPointerMove={cardMove} onPointerUp={cardUp(kind)}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(kind); } }}
         className="flex-1 rounded-2xl p-3 text-center select-none" style={{ background: IVORY, border: `1px solid ${RULE}`, cursor: "pointer", touchAction: "pan-y" }}>
-        <div className="flex justify-center pointer-events-none" style={{ position: "relative" }}>
-          <GearArt kind={kind} item={item} width={128} stickersBySid={bySid} />
-          {/* The drink lists its coffee orders in a tiny column beside the cup,
-              inside the card margin (founder, 2026-10-05 evening). */}
-          {kind === "drink" && (item.coffees || []).filter(Boolean).length > 0 && (
-            <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", textAlign: "left", maxWidth: "46%" }}>
-              {(item.coffees || []).filter(Boolean).slice(0, 3).map((c, i) => (
-                <div key={i} style={{ fontFamily: MONO, fontSize: fs(7.5), lineHeight: 1.7, color: INK2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>☕ {c}</div>
-              ))}
+        {(() => {
+          // With coffee orders the cup moves LEFT and the list takes the right
+          // column, no overlap (founder, 2026-10-05 evening). Tapping the list
+          // enlarges it to the center of the screen; × collapses it back.
+          const coffees = kind === "drink" ? (item.coffees || []).filter(Boolean).slice(0, 3) : [];
+          if (!coffees.length) {
+            return <div className="flex justify-center pointer-events-none"><GearArt kind={kind} item={item} width={128} stickersBySid={bySid} /></div>;
+          }
+          return (
+            <div className="flex items-center pointer-events-none" style={{ gap: 2 }}>
+              <div style={{ flex: "none" }}><GearArt kind={kind} item={item} width={100} stickersBySid={bySid} /></div>
+              <div role="button" tabIndex={0} aria-label="Read my coffee orders"
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => { e.stopPropagation(); setCoffeeOpen(coffees); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setCoffeeOpen(coffees); } }}
+                style={{ pointerEvents: "auto", flex: 1, minWidth: 0, textAlign: "left", cursor: "pointer" }}>
+                {coffees.map((c, i) => (
+                  <div key={i} style={{ fontFamily: MONO, fontSize: fs(7.5), lineHeight: 1.8, color: INK2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>☕ {c}</div>
+                ))}
+              </div>
             </div>
-          )}
-        </div>
+          );
+        })()}
         <div style={{ fontFamily: SERIF, fontSize: fs(15.5), color: INK, marginTop: 2 }}>
           {kind === "laptop" ? "My laptop" : DRINK_VARIANTS.find((v) => v.key === (item.variant || "tumbler"))?.name}
         </div>
@@ -531,6 +543,23 @@ export default function VirtualItems({ stamps }) {
       {buddyOpen && (
         <BuddyModal buddy={buddyOpen === "new" ? null : buddyOpen}
           onSave={saveBuddy} onRemove={() => removeBuddy(buddyOpen)} onClose={() => setBuddyOpen(null)} />
+      )}
+      {/* The coffee list, enlarged to the center of the screen (tap the tiny
+          column to open; × or a tap outside collapses it back). */}
+      {coffeeOpen && (
+        <div className="fixed inset-0 z-[10010] flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="How I take my coffee"
+          style={{ background: "rgba(22,17,13,.6)", backdropFilter: "blur(3px)" }} onClick={() => setCoffeeOpen(null)}>
+          <div className="w-full max-w-sm rounded-2xl p-5" style={{ background: "#F3EEE1", position: "relative", boxShadow: "0 24px 60px -20px rgba(0,0,0,.45)" }} onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setCoffeeOpen(null)} aria-label="Close" className="rounded-full p-1.5"
+              style={{ position: "absolute", top: 10, right: 10, background: "#fff", border: `1px solid ${RULE}` }}>
+              <X size={16} color={INK} />
+            </button>
+            <div style={{ fontFamily: SERIF, fontSize: fs(21), color: INK, marginBottom: 6, paddingRight: 30 }}>How I take my coffee</div>
+            {coffeeOpen.map((c, i) => (
+              <div key={i} style={{ fontSize: fs(16), color: INK2, lineHeight: 1.5, padding: "9px 0", borderTop: i ? `1px solid ${RULE}` : "none" }}>☕ {c}</div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
