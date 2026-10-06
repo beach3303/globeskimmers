@@ -79,7 +79,7 @@ export function buildStickers(stamps, profile = null) {
     // "Visited" caption for any country that isn't home or residence (founder,
     // 2026-10-05); a plain home flag earned earlier is upgraded, never doubled.
     if (flags.has(k)) { if (!visited) flags.get(k).label.visited = false; return; }
-    flags.set(k, { sid: `flag:${k}`, w: visited ? 92 : 84, label: { shape: "flag", flag: `${FLAG_BASE}/${k}.svg`, top: country || k.toUpperCase(), story, visited } });
+    flags.set(k, { sid: `flag:${k}`, w: 84, label: { shape: "flag", flag: `${FLAG_BASE}/${k}.svg`, top: country || k.toUpperCase(), story, visited } }); // compact: "VISITED" alone, same width as a plain flag
   };
   if (profile?.home_country) addFlag(countryCode(profile.home_country), profile.home_country, `Home — ${profile.home_country}.`);
   if (profile?.home_city_country) addFlag(countryCode(profile.home_city_country), profile.home_city_country, `Where you live — ${profile.home_city_country}.`);

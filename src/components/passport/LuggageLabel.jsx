@@ -17,14 +17,15 @@ export default function LuggageLabel({ label, uid }) {
     // A real vinyl flag sticker: white die-cut border, the true flag, a faint
     // gloss. HTML (not SVG <image>) so share captures can draw it — the flag
     // art serves with open CORS for exactly that. A country that isn't home or
-    // residence prints "VISITED <NAME>" above its flag (founder, 2026-10-05);
-    // home flags stay plain.
+    // residence prints just "VISITED" above its flag (founder, 2026-10-05
+    // evening: the country name made the sticker too long — keep it compact,
+    // the word on top, the flag under it); home flags stay plain.
     return (
       <div role="img" aria-label={label.visited ? `Sticker: visited ${label.top}` : `Flag sticker: ${label.top}`}
         style={{ position: "relative", background: "#FFFFFF", padding: "7%", borderRadius: "12% / 16%", boxShadow: "0 1px 1.5px rgba(0,0,0,.28), 0 0 0 0.5px rgba(0,0,0,.06)" }}>
         {label.visited && (
-          <span style={{ display: "block", textAlign: "center", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 700, fontSize: "clamp(6.5px, 0.72em, 11px)", lineHeight: 1.15, letterSpacing: ".04em", color: "#2B3A52", padding: "0 1% 4%", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            Visited {label.top}
+          <span style={{ display: "block", textAlign: "center", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 700, fontSize: "clamp(6.5px, 0.78em, 11px)", lineHeight: 1.1, letterSpacing: ".14em", color: "#2B3A52", padding: "0 0 4%", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+            Visited
           </span>
         )}
         <img src={label.flag} alt="" crossOrigin="anonymous" draggable={false}

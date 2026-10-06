@@ -21,7 +21,7 @@ import { luggageGet } from "@/lib/passport";
 import { buildStickers } from "@/components/passport/VirtualLuggage";
 import LuggageLabel from "@/components/passport/LuggageLabel";
 import { GEAR_SHAPES, GEAR_COLORS, DRINK_VARIANTS, GEAR_BOUNDS, colorOf } from "@/components/profile/gearShapes";
-import { PET_SHAPES, POSES, POSE_NAMES } from "@/components/profile/petShapes";
+import { PET_SHAPES, POSES } from "@/components/profile/petShapes";
 import { SPECIES, BREEDS, breedName } from "@/lib/petCatalog";
 import { coatsFor, coatFor } from "@/lib/petCoats";
 
@@ -168,15 +168,27 @@ function GearModal({ kind, item, stamps, stickersBySid, usedElsewhere, onChange,
         </div>
 
         {kind === "drink" && (
-          <div className="grid grid-cols-3 gap-1.5 mt-2.5">
-            {DRINK_VARIANTS.map((v) => (
-              <button key={v.key} type="button" onClick={() => patch({ variant: v.key })}
-                className="rounded-xl px-2 py-2 text-center"
-                style={{ background: variant === v.key ? INK : "#fff", color: variant === v.key ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(11.5), fontWeight: 600, fontFamily: "inherit", lineHeight: 1.2 }}>
-                {v.name}
-              </button>
+          <>
+            <div className="grid grid-cols-3 gap-1.5 mt-2.5">
+              {DRINK_VARIANTS.map((v) => (
+                <button key={v.key} type="button" onClick={() => patch({ variant: v.key })}
+                  className="rounded-xl px-2 py-2 text-center"
+                  style={{ background: variant === v.key ? INK : "#fff", color: variant === v.key ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(11.5), fontWeight: 600, fontFamily: "inherit", lineHeight: 1.2 }}>
+                  {v.name}
+                </button>
+              ))}
+            </div>
+            {/* Top-3 coffee orders, the traveler's own words (founder, 2026-10-05
+                evening) — they print in a small column beside the drink on the shelf. */}
+            <div style={{ fontFamily: SERIF, fontSize: fs(16), color: INK, marginTop: 12 }}>How I take my coffee (or tea)</div>
+            <p style={{ fontSize: fs(11), color: INK3, margin: "2px 0 6px", lineHeight: 1.4 }}>Your top 3, your words — they print beside your drink.</p>
+            {[0, 1, 2].map((i) => (
+              <input key={i} value={(item?.coffees || [])[i] || ""} aria-label={`Coffee order ${i + 1}`}
+                onChange={(e) => { const next = [0, 1, 2].map((j) => (item?.coffees || [])[j] || ""); next[i] = e.target.value.slice(0, 48); patch({ coffees: next }); }}
+                placeholder={["Cold brew, grande, 3 Splendas", "Oat milk latte, extra hot", "Earl Grey, splash of honey"][i]}
+                className="w-full rounded-xl px-3 h-10 outline-none" style={{ background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(13), color: INK, marginTop: i ? 6 : 0 }} />
             ))}
-          </div>
+          </>
         )}
 
         {/* Selected sticker: size + turn + remove. */}
@@ -453,8 +465,17 @@ export default function VirtualItems({ stamps }) {
         onPointerDown={cardDown(kind)} onPointerMove={cardMove} onPointerUp={cardUp(kind)}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(kind); } }}
         className="flex-1 rounded-2xl p-3 text-center select-none" style={{ background: IVORY, border: `1px solid ${RULE}`, cursor: "pointer", touchAction: "pan-y" }}>
-        <div className="flex justify-center pointer-events-none">
+        <div className="flex justify-center pointer-events-none" style={{ position: "relative" }}>
           <GearArt kind={kind} item={item} width={128} stickersBySid={bySid} />
+          {/* The drink lists its coffee orders in a tiny column beside the cup,
+              inside the card margin (founder, 2026-10-05 evening). */}
+          {kind === "drink" && (item.coffees || []).filter(Boolean).length > 0 && (
+            <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", textAlign: "left", maxWidth: "46%" }}>
+              {(item.coffees || []).filter(Boolean).slice(0, 3).map((c, i) => (
+                <div key={i} style={{ fontFamily: MONO, fontSize: fs(7.5), lineHeight: 1.7, color: INK2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>☕ {c}</div>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ fontFamily: SERIF, fontSize: fs(15.5), color: INK, marginTop: 2 }}>
           {kind === "laptop" ? "My laptop" : DRINK_VARIANTS.find((v) => v.key === (item.variant || "tumbler"))?.name}
@@ -485,9 +506,9 @@ export default function VirtualItems({ stamps }) {
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setBuddyOpen(b); } }}
             className="flex-none rounded-2xl p-2.5 text-center select-none" style={{ width: 118, background: IVORY, border: `1px solid ${RULE}`, cursor: "pointer", touchAction: "pan-y" }}>
             <div className="pointer-events-none"><PetArt buddy={b} width={92} /></div>
-            {/* The name tag carries the card — the breed lives in the manage sheet. */}
+            {/* Just the name (founder, 2026-10-05 evening: no pose caption) —
+                the breed and pose live in the manage sheet. */}
             <div className="truncate" style={{ fontFamily: SERIF, fontSize: fs(16), color: INK }}>{b.name}</div>
-            <div className="truncate" style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".06em", color: INK3, textTransform: "uppercase" }}>{POSE_NAMES[b.pose]}</div>
           </div>
         ))}
         {buddies.length < 6 && (

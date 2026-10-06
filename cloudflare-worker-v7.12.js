@@ -14061,7 +14061,13 @@ async function handleGearSet(request, env) {
         const g = src[kind];
         if (!g || typeof g !== 'object') continue;
         const o = { color: GEAR_COLORS_W.has(g.color) ? g.color : 'blue' };
-        if (kind === 'drink') o.variant = DRINK_VARIANTS_W.has(g.variant) ? g.variant : 'tumbler';
+        if (kind === 'drink') {
+          o.variant = DRINK_VARIANTS_W.has(g.variant) ? g.variant : 'tumbler';
+          // Top-3 coffee orders, free text in the traveler's own words
+          // (founder, 2026-10-05 evening) — trimmed, capped, empties dropped.
+          const cof = (Array.isArray(g.coffees) ? g.coffees : []).map((s) => String(s || '').trim().slice(0, 48)).filter(Boolean).slice(0, 3);
+          if (cof.length) o.coffees = cof;
+        }
         const pls = [];
         for (const pl of (Array.isArray(g.placements) ? g.placements : []).slice(0, 200)) {
           const sid = String(pl?.sid || '').slice(0, 80);
