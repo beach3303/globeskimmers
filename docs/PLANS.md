@@ -324,23 +324,29 @@ in any local config; sim boots clean twice incl. OTA handoff); build 9 stripped
 the entitlement; build 10 = 9 + ad removal + reviewer-onboarding replay + full-ink
 airport text. Resubmission rides build 10 after a TestFlight double-launch check.
 
-SUBMITTED TO APPLE — 2026-10-01, 4:54 AM. iOS 1.0.3 (build 8) is Waiting for Review:
-the full pivoted app (passport, social, luggage, world icons), new listing copy,
-worn-ink screenshots, UGC/age/privacy flips, demo account, and the 5.1.1 fix note
-posted in the rejection thread. On approval every store user updates once and joins
-the OTA train permanently. Google Play status (2026-10-01, paused at founder's workday): old account closed for
-inactivity; no D-U-N-S exists for 'globeskimmers' at ZIP 91007. Free D-U-N-S
-application (Google-developer lane, dfc.dnb.com) is filled through step 4 — PARKED at
-step 5 'Upload Files', which wants 2 of: EIN letter / business license / DBA cert /
-etc. "Finish Later" preserves it. TOMORROW'S FIRST MOVE: check Stripe → Settings →
-Business details for entity type + EIN. Fork: (a) EIN exists → CP-575 is doc 1, find
-doc 2, finish D&B, org account; (b) individual/no EIN → grab free instant EIN at
-irs.gov anyway, then open PERSONAL Play account ($25) and start the 12-tester /
-14-day closed test immediately — same ~3-week timeline as the paperwork path, zero
-documents. All Play assets ready: signed .aab, keystore (password in founder's
-manager), listing copy, play screenshots + feature graphic + 512 icon in
-~/Downloads/globeskimmers-store-shots/play. Apple: 1.0.3(8) Waiting for Review since
-4:54 AM — expect verdict within ~48h; founder forwards any reviewer question.
+STORES — 2026-10-06, pre-dawn. APPLE: build 8's 2.1 launch crash had TWO causes,
+both fixed and verified: the Declared Age Range entitlement (removed; entitlements
+now empty) and a strong link to the iOS 26-only DeclaredAgeRange framework on an
+iOS 15+ app (now -weak_framework, proven LC_LOAD_WEAK_DYLIB in the binary; fresh-
+install cold launch verified on the founder's physical iPhone on iOS 18 AND the
+iOS 27 simulator). 1.0.3 (build 12) uploaded, attached to the rejected submission,
+both fix notes posted. LAST STEP: the founder clicks RESUBMIT (status must flip
+from "Ready for Review" to "Waiting for Review" — unconfirmed at time of writing).
+GOOGLE PLAY: the D-U-N-S/org fork is DEAD — a personal account already exists with
+the app in Closed testing (Alpha, release 4 = 1.0.2 from Jul 4, 9 installed).
+Android developer verification: complete (package registered, identity green).
+The July upload key is NOT on this Mac — tonight's rebuild was refused (wrong key),
+so an UPLOAD KEY RESET was requested 2026-10-06 (~1-2 business days): new keystore
+android/upload-2026.keystore, alias `upload`, password in the founder's manager as
+"Globeskimmers Play upload keystore 2026"; the .pem from it is the pending new
+upload cert. android/keystore.properties scaffolded — founder still pastes the
+password in (then Gradle auto-signs; no wizard). WHEN THE RESET EMAIL LANDS:
+rebuild the aab (auto-signed), upload to Closed testing with the pivot release
+notes, then check Dashboard's production card (founder believes the 12-tester /
+14-day gate was already completed once — verify there; it never re-runs once met).
+Also pending: founder runs the two d1 commands importing the 10,873-place global
+tourist seed (scripts/city-icons/data/load_global_tourist_seed.sql + the Santa
+Monica fix file).
 
 **Store first (founder, 2026-09-30): partnerships are SKIPPED until the whole app is
 finished and deployed to BOTH stores.** The Georgia Aquarium pitch and every outreach item
