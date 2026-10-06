@@ -136,7 +136,7 @@ export default function ProfilePage() {
     }
     if (error) { showToast(error, "error"); return; }
     setShare({ is_public: !!data.is_public, url: data.url || null });
-    showToast(data.is_public ? "Your passport is public — anyone with the link can view it" : "Back to private", "success");
+    showToast(data.is_public ? "Your passport is public — anyone with the link can view it" : "Private — just you and your friends now", "success");
   };
 
   const copyLink = async () => {
@@ -306,8 +306,10 @@ export default function ProfilePage() {
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div style={{ fontFamily: SERIF, fontSize: fs(17), color: INK }}>{share.is_public ? "Your passport is public" : "Your passport is private"}</div>
+              {/* Private = you + friends; a friend is someone you follow who
+                  follows you back, both accepted (founder, 2026-10-05). */}
               <div style={{ fontSize: fs(12), color: INK3, marginTop: 2 }}>
-                {share.is_public ? "Anyone with the link can view the booklet — photos only after review, never your locations." : "Only you can see it. Flip to public to share the booklet by link."}
+                {share.is_public ? "Anyone with the link can view the booklet — photos only after review, never your locations." : "Just you and your friends — people you follow who follow you back. Flip to public to share with anyone by link."}
               </div>
             </div>
             <button type="button" onClick={toggleShare} disabled={shareBusy} role="switch" aria-checked={share.is_public} aria-label="Public passport"

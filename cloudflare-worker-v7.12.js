@@ -12895,7 +12895,9 @@ async function handlePassportShare(request, env) {
           await Promise.race([job, new Promise((r) => setTimeout(r, 6000))]);
         }
       }
-      await gbRest(env, `passport_shares?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ is_public: b.is_public, visibility: b.is_public ? 'public' : 'private', updated_at: new Date().toISOString() }) });
+      // Private = you + your friends (mutual accepted follows) — founder,
+      // 2026-10-05. There is no deeper tier: not-public IS the friends tier.
+      await gbRest(env, `passport_shares?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ is_public: b.is_public, visibility: b.is_public ? 'public' : 'friends', updated_at: new Date().toISOString() }) });
       row.is_public = b.is_public;
     }
     const origin = new URL(request.url).origin;
@@ -12903,7 +12905,9 @@ async function handlePassportShare(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
-// Public read-only passport by slug (only if the owner made it public).
+// Read-only passport by slug. Public → anyone. Private → the owner and their
+// FRIENDS (mutual accepted follows) still see it in-app (founder, 2026-10-05:
+// "private is with self and friends"); everyone else gets { private: true }.
 async function handlePassportPublic(request, env) {
   try {
     const b = await request.json().catch(() => ({}));
@@ -12911,7 +12915,14 @@ async function handlePassportPublic(request, env) {
     if (!slug) return jsonResponse({ private: true });
     const q = await gbRest(env, `passport_shares?slug=eq.${slug}&select=user_id,is_public`, {});
     const share = (q.ok ? await q.json() : [])[0];
-    if (!share || !share.is_public) return jsonResponse({ private: true });
+    if (!share) return jsonResponse({ private: true });
+    if (!share.is_public) {
+      const viewer = await gbUser(request, env).catch(() => null);
+      const friend = viewer && viewer.id !== share.user_id
+        ? (!(await gbBlockedEither(env, viewer.id, share.user_id)) && await gbMutualFriends(env, viewer.id, share.user_id))
+        : !!viewer; // the owner always sees their own
+      if (!friend) return jsonResponse({ private: true });
+    }
     const holder = await ppHolder(env, share.user_id);
     const { stamps, stats } = await ppLoad(env, share.user_id);
     // A shared booklet renders names, dates, art and photos — never the exact
@@ -12952,7 +12963,7 @@ async function handlePassportShareLanding(request, env, ctx) {
     const scheme = `globeskimmers://passport/view?u=${encodeURIComponent(slug)}`;
     const chips = sample.map((s) => `<span class="chip">${esc(s.name)}</span>`).join('');
     const inner = !holder
-      ? `<div class="stamp">🛂</div><h1>You’re invited to Globeskimmers</h1><p class="muted">This traveler’s passport is private — get the app to follow them and start your own.</p>
+      ? `<div class="stamp">🛂</div><h1>You’re invited to Globeskimmers</h1><p class="muted">This traveler shares with friends only — get the app, follow them, and start your own.</p>
          <a class="btn primary" href="${scheme}">Open in Globeskimmers</a>
          <a class="btn" href="/go/ios?src=${encodeURIComponent(slug || 'invite')}">Download for iPhone</a>
          <a class="btn" href="/go/android?src=${encodeURIComponent(slug || 'invite')}">Download for Android</a>`
@@ -14189,7 +14200,10 @@ async function blShareByOwner(env, ownerId) {
 async function blGate(env, user, share, opts) {
   if (!share) return 'Not found';
   if (user.id === share.user_id) return null; // the owner's own blotter
-  if (!share.is_public) return 'Not found';
+  // A private passport is still open to FRIENDS — mutual accepted follows
+  // (founder, 2026-10-05) — so a friend can sign a private guestbook. A block
+  // kills the follow edges, so a blocked viewer fails this and sees Not found.
+  if (!share.is_public && !(await gbMutualFriends(env, user.id, share.user_id))) return 'Not found';
   if (await gbBlockedEither(env, user.id, share.user_id)) return 'Not available';
   if (opts && opts.identity) {
     const sp = await gbSocialProfile(env, user.id);
@@ -14615,8 +14629,9 @@ async function handleSocialFeed(request, env) {
     const visible = ids.filter((id) => {
       const v = share[id]?.visibility || (share[id]?.is_public ? 'public' : 'private');
       if (v === 'public') return true;
-      if (v === 'friends') return mutual.has(id);
-      return false;
+      // 'friends' — and legacy 'private' rows mean the same now (founder,
+      // 2026-10-05: private = you + your friends): mutual follows only.
+      return mutual.has(id);
     });
     const sq = visible.length ? await gbRest(env, `passport_stamps?user_id=in.(${visible.join(',')})&hidden=eq.false&order=created_at.desc&limit=40&select=user_id,name,city,country,kind,visited_on,created_at,verified,meta`, {}) : null;
     // Postcards addressed to ME (from anyone I follow or not — a direct card
@@ -14713,6 +14728,20 @@ async function gbBlockedEither(env, a, b) {
   try {
     const q = await gbRest(env, `user_blocks?or=(and(user_id.eq.${a},blocked_user_id.eq.${b}),and(user_id.eq.${b},blocked_user_id.eq.${a}))&select=user_id&limit=1`, {});
     return q.ok && (await q.json()).length > 0;
+  } catch { return false; }
+}
+
+// Friends = MUTUAL accepted follows (founder, 2026-10-05: "private is with self
+// and friends"; the rule the feed has used since P2). Both directions must be
+// status=accepted; blocks already killed the edges, so a block fails this too.
+async function gbMutualFriends(env, a, b) {
+  if (!a || !b || a === b) return false;
+  try {
+    const [f1, f2] = await Promise.all([
+      gbRest(env, `user_follows?follower_id=eq.${a}&followee_id=eq.${b}&status=eq.accepted&select=follower_id&limit=1`, {}),
+      gbRest(env, `user_follows?follower_id=eq.${b}&followee_id=eq.${a}&status=eq.accepted&select=follower_id&limit=1`, {}),
+    ]);
+    return f1.ok && f2.ok && (await f1.json()).length > 0 && (await f2.json()).length > 0;
   } catch { return false; }
 }
 
