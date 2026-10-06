@@ -32,7 +32,6 @@ import { countryCode } from "@/lib/countries";
 import { homeTimezoneForCountry } from "@/lib/homePlace";
 import { useIsTablet } from "@/lib/useIsTablet";
 import HomeTablet from "@/components/home/HomeTablet";
-import SmartSearchBar from "@/components/search/SmartSearchBar";
 import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
 import DestinationStrip from "@/components/search/DestinationStrip";
 import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
@@ -751,11 +750,9 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* SMART-SEARCH SPINE — one search that routes into the right world.
-          The search bar is the hinge between the masthead and the three zones,
-          not a zone itself: it sits ABOVE the first zone kicker, with the
-          DestinationStrip glued directly underneath it. */}
-      <SmartSearchBar onOpen={() => setShowSearch(true)} />
+      {/* The Home search bar was REMOVED (founder, 2026-10-06) — the home page
+          leads with place, not a query box. The Smart-Search overlay machinery
+          stays wired for the destination strip and deep links. */}
       {destSearch && !destDismissed && (
         <DestinationStrip place={destSearch} onAction={handleQuickAction} onDismiss={() => setDestDismissed(true)} />
       )}

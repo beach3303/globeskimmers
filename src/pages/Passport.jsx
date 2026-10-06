@@ -928,18 +928,26 @@ function PassportInner() {
             <p style={{ color: INK2, fontSize: fs(12.5), lineHeight: 1.45, marginTop: 2 }}>
               It keeps GlobeSkimmers age-appropriate and helps us build for travelers like you. It&rsquo;s private — never shown on your profile or passport.
             </p>
+            {/* The FULL birthday in one field (founder, 2026-10-06) — never
+                piecemeal. Month/Day selects appear only when the year is
+                already locked behind the age gate and just the day is missing. */}
             <div className="flex gap-2 mt-2.5 items-center flex-wrap">
-              <select value={bdayM} onChange={(e) => setBdayM(e.target.value)} aria-label="Birthday month" className="h-11 rounded-xl px-2" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }}>
-                <option value="">Month</option>
-                {["01","02","03","04","05","06","07","08","09","10","11","12"].map((m, i) => <option key={m} value={m}>{["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][i]}</option>)}
-              </select>
-              <select value={bdayD} onChange={(e) => setBdayD(e.target.value)} aria-label="Birthday day" className="h-11 rounded-xl px-2" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }}>
-                <option value="">Day</option>
-                {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0")).map((d) => <option key={d} value={d}>{Number(d)}</option>)}
-              </select>
-              {bdayYearNeeded && (
-                <input value={bdayY} onChange={(e) => setBdayY(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))} placeholder="Year" inputMode="numeric" aria-label="Year you were born"
-                  className="w-20 h-11 rounded-xl px-3 outline-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }} />
+              {bdayYearNeeded ? (
+                <input type="date" value={bdayM && bdayD && bdayY.length === 4 ? `${bdayY}-${bdayM}-${bdayD}` : ""} aria-label="Your birthday"
+                  min="1900-01-01" max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(e.target.value); if (m) { setBdayY(m[1]); setBdayM(m[2]); setBdayD(m[3]); } else { setBdayY(""); setBdayM(""); setBdayD(""); } }}
+                  className="w-44 h-11 rounded-xl px-3 outline-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }} />
+              ) : (
+                <>
+                  <select value={bdayM} onChange={(e) => setBdayM(e.target.value)} aria-label="Birthday month" className="h-11 rounded-xl px-2" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }}>
+                    <option value="">Month</option>
+                    {["01","02","03","04","05","06","07","08","09","10","11","12"].map((m, i) => <option key={m} value={m}>{["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][i]}</option>)}
+                  </select>
+                  <select value={bdayD} onChange={(e) => setBdayD(e.target.value)} aria-label="Birthday day" className="h-11 rounded-xl px-2" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(13) }}>
+                    <option value="">Day</option>
+                    {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0")).map((d) => <option key={d} value={d}>{Number(d)}</option>)}
+                  </select>
+                </>
               )}
               <button onClick={saveBdayAsk} disabled={bdayBusy || !bdayM || !bdayD || (bdayYearNeeded && bdayY.length !== 4)} className="h-11 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: STAMP, color: "#fff", fontSize: fs(13) }}>{bdayBusy ? "Saving…" : "Save"}</button>
               <button onClick={snoozeBdayAsk} style={{ color: INK3, fontSize: fs(12) }}>Later</button>

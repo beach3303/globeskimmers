@@ -9,7 +9,11 @@
 //
 // Deliberately different from StampsNearYou:
 //   - NO includeSecrets — secrets are found by being there, never dreamed;
-//   - NO distance lines — dreaming isn't nearby;
+//   - DISTANCE under every card (founder, 2026-10-06): the shelf reaches 50
+//     miles — everything a car, train or bus can do — so each card says how
+//     far, in the traveler's unit (miles in mile countries, km elsewhere,
+//     Settings override wins). Water in between gets an honest ⛴ FERRY tag;
+//     fly-only places don't belong on a within-reach shelf.
 //   - photo-forward cards when a place has a real photoUrl, the engraved
 //     typographic stamp card otherwise (never a colored placeholder box).
 // A tap opens the DreamGallery photo sheet (the dream browser) as the first
@@ -19,6 +23,9 @@
 // full-page pattern as the nearby rail).
 import { useEffect, useState } from "react";
 import { useLocation } from "@/components/location/LocationContext";
+import { useAuth } from "@/lib/AuthContext";
+import { countryCode } from "@/lib/countries";
+import { distanceUnit, distanceLabel } from "@/lib/units";
 import { callWorker } from "@/lib/callWorker";
 import { listPassport } from "@/lib/passport";
 import { stampArtUrl } from "@/lib/stampArt";
@@ -49,7 +56,7 @@ function CollectedTag({ overlay }) {
 // engraved typographic stamp in the dashed "not yet earned" ring (mirrors
 // StampsNearYou's StampChip — bespoke stamp art first, TypographicStamp when
 // there's none). No distance line in either form — dreaming isn't nearby.
-function DreamCard({ item, collected, onOpen }) {
+function DreamCard({ item, collected, sub, onOpen }) {
   const [photoFail, setPhotoFail] = useState(false);
   const [artFail, setArtFail] = useState(false);
   const art = stampArtUrl(item.name, { entityId: item.id, country: item.country });
@@ -73,6 +80,7 @@ function DreamCard({ item, collected, onOpen }) {
           >
             {item.name}
           </div>
+          {sub && <div className="font-mono uppercase tracking-[0.08em] text-[calc(9px*var(--fs))] mt-0.5" style={{ color: MUTED }}>{sub}</div>}
         </div>
       </button>
     );
@@ -104,6 +112,7 @@ function DreamCard({ item, collected, onOpen }) {
       <div className="mt-1.5 leading-tight" style={{ fontFamily: '"Instrument Serif", Georgia, serif', color: INK2, fontSize: `calc(13px*var(--fs))`, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
         {item.name}
       </div>
+      {sub && <div className="font-mono uppercase tracking-[0.08em] text-[calc(9px*var(--fs))] mt-0.5" style={{ color: MUTED }}>{sub}</div>}
       {collected && <CollectedTag />}
     </button>
   );
@@ -113,7 +122,8 @@ function DreamCard({ item, collected, onOpen }) {
 // the mounting page already holds it (Home fetches /weather-forecast for the
 // active location in dream mode). No temp passed → that fragment just hides.
 export default function DreamShelf({ latitude, longitude, cityName, cityTempF = null, onOpenActivity }) {
-  const { currentGpsLocation } = useLocation();
+  const { currentGpsLocation, activeLocation } = useLocation();
+  const { profile } = useAuth();
   const [items, setItems] = useState([]);
   const [earnedIds, setEarnedIds] = useState(() => new Set());
   const [galleryItem, setGalleryItem] = useState(null); // raw attraction row the dream browser is open for
@@ -123,13 +133,14 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) { setItems([]); return; }
     (async () => {
       try {
-        // 30 km keeps the shelf to the dreamed city itself, and NO
+        // 80 km ≈ 50 miles (founder, 2026-10-06): every top destination a car,
+        // train or bus can reach from here belongs on the shelf. NO
         // includeSecrets: the worker hides tier=secret rows from browse, and a
         // secret is earned by stumbling onto it in person — never previewed
         // here. /passport/list is the lightest existing count read (signed-out
         // it returns empty stamps, never an error → "0 OF N" is the endowment).
         const [near, pass] = await Promise.all([
-          callWorker("attractions/nearby", { latitude, longitude, radiusKm: 30, limit: 24, stampsOnly: true }),
+          callWorker("attractions/nearby", { latitude, longitude, radiusKm: 80, limit: 48, stampsOnly: true }),
           listPassport(),
         ]);
         if (cancelled) return;
@@ -138,7 +149,7 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
         // Iconic first, then best-loved — NOT nearest-first; the shelf is a
         // promise, not a proximity list.
         list.sort((a, b) => (Number(!!b.isMarquee) - Number(!!a.isMarquee)) || ((b.popularity ?? 0) - (a.popularity ?? 0)));
-        setItems(list.slice(0, 12));
+        setItems(list.slice(0, 16));
         // Attraction stamps store the attraction id as entity_id
         // (ActivityDetail's addStamp), so id membership = already collected.
         setEarnedIds(new Set((pass.stamps || []).filter((s) => s && s.entity_id != null).map((s) => String(s.entity_id))));
@@ -169,6 +180,19 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
   }
   const dataLine = dataFrags.length ? dataFrags.join(" · ") : null;
 
+  // Distance under each card, from the shelf's anchor. Unit: Settings choice
+  // first, else the traveler's country (mile countries get miles). Known
+  // water crossings say so instead of pretending the road exists.
+  const unit = distanceUnit(profile, countryCode(activeLocation?.address?.country || currentGpsLocation?.address?.country) || "");
+  const FERRY = ["catalina", "alcatraz", "statue of liberty", "liberty island", "ellis island", "angel island", "channel islands"];
+  const subFor = (it) => {
+    if (!Number.isFinite(it?.lat) || !Number.isFinite(it?.lng)) return null;
+    const d = distanceLabel(haversineKm(latitude, longitude, it.lat, it.lng), unit);
+    if (!d) return null;
+    const ferry = FERRY.some((f) => String(it.name || "").toLowerCase().includes(f));
+    return ferry ? `⛴ FERRY · ${d}` : d;
+  };
+
   // First touch is the photo-immersion gallery; "View details" inside it
   // routes through the original onOpenActivity handoff.
   const openDream = (item) => {
@@ -192,7 +216,7 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
         </div>
         <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
           {items.map((it) => (
-            <DreamCard key={it.id} item={it} collected={earnedIds.has(String(it.id))} onOpen={() => openDream(it)} />
+            <DreamCard key={it.id} item={it} collected={earnedIds.has(String(it.id))} sub={subFor(it)} onOpen={() => openDream(it)} />
           ))}
         </div>
       </div>
