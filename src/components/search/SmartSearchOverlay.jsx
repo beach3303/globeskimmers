@@ -171,8 +171,11 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[9998] flex flex-col" style={{ background: IVORY }}>
-      {/* Header: input + close */}
-      <div className="px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${EDGE}` }}>
+      {/* Header: input + close. Clears the status bar / Dynamic Island
+          (viewport-fit=cover puts a fixed overlay's top UNDER the clock —
+          founder's screenshot 2026-10-06: field and Cancel overlapped the
+          status icons). Same rule as DreamGallery's header. */}
+      <div className="px-4 pb-2" style={{ paddingTop: "max(12px, calc(env(safe-area-inset-top, 0px) + 8px))", borderBottom: `1px solid ${EDGE}` }}>
         <div className="max-w-md mx-auto flex items-center gap-2">
           <div className="flex-1 flex items-center gap-2.5 rounded-2xl px-3.5 py-3" style={{ background: "#fff", border: `1px solid ${EDGE}` }}>
             <Search className="w-[18px] h-[18px] flex-none" style={{ color: TEAL }} strokeWidth={2.4} />
