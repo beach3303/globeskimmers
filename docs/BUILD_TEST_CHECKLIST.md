@@ -1632,3 +1632,15 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   avatar shows a PHOTO ribbon, and Save + Cancel appear only there. Save closes edit mode;
   Cancel restores what was on screen before.
 - Gates: eslint (touched) clean, no-undef app-wide 0, build 0. Held with the batch.
+
+## 2026-10-05 — Morning digest: official store downloads at 8am
+- Founder: yes to the daily digest of real App Store / Play download numbers.
+- Worker: morningDigest on the existing 15:00 UTC cron — Apple Sales Reports (ES256 JWT,
+  gzipped TSV, first-download product types 1/1F/1T/F1; falls back a day if not ready),
+  Play installs CSV from the Console's GCS bucket (service-account OAuth, UTF-16 CSV,
+  daily user installs), plus stamps-in-24h from D1. Sends via the founder's bell
+  ("☀️ Downloads: …"). Each source runs only when its secrets exist; nothing breaks the cron.
+- Also: the first-open alert now reads "🎉 New download! First open on iPhone".
+- **Activate (founder): docs/STORE_DIGEST_SETUP.md** — Apple: ASC_ISSUER_ID / ASC_KEY_ID /
+  ASC_VENDOR_NUMBER / ASC_PRIVATE_KEY; Play: GPLAY_BUCKET / GPLAY_SA_EMAIL / GPLAY_SA_KEY.
+- Gates: node --check clean. Ships on push.

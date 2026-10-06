@@ -862,6 +862,101 @@ async function founderAlert(env, text, tag = 'bell') {
   } catch { /* the bell never breaks the app */ }
 }
 
+// ── The morning digest (founder, 2026-10-05): yesterday's OFFICIAL store
+// downloads, by the stores' own daily reports, texted to the founder's bell.
+// Apple: App Store Connect Sales Reports (ES256 JWT from an API key; gzipped
+// TSV; ready ~5–8am PT for the previous day — we try yesterday, then the day
+// before). Google: the Play Console stats CSV in its GCS bucket (service
+// account; UTF-16 CSV; 1–2 days behind). Each source runs only when its
+// secrets exist and never breaks the cron.
+const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const pemToDer = (pem) => {
+  const b = String(pem).replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  return Uint8Array.from(atob(b), (c) => c.charCodeAt(0)).buffer;
+};
+async function ascToken(env) {
+  const key = await crypto.subtle.importKey('pkcs8', pemToDer(env.ASC_PRIVATE_KEY), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const now = Math.floor(Date.now() / 1000);
+  const head = b64url(new TextEncoder().encode(JSON.stringify({ alg: 'ES256', kid: env.ASC_KEY_ID, typ: 'JWT' })));
+  const body = b64url(new TextEncoder().encode(JSON.stringify({ iss: env.ASC_ISSUER_ID, iat: now, exp: now + 1100, aud: 'appstoreconnect-v1' })));
+  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, new TextEncoder().encode(`${head}.${body}`));
+  return `${head}.${body}.${b64url(sig)}`;
+}
+async function appleDownloads(env, isoDate) {
+  if (!env.ASC_ISSUER_ID || !env.ASC_KEY_ID || !env.ASC_PRIVATE_KEY || !env.ASC_VENDOR_NUMBER) return null;
+  const jwt = await ascToken(env);
+  const u = `https://api.appstoreconnect.apple.com/v1/salesReports?filter[frequency]=DAILY&filter[reportType]=SALES&filter[reportSubType]=SUMMARY&filter[version]=1_1&filter[vendorNumber]=${env.ASC_VENDOR_NUMBER}&filter[reportDate]=${isoDate}`;
+  const r = await fetch(u, { headers: { Authorization: `Bearer ${jwt}`, Accept: 'application/a-gzip' } });
+  if (!r.ok) return r.status === 404 ? { units: null, empty: true } : null;
+  const text = await new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).text();
+  const lines = text.split('\n').filter(Boolean);
+  const cols = lines[0].split('\t');
+  const iU = cols.indexOf('Units'), iT = cols.indexOf('Product Type Identifier');
+  let units = 0;
+  for (const line of lines.slice(1)) {
+    const c = line.split('\t');
+    // 1 / 1F / 1T / F1 = first-time app downloads (iPhone / universal / iPad / Mac).
+    if (/^(1|1F|1T|F1)$/.test(String(c[iT] || '').trim())) units += Number(c[iU]) || 0;
+  }
+  return { units };
+}
+async function googleDownloads(env, isoDate) {
+  if (!env.GPLAY_SA_EMAIL || !env.GPLAY_SA_KEY || !env.GPLAY_BUCKET) return null;
+  const key = await crypto.subtle.importKey('pkcs8', pemToDer(env.GPLAY_SA_KEY), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const now = Math.floor(Date.now() / 1000);
+  const head = b64url(new TextEncoder().encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
+  const claims = b64url(new TextEncoder().encode(JSON.stringify({
+    iss: env.GPLAY_SA_EMAIL, scope: 'https://www.googleapis.com/auth/devstorage.read_only',
+    aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 1800,
+  })));
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(`${head}.${claims}`));
+  const tr = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: `${head}.${claims}.${b64url(sig)}` }),
+  });
+  if (!tr.ok) return null;
+  const token = (await tr.json()).access_token;
+  const pkg = 'com.globeskimmers.app';
+  const obj = encodeURIComponent(`stats/installs/installs_${pkg}_${isoDate.slice(0, 7).replace('-', '')}_overview.csv`);
+  const gr = await fetch(`https://storage.googleapis.com/storage/v1/b/${env.GPLAY_BUCKET}/o/${obj}?alt=media`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!gr.ok) return { units: null, empty: true };
+  const csv = new TextDecoder('utf-16le').decode(await gr.arrayBuffer()).replace(/^﻿/, '');
+  const lines = csv.split('\n').map((l) => l.replace(/\r$/, '')).filter(Boolean);
+  const cols = lines[0].split(',');
+  const iD = cols.findIndex((c) => /^date$/i.test(c.trim()));
+  const iU = cols.findIndex((c) => /daily user installs/i.test(c));
+  for (const line of lines.slice(1)) {
+    const c = line.split(',');
+    if ((c[iD] || '').trim() === isoDate) return { units: Number(c[iU]) || 0 };
+  }
+  return { units: null, empty: true };
+}
+async function morningDigest(env) {
+  if (!env.NTFY_TOPIC && !env.TWILIO_SID) return;
+  const day = (back) => new Date(Date.now() - back * 86400000).toISOString().slice(0, 10);
+  const parts = [];
+  try {
+    let a = await appleDownloads(env, day(1));
+    let aDay = day(1);
+    if (a && a.empty) { a = await appleDownloads(env, day(2)); aDay = day(2); }
+    if (a && a.units != null) parts.push(`${a.units} App Store (${aDay.slice(5)})`);
+  } catch { /* apple skipped */ }
+  try {
+    let g = await googleDownloads(env, day(2));   // Play lags a day more
+    let gDay = day(2);
+    if (g && g.empty) { g = await googleDownloads(env, day(3)); gDay = day(3); }
+    if (g && g.units != null) parts.push(`${g.units} Google Play (${gDay.slice(5)})`);
+  } catch { /* google skipped */ }
+  try {
+    if (env.DB) {
+      const since = Math.floor(Date.now() / 1000) - 86400;
+      const r = await env.DB.prepare(`SELECT COUNT(*) n FROM events WHERE event_type = 'passport_stamp' AND ts >= ?1`).bind(since).first();
+      if (r) parts.push(`${r.n} stamps in 24h`);
+    }
+  } catch { /* stamps skipped */ }
+  if (parts.length) await founderAlert(env, `☀️ Downloads: ${parts.join(' · ')}`, 'new');
+}
+
 async function handleLogEvent(request, env) {
   try {
     const body = await request.json();
@@ -20337,6 +20432,10 @@ export default {
       // swallow — sweep trouble is invisible to the API surface; the next
       // day's cron (or POST /deals/sweep) simply tries again
     }
+    // The founder's morning digest — official store downloads (its own try).
+    try {
+      await morningDigest(env);
+    } catch (_e) { /* a quiet morning; tomorrow's cron tries again */ }
     // Nightly demand-intel rollup + 180-day raw-event retention. Its OWN
     // try/catch: rollup trouble can never dent the sweep above or the cron.
     try {
