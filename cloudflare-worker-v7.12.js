@@ -14031,7 +14031,7 @@ const LG_FACES = new Set(['front', 'right', 'back', 'left', 'top', 'bottom']);
 // lives on ONE gear item at a time (the app enforces it against the luggage
 // too); pets never take stickers.
 const GEAR_KINDS = new Set(['laptop', 'drink']);
-const GEAR_COLORS_W = new Set(['pink', 'white', 'black', 'yellow', 'blue', 'purple', 'green', 'orange']);
+const GEAR_COLORS_W = new Set(['pink', 'white', 'black', 'yellow', 'blue', 'purple', 'green', 'orange', 'red', 'silver']); // red + silver arrived with the 2026-10-05 render batch
 const DRINK_VARIANTS_W = new Set(['tumbler', 'straw-bottle', 'lid-bottle']);
 const PET_SPECIES_W = new Set(['dog', 'cat', 'hamster', 'bird', 'reptile']);
 const PET_POSES_W = new Set(['sitting', 'laying', 'belly-up']);
@@ -19523,6 +19523,64 @@ async function handleAdminActivityOverview(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// POST /admin/gear-report — what travelers pick for their virtual items
+// (founder, 2026-10-05: "how many people select laptops per city per month;
+// tumbler / water bottle / straw bottle per day, week, month, per city, per
+// country"). Two sources: profile_gear (the durable CURRENT state — how many
+// travelers own each item today) and the D1 gear_select / buddy_add events
+// (the pick stream, which carries $.city/$.country; D1 holds ~90 days, so the
+// month rows cover that window and the current-state block is the long truth).
+async function handleAdminGearReport(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  try {
+    const rows = [];
+    for (let page = 0; page < 40; page++) {
+      const q = await gbRest(env, `profile_gear?select=gear,buddies&limit=1000&offset=${page * 1000}`, {});
+      if (!q.ok) break;
+      const part = await q.json().catch(() => []);
+      rows.push(...part);
+      if (part.length < 1000) break;
+    }
+    const current = { travelers: rows.length, laptop: { n: 0, colors: {} }, drink: { n: 0, variants: {}, colors: {} }, buddies: { n: 0, travelers: 0, species: {}, breeds: {} } };
+    for (const r of rows) {
+      const lap = r.gear?.laptop, dr = r.gear?.drink;
+      if (lap) { current.laptop.n++; const c = lap.color || 'blue'; current.laptop.colors[c] = (current.laptop.colors[c] || 0) + 1; }
+      if (dr) {
+        current.drink.n++;
+        const v = dr.variant || 'tumbler', c = dr.color || 'blue';
+        current.drink.variants[v] = (current.drink.variants[v] || 0) + 1;
+        current.drink.colors[c] = (current.drink.colors[c] || 0) + 1;
+      }
+      const buds = Array.isArray(r.buddies) ? r.buddies : [];
+      if (buds.length) current.buddies.travelers++;
+      for (const bd of buds) {
+        current.buddies.n++;
+        if (bd?.species) current.buddies.species[bd.species] = (current.buddies.species[bd.species] || 0) + 1;
+        if (bd?.breed) { const k = `${bd.species}/${bd.breed}`; current.buddies.breeds[k] = (current.buddies.breeds[k] || 0) + 1; }
+      }
+    }
+    const out = { current, events: null };
+    if (env.DB) {
+      const J = (p) => `json_extract(payload,'$.${p}')`;
+      const U = 'COUNT(DISTINCT COALESCE(user_id, anon_id))';
+      const run = async (sql) => (await env.DB.prepare(sql).all()).results || [];
+      const [byDay, byMonth, byCity, byCountry, budDay, budMonth, budSpecies, budCity] = await Promise.all([
+        run(`SELECT date(ts,'unixepoch') k, ${J('item')} item, COUNT(*) n, ${U} travelers FROM events WHERE event_type='gear_select' GROUP BY k, item ORDER BY k`),
+        run(`SELECT strftime('%Y-%m', ts,'unixepoch') k, ${J('item')} item, COUNT(*) n, ${U} travelers FROM events WHERE event_type='gear_select' GROUP BY k, item ORDER BY k`),
+        run(`SELECT ${J('city')} k, ${J('item')} item, COUNT(*) n, ${U} travelers FROM events WHERE event_type='gear_select' AND IFNULL(${J('city')},'')<>'' GROUP BY k, item ORDER BY n DESC LIMIT 400`),
+        run(`SELECT ${J('country')} k, ${J('item')} item, COUNT(*) n, ${U} travelers FROM events WHERE event_type='gear_select' AND IFNULL(${J('country')},'')<>'' GROUP BY k, item ORDER BY n DESC LIMIT 400`),
+        run(`SELECT date(ts,'unixepoch') k, ${J('species')} species, COUNT(*) n FROM events WHERE event_type='buddy_add' GROUP BY k, species ORDER BY k`),
+        run(`SELECT strftime('%Y-%m', ts,'unixepoch') k, ${J('species')} species, COUNT(*) n FROM events WHERE event_type='buddy_add' GROUP BY k, species ORDER BY k`),
+        run(`SELECT ${J('species')} k, ${J('breed')} breed, COUNT(*) n FROM events WHERE event_type='buddy_add' GROUP BY k, breed ORDER BY n DESC LIMIT 300`),
+        run(`SELECT ${J('city')} k, ${J('species')} species, COUNT(*) n FROM events WHERE event_type='buddy_add' AND IFNULL(${J('city')},'')<>'' GROUP BY k, species ORDER BY n DESC LIMIT 300`),
+      ]);
+      out.events = { itemsByDay: byDay, itemsByMonth: byMonth, itemsByCity: byCity, itemsByCountry: byCountry, buddiesByDay: budDay, buddiesByMonth: budMonth, buddiesBySpecies: budSpecies, buddiesByCity: budCity };
+    }
+    return jsonResponse(out);
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleAdminUserActivity(request, env) {
   const denied = await requireAdmin(request, env);
   if (denied) return denied;
@@ -19544,11 +19602,12 @@ async function handleAdminUserActivity(request, env) {
       for (const r of rows) { const y = yr(r[key]); by[y] = (by[y] || 0) + 1; }
       return by;
     };
-    const [stq, gbq, dq, onq] = await Promise.all([
+    const [stq, gbq, dq, onq, gq] = await Promise.all([
       gbRest(env, `passport_stamps?user_id=eq.${userId}&order=created_at.asc&limit=2000&select=kind,entity_id,name,visited_on,created_at,verified,meta`, {}),
       gbRest(env, `guestbook_entries?user_id=eq.${userId}&order=created_at.asc&limit=2000&select=created_at,entity_name,is_doodle`, {}),
       gbRest(env, `place_dishes?user_id=eq.${userId}&order=created_at.asc&limit=2000&select=created_at,place_name,dish`, {}),
       gbRest(env, `owner_notes?user_id=eq.${userId}&order=created_at.asc&limit=2000&select=created_at,entity_name,status`, {}),
+      gbRest(env, `profile_gear?user_id=eq.${userId}&select=gear,buddies,updated_at`, {}),
     ]);
     const stamps = stq.ok ? await stq.json() : [];
     const notes = gbq.ok ? await gbq.json() : [];
@@ -19568,11 +19627,22 @@ async function handleAdminUserActivity(request, env) {
       ...dishes.map((r) => ({ date: day(r), type: 'dish photo', name: r.place_name || '', detail: r.dish || '' })),
       ...ownerNotes.map((r) => ({ date: day(r), type: 'owner message', name: r.entity_name || '', detail: r.status })),
     ].sort((a, b) => (a.date < b.date ? -1 : 1)).slice(0, 5000);
+    // Their virtual items, for the per-user audit (founder, 2026-10-05: "I want
+    // to know what each person selects if I audit their username"). Buddy NAMES
+    // are the traveler's own words — the audit shows picks, not names.
+    const gearRow = (gq.ok ? await gq.json() : [])[0] || null;
+    const virtualItems = gearRow ? {
+      laptop: gearRow.gear?.laptop ? { color: gearRow.gear.laptop.color || 'blue', stickers: (gearRow.gear.laptop.placements || []).length } : null,
+      drink: gearRow.gear?.drink ? { variant: gearRow.gear.drink.variant || 'tumbler', color: gearRow.gear.drink.color || 'blue', stickers: (gearRow.gear.drink.placements || []).length } : null,
+      buddies: (Array.isArray(gearRow.buddies) ? gearRow.buddies : []).map((bd) => ({ species: bd.species, breed: bd.breed, coat: bd.coat || null })),
+      updated_at: gearRow.updated_at,
+    } : null;
     return jsonResponse({
       user_id: userId, handle,
       byYear: { stamps: tally(stamps, 'created_at'), guestbook_notes: tally(notes, 'created_at'), dish_photos: tally(dishes, 'created_at'), owner_messages: tally(ownerNotes, 'created_at') },
       totals: { stamps: stamps.length, airports: airports.length, guestbook_notes: notes.length, dish_photos: dishes.length, owner_messages: ownerNotes.length },
       airport_sequence: airports,
+      virtual_items: virtualItems,
       timeline,
     });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
@@ -20313,6 +20383,7 @@ export default {
       if (pathname === '/admin/guestbook' && request.method === 'POST') return await handleAdminGuestbook(request, env);
       if (pathname === '/admin/user-activity' && request.method === 'POST') return await handleAdminUserActivity(request, env);
       if (pathname === '/admin/activity-overview' && request.method === 'POST') return await handleAdminActivityOverview(request, env);
+      if (pathname === '/admin/gear-report' && request.method === 'POST') return await handleAdminGearReport(request, env);
       if (pathname === '/passport/sets' && request.method === 'POST') return await handlePassportSets(request, env);
       if (pathname === '/social/block' && request.method === 'POST') return await handleSocialBlock(request, env, ctx);
       if (pathname === '/social/age' && request.method === 'POST') return await handleSocialAge(request, env, ctx);
