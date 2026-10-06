@@ -64,7 +64,8 @@ export default function Luggage({ stamps, readOnly }) {
     setBusy(true);
     try {
       const canvas = await html2canvas(trunkRef.current, { useCORS: true, backgroundColor: "#241F17", scale: 2, logging: false, imageTimeout: 8000 });
-      const img = await composeShare(canvas, "story_meta");
+      // Founder (2026-10-05): a luggage share says "My Virtual Luggage", never "passport".
+      const img = await composeShare(canvas, "story_meta", "My Virtual Luggage");
       setShare(img);
       logEvent("passport_share_open", { format: "story", preset: "story_meta", mix: "luggage", target: "unknown" }, "Passport");
     } catch (e) {
@@ -77,19 +78,19 @@ export default function Luggage({ stamps, readOnly }) {
     if (!share) return;
     let shareUrl = null;
     try { const { data: sl } = await getShareLink(); shareUrl = sl?.url || null; } catch { /* fine */ }
-    const text = shareUrl ? `My luggage on Globeskimmers 🧳 ${shareUrl}` : "My luggage on Globeskimmers 🧳";
+    const text = shareUrl ? `My virtual luggage on Globeskimmers 🧳 ${shareUrl}` : "My virtual luggage on Globeskimmers 🧳";
     try {
       if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("Share") && Capacitor.isPluginAvailable("Filesystem")) {
         const { Filesystem, Directory } = await import("@capacitor/filesystem");
         const { Share } = await import("@capacitor/share");
         const w = await Filesystem.writeFile({ path: "globeskimmers-luggage.png", data: String(share.dataUrl).split(",")[1], directory: Directory.Cache });
-        const res = await Share.share({ title: "My luggage", text, files: [w.uri] });
+        const res = await Share.share({ title: "My virtual luggage", text, files: [w.uri] });
         logEvent("passport_share", { format: "story", preset: "story_meta", mix: "luggage", images: 1, via: "app", activity: res?.activityType || null }, "Passport");
         setShare(null); return;
       }
       const files = [new File([share.blob], "globeskimmers-luggage.png", { type: "image/png" })];
       if (navigator.canShare && navigator.canShare({ files })) {
-        await navigator.share({ files, title: "My luggage", text });
+        await navigator.share({ files, title: "My virtual luggage", text });
         logEvent("passport_share", { format: "story", preset: "story_meta", mix: "luggage", images: 1, via: "web" }, "Passport");
         setShare(null); return;
       }
@@ -190,12 +191,12 @@ export default function Luggage({ stamps, readOnly }) {
 
       {/* Two-tap share preview (share() must run inside a tap on WebKit) */}
       {share && (
-        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Share my luggage"
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Share my virtual luggage"
           style={{ background: "rgba(22,17,13,.6)" }} onClick={() => setShare(null)}>
           <div className="w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
             <img src={share.url} alt="Your luggage, ready to share" style={{ width: "100%", borderRadius: 14, boxShadow: "0 18px 40px -20px rgba(0,0,0,.7)" }} />
             <button type="button" onClick={shareNow} className="w-full rounded-[14px] py-3 font-semibold mt-3"
-              style={{ background: "#0E7C86", color: "#fff", fontSize: fs(14.5), fontFamily: "inherit" }}>Share my luggage</button>
+              style={{ background: "#0E7C86", color: "#fff", fontSize: fs(14.5), fontFamily: "inherit" }}>Share my virtual luggage</button>
             <button type="button" onClick={() => setShare(null)} className="w-full rounded-[14px] py-2.5 font-semibold mt-2"
               style={{ background: "#FFFCF7", color: "#3A3128", fontSize: fs(13), fontFamily: "inherit" }}>Not now</button>
           </div>

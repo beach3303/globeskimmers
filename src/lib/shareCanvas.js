@@ -41,7 +41,7 @@ function paintShareBackground(ctx, W, H) {
   bg.addColorStop(0, "#12365F"); bg.addColorStop(0.7, NAVY_DEEP); bg.addColorStop(1, NAVY_DEEP);
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 }
-export function brandShareCanvas(page, presetId = "story_meta") {
+export function brandShareCanvas(page, presetId = "story_meta", title = "My Virtual Passport") {
   const P = SHARE_PRESETS[presetId] || SHARE_PRESETS.story_meta;
   const { W, H } = P;
   const out = document.createElement("canvas");
@@ -58,12 +58,12 @@ export function brandShareCanvas(page, presetId = "story_meta") {
     ctx.font = `600 36px ${SHARE_SANS}`; setSpacing(ctx, 7);
     const bw = ctx.measureText("GLOBESKIMMERS").width;
     setSpacing(ctx, 0); ctx.font = `54px ${SHARE_SERIF}`;
-    const tw = ctx.measureText("My Virtual Passport").width;
+    const tw = ctx.measureText(title).width;
     const gap = 44, x0 = cx - (bw + gap + tw) / 2;
     ctx.textAlign = "left";
     ctx.font = `600 36px ${SHARE_SANS}`; setSpacing(ctx, 7); ctx.fillStyle = GOLD; ctx.fillText("GLOBESKIMMERS", x0, y);
     setSpacing(ctx, 0); ctx.fillText("·", x0 + bw + gap * 0.36, y);
-    ctx.font = `54px ${SHARE_SERIF}`; ctx.fillStyle = "#FBF6EC"; ctx.fillText("My Virtual Passport", x0 + bw + gap, y);
+    ctx.font = `54px ${SHARE_SERIF}`; ctx.fillStyle = "#FBF6EC"; ctx.fillText(title, x0 + bw + gap, y);
     zoneTop = P.top + 92;
   } else {
     ctx.textAlign = "center";
@@ -71,7 +71,7 @@ export function brandShareCanvas(page, presetId = "story_meta") {
     ctx.fillText("GLOBESKIMMERS", W / 2, P.top + 46);
     setSpacing(ctx, 0);
     ctx.font = `88px ${SHARE_SERIF}`; ctx.fillStyle = "#FBF6EC";
-    ctx.fillText("My Virtual Passport", W / 2, P.top + 140);
+    ctx.fillText(title, W / 2, P.top + 140);
     zoneTop = P.top + 178;
   }
   // Footer: two lines just above the keep-clear band, centred on the content column.
@@ -86,8 +86,8 @@ export function brandShareCanvas(page, presetId = "story_meta") {
   ctx.drawImage(page, left + (zw - pw) / 2, zoneTop + (zh - ph) / 2, pw, ph);
   return out;
 }
-export const composeShare = async (pageCanvas, presetId) => {
-  const canvas = brandShareCanvas(pageCanvas, presetId);
+export const composeShare = async (pageCanvas, presetId, title) => {
+  const canvas = brandShareCanvas(pageCanvas, presetId, title);
   const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
   if (!blob) throw new Error("the image could not be encoded");
   return { url: URL.createObjectURL(blob), blob, dataUrl: canvas.toDataURL("image/png") };
