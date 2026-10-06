@@ -183,5 +183,9 @@ const reptile = (pose, c) => {
 };
 
 export const PET_SHAPES = { dog, cat, hamster, bird, reptile };
-export const POSES = ["sitting", "laying", "belly-up"];
-export const POSE_NAMES = { sitting: "Sitting", laying: "Laying", "belly-up": "Belly up" };
+// The founder's photo renders (2026-10-05) come in SITTING and STANDING — the
+// swipe cycles those two. The drawn chibi has no standing pose, so the fallback
+// renderer maps standing → sitting; laying/belly-up drawings stay for any
+// legacy pose value.
+export const POSES = ["sitting", "standing"];
+export const POSE_NAMES = { sitting: "Sitting", standing: "Standing", laying: "Laying", "belly-up": "Belly up" };

@@ -41,6 +41,11 @@ export const GEAR_COLORS = [
   { key: "purple", name: "Purple", body: "#8E7BAE", dark: "#685A85", lite: "#E4DEEF" },
   { key: "green", name: "Green", body: "#6F9A7B", dark: "#4E7259", lite: "#DEEBE1" },
   { key: "orange", name: "Orange", body: "#D28E57", dark: "#A5693B", lite: "#F3DFC9" },
+  // The founder's render batches added two colors beyond the original eight
+  // (2026-10-05): red (laptop + straw bottle) and silver (straw bottle). Items
+  // without that render fall back to the drawn shape in the same color.
+  { key: "red", name: "Red", body: "#B9574E", dark: "#8C3A33", lite: "#EFD2CE" },
+  { key: "silver", name: "Silver", body: "#C3C6CA", dark: "#93979C", lite: "#EDEFF1" },
 ];
 export const DRINK_VARIANTS = [
   { key: "tumbler", name: "XL coffee tumbler", sub: "Metal, lid with a handle" },

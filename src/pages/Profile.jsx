@@ -15,7 +15,7 @@ import { listPassport, getHandle, getSocialProfile, setSocialProfile, getShareLi
 import Luggage from "@/components/passport/Luggage";
 import VirtualItems from "@/components/profile/VirtualItems";
 
-const SHOW_VIRTUAL_ITEMS = false; // held for the founder's renders (2026-10-05)
+const SHOW_VIRTUAL_ITEMS = true; // the founder's renders landed on R2 2026-10-05 — live
 import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import InviteButton from "@/components/passport/InviteButton";

@@ -1,24 +1,29 @@
 // "My virtual items" (founder, 2026-10-05): beside the trunk, a generic laptop
-// and a drink container — tumbler, straw bottle or lid bottle — each in eight
-// colors, each taking the traveler's EARNED stickers (same inventory as the
-// luggage; a sticker lives on ONE item at a time, so a flag on the trunk can't
-// also ride the laptop). Items enlarge to edit, and the shelf order can be
-// dragged. Below them, up to six named travel buddies (virtual pets): species →
-// breed → coat → name, pose cycles with a swipe (sitting / laying / belly up).
-// Pets never take stickers. Per-breed renders uploaded to R2 at
-// stamp-art/pets/<species>/<breed>/<pose>.webp take over from the drawn
-// fallback automatically, like the luggage skins.
+// and a drink container — tumbler, straw bottle or lid bottle — each in the
+// founder's colors, each taking the traveler's EARNED stickers (same inventory
+// as the luggage; a sticker lives on ONE item at a time, so a flag on the trunk
+// can't also ride the laptop). Items enlarge to edit, and the shelf order can
+// be dragged. Below them, up to six named travel buddies (virtual pets):
+// species → breed → coat → name, pose cycles with a swipe (sitting / standing).
+// Pets never take stickers. The founder's photo renders live on R2 at
+// stamp-art/pets/<species>/<breed>[/<coat>]/<pose> and replace the drawn
+// fallback automatically, like the luggage skins. Every pick logs a gear_select
+// / buddy_add event (with city+country) so the admin can report what travelers
+// choose, per day/week/month and per place.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { useAuth } from "@/lib/AuthContext";
+import { useLocation } from "@/components/location/LocationContext";
+import { logEvent } from "@/lib/analytics";
 import { gearGet, gearSet } from "@/lib/gear";
 import { luggageGet } from "@/lib/passport";
 import { buildStickers } from "@/components/passport/VirtualLuggage";
 import LuggageLabel from "@/components/passport/LuggageLabel";
 import { GEAR_SHAPES, GEAR_COLORS, DRINK_VARIANTS, GEAR_BOUNDS, colorOf } from "@/components/profile/gearShapes";
 import { PET_SHAPES, POSES, POSE_NAMES } from "@/components/profile/petShapes";
-import { SPECIES, BREEDS, COATS, breedName, coatOf } from "@/lib/petCatalog";
+import { SPECIES, BREEDS, breedName } from "@/lib/petCatalog";
+import { coatsFor, coatFor } from "@/lib/petCoats";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -75,20 +80,25 @@ function GearArt({ kind, item, width, stickersBySid, edit = false, selected = nu
 
 // A pet: the uploaded breed render when R2 has one, else the drawn chibi.
 export function PetArt({ buddy, width }) {
-  // Render ladder: coat-specific breed render → breed render → the drawn chibi.
+  // Render ladder: coat render in this pose → breed render in this pose → the
+  // coat's sitting render (most coats shipped sitting-only) → breed sitting →
+  // the drawn chibi. The chibi has no standing drawing, so it maps to sitting.
   const [step, setStep] = useState(0);
-  const coat = coatOf(buddy.species, buddy.coat);
-  const urls = [
-    buddy.coat ? `${PETS_BASE}/${buddy.species}/${buddy.breed || "any"}/${buddy.coat}/${buddy.pose}.webp` : null,
-    `${PETS_BASE}/${buddy.species}/${buddy.breed || "any"}/${buddy.pose}.webp`,
-  ].filter(Boolean);
+  const base = `${PETS_BASE}/${buddy.species}/${buddy.breed || "any"}`;
+  const urls = [...new Set([
+    buddy.coat ? `${base}/${buddy.coat}/${buddy.pose}.webp` : null,
+    `${base}/${buddy.pose}.webp`,
+    buddy.coat ? `${base}/${buddy.coat}/sitting.webp` : null,
+    `${base}/sitting.webp`,
+  ].filter(Boolean))];
   useEffect(() => { setStep(0); }, [buddy.species, buddy.breed, buddy.coat, buddy.pose]);
   if (step < urls.length) {
     return <img src={urls[step]} alt="" onError={() => setStep(step + 1)} style={{ width, height: width, objectFit: "contain", display: "block" }} />;
   }
   const fn = PET_SHAPES[buddy.species] || PET_SHAPES.dog;
+  const pose = buddy.pose === "standing" ? "sitting" : buddy.pose;
   return <svg viewBox="0 0 340 340" width={width} height={width} style={{ display: "block" }} aria-hidden="true"
-    dangerouslySetInnerHTML={{ __html: fn(buddy.pose, coat) }} />;
+    dangerouslySetInnerHTML={{ __html: fn(pose, coatFor(buddy.species, buddy.breed, buddy.coat)) }} />;
 }
 
 // ── The enlarge / edit sheet for one item ───────────────────────────────────
@@ -268,19 +278,24 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
               className="w-full mt-2.5 rounded-xl px-3 h-10 outline-none" style={{ background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(14), color: INK }} />
             <div className="flex flex-wrap gap-1.5 mt-2" style={{ maxHeight: 132, overflowY: "auto" }}>
               {breeds.slice(0, 60).map((b) => (
-                <button key={b.key} type="button" onClick={() => setBreed(b.key)}
+                <button key={b.key} type="button" onClick={() => { setBreed(b.key); setCoat(null); }}
                   className="rounded-full px-2.5 py-1" style={{ background: breed === b.key ? INK : "#fff", color: breed === b.key ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(11.5), fontFamily: "inherit" }}>
                   {b.name}
                 </button>
               ))}
             </div>
-            <div className="flex flex-wrap items-center gap-2 mt-2.5" role="radiogroup" aria-label="Coat color">
-              {(COATS[species] || []).map((c) => (
-                <button key={c.key} type="button" role="radio" aria-checked={coat === c.key} aria-label={c.name} title={c.name}
-                  onClick={() => setCoat(c.key)} className="rounded-full"
-                  style={{ width: 25, height: 25, background: c.body, border: coat === c.key ? `3px solid ${INK}` : `2px solid rgba(22,17,13,.18)` }} />
-              ))}
-            </div>
+            {/* Coats are per-breed where the founder rendered them (a cavalier offers
+                Ruby, a great dane Harlequin); other breeds show the species palette. */}
+            {breed && (
+              <div className="flex flex-wrap items-center gap-2 mt-2.5" role="radiogroup" aria-label="Coat color">
+                {coatsFor(species, breed).map((c) => (
+                  <button key={c.key} type="button" role="radio" aria-checked={coat === c.key} aria-label={c.name} title={c.name}
+                    onClick={() => setCoat(c.key)} className="rounded-full"
+                    style={{ width: 25, height: 25, background: c.body, border: coat === c.key ? `3px solid ${INK}` : `2px solid rgba(22,17,13,.18)` }} />
+                ))}
+                {coat && <span style={{ fontSize: fs(11), color: INK3 }}>{coatsFor(species, breed).find((c) => c.key === coat)?.name}</span>}
+              </div>
+            )}
             {/* The name is the identity (founder, 2026-10-05) — the breed is just a pick. */}
             <div style={{ fontFamily: SERIF, fontSize: fs(17), color: INK, marginTop: 14 }}>What&rsquo;s your travel buddy&rsquo;s name?</div>
             <input value={name} onChange={(e) => setName(e.target.value.slice(0, 24))} placeholder="Peanut, Luna, Captain Fluff…" aria-label="Your travel buddy's name" autoCapitalize="words"
@@ -296,7 +311,7 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
           )}
           <button type="button" onClick={onClose} className="flex-1 rounded-xl py-3 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>Cancel</button>
           <button type="button" disabled={!ready}
-            onClick={() => onSave({ id: buddy?.id, species, breed, coat: coat || (COATS[species] || [])[0]?.key || "", name: name.trim(), pose: buddy?.pose || "sitting" })}
+            onClick={() => onSave({ id: buddy?.id, species, breed, coat: coat || "", name: name.trim(), pose: buddy?.pose || "sitting" })}
             className="flex-1 rounded-xl py-3 font-semibold disabled:opacity-50" style={{ background: INK, color: "#fff", fontSize: fs(14) }}>
             {isNew ? "Add buddy" : "Save"}
           </button>
@@ -309,6 +324,7 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
 // ── The shelf on the profile ────────────────────────────────────────────────
 export default function VirtualItems({ stamps }) {
   const { profile } = useAuth();
+  const { activeLocation } = useLocation();
   const [state, setState] = useState(null);           // { gear, buddies, layout }
   const [luggageSids, setLuggageSids] = useState(new Set());
   const [open, setOpen] = useState(null);             // 'laptop' | 'drink'
@@ -336,6 +352,14 @@ export default function VirtualItems({ stamps }) {
   const order = (state?.layout?.order || []).filter((k) => k === "laptop" || k === "drink");
   const shelfOrder = order.length === 2 ? order : ["laptop", "drink"];
 
+  // Where the traveler is right now — rides along on selection events so the
+  // admin report can slice picks per city / per country ($.city / $.country,
+  // the same payload keys every other located event uses).
+  const here = () => ({
+    city: activeLocation?.address?.city || null,
+    country: activeLocation?.address?.country || null,
+  });
+
   const save = (patch) => {
     setState((s) => ({ ...s, ...patch }));
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -344,7 +368,19 @@ export default function VirtualItems({ stamps }) {
       if (error) showToast(error, "error");
     }, 700);
   };
-  const setItem = (kind, item) => save({ gear: { ...gear, [kind]: item } });
+  // One gear_select per settled pick (the 700ms debounce above also stops a
+  // color-swatch sprint from spamming D1 — only the final choice logs).
+  const gearLog = useRef(null);
+  const setItem = (kind, item) => {
+    save({ gear: { ...gear, [kind]: item } });
+    if (gearLog.current) clearTimeout(gearLog.current);
+    gearLog.current = setTimeout(() => {
+      logEvent("gear_select", {
+        item: kind === "laptop" ? "laptop" : item?.variant || "tumbler",
+        color: item?.color || "blue", stickers: (item?.placements || []).length, ...here(),
+      }, "Profile");
+    }, 900);
+  };
 
   // Where each earned sticker already lives — one home per sticker.
   const usedElsewhere = useMemo(() => {
@@ -397,9 +433,15 @@ export default function VirtualItems({ stamps }) {
     const next = b.id ? buddies.map((x) => (x.id === b.id ? { ...x, ...b } : x)) : [...buddies, { ...b, id: `b-${Date.now().toString(36)}` }];
     save({ buddies: next });
     setBuddyOpen(null);
+    logEvent(b.id ? "buddy_update" : "buddy_add", { species: b.species, breed: b.breed, coat: b.coat || null, count: next.length, ...here() }, "Profile");
     showToast(b.id ? "Saved" : `${b.name} joined your travels 🧳`, "success");
   };
-  const removeBuddy = (b) => { save({ buddies: buddies.filter((x) => x.id !== b.id) }); setBuddyOpen(null); showToast(`${b.name} says goodbye 👋`, "success"); };
+  const removeBuddy = (b) => {
+    save({ buddies: buddies.filter((x) => x.id !== b.id) });
+    setBuddyOpen(null);
+    logEvent("buddy_remove", { species: b.species, breed: b.breed, ...here() }, "Profile");
+    showToast(`${b.name} says goodbye 👋`, "success");
+  };
 
   if (!state) return null;
 
@@ -457,7 +499,7 @@ export default function VirtualItems({ stamps }) {
         )}
       </div>
       {buddies.length > 0 && (
-        <p style={{ fontSize: fs(11), color: INK3, marginTop: 4, lineHeight: 1.4 }}>Swipe a buddy to change its pose — sitting, laying, belly up.</p>
+        <p style={{ fontSize: fs(11), color: INK3, marginTop: 4, lineHeight: 1.4 }}>Swipe a buddy to change its pose — sitting or standing. Tap to rename or say goodbye.</p>
       )}
 
       {open && (
