@@ -36,7 +36,7 @@ export const SEARCH_CATEGORIES = {
 const KEYWORD_MAP = [
   { cat: "coffee",      words: ["coffee", "café", "cafe", "espresso", "latte", "cappuccino", "cold brew", "macchiato", "matcha", "boba", "bubble tea"] },
   { cat: "things",      words: ["things to do", "things to see", "attraction", "museum", "sightsee", "landmark", "hike", "hiking", "viewpoint", "day trip", "tourist", "what to do"] },
-  { cat: "shopping",    words: ["shopping", "souvenir", "mall ", "boutique", "outlet", "shop for", "where to shop"] },
+  { cat: "shopping",    words: ["shopping", "souvenir", "mall", "boutique", "outlet", "shop for", "where to shop", "night market", "flea market", "bazaar"] },
   { cat: "atm",         words: ["atm", "cash machine", "cash point", "withdraw cash"] },
   { cat: "money",       words: ["money exchange", "currency exchange", "exchange money", "bureau de change", "change money", "forex"] },
   { cat: "convenience", words: ["convenience store", "7-eleven", "corner store", "mini mart", "24 hour store"] },
