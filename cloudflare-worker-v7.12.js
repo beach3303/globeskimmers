@@ -4725,7 +4725,7 @@ async function handleParseIntent(request, env) {
 // miss vs ~$0.045 via the generic /invoke-llm it replaces for the spine.
 // ============================================================================
 const PARSE_SEARCH_TTL_SECONDS = 24 * 60 * 60;
-const PARSE_SEARCH_PROMPT_VERSION = 'v3';  // v3: no hotel / ride categories (no booking in the app, founder 2026-10-03)
+const PARSE_SEARCH_PROMPT_VERSION = 'v4';  // v4: a place typed in the query beats the tapped scope (founder 2026-10-07); v3: no hotel / ride categories
 const PARSE_SEARCH_CATEGORIES = new Set(['eat', 'coffee', 'things', 'shopping', 'atm', 'money', 'convenience', 'restroom', 'weather', 'none']);
 const PARSE_SEARCH_SCOPES = new Set(['near_me', 'at_stay', 'named_place', 'unknown']);
 
@@ -4763,6 +4763,7 @@ RULES:
 4. confidence: 0.0-1.0. Below 0.4 = unsure.
 5. Return ONLY JSON — no prose, no markdown fences.
 6. dream_destination: ONLY when the query expresses a travel EXPERIENCE or dream not tied to the traveler's current surroundings — a phenomenon, activity, or sight someone would travel FOR ("see bears catch fish", "northern lights", "swim with whale sharks", "cherry blossoms"). Name the single best-known real place for it. Everything else (including all near-me/at-stay searches): "dream_destination": null. Never invent places.
+7. A place NAMED IN THE QUERY always wins over the tapped scope: "southern food in Atlanta" with scope near_me tapped -> scope "named_place", place "Atlanta". A bare landmark or city ("Eiffel Tower", "Seattle") is also named_place with that place.
 
 EXAMPLES:
 Input: "ramen near my hotel"
@@ -10172,6 +10173,12 @@ function parseSearchIntentInner(q) {
   if (/\bfilipino\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "filipino", label: "Filipino", types: /* @__PURE__ */ new Set(["filipino_restaurant"]), keywords: ["adobo", "sinigang", "lumpia", "sisig"] };
   if (/\bindian\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "indian", label: "Indian", types: /* @__PURE__ */ new Set(["indian_restaurant"]), keywords: ["curry", "biryani", "naan", "tikka masala"] };
   if (/\bfrench\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "french", label: "French", types: /* @__PURE__ */ new Set(["french_restaurant"]), keywords: ["croissant", "baguette", "crepe"] };
+  // Southern / soul food (founder, 2026-10-07): "authentic southern food" in
+  // Atlanta parsed as GENERAL, so every result tiered 1 — a cheesesteak shop
+  // and an Asian street-food hall ranked level with The Busy Bee. Google's real
+  // type for these places is soul_food_restaurant (verified on live Atlanta
+  // results); "southern" alone stays unclaimed so "southern California" isn't food.
+  if (/\bsoul\s*food\b|\bsouthern\s+(food|cuisine|cooking|comfort|kitchen|restaurants?|style|breakfast|brunch|dinner|lunch|dishes)\b|\blow\s*country\b|\bgullah\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "southern", label: "Southern", types: /* @__PURE__ */ new Set(["soul_food_restaurant", "cajun_restaurant", "southern_restaurant"]), keywords: ["soul food", "soul", "southern", "collard", "grits", "cornbread", "mac and cheese", "peach cobbler", "oxtail", "catfish", "smothered", "gullah", "low country", "lowcountry"] };
   if (/\bgreek\b/.test(q)) return { kind: "UMBRELLA", cultureKey: "greek", label: "Greek", types: /* @__PURE__ */ new Set(["greek_restaurant"]), keywords: ["gyro", "souvlaki", "tzatziki"] };
   for (const entry of DISH_MAP) {
     const m = q.match(entry.pattern);
@@ -10974,6 +10981,14 @@ async function handleRestaurantsFull(request, env, ctx) {
         if (Math.abs(qb - qa) > 0.05) return qb - qa;
         return (a.distanceKm || 999) - (b.distanceKm || 999);
       });
+      // "Authentic" is a promise (founder, 2026-10-07): when the traveler types
+      // authentic / traditional / legit, chains and places that merely SERVE
+      // the cuisine (tier 4) step aside — as long as at least 5 genuine
+      // matches (tiers 1-3, independent) remain, so a thin town never empties.
+      if (/\b(authentic|traditional|legit)\b/i.test(rawQuery)) {
+        const genuine = finalPlaces.filter((p) => (p.tier || 4) <= 3 && !p.isChain);
+        if (genuine.length >= 5) finalPlaces = genuine;
+      }
     } else if (cuisine === "sports_bar" || sportsBarVibeActive) {
       finalPlaces.sort((a, b) => {
         const qa = (a.rating || 0) * Math.log10(Math.max(a.userRatingCount || 1, 1));
