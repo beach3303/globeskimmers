@@ -49,36 +49,67 @@ const NEAR_ME = /\b(near\s*me|nearby|around\s*me|close\s*by)\b/i;
 const AT_STAY = /\b(near|at|by|around|from)\s+(my|our|the)\s+(hotel|stay|airbnb|place|room|accommodation|lodging)\b/i;
 // "... in Positano" / "... in New York" — a Capitalized place at the end.
 const IN_PLACE = /\bin\s+([A-Z][\w'’.-]*(?:\s+[A-Z][\w'’.-]*){0,3})\s*$/;
+// Any other "in <something>" clause the capitalized rule can't settle ("in
+// atlanta", "in Atlanta with great reviews") — the AI parser decides those.
+export const HAS_IN_CLAUSE = /\bin\s+[\p{L}]/u;
 
-// Free client rule-pass. Returns {category, scope, place, query, parsedBy,
-// confidence}. confidence >= 0.8 → skip the AI call.
+// Whole-word keyword match (founder, 2026-10-07): substring matching sent
+// "Seattle" and "great views" to restaurants (e-AT), "cozy atmosphere" to ATMs
+// and "charge my phone" to restaurants (PHO-ne). A keyword matches only as a
+// whole word, plurals allowed (tacos, museums, eats, bakeries).
+const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const wordRe = (w) => {
+  const stem = w.endsWith("y") ? `${esc(w.slice(0, -1))}(?:y|ies)` : `${esc(w)}(?:s|es)?`;
+  return new RegExp(`(?<![\\p{L}\\p{N}])${stem}(?![\\p{L}\\p{N}])`, "iu");
+};
+const KEYWORD_RES = KEYWORD_MAP.map(({ cat, words }) => ({ cat, res: words.map((w) => wordRe(w.trim())) }));
+
+// "best / top rated / highest rated" (founder, 2026-10-07): the traveler wants
+// the list ordered by rating, not distance. The phrase is stripped from the
+// query so the finder searches the THING; the finder sorts by a review-
+// weighted rating so a 5.0 with three reviews can't win.
+const RATING_PHRASE = /\b(?:with\s+(?:the\s+)?(?:highest|best|top)\s+ratings?|(?:the\s+)?(?:highest|best|top|highly)[\s-]rated|(?:5|five)[\s-]stars?|(?:the\s+)?best)\b/gi;
+export function ratingIntent(text) {
+  const t = String(text || "");
+  RATING_PHRASE.lastIndex = 0;
+  if (!RATING_PHRASE.test(t)) return { sort: null, cleaned: t };
+  RATING_PHRASE.lastIndex = 0;
+  const cleaned = t.replace(RATING_PHRASE, " ")
+    .replace(/\bmost\s+(?=authentic|traditional|legit)/i, "")
+    .replace(/\s+/g, " ").trim();
+  return { sort: "rating", cleaned };
+}
+
+// Free client rule-pass. Returns {category, scope, place, query, sort,
+// parsedBy, confidence}. confidence >= 0.8 → skip the AI call.
 export function ruleParse(raw, scopeChip) {
   const text = String(raw || "").trim();
-  const lower = text.toLowerCase();
 
   let category = null;
-  for (const { cat, words } of KEYWORD_MAP) {
-    if (words.some((w) => lower.includes(w))) { category = cat; break; }
+  for (const { cat, res } of KEYWORD_RES) {
+    if (res.some((re) => re.test(text))) { category = cat; break; }
   }
 
+  // A place TYPED in the query wins over the chip (founder, 2026-10-07: "In
+  // Atlanta" beats the default Near me — the chip is on by default, so the old
+  // `if (!scope)` guard meant a typed city was never honored).
   let scope = scopeChip || null;
   let place = null;
-  if (!scope) {
+  const m = text.match(IN_PLACE);
+  if (m) { scope = "named_place"; place = m[1].trim(); }
+  else if (!scope) {
     if (AT_STAY.test(text)) scope = "at_stay";
     else if (NEAR_ME.test(text)) scope = "near_me";
-    else {
-      const m = text.match(IN_PLACE);
-      if (m) { scope = "named_place"; place = m[1].trim(); }
-    }
   }
 
   // Strip scope phrases so the finder searches the THING, not "ramen near me".
   let query = text.replace(NEAR_ME, "").replace(AT_STAY, "");
-  if (place) query = query.replace(/\bin\s+.*$/i, "");
-  query = query.replace(/\s+/g, " ").trim();
+  if (place) query = query.replace(/\bin\s+[A-Z][\s\S]*$/, "");
+  const { sort, cleaned } = ratingIntent(query);
+  query = cleaned.replace(/\s+/g, " ").trim();
 
   const confident = !!(category || place || (scope && scope !== "named_place"));
-  return { category, scope, place, query, parsedBy: "rule", confidence: confident ? 0.85 : 0.2 };
+  return { category, scope, place, query, sort, parsedBy: "rule", confidence: confident ? 0.85 : 0.2 };
 }
 
 // Haiku parse (only on rule-miss) via the cheap prompt-cached /parse-search
@@ -143,7 +174,7 @@ export function shoppingCategoryFor(query) {
 // LocationContext value (needs switchToNavigateMode). `navigate` is
 // react-router's. Returns {routed, recentered, needsStay?, destinationMode?}.
 export async function runSmartSearch(parsed, { navigate, location }) {
-  const { category, scope, place, query, parsedBy } = parsed || {};
+  const { category, scope, place, query, parsedBy, sort } = parsed || {};
   const cat = category ? SEARCH_CATEGORIES[category] : null;
 
   // 1. Resolve place / re-center.
@@ -179,8 +210,10 @@ export async function runSmartSearch(parsed, { navigate, location }) {
       // Shopping takes a category chip, not free text — map the query to one.
       const shopCat = shoppingCategoryFor(query);
       if (shopCat) opts = { state: { presetCategory: shopCat } };
-    } else if (cat.acceptsQuery && query) {
-      opts = { state: { presetQuery: query } };
+    } else if (cat.acceptsQuery && (query || sort)) {
+      // presetSort 'rating' = "best / top rated" was typed — the finder orders
+      // by review-weighted rating instead of distance.
+      opts = { state: { ...(query ? { presetQuery: query } : {}), ...(sort ? { presetSort: sort } : {}) } };
     }
     navigate(createPageUrl(cat.page), opts);
     return { routed: cat.page, recentered, needsStay };

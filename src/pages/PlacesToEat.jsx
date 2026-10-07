@@ -961,6 +961,12 @@ export default function PlacesToEat() {
     if (q && typeof q === "string" && q.trim()) { setSearchInput(q); setSearchText(q.trim()); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routerLocation.state?.presetQuery]);
+  // "best / top rated" from Search (founder, 2026-10-07): order by a
+  // review-weighted rating instead of distance; a chip shows it and clears it.
+  const [sortByRating, setSortByRating] = useState(false);
+  useEffect(() => {
+    if (routerLocation.state?.presetSort === "rating") setSortByRating(true);
+  }, [routerLocation.state?.presetSort]);
   const [radius, setRadius]             = useState(25); // wide net; no radius UI — results show nearest-first
   const [displayCount, setDisplayCount] = useState(20);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false); // advanced filters live in the shared FilterSheet
@@ -1269,7 +1275,13 @@ export default function PlacesToEat() {
     }
     // Sort — when Sports Bar vibe is active, rank by sportsScore descending (best match first)
     const hasActiveSearch = !!searchText?.trim();
-    if (filterVibes['sportsBar']) {
+    if (sortByRating) {
+      // Review-weighted (Bayesian) rating: (R·v + 4.0·50) / (v + 50). A 5.0
+      // with 3 reviews scores ~4.06; a 4.6 with 4,600 scores ~4.59. Dish/
+      // authenticity tier still leads, so "best authentic X" stays authentic.
+      const wr = (x) => (((x.rating || 0) * (x.userRatingCount || 0)) + 4.0 * 50) / ((x.userRatingCount || 0) + 50);
+      r.sort((a,b) => ((a.tier||1) - (b.tier||1)) || (wr(b) - wr(a)) || ((a.distanceMiles||999) - (b.distanceMiles||999)));
+    } else if (filterVibes['sportsBar']) {
       r.sort((a,b) => (b.sportsScore||0) - (a.sportsScore||0));
     } else if (hasActiveSearch && r.some(x => x.backendRank)) {
       // Single unified ranking (the Nearby/Best toggle was removed). For an
@@ -1282,7 +1294,7 @@ export default function PlacesToEat() {
       r.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
     }
     return r;
-  }, [restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, searchText]);
+  }, [restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, searchText, sortByRating]);
 
   // ── T1.15: BATCH ENRICH THE VISIBLE PAGE OF OWNED CARDS ──────────────────
   // Was: every owned card fired its own /places/enrich-owned on mount (up to 20
@@ -1547,6 +1559,13 @@ export default function PlacesToEat() {
             {/* 25mi is already the ceiling, so a radius bump was a no-op — the honest
                 "expand" is moving the search. (FallbackDisclaimer's internal button
                 copy belongs to that component, not this call site.) */}
+            {sortByRating && (
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"2px 2px 0"}}>
+                <span style={{fontFamily:'"JetBrains Mono",ui-monospace,monospace',fontSize:"calc(10.5px*var(--fs))",letterSpacing:".08em",textTransform:"uppercase",color:"#736657"}}>★ Highest rated first · reviews weighed</span>
+                <button type="button" onClick={()=>setSortByRating(false)} aria-label="Sort by distance instead"
+                  style={{fontSize:"calc(11.5px*var(--fs))",color:"#17A38F",fontWeight:600,background:"none",border:"none",padding:0}}>Nearest first</button>
+              </div>
+            )}
             <FallbackDisclaimer
               fallbackInfo={fallbackInfo}
               onExpandRadius={() => setShowLocPicker(true)}

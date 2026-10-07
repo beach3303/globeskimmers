@@ -21,7 +21,7 @@ import { getPrimaryStay } from "@/lib/savedLocations";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { placePhrase } from "@/lib/placeContext";
-import { ruleParse, runSmartSearch } from "@/lib/smartSearch";
+import { ruleParse, runSmartSearch, ratingIntent, HAS_IN_CLAUSE } from "@/lib/smartSearch";
 import { logSearch } from "@/lib/logSearch";
 import { createPageUrl } from "@/utils";
 import DreamAnswerCard from "./DreamAnswerCard";
@@ -51,6 +51,9 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
   const location = useLocation();
   const [q, setQ] = useState("");
   const [scope, setScope] = useState("near_me");
+  // Did the traveler TAP a chip? The default "Near me" must never override a
+  // city they typed (founder, 2026-10-07), so it isn't sent to the AI parser.
+  const [scopeTouched, setScopeTouched] = useState(false);
   const [placeQuery, setPlaceQuery] = useState("");
   const [placeResults, setPlaceResults] = useState([]);
   const [chosenPlace, setChosenPlace] = useState(null); // a searchLocation result
@@ -64,7 +67,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
   // Reset + focus when opened.
   useEffect(() => {
     if (!isOpen) return;
-    setQ(""); setScope("near_me"); setPlaceQuery(""); setPlaceResults([]); setChosenPlace(null); setBusy(false); setDream(null);
+    setQ(""); setScope("near_me"); setScopeTouched(false); setPlaceQuery(""); setPlaceResults([]); setChosenPlace(null); setBusy(false); setDream(null);
     setRecents(readRecents().slice(0, 6));
     const t = setTimeout(() => inputRef.current?.focus(), 70);
     return () => clearTimeout(t);
@@ -116,22 +119,29 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
       // `destination` answer isn't dropped by aiParse.
       let parsed = ruleParse(raw, scope);
       if (explicitPlace) { parsed.scope = "named_place"; parsed.place = String(explicitPlace).trim(); }
+      const sort = parsed.sort || null; // "best / top rated" — kept whichever parser wins
       let destination = null;
-      if (raw && !explicitPlace && !parsed.category && !parsed.place) {
+      // AI when the rules found nothing, OR an "in …" clause they couldn't
+      // settle ("southern food in atlanta", "in Atlanta with great reviews").
+      const unresolvedPlace = !parsed.place && HAS_IN_CLAUSE.test(raw);
+      if (raw && !explicitPlace && ((!parsed.category && !parsed.place) || unresolvedPlace)) {
         try {
           const { data, error } = await callWorker(ROUTE.parseSearch, {
             query: raw,
-            scope: scope || "",
+            scope: scopeTouched ? scope : "",
             activePhrase: placePhrase(active) || "",
           });
           if (!error && data && typeof data === "object" && !data.error) {
             destination = (data.destination && typeof data.destination === "object" && data.destination.name)
               ? data.destination : null;
+            const aiQuery = ratingIntent(String(data.query || "").trim());
             parsed = {
-              category: data.category || null,
+              // The free rules' category stands when the AI only came in for the place.
+              category: data.category || parsed.category || null,
               scope: data.scope && data.scope !== "unknown" ? data.scope : (scope || null),
               place: (data.place || "").trim() || null,
-              query: String(data.query || "").trim(),
+              query: aiQuery.cleaned || parsed.query,
+              sort: sort || aiQuery.sort,
               parsedBy: "ai",
               confidence: typeof data.confidence === "number" ? data.confidence : 0.9,
             };
@@ -163,7 +173,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
       }
     } catch { /* keep the overlay open on failure */ }
     setBusy(false);
-  }, [q, scope, chosenPlace, placeQuery, location, navigate, onClose]);
+  }, [q, scope, scopeTouched, chosenPlace, placeQuery, location, navigate, onClose]);
 
   if (!isOpen) return null;
 
@@ -208,7 +218,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
                 <button
                   key={s.id}
                   disabled={disabled}
-                  onClick={() => { setScope(s.id); setDream(null); if (s.id !== "named_place") { setChosenPlace(null); setPlaceQuery(""); } }}
+                  onClick={() => { setScope(s.id); setScopeTouched(true); setDream(null); if (s.id !== "named_place") { setChosenPlace(null); setPlaceQuery(""); } }}
                   title={disabled ? "Set where you're staying first" : undefined}
                   className="flex items-center gap-1.5 rounded-full px-3 py-2 text-[calc(12.5px*var(--fs))] font-semibold transition-colors disabled:opacity-40"
                   style={active ? { background: TEAL, color: "#fff" } : { background: "#F2EEE6", color: INK }}
