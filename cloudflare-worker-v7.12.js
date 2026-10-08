@@ -5613,6 +5613,74 @@ async function handleSeedCity(request, env) {
 // visitor to this region gets the fast D1 path automatically. The
 // background task is rate-limited via the seed_attempts table (1
 // attempt per region per 24h).
+// ── Dream shelf (founder, 2026-10-08) ─────────────────────────────────────────
+// Visitors come to "Los Angeles", not to Arcadia or Santa Clarita: a region's
+// famous places are spread out (Disneyland in Anaheim, Six Flags in Valencia,
+// the Hollywood Sign, Griffith) and belong on every shelf in that region.
+// POST /dream/shelf { latitude, longitude } →
+//   { metro: { name, lat, lng }, tiers: [{ key, title, items }] }
+//   icons   — world/national stamps within 90 km of the REGION's center
+//   local   — regional stamps there (locals' favorites with merit)
+//   daytrip — world (and the most famous national) stamps 90–300 km out
+// The region's center is the median point of the most famous stamps within
+// 60 km of the traveler, so every suburb lands on the same center; with fewer
+// than 5 famous places nearby it is the traveler's own spot.
+const DREAM_REGION_KM = 90, DREAM_DAYTRIP_KM = 300;
+async function handleDreamShelf(request, env) {
+  if (!env.ATTRACTIONS_DB) return jsonResponse({ metro: null, tiers: [] });
+  const b = await request.json().catch(() => ({}));
+  const lat = Number(b.latitude), lng = Number(b.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return jsonResponse({ error: 'latitude and longitude required' }, 400);
+  const LIVE = "(class_ban IS NULL OR class_ban = '' OR class_ban LIKE 'review:%') AND (tier IS NULL OR tier != 'secret')";
+  const box = (cLat, cLng, km) => { const dLat = km / 111, dLng = km / (111 * Math.max(0.2, Math.cos(cLat * Math.PI / 180))); return [cLat - dLat, cLat + dLat, cLng - dLng, cLng + dLng]; };
+  try {
+    const near = (await env.ATTRACTIONS_DB.prepare(
+      `SELECT lat, lng, city FROM attractions WHERE lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4 AND ${LIVE}
+         AND coalesce(founder_scope, scope) IN ('world','national')
+       ORDER BY is_marquee DESC, (popularity IS NULL) ASC, popularity DESC LIMIT 25`
+    ).bind(...box(lat, lng, 60)).all()).results || [];
+    const med = (xs) => { const v = [...xs].sort((a, c) => a - c); const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+    const cLat = near.length >= 5 ? med(near.map((r) => r.lat)) : lat;
+    const cLng = near.length >= 5 ? med(near.map((r) => r.lng)) : lng;
+    const rows = (await env.ATTRACTIONS_DB.prepare(
+      `SELECT * FROM attractions WHERE lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4 AND ${LIVE}
+         AND coalesce(founder_scope, scope) IN ('world','national','regional')
+       ORDER BY is_marquee DESC, (popularity IS NULL) ASC, popularity DESC LIMIT 600`
+    ).bind(...box(cLat, cLng, DREAM_DAYTRIP_KM)).all()).results || [];
+    const seen = new Set();
+    const items = [];
+    for (const r of rows) {
+      const key = r.qid || `${String(r.name).toLowerCase()}|${Math.round(r.lat * 200)}|${Math.round(r.lng * 200)}`;
+      if (seen.has(key)) continue; // a place listed twice shows once
+      seen.add(key);
+      const fromCenter = calcDistance(cLat, cLng, r.lat, r.lng);
+      const fromYou = calcDistance(lat, lng, r.lat, r.lng);
+      items.push({
+        id: r.id, name: r.name, category: r.category, lat: r.lat, lng: r.lng, city: r.city || '', country: r.country,
+        photoUrl: r.photo_url || null, isMarquee: r.is_marquee === 1, popularity: r.popularity ?? null,
+        footprint_radius_m: r.footprint_radius_m ?? null, parentId: r.parent_id || null, tier: r.tier || 'page', qid: r.qid || null,
+        scope: r.founder_scope || r.scope, fromCenterKm: fromCenter, distanceKm: fromYou, distanceMiles: fromYou * 0.621371,
+      });
+    }
+    const inRegion = (x) => x.fromCenterKm <= DREAM_REGION_KM;
+    const icons = items.filter((x) => inRegion(x) && (x.scope === 'world' || x.scope === 'national')).slice(0, 30);
+    const local = items.filter((x) => inRegion(x) && x.scope === 'regional').slice(0, 30);
+    const daytrip = items.filter((x) => !inRegion(x) && x.fromCenterKm <= DREAM_DAYTRIP_KM && (x.scope === 'world' || (x.scope === 'national' && (x.popularity ?? 0) >= 1000000))).slice(0, 20);
+    // The region's name: the city most of its icons sit in ("Los Angeles, CA" → "Los Angeles").
+    const counts = {};
+    for (const x of icons.slice(0, 15)) { const c = String(x.city || '').split(',')[0].trim(); if (c) counts[c] = (counts[c] || 0) + 1; }
+    const metroName = Object.entries(counts).sort((a, c) => c[1] - a[1])[0]?.[0] || String(b.cityName || '').trim() || null;
+    return jsonResponse({
+      metro: { name: metroName, lat: cLat, lng: cLng },
+      tiers: [
+        { key: 'icons', title: metroName ? `Icons of ${metroName}` : 'Icons nearby', items: icons },
+        { key: 'local', title: 'Local favorites', items: local },
+        { key: 'daytrip', title: 'Worth a day trip', items: daytrip },
+      ].filter((t) => t.items.length),
+    });
+  } catch (e) { return jsonResponse({ metro: null, tiers: [], error: e.message }); }
+}
+
 async function handleAttractionsNearby(request, env, ctx) {
   const startedAt = Date.now();
 
@@ -21042,6 +21110,7 @@ export default {
         return new Response(body, { status: 200, headers: { 'Content-Type': 'text/plain' } });
       }
       if (pathname === '/attractions/nearby' && request.method === 'POST') return await handleAttractionsNearby(request, env, ctx);
+      if (pathname === '/dream/shelf' && request.method === 'POST') return await handleDreamShelf(request, env);
       if (pathname === '/attractions/get' && request.method === 'POST') return await handleAttractionsGet(request, env);
       if (pathname === '/home/rows' && request.method === 'POST') return await handleHomeRows(request, env, ctx);
       // Phase B manual / debug trigger. Same seed logic as the
