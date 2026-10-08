@@ -10238,7 +10238,7 @@ const KNOWN_CHAINS = [
   // casual dining
   "applebee", "chili's", "tgi friday", "denny's", "ihop", "cracker barrel", "red lobster", "outback", "texas roadhouse", "cheesecake factory", "red robin", "ruby tuesday", "golden corral", "bj's restaurant",
 ];
-const FOODISH_TYPE = /food|restaurant|cafe|coffee|bakery|bar$|^bar_|pub|brewery|winery|deli|dessert|ice_cream|gelato|juice|tea|chocolat|candy|confection|market|grocery|butcher|seafood|bistro|diner|snack/;
+const FOODISH_TYPE = /food|restaurant|cafe|coffee|bakery|bar$|^bar_|pub|brewery|winery|deli|dessert|ice_cream|gelato|juice|tea|chocolat|candy|confection|market|grocery|butcher|seafood|bistro|diner|snack|night_club|lounge|izakaya/;
 const isKnownChain = (name) => {
   const n = (name || "").toLowerCase();
   return KNOWN_CHAINS.some((c) => n.includes(c));
