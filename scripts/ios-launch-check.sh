@@ -24,10 +24,15 @@ for PATTERN in "iPad Air 11-inch" "iPhone [0-9]+ Pro \\("; do
   NAME=$(echo "$LINE" | sed -E 's/ \([0-9A-F-]{36}\).*//; s/^ *//')
   [ -z "$ID" ] && { echo "⚠️  no '$PATTERN' simulator on $RUNTIME"; continue; }
   xcrun simctl boot "$ID" 2>/dev/null; xcrun simctl bootstatus "$ID" -b >/dev/null 2>&1
+  sleep 30 # a freshly booted simulator keeps starting system services after "booted"
   xcrun simctl uninstall "$ID" "$BUNDLE" 2>/dev/null
-  xcrun simctl install "$ID" "$APP" && xcrun simctl launch "$ID" "$BUNDLE" >/dev/null
+  xcrun simctl install "$ID" "$APP"
+  # A launch can fail on the simulator's own services ("angel job", backboardd
+  # SIGABRT) — retry once before calling it the app's fault.
+  xcrun simctl launch "$ID" "$BUNDLE" >/dev/null 2>&1 || { sleep 15; xcrun simctl launch "$ID" "$BUNDLE" >/dev/null; }
   sleep 20
-  if xcrun simctl spawn "$ID" launchctl list | grep -q "$BUNDLE"; then echo "✅ $NAME: running after 20 s"
+  xcrun simctl io "$ID" screenshot "$DD-$ID.png" >/dev/null 2>&1
+  if xcrun simctl spawn "$ID" launchctl list | grep -q "$BUNDLE"; then echo "✅ $NAME: running after 20 s (screenshot $DD-$ID.png)"
   else
     echo "❌ $NAME: the app is not running 20 s after launch"
     xcrun simctl spawn "$ID" log show --last 2m --style compact --predicate 'eventMessage CONTAINS[c] "failed to launch" OR eventMessage CONTAINS[c] "SIGTRAP" OR eventMessage CONTAINS[c] "SIGABRT"' 2>/dev/null | tail -3

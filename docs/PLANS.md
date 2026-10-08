@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-07
+Last updated: 2026-10-08
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -128,6 +128,22 @@ requirements as real filters (open late/early, outdoor seating, groups, reservat
 to pay, drive-thru, wifi, 24/7) → fix 6 who it's for (kids by age, seniors, free) → fix 7
 answer cards for place and destination questions (hours from Google, never invented
 prices). Later: route search (Vegas → LA) and @handle search.
+
+**Dream shelf = the region (founder, 2026-10-08; built, ba189aa…/dream/shelf).** Visitors come to "Los
+Angeles", not Arcadia or Santa Clarita — every suburb gets the same three rows: Icons of <region>
+(world/national stamps within 90 km of the region's center), Local favorites (regional), Worth a day
+trip (90–250 km). Global (Naperville/Evanston → Chicago, Versailles → Paris). Event venues are not
+shelf places. Greater LA data fixes: scripts/attractions-fixes/2026-10-08-la-dream-shelf.sql
+(founder runs). **Stamp pages, agreed order:** merge duplicate stamps → match every world/national
+stamp to Google → "Why visit" + "Before you go" (dress code, who may enter — from official sites) →
+pages for unlisted places → traveler place photos (opt-in at stamping, place not people, verified
+visit). **Events (founder, 2026-10-08; NOT built yet — after the Apple resubmission):** its own page,
+never Home — this weekend / week / month, games, concerts, theater, holiday events, fireworks,
+festivals, pop-ups; Ticketmaster (dormant code still in the worker) + curated famous yearly events;
+tickets link out (no booking). Event stamps: at a stadium or venue, ask "Are you here for <team> vs
+<team>?" from that day's listings and personalize the stamp. Revenue later: organizers pay to promote
+events and get attendance reports — totals and age bands only, never individuals, small groups
+suppressed, minors only inside totals.
 
 **Reactions & guestbook (founder ask, 2026-09-30): mockup delivered, build awaits a yes.**
 The Blotter — BUILT + DEPLOYED 2026-09-30 (e282fb6; founder said yes to mockup v3
