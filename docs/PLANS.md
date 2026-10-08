@@ -119,10 +119,11 @@ these questions globally").** Search stays on Home. A worldwide test suite
 production; three independent reviewers grade the top 8 results of 119 of them. Done
 2026-10-07: fixes 1–4, Round 1 (rating weighed by review count, distance, public restrooms,
 markets/clubs routed), Round 1.5 + 2 (street-food rule, megachains, cheap eats, big cities
-centered on their famous landmarks, cities looked up with their country). Suite 124/124;
-graded "good" went 25% → 31% → 33% (quality-2026-10-07*.json). The client half reaches
-phones only with the next `npm run ota`. **Agreed order next:** fix 5 local institutions
-(famous restaurants and places documented on Wikipedia, re-runnable harvest) → fix 8
+centered on their famous landmarks, cities looked up with their country), fix 5 (8,243
+famous food places harvested from Wikipedia lead matching searches, each confirmed open on
+Google, NO badge — founder: travelers trust Google more; Things to Do ranks sights by
+popularity). Suite 124/124; graded "good" (3 reviewers per case, only changed lists
+re-graded) went 25% → 31% → 36% → 39% (quality-2026-10-07*.json). **Agreed order next:** fix 8
 requirements as real filters (open late/early, outdoor seating, groups, reservations, tap
 to pay, drive-thru, wifi, 24/7) → fix 6 who it's for (kids by age, seniors, free) → fix 7
 answer cards for place and destination questions (hours from Google, never invented
