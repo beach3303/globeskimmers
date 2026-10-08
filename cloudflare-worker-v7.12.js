@@ -5101,7 +5101,10 @@ async function handleSearchLocation(request, env) {
     const hasSpecificType = types.some(t => ['street_address','premise','point_of_interest','establishment','airport','train_station','transit_station','bus_station','subway_station','tourist_attraction','lodging','restaurant','park','shopping_mall','store','museum','stadium','university','school','cafe'].includes(t))
       || ['airport','lodging','tourist_attraction','shopping_mall','store','restaurant','train_station','museum','park'].includes(primaryType);
     const isStreetAddress = types.includes('street_address') || types.includes('premise');
-    const isCity = types.includes('locality') || types.includes('sublocality') || types.includes('postal_town');
+    // Italian comuni and other European municipalities (Naples, Florence) come
+    // back typed administrative_area_level_3/4, never locality.
+    const isCity = types.includes('locality') || types.includes('sublocality') || types.includes('postal_town')
+      || types.includes('administrative_area_level_3') || types.includes('administrative_area_level_4');
     const isState = types.includes('administrative_area_level_1') && !isCity;
     const isCountry = types.includes('country') && !types.includes('administrative_area_level_1') && !isCity;
     let granularity;
@@ -5173,7 +5176,7 @@ async function handleSearchLocation(request, env) {
       placeName: place.displayName?.text || '',
       granularity,
       suggestedRadius,
-      address: { formatted: place.formattedAddress || '', street, city, region, state, postalCode, country },
+      address: { formatted: place.formattedAddress || '', street, city, region, state, postalCode, country, countryCode: countryComp?.shortText || '' },
       coordinates: { latitude: place.location?.latitude || 0, longitude: place.location?.longitude || 0 },
       placeType,
       types,
@@ -5198,7 +5201,7 @@ async function handleSearchLocation(request, env) {
   if (body?.touristCenter && results[0] && (results[0].granularity === 'city' || results[0].granularity === 'region')) {
     try {
       const r0 = results[0];
-      const tc = await gsTouristCenter(env, r0.coordinates.latitude, r0.coordinates.longitude);
+      const tc = await gsTouristCenter(env, r0.coordinates.latitude, r0.coordinates.longitude, r0.address?.countryCode, r0.address?.country);
       if (tc) {
         r0.geoCenter = { ...r0.coordinates };
         r0.coordinates = { latitude: tc.lat, longitude: tc.lng };
@@ -5212,7 +5215,9 @@ async function handleSearchLocation(request, env) {
 
 // The median point of the 15 most famous stampable landmarks within ~25 km —
 // the owned attractions DB already knows where visitors go. Null below 5.
-async function gsTouristCenter(env, lat, lng) {
+// Same country only: Tijuana's center otherwise drifted to the San Diego Zoo.
+// The attractions table mixes ISO codes and full names, so both are matched.
+async function gsTouristCenter(env, lat, lng, countryCode = '', countryName = '') {
   if (!env.ATTRACTIONS_DB || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   const dLat = 0.22, dLng = 0.22 / Math.max(0.2, Math.cos(lat * Math.PI / 180));
   const { results: rows } = await env.ATTRACTIONS_DB.prepare(
@@ -5220,8 +5225,9 @@ async function gsTouristCenter(env, lat, lng) {
       WHERE lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4
         AND coalesce(founder_scope, scope) IN ('world','national')
         AND (class_ban IS NULL OR class_ban = '' OR class_ban LIKE 'review:%')
+        AND (?5 = '' OR country IS NULL OR country = '' OR country IN (?5, ?6))
       ORDER BY (popularity IS NULL) ASC, popularity DESC, sitelinks DESC LIMIT 15`
-  ).bind(lat - dLat, lat + dLat, lng - dLng, lng + dLng).all();
+  ).bind(lat - dLat, lat + dLat, lng - dLng, lng + dLng, String(countryCode || ''), String(countryName || '')).all();
   if (!rows || rows.length < 5) return null;
   const med = (xs) => { const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
   return { lat: med(rows.map((r) => r.lat)), lng: med(rows.map((r) => r.lng)), landmarks: rows.slice(0, 5).map((r) => r.name) };
