@@ -172,6 +172,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
               query: tidyQuery(priceIntent(aiQuery.cleaned).cleaned) || parsed.query,
               sort: sort || aiQuery.sort,
               maxPrice: parsed.maxPrice || priceIntent(String(data.query || "")).maxPrice || 0,
+              lateNight: parsed.lateNight || false,
               parsedBy: "ai",
               confidence: typeof data.confidence === "number" ? data.confidence : 0.9,
             };

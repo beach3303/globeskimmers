@@ -98,8 +98,14 @@ export function priceIntent(text) {
   const cleaned = maxPrice ? t.replace(/\b(?:cheap|budget|low[\s-]cost|dirt[\s-]cheap|affordable|inexpensive|reasonabl[ey](?:\s+priced)?|not\s+(?:too\s+)?expensive|good[\s-]value)\b/gi, " ") : t;
   return { maxPrice, cleaned };
 }
+// "open late", "late night", "24 hours" → the finder's strict Late-night
+// filter (real hours: still open past 10 PM today), not a keyword.
+const LATE_NIGHT = /\b(?:open\s+late|opens?\s+late|late[\s-]night|after\s+(?:10|11|midnight)(?:\s*pm)?|24[\s/-]?(?:hours?|hrs?|7)|all[\s-]night|still\s+open)\b/i;
+export const lateNightIntent = (text) => LATE_NIGHT.test(String(text || ""));
 export const tidyQuery = (q) => {
   const t = String(q || "").replace(/\s+/g, " ").trim().replace(SCAFFOLD, "")
+    .replace(new RegExp(LATE_NIGHT.source, "gi"), " ")
+    .replace(/\b(?:that|which|who)\s+(?:are|is)\b/gi, " ").replace(/\s+(?:are|is)\s*$/i, "")
     .replace(/\b(?:delicious|tasty|yummy|amazing|good|great)\b/gi, " ")
     .replace(/^(?:\s*(?:but|and|some|any)\b)+/i, " ").replace(/\s+(?:but|and)\s*$/i, "")
     .replace(/\s+/g, " ").trim();
@@ -141,7 +147,7 @@ export function ruleParse(raw, scopeChip) {
   const maxPrice = price.maxPrice;
 
   const confident = !!(category || place || (scope && scope !== "named_place"));
-  return { category, scope, place, query, sort: sort || (tasty ? "rating" : null), maxPrice, parsedBy: "rule", confidence: confident ? 0.85 : 0.2 };
+  return { category, scope, place, query, sort: sort || (tasty ? "rating" : null), maxPrice, lateNight: lateNightIntent(text), parsedBy: "rule", confidence: confident ? 0.85 : 0.2 };
 }
 
 // Haiku parse (only on rule-miss) via the cheap prompt-cached /parse-search
@@ -206,7 +212,7 @@ export function shoppingCategoryFor(query) {
 // LocationContext value (needs switchToNavigateMode). `navigate` is
 // react-router's. Returns {routed, recentered, needsStay?, destinationMode?}.
 export async function runSmartSearch(parsed, { navigate, location }) {
-  const { category, scope, place, query, parsedBy, sort, nearFirst, maxPrice } = parsed || {};
+  const { category, scope, place, query, parsedBy, sort, nearFirst, maxPrice, lateNight } = parsed || {};
   const cat = category ? SEARCH_CATEGORIES[category] : null;
 
   // 1. Resolve place / re-center.
@@ -243,7 +249,7 @@ export async function runSmartSearch(parsed, { navigate, location }) {
       // Shopping takes a category chip, not free text — map the query to one.
       const shopCat = shoppingCategoryFor(query);
       if (shopCat) opts = { state: { presetCategory: shopCat } };
-    } else if (cat.acceptsQuery && (query || sort || nearFirst || maxPrice)) {
+    } else if (cat.acceptsQuery && (query || sort || nearFirst || maxPrice || lateNight)) {
       // A generic word ("restaurants", "food", "cafes", "things to do") isn't a
       // keyword to send to Google — it means BROWSE the place (founder,
       // 2026-10-07: bare "restaurant" in Munich returned nothing from Google).
@@ -251,7 +257,7 @@ export async function runSmartSearch(parsed, { navigate, location }) {
       const q = GENERIC.test(String(query || "").trim()) ? "" : query;
       // presetSort 'rating' = "best / top rated" was typed — the finder orders
       // by review-weighted rating instead of distance.
-      opts = { state: { ...(q ? { presetQuery: q } : {}), ...(sort ? { presetSort: sort } : {}), ...(nearFirst ? { presetNearFirst: true } : {}), ...(placeCountry ? { presetCountry: placeCountry } : {}), ...(maxPrice ? { presetMaxPrice: maxPrice } : {}) } };
+      opts = { state: { ...(q ? { presetQuery: q } : {}), ...(sort ? { presetSort: sort } : {}), ...(nearFirst ? { presetNearFirst: true } : {}), ...(placeCountry ? { presetCountry: placeCountry } : {}), ...(maxPrice ? { presetMaxPrice: maxPrice } : {}), ...(lateNight ? { presetLateNight: true } : {}) } };
     }
     navigate(createPageUrl(cat.page), opts);
     return { routed: cat.page, recentered, needsStay };

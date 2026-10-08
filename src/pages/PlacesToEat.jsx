@@ -975,6 +975,10 @@ export default function PlacesToEat() {
   // crossed the border and San Diego/Chula Vista spots outranked Tijuana. A
   // named place keeps results in its own country; addresses end with it.
   const presetCountry = routerLocation.state?.presetCountry || null;
+  // "open late" from Search → the strict Late-night chip (real hours, past 10 PM).
+  useEffect(() => {
+    if (routerLocation.state?.presetLateNight === true) setSelectedCuisines(new Set(["latenight"]));
+  }, [routerLocation.state?.presetLateNight]);
   // "affordable / cheap" from Search → the finder's own price filter.
   useEffect(() => {
     const mp = routerLocation.state?.presetMaxPrice;
