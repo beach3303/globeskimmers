@@ -13127,7 +13127,8 @@ async function handlePassportStamp(request, env, ctx) {
     // Stamps are airport-arrival + iconic-attraction only — we do NOT auto-stamp cities.
     const localHour = Number.isFinite(+b.local_hour) && +b.local_hour >= 0 && +b.local_hour <= 23 ? Math.floor(+b.local_hour) : null;
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, country: row.country, city: row.city, name: row.name, verified: result.verified, updated: !!result.updated, local_hour: localHour }));
-    if (ctx && result.created) ctx.waitUntil(founderAlert(env, `📍 ${row.name}${row.city ? ` · ${row.city}` : ''}${row.country ? `, ${row.country}` : ''} — ${kind} stamp${result.verified === 'gps' ? ' ✓' : ''}${direction ? ` (${direction === 'departure' ? 'exit' : 'entry'})` : ''}`));
+    // Private stamps (every sensitive place starts private) never reach the alert.
+    if (ctx && result.created && !row.hidden) ctx.waitUntil(founderAlert(env, `📍 ${row.name}${row.city ? ` · ${row.city}` : ''}${row.country ? `, ${row.country}` : ''} — ${kind} stamp${result.verified === 'gps' ? ' ✓' : ''}${direction ? ` (${direction === 'departure' ? 'exit' : 'entry'})` : ''}`));
     return jsonResponse({ id: result.id, created: !!result.created, updated: !!result.updated, verified: result.verified, private: !!(result.created && startPrivate) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -13180,8 +13181,13 @@ async function ppLoad(env, userId) {
       ? { ...s, tagged_by_handle: who[s.tagged_by].handle || null, tagged_by_name: who[s.tagged_by].name || null }
       : s));
   }
+  return { stamps: out, stats: ppStats(out) };
+}
+// Counts for a list of stamps. Public views pass only the stamps that aren't
+// hidden, so a hidden stamp never shows up even as a number.
+function ppStats(out) {
   const distinct = (pred, key) => new Set(out.filter(pred).map(key).filter(Boolean)).size;
-  const stats = {
+  return {
     total: out.length,
     countries: distinct(() => true, (s) => (s.country || '').toLowerCase()),
     cities: distinct((s) => s.kind === 'city', (s) => (s.entity_id || s.name || '').toLowerCase()),
@@ -13192,7 +13198,6 @@ async function ppLoad(env, userId) {
     attractions: out.filter((s) => s.kind === 'attraction').length,
     verified: out.filter((s) => PP_VERIFIED.has(s.verified)).length,
   };
-  return { stamps: out, stats };
 }
 async function handlePassportList(request, env) {
   try {
@@ -13280,7 +13285,7 @@ async function handlePassportPublic(request, env) {
       if (!friend) return jsonResponse({ private: true });
     }
     const holder = await ppHolder(env, share.user_id);
-    const { stamps, stats } = await ppLoad(env, share.user_id);
+    const { stamps } = await ppLoad(env, share.user_id);
     // A shared booklet renders names, dates, art and photos — never the exact
     // coordinates of every visit (privacy audit 2026-09-29: select=* leaked
     // full-precision lat/lng of the owner's whole history to anyone with the
@@ -13294,7 +13299,7 @@ async function handlePassportPublic(request, env) {
         // Fail-closed: another viewer sees only photos that PASSED moderation.
         photos: (rest.photos || []).filter((p) => p.mod_status === 'ok'),
       }));
-    return jsonResponse({ holder, stamps: shared, stats });
+    return jsonResponse({ holder, stamps: shared, stats: ppStats(shared) });
   } catch (e) { return jsonResponse({ error: e.message, private: true }, 500); }
 }
 
@@ -13311,8 +13316,10 @@ async function handlePassportShareLanding(request, env, ctx) {
       const share = (q.ok ? await q.json() : [])[0];
       if (share && share.is_public) {
         holder = await ppHolder(env, share.user_id);
-        const loaded = await ppLoad(env, share.user_id);
-        stats = loaded.stats; sample = loaded.stamps.slice(0, 8);
+        // Hidden stamps (every sensitive place starts hidden) never reach the
+        // public web page — not as a name, not as a count.
+        const visible = (await ppLoad(env, share.user_id)).stamps.filter((st) => !st.hidden);
+        stats = ppStats(visible); sample = visible.slice(0, 8);
       }
     }
     const esc = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
