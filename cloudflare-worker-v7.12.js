@@ -12463,6 +12463,12 @@ async function handleOwnedFinder(request, env, rpc, tag) {
 // drink (up to 450 m), or anything within 40 m.
 // → { gid, closed } · { gid: null } (no listing) · { error: true } (don't remember)
 const ownedLatin = (v) => !/[\u0370-\u1fff\u2e80-\uffff]/.test(String(v || ''));
+// Same name in a non-Latin script (喫茶室 檜 = 喫茶室 檜): letters only, one inside the other.
+const ownedSameScriptName = (a, b) => {
+  const k = (v) => String(v || '').normalize('NFKC').toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
+  const x = k(a), y = k(b);
+  return x.length >= 2 && y.length >= 2 && (x.includes(y) || y.includes(x));
+};
 async function ownedMatch(env, name, lat, lng) {
   if (!name || !env.GOOGLE_API_KEY || !Number.isFinite(lat) || !Number.isFinite(lng)) return { error: true };
   const dLat = 0.0055, dLng = 0.0055 / Math.max(0.2, Math.cos(lat * Math.PI / 180));
@@ -12479,7 +12485,7 @@ async function ownedMatch(env, name, lat, lng) {
   const cands = places.map((p, rank) => {
     const m = haversineMilesLoc(lat, lng, p.location?.latitude, p.location?.longitude) * 1609.34;
     const pName = p.displayName?.text || '';
-    const same = gsInstSameName(name, pName);
+    const same = gsInstSameName(name, pName) || (!ownedLatin(name) && !ownedLatin(pName) && ownedSameScriptName(name, pName));
     const scriptGap = ownedLatin(name) !== ownedLatin(pName);
     const ok = (same && m <= 600) || (scriptGap && rank === 0 && m <= 450 && isActuallyARestaurant({ ...p, businessStatus: '' })) || m <= 40;
     return { p, m, ok, same };
@@ -12489,12 +12495,12 @@ async function ownedMatch(env, name, lat, lng) {
   if (!best) return { gid: null };
   return { gid: best.id, closed: String(best.businessStatus || '').toUpperCase() === 'CLOSED_PERMANENTLY' };
 }
-// Cached: owned2gid2:<id> = gid | 'none' (30 d) | 'closed' (90 d). A real match
+// Cached (v3: same-script names, 2026-10-08): owned2gid3:<id> = gid | 'none' (30 d) | 'closed' (90 d). A real match
 // is also written to the old owned2gid:<id> key that other readers use; an old
 // 'none' is re-checked with the matcher above.
 async function ownedGidCached(env, id, name, lat, lng) {
   const kv = env.GLOBESKIMMERS_KV;
-  const k2 = `owned2gid2:${id}`;
+  const k2 = `owned2gid3:${id}`;
   const hit = kv ? await kv.get(k2).catch(() => null) : null;
   if (hit === 'none') return { gid: null };
   if (hit === 'closed') return { gid: null, closed: true };
@@ -12509,12 +12515,15 @@ async function ownedGidCached(env, id, name, lat, lng) {
   }
   return m.closed ? { gid: null, closed: true } : { gid: m.gid };
 }
-// Our own places Google says closed for good leave every list (marked by the
-// photo lookup above; a place nobody has opened yet stays until it is checked).
+// Our own places Google says closed for good leave every list, and places
+// Google has no listing for at all (mostly closed too: Quiznos, Dean & DeLuca)
+// move below the rest — marked by the photo lookup above; a place nobody has
+// opened yet keeps its spot until it is checked.
 async function ownedDropClosed(env, places) {
   if (!env.GLOBESKIMMERS_KV || !places?.length) return places || [];
-  const marks = await Promise.all(places.map((p) => /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(p.id || '')) ? env.GLOBESKIMMERS_KV.get(`owned2gid2:${p.id}`).catch(() => null) : null));
-  return places.filter((_, i) => marks[i] !== 'closed');
+  const marks = await Promise.all(places.map((p) => /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(p.id || '')) ? env.GLOBESKIMMERS_KV.get(`owned2gid3:${p.id}`).catch(() => null) : null));
+  const open = places.map((p, i) => [p, marks[i]]).filter(([, m]) => m !== 'closed');
+  return [...open.filter(([, m]) => m !== 'none'), ...open.filter(([, m]) => m === 'none')].map(([p]) => p);
 }
 async function resolveOwnedGid(env, id, name, lat, lng) {
   id = String(id || '');
@@ -12549,6 +12558,7 @@ async function enrichOwnedOne(env, origin, b) {
     // Google says it closed for good: the app drops the card.
     if (r.closed) return { matched: false, closed: true, photos: [], hours: null };
     gid = r.gid;
+    if (!gid && !r.transient) return { matched: false, unverified: true, photos: [], hours: null };
   }
   if (!gid) return { matched: false, photos: [], hours: null };
 
@@ -12574,7 +12584,7 @@ async function enrichOwnedOne(env, origin, b) {
     // The matcher allows 600 m for a same-name match; older cached links that
     // land farther are a different branch.
     if (meters > 650) {
-      if (env.GLOBESKIMMERS_KV && id) await env.GLOBESKIMMERS_KV.put(`owned2gid2:${id}`, 'none', { expirationTtl: 30 * 24 * 60 * 60 }).catch(() => {});
+      if (env.GLOBESKIMMERS_KV && id) await env.GLOBESKIMMERS_KV.put(`owned2gid3:${id}`, 'none', { expirationTtl: 30 * 24 * 60 * 60 }).catch(() => {});
       return { matched: false, photos: [], hours: null, reason: 'too_far' };
     }
   }
