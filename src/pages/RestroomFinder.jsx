@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
+import { useLocation as useRouterLocation } from "react-router-dom";
 import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
@@ -508,6 +509,11 @@ export default function RestroomFinderPage() {
   const autoExpandRef = useRef(false); // when set, a 0-result 5mi search auto-widens to 10mi (refresh-to-current)
   const handleRefresh = () => { forceNextRef.current = true; setRefreshTick(t => t + 1); };
   const [venueType, setVenueType] = useState("all");
+  // "public restroom", "restroom in the station" from Search → that venue filter.
+  const presetVenue = useRouterLocation().state?.presetVenueType;
+  useEffect(() => {
+    if (presetVenue && VENUE_TYPES.some((v) => v.id === presetVenue)) setVenueType(presetVenue);
+  }, [presetVenue]);
   const [radius, setRadius] = useState(25); // wide net; no radius UI — nearest-first
   const [openOnly, setOpenOnly] = useState(false);
   const [accessOnly, setAccessOnly] = useState(false);

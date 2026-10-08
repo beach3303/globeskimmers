@@ -3,15 +3,18 @@
 // (scripts/search-eval) so a test ranks results exactly like the phone does.
 import { countryCode } from "./countries.js";
 
-// Review-weighted (Bayesian) rating: (R·v + 4.0·50) / (v + 50). A 5.0 with 3
-// reviews scores ~4.06; a 4.6 with 4,600 scores ~4.59. When a city was NAMED,
-// a place beyond 8 miles loses 0.03/mile ("best brunch in NYC" had ranked a
-// New Jersey spot 22 miles out first).
+// Review-weighted (Bayesian) rating: (R·v + 4.1·150) / (v + 150). Round 1
+// (2026-10-07 quality review) strengthened the prior from 50 to 150 reviews:
+// a 5-review shop had won "best cold brew in Austin". Now a 4.9 with 5 reviews
+// scores ~4.13, a 4.6 with 4,600 ~4.58, a 4.8 with 13,690 ~4.79.
+// Distance: NEAR ME loses 0.05/mile beyond 5 miles ("best tacos near me"
+// had pulled places 24 miles away); a NAMED city loses 0.03/mile beyond 8.
 export function weightedRating(x, { named = false } = {}) {
   if (!x.rating) return -1; // unrated places sink below every rated one
   const v = x.userRatingCount || 0;
-  const base = ((x.rating || 0) * v + 4.0 * 50) / (v + 50);
-  return base - (named ? 0.03 * Math.max(0, (x.distanceMiles || 0) - 8) : 0);
+  const base = ((x.rating || 0) * v + 4.1 * 150) / (v + 150);
+  const mi = x.distanceMiles || 0;
+  return base - (named ? 0.03 * Math.max(0, mi - 8) : 0.05 * Math.max(0, mi - 5));
 }
 
 // Dish/authenticity tier still leads, so "best authentic X" stays authentic.

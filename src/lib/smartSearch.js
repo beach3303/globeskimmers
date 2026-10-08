@@ -75,7 +75,7 @@ export async function parseSmartSearch(raw, { scopeChip, explicitPlace, activePh
 // LocationContext value (needs switchToNavigateMode). `navigate` is
 // react-router's. Returns {routed, recentered, needsStay?, destinationMode?}.
 export async function runSmartSearch(parsed, { navigate, location }) {
-  const { category, scope, place, query, parsedBy, sort, nearFirst, maxPrice, lateNight, bars } = parsed || {};
+  const { category, scope, place, query, parsedBy, sort, nearFirst, maxPrice, lateNight, bars, venue } = parsed || {};
   const cat = category ? SEARCH_CATEGORIES[category] : null;
 
   // 1. Resolve place / re-center.
@@ -108,7 +108,9 @@ export async function runSmartSearch(parsed, { navigate, location }) {
   // 3. Route.
   if (cat) {
     let opts;
-    if (category === "shopping") {
+    if (category === "restroom" && venue) {
+      opts = { state: { presetVenueType: venue } }; // Public / Transit / Parks filter
+    } else if (category === "shopping") {
       // Shopping takes a category chip, not free text — map the query to one.
       const shopCat = shoppingCategoryFor(query);
       if (shopCat) opts = { state: { presetCategory: shopCat } };

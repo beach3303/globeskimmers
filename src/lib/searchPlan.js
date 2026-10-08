@@ -11,8 +11,8 @@ import { stateInfo } from "./stateNicknames.js";
 // Most-specific categories first; `eat` is the food catch-all and stays last.
 export const KEYWORD_MAP = [
   { cat: "coffee",      words: ["coffee", "café", "cafe", "espresso", "latte", "cappuccino", "cold brew", "macchiato", "matcha", "boba", "bubble tea"] },
-  { cat: "things",      words: ["things to do", "things to see", "attraction", "museum", "sightsee", "landmark", "hike", "hiking", "viewpoint", "day trip", "tourist", "what to do"] },
-  { cat: "shopping",    words: ["shopping", "souvenir", "mall", "boutique", "outlet", "shop for", "where to shop", "night market", "flea market", "bazaar", "food market", "farmers market", "farmer's market", "mercado", "market hall"] },
+  { cat: "things",      words: ["things to do", "things to see", "attraction", "museum", "sightsee", "landmark", "hike", "hiking", "viewpoint", "day trip", "tourist", "what to do", "food market", "farmers market", "farmer's market", "mercado", "market hall", "club", "nightclub", "night club", "dance club", "dancing"] },
+  { cat: "shopping",    words: ["shopping", "souvenir", "mall", "boutique", "outlet", "shop for", "where to shop", "night market", "flea market", "bazaar", "supermarket", "grocery", "groceries"] },
   { cat: "atm",         words: ["atm", "cash machine", "cash point", "withdraw cash"] },
   { cat: "money",       words: ["money exchange", "currency exchange", "exchange money", "bureau de change", "change money", "forex"] },
   { cat: "convenience", words: ["convenience store", "7-eleven", "corner store", "mini mart", "24 hour store"] },
@@ -157,7 +157,18 @@ export function shoppingCategoryFor(query) {
 // Nightlife words turn on the food finder's Bars switch — bars are hidden
 // otherwise (founder, 2026-10-07: "speakeasies in Tokyo" gave 10 places
 // without it, 55 with it).
-const NIGHTLIFE = /\b(?:bars?|pubs?|speakeas(?:y|ies)|cocktails?|lounges?|brewer(?:y|ies)|beers?|wine\s+bars?|happy\s+hour|nightlife|night\s*clubs?|clubs?|dancing|salsa|izakayas?|taverns?)\b/i;
+const NIGHTLIFE = /\b(?:bars?|pubs?|speakeas(?:y|ies)|cocktails?|lounges?|brewer(?:y|ies)|beers?|wine\s+bars?|happy\s+hour|izakayas?|taverns?)\b/i;
+// Clubs and dancing go to Things to Do (a text search), not the food finder.
+// "public / free restroom", "restroom in the station", "…in the park" → the
+// restroom finder's own venue filter (Round 1: "public restroom near me"
+// returned restaurants and bars).
+export function restroomVenue(text) {
+  const t = String(text || "");
+  if (/\b(?:station|metro|subway|train|bus\s+terminal|airport)\b/i.test(t)) return "transit";
+  if (/\b(?:park|beach|trail)\b/i.test(t)) return "outdoor";
+  if (/\b(?:public|free|city|municipal)\b/i.test(t)) return "public";
+  return null;
+}
 export const barsIntent = (text) => NIGHTLIFE.test(String(text || ""));
 
 export const GENERIC_QUERY = /^(?:the\s+)?(?:restaurants?|food|foods|places?\s+to\s+eat|eats?|dining|somewhere\s+to\s+eat|coffee|coffee\s+shops?|caf[eé]s?|things\s+to\s+do|attractions?|activities)$/i;
@@ -246,6 +257,7 @@ export async function planSearch(raw, opts = {}) {
     } catch { /* stays as typed */ }
   }
   parsed.bars = barsIntent(raw);
+  if (parsed.category === "restroom") parsed.venue = restroomVenue(raw);
   // A NAMED smaller place (Redondo Beach) → nearby results lead; a big city
   // (LA, Tokyo, Atlanta) is searched whole.
   if (parsed.place && (parsed.scope === "named_place" || !parsed.scope)) {

@@ -1282,7 +1282,7 @@ export default function PlacesToEat() {
         if (ampm === 'pm' && hour !== 12) hour += 12;
         if (ampm === 'am' && hour === 12) hour = 0;
         const timeValue = hour + (min / 60);
-        return timeValue >= 22 || (timeValue >= 0 && timeValue <= 5);
+        return timeValue >= 23 || (timeValue >= 0 && timeValue <= 5); // past 11 PM today (Round 1, 2026-10-07)
       });
     }
 
