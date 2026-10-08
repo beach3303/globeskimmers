@@ -4725,7 +4725,7 @@ async function handleParseIntent(request, env) {
 // miss vs ~$0.045 via the generic /invoke-llm it replaces for the spine.
 // ============================================================================
 const PARSE_SEARCH_TTL_SECONDS = 24 * 60 * 60;
-const PARSE_SEARCH_PROMPT_VERSION = 'v4';  // v4: a place typed in the query beats the tapped scope (founder 2026-10-07); v3: no hotel / ride categories
+const PARSE_SEARCH_PROMPT_VERSION = 'v5';  // v5: country/state/region → best city + region (founder 2026-10-07); v4: a place typed in the query beats the tapped scope (founder 2026-10-07); v3: no hotel / ride categories
 const PARSE_SEARCH_CATEGORIES = new Set(['eat', 'coffee', 'things', 'shopping', 'atm', 'money', 'convenience', 'restroom', 'weather', 'none']);
 const PARSE_SEARCH_SCOPES = new Set(['near_me', 'at_stay', 'named_place', 'unknown']);
 
@@ -4738,6 +4738,7 @@ OUTPUT SCHEMA (return EXACTLY this shape — no extra keys, no markdown):
   "place": "<city/place name if scope is named_place, else empty string>",
   "query": "<the core thing to search, cleaned of scope words, e.g. ramen, viral desserts>",
   "confidence": <0.0-1.0>,
+  "region": "<the country/state/region typed, when place was narrowed to its best city; else empty string>",
   "dream_destination": {"name": "<place>", "city": "<city/region>", "country": "<country>"} | null
 }
 
@@ -4764,6 +4765,7 @@ RULES:
 5. Return ONLY JSON — no prose, no markdown fences.
 6. dream_destination: ONLY when the query expresses a travel EXPERIENCE or dream not tied to the traveler's current surroundings — a phenomenon, activity, or sight someone would travel FOR ("see bears catch fish", "northern lights", "swim with whale sharks", "cherry blossoms"). Name the single best-known real place for it. Everything else (including all near-me/at-stay searches): "dream_destination": null. Never invent places.
 7. A place NAMED IN THE QUERY always wins over the tapped scope: "southern food in Atlanta" with scope near_me tapped -> scope "named_place", place "Atlanta". A bare landmark or city ("Eiffel Tower", "Seattle") is also named_place with that place.
+8. If the named place is a COUNTRY, STATE, PROVINCE or other area bigger than one city ("Germany", "Spain", "Hawaii", "Tuscany"), set "place" to the single best real CITY in it for this query (beer in Germany -> "Munich"; ATV in Hawaii -> "Honolulu"; activities for seniors in Spain -> a city that suits it) and set "region" to the area as typed. Otherwise "region" is "".
 
 EXAMPLES:
 Input: "ramen near my hotel"
@@ -4856,6 +4858,7 @@ async function handleParseSearch(request, env) {
     place: (typeof parsed.place === 'string' && parsed.place.trim()) ? parsed.place.trim() : null,
     query: typeof parsed.query === 'string' ? parsed.query.trim() : '',
     confidence: typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : 0.5,
+    region: (typeof parsed.region === 'string' && parsed.region.trim()) ? parsed.region.trim().slice(0, 60) : null,
     destination,
   };
 
@@ -10220,6 +10223,7 @@ const KNOWN_CHAINS = [
   // casual dining
   "applebee", "chili's", "tgi friday", "denny's", "ihop", "cracker barrel", "red lobster", "outback", "texas roadhouse", "cheesecake factory", "red robin", "ruby tuesday", "golden corral", "bj's restaurant",
 ];
+const FOODISH_TYPE = /food|restaurant|cafe|coffee|bakery|bar$|^bar_|pub|brewery|winery|deli|dessert|ice_cream|gelato|juice|tea|chocolat|candy|confection|market|grocery|butcher|seafood|bistro|diner|snack/;
 const isKnownChain = (name) => {
   const n = (name || "").toLowerCase();
   return KNOWN_CHAINS.some((c) => n.includes(c));
@@ -10922,11 +10926,17 @@ async function handleRestaurantsFull(request, env, ctx) {
         // "Best Sports Bar" | "Sports-Friendly" | "Casual Watch Spot" | null
         // Intent-aware tiering (1=Authentic, 2=Good Match, 3=Has It, 4=Other)
         // Overrides any Worker-pass-through tier with our richer client-side logic
-        tier: getTierForPlace(place, intent),
-        tierLabel: TIER_LABELS[getTierForPlace(place, intent)] || "Match",
+        // GENERAL (no dish/cuisine recognized) carries NO tier (founder,
+        // 2026-10-07): tier 1 painted every unrecognized result — even a
+        // leather-goods store in Madrid — as "Dish Specialist".
+        tier: intent.kind === "GENERAL" ? null : getTierForPlace(place, intent),
+        tierLabel: intent.kind === "GENERAL" ? null : (TIER_LABELS[getTierForPlace(place, intent)] || "Match"),
         isChain: isKnownChain(place.displayName?.text || place.name || "")
       };
-    }).filter((p) => p.distanceMiles <= effectiveRadiusMiles + 1);
+    }).filter((p) => p.distanceMiles <= effectiveRadiusMiles + 1)
+      // A typed search on the FOOD finder returns places that serve food or
+      // drink — Google's keyword match can surface shops (founder, 2026-10-07).
+      .filter((p) => !searchQuery?.trim() || [...(p.types || []), p.primaryType || ""].some((t) => FOODISH_TYPE.test(t)));
     const DIETARY_FILTER_TYPES = ["halal", "kosher", "vegan", "vegetarian", "glutenFree"];
     const DIETARY_INTENT_LABEL_TO_KEY = {
       "halal": "halal",
@@ -16015,6 +16025,8 @@ async function handleEventsSearch(request, env) {
   } catch (e) { return jsonResponse({ events: [], experiences: [], error: e.message }); }
 }
 
+const NOT_AN_ACTIVITY_TYPE = /^(lodging|hotel|motel|resort_hotel|extended_stay_hotel|bed_and_breakfast|guest_house|hostel|inn|japanese_inn|budget_japanese_inn|private_guest_room|cottage|farmstay|apartment_building|apartment_complex|condominium_complex|housing_complex|real_estate_agency)$/;
+const OTA_LISTING_SITE = /(booking\.com|airbnb\.|vrbo\.|bluepillow\.|expedia\.|hotels\.com|agoda\.|tripadvisor\.[a-z.]+\/(hotel|vacationrental))/i;
 async function handleActivitySearch(request, env, ctx) {
   try {
     const b = await request.json().catch(() => ({}));
@@ -16030,7 +16042,7 @@ async function handleActivitySearch(request, env, ctx) {
     // Cache key includes query + ~1km geo grid + radius so a different city or
     // a wider radius doesn't return a stale set. 3-day TTL like other searches.
     const geoKey = hasGeo ? `${lat.toFixed(2)}_${lng.toFixed(2)}` : (city.toLowerCase() || 'na');
-    const cacheKey = `actsearch:v2:${query.toLowerCase()}:${geoKey}:${Math.round(radiusMiles)}`;
+    const cacheKey = `actsearch:v3:${query.toLowerCase()}:${geoKey}:${Math.round(radiusMiles)}`; // v3: lodging filtered
     const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
     if (cached) return jsonResponse(cached);
 
@@ -16048,6 +16060,9 @@ async function handleActivitySearch(request, env, ctx) {
         return raw
           .map((p) => gaMapSearchPlace(p, lat, lng))
           .filter((a) => a && a.distanceMiles <= capMi)
+          // Lodging and rental listings are not things to do (founder, 2026-10-07:
+          // "Hollywood Sign" surfaced Booking.com / Bluepillow rental rooms).
+          .filter((a) => !(a.types || []).some((t) => NOT_AN_ACTIVITY_TYPE.test(t)) && !OTA_LISTING_SITE.test(a.websiteUri || ''))
           .sort((a, b) => (a.distanceMiles ?? 1e9) - (b.distanceMiles ?? 1e9));
       } catch { return []; }
     })();
