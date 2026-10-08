@@ -4725,7 +4725,7 @@ async function handleParseIntent(request, env) {
 // miss vs ~$0.045 via the generic /invoke-llm it replaces for the spine.
 // ============================================================================
 const PARSE_SEARCH_TTL_SECONDS = 24 * 60 * 60;
-const PARSE_SEARCH_PROMPT_VERSION = 'v5';  // v5: country/state/region → best city + region (founder 2026-10-07); v4: a place typed in the query beats the tapped scope (founder 2026-10-07); v3: no hotel / ride categories
+const PARSE_SEARCH_PROMPT_VERSION = 'v6';  // v6: water bodies → waterfront district; v5: country/state/region → best city + region (founder 2026-10-07); v4: a place typed in the query beats the tapped scope (founder 2026-10-07); v3: no hotel / ride categories
 const PARSE_SEARCH_CATEGORIES = new Set(['eat', 'coffee', 'things', 'shopping', 'atm', 'money', 'convenience', 'restroom', 'weather', 'none']);
 const PARSE_SEARCH_SCOPES = new Set(['near_me', 'at_stay', 'named_place', 'unknown']);
 
@@ -4766,6 +4766,7 @@ RULES:
 6. dream_destination: ONLY when the query expresses a travel EXPERIENCE or dream not tied to the traveler's current surroundings — a phenomenon, activity, or sight someone would travel FOR ("see bears catch fish", "northern lights", "swim with whale sharks", "cherry blossoms"). Name the single best-known real place for it. Everything else (including all near-me/at-stay searches): "dream_destination": null. Never invent places.
 7. A place NAMED IN THE QUERY always wins over the tapped scope: "southern food in Atlanta" with scope near_me tapped -> scope "named_place", place "Atlanta". A bare landmark or city ("Eiffel Tower", "Seattle") is also named_place with that place.
 8. If the named place is a COUNTRY, STATE, PROVINCE or other area bigger than one city ("Germany", "Spain", "Hawaii", "Tuscany"), set "place" to the single best real CITY in it for this query (beer in Germany -> "Munich"; ATV in Hawaii -> "Honolulu"; activities for seniors in Spain -> a city that suits it) and set "region" to the area as typed. Otherwise "region" is "".
+9. If the named place is a BODY OF WATER (bay, lake, sea, river, gulf), set "place" to the waterfront city district travelers actually go to (Manila Bay -> "Roxas Boulevard, Manila"; Lake Tahoe -> "South Lake Tahoe").
 
 EXAMPLES:
 Input: "ramen near my hotel"
@@ -10020,8 +10021,13 @@ function phrasesByTokenCount() {
   return m;
 }
 const FUZZY_VOCAB_PHRASES_SET = new Set(FUZZY_VOCAB_PHRASES);
+// Everyday words the typo-corrector must never "fix" (founder, 2026-10-07):
+// it turned street→sorbet (every "street food" search returned ice cream),
+// dinner→diner, soul→soup, side→pide, cooked→cookies, late→latte,
+// classic→lassi, juicy→juice. A real word is not a typo.
+const FUZZY_PROTECTED = new Set(["street", "streets", "side", "cooked", "cook", "late", "dinner", "dinners", "soul", "juicy", "classic", "classics", "sweet", "grilled", "view", "views", "music", "live", "beach", "spot", "spots", "stall", "stalls", "place", "places", "local", "locals", "night", "market", "markets", "fresh", "steamed", "cheap", "best", "family", "kids", "open", "lunch", "brunch", "breakfast", "authentic", "traditional", "cozy", "quiet", "romantic", "outdoor", "patio", "terrace", "garden", "river", "harbor", "harbour", "pier", "dock", "catch", "fluffy", "spicy", "savory", "crispy", "fried", "roasted", "baked", "boiled", "raw", "hidden", "famous", "popular", "trendy", "viral", "iconic", "fancy", "upscale", "casual", "modern", "sunset", "ocean", "lake", "island", "hill", "mountain", "downtown", "rooftop", "waterfront", "seaside", "near", "around", "with", "where", "what", "find", "good", "great", "nice", "real", "legit", "vendor", "vendors", "cart", "carts", "truck", "trucks", "hawker", "hawkers"]);
 function fuzzyMatchSingle(token) {
-  if (FUZZY_VOCAB_SINGLE.has(token)) return token;
+  if (FUZZY_VOCAB_SINGLE.has(token) || FUZZY_PROTECTED.has(token)) return token;
   let maxDist;
   if (token.length <= 3) return null;
   else if (token.length <= 5) maxDist = 1;
