@@ -26,6 +26,7 @@ import FinderHeader from "@/components/finder/FinderHeader";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import FilterSheet from "@/components/finder/FilterSheet";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
+import { pinInstitutions } from "@/lib/searchRank";
 
 // iPad editorial design tokens (design handoff — modeled on "Places to Eat · iPad").
 const ED_SERIF = '"Instrument Serif", Georgia, serif';
@@ -168,6 +169,7 @@ function processShop(shop, userLat, userLng, isLocal) {
   let tier = specialtyFlag ? 1 : chainFlag ? 3 : 2;
 
   const badges=[];
+  if(shop.institution) badges.push({icon:'📖',label:'On Wikipedia',color:'#7C2D12',bg:'#FFEDD5'}); // famous local institution, source named
   if(specialtyFlag)   badges.push({icon:'✨',label:'Specialty',    color:'#E65100',bg:'#FFF3E0'});
   if(chainFlag)       badges.push({icon:'🏪',label:'Chain',        color:'#78909C',bg:'#ECEFF1'});
   // No WiFi badge — WiFi now lives only inside the "Good for working" panel.
@@ -643,6 +645,7 @@ export default function CoffeeFinderPage() {
       const sb=(b.rating||0)*Math.log10(Math.max(b.userRatingCount||1,1));
       return sb-sa;
     });
+    if(submitted) r=pinInstitutions(r);
     return r;
   },[shopsWithHours,searchMerged,submitted,radius,quickFilter,sortBy,filterOpenNow,hoursKnown,filterWifi,filterShopType,filterWork,filterOutlets,filterQuiet,filterAC,workProfiles]);
 
@@ -676,7 +679,7 @@ export default function CoffeeFinderPage() {
     const query=(typeof explicitQuery==='string'?explicitQuery:q).trim(); if(!query) return;
     setSubmitted(query); setSearchBusy(true); setSearchShops([]);
     try{
-      const {data}=await callWorker(ROUTE.searchCoffee,{query,latitude:lat,longitude:lng,radiusMiles:radius});
+      const {data}=await callWorker(ROUTE.searchCoffee,{query,latitude:lat,longitude:lng,radiusMiles:radius,namedPlace:!isLocal});
       const raw=Array.isArray(data?.places)?data.places:[];
       setSearchShops(raw.map(p=>processShop(p,lat,lng,isLocal)));
       // Geo-tagged demand signal (which coffee/drink, in which city, now vs planning).

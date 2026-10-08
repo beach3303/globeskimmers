@@ -32,7 +32,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
-import { sortByRating as rankByRating, keepCountry, nearFirst as nearFirstSplit } from "@/lib/searchRank";
+import { sortByRating as rankByRating, keepCountry, nearFirst as nearFirstSplit, pinInstitutions } from "@/lib/searchRank";
 import { createPageUrl } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
@@ -422,6 +422,8 @@ function processRest(place, userLat, userLng, isLocal = true) {
   if (place.sportsBadge === 'Best Sports Bar')   badges.push({ icon:'🏆', label:'Best Sports Bar',   color:'#B45309', bg:'#FEF3C7' });
   if (place.sportsBadge === 'Sports-Friendly')   badges.push({ icon:'📺', label:'Sports-Friendly',    color:'#0277BD', bg:'#E1F5FE' });
   if (place.sportsBadge === 'Casual Watch Spot') badges.push({ icon:'🍺', label:'Casual Watch Spot',  color:'#64748B', bg:'#F1F5F9' });
+  // A famous local institution (it has a Wikipedia article) — the source is named.
+  if (place.institution) badges.push({ icon:'📖', label:'On Wikipedia', color:'#7C2D12', bg:'#FFEDD5' });
   // Intent tier badges — match backend TIER_LABELS:
   //   1 = Dish Specialist (dish word in name, NOT a chain) — most expected
   //   2 = Authentic Match (place type matches the dish's primary cuisine type)
@@ -1173,6 +1175,8 @@ export default function PlacesToEat() {
           filterDriveThru, filterOutdoor, filterIndoor, filterParking,
           filterBakery, filterBars,
           filterVibes, filterDietary,
+          // Exploring a named place: its famous local institutions lead.
+          namedPlace: !isLocal,
           forceRefresh: force,
         });
         if (ignore) return; // a newer fetch already resolved — drop this one
@@ -1316,6 +1320,7 @@ export default function PlacesToEat() {
       r.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
     }
     if (nearFirst) r = nearFirstSplit(r);
+    r = pinInstitutions(r, nearFirst ? 5 : Infinity);
     return r;
   }, [restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, searchText, sortByRating, nearFirst, presetCountry]);
 

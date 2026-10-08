@@ -46,3 +46,13 @@ export function nearFirst(list, miles = 5, min = 3) {
   const near = list.filter((x) => (x.distanceMiles ?? 999) <= miles);
   return near.length >= min ? [...near, ...list.filter((x) => (x.distanceMiles ?? 999) > miles)] : list;
 }
+
+// Famous local institutions (a Wikipedia article, confirmed open on Google —
+// the worker marks them `institution`) lead, most famous first — unless the
+// worker says not to lift them (a plain "best restaurants near me"). With
+// maxMiles, only those that close (a named smaller place leads with nearby).
+export function pinInstitutions(list, maxMiles = Infinity) {
+  const lead = list.filter((x) => x.institution && x.institution.lift !== false && (x.distanceMiles ?? 0) <= maxMiles)
+    .sort((a, b) => (b.institution.fame || 0) - (a.institution.fame || 0));
+  return lead.length ? [...lead, ...list.filter((x) => !lead.includes(x))] : list;
+}
