@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-04
+Last updated: 2026-10-07
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -112,6 +112,21 @@ and tablet; DealRadarRow deleted, DreamersCorner's file stays for its shared row
 HomeRows uses). KEPT by name: the daily travel quote (WanderlustLine) and the dream shelf.
 Home is now: masthead → passport hero → search → NEARBY NOW (chips, stamps row) → dream
 shelf → quote. Site door copy no longer names the removed rows.
+
+**Smart Search, worldwide (founder, 2026-10-07: "I want us to be able to deliver answering
+these questions globally").** Search stays on Home. A worldwide test suite
+(scripts/search-eval, ~170 real traveler questions) runs the app's own planning code against
+production; three independent reviewers grade the top 8 results of 119 of them. Done
+2026-10-07: fixes 1–4, Round 1 (rating weighed by review count, distance, public restrooms,
+markets/clubs routed), Round 1.5 + 2 (street-food rule, megachains, cheap eats, big cities
+centered on their famous landmarks, cities looked up with their country). Suite 124/124;
+graded "good" went 25% → 31% → 33% (quality-2026-10-07*.json). The client half reaches
+phones only with the next `npm run ota`. **Agreed order next:** fix 5 local institutions
+(famous restaurants and places documented on Wikipedia, re-runnable harvest) → fix 8
+requirements as real filters (open late/early, outdoor seating, groups, reservations, tap
+to pay, drive-thru, wifi, 24/7) → fix 6 who it's for (kids by age, seniors, free) → fix 7
+answer cards for place and destination questions (hours from Google, never invented
+prices). Later: route search (Vegas → LA) and @handle search.
 
 **Reactions & guestbook (founder ask, 2026-09-30): mockup delivered, build awaits a yes.**
 The Blotter — BUILT + DEPLOYED 2026-09-30 (e282fb6; founder said yes to mockup v3

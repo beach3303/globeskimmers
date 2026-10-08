@@ -1,0 +1,997 @@
+{
+ "judgedAt": "2026-10-07",
+ "round": 2,
+ "method": "same 3 independent reviewers, same prompt, live top-8 after Rounds 1.5 + 2 (landmark centers, city+country lookups)",
+ "verdicts": {
+  "atl-authentic-southern": {
+   "id": "atl-authentic-southern",
+   "verdict": "WEAK",
+   "reason": "These are real soul-food places, but Hattie B's is a Nashville hot-chicken chain, not authentic Atlanta, and the city's best-known Southern institutions are all missing from a list that claims to be 'highest rated'.",
+   "missing": [
+    "Mary Mac's Tea Room",
+    "Busy Bee Cafe",
+    "Paschal's"
+   ]
+  },
+  "atl-best-southern-lower": {
+   "id": "atl-best-southern-lower",
+   "verdict": "WEAK",
+   "reason": "The soul-food spots are fair, but none of Atlanta's landmark Southern restaurants appear, and #8 is 12 mi out in Austell.",
+   "missing": [
+    "Mary Mac's Tea Room",
+    "Busy Bee Cafe",
+    "Paschal's"
+   ]
+  },
+  "atl-southern-food": {
+   "id": "atl-southern-food",
+   "verdict": "WEAK",
+   "reason": "Relevant soul-food and BBQ spots, but the iconic names a visitor expects are missing, and a counter inside a Shell gas station is padding the list.",
+   "missing": [
+    "Mary Mac's Tea Room",
+    "Busy Bee Cafe"
+   ]
+  },
+  "near-tiramisu": {
+   "id": "near-tiramisu",
+   "verdict": "WEAK",
+   "reason": "The Italian places (Grano, Domenico's, Maria's, Carrara's) fit, but Jim's Burgers is junk and two 85\u00b0C chain bakeries (one 9.6 mi away) rank above closer Italian options.",
+   "missing": []
+  },
+  "near-coffee": {
+   "id": "near-coffee",
+   "verdict": "GOOD",
+   "reason": "All eight are real coffee shops within 1 mile, which is exactly what 'near me' should return.",
+   "missing": []
+  },
+  "near-best-tacos": {
+   "id": "near-best-tacos",
+   "verdict": "GOOD",
+   "reason": "All eight are genuine taquerias in Arcadia, El Monte and Pasadena, and they are well rated. A San Gabriel Valley local would accept this list.",
+   "missing": []
+  },
+  "tokyo-things": {
+   "id": "tokyo-things",
+   "verdict": "WEAK",
+   "reason": "It opens with a minor palace gate and is mostly small niche museums (Origami, Currency, Ad Museum), so the city's marquee sights are absent.",
+   "missing": [
+    "Senso-ji",
+    "Meiji Jingu",
+    "Shibuya Crossing"
+   ]
+  },
+  "paris-museums": {
+   "id": "paris-museums",
+   "verdict": "GOOD",
+   "reason": "The Louvre, Orsay, Orangerie and Arts D\u00e9coratifs are all there, though the Paradox and Illusions gimmick museums and a kids' museum dilute the list.",
+   "missing": []
+  },
+  "naples-pizza": {
+   "id": "naples-pizza",
+   "verdict": "WEAK",
+   "reason": "These are real Neapolitan pizzerias, but sorting by rating pushes up small places and tourist trattorias, and every pilgrimage pizzeria is missing.",
+   "missing": [
+    "L'Antica Pizzeria da Michele",
+    "Gino e Toto Sorbillo (Via dei Tribunali)",
+    "Pizzeria Di Matteo"
+   ]
+  },
+  "statue-bare": {
+   "id": "statue-bare",
+   "verdict": "GOOD",
+   "reason": "It returns exactly the Statue of Liberty.",
+   "missing": []
+  },
+  "theater-not-food": {
+   "id": "theater-not-food",
+   "verdict": "GOOD",
+   "reason": "Nearby movie theaters are a fair reading of a bare 'theater', though live theater such as the Pasadena Playhouse never appears.",
+   "missing": []
+  },
+  "great-views-not-food": {
+   "id": "great-views-not-food",
+   "verdict": "WEAK",
+   "reason": "The Mt. Wilson trail, Jones Peak, the Angeles Crest overlooks and the rooftop are good, but name matching let in a nursing facility ('Valley View Post Acute') and an ordinary El Monte park ('Mountain View Park').",
+   "missing": [
+    "Echo Mountain",
+    "Griffith Observatory"
+   ]
+  },
+  "atmosphere-not-atm": {
+   "id": "atmosphere-not-atm",
+   "verdict": "WEAK",
+   "reason": "Only 5 results: a Mimi's Cafe chain and four generic cafes 5+ mi away. 'Cozy' was effectively read as 'cafe', and nothing in Arcadia or Pasadena showed up.",
+   "missing": []
+  },
+  "charge-phone-not-pho": {
+   "id": "charge-phone-not-pho",
+   "verdict": "WEAK",
+   "reason": "Convenience stores and pharmacies sell chargers but are not places to charge a phone, and every result is missing its distance and address.",
+   "missing": [
+    "The Shops at Santa Anita (mall)",
+    "Arcadia Public Library"
+   ]
+  },
+  "cheap-eats": {
+   "id": "cheap-eats",
+   "verdict": "GOOD",
+   "reason": "Udon, burger stands, Taiwanese breakfast, dumplings and Hawaiian BBQ, all close by, are genuinely cheap eats.",
+   "missing": []
+  },
+  "rooftop-bar": {
+   "id": "rooftop-bar",
+   "verdict": "WEAK",
+   "reason": "Only Hipico is clearly a rooftop. The rest are ordinary bars plus junk (the Elks Lodge, an Indian restaurant, a golf lounge). I'm not sure of specific rooftop bars to name nearby.",
+   "missing": []
+  },
+  "souvenirs": {
+   "id": "souvenirs",
+   "verdict": "WEAK",
+   "reason": "A mall, Sanrio stores, generic gift shops (one has a single review), a thrift store and a craft-supply store aren't local souvenirs.",
+   "missing": [
+    "The Huntington Library gift store (San Marino)"
+   ]
+  },
+  "taipei-night-market": {
+   "id": "taipei-night-market",
+   "verdict": "WEAK",
+   "reason": "Ningxia, Nanjichang, Guangzhou St and Shuangcheng are correct, but Ximending (twice) leads even though it isn't a night market, Qingguang is a day market, and the two most famous night markets are missing.",
+   "missing": [
+    "Shilin Night Market",
+    "Raohe Street Night Market"
+   ]
+  },
+  "ramen-at-hotel": {
+   "id": "ramen-at-hotel",
+   "verdict": "WEAK",
+   "reason": "The ask was 'near my hotel', but the top 5 are famous LA ramen shops 13\u201324 mi away across town, and only two results are within 6 mi. The intent is effectively ignored.",
+   "missing": []
+  },
+  "atv-hawaii": {
+   "id": "atv-hawaii",
+   "verdict": "WEAK",
+   "reason": "The top 5 are moped and slingshot rentals and a 3.2-rated motors shop, none of which do ATVs, while the real ATV answers (Coral Crater, Kualoa Ranch) sit at #7\u20138.",
+   "missing": []
+  },
+  "nyc-kids-2-6": {
+   "id": "nyc-kids-2-6",
+   "verdict": "WEAK",
+   "reason": "The Children's Museum of Manhattan fits, but 6 of 8 are New Jersey indoor playspaces (mostly American Dream mall), which is wrong for a family visiting NYC.",
+   "missing": [
+    "Central Park Zoo (Tisch Children's Zoo)",
+    "American Museum of Natural History",
+    "Bronx Zoo"
+   ]
+  },
+  "older-teens": {
+   "id": "older-teens",
+   "verdict": "GOOD",
+   "reason": "Sim racing, escape rooms, laser tag, a rage room and immersive experiences are all fair picks for older teens within reasonable range.",
+   "missing": []
+  },
+  "tokyo-matcha": {
+   "id": "tokyo-matcha",
+   "verdict": "GOOD",
+   "reason": "All eight are dedicated matcha cafes. They lean toward trendy Ginza and Tsukiji stands, and a classic like Ippodo Tea Marunouchi doesn't appear, but a traveler would accept this list.",
+   "missing": []
+  },
+  "tokyo-fresh-sushi": {
+   "id": "tokyo-fresh-sushi",
+   "verdict": "WEAK",
+   "reason": "It's mostly tourist-oriented sushi with a conveyor chain (Kura) and a vegan sushi shop that contradict 'fresh catch', and there's no Tsukiji or Toyosu market sushi.",
+   "missing": [
+    "Sushi Dai (Toyosu)",
+    "Daiwa Sushi (Toyosu)",
+    "Sushizanmai Tsukiji"
+   ]
+  },
+  "tokyo-ramen": {
+   "id": "tokyo-ramen",
+   "verdict": "WEAK",
+   "reason": "Tsujita is a fair #1, but sorting by rating promotes tourist-targeted halal wagyu spots, including a steak and burger restaurant, over Tokyo's acclaimed ramen.",
+   "missing": [
+    "Ginza Kagari",
+    "Rokurinsha (Tokyo Station Ramen Street)",
+    "Fuunji"
+   ]
+  },
+  "la-pancakes": {
+   "id": "la-pancakes",
+   "verdict": "GOOD",
+   "reason": "Gram Cafe (souffl\u00e9 pancakes), The Griddle Cafe and Du-par's are the right answers, though Pancakes R Us 22 mi away shouldn't be #2.",
+   "missing": []
+  },
+  "la-pancakes-full": {
+   "id": "la-pancakes-full",
+   "verdict": "GOOD",
+   "reason": "Same as la-pancakes: Gram Cafe, The Griddle and Du-par's are present, but the 22-mi Pancakes R Us at #2 is a ranking flaw.",
+   "missing": []
+  },
+  "bohol-zipline": {
+   "id": "bohol-zipline",
+   "verdict": "GOOD",
+   "reason": "Bohol's main zipline parks (Chocolate Hills Adventure Park, Danao Adventure Park, Loboc Ecotourism Adventure Park) are all present, though the Chocolate Hills viewing deck at #1 and a caf\u00e9 aren't ziplines.",
+   "missing": []
+  },
+  "paris-croissant": {
+   "id": "paris-croissant",
+   "verdict": "WRONG",
+   "reason": "The top results include a cr\u00eaperie, a matcha coffee shop, two sandwich caf\u00e9s and a b\u00e1nh m\u00ec/donut shop, with no recognized Paris boulangerie for the city's best pain au chocolat.",
+   "missing": [
+    "Du Pain et des Id\u00e9es",
+    "Boulangerie Utopie",
+    "C\u00e9dric Grolet Op\u00e9ra"
+   ]
+  },
+  "london-fish-chips": {
+   "id": "london-fish-chips",
+   "verdict": "WEAK",
+   "reason": "These are all real chippies, but sorting by rating favors review-heavy West End tourist shops, and London's classic fish-and-chip institutions are missing.",
+   "missing": [
+    "Poppies",
+    "The Golden Hind",
+    "Rock & Sole Plaice"
+   ]
+  },
+  "germany-beer": {
+   "id": "germany-beer",
+   "verdict": "WEAK",
+   "reason": "Munich is the right place and Giesinger, Tegernseer, Augustiner and the Bratwurst Gl\u00f6ckl fit, but the iconic beer halls and gardens are missing and a whisky/steak bar (Little London) slipped in.",
+   "missing": [
+    "Hofbr\u00e4uhaus",
+    "Augustiner-Keller",
+    "Weisses Br\u00e4uhaus"
+   ]
+  },
+  "london-strawberries": {
+   "id": "london-strawberries",
+   "verdict": "WEAK",
+   "reason": "#1 (chocolate-covered strawberries at Portobello) nails it, but the rest is a sandwich shop, a tea shop and general chocolatiers. I'm not sure of other specific places to name.",
+   "missing": []
+  },
+  "spain-seniors": {
+   "id": "spain-seniors",
+   "verdict": "WRONG",
+   "reason": "Municipal senior centers and adult daycare centers are local welfare services, not activities a senior traveler would want.",
+   "missing": [
+    "Prado Museum",
+    "Retiro Park",
+    "Royal Palace of Madrid"
+   ]
+  },
+  "madrid-capital": {
+   "id": "madrid-capital",
+   "verdict": "WEAK",
+   "reason": "Sorting by rating surfaces review-heavy brunch and tourist spots, a cocktail bar and a burek takeaway instead of Madrid's renowned restaurants.",
+   "missing": [
+    "Sobrino de Bot\u00edn",
+    "Casa Lucio",
+    "DiverXO"
+   ]
+  },
+  "sd-seafood": {
+   "id": "sd-seafood",
+   "verdict": "WEAK",
+   "reason": "Mostly good (Pete's, El Pescador, Tom Ham's, Water Grill), but an Italian restaurant (Romanissimo) and a steakhouse are in the top 5 while the city's signature seafood spot is missing.",
+   "missing": [
+    "Point Loma Seafoods",
+    "Mitch's Seafood"
+   ]
+  },
+  "sd-marketside": {
+   "id": "sd-marketside",
+   "verdict": "WEAK",
+   "reason": "#1 (Point Loma Seafoods) is the perfect answer, but half the list is steakhouses, an Italian restaurant and a sports bar with nothing to do with buying fish and having it cooked at the market.",
+   "missing": [
+    "El Pescador Fish Market",
+    "Mitch's Seafood"
+   ]
+  },
+  "la-steamed-crabs": {
+   "id": "la-steamed-crabs",
+   "verdict": "GOOD",
+   "reason": "L.A. Crazy Crab, Boiling Crab (\u00d72), Crab Avenue and Oh My Crab directly answer the question, with only minor filler (a Peruvian restaurant, a fish market).",
+   "missing": []
+  },
+  "redondo-crabs": {
+   "id": "redondo-crabs",
+   "verdict": "GOOD",
+   "reason": "Quality Seafood on the Redondo pier is the canonical answer and is #1, with other pier crab spots behind it. Only the shabu-shabu at #8 is junk.",
+   "missing": []
+  },
+  "la-beaches": {
+   "id": "la-beaches",
+   "verdict": "WEAK",
+   "reason": "#1 is 'Beaches Tropicana', a West Hollywood bar, and the most famous LA beaches are missing, though Santa Monica, Dockweiler, Will Rogers and Manhattan Beach are good.",
+   "missing": [
+    "Venice Beach",
+    "Zuma Beach",
+    "Hermosa Beach"
+   ]
+  },
+  "nyc-view": {
+   "id": "nyc-view",
+   "verdict": "WEAK",
+   "reason": "The View and Centurion fit, but the list is a nearest-first Midtown sweep of rooftop bars plus a no-view brasserie (La Grande Boucherie) and a rink-level restaurant, and it misses NYC's signature view restaurants.",
+   "missing": [
+    "The River Caf\u00e9",
+    "Peak (Hudson Yards)"
+   ]
+  },
+  "cebu-view": {
+   "id": "cebu-view",
+   "verdict": "WEAK",
+   "reason": "Mostly obscure rooftops with few reviews plus an aquarium dining gimmick and a 3.4-star cafe; the famous hillside view restaurants in Busay/Nivel Hills that everyone recommends are missing.",
+   "missing": [
+    "Lantaw Native Restaurant (Busay)",
+    "Anzani (Nivel Hills)",
+    "Tops Lookout (Busay)"
+   ]
+  },
+  "la-beachside": {
+   "id": "la-beachside",
+   "verdict": "GOOD",
+   "reason": "Shows real on-the-sand and pier restaurants in Santa Monica, Marina del Rey, Playa del Rey and the Palisades (Big Dean's, The Albright, Back on the Beach, Coast, Gladstones), which a local would accept.",
+   "missing": []
+  },
+  "sd-beachside": {
+   "id": "sd-beachside",
+   "verdict": "WEAK",
+   "reason": "These are bay and harbor waterfront restaurants on the Embarcadero, Harbor Island, Shelter Island and Mission Bay, not beachside; the true ocean-beach spots in La Jolla and Pacific Beach are missing.",
+   "missing": [
+    "George's at the Cove (La Jolla)",
+    "The Marine Room (La Jolla Shores)",
+    "JRDN (Pacific Beach)"
+   ]
+  },
+  "seattle-beachside": {
+   "id": "seattle-beachside",
+   "verdict": "WEAK",
+   "reason": "Downtown waterfront and skyline picks: 2120 at #1 has no water at all, and Charlotte and The Pink Door are view or downtown spots; Seattle's actual beach dining at Alki and Shilshole is missing.",
+   "missing": [
+    "Salty's on Alki",
+    "Ray's Boathouse",
+    "Marination Ma Kai"
+   ]
+  },
+  "maine-lobster": {
+   "id": "maine-lobster",
+   "verdict": "GOOD",
+   "reason": "Solid Portland lobster list (Luke's, DiMillo's, Bite Into Maine, Portland Lobster Co.), but a statewide ask was narrowed to one city and Portland's best-known lobster roll is absent.",
+   "missing": [
+    "Eventide Oyster Co.",
+    "The Lobster Shack at Two Lights",
+    "Red's Eats (Wiscasset)"
+   ]
+  },
+  "thailand-street-food": {
+   "id": "thailand-street-food",
+   "verdict": "WEAK",
+   "reason": "Apart from Pad Thai Fai Ta Lu and a food court, these are sit-down backpacker cafes and vegetarian restaurants, not street food, and the famous old-town and Chinatown stalls nearby are missing.",
+   "missing": [
+    "Thip Samai Pad Thai",
+    "Raan Jay Fai",
+    "Yaowarat Road street food"
+   ]
+  },
+  "manila-bay-street-food": {
+   "id": "manila-bay-street-food",
+   "verdict": "WRONG",
+   "reason": "None of these are street food: they are Nepali, Mexican, Vietnamese and Japanese-chain restaurants plus a Makati bakery, and several are in Makati, well away from the bay.",
+   "missing": [
+    "Seaside Dampa Macapagal (paluto market)",
+    "Manila Baywalk food stalls",
+    "Binondo / Ongpin Street food crawl"
+   ]
+  },
+  "dlsu-street-food": {
+   "id": "dlsu-street-food",
+   "verdict": "WRONG",
+   "reason": "These are the same sit-down ethnic restaurants as the Manila Bay case, three of them in Makati, rather than the cheap student street-food strip right by DLSU.",
+   "missing": [
+    "Ate Rica's Bacsilog (Agno St)",
+    "Agno Street student food strip"
+   ]
+  },
+  "tijuana-tacos": {
+   "id": "tijuana-tacos",
+   "verdict": "WEAK",
+   "reason": "Only #1 (Tacos el Nuevo Poblano) is a classic taqueria; the rest are mostly tortas, a 15-review burrito stand, carne en su jugo and tlayudas, in the city most famous for tacos.",
+   "missing": [
+    "Tacos El Franc",
+    "Tacos El Gordo",
+    "Las Ahumaderas (Taco Alley)"
+   ]
+  },
+  "tokyo-vegan-no-in": {
+   "id": "tokyo-vegan-no-in",
+   "verdict": "GOOD",
+   "reason": "Every result is a dedicated vegan spot across central Tokyo (Vegan Gyoza, Jangara, 2foods, Veggie Sushi); the marshmallow counter is a small dessert outlier.",
+   "missing": []
+  },
+  "ba-vegan-capital": {
+   "id": "ba-vegan-capital",
+   "verdict": "GOOD",
+   "reason": "Mostly dedicated vegan or plant-based places (La Reverde, La Vegana, Mudra, Menta & Limon); Green Eat is a healthy chain rather than strictly vegan, but the list is a fair answer.",
+   "missing": []
+  },
+  "arcadia-shaved-ice": {
+   "id": "arcadia-shaved-ice",
+   "verdict": "WRONG",
+   "reason": "There is no shaved-ice or snow-ice shop in the top 8; it is ice cream, frozen yogurt, a burger stand, a Burmese restaurant and a cheesecake shop, in a part of LA (the San Gabriel Valley) known for Taiwanese shaved ice.",
+   "missing": [
+    "Sno-Crave Tea House (Arcadia)",
+    "Meet Fresh",
+    "Class 302 (Rowland Heights)"
+   ]
+  },
+  "positano-pasta": {
+   "id": "positano-pasta",
+   "verdict": "WEAK",
+   "reason": "Half the list is outside Positano: Il Ruttino in Sant'Agnello on the Sorrento side, a pizzeria up in Agerola, and two Praiano spots. The best-known Positano tables are missing.",
+   "missing": [
+    "Ristorante Da Vincenzo",
+    "Chez Black",
+    "Da Adolfo"
+   ]
+  },
+  "barcelona-couples": {
+   "id": "barcelona-couples",
+   "verdict": "WEAK",
+   "reason": "These are niche Eixample workshops, studios and massage spas found by keyword; they miss the romantic sights and the one spa couples actually book.",
+   "missing": [
+    "Bunkers del Carmel (sunset)",
+    "AIRE Ancient Baths Barcelona",
+    "Magic Fountain of Montjuic"
+   ]
+  },
+  "nyc-statue-view": {
+   "id": "nyc-statue-view",
+   "verdict": "WRONG",
+   "reason": "The search centered on Midtown, so the top 7 (Reading Room, Parker & Quinn, ROBERT, Riverpark and others) have no Statue of Liberty view; only ONE Dine at #8 does.",
+   "missing": [
+    "Liberty House (Jersey City)",
+    "Manhatta",
+    "Battery Gardens"
+   ]
+  },
+  "nyc-propose": {
+   "id": "nyc-propose",
+   "verdict": "WEAK",
+   "reason": "Central Park Boathouse, ROBERT and One if by Land are fair proposal picks, but Avra, Bar 54 and Soothr are off-target, and the city's best-known proposal-with-a-view restaurant is missing.",
+   "missing": [
+    "The River Cafe (Brooklyn)",
+    "Manhatta",
+    "Peak (Hudson Yards)"
+   ]
+  },
+  "vegas-burgers": {
+   "id": "vegas-burgers",
+   "verdict": "GOOD",
+   "reason": "Real, well-reviewed burger spots led by Gordon Ramsay Burger, with Black Tap, Sickies and the downtown locals' picks; Habit at #8 is a harmless chain.",
+   "missing": []
+  },
+  "vegas-buffets": {
+   "id": "vegas-buffets",
+   "verdict": "WEAK",
+   "reason": "The top 2 are all-you-can-eat sushi and BBQ, not buffets, and most of the rest are off-Strip Chinese buffets; the Wynn is the only famous casino buffet shown.",
+   "missing": [
+    "Bacchanal Buffet (Caesars Palace)",
+    "Wicked Spoon (Cosmopolitan)",
+    "Bellagio Buffet"
+   ]
+  },
+  "la-kbbq": {
+   "id": "la-kbbq",
+   "verdict": "GOOD",
+   "reason": "Koreatown Korean BBQ led by Park's BBQ, Quarters, Genwa and Road to Seoul is a fair answer; #1 is a fast-casual KBBQ bowl shop rather than a grill-at-table place.",
+   "missing": [
+    "Kang Ho-dong Baekjeong",
+    "Soowon Galbi"
+   ]
+  },
+  "nyc-brunch": {
+   "id": "nyc-brunch",
+   "verdict": "WEAK",
+   "reason": "The list is pinned to Midtown tourist blocks (Isla & Co, Benny John's, Carnegie Diner) with a matcha counter at #8; none of NYC's signature brunch rooms appear.",
+   "missing": [
+    "Balthazar",
+    "Clinton St. Baking Company",
+    "Jack's Wife Freda"
+   ]
+  },
+  "nyc-empire-bridge": {
+   "id": "nyc-empire-bridge",
+   "verdict": "WEAK",
+   "reason": "Nubeluz and Magic Hour do see the Empire State Building, but ROBERT and Riverpark face other directions, and the two Brooklyn picks (Aurora, Aska) are in Williamsburg with no Brooklyn Bridge view.",
+   "missing": [
+    "The River Cafe (Brooklyn)",
+    "Cecconi's Dumbo",
+    "Celestine (Dumbo)"
+   ]
+  },
+  "london-farmers": {
+   "id": "london-farmers",
+   "verdict": "GOOD",
+   "reason": "Exactly right: Marylebone, Pimlico Road, Islington, South Kensington and Oval farmers' markets, plus Borough Market.",
+   "missing": []
+  },
+  "tokyo-affordable": {
+   "id": "tokyo-affordable",
+   "verdict": "WEAK",
+   "reason": "The query dropped 'affordable' and became just 'food', so a maid cafe tops the list next to a shabu-shabu buffet and a 41-review bistro; Gyukatsu Ichinisan and Tsujita fit, but the classic cheap-eats answers are missing.",
+   "missing": [
+    "Tsukiji Outer Market stalls",
+    "Fuunji (Shinjuku tsukemen)",
+    "Omoide Yokocho"
+   ]
+  },
+  "pasadena-late": {
+   "id": "pasadena-late",
+   "verdict": "WEAK",
+   "reason": "No open-late filter was applied (the query became 'restaurants'), only 4 results came back, and #4 is a 2.5-star place 18.8 mi away near LAX; King Taco and Yard House stay open late only by coincidence.",
+   "missing": []
+  },
+  "near-from-here": {
+   "id": "near-from-here",
+   "verdict": "GOOD",
+   "reason": "Nearest-first restaurants is the right answer to 'from here', but every row is unrated owned data (no rating, no reviews, no city in the address), so the traveler can't tell the rooftop from the McDonald's.",
+   "missing": []
+  },
+  "hilton-manhattan": {
+   "id": "hilton-manhattan",
+   "verdict": "WEAK",
+   "reason": "'My Hilton' was ignored. Results cluster at 0 mi around Columbus Circle with no ratings and one blank address, and some appear stale: I believe Landmarc (Time Warner Center) and Ichimura at Brushstroke closed years ago.",
+   "missing": []
+  },
+  "g-locals-shibuya": {
+   "id": "g-locals-shibuya",
+   "verdict": "WEAK",
+   "reason": "The raw phrase was sent as the query, so #1 is a board-game cafe and #2 is the Shibuya Crossing viewing deck; the rest (She Wolf Diner, Oslo brewpub, Brown Rice) are English-friendly tourist spots, not local haunts.",
+   "missing": [
+    "Nonbei Yokocho",
+    "Shibuya Yokocho (Miyashita Park)"
+   ]
+  },
+  "g-authentic-pho": {
+   "id": "g-authentic-pho",
+   "verdict": "GOOD",
+   "reason": "All dedicated pho shops in the San Gabriel Valley within a reasonable drive (Pho Saigon Pasteur, Pho LTK, Pho 87), though the area's most-cited pho house is missing.",
+   "missing": [
+    "Golden Deli (San Gabriel)"
+   ]
+  },
+  "g-cdmx-markets": {
+   "id": "g-cdmx-markets",
+   "verdict": "WEAK",
+   "reason": "#1 is a food-tour company, #2 (La Ciudadela) is a crafts market, and Chedraui is a supermarket; Mercado de San Juan and Mercado Juarez are fair, but the famous food markets are missing.",
+   "missing": [
+    "Mercado de Coyoacan",
+    "Mercado de Medellin",
+    "Mercado de la Merced"
+   ]
+  },
+  "g-sf-moscone-late": {
+   "id": "g-sf-moscone-late",
+   "verdict": "WEAK",
+   "reason": "'Open late' was dropped (the query became 'food') and only 5 results came back; The Melt is a fast-casual chain that closes early, and nothing confirms late hours.",
+   "missing": [
+    "Lers Ros Thai (Tenderloin)",
+    "Pinecrest Diner (Geary St)"
+   ]
+  },
+  "g-hk-quick-lunch": {
+   "id": "g-hk-quick-lunch",
+   "verdict": "WEAK",
+   "reason": "Yat Lok, TamJai, sen-ryo and Gyoza AnD fit, but Arbor and Bo Innovation are multi-course fine dining, the opposite of a quick lunch, and Central's classic noodle and cha chaan teng counters are missing.",
+   "missing": [
+    "Mak's Noodle (Wellington St)",
+    "Lan Fong Yuen (Gage St)",
+    "Tsim Chai Kee Noodle"
+   ]
+  },
+  "g-rome-gf": {
+   "id": "g-rome-gf",
+   "verdict": "GOOD",
+   "reason": "Every result is a dedicated gluten-free kitchen near the centro storico and Prati (New Food, Voglia di Pizza, Ciao Checca, Erudito), which is exactly what a celiac traveler wants.",
+   "missing": []
+  },
+  "g-seoul-halal": {
+   "id": "g-seoul-halal",
+   "verdict": "GOOD",
+   "reason": "All genuinely halal (EID, Kervan, Mari Meokja, the Itaewon cluster near the mosque), split sensibly between Jung-gu and Itaewon.",
+   "missing": []
+  },
+  "g-singapore-business": {
+   "id": "g-singapore-business",
+   "verdict": "WEAK",
+   "reason": "#1 is a Peach Garden catering and wedding office; Artemis, Peach Garden OCBC, Lerouy and 15 Stamford are fair, but the classic private-room hotel restaurants used for corporate dinners are absent.",
+   "missing": [
+    "Summer Pavilion (Ritz-Carlton Millenia)",
+    "Jade (The Fullerton Hotel)",
+    "CUT by Wolfgang Puck"
+   ]
+  },
+  "g-lisbon-wifi-coffee": {
+   "id": "g-lisbon-wifi-coffee",
+   "verdict": "GOOD",
+   "reason": "Credible specialty and laptop-friendly cafes in Alcantara, Santos and Bica (Copenhagen Coffee Lab, Fabrica, Coffee and People); wifi and outlets aren't actually verified, and tiny Hello, Kristof is a poor laptop fit.",
+   "missing": []
+  },
+  "g-london-quiet-cafe": {
+   "id": "g-london-quiet-cafe",
+   "verdict": "WEAK",
+   "reason": "Centered on Trafalgar Square, Soho and Covent Garden, the busiest cafe zone in London, with nothing to show these places are quiet; the go-to quiet work spots are missing.",
+   "missing": [
+    "Barbican Centre",
+    "British Library cafe"
+   ]
+  },
+  "g-sf-third-wave": {
+   "id": "g-sf-third-wave",
+   "verdict": "GOOD",
+   "reason": "Legitimate specialty shops (The Coffee Movement, Home Coffee Roasters, Scullery, Coffee Bar), though chain Bluestone Lane leads and SF's defining third-wave names are missing.",
+   "missing": [
+    "Blue Bottle Coffee (Mint Plaza)",
+    "Sightglass Coffee"
+   ]
+  },
+  "g-seoul-aesthetic": {
+   "id": "g-seoul-aesthetic",
+   "verdict": "WEAK",
+   "reason": "#1 Center Coffee is in a basement (B1), which contradicts 'outdoor patio', and patio seating isn't evident for most others; the famous hanok-courtyard cafes nearby are missing.",
+   "missing": [
+    "Onion Anguk",
+    "Cafe Layered Anguk"
+   ]
+  },
+  "g-marais-bakery": {
+   "id": "g-marais-bakery",
+   "verdict": "GOOD",
+   "reason": "The French Bastards, Bo&Mie, Rose Bakery and Demi Sel are fair Marais answers, though chain Le Pain Quotidien and brunch-focused Kozy dilute it.",
+   "missing": [
+    "Du Pain et des Idees",
+    "Fragments (cafe)"
+   ]
+  },
+  "g-austin-cold-brew": {
+   "id": "g-austin-cold-brew",
+   "verdict": "WEAK",
+   "reason": "Generic downtown cafes with low review counts, and Central District Brewing appears to be a beer brewery matched on 'brew'; Houndstooth is the only strong coffee pick, and Austin's best-known roasters are missing.",
+   "missing": [
+    "Merit Coffee",
+    "Fleet Coffee",
+    "Jo's Coffee (South Congress)"
+   ]
+  },
+  "g-near-me-now": {
+   "id": "g-near-me-now",
+   "verdict": "WEAK",
+   "reason": "The list is nearest-first and ignores 'right now', so a tiny neighborhood park and a bar outrank the LA Arboretum, and the seasonal 626 Night Market appears even though it only runs on select summer weekends.",
+   "missing": [
+    "Santa Anita Park (racetrack)"
+   ]
+  },
+  "g-mbs-hidden": {
+   "id": "g-mbs-hidden",
+   "verdict": "WRONG",
+   "reason": "These are literal keyword matches on 'secret', 'gem' and 'hidden' (a crystal shop, a gem museum, a business called HIDDEN), not hidden-gem sights near Marina Bay.",
+   "missing": [
+    "Fort Canning Park / Battlebox",
+    "Emerald Hill Road",
+    "Pinnacle@Duxton Sky Bridge"
+   ]
+  },
+  "g-rome-walking-tours": {
+   "id": "g-rome-walking-tours",
+   "verdict": "GOOD",
+   "reason": "The top five are real Rome walking-tour operators near the historic core; only the tail is junk (a 2-review listing and one named just 'Rome').",
+   "missing": []
+  },
+  "g-istanbul-landmarks": {
+   "id": "g-istanbul-landmarks",
+   "verdict": "WEAK",
+   "reason": "Minor monuments with about 100 reviews (Gulhane Fountain, Fatih Mansion, a 12-review ramp tower) are mixed in, and Topkapi Palace and the Blue Mosque, both right next door, are absent.",
+   "missing": [
+    "Topkapi Palace",
+    "Blue Mosque (Sultan Ahmed Mosque)",
+    "Galata Tower"
+   ]
+  },
+  "g-dallas-after-5": {
+   "id": "g-dallas-after-5",
+   "verdict": "WEAK",
+   "reason": "'After 5 pm' is ignored: SPARK! and the Holocaust Museum close around 5 and the Sixth Floor Museum around 6, and three entries are the same JFK site at 411 Elm St; only Reunion Tower and the Museum of Illusions suit an evening.",
+   "missing": [
+    "Klyde Warren Park",
+    "Deep Ellum"
+   ]
+  },
+  "g-tokyo-speakeasy": {
+   "id": "g-tokyo-speakeasy",
+   "verdict": "WRONG",
+   "reason": "These are generic Chiyoda cafes, beer bars and a burger joint (a cafe terrace is #1); apart from possibly JANAI COFFEE at 4 mi, none is a speakeasy.",
+   "missing": [
+    "The SG Club",
+    "Bar BenFiddich",
+    "Bar Trench"
+   ]
+  },
+  "g-bellagio-running": {
+   "id": "g-bellagio-running",
+   "verdict": "WEAK",
+   "reason": "Every result is a 2\u20137 mi drive from the Bellagio and the nearest trailhead is rated 3.3; Sunset Park is the one runners' standard here.",
+   "missing": []
+  },
+  "g-vancouver-hikes": {
+   "id": "g-vancouver-hikes",
+   "verdict": "GOOD",
+   "reason": "These are real North Shore and Pacific Spirit trails, including the Grouse Grind and Baden Powell, though some low-review fragments lead.",
+   "missing": [
+    "Quarry Rock (Deep Cove)",
+    "Lynn Canyon Park"
+   ]
+  },
+  "g-orlando-kids": {
+   "id": "g-orlando-kids",
+   "verdict": "WEAK",
+   "reason": "Escape rooms and game-show venues on International Drive dominate (better for teens and adults); WonderWorks is the only classic kids' pick, and the search sat on I-Drive even though the landmark center was the Disney parks.",
+   "missing": [
+    "Gatorland",
+    "SEA LIFE Orlando Aquarium",
+    "Crayola Experience Orlando"
+   ]
+  },
+  "g-restroom-near": {
+   "id": "g-restroom-near",
+   "verdict": "WEAK",
+   "reason": "After one park, the list is seven duplicate anonymous 'Bathroom'/'Male'/'Female Bathroom' pins with no venue name (apparently inside the Santa Anita mall), and closer reliable options are missing.",
+   "missing": [
+    "Arcadia County Park (0.2 mi)",
+    "Arcadia Public Library",
+    "The Shops at Santa Anita"
+   ]
+  },
+  "g-station-restroom": {
+   "id": "g-station-restroom",
+   "verdict": "WRONG",
+   "reason": "The results are station entrances, neighboring stations and the bus terminal, not restroom locations inside Shinjuku Station.",
+   "missing": [
+    "Restrooms in Busta Shinjuku",
+    "Restrooms in NEWoMan / Lumine at the station"
+   ]
+  },
+  "g-atm-fees": {
+   "id": "g-atm-fees",
+   "verdict": "WEAK",
+   "reason": "No fee filtering happened: a Bitcoin ATM and a gas-station ATM (typically the highest fees) are included, #1 is a merchant-services company with 0 reviews, and only the Chase and Citibank ATMs fit.",
+   "missing": [
+    "Bank-branch ATMs (e.g. Bank of America, Wells Fargo); unsure of exact Arcadia locations"
+   ]
+  },
+  "g-exchange-weekend": {
+   "id": "g-exchange-weekend",
+   "verdict": "GOOD",
+   "reason": "Myeongdong and Namdaemun money changers (MoneyBox, etc.) are the canonical weekend exchange answer in Seoul, though the cards show no distance or rating data.",
+   "missing": []
+  },
+  "g-best-rates": {
+   "id": "g-best-rates",
+   "verdict": "WRONG",
+   "reason": "Only two results came back, a crypto ATM and a check-cashing/remittance shop; neither is a currency exchange with good rates.",
+   "missing": [
+    "Bank branches that order foreign currency (e.g. Chase, Bank of America, East West Bank); unsure of exact Arcadia branches"
+   ]
+  },
+  "g-247-store": {
+   "id": "g-247-store",
+   "verdict": "WEAK",
+   "reason": "The '24/7' constraint was dropped from the query sent, so drugstores that usually close at night (CVS, a 2.5-rated Walgreens) are mixed in, and no distance or hours are shown; the 7-Elevens do answer it.",
+   "missing": []
+  },
+  "g-supermarket": {
+   "id": "g-supermarket",
+   "verdict": "GOOD",
+   "reason": "Grocery Outlet, Trader Joe's, Ralphs, ALDI and Vons are exactly right; only #1 is a stray 1-review 'Whole Foods Bakery' sub-listing 2.2 mi away.",
+   "missing": []
+  },
+  "g-adapter": {
+   "id": "g-adapter",
+   "verdict": "WEAK",
+   "reason": "The nearby mall is plausible, but the rest are malls 7\u201313 mi away and two night markets; there are no electronics, big-box or drugstore results, which is where you'd actually buy an adapter.",
+   "missing": [
+    "Best Buy",
+    "Target",
+    "Walmart (unsure of nearest branches)"
+   ]
+  },
+  "g-organic-grocery": {
+   "id": "g-organic-grocery",
+   "verdict": "WEAK",
+   "reason": "La Vie Claire is the only organic grocer; the rest are generic supermarkets and minimarts, one 1.5 mi away in Clichy.",
+   "missing": [
+    "Naturalia",
+    "Biocoop",
+    "Bio c' Bon"
+   ]
+  },
+  "g-milan-shopping-street": {
+   "id": "g-milan-shopping-street",
+   "verdict": "WEAK",
+   "reason": "The Galleria is the right #1, but most of the remaining slots are souvenir kiosks, a minimarket and a food hall, not shopping streets.",
+   "missing": [
+    "Via Montenapoleone (Quadrilatero della Moda)",
+    "Corso Vittorio Emanuele II",
+    "Corso Buenos Aires"
+   ]
+  },
+  "g-dubai-malls": {
+   "id": "g-dubai-malls",
+   "verdict": "WEAK",
+   "reason": "An online-only 'shopping center' with 2 reviews and Deira discount stores lead; Dubai Mall is only #5 and then repeats as its own sub-stores, and other major malls are missing.",
+   "missing": [
+    "Mall of the Emirates",
+    "Dubai Hills Mall",
+    "Ibn Battuta Mall"
+   ]
+  },
+  "g-artisan": {
+   "id": "g-artisan",
+   "verdict": "GOOD",
+   "reason": "These are genuine Oaxaca artisan shops and cooperatives, including Huizache, MARO and La Casa de las Artesan\u00edas.",
+   "missing": []
+  },
+  "g-spice-market": {
+   "id": "g-spice-market",
+   "verdict": "WRONG",
+   "reason": "The famous Spice Bazaar is absent; results are junk user pins (an Arabic 'popular market', a Hebrew 'Grand Bazaar' with 8 reviews, a 5-review 'souk'), an underground passage and a flower market.",
+   "missing": [
+    "Spice Bazaar (M\u0131s\u0131r \u00c7ar\u015f\u0131s\u0131)",
+    "Grand Bazaar (main listing)",
+    "Kad\u0131k\u00f6y Market"
+   ]
+  },
+  "g-salsa-clubs": {
+   "id": "g-salsa-clubs",
+   "verdict": "WEAK",
+   "reason": "Mostly Old Havana tourist bars and restaurants (Floridita, Bodeguita, Antojos) with at most live son; Casa de la M\u00fasica Centro at #8 is the only true salsa club.",
+   "missing": [
+    "Casa de la M\u00fasica de Miramar",
+    "Caf\u00e9 Cantante Mi Habana",
+    "Sal\u00f3n Rosado Benny Mor\u00e9 (La Tropical)"
+   ]
+  },
+  "g-rooftop-romantic": {
+   "id": "g-rooftop-romantic",
+   "verdict": "WEAK",
+   "reason": "A cannabis dispensary and non-rooftop Chinatown bars are mixed in with a backpacker Khaosan rooftop, and the classic romantic rooftops, including the Wat Arun-view bars right by Rattanakosin, are missing.",
+   "missing": [
+    "Sky Bar at Lebua",
+    "Vertigo & Moon Bar (Banyan Tree)",
+    "Eagle Nest Bar (Sala Rattanakosin)"
+   ]
+  },
+  "g-craft-beer": {
+   "id": "g-craft-beer",
+   "verdict": "GOOD",
+   "reason": "Wayfinder, BeerMongers, Lucky Lab, Beer, Treebeerd's and Deschutes are fair craft-beer answers; only the Marriott whiskey bar is off.",
+   "missing": [
+    "Breakside Brewery",
+    "Cascade Brewing Barrel House"
+   ]
+  },
+  "g-happy-hour": {
+   "id": "g-happy-hour",
+   "verdict": "WEAK",
+   "reason": "#1 is a Bluestone Lane coffee shop and several are restaurants rather than happy-hour bars; BXL Cafe and The Long Room are the real fits.",
+   "missing": [
+    "Jimmy's Corner",
+    "The Rum House"
+   ]
+  },
+  "g-late-dessert": {
+   "id": "g-late-dessert",
+   "verdict": "WEAK",
+   "reason": "'Open after 10 pm' was dropped from the query, and half the list is 17\u201324 mi away in West LA and Hollywood, while the San Gabriel Valley is full of late-night dessert spots; only 626 Ice Cream is a close, solid hit.",
+   "missing": [
+    "Meet Fresh (San Gabriel Valley)",
+    "Sweethoney Dessert (Alhambra)"
+   ]
+  },
+  "g-lisbon-dessert": {
+   "id": "g-lisbon-dessert",
+   "verdict": "WEAK",
+   "reason": "Global gelato chains (Amorino, H\u00e4agen-Dazs, Niv\u00e0) crowd out local sweets, and Past\u00e9is de Bel\u00e9m is missing even though Bel\u00e9m is the search center; only Confeitaria Nacional and Alc\u00f4a fit.",
+   "missing": [
+    "Past\u00e9is de Bel\u00e9m",
+    "Manteigaria",
+    "Pastelaria Versailles"
+   ]
+  },
+  "g-rome-gelato": {
+   "id": "g-rome-gelato",
+   "verdict": "WEAK",
+   "reason": "Mostly tourist-zone shops by Trevi (e.g. 'Gelato in Trevi'), while Rome's renowned gelaterie are absent; Geppy Sferra is the one connoisseur pick.",
+   "missing": [
+    "Giolitti",
+    "Fatamorgana",
+    "Gelateria del Teatro"
+   ]
+  },
+  "g-vegan-dessert": {
+   "id": "g-vegan-dessert",
+   "verdict": "WEAK",
+   "reason": "Chaumont Vegan, Val's and BESTIES fit, but two Indian restaurants (Roots Indian Bistro, Crown of India) are junk, and well-known vegan sweet shops are missing.",
+   "missing": [
+    "Donut Friend",
+    "Kippy's Ice Cream"
+   ]
+  },
+  "g-library": {
+   "id": "g-library",
+   "verdict": "GOOD",
+   "reason": "These are real public libraries, nearest first, starting with Arcadia Public Library at 0.8 mi.",
+   "missing": []
+  },
+  "g-first-date": {
+   "id": "g-first-date",
+   "verdict": "WRONG",
+   "reason": "The traveler said 'not loud bars' and every result is a bar, pub or brewery (Kells, White Horse, Some Random Bar, Old Stove).",
+   "missing": [
+    "Caf\u00e9 Campagne",
+    "Storyville Coffee (Pike Place)",
+    "Olympic Sculpture Park"
+   ]
+  },
+  "g-boba-date": {
+   "id": "g-boba-date",
+   "verdict": "GOOD",
+   "reason": "These are all well-rated boba shops around Diamond Jamboree and Irvine (7 Leaves, Sunright, Tastea, TP Tea), though seating can't be verified.",
+   "missing": []
+  },
+  "g-dim-lit": {
+   "id": "g-dim-lit",
+   "verdict": "WEAK",
+   "reason": "Mostly busy Loop and River North restaurants (Siena Tavern, Bar Mar, The Dearborn) rather than intimate dim rooms; only Beatnik and Gus' fit the mood.",
+   "missing": [
+    "Bavette's Bar & Boeuf",
+    "Gilt Bar",
+    "Maude's Liquor Bar"
+   ]
+  },
+  "g-interactive-date": {
+   "id": "g-interactive-date",
+   "verdict": "GOOD",
+   "reason": "Lucky Strike, Holey Moley and Puttshack are exactly the bowling and mini-golf date spots asked for, close to downtown.",
+   "missing": []
+  },
+  "g-pottery": {
+   "id": "g-pottery",
+   "verdict": "GOOD",
+   "reason": "These are all real Brooklyn ceramics studios that run classes; 'for couples' isn't verified but the answer fits.",
+   "missing": []
+  },
+  "g-board-game-cafe": {
+   "id": "g-board-game-cafe",
+   "verdict": "GOOD",
+   "reason": "Juju, Snakes & Lattes and The Guild House are true board-game cafes; a couple of dessert cafes I can't confirm have game libraries are mixed in.",
+   "missing": [
+    "Bampot House of Tea & Board Games"
+   ]
+  },
+  "g-anniversary": {
+   "id": "g-anniversary",
+   "verdict": "GOOD",
+   "reason": "Arp\u00e8ge, Boutary, La Cal\u00e8che, Le Sergent Recruteur and the Crillon's Jardin d'Hiver are credible reservation-worthy romantic picks.",
+   "missing": [
+    "Le Jules Verne"
+   ]
+  },
+  "g-budget-date": {
+   "id": "g-budget-date",
+   "verdict": "GOOD",
+   "reason": "'Budget' was dropped from the query, but the results are mid-priced, well-liked Covent Garden and Soho spots (Dishoom, Mildreds, Le Garrick, Kricket, Speedboat Bar) that suit an impressive budget date.",
+   "missing": []
+  }
+ }
+}
