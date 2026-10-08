@@ -137,7 +137,13 @@ shelf places. Greater LA data fixes: scripts/attractions-fixes/2026-10-08-la-dre
 (founder runs). **Stamp pages, agreed order:** merge duplicate stamps → match every world/national
 stamp to Google → "Why visit" + "Before you go" (dress code, who may enter — from official sites) →
 pages for unlisted places → traveler place photos (opt-in at stamping, place not people, verified
-visit). **Events (founder, 2026-10-08; NOT built yet — after the Apple resubmission):** its own page,
+visit). **Videos (founder, 2026-10-08), after the stamp pages, before events:** (1) short video
+memories on your own stamps — up to 30 s, private or friends-only by default; (2) video in postcards
+and the Blotter; (3) last, public place videos on attraction pages ("what it looks like inside"),
+opt-in, place not people, verified visit only. Same fail-closed moderation as photos on sampled frames
+plus the audio (speech-to-text), report + block on every video (Apple UGC rules); teens: no public
+videos, friends only with the 24-hour delay. Storage/playback via a video service that converts
+iPhone formats and streams (Cloudflare Stream is the likely pick — confirm pricing first). **Events (founder, 2026-10-08; NOT built yet — after the Apple resubmission):** its own page,
 never Home — this weekend / week / month, games, concerts, theater, holiday events, fireworks,
 festivals, pop-ups; Ticketmaster (dormant code still in the worker) + curated famous yearly events;
 tickets link out (no booking). Event stamps: at a stadium or venue, ask "Are you here for <team> vs
