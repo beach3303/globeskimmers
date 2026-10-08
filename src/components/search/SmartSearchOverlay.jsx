@@ -25,6 +25,9 @@ import { ruleParse, runSmartSearch, ratingIntent, HAS_IN_CLAUSE } from "@/lib/sm
 import { logSearch } from "@/lib/logSearch";
 import { createPageUrl } from "@/utils";
 import DreamAnswerCard from "./DreamAnswerCard";
+import { countryCode } from "@/lib/countries";
+import { stateInfo } from "@/lib/stateNicknames";
+import { showToast } from "@/components/Toast";
 import { openAttraction } from "@/lib/openAttraction";
 
 const IVORY = "#FFFCF7", INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
@@ -124,7 +127,11 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
       // AI when the rules found nothing, OR an "in …" clause they couldn't
       // settle ("southern food in atlanta", "in Atlanta with great reviews").
       const unresolvedPlace = !parsed.place && HAS_IN_CLAUSE.test(raw);
-      if (raw && !explicitPlace && ((!parsed.category && !parsed.place) || unresolvedPlace)) {
+      // A typed COUNTRY or STATE can't be searched as one point — the AI picks
+      // the best city in it (founder, 2026-10-07: beer in Germany, ATV in Hawaii).
+      const areaPlace = !!parsed.place && !!(countryCode(parsed.place) || stateInfo(parsed.place));
+      // Rules found the place but not WHAT (pancakes, zipline, activities) → AI.
+      if (raw && !explicitPlace && (!parsed.category || unresolvedPlace || areaPlace)) {
         try {
           const { data, error } = await callWorker(ROUTE.parseSearch, {
             query: raw,
@@ -140,6 +147,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
               category: data.category || parsed.category || null,
               scope: data.scope && data.scope !== "unknown" ? data.scope : (scope || null),
               place: (data.place || "").trim() || null,
+              region: (data.region || "").trim() || null,
               query: aiQuery.cleaned || parsed.query,
               sort: sort || aiQuery.sort,
               parsedBy: "ai",
@@ -149,6 +157,18 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
         } catch { /* keep the rule result */ }
       }
       if (raw) saveRecent(raw);
+      // A NAMED smaller place (Redondo Beach, Santa Monica) → nearby results
+      // lead; a big city (LA, Tokyo, Atlanta) is searched whole. The big-city
+      // list loads only here, at submit time.
+      if (parsed.place && (parsed.scope === "named_place" || !parsed.scope)) {
+        try {
+          const { isBigCity } = await import("@/lib/bigCities");
+          parsed.nearFirst = !isBigCity(parsed.place) && !parsed.region;
+        } catch { /* whole-area search */ }
+      }
+      if (parsed.region && parsed.place && !destination) {
+        showToast(`${parsed.region} is big — showing ${parsed.place}`, "success");
+      }
       if (destination) {
         // Dream answer — show the destination card instead of routing. Log the
         // search here since runSmartSearch (the usual logger) isn't called.

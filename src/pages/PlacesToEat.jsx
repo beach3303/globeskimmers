@@ -967,6 +967,10 @@ export default function PlacesToEat() {
   useEffect(() => {
     if (routerLocation.state?.presetSort === "rating") setSortByRating(true);
   }, [routerLocation.state?.presetSort]);
+  // A NAMED smaller place (Redondo Beach, not "LA") from Search: places within
+  // 5 miles of it lead, the wider 25-mile net follows (founder, 2026-10-07 —
+  // "best crabs in Redondo Beach area" ranked central-LA spots above the pier).
+  const nearFirst = routerLocation.state?.presetNearFirst === true;
   const [radius, setRadius]             = useState(25); // wide net; no radius UI — results show nearest-first
   const [displayCount, setDisplayCount] = useState(20);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false); // advanced filters live in the shared FilterSheet
@@ -1293,8 +1297,13 @@ export default function PlacesToEat() {
       // Browsing / no active dish search → nearest first.
       r.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
     }
+    if (nearFirst) {
+      // Stable split — each band keeps the order chosen above (rating, tier…).
+      const near = r.filter((x) => (x.distanceMiles ?? 999) <= 5);
+      if (near.length >= 3) r = [...near, ...r.filter((x) => (x.distanceMiles ?? 999) > 5)];
+    }
     return r;
-  }, [restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, searchText, sortByRating]);
+  }, [restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, searchText, sortByRating, nearFirst]);
 
   // ── T1.15: BATCH ENRICH THE VISIBLE PAGE OF OWNED CARDS ──────────────────
   // Was: every owned card fired its own /places/enrich-owned on mount (up to 20

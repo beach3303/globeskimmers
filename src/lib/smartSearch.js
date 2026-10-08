@@ -174,7 +174,7 @@ export function shoppingCategoryFor(query) {
 // LocationContext value (needs switchToNavigateMode). `navigate` is
 // react-router's. Returns {routed, recentered, needsStay?, destinationMode?}.
 export async function runSmartSearch(parsed, { navigate, location }) {
-  const { category, scope, place, query, parsedBy, sort } = parsed || {};
+  const { category, scope, place, query, parsedBy, sort, nearFirst } = parsed || {};
   const cat = category ? SEARCH_CATEGORIES[category] : null;
 
   // 1. Resolve place / re-center.
@@ -210,10 +210,10 @@ export async function runSmartSearch(parsed, { navigate, location }) {
       // Shopping takes a category chip, not free text — map the query to one.
       const shopCat = shoppingCategoryFor(query);
       if (shopCat) opts = { state: { presetCategory: shopCat } };
-    } else if (cat.acceptsQuery && (query || sort)) {
+    } else if (cat.acceptsQuery && (query || sort || nearFirst)) {
       // presetSort 'rating' = "best / top rated" was typed — the finder orders
       // by review-weighted rating instead of distance.
-      opts = { state: { ...(query ? { presetQuery: query } : {}), ...(sort ? { presetSort: sort } : {}) } };
+      opts = { state: { ...(query ? { presetQuery: query } : {}), ...(sort ? { presetSort: sort } : {}), ...(nearFirst ? { presetNearFirst: true } : {}) } };
     }
     navigate(createPageUrl(cat.page), opts);
     return { routed: cat.page, recentered, needsStay };
