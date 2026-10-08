@@ -160,7 +160,9 @@ festivals, pop-ups; Ticketmaster (dormant code still in the worker) + curated fa
 tickets link out (no booking). Event stamps: at a stadium or venue, ask "Are you here for <team> vs
 <team>?" from that day's listings and personalize the stamp. Revenue later: organizers pay to promote
 events and get attendance reports — totals and age bands only, never individuals, small groups
-suppressed, minors only inside totals.
+suppressed, minors only inside totals. **The day organizer reports ship:** add the age-band purpose
+(Analytics, or Advertising or marketing if sold as promotion) to date of birth in Google Play Data safety
+and App Store App Privacy, and a privacy-policy line that anonymous age-band reports go to event partners.
 
 **Reactions & guestbook (founder ask, 2026-09-30): mockup delivered, build awaits a yes.**
 The Blotter — BUILT + DEPLOYED 2026-09-30 (e282fb6; founder said yes to mockup v3
