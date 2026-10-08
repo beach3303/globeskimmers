@@ -975,6 +975,12 @@ export default function PlacesToEat() {
   // crossed the border and San Diego/Chula Vista spots outranked Tijuana. A
   // named place keeps results in its own country; addresses end with it.
   const presetCountry = routerLocation.state?.presetCountry || null;
+  // "affordable / cheap" from Search → the finder's own price filter.
+  useEffect(() => {
+    const mp = routerLocation.state?.presetMaxPrice;
+    if (mp === 1 || mp === 2) setFilterMaxPrice(mp);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routerLocation.state?.presetMaxPrice]);
   const [radius, setRadius]             = useState(25); // wide net; no radius UI — results show nearest-first
   const [displayCount, setDisplayCount] = useState(20);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false); // advanced filters live in the shared FilterSheet
@@ -1297,7 +1303,11 @@ export default function PlacesToEat() {
       // Review-weighted (Bayesian) rating: (R·v + 4.0·50) / (v + 50). A 5.0
       // with 3 reviews scores ~4.06; a 4.6 with 4,600 scores ~4.59. Dish/
       // authenticity tier still leads, so "best authentic X" stays authentic.
-      const wr = (x) => (((x.rating || 0) * (x.userRatingCount || 0)) + 4.0 * 50) / ((x.userRatingCount || 0) + 50);
+      // When a city was NAMED, a place far outside it can't win on rating
+      // alone (founder, 2026-10-07: "best brunch in NYC" ranked a New Jersey
+      // spot 22 miles out first) — beyond 8 miles, 0.03 points per mile.
+      const far = (x) => (presetCountry ? 0.03 * Math.max(0, (x.distanceMiles || 0) - 8) : 0);
+      const wr = (x) => ((((x.rating || 0) * (x.userRatingCount || 0)) + 4.0 * 50) / ((x.userRatingCount || 0) + 50)) - far(x);
       r.sort((a,b) => ((a.tier||1) - (b.tier||1)) || (wr(b) - wr(a)) || ((a.distanceMiles||999) - (b.distanceMiles||999)));
     } else if (filterVibes['sportsBar']) {
       r.sort((a,b) => (b.sportsScore||0) - (a.sportsScore||0));

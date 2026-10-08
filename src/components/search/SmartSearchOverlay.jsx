@@ -21,7 +21,7 @@ import { getPrimaryStay } from "@/lib/savedLocations";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { placePhrase } from "@/lib/placeContext";
-import { ruleParse, runSmartSearch, ratingIntent, HAS_IN_CLAUSE } from "@/lib/smartSearch";
+import { ruleParse, runSmartSearch, ratingIntent, tidyQuery, priceIntent, HAS_IN_CLAUSE } from "@/lib/smartSearch";
 import { logSearch } from "@/lib/logSearch";
 import { createPageUrl } from "@/utils";
 import DreamAnswerCard from "./DreamAnswerCard";
@@ -169,8 +169,9 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
               scope: data.scope && data.scope !== "unknown" ? data.scope : (scope || null),
               place: (data.place || "").trim() || null,
               region: (data.region || "").trim() || null,
-              query: aiQuery.cleaned || parsed.query,
+              query: tidyQuery(priceIntent(aiQuery.cleaned).cleaned) || parsed.query,
               sort: sort || aiQuery.sort,
+              maxPrice: parsed.maxPrice || priceIntent(String(data.query || "")).maxPrice || 0,
               parsedBy: "ai",
               confidence: typeof data.confidence === "number" ? data.confidence : 0.9,
             };

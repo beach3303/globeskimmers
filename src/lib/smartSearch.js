@@ -83,6 +83,30 @@ export function ratingIntent(text) {
   return { sort: "rating", cleaned };
 }
 
+// Trailing filler nouns blur the keyword sent to Google (founder, 2026-10-07:
+// "brunch spot" in NYC returned 9 places; "brunch" returns the real list).
+// Question scaffolding and taste words aren't keywords (founder, 2026-10-07:
+// "where can i find affordable but delicious food in tokyo" was sent to Google
+// verbatim and returned 4 random places).
+const SCAFFOLD = /^(?:where\s+(?:can|could|should|do)\s+(?:i|we)\s+(?:find|get|eat|buy|have|try|go\s+for|go\s+to|drink)|where\s+to\s+(?:find|get|eat|buy|go)|(?:can|could)\s+you\s+(?:find|show)\s+me|find\s+me|show\s+me|i\s+(?:want|need|am\s+looking\s+for)|looking\s+for|are\s+there(?:\s+any)?|is\s+there(?:\s+an?)?|what\s+are(?:\s+the)?|which)\s+/i;
+// Price words become the finder's price filter: 1 = inexpensive, 2 = moderate.
+export function priceIntent(text) {
+  const t = String(text || "");
+  const cheap = /\b(?:cheap|budget|low[\s-]cost|dirt[\s-]cheap)\b/i.test(t);
+  const afford = /\b(?:affordable|inexpensive|reasonabl[ey](?:\s+priced)?|not\s+(?:too\s+)?expensive|good[\s-]value)\b/i.test(t);
+  const maxPrice = cheap ? 1 : afford ? 2 : 0;
+  const cleaned = maxPrice ? t.replace(/\b(?:cheap|budget|low[\s-]cost|dirt[\s-]cheap|affordable|inexpensive|reasonabl[ey](?:\s+priced)?|not\s+(?:too\s+)?expensive|good[\s-]value)\b/gi, " ") : t;
+  return { maxPrice, cleaned };
+}
+export const tidyQuery = (q) => {
+  const t = String(q || "").replace(/\s+/g, " ").trim().replace(SCAFFOLD, "")
+    .replace(/\b(?:delicious|tasty|yummy|amazing|good|great)\b/gi, " ")
+    .replace(/^(?:\s*(?:but|and|some|any)\b)+/i, " ").replace(/\s+(?:but|and)\s*$/i, "")
+    .replace(/\s+/g, " ").trim();
+  const stripped = t.replace(/\s+(?:spots?|places?|joints?|options?|ideas?)$/i, "").trim();
+  return stripped || t;
+};
+
 // Free client rule-pass. Returns {category, scope, place, query, sort,
 // parsedBy, confidence}. confidence >= 0.8 → skip the AI call.
 export function ruleParse(raw, scopeChip) {
@@ -109,11 +133,15 @@ export function ruleParse(raw, scopeChip) {
   // Strip scope phrases so the finder searches the THING, not "ramen near me".
   let query = text.replace(NEAR_ME, "").replace(AT_STAY, "");
   if (place) query = query.replace(/\b(?:in|near|around|close\s+to|next\s+to)\s+[A-Z][\s\S]*$/, "");
-  const { sort, cleaned } = ratingIntent(query);
-  query = cleaned.replace(/\s+/g, " ").trim();
+  // Taste words ("delicious", "tasty") mean the traveler wants the GOOD ones.
+  const tasty = /\b(?:delicious|tasty|yummy|amazing)\b/i.test(text);
+  const price = priceIntent(query);
+  const { sort, cleaned } = ratingIntent(price.cleaned);
+  query = tidyQuery(cleaned);
+  const maxPrice = price.maxPrice;
 
   const confident = !!(category || place || (scope && scope !== "named_place"));
-  return { category, scope, place, query, sort, parsedBy: "rule", confidence: confident ? 0.85 : 0.2 };
+  return { category, scope, place, query, sort: sort || (tasty ? "rating" : null), maxPrice, parsedBy: "rule", confidence: confident ? 0.85 : 0.2 };
 }
 
 // Haiku parse (only on rule-miss) via the cheap prompt-cached /parse-search
@@ -178,7 +206,7 @@ export function shoppingCategoryFor(query) {
 // LocationContext value (needs switchToNavigateMode). `navigate` is
 // react-router's. Returns {routed, recentered, needsStay?, destinationMode?}.
 export async function runSmartSearch(parsed, { navigate, location }) {
-  const { category, scope, place, query, parsedBy, sort, nearFirst } = parsed || {};
+  const { category, scope, place, query, parsedBy, sort, nearFirst, maxPrice } = parsed || {};
   const cat = category ? SEARCH_CATEGORIES[category] : null;
 
   // 1. Resolve place / re-center.
@@ -215,7 +243,7 @@ export async function runSmartSearch(parsed, { navigate, location }) {
       // Shopping takes a category chip, not free text — map the query to one.
       const shopCat = shoppingCategoryFor(query);
       if (shopCat) opts = { state: { presetCategory: shopCat } };
-    } else if (cat.acceptsQuery && (query || sort || nearFirst)) {
+    } else if (cat.acceptsQuery && (query || sort || nearFirst || maxPrice)) {
       // A generic word ("restaurants", "food", "cafes", "things to do") isn't a
       // keyword to send to Google — it means BROWSE the place (founder,
       // 2026-10-07: bare "restaurant" in Munich returned nothing from Google).
@@ -223,7 +251,7 @@ export async function runSmartSearch(parsed, { navigate, location }) {
       const q = GENERIC.test(String(query || "").trim()) ? "" : query;
       // presetSort 'rating' = "best / top rated" was typed — the finder orders
       // by review-weighted rating instead of distance.
-      opts = { state: { ...(q ? { presetQuery: q } : {}), ...(sort ? { presetSort: sort } : {}), ...(nearFirst ? { presetNearFirst: true } : {}), ...(placeCountry ? { presetCountry: placeCountry } : {}) } };
+      opts = { state: { ...(q ? { presetQuery: q } : {}), ...(sort ? { presetSort: sort } : {}), ...(nearFirst ? { presetNearFirst: true } : {}), ...(placeCountry ? { presetCountry: placeCountry } : {}), ...(maxPrice ? { presetMaxPrice: maxPrice } : {}) } };
     }
     navigate(createPageUrl(cat.page), opts);
     return { routed: cat.page, recentered, needsStay };
