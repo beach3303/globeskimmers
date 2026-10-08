@@ -14,8 +14,9 @@
 // Writes scripts/search-eval/last-run.json; prints a summary. Cases marked
 // `gap` are known missing capabilities (reported, never counted as failures).
 import { writeFileSync } from "node:fs";
-import { planSearch, finderQuery, shoppingCategoryFor } from "../../src/lib/searchPlan.js";
-import { sortByRating, keepCountry, nearFirst } from "../../src/lib/searchRank.js";
+import { planSearch, finderQuery, shoppingCategoryFor, expandActivityQuery, fameFirstThings } from "../../src/lib/searchPlan.js";
+import { sortByRating, keepCountry, nearFirst, pinInstitutions } from "../../src/lib/searchRank.js";
+import { matchesQuery } from "../../src/lib/searchText.js";
 import { CASES } from "./cases.mjs";
 
 const API = "https://globeskimmers-api.maizasimeon.workers.dev";
@@ -60,9 +61,10 @@ const filtersOf = (p, cat) => [
   p.lateNight && "late-night: only places open until 11 PM or later today",
   p.maxPrice && `price: only ${"$".repeat(p.maxPrice)} or cheaper (unpriced places kept)`,
   p.bars && cat === "eat" && "bars and nightlife venues only",
-  p.sort === "rating" && "sorted by rating weighed by review count",
+  p.sort === "rating" && cat === "eat" && "sorted by rating weighed by review count",
   p.nearFirst && "nearest first",
   p.venue && p.venue !== "all" && `restroom venue: ${p.venue}`,
+  cat === "things" && finderQuery(p) && fameFirstThings({ query: finderQuery(p), sort: p.sort, named: !!p.place, nearFirst: !!p.nearFirst }) && "sorted by popularity (rating weighed by review count)",
 ].filter(Boolean);
 
 async function runCase(c) {
@@ -93,7 +95,7 @@ async function runCase(c) {
   if (p.place) {
     const g = (await post("search-location", { query: p.lookup || p.place, touristCenter: !p.nearFirst }))?.results?.[0];
     if (!g) { fail(`could not geocode "${p.place}"`); return out; }
-    at = { lat: g.coordinates.latitude, lng: g.coordinates.longitude, city: g.address?.city || g.placeName, country: g.address?.country || "" };
+    at = { lat: g.coordinates.latitude, lng: g.coordinates.longitude, city: g.address?.city || g.placeName, country: g.address?.country || "", region: g.address?.state || "" };
     out.at = g.placeName + (g.touristCenter ? ` (landmark center: ${g.touristCenter.landmarks.slice(0, 3).join(", ")})` : "");
   }
   const q = finderQuery(p); // the same call the app makes
@@ -102,17 +104,35 @@ async function runCase(c) {
   let list = [];
   const geo = { latitude: at.lat, longitude: at.lng };
   if (cat === "eat") {
-    const d = await post("restaurants-full", { ...geo, radius: 25 * 1609, maxResults: 40, ...(q ? { searchQuery: q } : {}),
+    const d = await post("restaurants-full", { ...geo, radius: 25 * 1609, maxResults: 40, namedPlace: !!p.place, ...(q ? { searchQuery: q } : {}),
       ...(p.maxPrice ? { filterMaxPrice: p.maxPrice } : {}), ...(p.lateNight ? { cuisine: "latenight" } : {}), ...(p.bars ? { filterBars: true } : {}) });
     list = d.places || d.restaurants || [];
     if (p.maxPrice) list = list.filter((x) => !x.priceLevel || parseInt(x.priceLevel, 10) <= p.maxPrice); // the app's own client price filter
     if (p.place) list = keepCountry(list, at.country);
     if (p.sort === "rating") list = sortByRating(list, { named: !!p.place });
     if (p.nearFirst) list = nearFirst(list);
+    list = pinInstitutions(list, p.nearFirst ? 5 : Infinity);
   } else if (cat === "coffee") {
-    list = (await post("coffee/search", { query: q || "coffee", ...geo, radiusMiles: 25 })).places || [];
+    list = pinInstitutions((await post("coffee/search", { query: q || "coffee", ...geo, radiusMiles: 25, namedPlace: !!p.place })).places || []);
   } else if (cat === "things") {
-    list = (await post("activities/search", { query: q || "things to do", city: at.city, country: at.country, ...geo, radiusMiles: 25 })).places || [];
+    // As ThingsToDo.jsx does it: the page's own landmark data (getActivities)
+    // is the first layer; a typed query adds the live Google search on top.
+    const act = await post("activities", { ...geo, radius: 25 * 1609, maxResults: 60, category: "all", smartRadius: false, countryName: at.country, regionName: at.region || "", cityName: at.city });
+    const dedupe = (xs) => { const seen = new Set(); return xs.filter((a) => { const k = a.placeId || a.id || `${a.lat},${a.lng}`; if (seen.has(k)) return false; seen.add(k); return true; }); };
+    const byDist = (a, b) => (a.distanceMiles ?? 1e9) - (b.distanceMiles ?? 1e9);
+    const strips = { national_icons: act.nationalIcons || [], regional_must_see: act.regionalGems || [], nearby_attractions: act.nearbyAttractions || [] };
+    if (!q) {
+      // A generic "things to do in X" opens the browse page: three landmark
+      // strips, then the nearest-first list.
+      out.sections = Object.fromEntries(Object.entries(strips).map(([k, v]) => [k, v.slice(0, 5).map(nameOf)]));
+      list = dedupe([...strips.national_icons, ...strips.regional_must_see, ...strips.nearby_attractions, ...[...(act.activities || [])].sort(byDist)]);
+    } else {
+      const pool = dedupe([...(act.activities || []), ...strips.national_icons, ...strips.regional_must_see, ...strips.nearby_attractions]);
+      const owned = pool.filter((a) => matchesQuery(`${nameOf(a)} ${(a.types || []).join(" ")} ${a.category || ""} ${a.activityLabel || ""} ${a.editorialSummary?.text || a.editorialSummary || ""}`, q));
+      const live = (await post("activities/search", { query: expandActivityQuery(q), city: at.city, country: at.country, ...geo, radiusMiles: 25 })).places || [];
+      list = dedupe([...owned, ...live]).sort(byDist);
+      if (fameFirstThings({ query: q, sort: p.sort, named: !!p.place, nearFirst: !!p.nearFirst })) list = sortByRating(list, { named: true });
+    }
   } else if (cat === "shopping") {
     const d = await post("shopping", { ...geo, radius: 25 * 1609, maxResults: 30, category: shoppingCategoryFor(q) || "all" });
     list = d.places || d.results || [];
@@ -123,7 +143,7 @@ async function runCase(c) {
   out.count = list.length;
   out.filters = filtersOf(p, cat);
   out.top = list.slice(0, 8).map((x) => ({ name: nameOf(x), rating: x.rating ?? null, reviews: x.userRatingCount ?? null, mi: x.distanceMiles != null ? +x.distanceMiles.toFixed(1) : (x.distanceKm != null ? +(x.distanceKm * 0.621371).toFixed(1) : (typeof x.distance === "number" ? +x.distance.toFixed(1) : null)), addr: x.formattedAddress || x.shortFormattedAddress || "",
-    ...(x.priceLevel ? { price: "$".repeat(parseInt(x.priceLevel, 10) || 0) } : {}), ...(todayHours(x) ? { today: todayHours(x) } : {}), ...(x.primaryType ? { kind: x.primaryType } : {}) }));
+    ...(x.priceLevel ? { price: "$".repeat(parseInt(x.priceLevel, 10) || 0) } : {}), ...(todayHours(x) ? { today: todayHours(x) } : {}), ...(x.primaryType ? { kind: x.primaryType } : {}), ...(x.institution ? { on_wikipedia: true } : {}) }));
 
   const min = e.min ?? 5;
   list.length >= min ? pass(`${list.length} results`) : fail(`${list.length} results, expected ≥${min}`);

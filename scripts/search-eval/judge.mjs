@@ -24,7 +24,7 @@ if (cmd === "pack") {
     const r = byId[id];
     if (!r) throw new Error(`case ${id} is not in last-run.json — run the full suite first`);
     return { id, q: r.q, resolved_place: r.at || "near Arcadia, CA (traveler GPS)", finder: r.route,
-      query_sent: r.plan?.query || "", filters_applied: r.filters || [], top: r.top || [] };
+      query_sent: r.plan?.query || "", filters_applied: r.filters || [], ...(r.sections ? { page_sections: r.sections } : {}), top: r.top || [] };
   });
   const size = Math.ceil(rows.length / packs);
   for (let i = 0; i < packs; i++) writeFileSync(`${dir}/pack-${i + 1}.json`, JSON.stringify(rows.slice(i * size, (i + 1) * size), null, 1));
