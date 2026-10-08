@@ -4,14 +4,21 @@
 //
 //   node scripts/search-eval/judge.mjs pack <dir> [packs=3]
 //       split last-run.json (the cases in graded-ids.json) into <dir>/pack-N.json
-//   node scripts/search-eval/judge.mjs merge <label> <dir>
+//   node scripts/search-eval/judge.mjs pack <dir> [packs] --since <prevDir>
+//       only the cases whose top results differ from <prevDir>'s packs —
+//       reviewers re-grading an IDENTICAL list flip about 5 of 119 verdicts,
+//       so unchanged lists keep their earlier verdict
+//   node scripts/search-eval/judge.mjs merge <label> <dir> [--base quality-X.json]
 //       read every <dir>/verdicts-*.json (several reviewers may grade each case;
-//       the MEDIAN verdict wins), write quality-<label>.json, compare with the
-//       earlier quality-*.json files on the same cases
+//       the MEDIAN verdict wins), fill cases not re-graded from --base, write
+//       quality-<label>.json, compare with the earlier quality-*.json files
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 
 const here = (f) => new URL(`./${f}`, import.meta.url);
-const [cmd, a, b] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const flag = (name) => { const i = argv.indexOf(name); if (i < 0) return null; const v = argv[i + 1]; argv.splice(i, 2); return v; };
+const since = flag("--since"), base = flag("--base");
+const [cmd, a, b] = argv;
 const RANK = { WRONG: 0, WEAK: 1, GOOD: 2 };
 const NAME = ["WRONG", "WEAK", "GOOD"];
 
@@ -28,9 +35,16 @@ if (cmd === "pack") {
       // Reviewers see what the traveler sees: the internal famous-place marker isn't shown in the app.
       top: (r.top || []).map(({ on_wikipedia, ...t }) => t) };
   });
-  const size = Math.ceil(rows.length / packs);
-  for (let i = 0; i < packs; i++) writeFileSync(`${dir}/pack-${i + 1}.json`, JSON.stringify(rows.slice(i * size, (i + 1) * size), null, 1));
-  console.log(`${rows.length} cases → ${packs} packs of ≤${size} in ${dir}`);
+  let todo = rows;
+  if (since) {
+    const prev = {};
+    for (const f of readdirSync(since).filter((f) => /^pack-\d+\.json$/.test(f))) for (const c of JSON.parse(readFileSync(`${since}/${f}`, "utf8"))) prev[c.id] = JSON.stringify(c.top.map((t) => t.name));
+    todo = rows.filter((r) => prev[r.id] !== JSON.stringify(r.top.map((t) => t.name)));
+    console.log(`${rows.length - todo.length} lists unchanged since ${since} (verdicts carry over)`);
+  }
+  const size = Math.max(1, Math.ceil(todo.length / packs));
+  for (let i = 0; i < packs; i++) writeFileSync(`${dir}/pack-${i + 1}.json`, JSON.stringify(todo.slice(i * size, (i + 1) * size), null, 1));
+  console.log(`${todo.length} cases → ${packs} packs of ≤${size} in ${dir}`);
 } else if (cmd === "merge") {
   const label = a, dir = b;
   const votes = {};
@@ -42,6 +56,10 @@ if (cmd === "pack") {
     const sorted = [...vs].sort((x, y) => RANK[x.verdict] - RANK[y.verdict]);
     const med = sorted[(sorted.length - 1) >> 1]; // lower median: a tie leans strict
     verdicts[id] = { ...med, votes: vs.map((v) => v.verdict) };
+  }
+  if (base) {
+    const prior = JSON.parse(readFileSync(here(base), "utf8")).verdicts;
+    for (const [id, v] of Object.entries(prior)) if (!verdicts[id]) verdicts[id] = { ...v, carried: true };
   }
   const ids = Object.keys(verdicts);
   const tally = (vs) => { const t = { GOOD: 0, WEAK: 0, WRONG: 0 }; for (const id of ids) if (vs[id]) t[vs[id].verdict]++; return t; };
