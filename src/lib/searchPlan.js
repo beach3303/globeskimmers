@@ -192,6 +192,20 @@ const NOT_PLACE_ACRONYMS = /\b(ATM|ATV|BBQ|KFC|USA|DIY|VIP|BYOB|IHOP)\b/g;
 // The whole plan, in the order the search screen used to run it inline.
 // opts: { scope = "near_me", scopeTouched = false, explicitPlace = null,
 //         activePhrase = "", parseAI: async (body) => data|null }
+// "portland maine" / "naples, florida" → "Maine" / "Florida": a US state or a
+// country typed straight after the place, or null.
+function typedQualifier(raw, place) {
+  const esc = String(place).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = String(raw || "").match(new RegExp(`\\b${esc}\\s*,?\\s+([a-z]+(?:\\s+[a-z]+)?)`, "i"));
+  if (!m) return null;
+  const words = m[1].split(/\s+/);
+  for (let n = words.length; n >= 1; n--) {
+    const w = words.slice(0, n).join(" ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+    if (stateInfo(w) || countryCode(w)) return w;
+  }
+  return null;
+}
+
 // Returns { parsed, destination }.
 export async function planSearch(raw, opts = {}) {
   const { scope = "near_me", scopeTouched = false, explicitPlace = null, activePhrase = "", parseAI = null } = opts;
@@ -266,10 +280,18 @@ export async function planSearch(raw, opts = {}) {
     parsed.nearFirst = !big(parsed.place) && !parsed.region;
     // How to LOOK UP the place. The location search favors businesses: plain
     // "Barcelona" returned the Camp Nou stadium or a restaurant in Roseville, CA
-    // (Round 1.5, 2026-10-07). "<big city> city" reliably returns the city;
-    // smaller places and landmarks keep the plain name ("Redondo Beach city"
-    // finds City Hall; "Statue of Liberty" should stay the statue).
-    parsed.lookup = big(parsed.place) && !/\bcity\b/i.test(parsed.place) ? `${parsed.place} city` : parsed.place;
+    // (Round 1.5, 2026-10-07). Smaller places and landmarks keep the plain name
+    // ("Redondo Beach" is a city already; "Statue of Liberty" stays the statue).
+    // Round 2 re-grade: "<name> city" found Naples, FLORIDA — so a big city is
+    // looked up WITH its country from the big-city list ("Naples, Italy").
+    // A state/country typed right after the city ("portland maine") beats it.
+    const typed = !/,/.test(parsed.place) && typedQualifier(raw, parsed.place);
+    if (typed) parsed.lookup = `${parsed.place}, ${typed}`;
+    else if (big(parsed.place) && !/,/.test(parsed.place)) {
+      const { bigCityCountry } = await import("./bigCities.js");
+      const cc = bigCityCountry(parsed.place);
+      parsed.lookup = cc ? `${parsed.place}, ${cc}` : `${parsed.place} city`;
+    } else parsed.lookup = parsed.place;
   }
   return { parsed, destination };
 }
