@@ -12119,7 +12119,8 @@ async function handleRestaurantsOwned(request, env, ctx) {
       };
     });
 
-    return jsonResponse({ places, count: places.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
+    const open = await ownedDropClosed(env, places);
+    return jsonResponse({ places: open, count: open.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
   }
@@ -12271,7 +12272,8 @@ async function handleCoffeeOwned(request, env, ctx) {
       } catch { /* Google failed — return whatever owned had below */ }
     }
 
-    return jsonResponse({ places, count: places.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
+    const open = await ownedDropClosed(env, places);
+    return jsonResponse({ places: open, count: open.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
   }
@@ -12414,7 +12416,8 @@ async function handleOwnedFinder(request, env, rpc, tag) {
     // through to the generic mapping below unchanged.
     if (rpc === 'nearby_shopping') {
       const places = await buildOwnedShoppingPlaces(env, rows, String(b.category || 'all'), maxResults, humanize);
-      return jsonResponse({ places, count: places.length, version: 'owned-shop-1', source: 'owned', fallbackInfo: null });
+      const open = await ownedDropClosed(env, places);
+      return jsonResponse({ places: open, count: open.length, version: 'owned-shop-1', source: 'owned', fallbackInfo: null });
     }
 
     rows = rows.slice(0, maxResults);
@@ -12438,7 +12441,8 @@ async function handleOwnedFinder(request, env, rpc, tag) {
       parking: null, seating: null, reviews: [],
     }));
 
-    return jsonResponse({ places, count: places.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
+    const open = await ownedDropClosed(env, places);
+    return jsonResponse({ places: open, count: open.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
   }
@@ -12449,37 +12453,74 @@ async function handleOwnedFinder(request, env, rpc, tag) {
 // Returns the id unchanged if it's already a Google id, or null if unresolvable.
 // A text search for an owned place's Google twin, restricted to a ~700 m box
 // around our coordinates (a bias let same-named places across town win).
-function ownedSearchPayload(name, lat, lng) {
-  const payload = { textQuery: String(name) };
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
-    const dLat = 0.0032, dLng = 0.0032 / Math.max(0.2, Math.cos(lat * Math.PI / 180));
-    payload.locationRestriction = { rectangle: { low: { latitude: lat - dLat, longitude: lng - dLng }, high: { latitude: lat + dLat, longitude: lng + dLng } } };
-  }
-  return payload;
+// Our own place → its Google listing (photo audit, 2026-10-08: 61% of coffee
+// and 66% of food cards had a photo). Was: Google's FIRST result, rejected if it
+// sat > 250 m away, and that "no match" kept 30 days — so one café next to
+// another branch of the same chain, or a Tokyo pin 300 m off, showed no photo
+// for a month. Now: Google's top 5 within ~600 m, and the nearest one that is
+// the same place by name (up to 600 m), or Google's top hit when the names are
+// in different scripts (ケンタッキー… vs "KFC Ginza") and it serves food or
+// drink (up to 450 m), or anything within 40 m.
+// → { gid, closed } · { gid: null } (no listing) · { error: true } (don't remember)
+const ownedLatin = (v) => !/[\u0370-\u1fff\u2e80-\uffff]/.test(String(v || ''));
+async function ownedMatch(env, name, lat, lng) {
+  if (!name || !env.GOOGLE_API_KEY || !Number.isFinite(lat) || !Number.isFinite(lng)) return { error: true };
+  const dLat = 0.0055, dLng = 0.0055 / Math.max(0.2, Math.cos(lat * Math.PI / 180));
+  let places;
+  try {
+    const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.businessStatus,places.types,places.primaryType', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ textQuery: String(name), pageSize: 5, locationRestriction: { rectangle: { low: { latitude: lat - dLat, longitude: lng - dLng }, high: { latitude: lat + dLat, longitude: lng + dLng } } } }),
+    });
+    if (!r.ok) return { error: true };
+    places = (await r.json())?.places || [];
+  } catch { return { error: true }; }
+  const cands = places.map((p, rank) => {
+    const m = haversineMilesLoc(lat, lng, p.location?.latitude, p.location?.longitude) * 1609.34;
+    const pName = p.displayName?.text || '';
+    const same = gsInstSameName(name, pName);
+    const scriptGap = ownedLatin(name) !== ownedLatin(pName);
+    const ok = (same && m <= 600) || (scriptGap && rank === 0 && m <= 450 && isActuallyARestaurant({ ...p, businessStatus: '' })) || m <= 40;
+    return { p, m, ok, same };
+  }).filter((c) => c.ok && Number.isFinite(c.m));
+  cands.sort((a, b) => (b.same - a.same) || (a.m - b.m));
+  const best = cands[0]?.p;
+  if (!best) return { gid: null };
+  return { gid: best.id, closed: String(best.businessStatus || '').toUpperCase() === 'CLOSED_PERMANENTLY' };
 }
-// Photos/match are trusted only within this distance of our own coordinates.
-const OWNED_MATCH_MAX_M = 250;
+// Cached: owned2gid2:<id> = gid | 'none' (30 d) | 'closed' (90 d). A real match
+// is also written to the old owned2gid:<id> key that other readers use; an old
+// 'none' is re-checked with the matcher above.
+async function ownedGidCached(env, id, name, lat, lng) {
+  const kv = env.GLOBESKIMMERS_KV;
+  const k2 = `owned2gid2:${id}`;
+  const hit = kv ? await kv.get(k2).catch(() => null) : null;
+  if (hit === 'none') return { gid: null };
+  if (hit === 'closed') return { gid: null, closed: true };
+  if (hit) return { gid: hit };
+  const old = kv ? await kv.get(`owned2gid:${id}`).catch(() => null) : null;
+  if (old && old !== 'none') { if (kv) await kv.put(k2, old, { expirationTtl: 180 * 86400 }).catch(() => {}); return { gid: old }; }
+  const m = await ownedMatch(env, name, parseFloat(lat), parseFloat(lng));
+  if (m.error) return { gid: null, transient: true };
+  if (kv) {
+    await kv.put(k2, m.closed ? 'closed' : (m.gid || 'none'), { expirationTtl: (m.closed ? 90 : m.gid ? 180 : 30) * 86400 }).catch(() => {});
+    if (m.gid && !m.closed) await kv.put(`owned2gid:${id}`, m.gid, { expirationTtl: 180 * 86400 }).catch(() => {});
+  }
+  return m.closed ? { gid: null, closed: true } : { gid: m.gid };
+}
+// Our own places Google says closed for good leave every list (marked by the
+// photo lookup above; a place nobody has opened yet stays until it is checked).
+async function ownedDropClosed(env, places) {
+  if (!env.GLOBESKIMMERS_KV || !places?.length) return places || [];
+  const marks = await Promise.all(places.map((p) => /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(p.id || '')) ? env.GLOBESKIMMERS_KV.get(`owned2gid2:${p.id}`).catch(() => null) : null));
+  return places.filter((_, i) => marks[i] !== 'closed');
+}
 async function resolveOwnedGid(env, id, name, lat, lng) {
   id = String(id || '');
   if (!id) return null;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id)) return id; // already a Google id
-  const mapKey = `owned2gid:${id}`;
-  let gid = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(mapKey).catch(() => null) : null;
-  if (gid === 'none') return null;
-  if (gid) return gid;
-  if (!name || !env.GOOGLE_API_KEY) return null;
-  try {
-    const payload = ownedSearchPayload(name, parseFloat(lat), parseFloat(lng));
-    const sr = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method: 'POST', headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': 'places.id', 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (sr.ok) {
-      gid = (await sr.json())?.places?.[0]?.id || null;
-      if (gid && env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(mapKey, gid, { expirationTtl: 180 * 24 * 60 * 60 }).catch(() => {});
-    }
-  } catch { /* no match */ }
-  return gid || null;
+  return (await ownedGidCached(env, id, name, lat, lng)).gid || null;
 }
 
 // On-tap enrich for an owned place: resolve to a Google place id (cached), fetch
@@ -12504,19 +12545,10 @@ async function enrichOwnedOne(env, origin, b) {
   const looksGoogle = /^(places\/)?ChIJ|^(places\/)?[A-Za-z0-9_-]{27}$/.test(id) && !id.includes(':');
   let gid = id && looksGoogle ? id : null;
   if (!gid && id) {
-    const mapKey = `owned2gid:${id}`;
-    gid = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(mapKey).catch(() => null) : null;
-    if (gid === 'none') return { matched: false, photos: [], hours: null };
-    if (!gid && name && env.GOOGLE_API_KEY) {
-      try {
-        const payload = ownedSearchPayload(name, lat, lng);
-        const sr = await fetch('https://places.googleapis.com/v1/places:searchText', {
-          method: 'POST', headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': 'places.id', 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (sr.ok) { gid = (await sr.json())?.places?.[0]?.id || null; if (gid && env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(mapKey, gid, { expirationTtl: 180 * 24 * 60 * 60 }).catch(() => {}); }
-      } catch { /* no match */ }
-    }
+    const r = await ownedGidCached(env, id, name, lat, lng);
+    // Google says it closed for good: the app drops the card.
+    if (r.closed) return { matched: false, closed: true, photos: [], hours: null };
+    gid = r.gid;
   }
   if (!gid) return { matched: false, photos: [], hours: null };
 
@@ -12534,13 +12566,15 @@ async function enrichOwnedOne(env, origin, b) {
     await setInCache(env, dk, place, CONFIG.CACHE_TTL.DETAILS);
   }
 
-  // The twin must actually be HERE: a match farther than OWNED_MATCH_MAX_M is a
-  // different place with the same name — remember "no match" for 30 days
-  // (so it never bills again) and show no one else's photos.
+  // The twin must actually be HERE: a match farther than 650 m is a different
+  // place with the same name — remember "no match" for 30 days (so it never
+  // bills again) and show no one else's photos.
   if (!looksGoogle && Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(place.latitude) && Number.isFinite(place.longitude)) {
     const meters = haversineMilesLoc(lat, lng, place.latitude, place.longitude) * 1609.34;
-    if (meters > OWNED_MATCH_MAX_M) {
-      if (env.GLOBESKIMMERS_KV && id) await env.GLOBESKIMMERS_KV.put(`owned2gid:${id}`, 'none', { expirationTtl: 30 * 24 * 60 * 60 }).catch(() => {});
+    // The matcher allows 600 m for a same-name match; older cached links that
+    // land farther are a different branch.
+    if (meters > 650) {
+      if (env.GLOBESKIMMERS_KV && id) await env.GLOBESKIMMERS_KV.put(`owned2gid2:${id}`, 'none', { expirationTtl: 30 * 24 * 60 * 60 }).catch(() => {});
       return { matched: false, photos: [], hours: null, reason: 'too_far' };
     }
   }
