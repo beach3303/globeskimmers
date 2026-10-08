@@ -131,7 +131,12 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
           const words = parsed.query.split(/\s+/);
           for (let n = Math.min(3, words.length - 1); n >= 1; n--) {
             const tail = words.slice(-n).join(" ");
-            if (isBigCity(tail)) { parsed.place = tail; parsed.scope = "named_place"; parsed.query = words.slice(0, -n).join(" "); break; }
+            if (isBigCity(tail)) {
+              parsed.place = tail; parsed.scope = "named_place";
+              // drop a dangling "in" / "near" left before the city ("…seating in munich")
+              parsed.query = words.slice(0, -n).join(" ").replace(/\s+(?:in|near|around|at)$/i, "").trim();
+              break;
+            }
           }
         } catch { /* stays a near-me search */ }
       }

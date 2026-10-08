@@ -42,7 +42,7 @@ const KEYWORD_MAP = [
   { cat: "convenience", words: ["convenience store", "7-eleven", "corner store", "mini mart", "24 hour store"] },
   { cat: "restroom",    words: ["restroom", "bathroom", "toilet", "washroom"] },
   { cat: "weather",     words: ["weather", "forecast", "temperature"] },
-  { cat: "eat",         words: ["restaurant", "food", "dinner", "lunch", "breakfast", "brunch", "eat", "ramen", "sushi", "pizza", "burger", "taco", "bakery", "dessert", "noodle", "bbq", "halal", "kosher", "vegan", "seafood", "steak", "dim sum", "pho", "curry", "kebab", "cheesecake", "croissant", "donut", "ice cream", "street food"] },
+  { cat: "eat",         words: ["restaurant", "food", "dinner", "lunch", "breakfast", "brunch", "eat", "ramen", "sushi", "pizza", "burger", "taco", "bakery", "dessert", "noodle", "bbq", "halal", "kosher", "vegan", "seafood", "steak", "dim sum", "pho", "curry", "kebab", "cheesecake", "croissant", "donut", "ice cream", "street food", "beer", "brewery", "pub", "wine bar", "cocktail", "bar"] },
 ];
 
 const NEAR_ME = /\b(near\s*me|nearby|around\s*me|close\s*by)\b/i;
@@ -216,9 +216,14 @@ export async function runSmartSearch(parsed, { navigate, location }) {
       const shopCat = shoppingCategoryFor(query);
       if (shopCat) opts = { state: { presetCategory: shopCat } };
     } else if (cat.acceptsQuery && (query || sort || nearFirst)) {
+      // A generic word ("restaurants", "food", "cafes", "things to do") isn't a
+      // keyword to send to Google — it means BROWSE the place (founder,
+      // 2026-10-07: bare "restaurant" in Munich returned nothing from Google).
+      const GENERIC = /^(?:the\s+)?(?:restaurants?|food|foods|places?\s+to\s+eat|eats?|dining|somewhere\s+to\s+eat|coffee|coffee\s+shops?|caf[eé]s?|things\s+to\s+do|attractions?|activities)$/i;
+      const q = GENERIC.test(String(query || "").trim()) ? "" : query;
       // presetSort 'rating' = "best / top rated" was typed — the finder orders
       // by review-weighted rating instead of distance.
-      opts = { state: { ...(query ? { presetQuery: query } : {}), ...(sort ? { presetSort: sort } : {}), ...(nearFirst ? { presetNearFirst: true } : {}), ...(placeCountry ? { presetCountry: placeCountry } : {}) } };
+      opts = { state: { ...(q ? { presetQuery: q } : {}), ...(sort ? { presetSort: sort } : {}), ...(nearFirst ? { presetNearFirst: true } : {}), ...(placeCountry ? { presetCountry: placeCountry } : {}) } };
     }
     navigate(createPageUrl(cat.page), opts);
     return { routed: cat.page, recentered, needsStay };

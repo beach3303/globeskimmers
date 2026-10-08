@@ -4725,7 +4725,7 @@ async function handleParseIntent(request, env) {
 // miss vs ~$0.045 via the generic /invoke-llm it replaces for the spine.
 // ============================================================================
 const PARSE_SEARCH_TTL_SECONDS = 24 * 60 * 60;
-const PARSE_SEARCH_PROMPT_VERSION = 'v6';  // v6: water bodies → waterfront district; v5: country/state/region → best city + region (founder 2026-10-07); v4: a place typed in the query beats the tapped scope (founder 2026-10-07); v3: no hotel / ride categories
+const PARSE_SEARCH_PROMPT_VERSION = 'v7';  // v7: drinks are eat; keep the place as specific as typed; v6: water bodies → waterfront district; v5: country/state/region → best city + region (founder 2026-10-07); v4: a place typed in the query beats the tapped scope (founder 2026-10-07); v3: no hotel / ride categories
 const PARSE_SEARCH_CATEGORIES = new Set(['eat', 'coffee', 'things', 'shopping', 'atm', 'money', 'convenience', 'restroom', 'weather', 'none']);
 const PARSE_SEARCH_SCOPES = new Set(['near_me', 'at_stay', 'named_place', 'unknown']);
 
@@ -4743,8 +4743,8 @@ OUTPUT SCHEMA (return EXACTLY this shape — no extra keys, no markdown):
 }
 
 CATEGORY = which finder fits:
-- eat = any food / restaurant / dish / bakery / dessert
-- coffee = coffee, café, tea, boba
+- eat = any food / restaurant / dish / bakery / dessert — AND drinking out: beer, breweries, pubs, bars, wine, cocktails
+- coffee = coffee, café, tea, boba (never beer, wine or bars)
 - things = things to do, attractions, museums, tours, hikes, sightseeing
 - shopping = shops, malls, souvenirs
 - atm = cash / ATM ; money = currency exchange
@@ -4767,6 +4767,7 @@ RULES:
 7. A place NAMED IN THE QUERY always wins over the tapped scope: "southern food in Atlanta" with scope near_me tapped -> scope "named_place", place "Atlanta". A bare landmark or city ("Eiffel Tower", "Seattle") is also named_place with that place.
 8. If the named place is a COUNTRY, STATE, PROVINCE or other area bigger than one city ("Germany", "Spain", "Hawaii", "Tuscany"), set "place" to the single best real CITY in it for this query (beer in Germany -> "Munich"; ATV in Hawaii -> "Honolulu"; activities for seniors in Spain -> a city that suits it) and set "region" to the area as typed. Otherwise "region" is "".
 9. If the named place is a BODY OF WATER (bay, lake, sea, river, gulf), set "place" to the waterfront city district travelers actually go to (Manila Bay -> "Roxas Boulevard, Manila"; Lake Tahoe -> "South Lake Tahoe").
+10. Keep the place AS SPECIFIC as the traveler typed it — a campus, landmark, street or neighborhood stays itself ("near DLSU Taft" -> place "De La Salle University, Taft Avenue, Manila"; "by Santa Monica Pier" -> "Santa Monica Pier"), never generalized to the city. Read obvious typos ("dear X" means "near X").
 
 EXAMPLES:
 Input: "ramen near my hotel"
