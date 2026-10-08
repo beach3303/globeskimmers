@@ -428,7 +428,7 @@ async function handleNearbySearch(request, env, ctx) {
   const priceLevels = params.priceLevels ? params.priceLevels.split(',') : [];
 
   const filterSuffix = [openNow ? 'open' : '', minRating > 0 ? `r${minRating}` : '', priceLevels.length ? priceLevels.join('-') : ''].filter(Boolean).join('_');
-  const cacheKey = generateCacheKey('nearby', { ...params, types }) + (filterSuffix ? `_${filterSuffix}` : '');
+  const cacheKey = generateCacheKey('nearby', { ...params, types }) + (filterSuffix ? `_v2_${filterSuffix}` : ''); // v2: filters applied here, not sent to Google
 
   const apiKey = env.GOOGLE_API_KEY;
   const baseUrl = url.origin;
@@ -443,9 +443,17 @@ async function handleNearbySearch(request, env, ctx) {
     rankPreference: params.rankBy === 'DISTANCE' ? 'DISTANCE' : 'POPULARITY'
   };
 
-  if (openNow) requestBody.openNow = true;
-  if (minRating > 0) requestBody.minRating = minRating;
-  if (priceLevels.length) requestBody.priceLevels = priceLevels;
+  // Google's searchNearby accepts NONE of openNow / minRating / priceLevels
+  // (those are searchText-only). Sending them failed the whole request, so any
+  // browse with Open now, a rating or a price filter silently lost its nearby
+  // fan-out (found 2026-10-07: Tokyo, price <= 2 → 3 results). Fetch unfiltered,
+  // then filter the normalized places here.
+  const PRICE_NUM = { PRICE_LEVEL_FREE: 0, PRICE_LEVEL_INEXPENSIVE: 1, PRICE_LEVEL_MODERATE: 2, PRICE_LEVEL_EXPENSIVE: 3, PRICE_LEVEL_VERY_EXPENSIVE: 4 };
+  const allowedPrice = new Set(priceLevels.map((x) => PRICE_NUM[x]).filter((n) => n != null));
+  const applyFilters = (list) => list.filter((pl) =>
+    (!openNow || pl.isOpen === true) &&
+    (!(minRating > 0) || (pl.rating || 0) >= minRating) &&
+    (!allowedPrice.size || pl.priceLevel == null || allowedPrice.has(pl.priceLevel)));
 
   const fetchAndCache = async () => {
     const response = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
@@ -468,7 +476,7 @@ async function handleNearbySearch(request, env, ctx) {
       throw err;
     }
     const data = await response.json();
-    const places = (data.places || []).map(p => normalizePlace(p, baseUrl, false));
+    const places = applyFilters((data.places || []).map(p => normalizePlace(p, baseUrl, false)));
     await setInCache(env, cacheKey, places, FRESH + SWR);
     return places;
   };
@@ -10268,6 +10276,9 @@ function getTierForPlace(place, intent) {
     // was strict on brunch/breakfast/cafe/diner primary types, so a French or
     // American place that serves brunch was thrown away as noise — 9 results
     // for brunch in NYC. servesBrunch / servesBreakfast now earn Authentic.
+    // Tier 1 (not just a name containing "brunch") so the RATING decides among
+    // real brunch places instead of name matches leading the list.
+    if (intent.label === "brunch" && place.servesBrunch === true) return 1;
     if (intent.mealTime === "brunch" && place.servesBrunch === true) return 2;
     if (intent.mealTime === "breakfast" && place.servesBreakfast === true) return 2;
     if (isStrict) {
