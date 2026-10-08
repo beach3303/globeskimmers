@@ -5625,7 +5625,10 @@ async function handleSeedCity(request, env) {
 // The region's center is the median point of the most famous stamps within
 // 60 km of the traveler, so every suburb lands on the same center; with fewer
 // than 5 famous places nearby it is the traveler's own spot.
-const DREAM_REGION_KM = 90, DREAM_DAYTRIP_KM = 300;
+const DREAM_REGION_KM = 90, DREAM_DAYTRIP_KM = 250;
+// Event venues (stadiums, arenas, concert halls) are for the events lane, not
+// the shelf of places to see; the Hollywood Bowl-type icons stay via founder_scope.
+const DREAM_VENUE = /\b(stadium|arena|forum|auditorium|speedway|raceway|ballpark|cinema|cinemark|amc|regal|pavilion|coliseum|field)\b/i;
 async function handleDreamShelf(request, env) {
   if (!env.ATTRACTIONS_DB) return jsonResponse({ metro: null, tiers: [] });
   const b = await request.json().catch(() => ({}));
@@ -5645,11 +5648,12 @@ async function handleDreamShelf(request, env) {
     const rows = (await env.ATTRACTIONS_DB.prepare(
       `SELECT * FROM attractions WHERE lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4 AND ${LIVE}
          AND coalesce(founder_scope, scope) IN ('world','national','regional')
-       ORDER BY is_marquee DESC, (popularity IS NULL) ASC, popularity DESC LIMIT 600`
+       ORDER BY (popularity IS NULL) ASC, popularity DESC, sitelinks DESC LIMIT 800`
     ).bind(...box(cLat, cLng, DREAM_DAYTRIP_KM)).all()).results || [];
     const seen = new Set();
     const items = [];
     for (const r of rows) {
+      if (DREAM_VENUE.test(r.name) && !r.founder_scope) continue;
       const key = r.qid || `${String(r.name).toLowerCase()}|${Math.round(r.lat * 200)}|${Math.round(r.lng * 200)}`;
       if (seen.has(key)) continue; // a place listed twice shows once
       seen.add(key);
