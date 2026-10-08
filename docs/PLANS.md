@@ -143,7 +143,10 @@ and the Blotter; (3) last, public place videos on attraction pages ("what it loo
 opt-in, place not people, verified visit only. Same fail-closed moderation as photos on sampled frames
 plus the audio (speech-to-text), report + block on every video (Apple UGC rules); teens: no public
 videos, friends only with the 24-hour delay. Storage/playback via a video service that converts
-iPhone formats and streams (Cloudflare Stream is the likely pick — confirm pricing first). **Events (founder, 2026-10-08; NOT built yet — after the Apple resubmission):** its own page,
+iPhone formats and streams (Cloudflare Stream is the likely pick — confirm pricing first). **Fix after Apple approval (found 2026-10-08):** airport and border stamps take their date from UTC
+(AirportArrivalPrompt.jsx / BorderCrossingPrompt.jsx use `new Date().toISOString().slice(0,10)`), so an
+evening landing in LA is dated the next day — switch to the local date like NearbyStampPrompt does.
+**Events (founder, 2026-10-08; NOT built yet — after the Apple resubmission):** its own page,
 never Home — this weekend / week / month, games, concerts, theater, holiday events, fireworks,
 festivals, pop-ups; Ticketmaster (dormant code still in the worker) + curated famous yearly events;
 tickets link out (no booking). Event stamps: at a stadium or venue, ask "Are you here for <team> vs
