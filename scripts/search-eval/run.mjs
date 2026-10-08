@@ -40,7 +40,7 @@ async function runCase(c) {
   const e = c.expect || {};
 
   const { parsed: p, destination } = await planSearch(c.q, { scope: "near_me", activePhrase: HOME.phrase, parseAI });
-  out.plan = { category: p.category || null, place: p.place || null, region: p.region || null, query: p.query || "", sort: p.sort || null, maxPrice: p.maxPrice || 0, lateNight: !!p.lateNight, bars: !!p.bars, nearFirst: !!p.nearFirst, dream: destination?.name || null };
+  out.plan = { category: p.category || null, place: p.place || null, region: p.region || null, query: p.query || "", sort: p.sort || null, maxPrice: p.maxPrice || 0, lateNight: !!p.lateNight, bars: !!p.bars, venue: p.venue || null, nearFirst: !!p.nearFirst, dream: destination?.name || null };
 
   // ── route ──
   const cat = destination ? "dream" : (p.category || (p.place ? "home" : "none"));
@@ -86,10 +86,10 @@ async function runCase(c) {
     list = d.places || d.results || [];
   } else {
     const path = { atm: "atm-locations", money: "money-exchange", convenience: "convenience-stores", restroom: "restroom-owned" }[cat];
-    if (path) { const d = await post(path, { ...geo, radius: 25 * 1609, maxResults: 30 }); list = d.places || d.stores || d.all_stores || d.results || d.atms || d.locations || d.restrooms || []; }
+    if (path) { const d = await post(path, { ...geo, radius: 25 * 1609, maxResults: 30, ...(cat === "restroom" ? { venueType: p.venue || "all" } : {}) }); list = d.places || d.stores || d.all_stores || d.results || d.atms || d.locations || d.restrooms || []; }
   }
   out.count = list.length;
-  out.top = list.slice(0, 8).map((x) => ({ name: nameOf(x), rating: x.rating ?? null, reviews: x.userRatingCount ?? null, mi: x.distanceMiles != null ? +x.distanceMiles.toFixed(1) : null, addr: x.formattedAddress || x.shortFormattedAddress || "" }));
+  out.top = list.slice(0, 8).map((x) => ({ name: nameOf(x), rating: x.rating ?? null, reviews: x.userRatingCount ?? null, mi: x.distanceMiles != null ? +x.distanceMiles.toFixed(1) : (x.distanceKm != null ? +(x.distanceKm * 0.621371).toFixed(1) : (typeof x.distance === "number" ? +x.distance.toFixed(1) : null)), addr: x.formattedAddress || x.shortFormattedAddress || "" }));
 
   const min = e.min ?? 5;
   list.length >= min ? pass(`${list.length} results`) : fail(`${list.length} results, expected ≥${min}`);
