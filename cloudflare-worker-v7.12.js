@@ -11073,6 +11073,11 @@ async function handleRestaurantsFull(request, env, ctx) {
       intent.kind === "DISH" ? intent.label : null
     );
     const effectiveDietary = DIETARY_FILTER_TYPES.includes(cuisine) ? cuisine : activeDietary && DIETARY_FILTER_TYPES.includes(activeDietary) ? activeDietary : compoundDietary || intentDietary;
+    // Famous institutions matched by the query are marked now, so the quality
+    // heuristics below (authentic-only, tier noise, street food, priced-only)
+    // keep them; the traveler's own filters (late night, dietary) still apply.
+    for (const p of processedPlaces) if (instMeta.has(p.id)) p.institution = instMeta.get(p.id);
+    const keepFamous = (p) => !!p.institution?.lift;
     let finalPlaces = processedPlaces;
     if (cuisine === "latenight") {
       // TODAY's hours in the place's own timezone, open past 11 PM (or 24h).
@@ -11112,7 +11117,7 @@ async function handleRestaurantsFull(request, env, ctx) {
       // the cuisine (tier 4) step aside — as long as at least 5 genuine
       // matches (tiers 1-3, independent) remain, so a thin town never empties.
       if (/\b(authentic|traditional|legit)\b/i.test(rawQuery)) {
-        const genuine = finalPlaces.filter((p) => (p.tier || 4) <= 3 && !p.isChain);
+        const genuine = finalPlaces.filter((p) => ((p.tier || 4) <= 3 && !p.isChain) || keepFamous(p));
         if (genuine.length >= 5) finalPlaces = genuine;
       }
     } else if (cuisine === "sports_bar" || sportsBarVibeActive) {
@@ -11126,7 +11131,7 @@ async function handleRestaurantsFull(request, env, ctx) {
     }
     if (intent.kind === "DISH") {
       const before = finalPlaces.length;
-      finalPlaces = finalPlaces.filter((p) => (p.tier || 5) <= 4);
+      finalPlaces = finalPlaces.filter((p) => (p.tier || 5) <= 4 || keepFamous(p));
       const dropped = before - finalPlaces.length;
       if (dropped > 0) console.log(`\u{1F6AE} Dropped ${dropped} tier-5 noise places`);
     }
@@ -11157,7 +11162,7 @@ async function handleRestaurantsFull(request, env, ctx) {
     // Tim Ho Wan) — for EVERY intent; Round 1 only covered recognized dishes,
     // and "street food" itself parses as GENERAL. Applies when 5+ remain.
     if (/\b(street\s*food|hawker|food\s*stalls?|street\s*vendors?|carinderia|isaw)\b/i.test(rawQuery)) {
-      const indie = finalPlaces.filter((p) => !p.isChain && p.primaryType !== "fast_food_restaurant");
+      const indie = finalPlaces.filter((p) => (!p.isChain && p.primaryType !== "fast_food_restaurant") || keepFamous(p));
       if (indie.length >= 5) finalPlaces = indie;
     }
     // Fast-food megachains don't answer a typed food search unless named
@@ -11171,7 +11176,7 @@ async function handleRestaurantsFull(request, env, ctx) {
     // PRICED places qualify, unpriced ones step aside ("cheap eats" listed
     // unpriced hotel bars and Denny's delivery-only side brands).
     if (filterMaxPrice > 0) {
-      const priced = finalPlaces.filter((p) => p.priceLevel != null && p.priceLevel !== "");
+      const priced = finalPlaces.filter((p) => (p.priceLevel != null && p.priceLevel !== "") || keepFamous(p));
       if (priced.length >= 8) finalPlaces = priced;
     }
     // A typed search gets the shared tidy: duplicate pins collapse, 2 per
@@ -11179,7 +11184,6 @@ async function handleRestaurantsFull(request, env, ctx) {
     if (searchQuery?.trim()) finalPlaces = gsTidy(finalPlaces);
     // Institutions that survived every filter lead, most famous first.
     if (instMeta.size) {
-      for (const p of finalPlaces) if (instMeta.has(p.id)) p.institution = instMeta.get(p.id);
       const famous = finalPlaces.filter((p) => p.institution?.lift).sort((a, b) => b.institution.fame - a.institution.fame);
       finalPlaces = [...famous, ...finalPlaces.filter((p) => !p.institution?.lift)];
     }
