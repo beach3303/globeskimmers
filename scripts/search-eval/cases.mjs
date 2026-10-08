@@ -119,6 +119,9 @@ export const CASES = [
   C("drive-thru", "find me drive through fastfoods in Pasadena", E("eat", { place: /pasadena/i }), ["food", "founder"], "8 — drive-thru filter exists in the app; search doesn't turn it on yet"),
   C("route-vegas-la", "find me restaurants that are open late from las vegas to los angeles", E("eat"), ["food", "founder", "route"], "R — search along a route (I-15) is new"),
 
+  C("near-from-here", "nearby restaurants from here", E("eat", { near: true, query: /^(?:restaurants?)?$/i }), ["food", "founder"]),
+  C("hilton-manhattan", "nearby restaurants near my hilton hotel in manhattan", E("eat", { place: /manhattan|hilton|new york/i }), ["food", "founder"]),
+
   // ── Gemini list 1: food on trips ──
   C("g-must-try-lisbon", "what is the must-try local dish in Lisbon", E("answer"), ["food", "gemini", "answer"], "7 — destination answer: must-try dishes"),
   C("g-locals-shibuya", "where do locals actually eat in Shibuya", E("eat", { place: /shibuya/i, nearFirst: true }), ["food", "gemini"]),

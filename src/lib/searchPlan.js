@@ -21,8 +21,9 @@ export const KEYWORD_MAP = [
   { cat: "eat",         words: ["restaurant", "food", "dinner", "lunch", "breakfast", "brunch", "eat", "ramen", "sushi", "pizza", "burger", "taco", "bakery", "dessert", "noodle", "bbq", "halal", "kosher", "vegan", "seafood", "steak", "dim sum", "pho", "curry", "kebab", "cheesecake", "croissant", "donut", "ice cream", "street food", "beer", "brewery", "pub", "wine bar", "cocktail", "bar"] },
 ];
 
-const NEAR_ME = /\b(near\s*me|nearby|around\s*me|close\s*by)\b/i;
-const AT_STAY = /\b(near|at|by|around|from)\s+(my|our|the)\s+(hotel|stay|airbnb|place|room|accommodation|lodging)\b/i;
+const NEAR_ME = /\b(near\s*me|nearby|around\s*me|close\s*by|(?:from|around|near)\s+here)\b/i;
+// "near my hotel", and also "near my Hilton hotel" / "by our beach airbnb".
+const AT_STAY = /\b(near|at|by|around|from)\s+(my|our|the)\s+(?:[\w'’-]+\s+){0,2}(hotel|stay|airbnb|place|room|accommodation|lodging|resort|hostel|condo)\b/i;
 // "... in Positano" / "... in New York" — a Capitalized place at the end.
 const IN_PLACE = /\bin\s+([A-Z][\w'’.-]*(?:\s+[A-Z][\w'’.-]*){0,3})\s*$/;
 // "street food near DLSU Taft" / "shaved ice near Arcadia" — a NAMED place
@@ -113,7 +114,7 @@ export function ruleParse(raw, scopeChip) {
   }
 
   // Strip scope phrases so the finder searches the THING, not "ramen near me".
-  let query = text.replace(NEAR_ME, "").replace(AT_STAY, "");
+  let query = text.replace(new RegExp(NEAR_ME.source, "gi"), "").replace(AT_STAY, ""); // every near-me phrase ("nearby … from here")
   if (place) query = query.replace(/\b(?:in|near|around|close\s+to|next\s+to|inside|at)\s+[A-Z][\s\S]*$/, "");
   // Taste words ("delicious", "tasty") mean the traveler wants the GOOD ones.
   const tasty = /\b(?:delicious|tasty|yummy|amazing)\b/i.test(text);
