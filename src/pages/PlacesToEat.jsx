@@ -1262,6 +1262,10 @@ export default function PlacesToEat() {
   // Kept here: filters that use Google's native query params (openNow,
   // minRating, maxPrice) — safe to reapply as a UI safety net — and the
   // multi-select cuisine type filter (a different mechanism).
+  // Batch enrich results (declared before `filtered`, which drops places the
+  // lookup reports closed for good).
+  const [ownedEnrich, setOwnedEnrich] = useState({});
+  const ownedEnrichAsked = useRef(new Set());
   const filtered = useMemo(() => {
     let r = [...restaurants];
 
@@ -1319,8 +1323,9 @@ export default function PlacesToEat() {
     }
     if (nearFirst) r = nearFirstSplit(r);
     r = pinInstitutions(r, nearFirst ? 5 : Infinity);
+    r = r.filter(x => !ownedEnrich[x.id || x.placeId]?.closed); // Google says it closed for good
     return r;
-  }, [restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, searchText, sortByRating, nearFirst, presetCountry]);
+  }, [ownedEnrich, restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, searchText, sortByRating, nearFirst, presetCountry]);
 
   // ── T1.15: BATCH ENRICH THE VISIBLE PAGE OF OWNED CARDS ──────────────────
   // Was: every owned card fired its own /places/enrich-owned on mount (up to 20
@@ -1328,8 +1333,6 @@ export default function PlacesToEat() {
   // worker caps a batch at 20 = exactly one page). ownedEnrich[key] semantics:
   // undefined = batch pending, payload = result, null = batch missed/errored →
   // that card's own single-call fallback runs (same KV cache server-side).
-  const [ownedEnrich, setOwnedEnrich] = useState({});
-  const ownedEnrichAsked = useRef(new Set());
   useEffect(() => {
     const owned = filtered.slice(0, displayCount)
       .filter(r => r.source === 'owned')

@@ -615,6 +615,10 @@ export default function CoffeeFinderPage() {
   // drop it (the pill is disabled meanwhile) rather than show an empty list.
   useEffect(()=>{ if(!hoursKnown){ if(quickFilter==='open') setQuickFilter('all'); if(filterOpenNow) setFilterOpenNow(false); } },[hoursKnown]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Batch enrich results (declared before `filtered`, which drops cafés the
+  // lookup reports closed for good).
+  const [ownedEnrich,setOwnedEnrich]=useState({});
+  const ownedEnrichAsked=useRef(new Set());
   const filtered = useMemo(()=>{
     // Searching: within-radius merged results, or the closest few beyond if
     // nothing is within radius (better than an empty screen). Else: browse.
@@ -645,8 +649,9 @@ export default function CoffeeFinderPage() {
       return sb-sa;
     });
     if(submitted) r=pinInstitutions(r);
+    r=r.filter(s=>!ownedEnrich[s.id||s.placeId]?.closed); // Google says it closed for good
     return r;
-  },[shopsWithHours,searchMerged,submitted,radius,quickFilter,sortBy,filterOpenNow,hoursKnown,filterWifi,filterShopType,filterWork,filterOutlets,filterQuiet,filterAC,workProfiles]);
+  },[ownedEnrich,shopsWithHours,searchMerged,submitted,radius,quickFilter,sortBy,filterOpenNow,hoursKnown,filterWifi,filterShopType,filterWork,filterOutlets,filterQuiet,filterAC,workProfiles]);
 
   // ── T1.15: BATCH ENRICH VISIBLE OWNED CAFÉS ──────────────────────────────
   // Was: every owned card fired its own /places/enrich-owned on mount (one call
@@ -654,8 +659,6 @@ export default function CoffeeFinderPage() {
   // (the worker's batch cap). ownedEnrich[key]: undefined = batch pending,
   // payload = result, null = batch missed/errored → that card's own single-call
   // fallback runs (same KV cache server-side).
-  const [ownedEnrich,setOwnedEnrich]=useState({});
-  const ownedEnrichAsked=useRef(new Set());
   useEffect(()=>{
     const owned=filtered.filter(s=>s.source==='owned')
       .map(s=>({id:s.id||s.placeId,name:s.displayName?.text||s.name,lat:s.lat,lng:s.lng}))
