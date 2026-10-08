@@ -8280,7 +8280,7 @@ async function handleCoffeeKeywordSearch(request, env, ctx) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return jsonResponse({ places: [] });
     const radiusMiles = Math.max(parseFloat(b.radiusMiles) || 10, 5);
     const geoKey = `${lat.toFixed(2)}_${lng.toFixed(2)}`;
-    const cacheKey = `coffeesearch:v1:${query.toLowerCase()}:${geoKey}:${Math.round(radiusMiles)}`;
+    const cacheKey = `coffeesearch:v2:${query.toLowerCase()}:${geoKey}:${Math.round(radiusMiles)}`; // v2: tidy
     const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
     if (cached) return jsonResponse(cached);
 
@@ -8304,6 +8304,7 @@ async function handleCoffeeKeywordSearch(request, env, ctx) {
         })
         .filter((p) => p && p.distanceMiles <= capMi)
         .sort((a, b) => (a.distanceMiles ?? 1e9) - (b.distanceMiles ?? 1e9));
+      places = gsTidy(places);
     } catch { places = []; }
 
     const payload = { places, query };
@@ -10236,6 +10237,8 @@ const KNOWN_CHAINS = [
   // coffee / donuts / dessert
   "starbucks", "dunkin", "krispy kreme", "peet's coffee", "dutch bros", "tim hortons", "baskin-robbins", "baskin robbins", "cold stone", "dairy queen",
   // casual dining
+  // Philippine / Asian mall chains (founder, 2026-10-07: Manila street food)
+  "tim ho wan", "kuya j", "army navy", "mang inasal", "chowking", "greenwich pizza", "max's restaurant", "yellow cab", "shakey's", "tokyo tokyo", "jollibee",
   "applebee", "chili's", "tgi friday", "denny's", "ihop", "cracker barrel", "red lobster", "outback", "texas roadhouse", "cheesecake factory", "red robin", "ruby tuesday", "golden corral", "bj's restaurant",
 ];
 const FOODISH_TYPE = /food|restaurant|cafe|coffee|bakery|bar$|^bar_|pub|brewery|winery|deli|dessert|ice_cream|gelato|juice|tea|chocolat|candy|confection|market|grocery|butcher|seafood|bistro|diner|snack|night_club|lounge|izakaya/;
@@ -10244,6 +10247,24 @@ const isKnownChain = (name) => {
   return KNOWN_CHAINS.some((c) => n.includes(c));
 };
 
+const GS_WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+function gsOpenLateToday(hours, utcOffsetMinutes) {
+  if (!Array.isArray(hours) || !hours.length) return false;
+  const local = new Date(Date.now() + (Number.isFinite(utcOffsetMinutes) ? utcOffsetMinutes : 0) * 60000);
+  const day = GS_WEEKDAYS[local.getUTCDay()];
+  const today = hours.find((h) => String(h).startsWith(day));
+  if (!today) return false;
+  const t = String(today).toLowerCase();
+  if (t.includes("24 hours")) return true;
+  if (t.includes("closed")) return false;
+  const times = [...t.matchAll(/(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m/g)];
+  if (!times.length) return false;
+  const last = times[times.length - 1];
+  let h = parseInt(last[1], 10) % 12;
+  if (last[3] === "p") h += 12;
+  const close = h + (parseInt(last[2] || "0", 10) / 60);
+  return close >= 23 || close <= 5; // 11 PM or later, or past midnight
+}
 function getTierForPlace(place, intent) {
   if (intent.kind === "GENERAL") return 1;
   const types = new Set([...place.types || [], place.primaryType || ""].map((t) => t.toLowerCase()));
@@ -10981,16 +11002,10 @@ async function handleRestaurantsFull(request, env, ctx) {
     const effectiveDietary = DIETARY_FILTER_TYPES.includes(cuisine) ? cuisine : activeDietary && DIETARY_FILTER_TYPES.includes(activeDietary) ? activeDietary : compoundDietary || intentDietary;
     let finalPlaces = processedPlaces;
     if (cuisine === "latenight") {
-      finalPlaces = finalPlaces.filter((p) => {
-        if (!p.hours || p.hours.length === 0) return false;
-        return p.hours.some((dayStr) => {
-          const text = dayStr.toLowerCase();
-          if (text.includes("24 hours")) return true;
-          const parts = text.split(/[-–to]/);
-          const closingPart = parts.length > 1 ? parts[parts.length - 1] : text;
-          return /(10|11):\d{2}\s*pm|(12|1|2|3|4|5):\d{2}\s*am/i.test(closingPart);
-        });
-      });
+      // TODAY's hours in the place's own timezone, open past 11 PM (or 24h).
+      // Was: ANY day closing 10 PM+, and the parser split on the letters t/o
+      // (founder, 2026-10-07: Pasadena "late" list was 10 PM dinner spots).
+      finalPlaces = finalPlaces.filter((p) => gsOpenLateToday(p.hours, p.utcOffsetMinutes));
     }
     if (effectiveDietary) {
       finalPlaces = processedPlaces.filter((p) => hasStrongDietaryMatch(p, effectiveDietary));
@@ -11023,6 +11038,12 @@ async function handleRestaurantsFull(request, env, ctx) {
       // authentic / traditional / legit, chains and places that merely SERVE
       // the cuisine (tier 4) step aside — as long as at least 5 genuine
       // matches (tiers 1-3, independent) remain, so a thin town never empties.
+      // "Street food" is never a mall chain (founder, 2026-10-07: Manila got
+      // Jollibee, McDonald's and Tim Ho Wan) — when 5+ independents remain.
+      if (/\b(street\s*food|hawker|food\s*stalls?|street\s*vendors?|carinderia|isaw)\b/i.test(rawQuery)) {
+        const indie = finalPlaces.filter((p) => !p.isChain && p.primaryType !== "fast_food_restaurant");
+        if (indie.length >= 5) finalPlaces = indie;
+      }
       if (/\b(authentic|traditional|legit)\b/i.test(rawQuery)) {
         const genuine = finalPlaces.filter((p) => (p.tier || 4) <= 3 && !p.isChain);
         if (genuine.length >= 5) finalPlaces = genuine;
@@ -11065,6 +11086,9 @@ async function handleRestaurantsFull(request, env, ctx) {
         console.log(`\u{1F504} Fallback fired for "${fallbackQueryLabel}" -> ${fallbackPlaces.length} ${fallbackCuisine} restaurants from existing pool`);
       }
     }
+    // A typed search gets the shared tidy: duplicate pins collapse, 2 per
+    // chain/brand, near-zero-review pins drop when 8+ established remain.
+    if (searchQuery?.trim()) finalPlaces = gsTidy(finalPlaces);
     const intentSorted = intent.kind !== "GENERAL" && !!searchQuery?.trim();
     finalPlaces.forEach((p, i) => {
       p.backendRank = i + 1;
@@ -16053,6 +16077,40 @@ async function handleEventsSearch(request, env) {
   } catch (e) { return jsonResponse({ events: [], experiences: [], error: e.message }); }
 }
 
+// ── Result tidy, shared by Things to Do, Coffee and food search (founder,
+// 2026-10-07 quality review: a dental office for "great views", a crystal shop
+// for "hidden gems", Boiling Crab four times, 0-8-review pins in top slots).
+//  · exact-duplicate names collapse; at most 2 places per chain/brand (same
+//    name, or 3+ leading words in common: "The Matcha Tokyo …", "Hobson's …")
+//  · near-zero-review pins (< 10) drop out when at least 8 established places
+//    remain — an owned-data list with no review counts is never touched
+//  · dropTypes removes non-destinations (medical, offices, salons…)
+const GS_BRAND_WORDS = (n) => String(n || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[`'’]/g, '').replace(/[^a-z0-9& ]+/g, ' ').replace(/^the\s+/, '').split(/\s+/).filter(Boolean);
+function gsSameBrand(a, b) {
+  const x = GS_BRAND_WORDS(a), y = GS_BRAND_WORDS(b);
+  if (!x.length || !y.length) return false;
+  if (x.join(' ') === y.join(' ')) return true;
+  let k = 0; while (k < x.length && k < y.length && x[k] === y[k]) k++;
+  if (k >= 3) return true;
+  // Two shared words + a branch suffix ("Matcha Tokyo Harajuku" / "… Shinjuku")
+  // — unless the shared words are generic ("Tacos El Gordo" / "Tacos El Franc").
+  return k === 2 && x.length >= 3 && y.length >= 3 && !GS_GENERIC_FIRST.has(x[0]);
+}
+const GS_GENERIC_FIRST = new Set(["tacos", "taco", "taqueria", "cafe", "caffe", "coffee", "pizza", "pizzeria", "sushi", "ramen", "el", "la", "le", "les", "los", "las", "il", "bar", "restaurant", "restaurante", "ristorante", "trattoria", "hotel", "casa", "mi", "my", "pho", "bistro", "burger", "burgers", "boulangerie", "patisserie", "gelateria", "bakery", "tea", "beach", "park", "museum", "mercado", "market", "san", "santa", "st", "saint", "new", "old", "big", "little", "golden", "royal", "grand"]);
+function gsTidy(list, { dropTypes = null, brandCap = 2, minReviews = 10 } = {}) {
+  const nameOf = (p) => p.displayName?.text || p.name || '';
+  let out = (list || []).filter((p) => !dropTypes || !(p.types || []).concat(p.primaryType || []).some((t) => dropTypes.test(String(t))));
+  const kept = [];
+  for (const p of out) {
+    const same = kept.filter((q) => gsSameBrand(nameOf(q), nameOf(p)));
+    if (same.some((q) => GS_BRAND_WORDS(nameOf(q)).join(' ') === GS_BRAND_WORDS(nameOf(p)).join(' ') && Math.abs((q.distanceMiles ?? 0) - (p.distanceMiles ?? 0)) < 0.3)) continue; // exact duplicate pin
+    if (same.length >= brandCap) continue;
+    kept.push(p);
+  }
+  const established = kept.filter((p) => (p.userRatingCount || 0) >= minReviews);
+  return established.length >= 8 ? established : kept;
+}
+const GS_NON_DESTINATION = /^(dentist|dental_clinic|doctor|hospital|medical_lab|medical_clinic|physiotherapist|nursing_home|assisted_living_facility|pharmacy|drugstore|veterinary_care|insurance_agency|real_estate_agency|lawyer|accounting|car_dealer|car_repair|car_wash|storage|moving_company|funeral_home|locksmith|plumber|electrician|roofing_contractor|general_contractor|bank|post_office|police|local_government_office|courthouse|primary_school|secondary_school|cannabis_store|laundry|beauty_salon|hair_salon|hair_care|barber_shop|nail_salon|corporate_office|consultant|employment_agency|travel_agency)$/;
 const NOT_AN_ACTIVITY_TYPE = /^(lodging|hotel|motel|resort_hotel|extended_stay_hotel|bed_and_breakfast|guest_house|hostel|inn|japanese_inn|budget_japanese_inn|private_guest_room|cottage|farmstay|apartment_building|apartment_complex|condominium_complex|housing_complex|real_estate_agency)$/;
 const OTA_LISTING_SITE = /(booking\.com|airbnb\.|vrbo\.|bluepillow\.|expedia\.|hotels\.com|agoda\.|tripadvisor\.[a-z.]+\/(hotel|vacationrental))/i;
 async function handleActivitySearch(request, env, ctx) {
@@ -16070,7 +16128,7 @@ async function handleActivitySearch(request, env, ctx) {
     // Cache key includes query + ~1km geo grid + radius so a different city or
     // a wider radius doesn't return a stale set. 3-day TTL like other searches.
     const geoKey = hasGeo ? `${lat.toFixed(2)}_${lng.toFixed(2)}` : (city.toLowerCase() || 'na');
-    const cacheKey = `actsearch:v3:${query.toLowerCase()}:${geoKey}:${Math.round(radiusMiles)}`; // v3: lodging filtered
+    const cacheKey = `actsearch:v4:${query.toLowerCase()}:${geoKey}:${Math.round(radiusMiles)}`; // v4: tidy (dupes, brands, junk pins, non-destinations)
     const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
     if (cached) return jsonResponse(cached);
 
@@ -16097,7 +16155,7 @@ async function handleActivitySearch(request, env, ctx) {
 
     // No booking in the app (founder, 2026-10-03): Viator products are gone;
     // `products` stays an empty list for older builds.
-    const [places, products] = [await placesP, []];
+    const [places, products] = [gsTidy(await placesP, { dropTypes: GS_NON_DESTINATION }), []];
     const payload = { places, products, query };
     if ((places.length || products.length) && ctx) {
       ctx.waitUntil(env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: 3 * 24 * 60 * 60 }).catch(() => {}));
