@@ -1,0 +1,1398 @@
+[
+ {
+  "group": "Q160659",
+  "kind": "ban-conflict",
+  "blocks_merge": true,
+  "reason": "No row is visible today, and keeping one would override a class ban (banned:ride) that the founder's own scope contradicts.",
+  "suggest": "Decide whether this place is a stamp. If yes, clear the class ban on one row and re-run.",
+  "rows": [
+   "curated:united-kingdom-london-london-eye — \"London Eye\" (London, United Kingdom) [duplicate, founder: world]",
+   "wikidata:Q160659 — \"London Eye\" (London, GB) [banned:ride, founder: world]"
+  ]
+ },
+ {
+  "group": "Q18157",
+  "kind": "mistag",
+  "blocks_merge": true,
+  "reason": "The visible row is a church in Djerba, Tunisia; the hidden twin is St. Nicholas Greek Orthodox Church in New York. Different places.",
+  "rows": [
+   "wikidata:Q18157 — \"St. Nicholas Greek Orthodox Church\" (Djerba, TN) [live]",
+   "curated:united-states-new-york-st-nicholas-greek-orthodox-church — \"St. Nicholas Greek Orthodox Church\" (New York, United States) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q186106",
+  "kind": "mistag",
+  "blocks_merge": true,
+  "reason": "'South Beach' (icon) and 'Española Way' (a street in South Beach) share one Wikidata id; the icon's own id says it is a different entity.",
+  "rows": [
+   "icon:Q839805 — \"South Beach\" (Miami Beach, US) [live, founder: world]",
+   "wikidata:Q186106 — \"Espanola Way\" (Miami Beach, US) [review:Q123705]"
+  ]
+ },
+ {
+  "group": "Q841506",
+  "kind": "mistag",
+  "blocks_merge": true,
+  "reason": "Villa Borghese gardens (visible) and Galleria Borghese museum (hidden, founder said national) are two different places under one Wikidata id.",
+  "rows": [
+   "wikidata:Q841506 — \"Villa Borghese\" (Roma, IT) [live]",
+   "curated:italy-rome-galleria-borghese — \"Galleria Borghese\" (Rome, Italy) [duplicate, founder: national]"
+  ]
+ },
+ {
+  "group": "Q913672",
+  "kind": "mistag",
+  "blocks_merge": true,
+  "reason": "The visible row is 'SFMOMA — Artists Gallery' at Fort Mason, 3.6 km from the real SFMOMA (the hidden auto row). Two different places share one Wikidata id.",
+  "rows": [
+   "wikidata:Q913672 — \"San Francisco Museum Of Modern Art &mdash; Artists Gallery\" (San Francisco, US) [live]",
+   "auto:united-states-san-francisco-san-francisco-museum-of-modern-art — \"San Francisco Museum of Modern Art\" (San Francisco, United States) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1047206",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 95 km apart (Siavonga, Zambia / Kariba, ZM): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q1047206 — \"Lake Kariba\" (Siavonga, Zambia) [live, founder: regional]",
+   "wikidata:Q1047206 — \"Lake Kariba\" (Kariba, ZM) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1109031",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 739 km apart (Bogotá, Colombia / Santa Marta, CO): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q1109031 — \"Gold Museum\" (Bogotá, Colombia) [live, founder: national]",
+   "wikidata:Q1109031 — \"Museo del Oro\" (Santa Marta, CO) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q1137661",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 28 km apart (Gračanica, Kosovo / Gračanica (Kosovo), XK): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q1137661 — \"Gračanica Monastery\" (Gračanica, Kosovo) [live, founder: regional]",
+   "wikidata:Q1137661 — \"Gračanica monastery\" (Gračanica (Kosovo), XK) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q116761383",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 2260 km apart (Marshfield, US / Calgary, Canada): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "wikidata:Q116761383 — \"Rotary Park\" (Marshfield, US) [live]",
+   "auto:canada-calgary-rotary-park — \"Rotary Park\" (Calgary, Canada) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q12597",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 1303 km apart (Havana, Cuba / Masaya, NI): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q12597 — \"El Malecón\" (Havana, Cuba) [live, founder: national]",
+   "wikidata:Q12597 — \"El Malecón\" (Masaya, NI) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1510436",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 8.2 km apart (Mulanje, Malawi / Mount Mulanje, MW): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q1510436 — \"Mount Mulanje\" (Mulanje, Malawi) [live, founder: national]",
+   "wikidata:Q1510436 — \"Sapitwa\" (Mount Mulanje, MW) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q15523",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 8385 km apart (Como, Italy / Hamilton (Montana), US): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q15523 — \"Lake Como\" (Como, Italy) [live, founder: world]",
+   "wikidata:Q15523 — \"Lake Como\" (Hamilton (Montana), US) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q157603",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 167 km apart (Cuiabá, Brazil / Santa Cruz (department, Bolivia), BO): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q157603 — \"Pantanal\" (Cuiabá, Brazil) [live, founder: national]",
+   "wikidata:Q157603 — \"Pantanal Boliviano\" (Santa Cruz (department, Bolivia), BO) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q187197",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 8.2 km apart (Te Anau, New Zealand / Fiordland National Park, NZ): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q187197 — \"Milford Sound\" (Te Anau, New Zealand) [live, founder: world]",
+   "wikidata:Q187197 — \"Milford Sound\" (Fiordland National Park, NZ) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q192721",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 19 km apart (Ho Chi Minh City, Vietnam / Huyện Củ Chi, VN / XXVW+XJ, Vietnam): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q192721 — \"Cu Chi Tunnels\" (Ho Chi Minh City, Vietnam) [live, founder: world]",
+   "wikidata:Q192721 — \"Cu Chi tunnels\" (Huyện Củ Chi, VN) [duplicate]",
+   "auto:vietnam-xxvw+xj-cu-chi-tunnel — \"Cu Chi Tunnel\" (XXVW+XJ, Vietnam) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q193325",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 31 km apart (Mary, Turkmenistan / Mongol Empire, MN): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q193325 — \"Ancient Merv\" (Mary, Turkmenistan) [live, founder: national]",
+   "wikidata:Q193325 — \"Merv\" (Mongol Empire, MN) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1984341",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 5.6 km apart (Hong Kong, Hong Kong / Hong Kong, HK): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "curated:hong-kong-hong-kong-ngong-ping-360 — \"Ngong Ping 360\" (Hong Kong, Hong Kong) [live]",
+   "wikidata:Q1984341 — \"Ngong Ping 360\" (Hong Kong, HK) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q223726",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 336 km apart (Šiauliai, Lithuania / Hiiumaa, EE): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q223726 — \"Hill of Crosses\" (Šiauliai, Lithuania) [live, founder: national]",
+   "wikidata:Q223726 — \"Hill of Crosses\" (Hiiumaa, EE) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q2627029",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 8889 km apart (Fátima, Portugal / Tacámbaro, MX): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q2627029 — \"Sanctuary of Fátima\" (Fátima, Portugal) [live, founder: world]",
+   "wikidata:Q2627029 — \"Sanctuary of Fatima\" (Tacámbaro, MX) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q2663377",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 1231 km apart (Mexico City, Mexico / Tulum, MX): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q2663377 — \"Frida Kahlo Museum (Casa Azul)\" (Mexico City, Mexico) [live, founder: national]",
+   "wikidata:Q2663377 — \"Museo Frida Kahlo\" (Tulum, MX) [duplicate, founder: national]"
+  ]
+ },
+ {
+  "group": "Q305419",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 7005 km apart (Mexico City, Mexico / Santa Fe, AR): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q305419 — \"Basilica of Our Lady of Guadalupe\" (Mexico City, Mexico) [live, founder: world]",
+   "wikidata:Q305419 — \"Basílica de Guadalupe\" (Santa Fe, AR) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q318678",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 5441 km apart (Gran Roque, Venezuela / San Sebastián de la Gomera, ES): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q318678 — \"Los Roques Archipelago\" (Gran Roque, Venezuela) [live, founder: national]",
+   "wikidata:Q318678 — \"Los Roques\" (San Sebastián de la Gomera, ES) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q3392",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 1694 km apart (Rutovu, Burundi / Jinja, UG): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q3392 — \"Source of the Nile Pyramid\" (Rutovu, Burundi) [live, founder: regional]",
+   "wikidata:Q3392 — \"Source of the Nile\" (Jinja, UG) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q344570",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 40 km apart (San Ignacio, Belize / San Ignacio (Belize), BZ): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q344570 — \"Actun Tunichil Muknal Cave\" (San Ignacio, Belize) [live, founder: national]",
+   "wikidata:Q344570 — \"Actun Tunichil Muknal\" (San Ignacio (Belize), BZ) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q36034",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 596 km apart (Huangshan, China / Zoucheng, CN): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q36034 — \"Huangshan (Yellow Mountain)\" (Huangshan, China) [live, founder: national]",
+   "wikidata:Q36034 — \"Mount Yi\" (Zoucheng, CN) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q464257",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 18524 km apart (Normandy, France / Omaha, NZ): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q464257 — \"D-Day Landing Beaches (Omaha Beach)\" (Normandy, France) [live, founder: world]",
+   "wikidata:Q464257 — \"Omaha Beach\" (Omaha, NZ) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q47141",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 72 km apart (San Pedro de Atacama, Chile / Biomes and ecosystems, US): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q47141 — \"Atacama Desert\" (San Pedro de Atacama, Chile) [live, founder: world]",
+   "wikidata:Q47141 — \"Atacama Desert\" (Biomes and ecosystems, US) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q47476",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 1591 km apart (Granada, Spain / Calais, FR): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q47476 — \"Alhambra\" (Granada, Spain) [live, founder: world]",
+   "wikidata:Q47476 — \"Alhambra\" (Calais, FR) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q66085108",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 1550 km apart (Orlando, FL, US / Addison, US): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q66085108 — \"Universal Epic Universe\" (Orlando, FL, US) [live, founder: world]",
+   "wikidata:Q66085108 — \"Celestial Park\" (Addison, US) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q7683479",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 14186 km apart (Menzies, AU / San Francisco, United States): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "wikidata:Q7683479 — \"Tank Hill\" (Menzies, AU) [live]",
+   "auto:united-states-san-francisco-tank-hill-park — \"Tank Hill Park\" (San Francisco, United States) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q770631",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 51 km apart (Kraków, Poland / Oświęcim, PL): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q770631 — \"Kraków Main Market Square\" (Kraków, Poland) [live, founder: world]",
+   "wikidata:Q770631 — \"Rynek Główny\" (Oświęcim, PL) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q7709620",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 11507 km apart (Lourdes, France / Iriga, PH): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q7709620 — \"Sanctuary of Lourdes\" (Lourdes, France) [live, founder: world]",
+   "wikidata:Q7709620 — \"Grotto of Our Lady of Lourdes\" (Iriga, PH) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q775056",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 16172 km apart (Culebra, Puerto Rico (US territory) / Dasol, PH): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q775056 — \"Flamenco Beach\" (Culebra, Puerto Rico (US territory)) [live, founder: world]",
+   "wikidata:Q775056 — \"Culebra Island\" (Dasol, PH) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q826551",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 8.4 km apart (Banaue, Philippines / Banaue, PH): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q826551 — \"Banaue Rice Terraces\" (Banaue, Philippines) [live, founder: world]",
+   "wikidata:Q826551 — \"Banaue Rice Terraces\" (Banaue, PH) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q965776",
+  "kind": "too-far-apart",
+  "blocks_merge": true,
+  "reason": "Rows are 6.1 km apart (Salento, Colombia / Armenia (Colombia), CO): either a different place tagged with this Wikidata id, or the same place with wrong coordinates.",
+  "suggest": "Different place: clear the qid on the stray row. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "icon:Q965776 — \"Cocora Valley\" (Salento, Colombia) [live, founder: national]",
+   "wikidata:Q965776 — \"Cocora Valley\" (Armenia (Colombia), CO) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1123180",
+  "kind": "sub-place",
+  "blocks_merge": true,
+  "reason": "A Wikivoyage listing called just 'Cathedral' sits under the Toledo Old City id.",
+  "rows": [
+   "icon:Q1123180 — \"Toledo Old City\" (Toledo, Spain) [live, founder: national]",
+   "wikidata:Q1123180 — \"Cathedral\" (Toledo, ES) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1133309",
+  "kind": "sub-place",
+  "blocks_merge": true,
+  "reason": "'The Dubai Mall' (visible) carries the Wikidata id of the Dubai Aquarium inside it; the hidden twin is the aquarium.",
+  "rows": [
+   "curated:united-arab-emirates-dubai-the-dubai-mall — \"The Dubai Mall\" (Dubai, United Arab Emirates) [live]",
+   "wikidata:Q1133309 — \"Dubai Aquarium and Underwater Zoo\" (Dubai, AE) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q18769666",
+  "kind": "sub-place",
+  "blocks_merge": true,
+  "reason": "'Castle Keukenhof' is a different building next to Keukenhof Gardens, under the gardens' id.",
+  "rows": [
+   "icon:Q18769666 — \"Keukenhof Gardens\" (Lisse, Netherlands) [live, founder: world]",
+   "wikidata:Q18769666 — \"Castle Keukenhof\" (Lisse, NL) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q220289",
+  "kind": "sub-place",
+  "blocks_merge": true,
+  "reason": "The 'Grand Canyon South Rim' icon carries the national park's Wikidata id; the hidden twin is the whole park. The rims are separate variant stamps.",
+  "rows": [
+   "icon:Q220289 — \"Grand Canyon South Rim\" (Grand Canyon Village, AZ, US) [live, founder: world]",
+   "wikidata:Q220289 — \"Grand Canyon National Park\" (Grand Canyon, US) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q2583112",
+  "kind": "sub-place",
+  "blocks_merge": true,
+  "reason": "'Camp Jurassic' is one area inside Universal Islands of Adventure, listed under the park's Wikidata id.",
+  "rows": [
+   "icon:Q2583112 — \"Universal Islands of Adventure\" (Orlando, FL, US) [live, founder: world]",
+   "wikidata:Q2583112 — \"Camp Jurassic\" (Orlando, US) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q3229105",
+  "kind": "sub-place",
+  "blocks_merge": true,
+  "reason": "'Sea Life Aquarium' is a separate attraction next to Legoland Malaysia, listed under Legoland's Wikidata id.",
+  "rows": [
+   "icon:Q3229105 — \"Legoland Malaysia\" (Johor Bahru, Malaysia) [live, founder: national]",
+   "wikidata:Q3229105 — \"Sea Life Aquarium\" (Iskandar Puteri, MY) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q338512",
+  "kind": "sub-place",
+  "blocks_merge": true,
+  "reason": "'Hotel Sidi Driss' (a Star Wars film location, has a film scene) is one building in Matmata, listed under the troglodyte houses' id.",
+  "rows": [
+   "icon:Q338512 — \"Matmata Troglodyte Houses\" (Matmata, Tunisia) [live, founder: regional]",
+   "wikidata:Q338512 — \"Hotel Sidi Driss\" (مطماطة, TN) [duplicate, founder: regional]"
+  ]
+ },
+ {
+  "group": "Q3630402",
+  "kind": "sub-place",
+  "blocks_merge": true,
+  "reason": "'Dashashwamedh Ghat' is one ghat; the icon is all the Varanasi ghats.",
+  "rows": [
+   "icon:Q3630402 — \"Varanasi Ghats\" (Varanasi, India) [live, founder: world]",
+   "wikidata:Q3630402 — \"Dashashwamedh Ghat\" (Varanasi, IN) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q423654",
+  "kind": "sub-place",
+  "blocks_merge": true,
+  "reason": "'Wat Traphang Thong' is one temple inside Sukhothai Historical Park, listed under the park's id.",
+  "rows": [
+   "icon:Q423654 — \"Sukhothai Historical Park\" (Sukhothai, Thailand) [live, founder: national]",
+   "wikidata:Q423654 — \"Wat Traphang Thong\" (สุโขทัย, TH) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q487036",
+  "kind": "sub-place",
+  "blocks_merge": true,
+  "reason": "'Myeong-Dong Cathedral' and the Myeongdong district (icon) share one Wikidata id.",
+  "rows": [
+   "icon:Q487036 — \"Myeongdong\" (Seoul, South Korea) [live, founder: national]",
+   "wikidata:Q487036 — \"Myeong-Dong Cathedral\" (중구, KR) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q54495",
+  "kind": "sub-place",
+  "blocks_merge": true,
+  "reason": "'Bridge Climb' is a tour on the Sydney Harbour Bridge, not the bridge itself.",
+  "rows": [
+   "icon:Q54495 — \"Sydney Harbour Bridge\" (Sydney, Australia) [live, founder: world]",
+   "wikidata:Q54495 — \"Bridge Climb\" (Sydney, AU) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q870844",
+  "kind": "sub-place",
+  "blocks_merge": true,
+  "reason": "'Sentosa Island' (hidden) is listed under the id of 'Siloso Beach', one beach on the island.",
+  "rows": [
+   "icon:Q870844 — \"Siloso Beach\" (Singapore, Singapore) [live, founder: national]",
+   "curated:singapore-singapore-sentosa-island — \"Sentosa Island\" (Singapore, Singapore) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q990128",
+  "kind": "sub-place",
+  "blocks_merge": true,
+  "reason": "The 'Erawan Falls' icon carries the national park's Wikidata id; the hidden twin is the whole park, 3 km away.",
+  "rows": [
+   "icon:Q990128 — \"Erawan Falls\" (Kanchanaburi, Thailand) [live, founder: national]",
+   "wikidata:Q990128 — \"Erawan National Park\" (ศรีสวัสดิ์, TH) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q34221",
+  "kind": "two-sides",
+  "blocks_merge": true,
+  "reason": "Niagara Falls: a Canada row, a US row and the US-side icon. Decide whether the two sides stay two stamps.",
+  "rows": [
+   "icon:Q34221 — \"Niagara Falls (US side)\" (Niagara Falls, NY, US) [live, founder: world]",
+   "curated:canada-niagara-falls — \"Niagara Falls\" (Canada) [duplicate]",
+   "curated:united-states-niagara-falls — \"Niagara Falls\" (United States) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q177567",
+  "kind": "two-sites",
+  "blocks_merge": true,
+  "reason": "The icon is the 'Manaus gateway' to the Amazon, 274 km from the rainforest row; its id (Q155) is Brazil's.",
+  "rows": [
+   "icon:Q155 — \"Amazon Rainforest (Manaus Gateway)\" (Manaus, Brazil) [live, founder: world]",
+   "wikidata:Q177567 — \"Amazon Rainforest\" (Amazonas, BR) [live]"
+  ]
+ },
+ {
+  "group": "Q2266081",
+  "kind": "two-sites",
+  "blocks_merge": true,
+  "reason": "Galleria Nazionale d'Arte Antica has two buildings (Palazzo Barberini and Palazzo Corsini), 2.3 km apart.",
+  "rows": [
+   "wikidata:Q2266081 — \"National Gallery of Ancient Art\" (Rome, IT) [live]",
+   "curated:italy-rome-galleria-nazionale-d-arte-antica — \"Galleria Nazionale d'Arte Antica\" (Rome, Italy) [duplicate]"
+  ]
+ },
+ {
+  "group": "curated:australia-sydney-sydney-harbour-bridge",
+  "kind": "ghost",
+  "blocks_merge": true,
+  "reason": "curated:australia-sydney-sydney-harbour-bridge was deleted; its id has no Wikidata number to follow, and its art place doesn't point at one survivor. Named by: art-matches #68 Sydney Harbour Bridge.",
+  "suggest": "Point it at the right row by hand (or re-insert it), so stamps and art that use it keep working.",
+  "rows": [
+   "curated:australia-sydney-sydney-harbour-bridge"
+  ]
+ },
+ {
+  "group": "film:Q7300572",
+  "kind": "ghost",
+  "blocks_merge": true,
+  "reason": "film:Q7300572 was deleted; its id has no Wikidata number to follow, and its art place doesn't point at one survivor. Named by: film_scenes.",
+  "suggest": "Point it at the right row by hand (or re-insert it), so stamps and art that use it keep working.",
+  "rows": [
+   "film:Q7300572"
+  ]
+ },
+ {
+  "group": "film:Q852908",
+  "kind": "ghost",
+  "blocks_merge": true,
+  "reason": "film:Q852908 was deleted; its id has no Wikidata number to follow, and its art place doesn't point at one survivor. Named by: film_scenes.",
+  "suggest": "Point it at the right row by hand (or re-insert it), so stamps and art that use it keep working.",
+  "rows": [
+   "film:Q852908"
+  ]
+ },
+ {
+  "group": "Q1045876",
+  "kind": "too-far-apart",
+  "blocks_merge": false,
+  "reason": "Left out of the merge: 689 km from the survivor icon:Q1045876 (Chiang Rai, TH). The rest of the group merges.",
+  "suggest": "Different place: clear its qid. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "wikidata:Q1045876 — \"Wat Phra Kaew\" (Chiang Rai, TH) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q181523",
+  "kind": "too-far-apart",
+  "blocks_merge": false,
+  "reason": "Left out of the merge: 2466 km from the survivor icon:cerro-san-cristobal (San Juan de Lurigancho, PE). The rest of the group merges.",
+  "suggest": "Different place: clear its qid. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "wikidata:Q181523 — \"Cerro San Cristóbal\" (San Juan de Lurigancho, PE) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q5004763",
+  "kind": "too-far-apart",
+  "blocks_merge": false,
+  "reason": "Left out of the merge: 5.2 km from the survivor icon:Q5004763 (Đà Nẵng, VN). The rest of the group merges.",
+  "suggest": "Different place: clear its qid. Same place: fix its coordinates, then re-run.",
+  "rows": [
+   "wikidata:Q5004763 — \"Ba Na Hill Station\" (Đà Nẵng, VN) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1045876",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Grand Palace & Wat Phra Kaew' covers more than one place; 'Wat Phra Kaew' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q1045876 — \"Grand Palace & Wat Phra Kaew\" (Bangkok, Thailand) [live, founder: world]",
+   "curated:thailand-bangkok-wat-phra-kaew — \"Wat Phra Kaew\" (Bangkok, Thailand) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q12065255",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Paphos Archaeological Park & Tombs of the Kings' covers more than one place; 'Paphos Archaeological Park' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q12065255 — \"Paphos Archaeological Park & Tombs of the Kings\" (Paphos, Cyprus) [live, founder: national]",
+   "wikidata:Q12065255 — \"Paphos Archaeological Park\" (Πάφος, CY) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q12244393",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Hercules Caves & Cap Spartel' covers more than one place; 'Caves of Hercules' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q12244393 — \"Hercules Caves & Cap Spartel\" (Tangier, Morocco) [live, founder: regional]",
+   "wikidata:Q12244393 — \"Caves of Hercules\" (Caves, IN) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q130958",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Pyramids of Giza & Great Sphinx' covers two places; the twin is only the Sphinx.",
+  "rows": [
+   "icon:Q130958 — \"Pyramids of Giza & Great Sphinx\" (Giza, Egypt) [live, founder: world]",
+   "wikidata:Q130958 — \"Great Sphinx of Giza\" (الهرم, EG) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1348507",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Zócalo & Metropolitan Cathedral' covers two places; the twin is only the square.",
+  "rows": [
+   "icon:Q1348507 — \"Zócalo & Metropolitan Cathedral\" (Mexico City, Mexico) [live, founder: national]",
+   "wikidata:Q1348507 — \"Plaza de la Constitución\" (Mexico City, MX) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q172988",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'St. Mark's Square & Basilica' covers two places; the twin is only the basilica.",
+  "rows": [
+   "icon:Q172988 — \"St. Mark's Square & Basilica\" (Venice, CA, Italy) [live, founder: world]",
+   "wikidata:Q172988 — \"Basilica di San Marco\" (Venezia, IT) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1822397",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Menin Gate & Flanders Fields' covers more than one place; 'Menin Gate Memorial' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q1822397 — \"Menin Gate & Flanders Fields\" (Ypres, Belgium) [live, founder: national]",
+   "wikidata:Q1822397 — \"Menin Gate Memorial\" (Ypres, BE) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q182955",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Vatican Museums & Sistine Chapel' covers more than one place; 'Vatican Museums', 'The Vatican Museum' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q182955 — \"Vatican Museums & Sistine Chapel\" (Vatican City, Vatican City) [live, founder: world]",
+   "curated:italy-rome-vatican-museums — \"Vatican Museums\" (Rome, Italy) [duplicate, founder: world]",
+   "wikidata:Q182955 — \"The Vatican Museum\" (Roma, IT) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q189616",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Ajanta & Ellora Caves' covers more than one place; 'Ellora Caves' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q189616 — \"Ajanta & Ellora Caves\" (Aurangabad, India) [live, founder: national]",
+   "wikidata:Q189616 — \"Ellora Caves\" (Ellora, IN) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1921137",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Ciudad Vieja & Mercado del Puerto' covers more than one place; 'Mercado del Puerto' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q1921137 — \"Ciudad Vieja & Mercado del Puerto\" (Montevideo, Uruguay) [live, founder: national]",
+   "wikidata:Q1921137 — \"Mercado del Puerto\" (Montevideo, UY) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q231606",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Seville Cathedral & La Giralda' covers more than one place; 'Cathedral' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q231606 — \"Seville Cathedral & La Giralda\" (Seville, Spain) [live, founder: national]",
+   "wikidata:Q231606 — \"Cathedral\" (Seville, ES) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q2384491",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Dubai Mall & Dubai Fountain' covers more than one place; 'The Dubai Fountain', 'Dubai Fountain' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q2384491 — \"Dubai Mall & Dubai Fountain\" (Dubai, United Arab Emirates) [live, founder: world]",
+   "curated:united-arab-emirates-dubai-the-dubai-fountain — \"The Dubai Fountain\" (Dubai, United Arab Emirates) [duplicate]",
+   "wikidata:Q2384491 — \"Dubai Fountain\" (دبي, AE) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q244952",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'The Last Supper (Santa Maria delle Grazie)' is the painting's refectory; the twin is the church.",
+  "rows": [
+   "icon:Q244952 — \"The Last Supper (Santa Maria delle Grazie)\" (Milan, Italy) [live, founder: world]",
+   "wikidata:Q244952 — \"Saint Mary of the Graces\" (Milan, IT) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q2709506",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Singapore Zoo & Night Safari' covers more than one place; 'Singapore Zoo', 'Singapore Zoo' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q2709506 — \"Singapore Zoo & Night Safari\" (Singapore, Singapore) [live, founder: national]",
+   "curated:singapore-singapore-singapore-zoo — \"Singapore Zoo\" (Singapore, Singapore) [duplicate, founder: world]",
+   "wikidata:Q2709506 — \"Singapore Zoo\" (Singapore, SG) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q2714250",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Luxembourg Old Town & Bock Casemates' covers more than one place; 'The Bock' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q2714250 — \"Luxembourg Old Town & Bock Casemates\" (Luxembourg City, Luxembourg) [live, founder: national]",
+   "wikidata:Q2714250 — \"The Bock\" (Luxembourg, LU) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q29466",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Masjid al-Haram & the Kaaba' covers more than one place; 'Kaaba', 'Kaaba' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q29466 — \"Masjid al-Haram & the Kaaba\" (Mecca, Saudi Arabia) [live, founder: world]",
+   "curated:saudi-arabia-mecca-kaaba — \"Kaaba\" (Mecca, Saudi Arabia) [duplicate]",
+   "wikidata:Q29466 — \"Kaaba\" (مكة, SA) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q3078443",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Prizren Old Town & Fortress' covers more than one place; 'Fortress of Prizren' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q3078443 — \"Prizren Old Town & Fortress\" (Prizren, Kosovo) [live, founder: national]",
+   "wikidata:Q3078443 — \"Fortress of Prizren\" (Prizren, XK) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q318181",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Gobustan Rock Art & Mud Volcanoes' covers more than one place; 'Qobustan National Historical-Artistic Reserve' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q318181 — \"Gobustan Rock Art & Mud Volcanoes\" (Gobustan, Azerbaijan) [live, founder: national]",
+   "wikidata:Q318181 — \"Qobustan National Historical-Artistic Reserve\" (Baku Region, AZ) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q3320132",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Christ Church Cathedral & Whalebone Arch' covers more than one place; 'Christ Church Cathedral' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q3320132 — \"Christ Church Cathedral & Whalebone Arch\" (Stanley, Falkland Islands (British Overseas Territory)) [live, founder: regional]",
+   "wikidata:Q3320132 — \"Christ Church Cathedral\" (Stanley, FK) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q390306",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Independence Hall & Liberty Bell' covers more than one place; 'Liberty Bell Center' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q390306 — \"Independence Hall & Liberty Bell\" (Philadelphia, PA, US) [live, founder: national]",
+   "wikidata:Q390306 — \"Liberty Bell Center\" (Philadelphia, US) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q41116",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Red Square & the Kremlin' covers more than one place; 'Red Square' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q41116 — \"Red Square & the Kremlin\" (Moscow, Russia) [live, founder: world]",
+   "wikidata:Q41116 — \"Red Square\" (Moscow, RU) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q41225",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Big Ben & Houses of Parliament' covers more than one place; 'Big Ben' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q41225 — \"Big Ben & Houses of Parliament\" (London, United Kingdom) [live, founder: world]",
+   "curated:united-kingdom-london-big-ben — \"Big Ben\" (London, United Kingdom) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q493117",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Fisherman's Bastion & Buda Castle' covers more than one place; 'Fisherman's Bastion' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q493117 — \"Fisherman's Bastion & Buda Castle\" (Budapest, Hungary) [live, founder: world]",
+   "wikidata:Q493117 — \"Fisherman's Bastion\" (Budapest, HU) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q511933",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Jökulsárlón Glacier Lagoon & Diamond Beach' covers more than one place; 'Jökulsarlon' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q511933 — \"Jökulsárlón Glacier Lagoon & Diamond Beach\" (Höfn, Iceland) [live, founder: world]",
+   "wikidata:Q511933 — \"Jökulsarlon\" (Sveitarfélagið Hornafjörður, IS) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q52505",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Grand Canal & Rialto Bridge' covers two places; the twin is only the bridge.",
+  "rows": [
+   "icon:Q52505 — \"Grand Canal & Rialto Bridge\" (Venice, CA, Italy) [live, founder: world]",
+   "wikidata:Q52505 — \"Ponte di Rialto\" (Venezia, IT) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q729370",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Old Town Square & Astronomical Clock' covers more than one place; 'Prague Astronomical Clock', 'Astronomical Clock' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q729370 — \"Old Town Square & Astronomical Clock\" (Prague, Czech Republic) [live, founder: world]",
+   "curated:czech-republic-prague-prague-astronomical-clock — \"Prague Astronomical Clock\" (Prague, Czech Republic) [duplicate]",
+   "wikidata:Q729370 — \"Astronomical Clock\" (Prague, CZ) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q74736",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Riga Old Town & House of the Blackheads' covers more than one place; 'House of the Blackheads' is only part of it. Merged: a stamp on the part opens the icon. Split the icon later if it should be two stamps.",
+  "rows": [
+   "icon:Q74736 — \"Riga Old Town & House of the Blackheads\" (Riga, Latvia) [live, founder: national]",
+   "wikidata:Q74736 — \"House of the Blackheads\" (Rīga, LV) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q842822",
+  "kind": "composite",
+  "blocks_merge": false,
+  "reason": "The icon 'Icherisheher & Maiden Tower' covers the old town and the tower; the twin is only the tower.",
+  "rows": [
+   "icon:Q842822 — \"Icherisheher & Maiden Tower\" (Baku, Azerbaijan) [live, founder: national]",
+   "wikidata:Q842822 — \"Maiden's Tower\" (Bakı, AZ) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q29247+Q731126",
+  "kind": "check-pair",
+  "blocks_merge": false,
+  "reason": "Getty Center (the hilltop campus) and the J. Paul Getty Museum (the museum on it) both show, about 100 m apart. Names and Wikidata ids differ, so the automatic rules leave them apart; to merge, add the pair to NAME_PAIRS in this script and re-run.",
+  "rows": [
+   "curated:united-states-los-angeles-getty-center — \"Getty Center\" (Los Angeles, United States) [live]",
+   "icon:Q731126 — \"J. Paul Getty Museum\" (Los Angeles, US) [live]"
+  ]
+ },
+ {
+  "group": "Q113639810",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:Q113639810: national; icon:kawasan-falls: world). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:Q113639810 — \"Kawasan Falls\" (Badian, Cebu, Philippines) [live, founder: national]",
+   "icon:kawasan-falls — \"Kawasan Falls\" (Badian, PH) [live, founder: world]",
+   "wikidata:Q113639810 — \"Kawasan waterfalls\" (Alegria, PH) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q134883",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:Q134883: national; wikidata:Q134883: world). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:Q134883 — \"CN Tower\" (Toronto, ON, Canada) [live, founder: national]",
+   "wikidata:Q134883 — \"CN Tower\" (Toronto, CA) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q1381933+Q18588998",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:Q18588998: national; wikidata:Q1381933: world). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:Q18588998 — \"Uluwatu Temple\" (Uluwatu, Bali, Indonesia) [live, founder: national]",
+   "wikidata:Q1381933 — \"Uluwatu Temple\" (Badung, ID) [live, founder: world]"
+  ]
+ },
+ {
+  "group": "Q15265",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:Q15265: national; wikidata:Q15265: world). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:Q15265 — \"Mount Pilatus\" (Lucerne, Switzerland) [live, founder: national]",
+   "wikidata:Q15265 — \"Mount Pilatus\" (Alpnach, CH) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q181523",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:cerro-san-cristobal: national; icon:Q181523: regional). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:cerro-san-cristobal — \"Cerro San Cristobal\" (Santiago, CL) [live, founder: national]",
+   "icon:Q181523 — \"Cerro San Cristóbal\" (Santiago, Chile) [live, founder: regional]"
+  ]
+ },
+ {
+  "group": "Q2536763",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:Q2536763: national; wikidata:Q2536763: world). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:Q2536763 — \"Plaza Mayor of Lima\" (Lima, Peru) [live, founder: national]",
+   "wikidata:Q2536763 — \"Plaza Mayor\" (Lima, PE) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q2709506",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:Q2709506: national; curated:singapore-singapore-singapore-zoo: world; wikidata:Q2709506: world). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:Q2709506 — \"Singapore Zoo & Night Safari\" (Singapore, Singapore) [live, founder: national]",
+   "curated:singapore-singapore-singapore-zoo — \"Singapore Zoo\" (Singapore, Singapore) [duplicate, founder: world]",
+   "wikidata:Q2709506 — \"Singapore Zoo\" (Singapore, SG) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q271466",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:Q271466: national; wikidata:Q271466: world). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:Q271466 — \"Hallgrímskirkja\" (Reykjavík, Iceland) [live, founder: national]",
+   "wikidata:Q271466 — \"Hallgrímskirkja\" (Reykjavík, IS) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q4200637",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:Q4200637: national; icon:tegallalang-rice-terraces: world). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:Q4200637 — \"Tegallalang Rice Terraces\" (Ubud, Bali, Indonesia) [live, founder: national]",
+   "icon:tegallalang-rice-terraces — \"Tegallalang Rice Terraces\" (Ubud, ID) [live, founder: world]",
+   "wikidata:Q4200637 — \"Tegallalang\" (Gianyar, ID) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q464899",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:Q464899: national; icon:monte-alban: world). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:Q464899 — \"Monte Albán\" (Oaxaca, Mexico) [live, founder: national]",
+   "icon:monte-alban — \"Monte Alban\" (Oaxaca, MX) [live, founder: world]"
+  ]
+ },
+ {
+  "group": "Q550502",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:Q550502: national; wikidata:Q550502: world). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:Q550502 — \"El Morro (Castillo San Felipe del Morro)\" (San Juan, Puerto Rico (US territory)) [live, founder: national]",
+   "wikidata:Q550502 — \"Castillo San Felipe del Morro\" (San Juan, PR) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q573558",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:Q573558: national; icon:vallee-de-mai: world). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:Q573558 — \"Vallée de Mai\" (Praslin, Seychelles) [live, founder: national]",
+   "icon:vallee-de-mai — \"Vallee de Mai\" (Praslin, SC) [live, founder: world]"
+  ]
+ },
+ {
+  "group": "Q7479348",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:beau-vallon-beach: national; icon:Q7479348: regional). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:beau-vallon-beach — \"Beau Vallon Beach\" (Beau Vallon, SC) [live, founder: national]",
+   "icon:Q7479348 — \"Beau Vallon Beach\" (Mahé, Seychelles) [live, founder: regional]"
+  ]
+ },
+ {
+  "group": "Q828336",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:Q828336: national; icon:sacsayhuaman: world). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:Q828336 — \"Sacsayhuamán\" (Cusco, Peru) [live, founder: national]",
+   "icon:sacsayhuaman — \"Sacsayhuaman\" (Cusco, PE) [live, founder: world]",
+   "wikidata:Q828336 — \"Sacsayhuamán\" (Cusco, PE) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q851527",
+  "kind": "founder-scope-conflict",
+  "blocks_merge": false,
+  "reason": "Founder scopes disagree (icon:Q851527: national; icon:oceanographic-museum: world). The survivor keeps its own 'national'.",
+  "suggest": "Pick the scope this place should have; the merge does not change it.",
+  "rows": [
+   "icon:Q851527 — \"Oceanographic Museum\" (Monaco-Ville, Monaco) [live, founder: national]",
+   "icon:oceanographic-museum — \"Oceanographic Museum\" (Monaco, MC) [live, founder: world]",
+   "wikidata:Q851527 — \"Musée océanographique\" (Monaco, MC) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q490981",
+  "kind": "class-review",
+  "blocks_merge": false,
+  "reason": "Bukchon Hanok Village: the hidden twin is under class review as a neighbourhood (review:Q123705); the icon row is live and wins. Confirm neighbourhoods stay stamps.",
+  "rows": [
+   "icon:Q490981 — \"Bukchon Hanok Village\" (Seoul, South Korea) [live, founder: world]",
+   "wikidata:Q490981 — \"Bukchon Hanok Village\" (Seoul, KR) [review:Q123705, founder: world]"
+  ]
+ },
+ {
+  "group": "Q28785",
+  "kind": "place-id-conflict",
+  "blocks_merge": false,
+  "reason": "The survivor has no owned-place link and its twins name 2 different ones; none was copied.",
+  "rows": [
+   "icon:Q28785 — \"Sacré-Cœur Basilica (Montmartre)\" (Paris, France) [live, founder: national]",
+   "curated:france-paris-sacr-c-ur-paris — \"Sacré-Cœur, Paris\" (Paris, France) [duplicate]",
+   "wikidata:Q28785 — \"Sacré-Cœur\" (Paris, FR) [duplicate]",
+   "wv:paris-sacre-coeur — \"Sacré Coeur\" (Paris, FR) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q2981",
+  "kind": "place-id-conflict",
+  "blocks_merge": false,
+  "reason": "The survivor has no owned-place link and its twins name 2 different ones; none was copied.",
+  "rows": [
+   "curated:france-paris-notre-dame-cathedral — \"Notre-Dame Cathedral\" (Paris, France) [duplicate, founder: world]",
+   "curated:france-paris-notre-dame-de-paris — \"Notre-Dame de Paris\" (Paris, France) [duplicate, founder: world]",
+   "wikidata:Q2981 — \"Notre-Dame de Paris\" (Paris, FR) [duplicate, founder: world]",
+   "wv:paris-notre-dame-cathedral — \"Notre Dame Cathedral\" (Paris, FR) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q1136776",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 250 m to 1.9 km to reach curated:united-states-new-york-cotton-club, 1.9 km away. Check that twin's coordinates.",
+  "rows": [
+   "wikidata:Q1136776 — \"Cotton Club\" (New York, US) [live]",
+   "curated:united-states-new-york-cotton-club — \"Cotton Club\" (New York, United States) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1166159",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 250 m to 3.7 km to reach wikidata:Q1166159, 3.7 km away. Check that twin's coordinates.",
+  "rows": [
+   "icon:Q1166159 — \"Rugova Canyon\" (Peja, Kosovo) [live, founder: regional]",
+   "wikidata:Q1166159 — \"Rugova Gorge\" (Peja, XK) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q15265",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 250 m to 1.3 km to reach wikidata:Q15265, 1.3 km away. Check that twin's coordinates.",
+  "rows": [
+   "icon:Q15265 — \"Mount Pilatus\" (Lucerne, Switzerland) [live, founder: national]",
+   "wikidata:Q15265 — \"Mount Pilatus\" (Alpnach, CH) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q179199",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 250 m to 1.6 km to reach wikidata:Q179199, 1.5 km away. Check that twin's coordinates.",
+  "rows": [
+   "icon:Q179199 — \"Guggenheim Museum Bilbao\" (Bilbao, Spain) [live, founder: world]",
+   "wikidata:Q179199 — \"Guggenheim Museum\" (Bilbao, ES) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q188905",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 250 m to 2.3 km to reach wikidata:Q188905, 2.3 km away. Check that twin's coordinates.",
+  "rows": [
+   "icon:Q188905 — \"Ouro Preto\" (Ouro Preto, Brazil) [live, founder: national]",
+   "wikidata:Q188905 — \"Ouro Preto\" (Ouro Preto, BR) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q193989",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 250 m to 3.4 km to reach wikidata:Q193989, 3.4 km away. Check that twin's coordinates.",
+  "rows": [
+   "icon:Q193989 — \"Geirangerfjord\" (Geiranger, Norway) [live, founder: world]",
+   "wikidata:Q193989 — \"Geirangerfjord\" (Geiranger, NO) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q2338515",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 250 m to 1.8 km, taking the footprint set on wikidata:Q2338515. Check that footprint fits this place.",
+  "rows": [
+   "icon:Q2338515 — \"Grand Bassin (Ganga Talao)\" (Grand Bassin, Mauritius) [live, founder: national]",
+   "wikidata:Q2338515 — \"Ganga Talao - Grand Bassin\" (Bois Chérie VCA, MU) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q3304574",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 250 m to 1.6 km to reach wikidata:Q3304574, 1.6 km away. Check that twin's coordinates.",
+  "rows": [
+   "icon:Q3304574 — \"Crystal & Fantasy Caves\" (Hamilton Parish, Bermuda (UK territory)) [live, founder: national]",
+   "wikidata:Q3304574 — \"Crystal and Fantasy Caves\" (Hamilton Parish, BM) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q3748608",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 300 m to 6.0 km, taking the footprint set on wikidata:Q3748608. Check that footprint fits this place.",
+  "rows": [
+   "icon:castillo-san-cristobal — \"Castillo San Cristobal\" (San Juan, PR) [live, founder: national]",
+   "wikidata:Q3748608 — \"Castillo San Cristóbal\" (San Juan, PR) [live]"
+  ]
+ },
+ {
+  "group": "Q4116104",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 250 m to 1.3 km to reach wikidata:Q4116104, 1.3 km away. Check that twin's coordinates.",
+  "rows": [
+   "curated:saudi-arabia-mecca-jabal-thawr — \"Jabal Thawr\" (Mecca, Saudi Arabia) [live]",
+   "wikidata:Q4116104 — \"Cave Thawr\" (Mecca, SA) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q511933",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 3.0 km to 6.0 km, taking the footprint set on wikidata:Q511933. Check that footprint fits this place.",
+  "rows": [
+   "icon:Q511933 — \"Jökulsárlón Glacier Lagoon & Diamond Beach\" (Höfn, Iceland) [live, founder: world]",
+   "wikidata:Q511933 — \"Jökulsarlon\" (Sveitarfélagið Hornafjörður, IS) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q71719",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 250 m to 1.7 km to reach curated:united-states-los-angeles-hollywood-walk-of-fame, 1.7 km away. Check that twin's coordinates.",
+  "rows": [
+   "icon:Q71719 — \"Hollywood Walk of Fame\" (Los Angeles, CA, US) [live, founder: national]",
+   "curated:united-states-los-angeles-hollywood-walk-of-fame — \"Hollywood Walk of Fame\" (Los Angeles, United States) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q76122",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 20 km to 36 km to reach wikidata:Q76122, 36 km away. Check that twin's coordinates.",
+  "rows": [
+   "icon:Q76122 — \"Salar de Uyuni\" (Uyuni, Bolivia) [live, founder: world]",
+   "wikidata:Q76122 — \"Salar de Uyuni\" (Uyuni, BO) [duplicate, founder: world]"
+  ]
+ },
+ {
+  "group": "Q860172",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 250 m to 3.1 km to reach curated:france-paris-canal-saint-martin, 3.1 km away. Check that twin's coordinates.",
+  "rows": [
+   "wikidata:Q860172 — \"Promenade Canal St. Martin\" (Paris, FR) [live]",
+   "curated:france-paris-canal-saint-martin — \"Canal Saint-Martin\" (Paris, France) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q9213",
+  "kind": "big-footprint",
+  "blocks_merge": false,
+  "reason": "The stamp radius would grow from 2.0 km to 4.9 km to reach wikidata:Q9213, 4.9 km away. Check that twin's coordinates.",
+  "rows": [
+   "icon:Q9213 — \"Lumbini\" (Lumbini, Nepal) [live, founder: world]",
+   "wikidata:Q9213 — \"Lumbini\" (Buddhist Circuit, IN) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1458032+Q961220",
+  "kind": "possible-twin",
+  "blocks_merge": false,
+  "reason": "Same name, different Wikidata ids, 1.0 km apart: not merged.",
+  "suggest": "If they are the same place, give both rows one qid and re-run.",
+  "rows": [
+   "wikidata:Q1458032 — \"Viking Ship Museum\" (Vikings and the Old Norse, SE) [live]",
+   "wikidata:Q961220 — \"The Viking Ship Museum\" (Skjoldunge trail, DK) [live]"
+  ]
+ },
+ {
+  "group": "Q1701099+Q1063513",
+  "kind": "possible-twin",
+  "blocks_merge": false,
+  "reason": "Same name, different Wikidata ids, 1.3 km apart: not merged.",
+  "suggest": "If they are the same place, give both rows one qid and re-run.",
+  "rows": [
+   "icon:Q1701099 — \"LEGOLAND Billund\" (Billund, Denmark) [live, founder: world]",
+   "wikidata:Q1063513 — \"Legoland Billund\" (Billund, DK) [live]"
+  ]
+ },
+ {
+  "group": "Q473972+Q877538",
+  "kind": "possible-twin",
+  "blocks_merge": false,
+  "reason": "Same name, different Wikidata ids, 937 m apart: not merged.",
+  "suggest": "If they are the same place, give both rows one qid and re-run.",
+  "rows": [
+   "wikidata:Q473972 — \"Rožok\" (Poloniny, PL) [live]",
+   "wikidata:Q877538 — \"Rožok\" (Beech forests of Europe, DE) [live]"
+  ]
+ },
+ {
+  "group": "Q550+Q726531",
+  "kind": "possible-twin",
+  "blocks_merge": false,
+  "reason": "Same name, different Wikidata ids, 566 m apart: not merged.",
+  "suggest": "If they are the same place, give both rows one qid and re-run.",
+  "rows": [
+   "curated:france-paris-champs-elysees — \"Champs-Elysees\" (Paris, France) [live]",
+   "icon:Q726531 — \"Champs-Élysées\" (Paris, France) [live, founder: world]"
+  ]
+ },
+ {
+  "group": "Q104861311",
+  "kind": "orphan-duplicate",
+  "blocks_merge": false,
+  "reason": "Hidden as a duplicate, but no twin survives (no row shares its qid, and no visible stamp-worthy row has its name within 1.5 km).",
+  "suggest": "Un-hide it, or leave it hidden.",
+  "rows": [
+   "auto:philippines-cebu-city-heritage-of-cebu-monument — \"Heritage of Cebu Monument\" (Cebu City, Philippines) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1101073",
+  "kind": "orphan-duplicate",
+  "blocks_merge": false,
+  "reason": "Hidden as a duplicate, but no twin survives (no row shares its qid, and no visible stamp-worthy row has its name within 1.5 km).",
+  "suggest": "Un-hide it, or leave it hidden.",
+  "rows": [
+   "wikidata:Q1101073 — \"Swedish Parliament\" (Stockholm Quay Palaces tour, SE) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q1236511",
+  "kind": "orphan-duplicate",
+  "blocks_merge": false,
+  "reason": "Hidden as a duplicate, but no twin survives (no row shares its qid, and no visible stamp-worthy row has its name within 1.5 km); its scope says national.",
+  "suggest": "Probably un-hide it (clear class_ban).",
+  "rows": [
+   "wikidata:Q1236511 — \"Corfe Castle\" (Nr Wareham, GB) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q3530881",
+  "kind": "orphan-duplicate",
+  "blocks_merge": false,
+  "reason": "Hidden as a duplicate, but no twin survives (its only twin, secret:disneyland-tom-sawyer-island, is a secret stamp and is never merged).",
+  "suggest": "Un-hide it, or leave it hidden.",
+  "rows": [
+   "wikidata:Q3530881 — \"Pirate's Lair on Tom Sawyer Island\" (Anaheim, US) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q4290211",
+  "kind": "orphan-duplicate",
+  "blocks_merge": false,
+  "reason": "Hidden as a duplicate, but no twin survives (no row shares its qid, and no visible stamp-worthy row has its name within 1.5 km).",
+  "suggest": "Un-hide it, or leave it hidden.",
+  "rows": [
+   "wikidata:Q4290211 — \"Дом-музей Мажита Гафури\" (Ufa, RU) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q5037917",
+  "kind": "orphan-duplicate",
+  "blocks_merge": false,
+  "reason": "Hidden as a duplicate, but no twin survives (no row shares its qid, and no visible stamp-worthy row has its name within 1.5 km).",
+  "suggest": "Un-hide it, or leave it hidden.",
+  "rows": [
+   "auto:philippines-cebu-city-carbon-market — \"Carbon Market\" (Cebu City, Philippines) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q56062211",
+  "kind": "orphan-duplicate",
+  "blocks_merge": false,
+  "reason": "Hidden as a duplicate, but no twin survives (no row shares its qid, and no visible stamp-worthy row has its name within 1.5 km).",
+  "suggest": "Un-hide it, or leave it hidden.",
+  "rows": [
+   "auto:philippines-cebu-city-plaza-independencia — \"Plaza Independencia\" (Cebu City, Philippines) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q7896231",
+  "kind": "orphan-duplicate",
+  "blocks_merge": false,
+  "reason": "Hidden as a duplicate, but no twin survives (no row shares its qid, and no visible stamp-worthy row has its name within 1.5 km).",
+  "suggest": "Un-hide it, or leave it hidden.",
+  "rows": [
+   "auto:philippines-cebu-city-university-of-san-carlos-museum — \"University of San Carlos Museum\" (Cebu City, Philippines) [duplicate]"
+  ]
+ },
+ {
+  "group": "Q85751065",
+  "kind": "orphan-duplicate",
+  "blocks_merge": false,
+  "reason": "Hidden as a duplicate, but no twin survives (no row shares its qid, and no visible stamp-worthy row has its name within 1.5 km).",
+  "suggest": "Un-hide it, or leave it hidden.",
+  "rows": [
+   "auto:philippines-cebu-city-cebu-ocean-park — \"Cebu Ocean Park\" (Cebu City, Philippines) [duplicate]"
+  ]
+ },
+ {
+  "group": "name:huntington library art collection and botanical gardens",
+  "kind": "orphan-duplicate",
+  "blocks_merge": false,
+  "reason": "Hidden as a duplicate, but no twin survives (no row shares its qid, and no visible stamp-worthy row has its name within 1.5 km).",
+  "suggest": "Un-hide it, or leave it hidden.",
+  "rows": [
+   "wv:san-marino-california-huntington-library-art-collection-and-botanical-gardens — \"Huntington Library, Art Collection, and Botanical Gardens\" (San Marino, US) [duplicate]"
+  ]
+ }
+]
