@@ -17,10 +17,16 @@ import { writeFileSync } from "node:fs";
 import { planSearch, finderQuery, shoppingCategoryFor, expandActivityQuery, fameFirstThings } from "../../src/lib/searchPlan.js";
 import { sortByRating, keepCountry, nearFirst, pinInstitutions } from "../../src/lib/searchRank.js";
 import { matchesQuery } from "../../src/lib/searchText.js";
-import { CASES } from "./cases.mjs";
+// EVAL_CASES: another case file; EVAL_HOME: "lat,lng,City,Country,Phrase…";
+// EVAL_MODE=page: send each case's text raw to its `page`'s own search bar, as
+// the finder pages do today (no planning, the traveler's location).
+const { CASES } = await import(process.env.EVAL_CASES ? new URL(process.env.EVAL_CASES, import.meta.url) : "./cases.mjs");
+const PAGE_MODE = process.env.EVAL_MODE === "page";
 
 const API = "https://globeskimmers-api.maizasimeon.workers.dev";
-const HOME = { lat: 34.1397, lng: -118.0353, city: "Arcadia", country: "United States", phrase: "Arcadia, CA" };
+const HOME = process.env.EVAL_HOME
+  ? (([lat, lng, city, country, ...phrase]) => ({ lat: +lat, lng: +lng, city, country, phrase: phrase.join(",").trim() || city }))(process.env.EVAL_HOME.split(","))
+  : { lat: 34.1397, lng: -118.0353, city: "Arcadia", country: "United States", phrase: "Arcadia, CA" };
 const CONCURRENCY = 2; // 5 tripped Google's per-minute limit (429s) once famous-place lookups joined in
 
 const post = async (path, body, tries = 2) => {
@@ -73,6 +79,7 @@ async function runCase(c) {
   const pass = (msg) => out.checks.push({ ok: true, msg });
   const e = c.expect || {};
 
+  if (PAGE_MODE) return runPageCase(c, out);
   const { parsed: p, destination } = await planSearch(c.q, { scope: "near_me", activePhrase: HOME.phrase, parseAI });
   out.plan = { category: p.category || null, place: p.place || null, region: p.region || null, query: p.query || "", sort: p.sort || null, maxPrice: p.maxPrice || 0, lateNight: !!p.lateNight, bars: !!p.bars, venue: p.venue || null, nearFirst: !!p.nearFirst, dream: destination?.name || null };
 
@@ -172,6 +179,34 @@ async function runCase(c) {
   return out;
 }
 
+// What a finder page's own search bar does today: the raw text, at the
+// traveler's location, nearest/backend order — no place, sort or filter reading.
+async function runPageCase(c, out) {
+  const geo = { latitude: HOME.lat, longitude: HOME.lng };
+  out.route = c.page; out.at = `${HOME.city} (the page's current location)`; out.plan = { query: c.q }; out.filters = [];
+  let list = [];
+  if (c.page === "eat") {
+    const d = await post("restaurants-full", { ...geo, radius: 25 * 1609, maxResults: 40, searchQuery: c.q });
+    list = d.places || d.restaurants || [];
+  } else if (c.page === "coffee") {
+    list = ((await post("coffee/search", { query: c.q, ...geo, radiusMiles: 25 })).places || []).sort((a, b) => (a.distanceMiles ?? 1e9) - (b.distanceMiles ?? 1e9));
+  } else if (c.page === "things") {
+    const act = await post("activities", { ...geo, radius: 25 * 1609, maxResults: 60, category: "all", smartRadius: false, countryName: HOME.country, cityName: HOME.city });
+    const pool = [...(act.activities || []), ...(act.nationalIcons || []), ...(act.regionalGems || []), ...(act.nearbyAttractions || [])];
+    const owned = pool.filter((a) => matchesQuery(`${nameOf(a)} ${(a.types || []).join(" ")} ${a.category || ""} ${a.activityLabel || ""} ${a.editorialSummary?.text || a.editorialSummary || ""}`, c.q));
+    const live = (await post("activities/search", { query: expandActivityQuery(c.q), city: HOME.city, country: HOME.country, ...geo, radiusMiles: 25 })).places || [];
+    const seen = new Set();
+    list = [...owned, ...live].filter((a) => { const k = a.placeId || a.id; if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => (a.distanceMiles ?? 1e9) - (b.distanceMiles ?? 1e9));
+  } else {
+    out.checks.push({ ok: false, msg: "this page has no search bar" });
+    return out;
+  }
+  out.count = list.length;
+  out.top = list.slice(0, 8).map((x) => ({ name: nameOf(x), rating: x.rating ?? null, reviews: x.userRatingCount ?? null, mi: x.distanceMiles != null ? +x.distanceMiles.toFixed(1) : null, addr: x.formattedAddress || x.shortFormattedAddress || "", ...(x.primaryType ? { kind: x.primaryType } : {}), ...(todayHours(x) ? { today: todayHours(x) } : {}) }));
+  out.checks.push({ ok: list.length >= 5, msg: `${list.length} results` });
+  return out;
+}
+
 const filter = process.argv.slice(2).map((s) => s.toLowerCase());
 const todo = CASES.filter((c) => !filter.length || filter.some((f) => c.id.includes(f) || (c.tags || []).includes(f)));
 const results = [];
@@ -194,4 +229,4 @@ for (const r of results) {
   if (r.gap) console.log(`      gap: ${r.gap}`);
 }
 console.log(`\nPASS ${passed.length}/${scored.length} (${Math.round((100 * passed.length) / Math.max(1, scored.length))}%) · known gaps: ${results.length - scored.length}`);
-writeFileSync(new URL("./last-run.json", import.meta.url), JSON.stringify({ ranAt: new Date().toISOString(), passed: passed.length, scored: scored.length, results }, null, 1));
+writeFileSync(new URL(process.env.EVAL_OUT || "./last-run.json", import.meta.url), JSON.stringify({ ranAt: new Date().toISOString(), passed: passed.length, scored: scored.length, results }, null, 1));
