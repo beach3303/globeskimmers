@@ -16240,6 +16240,7 @@ const GS_INST_SYNONYMS = {
   "bakery": ["bakery", "boulangerie", "patisserie", "pâtisserie", "pastry", "konditorei", "bakehouse"],
   "croissant": ["croissant", "croissants", "boulangerie", "bakery", "patisserie", "viennoiserie"],
   "pain au chocolat": ["pain au chocolat", "croissant", "croissants", "boulangerie", "bakery", "patisserie", "viennoiserie"],
+  "chocolate croissant": ["pain au chocolat", "croissant", "croissants", "boulangerie", "bakery", "patisserie", "viennoiserie"],
   "street food": ["street food", "street-side", "street stall", "food stall", "hawker", "street vendor"],
   "soul food": ["soul food", "southern"],
   "hot pot": ["hot pot", "hotpot"],
@@ -16288,7 +16289,7 @@ const GS_INST_KINDS_GENERIC = { eat: new Set(["restaurant"]), bars: new Set(["ba
 const GS_INST_BAR_WORDS = new Set(["bar", "bars", "pub", "pubs", "drink", "drinks", "nightlife", "tavern", "taverns"]);
 // "Best restaurants" is never a jazz club, a theatre or a hotel lobby.
 const GS_INST_NOT_A_MEAL = /\b(jazz club|nightclub|night club|music venue|concert|cabaret|comedy club|theatre|theater|casino|hotel|stadium|museum|cinema)\b/;
-const GS_INST_TERM_KINDS = { croissant: ["bakery"], "pain au chocolat": ["bakery"], bakery: ["bakery"], pastry: ["bakery", "cafe"], gelato: ["ice_cream", "cafe", "bakery"], "ice cream": ["ice_cream", "cafe", "bakery"] };
+const GS_INST_TERM_KINDS = { croissant: ["bakery"], "pain au chocolat": ["bakery"], "chocolate croissant": ["bakery"], bakery: ["bakery"], pastry: ["bakery", "cafe"], gelato: ["ice_cream", "cafe", "bakery"], "ice cream": ["ice_cream", "cafe", "bakery"] };
 const GS_INST_KINDS_ANY = { eat: new Set(["restaurant", "pub", "bar", "beer_hall", "brewery", "bakery", "ice_cream", "cafe"]), bars: new Set(["bar", "pub", "beer_hall", "brewery"]), coffee: new Set(["cafe", "bakery"]) };
 const gsInstWords = (s) => String(s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[`'’]/g, "'");
 const gsInstEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
