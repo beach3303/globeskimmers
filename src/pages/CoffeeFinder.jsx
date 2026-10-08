@@ -169,7 +169,6 @@ function processShop(shop, userLat, userLng, isLocal) {
   let tier = specialtyFlag ? 1 : chainFlag ? 3 : 2;
 
   const badges=[];
-  if(shop.institution) badges.push({icon:'📖',label:'On Wikipedia',color:'#7C2D12',bg:'#FFEDD5'}); // famous local institution, source named
   if(specialtyFlag)   badges.push({icon:'✨',label:'Specialty',    color:'#E65100',bg:'#FFF3E0'});
   if(chainFlag)       badges.push({icon:'🏪',label:'Chain',        color:'#78909C',bg:'#ECEFF1'});
   // No WiFi badge — WiFi now lives only inside the "Good for working" panel.

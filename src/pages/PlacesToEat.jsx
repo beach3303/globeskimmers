@@ -422,8 +422,6 @@ function processRest(place, userLat, userLng, isLocal = true) {
   if (place.sportsBadge === 'Best Sports Bar')   badges.push({ icon:'🏆', label:'Best Sports Bar',   color:'#B45309', bg:'#FEF3C7' });
   if (place.sportsBadge === 'Sports-Friendly')   badges.push({ icon:'📺', label:'Sports-Friendly',    color:'#0277BD', bg:'#E1F5FE' });
   if (place.sportsBadge === 'Casual Watch Spot') badges.push({ icon:'🍺', label:'Casual Watch Spot',  color:'#64748B', bg:'#F1F5F9' });
-  // A famous local institution (it has a Wikipedia article) — the source is named.
-  if (place.institution) badges.push({ icon:'📖', label:'On Wikipedia', color:'#7C2D12', bg:'#FFEDD5' });
   // Intent tier badges — match backend TIER_LABELS:
   //   1 = Dish Specialist (dish word in name, NOT a chain) — most expected
   //   2 = Authentic Match (place type matches the dish's primary cuisine type)

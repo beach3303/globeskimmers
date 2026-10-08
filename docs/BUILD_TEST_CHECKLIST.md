@@ -1674,7 +1674,8 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   within 15 km when a place was named or the query is specific; each confirmed on Google
   (closed, temporarily closed, not food, or no same-name match within 600 m = never shown;
   KV 30 days). Offline check: 38/40 famous places matched an open Google listing.
-- App (dbbad3f, 37e57b9): "📖 On Wikipedia" badge in Places to Eat and Coffee; Things to Do
+- App (dbbad3f, 37e57b9): famous places simply lead the list — NO badge (founder 2026-10-07:
+  travelers trust Google more than Wikipedia; every visible field comes from Google); Things to Do
   ranks a big-city or "best/top" search by review-weighted rating (Istanbul → Hagia Sophia,
   Blue Mosque, Dolmabahçe), hidden-gem asks stay nearest-first.
 - Eval (6b83fe6, 98a7461, 660bdc3): reviewers see filters/hours/price, 3 votes per case
