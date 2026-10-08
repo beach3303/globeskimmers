@@ -143,7 +143,15 @@ and the Blotter; (3) last, public place videos on attraction pages ("what it loo
 opt-in, place not people, verified visit only. Same fail-closed moderation as photos on sampled frames
 plus the audio (speech-to-text), report + block on every video (Apple UGC rules); teens: no public
 videos, friends only with the 24-hour delay. Storage/playback via a video service that converts
-iPhone formats and streams (Cloudflare Stream is the likely pick — confirm pricing first). **Fix after Apple approval (found 2026-10-08):** airport and border stamps take their date from UTC
+iPhone formats and streams (Cloudflare Stream is the likely pick — confirm pricing first). **Safety and privacy fixes — FIRST after Apple approval (privacy audit 2026-10-08; the policy now
+states today's behavior honestly and gets stronger as each ships):** (1) account deletion removes
+everything — social profile + avatar, follows, blocks, postcards + photos, Blotter rows + doodles, dish
+posts + photos, owner notes, luggage/gear, handle requests, D1 events (Apple 5.1.1(v)); (2) Block and
+Report on profiles, followers, postcards and comments, block removes both follow edges and filters the
+feed (Apple 1.2); (3) teens: an adult can't postcard a teen without a mutual follow, and teens' feeds
+skip non-mutual broadcast cards; (4) postcard messages and profile name/bio go through gbModerate;
+(5) a birthday under the minimum age freezes the account and stops collection (COPPA), then deletion.
+**Also after approval (found 2026-10-08):** airport and border stamps take their date from UTC
 (AirportArrivalPrompt.jsx / BorderCrossingPrompt.jsx use `new Date().toISOString().slice(0,10)`), so an
 evening landing in LA is dated the next day — switch to the local date like NearbyStampPrompt does.
 **Events (founder, 2026-10-08; NOT built yet — after the Apple resubmission):** its own page,
