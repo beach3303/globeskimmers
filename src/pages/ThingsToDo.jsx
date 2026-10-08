@@ -25,6 +25,8 @@ import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import PersonaChooser from "@/components/PersonaChooser";
 import { usePersona, personaRank } from "@/lib/persona";
+import { expandActivityQuery, fameFirstThings } from "@/lib/searchPlan";
+import { sortByRating as rankByRating } from "@/lib/searchRank";
 
 // iPad editorial design tokens (design handoff: matches "Places to Eat · iPad").
 const ED_SERIF = '"Instrument Serif", Georgia, serif';
@@ -93,28 +95,6 @@ const TOUR_MODE_LABELS = {
 // kayaking, ATV) already match Google well, but vague ones return junk. We expand
 // ONLY the query sent to Google; the typed text stays as-is for display + the
 // owned-data match, so results still read as what the user asked for.
-const ACTIVITY_SYNONYMS = {
-  "views": "scenic viewpoint lookout",
-  "view": "scenic viewpoint lookout",
-  "scenic views": "scenic viewpoint lookout",
-  "great views": "scenic viewpoint lookout",
-  "amazing views": "scenic viewpoint lookout",
-  "spectacular views": "scenic viewpoint lookout",
-  "lookout": "scenic viewpoint lookout",
-  "sand boarding": "sandboarding dune",
-  "sandboarding": "sandboarding dune",
-  "mountain coaster": "mountain coaster alpine slide",
-  "tubing": "river tubing",
-  "cable car": "cable car aerial tramway",
-  "hot spring": "hot springs thermal bath",
-  "hot springs": "hot springs thermal bath",
-  "banana boat": "banana boat ride watersports",
-  "whale watching": "whale watching tour",
-};
-function expandActivityQuery(q) {
-  const key = (q || "").trim().toLowerCase();
-  return ACTIVITY_SYNONYMS[key] || q;
-}
 
 // ── localStorage cache for instant ThingsToDo page open ──────────────
 // User sees their LAST results within 50ms of tapping the tile, while
@@ -837,6 +817,7 @@ export default function ThingsToDoFinder() {
   const [focusOpen,setFocusOpen]=useState(false);       // one-shot: opens the pinned card once
   const [focusWaited,setFocusWaited]=useState(false);   // stop waiting for a location after a moment
   const [searchPlaces,setSearchPlaces]=useState([]); // live Google Places keyword results
+  const [fameFirst,setFameFirst]=useState(false); // Search handed a big-city or "best" ask: popular first
   const [searchError,setSearchError]=useState(null); // callWorker envelope error for the last search — distinct from "no results"
   const cardRefs=useRef({});
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
@@ -972,8 +953,9 @@ export default function ThingsToDoFinder() {
     // this list follows the app's closest-first standard. Search is already
     // distance-sorted upstream, so re-sorting is a no-op for it.
     r.sort((a,b)=>(a.distanceMiles??999)-(b.distanceMiles??999));
+    if(submitted&&fameFirst) r=rankByRating(r,{named:true}); // shared with the test suite (searchRank.js)
     return r;
-  },[activities,ownedPool,searchMerged,submitted,browseFilterActive,radius,openOnly,outdoorOnly,popularOnly,category]);
+  },[activities,ownedPool,searchMerged,submitted,browseFilterActive,radius,openOnly,outdoorOnly,popularOnly,category,fameFirst]);
 
   // "A bit farther — worth the trip": search matches just beyond the radius,
   // closest few. So an empty in-radius result still surfaces nearby options
@@ -1043,7 +1025,7 @@ export default function ThingsToDoFinder() {
     }catch(e){ setSearchPlaces([]); setSearchError(e?.message||"Network error"); }
     setTourBusy(false);
   };
-  const clearSearch=()=>{setQ("");setSubmitted("");setSearchPlaces([]);setSearchError(null);};
+  const clearSearch=()=>{setQ("");setSubmitted("");setSearchPlaces([]);setSearchError(null);setFameFirst(false);};
   // Smart-Search spine / cross-finder handoff: a query passed via router state
   // prefills the box and auto-runs the activity search once coords are ready.
   const presetRanRef=useRef(false);
@@ -1052,6 +1034,8 @@ export default function ThingsToDoFinder() {
     if(presetRanRef.current||!pq||!String(pq).trim()) return;
     if(!Number.isFinite(lat)||!Number.isFinite(lng)) return;
     presetRanRef.current=true;
+    const st=routerLocation.state||{};
+    setFameFirst(fameFirstThings({query:String(pq),sort:st.presetSort||null,named:!!st.presetCountry,nearFirst:!!st.presetNearFirst}));
     setQ(String(pq).trim());
     runActivitySearch(String(pq).trim());
     // eslint-disable-next-line react-hooks/exhaustive-deps

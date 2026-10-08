@@ -295,3 +295,37 @@ export async function planSearch(raw, opts = {}) {
   }
   return { parsed, destination };
 }
+
+// Things to Do sends these phrases to Google expanded (shared with the test suite).
+export const ACTIVITY_SYNONYMS = {
+  "views": "scenic viewpoint lookout",
+  "view": "scenic viewpoint lookout",
+  "scenic views": "scenic viewpoint lookout",
+  "great views": "scenic viewpoint lookout",
+  "amazing views": "scenic viewpoint lookout",
+  "spectacular views": "scenic viewpoint lookout",
+  "lookout": "scenic viewpoint lookout",
+  "sand boarding": "sandboarding dune",
+  "sandboarding": "sandboarding dune",
+  "mountain coaster": "mountain coaster alpine slide",
+  "tubing": "river tubing",
+  "cable car": "cable car aerial tramway",
+  "hot spring": "hot springs thermal bath",
+  "hot springs": "hot springs thermal bath",
+  "banana boat": "banana boat ride watersports",
+  "whale watching": "whale watching tour",
+};
+export function expandActivityQuery(q) {
+  const key = (q || "").trim().toLowerCase();
+  return ACTIVITY_SYNONYMS[key] || q;
+}
+
+// A typed Things to Do search in a named big city, or one asking for the
+// "best / top", ranks by review-weighted rating, not distance (2026-10-07:
+// "top historic landmarks in Istanbul" led with a 111-review mansion while
+// Hagia Sophia sat 4th). Hidden-gem searches keep nearest-first.
+const HIDDEN_ASK = /\b(hidden|secret|off the beaten|lesser[- ]known|underrated|quiet|non[- ]touristy|locals?)\b/i;
+export function fameFirstThings({ query = "", sort = null, named = false, nearFirst = false } = {}) {
+  if (HIDDEN_ASK.test(query)) return false;
+  return sort === "rating" || (named && !nearFirst);
+}
