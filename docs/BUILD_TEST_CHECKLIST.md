@@ -1664,3 +1664,21 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Mockup with the real art: https://claude.ai/artifact/JbNVAfKZ2mLwbZurh9FfuX
 - Gates: eslint clean, no-undef 0, node --check clean, build 0.
 - **Activate: push** (worker deploys), then OTA for phones.
+
+## 2026-10-07 — Search fix 5: famous local institutions + Things to Do popularity order
+- Founder: "I want us to be able to deliver answering these questions globally"; graders kept
+  naming famous places the app missed (Mary Mac's, Hofbräuhaus, Botín, Pastéis de Belém).
+- Data: scripts/institutions/harvest.py → 8,243 food places with a Wikipedia article
+  (Wikidata via QLever; English intros used only as match words). Re-runnable; rerun monthly.
+- Worker (32789c3): D1 `institutions`; typed food/coffee searches lift matching famous places
+  within 15 km when a place was named or the query is specific; each confirmed on Google
+  (closed, temporarily closed, not food, or no same-name match within 600 m = never shown;
+  KV 30 days). Offline check: 38/40 famous places matched an open Google listing.
+- App (dbbad3f, 37e57b9): "📖 On Wikipedia" badge in Places to Eat and Coffee; Things to Do
+  ranks a big-city or "best/top" search by review-weighted rating (Istanbul → Hagia Sophia,
+  Blue Mosque, Dolmabahçe), hidden-gem asks stay nearest-first.
+- Eval (6b83fe6, 98a7461, 660bdc3): reviewers see filters/hours/price, 3 votes per case
+  (Round 2 fair score 36% good); Things to Do measured as the page really shows it.
+- Gates: node --check, eslint, no-undef 0, build 0, boot-check ✅.
+- **Activate (founder):** `npx wrangler d1 execute globeskimmers-attractions --remote --file=scripts/institutions/data/load_institutions.sql`
+  then push (worker deploys) and `npm run ota`.
