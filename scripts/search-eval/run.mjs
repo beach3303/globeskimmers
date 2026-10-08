@@ -21,7 +21,7 @@ import { CASES } from "./cases.mjs";
 
 const API = "https://globeskimmers-api.maizasimeon.workers.dev";
 const HOME = { lat: 34.1397, lng: -118.0353, city: "Arcadia", country: "United States", phrase: "Arcadia, CA" };
-const CONCURRENCY = 5;
+const CONCURRENCY = 2; // 5 tripped Google's per-minute limit (429s) once famous-place lookups joined in
 
 const post = async (path, body, tries = 2) => {
   for (let i = 0; i < tries; i++) {
@@ -93,7 +93,11 @@ async function runCase(c) {
   // ── where ──
   let at = HOME;
   if (p.place) {
-    const g = (await post("search-location", { query: p.lookup || p.place, touristCenter: !p.nearFirst }))?.results?.[0];
+    let g = null;
+    for (let i = 0; i < 3 && !g; i++) {
+      if (i) await new Promise((r) => setTimeout(r, 3000 * i)); // a 429 clears in seconds
+      g = (await post("search-location", { query: p.lookup || p.place, touristCenter: !p.nearFirst }))?.results?.[0];
+    }
     if (!g) { fail(`could not geocode "${p.place}"`); return out; }
     at = { lat: g.coordinates.latitude, lng: g.coordinates.longitude, city: g.address?.city || g.placeName, country: g.address?.country || "", region: g.address?.state || "" };
     out.at = g.placeName + (g.touristCenter ? ` (landmark center: ${g.touristCenter.landmarks.slice(0, 3).join(", ")})` : "");

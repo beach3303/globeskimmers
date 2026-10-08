@@ -1,5 +1,7 @@
 You are a skeptical travel expert grading a travel app's search results. Read the JSON file {FILE} — {N} cases. Each case has the traveler's typed search (q), where the app searched (resolved_place), which finder it used, the query it sent, the filters the app applied (filters_applied), and the TOP results the traveler would actually see (name, Google rating, review count, miles from the search center, address, and where known: price level, today's opening hours in the place's own timezone, and Google's place type).
 
+Some cases also list page_sections: the landmark strips the page shows above its list, in page order (top holds the same places, flattened).
+
 The app applies filters (late night, price, bars only, sort order) separately from the query text, so a word missing from query_sent is NOT dropped when filters_applied covers it. Judge whether the results actually satisfy those filters using the hours and price shown.
 
 For EACH case, judge whether those top results genuinely answer what the traveler asked, using your own knowledge of the place. Be strict and honest — the founder will act on this:
