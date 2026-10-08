@@ -21,12 +21,10 @@ import { getPrimaryStay } from "@/lib/savedLocations";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { placePhrase } from "@/lib/placeContext";
-import { ruleParse, runSmartSearch, ratingIntent, tidyQuery, priceIntent, HAS_IN_CLAUSE } from "@/lib/smartSearch";
+import { runSmartSearch, planSearch } from "@/lib/smartSearch";
 import { logSearch } from "@/lib/logSearch";
 import { createPageUrl } from "@/utils";
 import DreamAnswerCard from "./DreamAnswerCard";
-import { countryCode } from "@/lib/countries";
-import { stateInfo } from "@/lib/stateNicknames";
 import { showToast } from "@/components/Toast";
 import { openAttraction } from "@/lib/openAttraction";
 
@@ -117,78 +115,17 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
       const explicitPlace = scope === "named_place"
         ? (chosenPlace?.placeName || chosenPlace?.address?.city || placeQuery.trim() || null)
         : null;
-      // Rule-first parse (free). Mirrors parseSmartSearch, except a rule miss
-      // (no category, no place) calls /parse-search directly so the worker's
-      // `destination` answer isn't dropped by aiParse.
-      let parsed = ruleParse(raw, scope);
-      if (explicitPlace) { parsed.scope = "named_place"; parsed.place = String(explicitPlace).trim(); }
-      const sort = parsed.sort || null; // "best / top rated" — kept whichever parser wins
-      // A big city typed with no "in" ("vegan restaurants tokyo") — the last
-      // 1-3 words are checked against the big-city list (lazy, submit-time).
-      if (!parsed.place && !explicitPlace) {
-        try {
-          const { isBigCity } = await import("@/lib/bigCities");
-          const words = parsed.query.split(/\s+/);
-          for (let n = Math.min(3, words.length - 1); n >= 1; n--) {
-            const tail = words.slice(-n).join(" ");
-            if (isBigCity(tail)) {
-              parsed.place = tail; parsed.scope = "named_place";
-              // drop a dangling "in" / "near" left before the city ("…seating in munich")
-              parsed.query = words.slice(0, -n).join(" ").replace(/\s+(?:in|near|around|at)$/i, "").trim();
-              break;
-            }
-          }
-        } catch { /* stays a near-me search */ }
-      }
-      let destination = null;
-      // AI when the rules found nothing, OR an "in …" clause they couldn't
-      // settle ("southern food in atlanta", "in Atlanta with great reviews").
-      const unresolvedPlace = !parsed.place && HAS_IN_CLAUSE.test(raw);
-      // A typed COUNTRY or STATE can't be searched as one point — the AI picks
-      // the best city in it (founder, 2026-10-07: beer in Germany, ATV in Hawaii).
-      const areaPlace = !!parsed.place && !!(countryCode(parsed.place) || stateInfo(parsed.place));
-      // A bay or lake is not a point anyone eats at — the AI names its shore district.
-      const waterPlace = !!parsed.place && /\b(bay|lake|sea|ocean|gulf|river|harbou?r|lagoon|strait)\b/i.test(parsed.place);
-      // An acronym or typo'd place the rules can't read ("dear DLSU taft") → AI.
-      const acronym = !parsed.place && /\b[A-Z]{2,6}\b/.test(raw.replace(/\b(ATM|ATV|BBQ|KFC|USA|DIY|VIP|BYOB|IHOP)\b/g, ""));
-      // Rules found the place but not WHAT (pancakes, zipline, activities) → AI.
-      if (raw && !explicitPlace && (!parsed.category || unresolvedPlace || areaPlace || waterPlace || acronym)) {
-        try {
-          const { data, error } = await callWorker(ROUTE.parseSearch, {
-            query: raw,
-            scope: scopeTouched ? scope : "",
-            activePhrase: placePhrase(active) || "",
-          });
-          if (!error && data && typeof data === "object" && !data.error) {
-            destination = (data.destination && typeof data.destination === "object" && data.destination.name)
-              ? data.destination : null;
-            const aiQuery = ratingIntent(String(data.query || "").trim());
-            parsed = {
-              // The free rules' category stands when the AI only came in for the place.
-              category: data.category || parsed.category || null,
-              scope: data.scope && data.scope !== "unknown" ? data.scope : (scope || null),
-              place: (data.place || "").trim() || null,
-              region: (data.region || "").trim() || null,
-              query: tidyQuery(priceIntent(aiQuery.cleaned).cleaned) || parsed.query,
-              sort: sort || aiQuery.sort,
-              maxPrice: parsed.maxPrice || priceIntent(String(data.query || "")).maxPrice || 0,
-              lateNight: parsed.lateNight || false,
-              parsedBy: "ai",
-              confidence: typeof data.confidence === "number" ? data.confidence : 0.9,
-            };
-          }
-        } catch { /* keep the rule result */ }
-      }
+      // The whole plan (rules → big-city → AI → nearby-first) lives in
+      // searchPlan.js, shared with the worldwide test suite.
+      const { parsed, destination } = await planSearch(raw, {
+        scope, scopeTouched, explicitPlace,
+        activePhrase: placePhrase(active) || "",
+        parseAI: async (body) => {
+          const { data, error } = await callWorker(ROUTE.parseSearch, body);
+          return !error && data && typeof data === "object" && !data.error ? data : null;
+        },
+      });
       if (raw) saveRecent(raw);
-      // A NAMED smaller place (Redondo Beach, Santa Monica) → nearby results
-      // lead; a big city (LA, Tokyo, Atlanta) is searched whole. The big-city
-      // list loads only here, at submit time.
-      if (parsed.place && (parsed.scope === "named_place" || !parsed.scope)) {
-        try {
-          const { isBigCity } = await import("@/lib/bigCities");
-          parsed.nearFirst = !isBigCity(parsed.place) && !parsed.region;
-        } catch { /* whole-area search */ }
-      }
       if (parsed.region && parsed.place && !destination) {
         showToast(`${parsed.region} is big — showing ${parsed.place}`, "success");
       }

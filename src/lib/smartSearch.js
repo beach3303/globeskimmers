@@ -17,6 +17,10 @@ import { ROUTE } from "@/lib/workerRoutes";
 import { createPageUrl } from "@/utils";
 import { logSearch } from "@/lib/logSearch";
 import { getPrimaryStay } from "@/lib/savedLocations";
+import { ruleParse, shoppingCategoryFor, finderQuery } from "@/lib/searchPlan";
+// The pure planning code lives in searchPlan.js (shared with the test suite);
+// re-exported so existing imports keep working.
+export { ruleParse, ratingIntent, priceIntent, tidyQuery, lateNightIntent, barsIntent, finderQuery, HAS_IN_CLAUSE, KEYWORD_MAP, shoppingCategoryFor, planSearch, GENERIC_QUERY } from "@/lib/searchPlan";
 
 // category → { page (createPageUrl target), log (logSearch category vocab),
 // acceptsQuery (does the finder read state.presetQuery?) }.
@@ -31,124 +35,6 @@ export const SEARCH_CATEGORIES = {
   restroom:   { page: "RestroomFinder",   log: "transport",    acceptsQuery: false },
   weather:    { page: "Weather",          log: "transport",    acceptsQuery: false },
 };
-
-// Most-specific categories first; `eat` is the food catch-all and stays last.
-const KEYWORD_MAP = [
-  { cat: "coffee",      words: ["coffee", "café", "cafe", "espresso", "latte", "cappuccino", "cold brew", "macchiato", "matcha", "boba", "bubble tea"] },
-  { cat: "things",      words: ["things to do", "things to see", "attraction", "museum", "sightsee", "landmark", "hike", "hiking", "viewpoint", "day trip", "tourist", "what to do"] },
-  { cat: "shopping",    words: ["shopping", "souvenir", "mall", "boutique", "outlet", "shop for", "where to shop", "night market", "flea market", "bazaar"] },
-  { cat: "atm",         words: ["atm", "cash machine", "cash point", "withdraw cash"] },
-  { cat: "money",       words: ["money exchange", "currency exchange", "exchange money", "bureau de change", "change money", "forex"] },
-  { cat: "convenience", words: ["convenience store", "7-eleven", "corner store", "mini mart", "24 hour store"] },
-  { cat: "restroom",    words: ["restroom", "bathroom", "toilet", "washroom"] },
-  { cat: "weather",     words: ["weather", "forecast", "temperature"] },
-  { cat: "eat",         words: ["restaurant", "food", "dinner", "lunch", "breakfast", "brunch", "eat", "ramen", "sushi", "pizza", "burger", "taco", "bakery", "dessert", "noodle", "bbq", "halal", "kosher", "vegan", "seafood", "steak", "dim sum", "pho", "curry", "kebab", "cheesecake", "croissant", "donut", "ice cream", "street food", "beer", "brewery", "pub", "wine bar", "cocktail", "bar"] },
-];
-
-const NEAR_ME = /\b(near\s*me|nearby|around\s*me|close\s*by)\b/i;
-const AT_STAY = /\b(near|at|by|around|from)\s+(my|our|the)\s+(hotel|stay|airbnb|place|room|accommodation|lodging)\b/i;
-// "... in Positano" / "... in New York" — a Capitalized place at the end.
-const IN_PLACE = /\bin\s+([A-Z][\w'’.-]*(?:\s+[A-Z][\w'’.-]*){0,3})\s*$/;
-// "street food near DLSU Taft" / "shaved ice near Arcadia" — a NAMED place
-// after near / around / close to / next to (never "near me", "near my hotel").
-const NEAR_PLACE = /\b(?:near|around|close\s+to|next\s+to)\s+(?!me\b|my\b|our\b|here\b|the\s+(?:hotel|area)\b)([A-Z][\w'’.&-]*(?:\s+[A-Za-z][\w'’.&-]*){0,3})\s*$/;
-// Any place clause the capitalized rules can't settle ("in atlanta", "near
-// arcadia", "in Atlanta with great reviews") — the AI parser decides those.
-export const HAS_IN_CLAUSE = /\b(?:in|near|around|close\s+to|next\s+to)\s+(?!me\b|my\b|our\b|here\b|the\s+(?:hotel|area)\b)[\p{L}]/iu;
-
-// Whole-word keyword match (founder, 2026-10-07): substring matching sent
-// "Seattle" and "great views" to restaurants (e-AT), "cozy atmosphere" to ATMs
-// and "charge my phone" to restaurants (PHO-ne). A keyword matches only as a
-// whole word, plurals allowed (tacos, museums, eats, bakeries).
-const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const wordRe = (w) => {
-  const stem = w.endsWith("y") ? `${esc(w.slice(0, -1))}(?:y|ies)` : `${esc(w)}(?:s|es)?`;
-  return new RegExp(`(?<![\\p{L}\\p{N}])${stem}(?![\\p{L}\\p{N}])`, "iu");
-};
-const KEYWORD_RES = KEYWORD_MAP.map(({ cat, words }) => ({ cat, res: words.map((w) => wordRe(w.trim())) }));
-
-// "best / top rated / highest rated" (founder, 2026-10-07): the traveler wants
-// the list ordered by rating, not distance. The phrase is stripped from the
-// query so the finder searches the THING; the finder sorts by a review-
-// weighted rating so a 5.0 with three reviews can't win.
-const RATING_PHRASE = /\b(?:with\s+(?:the\s+)?(?:highest|best|top)\s+ratings?|(?:the\s+)?(?:highest|best|top|highly)[\s-]rated|(?:5|five)[\s-]stars?|(?:the\s+)?best)\b/gi;
-export function ratingIntent(text) {
-  const t = String(text || "");
-  RATING_PHRASE.lastIndex = 0;
-  if (!RATING_PHRASE.test(t)) return { sort: null, cleaned: t };
-  RATING_PHRASE.lastIndex = 0;
-  const cleaned = t.replace(RATING_PHRASE, " ")
-    .replace(/\bmost\s+(?=authentic|traditional|legit)/i, "")
-    .replace(/\s+/g, " ").trim();
-  return { sort: "rating", cleaned };
-}
-
-// Trailing filler nouns blur the keyword sent to Google (founder, 2026-10-07:
-// "brunch spot" in NYC returned 9 places; "brunch" returns the real list).
-// Question scaffolding and taste words aren't keywords (founder, 2026-10-07:
-// "where can i find affordable but delicious food in tokyo" was sent to Google
-// verbatim and returned 4 random places).
-const SCAFFOLD = /^(?:where\s+(?:can|could|should|do)\s+(?:i|we)\s+(?:find|get|eat|buy|have|try|go\s+for|go\s+to|drink)|where\s+to\s+(?:find|get|eat|buy|go)|(?:can|could)\s+you\s+(?:find|show)\s+me|find\s+me|show\s+me|i\s+(?:want|need|am\s+looking\s+for)|looking\s+for|are\s+there(?:\s+any)?|is\s+there(?:\s+an?)?|what\s+are(?:\s+the)?|which)\s+/i;
-// Price words become the finder's price filter: 1 = inexpensive, 2 = moderate.
-export function priceIntent(text) {
-  const t = String(text || "");
-  const cheap = /\b(?:cheap|budget|low[\s-]cost|dirt[\s-]cheap)\b/i.test(t);
-  const afford = /\b(?:affordable|inexpensive|reasonabl[ey](?:\s+priced)?|not\s+(?:too\s+)?expensive|good[\s-]value)\b/i.test(t);
-  const maxPrice = cheap ? 1 : afford ? 2 : 0;
-  const cleaned = maxPrice ? t.replace(/\b(?:cheap|budget|low[\s-]cost|dirt[\s-]cheap|affordable|inexpensive|reasonabl[ey](?:\s+priced)?|not\s+(?:too\s+)?expensive|good[\s-]value)\b/gi, " ") : t;
-  return { maxPrice, cleaned };
-}
-// "open late", "late night", "24 hours" → the finder's strict Late-night
-// filter (real hours: still open past 10 PM today), not a keyword.
-const LATE_NIGHT = /\b(?:open\s+late|opens?\s+late|late[\s-]night|after\s+(?:10|11|midnight)(?:\s*pm)?|24[\s/-]?(?:hours?|hrs?|7)|all[\s-]night|still\s+open)\b/i;
-export const lateNightIntent = (text) => LATE_NIGHT.test(String(text || ""));
-export const tidyQuery = (q) => {
-  const t = String(q || "").replace(/\s+/g, " ").trim().replace(SCAFFOLD, "")
-    .replace(new RegExp(LATE_NIGHT.source, "gi"), " ")
-    .replace(/\b(?:that|which|who)\s+(?:are|is)\b/gi, " ").replace(/\s+(?:are|is)\s*$/i, "")
-    .replace(/\b(?:delicious|tasty|yummy|amazing|good|great)\b/gi, " ")
-    .replace(/^(?:\s*(?:but|and|some|any)\b)+/i, " ").replace(/\s+(?:but|and)\s*$/i, "")
-    .replace(/\s+/g, " ").trim();
-  const stripped = t.replace(/\s+(?:spots?|places?|joints?|options?|ideas?)$/i, "").trim();
-  return stripped || t;
-};
-
-// Free client rule-pass. Returns {category, scope, place, query, sort,
-// parsedBy, confidence}. confidence >= 0.8 → skip the AI call.
-export function ruleParse(raw, scopeChip) {
-  // Trailing "?", "!" or "." would hide the place from the end-anchored rules.
-  const text = String(raw || "").trim().replace(/[?!.。！？]+$/u, "").trim();
-
-  let category = null;
-  for (const { cat, res } of KEYWORD_RES) {
-    if (res.some((re) => re.test(text))) { category = cat; break; }
-  }
-
-  // A place TYPED in the query wins over the chip (founder, 2026-10-07: "In
-  // Atlanta" beats the default Near me — the chip is on by default, so the old
-  // `if (!scope)` guard meant a typed city was never honored).
-  let scope = scopeChip || null;
-  let place = null;
-  const m = text.match(IN_PLACE) || text.match(NEAR_PLACE);
-  if (m) { scope = "named_place"; place = m[1].trim(); }
-  else if (!scope) {
-    if (AT_STAY.test(text)) scope = "at_stay";
-    else if (NEAR_ME.test(text)) scope = "near_me";
-  }
-
-  // Strip scope phrases so the finder searches the THING, not "ramen near me".
-  let query = text.replace(NEAR_ME, "").replace(AT_STAY, "");
-  if (place) query = query.replace(/\b(?:in|near|around|close\s+to|next\s+to)\s+[A-Z][\s\S]*$/, "");
-  // Taste words ("delicious", "tasty") mean the traveler wants the GOOD ones.
-  const tasty = /\b(?:delicious|tasty|yummy|amazing)\b/i.test(text);
-  const price = priceIntent(query);
-  const { sort, cleaned } = ratingIntent(price.cleaned);
-  query = tidyQuery(cleaned);
-  const maxPrice = price.maxPrice;
-
-  const confident = !!(category || place || (scope && scope !== "named_place"));
-  return { category, scope, place, query, sort: sort || (tasty ? "rating" : null), maxPrice, lateNight: lateNightIntent(text), parsedBy: "rule", confidence: confident ? 0.85 : 0.2 };
-}
 
 // Haiku parse (only on rule-miss) via the cheap prompt-cached /parse-search
 // worker endpoint (~$0.0009/miss, KV-cached 24h). Returns the parsed shape, or
@@ -185,34 +71,11 @@ export async function parseSmartSearch(raw, { scopeChip, explicitPlace, activePh
   return ruled;
 }
 
-// Map a shopping query to one of Shopping's category chips (Shopping takes a
-// category, not free text). Returns a chip id or null. Order matters — more
-// specific phrases ("night market", "supermarket") win over "market".
-const SHOP_CATEGORY_KEYWORDS = [
-  { id: "souvenir_shopping", words: ["souvenir", "gift", "keepsake"] },
-  { id: "supermarkets", words: ["grocery", "groceries", "supermarket"] },
-  { id: "luxury_shopping", words: ["luxury", "designer", "high end", "high-end"] },
-  { id: "duty_free", words: ["duty free", "duty-free"] },
-  { id: "night_markets", words: ["night market"] },
-  { id: "malls", words: ["mall", "shopping center", "shopping centre"] },
-  { id: "outlets", words: ["outlet", "discount"] },
-  { id: "markets_bazaars", words: ["bazaar", "flea market", "market"] },
-  { id: "local_crafts", words: ["craft", "handmade", "artisan"] },
-];
-export function shoppingCategoryFor(query) {
-  const q = String(query || "").toLowerCase();
-  if (!q) return null;
-  for (const { id, words } of SHOP_CATEGORY_KEYWORDS) {
-    if (words.some((w) => q.includes(w))) return id;
-  }
-  return null;
-}
-
 // Dispatch parsed intent: re-center + navigate + log. `location` is the
 // LocationContext value (needs switchToNavigateMode). `navigate` is
 // react-router's. Returns {routed, recentered, needsStay?, destinationMode?}.
 export async function runSmartSearch(parsed, { navigate, location }) {
-  const { category, scope, place, query, parsedBy, sort, nearFirst, maxPrice, lateNight } = parsed || {};
+  const { category, scope, place, query, parsedBy, sort, nearFirst, maxPrice, lateNight, bars } = parsed || {};
   const cat = category ? SEARCH_CATEGORIES[category] : null;
 
   // 1. Resolve place / re-center.
@@ -249,15 +112,14 @@ export async function runSmartSearch(parsed, { navigate, location }) {
       // Shopping takes a category chip, not free text — map the query to one.
       const shopCat = shoppingCategoryFor(query);
       if (shopCat) opts = { state: { presetCategory: shopCat } };
-    } else if (cat.acceptsQuery && (query || sort || nearFirst || maxPrice || lateNight)) {
+    } else if (cat.acceptsQuery && (query || sort || nearFirst || maxPrice || lateNight || bars)) {
       // A generic word ("restaurants", "food", "cafes", "things to do") isn't a
       // keyword to send to Google — it means BROWSE the place (founder,
       // 2026-10-07: bare "restaurant" in Munich returned nothing from Google).
-      const GENERIC = /^(?:the\s+)?(?:restaurants?|food|foods|places?\s+to\s+eat|eats?|dining|somewhere\s+to\s+eat|coffee|coffee\s+shops?|caf[eé]s?|things\s+to\s+do|attractions?|activities)$/i;
-      const q = GENERIC.test(String(query || "").trim()) ? "" : query;
+      const q = finderQuery(parsed); // shared with the test suite (searchPlan.js)
       // presetSort 'rating' = "best / top rated" was typed — the finder orders
       // by review-weighted rating instead of distance.
-      opts = { state: { ...(q ? { presetQuery: q } : {}), ...(sort ? { presetSort: sort } : {}), ...(nearFirst ? { presetNearFirst: true } : {}), ...(placeCountry ? { presetCountry: placeCountry } : {}), ...(maxPrice ? { presetMaxPrice: maxPrice } : {}), ...(lateNight ? { presetLateNight: true } : {}) } };
+      opts = { state: { ...(q ? { presetQuery: q } : {}), ...(sort ? { presetSort: sort } : {}), ...(nearFirst ? { presetNearFirst: true } : {}), ...(placeCountry ? { presetCountry: placeCountry } : {}), ...(maxPrice ? { presetMaxPrice: maxPrice } : {}), ...(lateNight ? { presetLateNight: true } : {}), ...(bars && category === "eat" ? { presetBars: true } : {}) } };
     }
     navigate(createPageUrl(cat.page), opts);
     return { routed: cat.page, recentered, needsStay };

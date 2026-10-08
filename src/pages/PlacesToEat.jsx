@@ -32,6 +32,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
+import { sortByRating as rankByRating, keepCountry, nearFirst as nearFirstSplit } from "@/lib/searchRank";
 import { createPageUrl } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
@@ -979,6 +980,11 @@ export default function PlacesToEat() {
   useEffect(() => {
     if (routerLocation.state?.presetLateNight === true) setSelectedCuisines(new Set(["latenight"]));
   }, [routerLocation.state?.presetLateNight]);
+  // Bars / speakeasies / pubs from Search → the Bars switch (bars are hidden otherwise).
+  useEffect(() => {
+    if (routerLocation.state?.presetBars === true) setFilterBars(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routerLocation.state?.presetBars]);
   // "affordable / cheap" from Search → the finder's own price filter.
   useEffect(() => {
     const mp = routerLocation.state?.presetMaxPrice;
@@ -1280,16 +1286,7 @@ export default function PlacesToEat() {
       });
     }
 
-    if (presetCountry) {
-      const want = String(presetCountry).toLowerCase();
-      const alias = { "united states": "usa", "united kingdom": "uk" }[want];
-      const inCountry = (x) => {
-        const last = String(x.formattedAddress || "").split(",").pop().trim().toLowerCase();
-        return !last || last === want || last === alias;
-      };
-      const kept = r.filter(inCountry);
-      if (kept.length) r = kept; // never empty the list on an address-format surprise
-    }
+    r = keepCountry(r, presetCountry);
     if (filterOpenNow)    r = r.filter(x => x.isOpen === true);
     if (filterMinRating>0) r = r.filter(x => (x.rating||0) >= filterMinRating);
     if (filterMaxPrice>0)  r = r.filter(x => !x.priceLevel || (parseInt(x.priceLevel)||0) <= filterMaxPrice);
@@ -1304,15 +1301,8 @@ export default function PlacesToEat() {
     // Sort — when Sports Bar vibe is active, rank by sportsScore descending (best match first)
     const hasActiveSearch = !!searchText?.trim();
     if (sortByRating) {
-      // Review-weighted (Bayesian) rating: (R·v + 4.0·50) / (v + 50). A 5.0
-      // with 3 reviews scores ~4.06; a 4.6 with 4,600 scores ~4.59. Dish/
-      // authenticity tier still leads, so "best authentic X" stays authentic.
-      // When a city was NAMED, a place far outside it can't win on rating
-      // alone (founder, 2026-10-07: "best brunch in NYC" ranked a New Jersey
-      // spot 22 miles out first) — beyond 8 miles, 0.03 points per mile.
-      const far = (x) => (presetCountry ? 0.03 * Math.max(0, (x.distanceMiles || 0) - 8) : 0);
-      const wr = (x) => ((((x.rating || 0) * (x.userRatingCount || 0)) + 4.0 * 50) / ((x.userRatingCount || 0) + 50)) - far(x);
-      r.sort((a,b) => ((a.tier||1) - (b.tier||1)) || (wr(b) - wr(a)) || ((a.distanceMiles||999) - (b.distanceMiles||999)));
+      // Shared with the test suite: src/lib/searchRank.js
+      r = rankByRating(r, { named: !!presetCountry });
     } else if (filterVibes['sportsBar']) {
       r.sort((a,b) => (b.sportsScore||0) - (a.sportsScore||0));
     } else if (hasActiveSearch && r.some(x => x.backendRank)) {
@@ -1325,11 +1315,7 @@ export default function PlacesToEat() {
       // Browsing / no active dish search → nearest first.
       r.sort((a,b)=>(a.distanceMiles||999)-(b.distanceMiles||999));
     }
-    if (nearFirst) {
-      // Stable split — each band keeps the order chosen above (rating, tier…).
-      const near = r.filter((x) => (x.distanceMiles ?? 999) <= 5);
-      if (near.length >= 3) r = [...near, ...r.filter((x) => (x.distanceMiles ?? 999) > 5)];
-    }
+    if (nearFirst) r = nearFirstSplit(r);
     return r;
   }, [restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, searchText, sortByRating, nearFirst, presetCountry]);
 
