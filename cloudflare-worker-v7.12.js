@@ -5191,7 +5191,40 @@ async function handleSearchLocation(request, env) {
       : 'No locations found. Try a different search term.';
     return jsonResponse({ results: [], message, tooBroad }, 200);
   }
+  // Tourist center (Round 2, 2026-10-07): when SEARCH looks up a city, center
+  // it where the city's most famous landmarks cluster — not its geographic
+  // middle ("Tokyo" sat in suburban Suginami; Singapore in Toa Payoh; NYC at
+  // City Hall). Opt-in via touristCenter, so the location picker is unchanged.
+  if (body?.touristCenter && results[0] && (results[0].granularity === 'city' || results[0].granularity === 'region')) {
+    try {
+      const r0 = results[0];
+      const tc = await gsTouristCenter(env, r0.coordinates.latitude, r0.coordinates.longitude);
+      if (tc) {
+        r0.geoCenter = { ...r0.coordinates };
+        r0.coordinates = { latitude: tc.lat, longitude: tc.lng };
+        r0.latitude = tc.lat; r0.longitude = tc.lng;
+        r0.touristCenter = tc;
+      }
+    } catch { /* the geographic center stands */ }
+  }
   return jsonResponse({ results }, 200);
+}
+
+// The median point of the 15 most famous stampable landmarks within ~25 km —
+// the owned attractions DB already knows where visitors go. Null below 5.
+async function gsTouristCenter(env, lat, lng) {
+  if (!env.ATTRACTIONS_DB || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const dLat = 0.22, dLng = 0.22 / Math.max(0.2, Math.cos(lat * Math.PI / 180));
+  const { results: rows } = await env.ATTRACTIONS_DB.prepare(
+    `SELECT lat, lng, name FROM attractions
+      WHERE lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4
+        AND coalesce(founder_scope, scope) IN ('world','national')
+        AND (class_ban IS NULL OR class_ban = '' OR class_ban LIKE 'review:%')
+      ORDER BY (popularity IS NULL) ASC, popularity DESC, sitelinks DESC LIMIT 15`
+  ).bind(lat - dLat, lat + dLat, lng - dLng, lng + dLng).all();
+  if (!rows || rows.length < 5) return null;
+  const med = (xs) => { const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+  return { lat: med(rows.map((r) => r.lat)), lng: med(rows.map((r) => r.lng)), landmarks: rows.slice(0, 5).map((r) => r.name) };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -11038,12 +11071,6 @@ async function handleRestaurantsFull(request, env, ctx) {
       // authentic / traditional / legit, chains and places that merely SERVE
       // the cuisine (tier 4) step aside — as long as at least 5 genuine
       // matches (tiers 1-3, independent) remain, so a thin town never empties.
-      // "Street food" is never a mall chain (founder, 2026-10-07: Manila got
-      // Jollibee, McDonald's and Tim Ho Wan) — when 5+ independents remain.
-      if (/\b(street\s*food|hawker|food\s*stalls?|street\s*vendors?|carinderia|isaw)\b/i.test(rawQuery)) {
-        const indie = finalPlaces.filter((p) => !p.isChain && p.primaryType !== "fast_food_restaurant");
-        if (indie.length >= 5) finalPlaces = indie;
-      }
       if (/\b(authentic|traditional|legit)\b/i.test(rawQuery)) {
         const genuine = finalPlaces.filter((p) => (p.tier || 4) <= 3 && !p.isChain);
         if (genuine.length >= 5) finalPlaces = genuine;
@@ -11085,6 +11112,27 @@ async function handleRestaurantsFull(request, env, ctx) {
         }).map((p) => ({ ...p, fallback: true, fallbackCuisine: umbrella.label })).sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 20);
         console.log(`\u{1F504} Fallback fired for "${fallbackQueryLabel}" -> ${fallbackPlaces.length} ${fallbackCuisine} restaurants from existing pool`);
       }
+    }
+    // "Street food" is never a mall chain (Manila got Jollibee, McDonald's and
+    // Tim Ho Wan) — for EVERY intent; Round 1 only covered recognized dishes,
+    // and "street food" itself parses as GENERAL. Applies when 5+ remain.
+    if (/\b(street\s*food|hawker|food\s*stalls?|street\s*vendors?|carinderia|isaw)\b/i.test(rawQuery)) {
+      const indie = finalPlaces.filter((p) => !p.isChain && p.primaryType !== "fast_food_restaurant");
+      if (indie.length >= 5) finalPlaces = indie;
+    }
+    // Fast-food megachains don't answer a typed food search unless named
+    // (a McDonald's in "vegan restaurants in Buenos Aires") — when 8+ remain.
+    if (searchQuery?.trim()) {
+      const named = (n) => GS_MEGACHAINS.some((c) => n.includes(c) && rawQuery.toLowerCase().includes(c));
+      const rest = finalPlaces.filter((p) => { const n = (p.displayName?.text || p.name || "").toLowerCase(); return !GS_MEGACHAINS.some((c) => n.includes(c)) || named(n); });
+      if (rest.length >= 8) finalPlaces = rest;
+    }
+    // A price filter keeps places whose price Google doesn't know; when 8+
+    // PRICED places qualify, unpriced ones step aside ("cheap eats" listed
+    // unpriced hotel bars and Denny's delivery-only side brands).
+    if (filterMaxPrice > 0) {
+      const priced = finalPlaces.filter((p) => p.priceLevel != null && p.priceLevel !== "");
+      if (priced.length >= 8) finalPlaces = priced;
     }
     // A typed search gets the shared tidy: duplicate pins collapse, 2 per
     // chain/brand, near-zero-review pins drop when 8+ established remain.
@@ -16110,6 +16158,7 @@ function gsTidy(list, { dropTypes = null, brandCap = 2, minReviews = 10 } = {}) 
   const established = kept.filter((p) => (p.userRatingCount || 0) >= minReviews);
   return established.length >= 8 ? established : kept;
 }
+const GS_MEGACHAINS = ["mcdonald", "burger king", "kfc", "kentucky fried", "subway", "taco bell", "wendy's", "jollibee", "domino", "pizza hut", "popeyes", "carl's jr", "jack in the box", "little caesars", "dunkin", "7-eleven"];
 const GS_NON_DESTINATION = /^(dentist|dental_clinic|doctor|hospital|medical_lab|medical_clinic|physiotherapist|nursing_home|assisted_living_facility|pharmacy|drugstore|veterinary_care|insurance_agency|real_estate_agency|lawyer|accounting|car_dealer|car_repair|car_wash|storage|moving_company|funeral_home|locksmith|plumber|electrician|roofing_contractor|general_contractor|bank|post_office|police|local_government_office|courthouse|primary_school|secondary_school|cannabis_store|laundry|beauty_salon|hair_salon|hair_care|barber_shop|nail_salon|corporate_office|consultant|employment_agency|travel_agency)$/;
 const NOT_AN_ACTIVITY_TYPE = /^(lodging|hotel|motel|resort_hotel|extended_stay_hotel|bed_and_breakfast|guest_house|hostel|inn|japanese_inn|budget_japanese_inn|private_guest_room|cottage|farmstay|apartment_building|apartment_complex|condominium_complex|housing_complex|real_estate_agency)$/;
 const OTA_LISTING_SITE = /(booking\.com|airbnb\.|vrbo\.|bluepillow\.|expedia\.|hotels\.com|agoda\.|tripadvisor\.[a-z.]+\/(hotel|vacationrental))/i;
