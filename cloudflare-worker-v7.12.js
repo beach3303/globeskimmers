@@ -37,8 +37,10 @@ const CONFIG = {
     // Fresh windows — within this age, cache is returned as-is.
     TEXT_SEARCH: 12 * 60 * 60,
     NEARBY_SEARCH: 3 * 24 * 60 * 60,
-    DETAILS: 90 * 24 * 60 * 60,
-    PHOTO: 90 * 24 * 60 * 60,
+    // Google lets an app keep its data temporarily for at most 30 days (Maps
+    // Platform terms 3.2.3); was 90. Reads also refuse older entries.
+    DETAILS: 30 * 24 * 60 * 60,
+    PHOTO: 30 * 24 * 60 * 60,
     DIETARY: 12 * 60 * 60,
     // Stale-while-revalidate windows — past the fresh window but within
     // FRESH + SWR, we return the cached response immediately AND trigger
@@ -183,6 +185,8 @@ async function getFromCache(env, key) {
     const cached = await env.GLOBESKIMMERS_KV.get(key, { type: 'json' });
     if (cached) {
       const age = Date.now() - (cached.timestamp || 0);
+      // Place details written under the old 90-day rule: past 30 days = a miss.
+      if (key.startsWith('details_') && age > CONFIG.CACHE_TTL.DETAILS * 1000) return null;
       return { data: cached.data, age, timestamp: cached.timestamp };
     }
   } catch (e) {
@@ -566,8 +570,9 @@ async function handlePhotoProxy(request, env) {
 
   if (env.GLOBESKIMMERS_KV) {
     try {
-      const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'arrayBuffer' });
-      if (cached) {
+      // Photos carry their save time; untimed ones are from the old 90-day rule.
+      const { value: cached, metadata } = await env.GLOBESKIMMERS_KV.getWithMetadata(cacheKey, { type: 'arrayBuffer' });
+      if (cached && Date.now() - (metadata?.t || 0) <= CONFIG.CACHE_TTL.PHOTO * 1000) {
         return new Response(cached, {
           headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=604800', 'X-Cache': 'HIT', ...CORS_HEADERS }
         });
@@ -605,7 +610,7 @@ async function handlePhotoProxy(request, env) {
 
     if (env.GLOBESKIMMERS_KV) {
       try {
-        await env.GLOBESKIMMERS_KV.put(cacheKey, photoBuffer, { expirationTtl: CONFIG.CACHE_TTL.PHOTO });
+        await env.GLOBESKIMMERS_KV.put(cacheKey, photoBuffer, { expirationTtl: CONFIG.CACHE_TTL.PHOTO, metadata: { t: Date.now() } });
       } catch (e) {
         console.error('Photo cache write error:', e);
       }
