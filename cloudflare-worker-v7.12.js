@@ -8325,7 +8325,7 @@ async function handleCoffeeKeywordSearch(request, env, ctx) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return jsonResponse({ places: [] });
     const radiusMiles = Math.max(parseFloat(b.radiusMiles) || 10, 5);
     const geoKey = `${lat.toFixed(2)}_${lng.toFixed(2)}`;
-    const cacheKey = `coffeesearch:v2:${query.toLowerCase()}:${geoKey}:${Math.round(radiusMiles)}`; // v2: tidy
+    const cacheKey = `coffeesearch:v3:${query.toLowerCase()}:${geoKey}:${Math.round(radiusMiles)}${b.namedPlace === true ? ':named' : ''}`; // v3: institutions
     const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
     if (cached) return jsonResponse(cached);
 
@@ -8350,6 +8350,20 @@ async function handleCoffeeKeywordSearch(request, env, ctx) {
         .filter((p) => p && p.distanceMiles <= capMi)
         .sort((a, b) => (a.distanceMiles ?? 1e9) - (b.distanceMiles ?? 1e9));
       places = gsTidy(places);
+      // Famous cafés with a Wikipedia article that match lead (Café de Flore).
+      const found = await gsInstitutionsFor(env, ctx, origin, { lat, lng, radiusM: searchRadiusM, query, finder: 'coffee', named: b.namedPlace === true }).catch(() => []);
+      if (found.length) {
+        const byId = new Map(found.map(({ place, inst }) => [place.id || place.placeId, { place, inst }]));
+        const famous = [];
+        for (const { place, inst } of found) {
+          const pid = place.id || place.placeId;
+          const have = places.find((p) => (p.id || p.placeId) === pid);
+          const plat = place.location?.latitude ?? place.lat, plng = place.location?.longitude ?? place.lng;
+          famous.push({ ...(have || place), distanceMiles: have?.distanceMiles ?? haversineMilesLoc(lat, lng, plat, plng), institution: inst });
+        }
+        const rest = places.filter((p) => !byId.has(p.id || p.placeId));
+        places = [...famous.filter((p) => p.institution.lift), ...rest, ...famous.filter((p) => !p.institution.lift)];
+      }
     } catch { places = []; }
 
     const payload = { places, query };
@@ -10930,6 +10944,20 @@ async function handleRestaurantsFull(request, env, ctx) {
       await runQueryPass(expandedRadius);
       console.log(`\u{1F52D} After auto-expand: ${allPlaces.length} total`);
     }
+    // Famous local institutions that match the typed search join the pool
+    // (each confirmed open on Google); they're lifted to the top below.
+    const instMeta = new Map();
+    if (rawQuery) {
+      try {
+        const found = await gsInstitutionsFor(env, ctx, origin, { lat: latitude, lng: longitude, radiusM: radius, query: rawQuery, finder: filterBars ? "bars" : "eat", named: body.namedPlace === true });
+        for (const { place, inst } of found) {
+          const pid = place.id || place.placeId;
+          if (!pid) continue;
+          instMeta.set(pid, inst);
+          if (!seenPlaceIds.has(pid) && isActuallyARestaurant(place)) { seenPlaceIds.add(pid); allPlaces.push(place); }
+        }
+      } catch (e) { console.warn("institutions (non-fatal):", e.message); }
+    }
     if (allPlaces.length === 0) {
       return grResp({
         places: [],
@@ -11149,6 +11177,12 @@ async function handleRestaurantsFull(request, env, ctx) {
     // A typed search gets the shared tidy: duplicate pins collapse, 2 per
     // chain/brand, near-zero-review pins drop when 8+ established remain.
     if (searchQuery?.trim()) finalPlaces = gsTidy(finalPlaces);
+    // Institutions that survived every filter lead, most famous first.
+    if (instMeta.size) {
+      for (const p of finalPlaces) if (instMeta.has(p.id)) p.institution = instMeta.get(p.id);
+      const famous = finalPlaces.filter((p) => p.institution?.lift).sort((a, b) => b.institution.fame - a.institution.fame);
+      finalPlaces = [...famous, ...finalPlaces.filter((p) => !p.institution?.lift)];
+    }
     const intentSorted = intent.kind !== "GENERAL" && !!searchQuery?.trim();
     finalPlaces.forEach((p, i) => {
       p.backendRank = i + 1;
@@ -16171,6 +16205,178 @@ function gsTidy(list, { dropTypes = null, brandCap = 2, minReviews = 10 } = {}) 
   return established.length >= 8 ? established : kept;
 }
 const GS_MEGACHAINS = ["mcdonald", "burger king", "kfc", "kentucky fried", "subway", "taco bell", "wendy's", "jollibee", "domino", "pizza hut", "popeyes", "carl's jr", "jack in the box", "little caesars", "dunkin", "7-eleven"];
+
+// ── Local institutions (fix 5, founder 2026-10-07: "best southern food in
+// Atlanta" missed Mary Mac's; "beer in Germany" missed the Hofbräuhaus) ──
+// Restaurants, cafés, bakeries, pubs, bars, breweries and beer halls with a
+// Wikipedia article, harvested from Wikidata by scripts/institutions into the
+// D1 `institutions` table. A typed search lifts the famous ones that MATCH it.
+// Wikipedia isn't trusted on whether a place still trades: each one is looked
+// up on Google first (permanently closed or not found = never shown), and
+// that answer is kept 30 days. No table yet (or any error) = no change.
+const GS_INST_TTL = 30 * 24 * 3600;
+// Words that don't narrow WHICH famous place ("best authentic food in…").
+const GS_INST_GENERIC = new Set(("a an the and or of in on at to for with near nearby around by from me my our here there " +
+  "best top good great nice famous iconic legendary popular renowned classic local locals authentic traditional legit real genuine " +
+  "most highest high rated rating ratings reviewed recommended must try place places spot spots joint joints shop shops " +
+  "restaurant restaurants food foods eat eats eating dinner lunch breakfast meal meals dining dine cuisine dish dishes " +
+  "where can find get go want looking some any open late tonight today now cheap affordable budget expensive fancy " +
+  "city town downtown area district neighborhood old style delicious tasty yummy fresh real").split(" "));
+// One typed word → the words a matching Wikipedia/Wikidata entry uses.
+const GS_INST_SYNONYMS = {
+  "pizza": ["pizza", "pizzeria", "pizzerias", "neapolitan"],
+  "beer": ["beer", "beers", "brewery", "brewer", "brewing", "beer hall", "beer garden", "biergarten", "brewpub", "bierkeller", "pub", "ale", "lager"],
+  "pub": ["pub", "public house", "tavern", "inn", "alehouse"],
+  "bar": ["bar", "cocktail", "cocktails", "speakeasy", "tavern", "pub"],
+  "cocktail": ["cocktail", "cocktails", "bar", "speakeasy"],
+  "wine": ["wine", "wine bar", "wine tavern", "winery", "enoteca", "bodega"],
+  "coffee": ["coffee", "coffeehouse", "café", "cafe", "caffè", "kaffeehaus", "espresso"],
+  "cafe": ["café", "cafe", "coffeehouse", "caffè", "kaffeehaus", "coffee"],
+  "tea": ["tea", "tea room", "teahouse", "tea house", "tearoom"],
+  "bakery": ["bakery", "boulangerie", "patisserie", "pâtisserie", "pastry", "konditorei", "bakehouse"],
+  "croissant": ["croissant", "croissants", "boulangerie", "bakery", "patisserie", "viennoiserie"],
+  "pain au chocolat": ["pain au chocolat", "croissant", "croissants", "boulangerie", "bakery", "patisserie", "viennoiserie"],
+  "street food": ["street food", "street-side", "street stall", "food stall", "hawker", "street vendor"],
+  "soul food": ["soul food", "southern"],
+  "hot pot": ["hot pot", "hotpot"],
+  "pastry": ["pastry", "pastries", "patisserie", "pâtisserie", "confectionery", "konditorei", "bakery"],
+  "dessert": ["dessert", "desserts", "pastry", "patisserie", "confectionery", "ice cream", "gelato", "cake", "cakes", "sweets"],
+  "gelato": ["gelato", "gelateria", "ice cream"],
+  "ice cream": ["ice cream", "gelato", "gelateria", "ice-cream"],
+  "chocolate": ["chocolate", "chocolatier", "cocoa", "hot chocolate"],
+  "donut": ["donut", "donuts", "doughnut", "doughnuts"],
+  "southern": ["southern", "soul food", "southern cuisine", "southern-style", "southern food"],
+  "soul": ["soul food", "southern"],
+  "bbq": ["barbecue", "bbq", "barbeque", "smokehouse"],
+  "barbecue": ["barbecue", "bbq", "barbeque", "smokehouse"],
+  "steak": ["steak", "steakhouse", "steaks", "chophouse"],
+  "burger": ["burger", "burgers", "hamburger", "hamburgers"],
+  "hot dog": ["hot dog", "hot dogs", "frankfurter"],
+  "seafood": ["seafood", "fish", "oyster", "oysters", "lobster", "crab", "shellfish", "clam"],
+  "fish and chips": ["fish and chips", "fish and chip", "chippy", "chip shop"],
+  "lobster": ["lobster", "lobster roll", "lobsters"],
+  "oyster": ["oyster", "oysters", "oyster bar"],
+  "crab": ["crab", "crabs", "crab shack"],
+  "sushi": ["sushi", "sushi-ya", "omakase"],
+  "ramen": ["ramen", "ramen shop", "tsukemen", "noodle", "noodles"],
+  "noodle": ["noodle", "noodles", "ramen", "udon", "soba", "pho", "wonton"],
+  "dim sum": ["dim sum", "yum cha", "dumpling", "dumplings", "teahouse"],
+  "dumpling": ["dumpling", "dumplings", "dim sum", "xiaolongbao", "gyoza", "pierogi"],
+  "taco": ["taco", "tacos", "taqueria", "taquería"],
+  "tacos": ["taco", "tacos", "taqueria", "taquería"],
+  "deli": ["deli", "delicatessen", "pastrami", "sandwich"],
+  "sandwich": ["sandwich", "sandwiches", "sandwich shop", "deli", "delicatessen"],
+  "pasta": ["pasta", "trattoria", "osteria", "italian"],
+  "tapas": ["tapas", "pintxos", "bodega", "taberna"],
+  "beignet": ["beignet", "beignets"],
+  "brunch": ["brunch", "breakfast"],
+  "vegan": ["vegan", "plant-based"],
+  "vegetarian": ["vegetarian", "vegan"],
+  "kebab": ["kebab", "kebap", "döner", "doner", "shawarma"],
+  "curry": ["curry", "indian"],
+  "chili": ["chili", "chilli"],
+  "pie": ["pie", "pies", "pie and mash"],
+};
+const GS_INST_KINDS_GENERIC = { eat: new Set(["restaurant"]), bars: new Set(["bar", "pub", "beer_hall", "brewery"]), coffee: new Set(["cafe"]) };
+// Words that only a certain kind of place may answer — "croissant" must not
+// match Café du Croissant, a café named after its street.
+// In a bars search these words mean "any famous bar", not a word to match.
+const GS_INST_BAR_WORDS = new Set(["bar", "bars", "pub", "pubs", "drink", "drinks", "nightlife", "tavern", "taverns"]);
+// "Best restaurants" is never a jazz club, a theatre or a hotel lobby.
+const GS_INST_NOT_A_MEAL = /\b(jazz club|nightclub|night club|music venue|concert|cabaret|comedy club|theatre|theater|casino|hotel|stadium|museum|cinema)\b/;
+const GS_INST_TERM_KINDS = { croissant: ["bakery"], "pain au chocolat": ["bakery"], bakery: ["bakery"], pastry: ["bakery", "cafe"], gelato: ["ice_cream", "cafe", "bakery"], "ice cream": ["ice_cream", "cafe", "bakery"] };
+const GS_INST_KINDS_ANY = { eat: new Set(["restaurant", "pub", "bar", "beer_hall", "brewery", "bakery", "ice_cream", "cafe"]), bars: new Set(["bar", "pub", "beer_hall", "brewery"]), coffee: new Set(["cafe", "bakery"]) };
+const gsInstWords = (s) => String(s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[`'’]/g, "'");
+const gsInstEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// "best authentic southern food" → [["southern", "soul food", …]] — one group
+// per meaningful word or phrase; every group must match the place.
+function gsInstTermGroups(query, finder = "eat") {
+  let q = " " + gsInstWords(query).replace(/[^a-z0-9' &-]+/g, " ").replace(/\s+/g, " ") + " ";
+  const groups = [];
+  const add = (key, words) => { const g = [...words]; g.kinds = GS_INST_TERM_KINDS[key] || null; groups.push(g); };
+  for (const key of Object.keys(GS_INST_SYNONYMS).filter((k) => k.includes(" ")).sort((a, b) => b.length - a.length)) {
+    if (q.includes(" " + key + " ")) { add(key, GS_INST_SYNONYMS[key]); q = q.replace(" " + key + " ", " "); }
+  }
+  for (const w of q.trim().split(" ")) {
+    if (!w || w.length < 3 || GS_INST_GENERIC.has(w) || (finder === "bars" && GS_INST_BAR_WORDS.has(w))) continue;
+    const base = w.length > 4 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w;
+    const key = GS_INST_SYNONYMS[w] ? w : GS_INST_SYNONYMS[base] ? base : null;
+    add(key || w, key ? GS_INST_SYNONYMS[key] : [w, base]);
+  }
+  return groups;
+}
+function gsInstMatches(row, groups, finder) {
+  const kinds = String(row.kind || "").split("|");
+  if (!groups.length) return kinds.some((k) => GS_INST_KINDS_GENERIC[finder]?.has(k)) && !GS_INST_NOT_A_MEAL.test(gsInstWords(row.words));
+  if (!kinds.some((k) => GS_INST_KINDS_ANY[finder]?.has(k))) return false;
+  if (groups.some((g) => g.kinds && !kinds.some((k) => g.kinds.includes(k)))) return false;
+  const text = " " + gsInstWords(row.words) + " " + gsInstWords(String(row.names || "").replace(/\|/g, " ")) + " ";
+  return groups.every((g) => g.some((v) => new RegExp(`[^a-z0-9]${gsInstEsc(gsInstWords(v))}[^a-z0-9]`).test(text)));
+}
+// Same place? Names compared word by word after accents/punctuation go;
+// ≥ 60% of the shorter name's words shared, or one name inside the other.
+function gsInstSameName(a, b) {
+  const w = (s) => gsInstWords(s).replace(/'s\b/g, "").replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((x) => x.length > 1 && !["the", "la", "le", "il", "el", "da", "di", "de", "du", "and"].includes(x));
+  const x = w(a), y = w(b);
+  if (!x.length || !y.length) return false;
+  const xs = x.join(" "), ys = y.join(" ");
+  if (xs.includes(ys) || ys.includes(xs)) return true;
+  const shared = x.filter((t) => y.includes(t)).length;
+  return shared / Math.min(x.length, y.length) >= 0.6;
+}
+// The Google place for one institution — a KV-cached lookup ({miss} when
+// Google can't find it within ~400 m or says it closed for good).
+async function gsInstResolve(env, ctx, origin, row) {
+  const key = `inst:v1:${row.qid}`;
+  const hit = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get(key, { type: "json" }).catch(() => null) : null;
+  if (hit) return hit.miss ? null : hit.place;
+  let place = null;
+  try {
+    const params = new URLSearchParams({ query: row.name, latitude: String(row.lat), longitude: String(row.lng), radius: "400", maxResults: "5" });
+    const res = await rxDispatch(env, ctx, origin, `/places/text-search?${params}`);
+    const data = res.ok ? await res.json() : null;
+    if (!data || data.error) return null; // a Google error isn't an answer — don't cache it
+    const names = [row.name, ...String(row.names || "").split("|")].filter(Boolean);
+    place = (data.places || []).find((p) => {
+      const lat = p.location?.latitude ?? p.lat, lng = p.location?.longitude ?? p.lng;
+      const near = Number.isFinite(lat) && calcDistance(row.lat, row.lng, lat, lng) <= 0.6;
+      const pName = p.displayName?.text || p.name || "";
+      return near && names.some((n) => gsInstSameName(n, pName));
+    }) || null;
+    if (place && (String(place.businessStatus || "").toUpperCase() === "CLOSED_PERMANENTLY" || !isActuallyARestaurant(place))) place = null;
+  } catch { return null; }
+  if (env.GLOBESKIMMERS_KV) {
+    const put = env.GLOBESKIMMERS_KV.put(key, JSON.stringify(place ? { place } : { miss: 1 }), { expirationTtl: GS_INST_TTL }).catch(() => {});
+    if (ctx?.waitUntil) ctx.waitUntil(put); else await put;
+  }
+  return place;
+}
+// Famous places near (lat, lng) that match the typed query, each with its
+// Google place: [{ place, inst: { qid, name, since, fame, wiki, lift } }], most
+// famous first, at most `limit`. finder: 'eat' | 'bars' | 'coffee'. `lift`
+// (they lead the list) when a place was NAMED or the query is specific —
+// a plain "best restaurants near me" keeps its normal order, badges only.
+async function gsInstitutionsFor(env, ctx, origin, { lat, lng, radiusM = 15000, query = "", finder = "eat", limit = 4, named = false }) {
+  if (!env.ATTRACTIONS_DB || !Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+  const r = Math.min(Math.max(radiusM, 2000), 15000) / 1000;
+  const dLat = r / 111, dLng = r / (111 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+  let rows;
+  try {
+    ({ results: rows } = await env.ATTRACTIONS_DB.prepare(
+      `SELECT qid, name, names, lat, lng, kind, since, fame, enwiki, words FROM institutions
+        WHERE lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4 ORDER BY fame DESC LIMIT 400`
+    ).bind(lat - dLat, lat + dLat, lng - dLng, lng + dLng).all());
+  } catch { return []; } // table not loaded yet
+  const groups = gsInstTermGroups(query, finder);
+  const lift = named || groups.length > 0;
+  // A few extra candidates: Wikipedia keeps articles on places that have closed.
+  const picks = (rows || []).filter((row) => calcDistance(lat, lng, row.lat, row.lng) <= r && gsInstMatches(row, groups, finder)).slice(0, limit + 4);
+  const resolved = await Promise.all(picks.map(async (row) => ({ row, place: await gsInstResolve(env, ctx, origin, row) })));
+  return resolved.filter((x) => x.place).slice(0, limit).map(({ row, place }) => ({
+    place,
+    inst: { qid: row.qid, name: row.name, since: row.since || null, fame: row.fame, lift, wiki: row.enwiki ? `https://en.wikipedia.org/wiki/${encodeURIComponent(row.enwiki.replace(/ /g, "_"))}` : `https://www.wikidata.org/wiki/${row.qid}` },
+  }));
+}
 const GS_NON_DESTINATION = /^(dentist|dental_clinic|doctor|hospital|medical_lab|medical_clinic|physiotherapist|nursing_home|assisted_living_facility|pharmacy|drugstore|veterinary_care|insurance_agency|real_estate_agency|lawyer|accounting|car_dealer|car_repair|car_wash|storage|moving_company|funeral_home|locksmith|plumber|electrician|roofing_contractor|general_contractor|bank|post_office|police|local_government_office|courthouse|primary_school|secondary_school|cannabis_store|laundry|beauty_salon|hair_salon|hair_care|barber_shop|nail_salon|corporate_office|consultant|employment_agency|travel_agency)$/;
 const NOT_AN_ACTIVITY_TYPE = /^(lodging|hotel|motel|resort_hotel|extended_stay_hotel|bed_and_breakfast|guest_house|hostel|inn|japanese_inn|budget_japanese_inn|private_guest_room|cottage|farmstay|apartment_building|apartment_complex|condominium_complex|housing_complex|real_estate_agency)$/;
 const OTA_LISTING_SITE = /(booking\.com|airbnb\.|vrbo\.|bluepillow\.|expedia\.|hotels\.com|agoda\.|tripadvisor\.[a-z.]+\/(hotel|vacationrental))/i;
