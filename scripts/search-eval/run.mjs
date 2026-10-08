@@ -33,6 +33,38 @@ const post = async (path, body, tries = 2) => {
 const parseAI = async (body) => { const d = await post("parse-search", body); return d && !d.error ? d : null; };
 const nameOf = (x) => x.displayName?.text || x.name || x.title || "";
 
+// Today's hours line in the PLACE's own timezone ("Friday: 11:00 AM – 12:00 AM").
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const todayHours = (x) => {
+  const lines = x.regularOpeningHours?.weekdayDescriptions || x.hours || [];
+  if (!lines.length) return null;
+  const off = Number.isFinite(x.utcOffsetMinutes) ? x.utcOffsetMinutes : 0;
+  const day = DAYS[new Date(Date.now() + off * 60000).getUTCDay()];
+  const line = lines.find((l) => String(l).startsWith(day));
+  return line ? String(line).replace(/[\u202f\u2009]/g, " ") : null;
+};
+// Open until 11 PM or later today (or past midnight, or 24 hours) — the same
+// bar as the worker's late-night filter. Null when the hours are unknown.
+const closesLate = (line) => {
+  if (!line) return null;
+  if (/open 24 hours/i.test(line)) return true;
+  if (/closed/i.test(line)) return false;
+  const ends = [...line.matchAll(/[–-]\s*(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/gi)];
+  if (!ends.length) return null;
+  const [, h, m = "0", ap] = ends[ends.length - 1];
+  const mins = ((+h % 12) + (/pm/i.test(ap) ? 12 : 0)) * 60 + +m;
+  return mins >= 23 * 60 || mins <= 5 * 60;
+};
+// The filters the app applies, in plain words — reviewers can't see presets.
+const filtersOf = (p, cat) => [
+  p.lateNight && "late-night: only places open until 11 PM or later today",
+  p.maxPrice && `price: only ${"$".repeat(p.maxPrice)} or cheaper (unpriced places kept)`,
+  p.bars && cat === "eat" && "bars and nightlife venues only",
+  p.sort === "rating" && "sorted by rating weighed by review count",
+  p.nearFirst && "nearest first",
+  p.venue && p.venue !== "all" && `restroom venue: ${p.venue}`,
+].filter(Boolean);
+
 async function runCase(c) {
   const out = { id: c.id, q: c.q, tags: c.tags || [], gap: c.gap || null, checks: [], top: [] };
   const fail = (msg) => out.checks.push({ ok: false, msg });
@@ -89,13 +121,24 @@ async function runCase(c) {
     if (path) { const d = await post(path, { ...geo, radius: 25 * 1609, maxResults: 30, ...(cat === "restroom" ? { venueType: p.venue || "all" } : {}) }); list = d.places || d.stores || d.all_stores || d.results || d.atms || d.locations || d.restrooms || []; }
   }
   out.count = list.length;
-  out.top = list.slice(0, 8).map((x) => ({ name: nameOf(x), rating: x.rating ?? null, reviews: x.userRatingCount ?? null, mi: x.distanceMiles != null ? +x.distanceMiles.toFixed(1) : (x.distanceKm != null ? +(x.distanceKm * 0.621371).toFixed(1) : (typeof x.distance === "number" ? +x.distance.toFixed(1) : null)), addr: x.formattedAddress || x.shortFormattedAddress || "" }));
+  out.filters = filtersOf(p, cat);
+  out.top = list.slice(0, 8).map((x) => ({ name: nameOf(x), rating: x.rating ?? null, reviews: x.userRatingCount ?? null, mi: x.distanceMiles != null ? +x.distanceMiles.toFixed(1) : (x.distanceKm != null ? +(x.distanceKm * 0.621371).toFixed(1) : (typeof x.distance === "number" ? +x.distance.toFixed(1) : null)), addr: x.formattedAddress || x.shortFormattedAddress || "",
+    ...(x.priceLevel ? { price: "$".repeat(parseInt(x.priceLevel, 10) || 0) } : {}), ...(todayHours(x) ? { today: todayHours(x) } : {}), ...(x.primaryType ? { kind: x.primaryType } : {}) }));
 
   const min = e.min ?? 5;
   list.length >= min ? pass(`${list.length} results`) : fail(`${list.length} results, expected ≥${min}`);
   const top10 = list.slice(0, 10).map(nameOf);
   if (e.notNames) { const bad = top10.filter((n) => e.notNames.test(n)); bad.length ? fail(`unwanted in top 10: ${bad.join("; ")}`) : pass(`top 10 clean of ${e.notNames}`); }
   if (e.someNames) top10.some((n) => e.someNames.test(n)) ? pass(`top 10 has ${e.someNames}`) : fail(`top 10 lacks ${e.someNames}`);
+  // The filters must hold for every top-10 result whose data says otherwise.
+  if (p.lateNight && cat === "eat") {
+    const early = list.slice(0, 10).filter((x) => closesLate(todayHours(x)) === false).map(nameOf);
+    early.length ? fail(`late-night filter let through: ${early.join("; ")}`) : pass("late-night filter holds");
+  }
+  if (p.maxPrice && cat === "eat") {
+    const dear = list.slice(0, 10).filter((x) => x.priceLevel && parseInt(x.priceLevel, 10) > p.maxPrice).map(nameOf);
+    dear.length ? fail(`price filter let through: ${dear.join("; ")}`) : pass("price filter holds");
+  }
   if (e.country && cat === "eat") {
     const tail = (x) => String(x.formattedAddress || "").split(",").pop().trim().toLowerCase();
     const want = e.country.toLowerCase();
