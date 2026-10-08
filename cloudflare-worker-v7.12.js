@@ -5188,6 +5188,12 @@ async function handleSearchLocation(request, env) {
     });
   }
 
+  // Search only (touristCenter): a city that shares its state's name — Oaxaca,
+  // Puebla, Guanajuato — comes back as just the state. Retry once as "<name> city".
+  if (results.length === 0 && rejectedTooBroadCount > 0 && body?.touristCenter && !body.cityRetry && !/\bcity\b/i.test(query)) {
+    return handleSearchLocation(new Request(request.url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, query: `${query} city`, cityRetry: true }) }), env);
+  }
   if (results.length === 0) {
     const message = rejectedTooBroadCount > 0
       ? "That's too broad — please add a city (e.g. \"Paris, France\") or pick a specific address or landmark."
