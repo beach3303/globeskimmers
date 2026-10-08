@@ -4,16 +4,16 @@
 // about — its navigate-mode selection — and the shelf lays out the stamps
 // waiting there as the promise of the trip. Endowed progress: the mono kicker
 // reads "{CITY} · {earned} OF {total}" even at 0 — the set itself is the
-// endowment. Owned attraction data only (attractions/nearby, D1 — zero
-// Google/AI spend) + one /passport/list read to mark what's already collected.
+// endowment. Owned attraction data only (/dream/shelf, D1 — zero Google/AI
+// spend) + one /passport/list read to mark what's already collected.
 //
 // Deliberately different from StampsNearYou:
 //   - NO includeSecrets — secrets are found by being there, never dreamed;
-//   - DISTANCE under every card (founder, 2026-10-06): the shelf reaches 50
-//     miles — everything a car, train or bus can do — so each card says how
-//     far, in the traveler's unit (miles in mile countries, km elsewhere,
-//     Settings override wins). Water in between gets an honest ⛴ FERRY tag;
-//     fly-only places don't belong on a within-reach shelf.
+//   - the REGION, not a circle around you (founder, 2026-10-08): three rows —
+//     Icons of <region>, Local favorites, Worth a day trip — the same from
+//     every suburb; DISTANCE under every card from where you are, in the
+//     traveler's unit (miles in mile countries, km elsewhere, Settings
+//     override wins). Water in between gets an honest ⛴ FERRY tag.
 //   - photo-forward cards when a place has a real photoUrl, the engraved
 //     typographic stamp card otherwise (never a colored placeholder box).
 // A tap opens the place's full page — the same one "Stamps near you" opens
@@ -122,44 +122,46 @@ function DreamCard({ item, collected, sub, onOpen }) {
 export default function DreamShelf({ latitude, longitude, cityName, cityTempF = null, onOpenActivity }) {
   const { currentGpsLocation, activeLocation } = useLocation();
   const { profile } = useAuth();
-  const [items, setItems] = useState([]);
+  const [tiers, setTiers] = useState([]); // [{ key, title, items }]
+  const [metroName, setMetroName] = useState(null);
   const [earnedIds, setEarnedIds] = useState(() => new Set());
 
   useEffect(() => {
     let cancelled = false;
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) { setItems([]); return; }
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) { setTiers([]); return; }
     (async () => {
       try {
-        // 80 km ≈ 50 miles (founder, 2026-10-06): every top destination a car,
-        // train or bus can reach from here belongs on the shelf. NO
-        // includeSecrets: the worker hides tier=secret rows from browse, and a
-        // secret is earned by stumbling onto it in person — never previewed
-        // here. /passport/list is the lightest existing count read (signed-out
-        // it returns empty stamps, never an error → "0 OF N" is the endowment).
-        const [near, pass] = await Promise.all([
-          callWorker("attractions/nearby", { latitude, longitude, radiusKm: 80, limit: 48, stampsOnly: true }),
+        // The REGION's shelf (founder, 2026-10-08): from Arcadia, Santa Clarita
+        // or Van Nuys alike — Icons of Los Angeles (Disneyland to Six Flags),
+        // Local favorites (LACMA, the Original Farmers Market), Worth a day trip
+        // (San Diego Zoo, Legoland). No secrets: those are found by being there.
+        // /passport/list marks what's collected (signed-out it's empty, never an error).
+        const [shelf, pass] = await Promise.all([
+          callWorker("dream/shelf", { latitude, longitude, cityName: cityName || "" }),
           listPassport(),
         ]);
         if (cancelled) return;
-        const raw = (!near.error && Array.isArray(near.data?.attractions)) ? near.data.attractions : [];
-        const list = raw.filter((a) => a.tier !== "secret");
-        // Iconic first, then best-loved — NOT nearest-first; the shelf is a
-        // promise, not a proximity list.
-        list.sort((a, b) => (Number(!!b.isMarquee) - Number(!!a.isMarquee)) || ((b.popularity ?? 0) - (a.popularity ?? 0)));
-        setItems(list.slice(0, 16));
-        // Attraction stamps store the attraction id as entity_id
-        // (ActivityDetail's addStamp), so id membership = already collected.
+        const got = (!shelf.error && Array.isArray(shelf.data?.tiers)) ? shelf.data.tiers : [];
+        setMetroName(shelf.data?.metro?.name || null);
+        setTiers(got.map((t) => ({ ...t, items: (t.items || []).filter((a) => a.tier !== "secret") })));
+        // Attraction stamps store the attraction id as entity_id, so id
+        // membership = already collected.
         setEarnedIds(new Set((pass.stamps || []).filter((s) => s && s.entity_id != null).map((s) => String(s.entity_id))));
-      } catch { if (!cancelled) setItems([]); }
+      } catch { if (!cancelled) setTiers([]); }
     })();
     return () => { cancelled = true; };
-  }, [latitude, longitude]);
+  }, [latitude, longitude, cityName]);
 
-  // Self-hide: no dreamed coords, or too few stampable places to read as a set.
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || items.length < 3) return null;
+  // Each row needs 3+ places to read as a set; the shelf hides when none does.
+  // Not-yet-collected places lead each row, so the shelf always offers what's next.
+  const rows = tiers
+    .map((t) => ({ ...t, items: [...t.items.filter((it) => !earnedIds.has(String(it.id))), ...t.items.filter((it) => earnedIds.has(String(it.id)))].slice(0, 16) }))
+    .filter((t) => t.items.length >= 3);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !rows.length) return null;
 
-  const earned = items.filter((it) => earnedIds.has(String(it.id))).length;
-  const city = String(cityName || "").trim();
+  const all = rows.flatMap((t) => t.items);
+  const earned = all.filter((it) => earnedIds.has(String(it.id))).length;
+  const city = String(metroName || cityName || "").trim();
 
   // "72°F NOW · ~9H FLIGHT (EST)" — the dreamed city's live temp (optional
   // cityTempF prop) and a rough flight estimate from where the user PHYSICALLY
@@ -200,7 +202,7 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
       <div className="max-w-md mx-auto">
         <div className="mb-2 px-0.5">
           <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))]" style={{ color: MUTED }}>
-            {city ? `${city} · ` : ""}{earned} of {items.length}
+            {city ? `${city} · ` : ""}{earned} of {all.length}
           </div>
           <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1] mt-0.5" style={{ color: INK }}>Dream shelf</div>
           {dataLine && (
@@ -209,11 +211,16 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
             </div>
           )}
         </div>
-        <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
-          {items.map((it) => (
-            <DreamCard key={it.id} item={it} collected={earnedIds.has(String(it.id))} sub={subFor(it)} onOpen={() => openDream(it)} />
-          ))}
-        </div>
+        {rows.map((t) => (
+          <div key={t.key} className="mt-2.5">
+            <div className="font-mono uppercase tracking-[0.08em] text-[calc(10px*var(--fs))] mb-1.5 px-0.5" style={{ color: INK2 }}>{t.title}</div>
+            <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
+              {t.items.map((it) => (
+                <DreamCard key={it.id} item={it} collected={earnedIds.has(String(it.id))} sub={subFor(it)} onOpen={() => openDream(it)} />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
