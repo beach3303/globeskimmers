@@ -35,7 +35,10 @@ const TEXT_SEARCH_AI_FIELDS =
 const CONFIG = {
   CACHE_TTL: {
     // Fresh windows — within this age, cache is returned as-is.
-    TEXT_SEARCH: 12 * 60 * 60,
+    // 3 days (founder, 2026-10-07): ratings, hours and closures move slowly, and
+    // "open now" is worked out fresh from the weekly hours on every read
+    // (gsOpenNow) — never trusted from the cache.
+    TEXT_SEARCH: 3 * 24 * 60 * 60,
     NEARBY_SEARCH: 3 * 24 * 60 * 60,
     // Google lets an app keep its data temporarily for at most 30 days (Maps
     // Platform terms 3.2.3); was 90. Reads also refuse older entries.
@@ -46,7 +49,10 @@ const CONFIG = {
     // FRESH + SWR, we return the cached response immediately AND trigger
     // a background refresh via ctx.waitUntil. KV expirationTtl is set to
     // FRESH + SWR so entries survive long enough to be served stale.
-    TEXT_SEARCH_SWR: 12 * 60 * 60,      // 12hr fresh + 12hr stale = 24hr total
+    TEXT_SEARCH_SWR: 4 * 24 * 60 * 60,  // 3d fresh + 4d stale = 7d total
+    // A search that asked Google for "open now" goes stale within the hour.
+    OPEN_NOW: 30 * 60,
+    OPEN_NOW_SWR: 30 * 60,
     NEARBY_SEARCH_SWR: 4 * 24 * 60 * 60, // 3d fresh + 4d stale = 7d total
     STALE_WHILE_REVALIDATE: 60 * 60      // legacy constant (unused)
   },
@@ -406,12 +412,13 @@ async function handleTextSearch(request, env, ctx) {
   if (!forceRefresh) {
     const hit = await tryCacheWithSWR(env, ctx, cacheKey, FRESH, SWR, fetchAndCache);
     if (hit) {
-      return jsonResponse({ places: hit.data, count: hit.data.length, cached: true, stale: hit.status === 'stale', cacheAge: hit.cacheAge });
+      const live = gsFreshOpen(hit.data);
+      return jsonResponse({ places: live, count: live.length, cached: true, stale: hit.status === 'stale', cacheAge: hit.cacheAge });
     }
   }
 
   try {
-    const places = await fetchAndCache();
+    const places = gsFreshOpen(await fetchAndCache());
     return jsonResponse({ places, count: places.length, cached: false, stale: false });
   } catch (error) {
     return jsonResponse({ error: 'Google Places API error', status: error.upstreamStatus, details: error.message, places: [] }, 200);
@@ -431,8 +438,9 @@ async function handleNearbySearch(request, env, ctx) {
   const minRating = parseFloat(params.minRating) || 0;
   const priceLevels = params.priceLevels ? params.priceLevels.split(',') : [];
 
-  const filterSuffix = [openNow ? 'open' : '', minRating > 0 ? `r${minRating}` : '', priceLevels.length ? priceLevels.join('-') : ''].filter(Boolean).join('_');
-  const cacheKey = generateCacheKey('nearby', { ...params, types }) + (filterSuffix ? `_v2_${filterSuffix}` : ''); // v2: filters applied here, not sent to Google
+  // v3: ONE unfiltered list per area; open-now / rating / price are applied on
+  // every read — a cached "open now" list was wrong within hours.
+  const cacheKey = generateCacheKey('nearby', { ...params, types }) + '_v3';
 
   const apiKey = env.GOOGLE_API_KEY;
   const baseUrl = url.origin;
@@ -480,7 +488,7 @@ async function handleNearbySearch(request, env, ctx) {
       throw err;
     }
     const data = await response.json();
-    const places = applyFilters((data.places || []).map(p => normalizePlace(p, baseUrl, false)));
+    const places = (data.places || []).map(p => normalizePlace(p, baseUrl, false));
     await setInCache(env, cacheKey, places, FRESH + SWR);
     return places;
   };
@@ -488,12 +496,13 @@ async function handleNearbySearch(request, env, ctx) {
   if (!forceRefresh) {
     const hit = await tryCacheWithSWR(env, ctx, cacheKey, FRESH, SWR, fetchAndCache);
     if (hit) {
-      return jsonResponse({ places: hit.data, count: hit.data.length, cached: true, stale: hit.status === 'stale', cacheAge: hit.cacheAge });
+      const live = applyFilters(gsFreshOpen(hit.data));
+      return jsonResponse({ places: live, count: live.length, cached: true, stale: hit.status === 'stale', cacheAge: hit.cacheAge });
     }
   }
 
   try {
-    const places = await fetchAndCache();
+    const places = applyFilters(gsFreshOpen(await fetchAndCache()));
     return jsonResponse({ places, count: places.length, cached: false, stale: false });
   } catch (error) {
     return jsonResponse({ error: 'Google Places API error', status: error.upstreamStatus, details: error.message, places: [] }, 200);
@@ -708,7 +717,7 @@ async function handleCoffeeSearch(request, env) {
   if (!forceRefresh) {
     const cached = await getFromCache(env, cacheKey);
     if (cached && cached.age < CONFIG.CACHE_TTL.TEXT_SEARCH * 1000) {
-      return jsonResponse({ places: cached.data, count: cached.data.length, cached: true });
+      return jsonResponse({ places: gsFreshOpen(cached.data), count: cached.data.length, cached: true });
     }
   }
 
@@ -739,7 +748,7 @@ async function handleCoffeeSearch(request, env) {
     const data = await response.json();
     const places = (data.places || []).map(p => normalizePlace(p, baseUrl, false));
     await setInCache(env, cacheKey, places, CONFIG.CACHE_TTL.TEXT_SEARCH);
-    return jsonResponse({ places, count: places.length, cached: false });
+    return jsonResponse({ places: gsFreshOpen(places), count: places.length, cached: false });
   } catch (error) {
     return jsonResponse({ error: error.message, places: [] }, 200);
   }
@@ -766,8 +775,10 @@ async function handleRestaurantSearch(request, env, ctx) {
 
     const filterSuffix = [openNow ? 'open' : '', minRating > 0 ? `r${minRating}` : '', priceLevels?.length ? priceLevels.join('-') : '', includedType ? `t-${includedType}` : '', `rad${Math.round(radiusMiles)}`].filter(Boolean).join('_');
     const cacheKey = generateCacheKey('restaurants', { latitude, longitude, radius: radiusMeters, textQuery: searchQuery }) + (filterSuffix ? `_${filterSuffix}` : '');
-    const FRESH = CONFIG.CACHE_TTL.TEXT_SEARCH;
-    const SWR = CONFIG.CACHE_TTL.TEXT_SEARCH_SWR;
+    // Google answered "open now" for the moment it was asked: keep that 30 min.
+    const FRESH = openNow ? CONFIG.CACHE_TTL.OPEN_NOW : CONFIG.CACHE_TTL.TEXT_SEARCH;
+    const SWR = openNow ? CONFIG.CACHE_TTL.OPEN_NOW_SWR : CONFIG.CACHE_TTL.TEXT_SEARCH_SWR;
+    const liveList = (list) => { const l = gsFreshOpen(list); return openNow ? l.filter((p) => p.isOpen !== false) : l; };
 
     const requestBody = {
       textQuery: searchQuery,
@@ -819,11 +830,12 @@ async function handleRestaurantSearch(request, env, ctx) {
     if (!forceRefresh) {
       const hit = await tryCacheWithSWR(env, ctx, cacheKey, FRESH, SWR, fetchAndCache);
       if (hit) {
-        return jsonResponse({ restaurants: hit.data, places: hit.data, count: hit.data.length, cached: true, stale: hit.status === 'stale', cacheAge: hit.cacheAge });
+        const live = liveList(hit.data);
+        return jsonResponse({ restaurants: live, places: live, count: live.length, cached: true, stale: hit.status === 'stale', cacheAge: hit.cacheAge });
       }
     }
 
-    const restaurants = await fetchAndCache();
+    const restaurants = liveList(await fetchAndCache());
     return jsonResponse({ restaurants, places: restaurants, count: restaurants.length, cached: false, stale: false, note: 'Reviews available via /places/details/{id}' });
   } catch (error) {
     return jsonResponse({ error: error.message, restaurants: [], places: [] }, 200);
@@ -10339,6 +10351,44 @@ function gsOpenLateToday(hours, utcOffsetMinutes) {
   const close = h + (parseInt(last[2] || "0", 10) / 60);
   return close >= 23 || close <= 5; // 11 PM or later, or past midnight
 }
+// Open right now, from the weekly hours in the PLACE's timezone — the cached
+// openNow flag is however old the cache is. true / false, or null when the
+// hours can't say. Handles split shifts ("11 AM – 2 PM, 5 – 10 PM"), a start
+// that borrows the end's AM/PM ("5:00 – 10:00 PM"), and yesterday's late
+// shift running past midnight.
+function gsOpenNow(hours, utcOffsetMinutes) {
+  if (!Array.isArray(hours) || !hours.length) return null;
+  const local = new Date(Date.now() + (Number.isFinite(utcOffsetMinutes) ? utcOffsetMinutes : 0) * 60000);
+  const dow = local.getUTCDay(), now = local.getUTCHours() * 60 + local.getUTCMinutes();
+  const lineFor = (d) => { const l = hours.find((h) => String(h).startsWith(GS_WEEKDAYS[(d + 7) % 7])); return l == null ? null : String(l).replace(/[\u202f\u2009\u00a0]/g, " ").toLowerCase(); };
+  const shifts = (line) => {
+    const body = line.slice(line.indexOf(":") + 1);
+    return body.split(",").map((part) => {
+      const t = [...part.matchAll(/(\d{1,2})(?::(\d{2}))?\s*([ap])?\.?m?/g)].filter((m) => m[1]);
+      if (t.length < 2) return null;
+      const [a, b] = [t[0], t[t.length - 1]];
+      const mins = (m, mer) => ((+m[1] % 12) + (mer === "p" ? 12 : 0)) * 60 + +(m[2] || 0);
+      const endMer = b[3] || "a", startMer = a[3] || endMer;
+      return [mins(a, startMer), mins(b, endMer)];
+    }).filter(Boolean);
+  };
+  const today = lineFor(dow);
+  if (today == null) return null;
+  if (today.includes("24 hours")) return true;
+  if (!today.includes("closed")) {
+    for (const [o, c] of shifts(today)) if (c > o ? now >= o && now < c : now >= o) return true;
+  }
+  const yday = lineFor(dow - 1);
+  if (yday && !yday.includes("closed") && !yday.includes("24 hours")) {
+    for (const [o, c] of shifts(yday)) if (c <= o && now < c) return true;
+  }
+  return today.includes("closed") || shifts(today).length ? false : null;
+}
+// Every cached list leaves with a fresh isOpen.
+const gsFreshOpen = (list) => (list || []).map((p) => {
+  const live = gsOpenNow(p.hours || p.currentOpeningHours?.weekdayDescriptions || p.regularOpeningHours?.weekdayDescriptions, p.utcOffsetMinutes);
+  return live == null ? p : { ...p, isOpen: live };
+});
 function getTierForPlace(place, intent) {
   if (intent.kind === "GENERAL") return 1;
   const types = new Set([...place.types || [], place.primaryType || ""].map((t) => t.toLowerCase()));
