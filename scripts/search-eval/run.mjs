@@ -59,10 +59,10 @@ async function runCase(c) {
   // ── where ──
   let at = HOME;
   if (p.place) {
-    const g = (await post("search-location", { query: p.place }))?.results?.[0];
+    const g = (await post("search-location", { query: p.lookup || p.place, touristCenter: !p.nearFirst }))?.results?.[0];
     if (!g) { fail(`could not geocode "${p.place}"`); return out; }
     at = { lat: g.coordinates.latitude, lng: g.coordinates.longitude, city: g.address?.city || g.placeName, country: g.address?.country || "" };
-    out.at = g.placeName;
+    out.at = g.placeName + (g.touristCenter ? ` (landmark center: ${g.touristCenter.landmarks.slice(0, 3).join(", ")})` : "");
   }
   const q = finderQuery(p); // the same call the app makes
 

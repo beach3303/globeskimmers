@@ -181,6 +181,7 @@ export const GENERIC_QUERY = /^(?:the\s+)?(?:restaurants?|food|foods|places?\s+t
 export function finderQuery(parsed) {
   const q = String(parsed?.query || "").trim();
   if (!GENERIC_QUERY.test(q)) return q;
+  if (parsed?.category === "eat" && parsed?.maxPrice === 1) return "cheap eats";
   if (parsed?.sort === "rating" && parsed?.category === "eat") return "best restaurants";
   return "";
 }
@@ -263,6 +264,12 @@ export async function planSearch(raw, opts = {}) {
   if (parsed.place && (parsed.scope === "named_place" || !parsed.scope)) {
     const big = await bigCities();
     parsed.nearFirst = !big(parsed.place) && !parsed.region;
+    // How to LOOK UP the place. The location search favors businesses: plain
+    // "Barcelona" returned the Camp Nou stadium or a restaurant in Roseville, CA
+    // (Round 1.5, 2026-10-07). "<big city> city" reliably returns the city;
+    // smaller places and landmarks keep the plain name ("Redondo Beach city"
+    // finds City Hall; "Statue of Liberty" should stay the statue).
+    parsed.lookup = big(parsed.place) && !/\bcity\b/i.test(parsed.place) ? `${parsed.place} city` : parsed.place;
   }
   return { parsed, destination };
 }

@@ -84,7 +84,8 @@ export async function runSmartSearch(parsed, { navigate, location }) {
   let placeCountry = null; // "in Tijuana" means Mexico — not San Diego across the border
   if (scope === "named_place" && place) {
     try {
-      const { data } = await callWorker(ROUTE.searchLocation, { query: place });
+      // Big cities: look up "<city> city" and center on its landmark cluster.
+      const { data } = await callWorker(ROUTE.searchLocation, { query: parsed.lookup || place, touristCenter: !nearFirst });
       const loc = data?.results?.[0];
       if (loc) { await location.switchToNavigateMode(loc); recentered = true; placeCountry = loc.address?.country || null; }
     } catch { /* couldn't geocode — stay on the current location */ }
