@@ -35,6 +35,8 @@ npm run boot-check                         # boots dist/ in headless Chrome; fai
 
 Repo conventions: **one logical change per commit; show the diff before committing; ask before pushing.** Commit subjects are `Area: what changed`.
 
+**Before every App Store submission:** `scripts/ios-launch-check.sh` builds the iOS app for the newest simulator runtime and launches it on an iPad Air and an iPhone (App Review tests both; the app is iPhone + iPad, `TARGETED_DEVICE_FAMILY = "1,2"`). Build 12 was rejected 2026-10-07 for a launch crash only iPadOS 27 showed: the iOS 27 SDK requires the UIScene lifecycle (`ios/App/App/SceneDelegate.swift` + `UIApplicationSceneManifest`). The script reproduces that class of failure in minutes.
+
 ## Deployment
 
 | Target | Trigger | Notes |
