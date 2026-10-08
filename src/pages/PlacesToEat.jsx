@@ -971,6 +971,10 @@ export default function PlacesToEat() {
   // 5 miles of it lead, the wider 25-mile net follows (founder, 2026-10-07 —
   // "best crabs in Redondo Beach area" ranked central-LA spots above the pier).
   const nearFirst = routerLocation.state?.presetNearFirst === true;
+  // "best tacos in Tijuana" means MEXICO (founder, 2026-10-07): the 25-mile net
+  // crossed the border and San Diego/Chula Vista spots outranked Tijuana. A
+  // named place keeps results in its own country; addresses end with it.
+  const presetCountry = routerLocation.state?.presetCountry || null;
   const [radius, setRadius]             = useState(25); // wide net; no radius UI — results show nearest-first
   const [displayCount, setDisplayCount] = useState(20);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false); // advanced filters live in the shared FilterSheet
@@ -1266,6 +1270,16 @@ export default function PlacesToEat() {
       });
     }
 
+    if (presetCountry) {
+      const want = String(presetCountry).toLowerCase();
+      const alias = { "united states": "usa", "united kingdom": "uk" }[want];
+      const inCountry = (x) => {
+        const last = String(x.formattedAddress || "").split(",").pop().trim().toLowerCase();
+        return !last || last === want || last === alias;
+      };
+      const kept = r.filter(inCountry);
+      if (kept.length) r = kept; // never empty the list on an address-format surprise
+    }
     if (filterOpenNow)    r = r.filter(x => x.isOpen === true);
     if (filterMinRating>0) r = r.filter(x => (x.rating||0) >= filterMinRating);
     if (filterMaxPrice>0)  r = r.filter(x => !x.priceLevel || (parseInt(x.priceLevel)||0) <= filterMaxPrice);
@@ -1303,7 +1317,7 @@ export default function PlacesToEat() {
       if (near.length >= 3) r = [...near, ...r.filter((x) => (x.distanceMiles ?? 999) > 5)];
     }
     return r;
-  }, [restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, searchText, sortByRating, nearFirst]);
+  }, [restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, searchText, sortByRating, nearFirst, presetCountry]);
 
   // ── T1.15: BATCH ENRICH THE VISIBLE PAGE OF OWNED CARDS ──────────────────
   // Was: every owned card fired its own /places/enrich-owned on mount (up to 20

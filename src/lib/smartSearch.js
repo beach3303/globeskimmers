@@ -49,9 +49,12 @@ const NEAR_ME = /\b(near\s*me|nearby|around\s*me|close\s*by)\b/i;
 const AT_STAY = /\b(near|at|by|around|from)\s+(my|our|the)\s+(hotel|stay|airbnb|place|room|accommodation|lodging)\b/i;
 // "... in Positano" / "... in New York" — a Capitalized place at the end.
 const IN_PLACE = /\bin\s+([A-Z][\w'’.-]*(?:\s+[A-Z][\w'’.-]*){0,3})\s*$/;
-// Any other "in <something>" clause the capitalized rule can't settle ("in
-// atlanta", "in Atlanta with great reviews") — the AI parser decides those.
-export const HAS_IN_CLAUSE = /\bin\s+[\p{L}]/u;
+// "street food near DLSU Taft" / "shaved ice near Arcadia" — a NAMED place
+// after near / around / close to / next to (never "near me", "near my hotel").
+const NEAR_PLACE = /\b(?:near|around|close\s+to|next\s+to)\s+(?!me\b|my\b|our\b|here\b|the\s+(?:hotel|area)\b)([A-Z][\w'’.&-]*(?:\s+[A-Za-z][\w'’.&-]*){0,3})\s*$/;
+// Any place clause the capitalized rules can't settle ("in atlanta", "near
+// arcadia", "in Atlanta with great reviews") — the AI parser decides those.
+export const HAS_IN_CLAUSE = /\b(?:in|near|around|close\s+to|next\s+to)\s+(?!me\b|my\b|our\b|here\b|the\s+(?:hotel|area)\b)[\p{L}]/iu;
 
 // Whole-word keyword match (founder, 2026-10-07): substring matching sent
 // "Seattle" and "great views" to restaurants (e-AT), "cozy atmosphere" to ATMs
@@ -83,7 +86,8 @@ export function ratingIntent(text) {
 // Free client rule-pass. Returns {category, scope, place, query, sort,
 // parsedBy, confidence}. confidence >= 0.8 → skip the AI call.
 export function ruleParse(raw, scopeChip) {
-  const text = String(raw || "").trim();
+  // Trailing "?", "!" or "." would hide the place from the end-anchored rules.
+  const text = String(raw || "").trim().replace(/[?!.。！？]+$/u, "").trim();
 
   let category = null;
   for (const { cat, res } of KEYWORD_RES) {
@@ -95,7 +99,7 @@ export function ruleParse(raw, scopeChip) {
   // `if (!scope)` guard meant a typed city was never honored).
   let scope = scopeChip || null;
   let place = null;
-  const m = text.match(IN_PLACE);
+  const m = text.match(IN_PLACE) || text.match(NEAR_PLACE);
   if (m) { scope = "named_place"; place = m[1].trim(); }
   else if (!scope) {
     if (AT_STAY.test(text)) scope = "at_stay";
@@ -104,7 +108,7 @@ export function ruleParse(raw, scopeChip) {
 
   // Strip scope phrases so the finder searches the THING, not "ramen near me".
   let query = text.replace(NEAR_ME, "").replace(AT_STAY, "");
-  if (place) query = query.replace(/\bin\s+[A-Z][\s\S]*$/, "");
+  if (place) query = query.replace(/\b(?:in|near|around|close\s+to|next\s+to)\s+[A-Z][\s\S]*$/, "");
   const { sort, cleaned } = ratingIntent(query);
   query = cleaned.replace(/\s+/g, " ").trim();
 
@@ -180,11 +184,12 @@ export async function runSmartSearch(parsed, { navigate, location }) {
   // 1. Resolve place / re-center.
   let recentered = false;
   let needsStay = false;
+  let placeCountry = null; // "in Tijuana" means Mexico — not San Diego across the border
   if (scope === "named_place" && place) {
     try {
       const { data } = await callWorker(ROUTE.searchLocation, { query: place });
       const loc = data?.results?.[0];
-      if (loc) { await location.switchToNavigateMode(loc); recentered = true; }
+      if (loc) { await location.switchToNavigateMode(loc); recentered = true; placeCountry = loc.address?.country || null; }
     } catch { /* couldn't geocode — stay on the current location */ }
   } else if (scope === "at_stay") {
     const stay = getPrimaryStay();
@@ -213,7 +218,7 @@ export async function runSmartSearch(parsed, { navigate, location }) {
     } else if (cat.acceptsQuery && (query || sort || nearFirst)) {
       // presetSort 'rating' = "best / top rated" was typed — the finder orders
       // by review-weighted rating instead of distance.
-      opts = { state: { ...(query ? { presetQuery: query } : {}), ...(sort ? { presetSort: sort } : {}), ...(nearFirst ? { presetNearFirst: true } : {}) } };
+      opts = { state: { ...(query ? { presetQuery: query } : {}), ...(sort ? { presetSort: sort } : {}), ...(nearFirst ? { presetNearFirst: true } : {}), ...(placeCountry ? { presetCountry: placeCountry } : {}) } };
     }
     navigate(createPageUrl(cat.page), opts);
     return { routed: cat.page, recentered, needsStay };

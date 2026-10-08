@@ -123,6 +123,18 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
       let parsed = ruleParse(raw, scope);
       if (explicitPlace) { parsed.scope = "named_place"; parsed.place = String(explicitPlace).trim(); }
       const sort = parsed.sort || null; // "best / top rated" — kept whichever parser wins
+      // A big city typed with no "in" ("vegan restaurants tokyo") — the last
+      // 1-3 words are checked against the big-city list (lazy, submit-time).
+      if (!parsed.place && !explicitPlace) {
+        try {
+          const { isBigCity } = await import("@/lib/bigCities");
+          const words = parsed.query.split(/\s+/);
+          for (let n = Math.min(3, words.length - 1); n >= 1; n--) {
+            const tail = words.slice(-n).join(" ");
+            if (isBigCity(tail)) { parsed.place = tail; parsed.scope = "named_place"; parsed.query = words.slice(0, -n).join(" "); break; }
+          }
+        } catch { /* stays a near-me search */ }
+      }
       let destination = null;
       // AI when the rules found nothing, OR an "in …" clause they couldn't
       // settle ("southern food in atlanta", "in Atlanta with great reviews").
@@ -130,8 +142,12 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
       // A typed COUNTRY or STATE can't be searched as one point — the AI picks
       // the best city in it (founder, 2026-10-07: beer in Germany, ATV in Hawaii).
       const areaPlace = !!parsed.place && !!(countryCode(parsed.place) || stateInfo(parsed.place));
+      // A bay or lake is not a point anyone eats at — the AI names its shore district.
+      const waterPlace = !!parsed.place && /\b(bay|lake|sea|ocean|gulf|river|harbou?r|lagoon|strait)\b/i.test(parsed.place);
+      // An acronym or typo'd place the rules can't read ("dear DLSU taft") → AI.
+      const acronym = !parsed.place && /\b[A-Z]{2,6}\b/.test(raw.replace(/\b(ATM|ATV|BBQ|KFC|USA|DIY|VIP|BYOB|IHOP)\b/g, ""));
       // Rules found the place but not WHAT (pancakes, zipline, activities) → AI.
-      if (raw && !explicitPlace && (!parsed.category || unresolvedPlace || areaPlace)) {
+      if (raw && !explicitPlace && (!parsed.category || unresolvedPlace || areaPlace || waterPlace || acronym)) {
         try {
           const { data, error } = await callWorker(ROUTE.parseSearch, {
             query: raw,
