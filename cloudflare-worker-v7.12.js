@@ -5072,18 +5072,28 @@ async function handleSearchLocation(request, env) {
   const requestBody = { textQuery: query, ...(isHotelSearch && { includedType: 'lodging', rankPreference: 'RELEVANCE' }) };
 
   let response;
-  try {
-    response = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.viewport,places.addressComponents,places.types,places.primaryType',
-      },
-      body: JSON.stringify(requestBody),
-    });
-  } catch (_e) { return jsonResponse({ error: 'Network error', results: [] }, 200); }
-  if (!response.ok) return jsonResponse({ error: 'Location search unavailable', results: [] }, 200);
+  // One retry on a rate limit or a Google server error (2026-10-07: about one
+  // lookup in three failed during a busy minute, leaving search un-centered).
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.viewport,places.addressComponents,places.types,places.primaryType',
+        },
+        body: JSON.stringify(requestBody),
+      });
+    } catch (_e) { if (attempt) return jsonResponse({ error: 'Network error', results: [] }, 200); continue; }
+    if (response.ok || !(response.status === 429 || response.status >= 500)) break;
+    if (!attempt) await new Promise((r) => setTimeout(r, 400));
+  }
+  if (!response?.ok) {
+    const detail = response ? await response.text().catch(() => '') : '';
+    console.warn(`search-location: Google ${response?.status} ${detail.slice(0, 200)}`);
+    return jsonResponse({ error: 'Location search unavailable', status: response?.status || null, results: [] }, 200);
+  }
 
   let data;
   try { data = await response.json(); } catch (_e) { return jsonResponse({ error: 'Invalid response', results: [] }, 200); }
