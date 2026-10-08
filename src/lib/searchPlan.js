@@ -320,12 +320,15 @@ export function expandActivityQuery(q) {
   return ACTIVITY_SYNONYMS[key] || q;
 }
 
-// A typed Things to Do search in a named big city, or one asking for the
-// "best / top", ranks by review-weighted rating, not distance (2026-10-07:
-// "top historic landmarks in Istanbul" led with a 111-review mansion while
-// Hagia Sophia sat 4th). Hidden-gem searches keep nearest-first.
+// A typed Things to Do search for SIGHTS in a named big city, or one asking
+// for the "best / top", ranks by review-weighted rating, not distance
+// (2026-10-07: "top historic landmarks in Istanbul" led with a 111-review
+// mansion while Hagia Sophia sat 4th). Activities ("mini golf or bowling in
+// Denver") keep nearest-first — popularity pulled in suburban fun centers.
+// Hidden-gem searches always keep nearest-first.
 const HIDDEN_ASK = /\b(hidden|secret|off the beaten|lesser[- ]known|underrated|quiet|non[- ]touristy|locals?)\b/i;
+const SIGHT_ASK = /\b(landmarks?|sights?|sightseeing|monuments?|museums?|galler(y|ies)|temples?|shrines?|churches|cathedrals?|mosques?|palaces?|castles?|ruins|historic(al)?|attractions?|must[- ]see|famous|iconic|things to see|viewpoints?|bridges?|towers?|squares?)\b/i;
 export function fameFirstThings({ query = "", sort = null, named = false, nearFirst = false } = {}) {
   if (HIDDEN_ASK.test(query)) return false;
-  return sort === "rating" || (named && !nearFirst);
+  return sort === "rating" || (named && !nearFirst && SIGHT_ASK.test(query));
 }
