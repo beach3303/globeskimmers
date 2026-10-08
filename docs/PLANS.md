@@ -151,6 +151,14 @@ Report on profiles, followers, postcards and comments, block removes both follow
 feed (Apple 1.2); (3) teens: an adult can't postcard a teen without a mutual follow, and teens' feeds
 skip non-mutual broadcast cards; (4) postcard messages and profile name/bio go through gbModerate;
 (5) a birthday under the minimum age freezes the account and stops collection (COPPA), then deletion.
+**Birthday required for everyone (founder decision 2026-10-08; build after Apple approval):** full
+date of birth becomes a required onboarding step (new users) and a one-time required sheet on next open
+(existing users without one), using the existing locked age gate and DeclaredAgeRange. Why: an age check
+for every account (minor safety, legal) and, in aggregate only, user demographics for investors and
+future monetization. Present it in the app as an age check, never as "for ads/monetization" (Apple
+5.1.1(ii) allows required data that is relevant or legally needed). The day it ships: Google Play Data
+safety → date of birth (Other info) = Required; privacy policy → "we ask for your date of birth when you
+sign up".
 **Also after approval (found 2026-10-08):** airport and border stamps take their date from UTC
 (AirportArrivalPrompt.jsx / BorderCrossingPrompt.jsx use `new Date().toISOString().slice(0,10)`), so an
 evening landing in LA is dated the next day — switch to the local date like NearbyStampPrompt does.
