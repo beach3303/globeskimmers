@@ -16,11 +16,10 @@
 //     fly-only places don't belong on a within-reach shelf.
 //   - photo-forward cards when a place has a real photoUrl, the engraved
 //     typographic stamp card otherwise (never a colored placeholder box).
-// A tap opens the DreamGallery photo sheet (the dream browser) as the first
-// touch; the old open-activity behavior stays reachable as the gallery's
-// quiet "View details" action, which hands the raw attraction row to
-// onOpenActivity — Home still owns what opening means (same openStamp/
-// full-page pattern as the nearby rail).
+// A tap opens the place's full page — the same one "Stamps near you" opens
+// (founder, 2026-10-08: Six Flags opened its page, but the Hollywood Sign
+// opened a name-matched photo gallery full of other "Hollywood" signs).
+// Home still owns what opening means (onOpenActivity → openStamp).
 import { useEffect, useState } from "react";
 import { useLocation } from "@/components/location/LocationContext";
 import { useAuth } from "@/lib/AuthContext";
@@ -32,7 +31,6 @@ import { stampArtUrl } from "@/lib/stampArt";
 import { haversineKm } from "@/lib/homeContext";
 import { estFlightHours, MIN_FLIGHT_MILES, KM_TO_MI } from "@/lib/flightTime";
 import TypographicStamp from "@/components/passport/TypographicStamp";
-import DreamGallery from "@/components/home/DreamGallery";
 import { logDiscover } from "@/lib/logDiscover";
 import { IVORY_2 } from "@/components/redesign/constants";
 
@@ -126,7 +124,6 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
   const { profile } = useAuth();
   const [items, setItems] = useState([]);
   const [earnedIds, setEarnedIds] = useState(() => new Set());
-  const [galleryItem, setGalleryItem] = useState(null); // raw attraction row the dream browser is open for
 
   useEffect(() => {
     let cancelled = false;
@@ -193,11 +190,9 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
     return ferry ? `⛴ FERRY · ${d}` : d;
   };
 
-  // First touch is the photo-immersion gallery; "View details" inside it
-  // routes through the original onOpenActivity handoff.
   const openDream = (item) => {
     logDiscover("dream_shelf_tap", { place_id: item.id, place_name: item.name });
-    setGalleryItem(item);
+    onOpenActivity?.(item);
   };
 
   return (
@@ -220,16 +215,6 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
           ))}
         </div>
       </div>
-      <DreamGallery
-        open={!!galleryItem}
-        onClose={() => setGalleryItem(null)}
-        dest={galleryItem ? { name: galleryItem.name, city: galleryItem.city, country: galleryItem.country, lat: galleryItem.lat, lng: galleryItem.lng } : null}
-        onView={() => {
-          const it = galleryItem;
-          setGalleryItem(null);
-          if (it) onOpenActivity?.(it);
-        }}
-      />
     </div>
   );
 }
