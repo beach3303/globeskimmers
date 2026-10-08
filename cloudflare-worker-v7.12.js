@@ -16299,6 +16299,7 @@ const GS_INST_KINDS_GENERIC = { eat: new Set(["restaurant"]), bars: new Set(["ba
 const GS_INST_BAR_WORDS = new Set(["bar", "bars", "pub", "pubs", "drink", "drinks", "nightlife", "tavern", "taverns"]);
 // "Best restaurants" is never a jazz club, a theatre or a hotel lobby.
 const GS_INST_NOT_A_MEAL = /\b(jazz club|nightclub|night club|music venue|concert|cabaret|comedy club|theatre|theater|casino|hotel|stadium|museum|cinema)\b/;
+const GS_INST_MEAL_TYPE = /restaurant|steak_house|deli|diner|bistro|brasserie|food_court|pizz|sandwich|barbecue|buffet/;
 const GS_INST_TERM_KINDS = { croissant: ["bakery"], "pain au chocolat": ["bakery"], "chocolate croissant": ["bakery"], bakery: ["bakery"], pastry: ["bakery", "cafe"], gelato: ["ice_cream", "cafe", "bakery"], "ice cream": ["ice_cream", "cafe", "bakery"] };
 const GS_INST_KINDS_ANY = { eat: new Set(["restaurant", "pub", "bar", "beer_hall", "brewery", "bakery", "ice_cream", "cafe"]), bars: new Set(["bar", "pub", "beer_hall", "brewery"]), coffee: new Set(["cafe", "bakery"]) };
 const gsInstWords = (s) => String(s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[`'’]/g, "'");
@@ -16387,7 +16388,10 @@ async function gsInstitutionsFor(env, ctx, origin, { lat, lng, radiusM = 15000, 
   // A few extra candidates: Wikipedia keeps articles on places that have closed.
   const picks = (rows || []).filter((row) => calcDistance(lat, lng, row.lat, row.lng) <= r && gsInstMatches(row, groups, finder)).slice(0, limit + 4);
   const resolved = await Promise.all(picks.map(async (row) => ({ row, place: await gsInstResolve(env, ctx, origin, row) })));
-  return resolved.filter((x) => x.place).slice(0, limit).map(({ row, place }) => ({
+  // A plain "food / restaurants" search wants restaurants: Vesuvio (a famous
+  // bar) led "best food open late near Moscone Center".
+  const mealOk = (p) => finder !== "eat" || groups.length > 0 || GS_INST_MEAL_TYPE.test(p.primaryType || "");
+  return resolved.filter((x) => x.place && mealOk(x.place)).slice(0, limit).map(({ row, place }) => ({
     place,
     inst: { qid: row.qid, name: row.name, since: row.since || null, fame: row.fame, lift, wiki: row.enwiki ? `https://en.wikipedia.org/wiki/${encodeURIComponent(row.enwiki.replace(/ /g, "_"))}` : `https://www.wikidata.org/wiki/${row.qid}` },
   }));
