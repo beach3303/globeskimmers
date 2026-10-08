@@ -10264,6 +10264,12 @@ function getTierForPlace(place, intent) {
     // italian_restaurant, not "Dish Specialist"), then gets demoted in the sort.
     if (!isKnownChain(name) && dishWords.some((w) => name.includes(w))) return 1;
     const isStrict = intent.strict === true && Array.isArray(intent.strictPrimaryTypes) && intent.strictPrimaryTypes.length > 0;
+    // A MEAL is a fact Google states directly (founder, 2026-10-07): "brunch"
+    // was strict on brunch/breakfast/cafe/diner primary types, so a French or
+    // American place that serves brunch was thrown away as noise — 9 results
+    // for brunch in NYC. servesBrunch / servesBreakfast now earn Authentic.
+    if (intent.mealTime === "brunch" && place.servesBrunch === true) return 2;
+    if (intent.mealTime === "breakfast" && place.servesBreakfast === true) return 2;
     if (isStrict) {
       const primary = (place.primaryType || "").toString();
       if (!intent.strictPrimaryTypes.includes(primary)) {
@@ -10446,7 +10452,11 @@ async function handleRestaurantsFull(request, env, ctx) {
       "PRICE_LEVEL_EXPENSIVE",
       "PRICE_LEVEL_VERY_EXPENSIVE"
     ];
-    let priceLevels = filterMaxPrice > 0 ? PRICE_LEVEL_NAMES.slice(0, filterMaxPrice + 1) : [];
+    // Google's searchText/searchNearby reject PRICE_LEVEL_FREE, so including it
+    // failed the WHOLE request — every price-filtered search came back empty
+    // (found 2026-10-07: Tokyo, price ≤ 2 → 0 of 72 matching places). Start at
+    // INEXPENSIVE; the cache key changes with the list, so no stale empties.
+    let priceLevels = filterMaxPrice > 0 ? PRICE_LEVEL_NAMES.slice(1, filterMaxPrice + 1) : [];
     if (cuisine === "fine") {
       priceLevels = ["PRICE_LEVEL_EXPENSIVE", "PRICE_LEVEL_VERY_EXPENSIVE"];
     } else if (cuisine === "budget") {
