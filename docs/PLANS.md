@@ -179,7 +179,32 @@ Claude's technical calls:
 - quick data fixes: stadium and theme-park sizes, duplicates, the broken "Verify I'm here", and the
   impossible-travel check that reads updated_at.
 Privacy policy and store forms are updated the day it ships. The client half ships by OTA after Apple
-approves 1.0.3. **Safety and privacy fixes — FIRST after Apple approval (privacy audit 2026-10-08; the policy now
+approves 1.0.3.
+**Suggest a Place to Stamp (founder decisions 2026-10-10)**, crowd-sourced Local favorites. Mockup:
+https://claude.ai/artifact/7Q5HTErHgpe6eV1dgsArQu (6 screens).
+- **Where it sits:** a section at the bottom of Home, just above the quotes. Headline: "Know a spot
+  worth a visit?"
+- **Who can suggest:** locals (their home city) and people with a GPS-verified stamp nearby.
+- **The form:** place name, use my location or pin it on the map, an optional photo, and a "Why do you
+  recommend it?" dropdown with 5 reasons plus Other (free text). The reasons:
+  - breathtaking views or a great photo spot;
+  - a fun walk, hike or place to explore;
+  - local history or culture;
+  - great for families and kids;
+  - a hidden gem locals love.
+  A duplicate suggestion (same name, close by) adds to the existing place's count.
+- **Everyone sees every suggestion,** with its count ("3 of 5"). Users tell people "we review a place
+  once 5 people suggest it". The count keeps going past 5.
+- **Likes have no limit.** People can keep liking the place and each reason ("I agree"), and the
+  totals are for bragging ("418 people love this").
+- **Admin sees only places with 5 or more suggestions,** each with Approve / Decline and an Excel
+  export, plus the split of locals vs visitors, the top reasons and the Other texts. Nothing goes live
+  without the founder's approval.
+- **An approved place becomes a "Local favorite" stamp,** a distinct style that always discloses
+  "recommended by N people who've been there". It never uses the official icon art, so the fame bar
+  for icons stands.
+- **Still to decide:** suggestion rate limits, a "Local Scout" badge for suggesters, and moderating the
+  free text (it goes through gbModerate). **Safety and privacy fixes — FIRST after Apple approval (privacy audit 2026-10-08; the policy now
 states today's behavior honestly and gets stronger as each ships):** (1) account deletion removes
 everything — social profile + avatar, follows, blocks, postcards + photos, Blotter rows + doodles, dish
 posts + photos, owner notes, luggage/gear, handle requests, D1 events (Apple 5.1.1(v)); (2) Block and
