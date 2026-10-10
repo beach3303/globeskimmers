@@ -13344,8 +13344,12 @@ async function handlePassportStamp(request, env, ctx) {
     const fileReport = async (outcome) => {
       if (!reporting || !ctx) return;
       const userCode = (await sha256Hex(`${user.id}:stamp-report`)).slice(0, 8);
+      // A minor's report keeps no spot at all, only the distance (teens & minors
+      // plan, 2026-10-10). Unknown age counts as a minor.
+      const sp = await gbSocialProfile(env, user.id).catch(() => null);
+      const spotOk = sp?.social_tier === 'adult';
       ctx.waitUntil(ppFileStampReport(env, {
-        name, entity_id: reportEntity, city: row.city, country: row.country, fix, meters, reach, refusal, outcome,
+        name, entity_id: reportEntity, city: row.city, country: row.country, fix: spotOk ? fix : { acc: fix?.acc }, meters, reach, refusal, outcome,
         platform: String(b.platform || '').slice(0, 20) || null, app_version: String(b.app_version || '').slice(0, 30) || null, user_code: userCode,
       }));
     };
