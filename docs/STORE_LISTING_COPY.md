@@ -233,3 +233,25 @@ Reviewer notes (App Review / Play "App access"):
 > photos/drawings pass automated review before public display; every item can be
 > reported in-app; blocking is available on every profile; under-18 accounts cannot
 > go public and require follower approval. Test account available on request.
+
+## Screenshot captions — 1.0.4 (founder's final set, 2026-10-10)
+Same seven screens and order on iPhone 6.5" (1284×2778) and iPad 13" (2064×2752).
+Every screen is a real, current, signed-in capture (Apple 2.3.3 rejected the old
+mock-ups). The small label goes above in caps; line 2 is set in italic serif.
+
+| # | Screen | Small label | Line 1 | Line 2 (italic) |
+|---|---|---|---|---|
+| 1 | Memory photos (a stamp page with your photos) | MEMORY PHOTOS | Keep the faces, | not just the places |
+| 2 | Tag a friend (Details, date & tag a friend) | TAG A FRIEND | You were there together | keep the story together |
+| 3 | Dream shelf (Icons of your region) | DREAM SHELF | Save it for someday | then make it happen |
+| 4 | Home (Stamps near you) | STAMPS NEAR YOU | Your next stamp | is just around the corner |
+| 5 | Places to Eat (results nearby) | PLACES TO EAT | Hungry somewhere new? | good food is close by |
+| 6 | Passport cover | YOUR PASSPORT | Your places. Your stories. | all in one passport |
+| 7 | Airport stamp | AIRPORT STAMPS | Any airport, anywhere | stamp it—or skip it |
+
+Fact checks: airport stamps cover ~7.9k IATA airports worldwide, and nothing is
+stamped without a tap ("Not now" skips), so line 7 is literal.
+
+Note: the Reviewer notes above claim "blocking is available on every profile", but
+Block and Report are only partial today (privacy audit 2026-10-08). Fix that, or
+correct the note, before 1.0.4 is submitted.
