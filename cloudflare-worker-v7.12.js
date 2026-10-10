@@ -1119,6 +1119,16 @@ async function handleDeleteAccount(request, env) {
       });
     } catch { /* passport purge best-effort; still delete the account */ }
 
+    // 1d) Their "I'm here, but the app is saying I'm not" reports (events D1,
+    //     keyed by the same anonymous code the report used). Best-effort.
+    try {
+      if (env.DB) {
+        await env.DB.prepare(STAMP_REPORT_SQL).run();
+        const code = (await sha256Hex(`${userId}:stamp-report`)).slice(0, 8);
+        await env.DB.prepare('DELETE FROM stamp_reports WHERE user_code = ?').bind(code).run();
+      }
+    } catch { /* report purge best-effort; still delete the account */ }
+
     // 2) Hard-delete the auth user (cascades profiles + login_events).
     const delRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
       method: 'DELETE',
@@ -2349,6 +2359,67 @@ async function handleAdminContact(request, env) {
   }
 }
 
+// POST /admin/stamp-reports { op?: 'list' | 'status' | 'csv', id?, status?, open? }
+// The founder's "I'm here, but the app is saying I'm not" list (2026-10-10):
+// every report, newest first; 'status' marks one new / fixed / ignored; 'csv'
+// returns the whole list as a spreadsheet Excel opens directly. Also returns
+// the quiet refusals per place (last 30 days, no positions) from the events log.
+const STAMP_REPORT_STATUSES = ['new', 'fixed', 'ignored'];
+async function handleAdminStampReports(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  try {
+    if (!env.DB) return jsonResponse({ error: 'DB not configured', reports: [] }, 500);
+    await env.DB.prepare(STAMP_REPORT_SQL).run();
+    const body = await request.json().catch(() => ({}));
+    const op = ['list', 'status', 'csv'].includes(body?.op) ? body.op : 'list';
+    if (op === 'status') {
+      const id = parseInt(body?.id, 10);
+      const status = STAMP_REPORT_STATUSES.includes(body?.status) ? body.status : null;
+      if (!Number.isFinite(id) || !status) return jsonResponse({ error: 'id and status required' }, 400);
+      await env.DB.prepare('UPDATE stamp_reports SET status = ? WHERE id = ?').bind(status, id).run();
+      return jsonResponse({ ok: true });
+    }
+    const where = body?.open ? "WHERE status = 'new'" : '';
+    const limit = op === 'csv' ? 10000 : Math.min(500, Math.max(1, parseInt(body?.limit, 10) || 200));
+    const { results } = await env.DB.prepare(`SELECT * FROM stamp_reports ${where} ORDER BY id DESC LIMIT ?`).bind(limit).all();
+    const reports = results || [];
+    if (op === 'csv') {
+      // Text a user typed must never run as a formula when Excel opens the file:
+      // a leading = + - @ tab or CR gets an apostrophe (numbers and coordinates don't).
+      const cell = (v) => {
+        let t = v == null ? '' : String(v);
+        if (typeof v === 'string' && /^[=+\-@\t\r]/.test(t) && !/^-?\d+(\.\d+)?(, -?\d+(\.\d+)?)?$/.test(t)) t = `'${t}`;
+        return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+      };
+      const head = ['Report', 'Date (UTC)', 'Place', 'City', 'Country', 'Place ID', 'Spot (about 1 block)', 'Map link', 'Distance from our pin (m)', 'Allowed distance (m)', 'GPS accuracy (m)', 'Why GPS said no', 'Result', 'Phone', 'App version', 'User code', 'Status'];
+      const why = { not_here: 'Outside our map for this place', proof_needed: 'No GPS reading', unlocatable: 'Place not on our map', unconfirmed: 'GPS not trusted (VPN or travel speed)' };
+      const lines = reports.map((r) => {
+        const spot = r.spot_lat != null && r.spot_lng != null ? `${r.spot_lat}, ${r.spot_lng}` : '';
+        const map = spot ? `https://www.google.com/maps/search/?api=1&query=${r.spot_lat},${r.spot_lng}` : '';
+        return [
+          'I’m here, but the app is saying I’m not', String(r.created_at || '').replace('T', ' ').slice(0, 16), r.place_name, r.city, r.country, r.entity_id,
+          spot, map, r.distance_m, r.radius_m, r.accuracy_m, why[r.refusal] || (r.refusal ? r.refusal : 'GPS passed on retry'), r.outcome, r.platform, r.app_version, r.user_code, r.status,
+        ].map(cell).join(',');
+      });
+      // The byte-order mark makes Excel read accents and curly quotes correctly.
+      const csv = '﻿' + [head.map(cell).join(','), ...lines].join('\r\n');
+      return new Response(csv, { status: 200, headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="stamp-reports-${new Date().toISOString().slice(0, 10)}.csv"`, ...CORS_HEADERS } });
+    }
+    const since = Math.floor(Date.now() / 1000) - 30 * 86400;
+    const { results: quiet } = await env.DB.prepare(
+      `SELECT json_extract(payload, '$.name') AS name, json_extract(payload, '$.entity_id') AS entity_id,
+              COUNT(*) AS refusals, SUM(CASE WHEN json_extract(payload, '$.reported') THEN 1 ELSE 0 END) AS reported
+         FROM events WHERE event_type = 'passport_stamp_refused' AND ts >= ?
+        GROUP BY entity_id ORDER BY refusals DESC LIMIT 50`
+    ).bind(since).all().catch(() => ({ results: [] }));
+    const { results: totals } = await env.DB.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END) AS open FROM stamp_reports").all();
+    return jsonResponse({ reports, total: totals?.[0]?.total || 0, open: totals?.[0]?.open || 0, refusals_30d: quiet || [] });
+  } catch (e) {
+    return jsonResponse({ error: e?.message || 'Failed', reports: [] }, 500);
+  }
+}
+
 // Admin gate — verify the caller's Supabase JWT + confirm they're an admin.
 // Returns null when authorized, or a Response to return otherwise. Mirrors
 // handleAdminUserStats so /analytics-query is no longer world-readable (it exposes
@@ -3300,8 +3371,8 @@ async function resolveStampGid(env, id) {
     if (r.ok) gid = (await r.json())?.places?.[0]?.id || null;
   } catch { gid = null; }
   if (kv) await kv.put(key, gid || 'none', { expirationTtl: (gid ? 180 : 30) * 86400 }).catch(() => {});
-  const stampable = row.tier === 'secret' || ['world', 'national', 'regional'].includes(row.founder_scope || row.scope);
-  if (kv && gid && stampable) await kv.put(`gid2d1v3:${gid}`, JSON.stringify(ttdStampSummary(row)), { expirationTtl: 30 * 86400 }).catch(() => {});
+  const stampable = (row.tier === 'secret' || ['world', 'national', 'regional'].includes(row.founder_scope || row.scope)) && row.class_ban !== 'duplicate';
+  if (kv && gid && stampable) await kv.put(`gid2d1v4:${gid}`, JSON.stringify(ttdStampSummary(row)), { expirationTtl: 30 * 86400 }).catch(() => {});
   return gid;
 }
 
@@ -6300,8 +6371,16 @@ const ttdStampSummary = (r) => ({ id: r.id, name: r.name, category: r.category |
 async function ttdStampFor(env, gid, name, lat, lng, { write = true } = {}) {
   // v3 (2026-10-04): the art review made 182 more Top-1,000 places stampable and
   // re-pinned 46 rows — every cached link (and 'none') is recomputed.
-  const kv = env.GLOBESKIMMERS_KV, key = gid ? `gid2d1v3:${gid}` : null;
+  // v4 (2026-10-10): duplicate rows (class_ban 'duplicate') are no longer matched.
+  const kv = env.GLOBESKIMMERS_KV, key = gid ? `gid2d1v4:${gid}` : null;
   const goodInput = Number.isFinite(lat) && Number.isFinite(lng) && !!name;
+  // A shaped place names its own official stamp: its Google pins can sit far
+  // from our pin (the Walk of Fame's are 1.3 km apart), so no distance match.
+  const shaped = gid ? ppShapeFor(null, gid) : null;
+  if (shaped?.stamp_id && env.ATTRACTIONS_DB) {
+    const r = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(shaped.stamp_id).first().catch(() => null);
+    if (r) return ttdStampSummary(r);
+  }
   if (key && kv) {
     const hit = await kv.get(key).catch(() => null);
     if (hit) return hit === 'none' ? null : JSON.parse(hit);
@@ -6311,7 +6390,8 @@ async function ttdStampFor(env, gid, name, lat, lng, { write = true } = {}) {
     const dLat = 0.03, dLng = 0.03 / Math.max(0.2, Math.cos(lat * Math.PI / 180));
     const q = await env.ATTRACTIONS_DB.prepare(
       `SELECT * FROM attractions WHERE lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4
-         AND (tier = 'secret' OR coalesce(founder_scope, scope) IN ('world','national','regional')) LIMIT 80`
+         AND (tier = 'secret' OR coalesce(founder_scope, scope) IN ('world','national','regional'))
+         AND coalesce(class_ban, '') != 'duplicate' LIMIT 80`
     ).bind(lat - dLat, lat + dLat, lng - dLng, lng + dLng).all().catch(() => null);
     const norm = (v) => String(v || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/^the\s+/, '').replace(/[^a-z0-9]+/g, ' ').trim();
     const n = norm(name);
@@ -6336,14 +6416,14 @@ async function ttdPlaceTruth(env, entityId, origin) {
   const k = ttdIdKind(entityId);
   if (k === 'd1' && env.ATTRACTIONS_DB) {
     const r = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(entityId).first().catch(() => null);
-    if (r && Number.isFinite(+r.lat) && Number.isFinite(+r.lng)) return { lat: +r.lat, lng: +r.lng, radius: ppStampRadius(r) };
+    if (r && Number.isFinite(+r.lat) && Number.isFinite(+r.lng)) return { lat: +r.lat, lng: +r.lng, radius: ppStampRadius(r), shape: ppShapeFor(entityId, null) };
     return null;
   }
   let gid = String(entityId).startsWith('places:') ? String(entityId).slice(7) : String(entityId).startsWith('owned:') ? await ttdGidFor(env, entityId) : null;
   const d = gid ? await ttdPlaceDetails(env, gid, origin) : null;
   const lat = Number(d?.latitude ?? d?.location?.latitude), lng = Number(d?.longitude ?? d?.location?.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { lat, lng, radius: ppStampRadius({ category: [d.primaryType, ...(d.types || [])].filter(Boolean).join(' ') }), gid, name: d.name || null, types: [d.primaryType, ...(d.types || [])].filter(Boolean) };
+  return { lat, lng, radius: ppStampRadius({ category: [d.primaryType, ...(d.types || [])].filter(Boolean).join(' ') }), shape: ppShapeFor(null, gid), gid, name: d.name || null, types: [d.primaryType, ...(d.types || [])].filter(Boolean) };
 }
 
 // POST /attractions/link { placeId, name, lat, lng } → { stamp: {id,…} | null }
@@ -12897,7 +12977,9 @@ const PP_KINDS = ['country', 'city', 'airport', 'icon', 'wonder', 'attraction', 
 // there on the visit date; photo_ai = the place is recognised in the photo;
 // photo = a memory photo, no proof; self = declared. Only the first three earn
 // the ✓. A re-stamp or a new photo never lowers a stamp's rank.
-const PP_VERIFY_RANK = { self: 0, photo: 1, photo_ai: 2, photo_loc: 3, gps: 4 };
+// reported = granted through "I'm here, but the app is saying I'm not"
+// (founder, 2026-10-10): stamped, never ✓, and any real proof outranks it.
+const PP_VERIFY_RANK = { self: 0, reported: 0.5, photo: 1, photo_ai: 2, photo_loc: 3, gps: 4 };
 const PP_VERIFIED = new Set(['gps', 'photo_loc', 'photo_ai']);
 const ppDate = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? String(s) : null);
 const ppSlug = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -12916,6 +12998,9 @@ async function ppUpsertStamp(env, row) {
     if (row.visited_on) patch.visited_on = row.visited_on;
     // A re-stamp adds the film to an older stamp of the same place, never replaces one.
     if (row.meta?.film && !existing.meta?.film) patch.meta = { ...(existing.meta || {}), film: row.meta.film };
+    // The rough zone only ever improves (reported < nearby < on_site < inside).
+    const zNew = row.meta?.presence?.zone, zOld = existing.meta?.presence?.zone;
+    if (zNew && !(zNew === 'reported' && best !== 'reported') && (!zOld || (PP_ZONE_RANK[zNew] ?? -1) > (PP_ZONE_RANK[zOld] ?? -1))) patch.meta = { ...(patch.meta || existing.meta || {}), presence: row.meta.presence };
     await gbRest(env, `passport_stamps?id=eq.${existing.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
     return { id: existing.id, updated: true, verified: best };
   }
@@ -12961,6 +13046,99 @@ function ppStampRadius(place) {
   const hay = String(place?.category || '').toLowerCase();
   if (hay) for (const [pattern, metres] of PP_FOOTPRINTS) if (pattern.test(hay)) return metres;
   return 250;
+}
+
+// Shaped stamp places (founder, 2026-10-10). A pin and a circle can't hold a
+// long place: the Walk of Fame refused a stamp under the Dolby Theatre because
+// its only pin sits at the La Brea end. A shape is a set of street centre lines
+// ([lat, lng], from OpenStreetMap) plus buffer_m, which covers both sidewalks;
+// GPS counts anywhere within buffer_m of a line. Matched by D1 id or Google id.
+const PP_SHAPES = [
+  {
+    key: 'hollywood-walk-of-fame',
+    stamp_id: 'icon:Q71719', // the official stamp every id of this place resolves to
+    ids: ['icon:Q71719', 'curated:united-states-los-angeles-hollywood-walk-of-fame'],
+    gids: ['ChIJjwu2pOa_woARViWxZ-MRAu4', 'ChIJXyC7WTu_woARPvVMCHBXd4U'],
+    buffer_m: 50,
+    lines: [
+      [[34.10158, -118.34521], [34.10154, -118.33886], [34.10166, -118.32190]], // Hollywood Blvd, La Brea → Gower
+      [[34.09800, -118.32668], [34.10377, -118.32672]],                         // Vine St, Sunset → Yucca
+    ],
+  },
+];
+function ppShapeFor(id, gid) {
+  return PP_SHAPES.find((s) => (id && s.ids.includes(id)) || (gid && s.gids.includes(gid))) || null;
+}
+// Metres from a point to the nearest line of a shape, on a flat local
+// projection (exact to well under a metre across a few kilometres).
+function ppMetersToShape(shape, lat, lng) {
+  const ky = 110574, kx = 111320 * Math.cos(lat * Math.PI / 180);
+  let best = Infinity;
+  for (const line of shape.lines) {
+    for (let i = 0; i + 1 < line.length; i++) {
+      const ax = (line[i][1] - lng) * kx, ay = (line[i][0] - lat) * ky;
+      const bx = (line[i + 1][1] - lng) * kx, by = (line[i + 1][0] - lat) * ky;
+      const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+      const t = len2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2)) : 0;
+      best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+    }
+  }
+  return best;
+}
+
+// The rough zone a stamp keeps (founder, 2026-10-10: "rough zone only"): where
+// the person stood relative to the place, in bands, never the exact spot.
+// zone: on_site (inside the circle or shape) · nearby (only within GPS slack) ·
+// reported (granted through "I'm here, but the app is saying I'm not").
+const PP_ZONE_RANK = { reported: 0, nearby: 1, on_site: 2, inside: 3 };
+const ppBand = (v, cuts) => (Number.isFinite(v) && v >= 0 ? (cuts.find((c) => v < c) ? `<${cuts.find((c) => v < c)}` : `>${cuts[cuts.length - 1]}`) : null);
+function ppPresence(zone, meters, acc, truth) {
+  return {
+    zone,
+    d: ppBand(meters, [50, 150, 500, 1500, 5000]),
+    acc: ppBand(acc, [20, 65, 100, 300]),
+    src: truth?.shape ? 'shape' : truth ? 'circle' : null,
+  };
+}
+
+// "I'm here, but the app is saying I'm not" (founder, 2026-10-10). Every tap
+// files a report for the admin list; the stamp is granted either way. Stored
+// in the events D1 (table created lazily, like contact_messages). The spot is
+// rounded to ~1 city block; the user is an anonymous code, not an id.
+const STAMP_REPORT_SQL = `CREATE TABLE IF NOT EXISTS stamp_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at TEXT NOT NULL,
+  place_name TEXT NOT NULL,
+  entity_id TEXT,
+  city TEXT,
+  country TEXT,
+  spot_lat REAL,
+  spot_lng REAL,
+  distance_m INTEGER,
+  radius_m INTEGER,
+  accuracy_m INTEGER,
+  refusal TEXT,
+  outcome TEXT NOT NULL,
+  platform TEXT,
+  app_version TEXT,
+  user_code TEXT,
+  status TEXT NOT NULL DEFAULT 'new'
+)`;
+async function ppFileStampReport(env, r) {
+  try {
+    if (!env.DB) return;
+    await env.DB.prepare(STAMP_REPORT_SQL).run();
+    const round3 = (v) => (Number.isFinite(v) ? Math.round(v * 1000) / 1000 : null);
+    const int = (v, step = 1) => (Number.isFinite(v) ? Math.round(v / step) * step : null);
+    await env.DB.prepare(
+      `INSERT INTO stamp_reports (created_at, place_name, entity_id, city, country, spot_lat, spot_lng, distance_m, radius_m, accuracy_m, refusal, outcome, platform, app_version, user_code)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      new Date().toISOString(), String(r.name || '').slice(0, 200), r.entity_id || null, r.city || null, r.country || null,
+      round3(r.fix?.lat), round3(r.fix?.lng), int(r.meters, 10), int(r.reach), int(r.fix?.acc),
+      r.refusal || null, r.outcome, r.platform || null, r.app_version || null, r.user_code || null,
+    ).run();
+  } catch (e) { console.error('stamp report failed', e?.message || e); }
 }
 
 // Sensitive places start PRIVATE (founder + the plan she shared, 2026-10-03):
@@ -13014,14 +13192,16 @@ async function handlePassportStamp(request, env, ctx) {
         } catch { /* treat as a mismatch */ }
         if (!roamingHome) verified = 'self';
       }
-      // (2) impossible travel vs the most-recent GPS stamp (>620 mph = faster than a jet)
+      // (2) impossible travel vs the most-recent GPS stamp (>620 mph = faster than a jet).
+      // Measured from created_at: editing an old stamp's photo, date or layout bumps
+      // updated_at, which made it look fresh and refused genuine travelers.
       if (verified === 'gps' && lat != null && lng != null) {
         try {
-          const q = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&verified=eq.gps&lat=not.is.null&order=updated_at.desc&limit=1&select=lat,lng,updated_at`, {});
+          const q = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&verified=eq.gps&lat=not.is.null&order=created_at.desc&limit=1&select=lat,lng,created_at`, {});
           const last = (q.ok ? await q.json() : [])[0];
           if (last && last.lat != null && last.lng != null) {
             const miles = haversineMilesLoc(+last.lat, +last.lng, lat, lng);
-            const hrs = (Date.now() - Date.parse(last.updated_at || 0)) / 3.6e6;
+            const hrs = (Date.now() - Date.parse(last.created_at || 0)) / 3.6e6;
             if (hrs > 0 && miles / hrs > 620) verified = 'self';
           }
         } catch { /* best-effort */ }
@@ -13037,9 +13217,14 @@ async function handlePassportStamp(request, env, ctx) {
     const fix = b.fix && typeof b.fix === 'object' ? { lat: Number(b.fix.lat), lng: Number(b.fix.lng), acc: Number(b.fix.acc) } : null;
     // Stamp-a-place visits (kind city / entity_type visit) are checked by name.
     let startPrivate = kind === 'city' && String(b.entity_type || '') === 'visit' && ppSensitivePlace(name, []);
-    if (kind === 'attraction' && verified === 'gps') {
+    // "I'm here, but the app is saying I'm not" (founder, 2026-10-10): the
+    // client resends the stamp with report:true. It is ALWAYS granted (as
+    // 'reported', never \u2713 unless GPS passes after all) and ALWAYS filed.
+    const reporting = b.report === true && kind === 'attraction';
+    let presence = null, refusal = null, meters = null, reach = null, reportEntity = entityId;
+    if (kind === 'attraction' && (verified === 'gps' || reporting)) {
       const hasFix = fix && Number.isFinite(fix.lat) && Number.isFinite(fix.lng);
-      if (!hasFix) return jsonResponse({ error: "We couldn\u2019t confirm you\u2019re here \u2014 open the place in the app while you\u2019re there and tap Stamp", code: 'proof_needed' }, 409);
+      if (!hasFix && !reporting) return jsonResponse({ error: "We couldn\u2019t confirm you\u2019re here \u2014 open the place in the app while you\u2019re there and tap Stamp", code: 'proof_needed' }, 409);
       const k0 = ttdIdKind(entityId);
       if (k0 === 'google') entityId = `places:${entityId}`;
       else if (k0 === 'owned') entityId = `owned:${entityId}`;
@@ -13049,16 +13234,46 @@ async function handlePassportStamp(request, env, ctx) {
       if (k1 === 'tagged' || k1 === 'd1') truth = await ttdPlaceTruth(env, entityId, origin);
       else if (k1 === 'variant' && ttdIdKind(b.parent_id) === 'd1') truth = await ttdPlaceTruth(env, String(b.parent_id), origin);
       else if (k1 === 'variant' && Number.isFinite(lat) && Number.isFinite(lng)) truth = { lat, lng, radius: ppStampRadius({ category: b.category }) }; // builds before parent_id
-      if (!truth) return jsonResponse({ error: 'We can\u2019t place this attraction on the map yet, so it can\u2019t be stamped right now', code: 'unlocatable' }, 409);
-      const slack = Number.isFinite(fix.acc) && fix.acc >= 0 ? Math.min(fix.acc, 100) : 50;
-      const meters = haversineMilesLoc(truth.lat, truth.lng, fix.lat, fix.lng) * 1609.34;
-      if (meters > truth.radius + slack) return jsonResponse({ error: 'Your GPS doesn\u2019t show you at this place yet \u2014 stamping opens when you\u2019re here', code: 'not_here', distance_m: Math.round(meters), radius_m: truth.radius }, 409);
-      if (k1 !== 'variant') { lat = truth.lat; lng = truth.lng; }
-      if (k1 === 'tagged') {
-        // An iconic place becomes its official stamp (no duplicates); others stamp "I was here".
-        const iconic = truth.gid ? await ttdStampFor(env, truth.gid, truth.name || name, truth.lat, truth.lng) : null;
-        if (iconic) { entityId = iconic.id; b.entity_type = 'place'; }
-        else { b.entity_type = 'local'; startPrivate = ppSensitivePlace(truth.name || name, truth.types); }
+      reportEntity = entityId;
+      if (!truth && !reporting) {
+        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: 'unlocatable', entity_id: entityId, name }));
+        return jsonResponse({ error: 'We can\u2019t place this attraction on the map yet, so it can\u2019t be stamped right now', code: 'unlocatable' }, 409);
+      }
+      if (!truth) {
+        refusal = 'unlocatable';
+        // Sensitive places start private even when we can't place them (name check).
+        if (k1 === 'tagged' || k1 == null) { b.entity_type = 'local'; startPrivate = ppSensitivePlace(name, []); }
+      } else if (!hasFix) refusal = 'proof_needed';
+      else {
+        const slack = Number.isFinite(fix.acc) && fix.acc >= 0 ? Math.min(fix.acc, 100) : 50;
+        // A shaped place measures to its nearest line; everything else to its pin.
+        meters = truth.shape ? ppMetersToShape(truth.shape, fix.lat, fix.lng) : haversineMilesLoc(truth.lat, truth.lng, fix.lat, fix.lng) * 1609.34;
+        reach = truth.shape ? truth.shape.buffer_m : truth.radius;
+        if (meters > reach + slack) refusal = 'not_here';
+        else presence = ppPresence(meters <= reach ? 'on_site' : 'nearby', meters, fix.acc, truth);
+      }
+      // The anti-spoof checks above can still have taken the \u2713 away.
+      if (!refusal && verified !== 'gps') refusal = 'unconfirmed';
+      if (refusal) {
+        // Counted per place with no position (founder: a place that fails
+        // quietly still shows up), whether or not the person reports it.
+        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: refusal, entity_id: entityId, name, d: ppBand(meters, [50, 150, 500, 1500, 5000]), radius_m: reach, acc: ppBand(fix?.acc, [20, 65, 100, 300]), reported: reporting }));
+        if (!reporting) {
+          if (refusal === 'not_here') return jsonResponse({ error: 'Your GPS doesn\u2019t show you at this place yet \u2014 stamping opens when you\u2019re here', code: 'not_here', distance_m: Math.round(meters), radius_m: reach }, 409);
+          // 'unconfirmed' falls through to the proof gate below, exactly as before.
+        } else {
+          verified = 'reported';
+          presence = ppPresence('reported', meters, fix?.acc, truth);
+        }
+      }
+      if (truth && (presence || reporting)) {
+        if (k1 !== 'variant') { lat = truth.lat; lng = truth.lng; }
+        if (k1 === 'tagged') {
+          // An iconic place becomes its official stamp (no duplicates); others stamp "I was here".
+          const iconic = truth.gid ? await ttdStampFor(env, truth.gid, truth.name || name, truth.lat, truth.lng) : null;
+          if (iconic) { entityId = iconic.id; b.entity_type = 'place'; }
+          else { b.entity_type = 'local'; startPrivate = ppSensitivePlace(truth.name || name, truth.types); }
+        }
       }
     }
 
@@ -13091,7 +13306,7 @@ async function handlePassportStamp(request, env, ctx) {
     if (direction && entityId) entityId = `${entityId.split(':')[0]}:${visitedOn || new Date().toISOString().slice(0, 10)}:${direction === 'departure' ? 'dep' : 'arr'}`;
     // The page-one home-city stamp (onboarding "make your passport") marks
     // itself origin:true — the app renders it as the cover page, not a brag.
-    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}), ...(direction ? { direction } : {}), ...(mode ? { mode } : {}) };
+    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}), ...(direction ? { direction } : {}), ...(mode ? { mode } : {}), ...(presence ? { presence } : {}) };
     const row = {
       user_id: user.id, kind, tier,
       entity_type: b.entity_type ? String(b.entity_type) : null,
@@ -13107,8 +13322,9 @@ async function handlePassportStamp(request, env, ctx) {
     // No stamp without proof (founder doctrine, 2026-10-03). A new stamp is
     // either GPS-corroborated, or arrives with a proof photo (await_proof —
     // the client uploads it next and deletes the stamp if it proves nothing).
-    // No exceptions: birthday stamps were retired (founder, 2026-10-03).
-    if (verified !== 'gps' && b.await_proof !== true) {
+    // No exceptions: birthday stamps were retired (founder, 2026-10-03). The one
+    // exception since: a reported stamp (founder, 2026-10-10), filed for review.
+    if (verified !== 'gps' && verified !== 'reported' && b.await_proof !== true) {
       let exists = false;
       if (entityId) {
         const ex = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&kind=eq.${kind}&entity_id=eq.${encodeURIComponent(entityId)}&select=id&limit=1`, {});
@@ -13123,13 +13339,26 @@ async function handlePassportStamp(request, env, ctx) {
         }, 409);
       }
     }
-    const result = await ppUpsertStamp(env, row);
+    // Every "I'm here, but the app is saying I'm not" tap is filed, granted or
+    // not, and even when saving the stamp fails.
+    const fileReport = async (outcome) => {
+      if (!reporting || !ctx) return;
+      const userCode = (await sha256Hex(`${user.id}:stamp-report`)).slice(0, 8);
+      ctx.waitUntil(ppFileStampReport(env, {
+        name, entity_id: reportEntity, city: row.city, country: row.country, fix, meters, reach, refusal, outcome,
+        platform: String(b.platform || '').slice(0, 20) || null, app_version: String(b.app_version || '').slice(0, 30) || null, user_code: userCode,
+      }));
+    };
+    let result;
+    try { result = await ppUpsertStamp(env, row); }
+    catch (e) { await fileReport(`stamp failed: ${String(e?.message || e).slice(0, 120)}`); throw e; }
+    await fileReport(refusal ? 'stamped (reported)' : 'stamped (GPS passed on retry)');
     // Stamps are airport-arrival + iconic-attraction only — we do NOT auto-stamp cities.
     const localHour = Number.isFinite(+b.local_hour) && +b.local_hour >= 0 && +b.local_hour <= 23 ? Math.floor(+b.local_hour) : null;
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, country: row.country, city: row.city, name: row.name, verified: result.verified, updated: !!result.updated, local_hour: localHour }));
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, country: row.country, city: row.city, name: row.name, verified: result.verified, updated: !!result.updated, local_hour: localHour, zone: presence?.zone || null }));
     // Private stamps (every sensitive place starts private) never reach the alert.
-    if (ctx && result.created && !row.hidden) ctx.waitUntil(founderAlert(env, `📍 ${row.name}${row.city ? ` · ${row.city}` : ''}${row.country ? `, ${row.country}` : ''} — ${kind} stamp${result.verified === 'gps' ? ' ✓' : ''}${direction ? ` (${direction === 'departure' ? 'exit' : 'entry'})` : ''}`));
-    return jsonResponse({ id: result.id, created: !!result.created, updated: !!result.updated, verified: result.verified, private: !!(result.created && startPrivate) });
+    if (ctx && result.created && !row.hidden) ctx.waitUntil(founderAlert(env, `📍 ${row.name}${row.city ? ` · ${row.city}` : ''}${row.country ? `, ${row.country}` : ''} — ${kind} stamp${result.verified === 'gps' ? ' ✓' : ''}${result.verified === 'reported' ? ' (reported: "I’m here, but the app is saying I’m not")' : ''}${direction ? ` (${direction === 'departure' ? 'exit' : 'entry'})` : ''}`));
+    return jsonResponse({ id: result.id, created: !!result.created, updated: !!result.updated, verified: result.verified, reported: reporting, private: !!(result.created && startPrivate) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -19858,8 +20087,9 @@ async function gbEntityIds(env, raw) {
   const all = new Set([canon, id]);
   if (/^[A-Za-z0-9_-]{16,}$/.test(canon) && !/^[a-z]+:/.test(canon)) {
     all.add(`places:${canon}`);
-    // v2 links (before the 2026-10-04 re-pin) still name the right row for older entries.
-    const linked = env.GLOBESKIMMERS_KV ? (await env.GLOBESKIMMERS_KV.get(`gid2d1v3:${canon}`).catch(() => null)) || (await env.GLOBESKIMMERS_KV.get(`gid2d1v2:${canon}`).catch(() => null)) : null;
+    // Older link versions (v3, v2) still name the right row for older entries.
+    const kvl = env.GLOBESKIMMERS_KV;
+    const linked = kvl ? (await kvl.get(`gid2d1v4:${canon}`).catch(() => null)) || (await kvl.get(`gid2d1v3:${canon}`).catch(() => null)) || (await kvl.get(`gid2d1v2:${canon}`).catch(() => null)) : null;
     if (linked && linked !== 'none') { try { const l = JSON.parse(linked); if (l?.id) all.add(String(l.id)); } catch { /* fine */ } }
   }
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id)) all.add(`owned:${id}`);
@@ -20931,6 +21161,7 @@ export default {
       if (pathname === '/admin-user-stats') return await handleAdminUserStats(request, env);
       if (pathname === '/contact' && request.method === 'POST') return await handleContactSubmit(request, env);
       if (pathname === '/admin/contact' && request.method === 'POST') return await handleAdminContact(request, env);
+      if (pathname === '/admin/stamp-reports' && request.method === 'POST') return await handleAdminStampReports(request, env);
       if (pathname === '/analytics-query') return await handleAnalyticsQuery(request, env);
       if (pathname === '/admin/passport-monthly' && request.method === 'POST') return await handleAdminPassportMonthly(request, env);
       if (pathname.startsWith('/places/details/')) return await handlePlaceDetails(request, env);
