@@ -143,7 +143,15 @@ and the Blotter; (3) last, public place videos on attraction pages ("what it loo
 opt-in, place not people, verified visit only. Same fail-closed moderation as photos on sampled frames
 plus the audio (speech-to-text), report + block on every video (Apple UGC rules); teens: no public
 videos, friends only with the 24-hour delay. Storage/playback via a video service that converts
-iPhone formats and streams (Cloudflare Stream is the likely pick — confirm pricing first). **Safety and privacy fixes — FIRST after Apple approval (privacy audit 2026-10-08; the policy now
+iPhone formats and streams (Cloudflare Stream is the likely pick — confirm pricing first). **App Store 1.0.3 → 1.0.4 (2026-10-10):**
+build 13 was rejected for the Sign in with Apple logo (Guideline 4) and for outdated 6.5-inch iPhone and
+13-inch iPad screenshots (2.3.3). Both issues are bug-fix eligible, so the founder replies asking Apple to
+approve 1.0.3 as it is. Google, Apple and Facebook sign-in were verified on build 13 through TestFlight.
+When it's approved, an OTA ships the official Apple button (3a73df2). 1.0.4 must carry real screenshots
+of the current app, signed in, at 1284×2778 and 2064×2752. Claude makes them from the simulators, so no
+iPad is needed. They show the passport, the Dream shelf and a finder with results; no marketing frames,
+splash or login screens. Before submitting 1.0.4, run `scripts/ios-launch-check.sh` and a TestFlight
+sign-in check (internal group "Lobster"). **Safety and privacy fixes — FIRST after Apple approval (privacy audit 2026-10-08; the policy now
 states today's behavior honestly and gets stronger as each ships):** (1) account deletion removes
 everything — social profile + avatar, follows, blocks, postcards + photos, Blotter rows + doodles, dish
 posts + photos, owner notes, luggage/gear, handle requests, D1 events (Apple 5.1.1(v)); (2) Block and
