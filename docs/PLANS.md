@@ -151,7 +151,33 @@ When it's approved, an OTA ships the official Apple button (3a73df2). 1.0.4 must
 of the current app, signed in, at 1284×2778 and 2064×2752. Claude makes them from the simulators, so no
 iPad is needed. They show the passport, the Dream shelf and a finder with results; no marketing frames,
 splash or login screens. Before submitting 1.0.4, run `scripts/ios-launch-check.sh` and a TestFlight
-sign-in check (internal group "Lobster"). **Safety and privacy fixes — FIRST after Apple approval (privacy audit 2026-10-08; the policy now
+sign-in check (internal group "Lobster"). **GPS stamping redesign (founder decisions 2026-10-10):**
+the founder's real-world test found that the Walk of Fame refused a stamp under the Dolby Theatre. Its
+only pin sits at the La Brea end with a 250 m circle; the Dolby is 421 m away and the app's limit is
+350 m. 62% of the 25,250 stamp places use that default circle, and ~400 famous stadiums are filed
+as landmarks. ChatGPT and Grok were consulted. Decisions:
+(1) **Same stamp for everyone.** Whether someone was inside or only on-site is recorded privately for
+the founder's analytics, never shown on the stamp.
+(2) **Venues (stadiums, theme parks, malls) stamp anywhere on the property**: gates, entrance plaza,
+outside walls, its own parking. A nearby freeway or hotel doesn't count.
+(3) **A refused stamp shows "I'm here, but the app says no".** Tapping it ALWAYS grants the stamp,
+from anywhere (founder's choice after the cheating risk was raised). That stamp is marked "reported"
+internally, below GPS/photo, and looks identical. Proof-gated features (City Board etc.) still need
+GPS or photo. The tap also files an admin report titled "I'm here, but the app says no" with: place
+name and id, city, date and time, the user's spot rounded to ~1 city block with a map link, distance
+from our pin, GPS accuracy, phone platform, an anonymous user code, and a status. Admin can export the
+list to Excel (CSV) and fix the map later.
+(4) **A stamp keeps only a rough zone**: inside / on-site / nearby, plus a distance band. Never the
+exact spot.
+Claude's technical calls:
+- famous long places get real shapes, the Walk of Fame first (Hollywood Blvd from La Brea to Gower,
+  plus Vine from Sunset to Yucca);
+- the server, not the phone, decides;
+- GPS takes 2–3 readings and keeps the best;
+- quick data fixes: stadium and theme-park sizes, duplicates, the broken "Verify I'm here", and the
+  impossible-travel check that reads updated_at.
+Privacy policy and store forms are updated the day it ships. The client half ships by OTA after Apple
+approves 1.0.3. **Safety and privacy fixes — FIRST after Apple approval (privacy audit 2026-10-08; the policy now
 states today's behavior honestly and gets stronger as each ships):** (1) account deletion removes
 everything — social profile + avatar, follows, blocks, postcards + photos, Blotter rows + doodles, dish
 posts + photos, owner notes, luggage/gear, handle requests, D1 events (Apple 5.1.1(v)); (2) Block and
