@@ -106,7 +106,10 @@ export default function MailboxPage() {
 
   return (
     <div className="min-h-screen pb-28" style={{ background: IVORY }}>
-      <div className="max-w-md mx-auto px-4 pt-6">
+      {/* md:max-w-2xl (2026-10-10): on iPad this page sat in a phone-width
+          column with empty cream on both sides — Apple's 13" screenshots
+          made it look unfinished. Phones are untouched. */}
+      <div className="max-w-md md:max-w-2xl mx-auto px-4 pt-6">
         <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: STAMP }}>Globeskimmers · Mailbox</div>
         <div className="flex items-end justify-between gap-3">
           <h1 style={{ fontFamily: SERIF, fontSize: fs(28), color: INK, lineHeight: 1.05, marginTop: 4 }}>Where your people went</h1>

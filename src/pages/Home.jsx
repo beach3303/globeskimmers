@@ -650,6 +650,13 @@ export default function HomePage() {
           journeyMode={journeyMode}
           passportTotal={passportTotal}
           nearestStamp={nearestStamp}
+          dreamShelf={isDreamStack ? {
+            latitude: activeLocation?.coordinates?.latitude,
+            longitude: activeLocation?.coordinates?.longitude,
+            cityName,
+            cityTempF: weatherInfo?.fahrenheit ?? null,
+            onOpenActivity: openDreamActivity,
+          } : null}
           destinationSearch={destSearch && !destDismissed ? destSearch : null}
           onDismissDestination={() => setDestDismissed(true)}
         />

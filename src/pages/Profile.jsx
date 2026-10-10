@@ -164,7 +164,9 @@ export default function ProfilePage() {
           HELD until the founder's photo-real renders land (founder, 2026-10-05:
           "hold all virtual items"). Re-enable: set SHOW_VIRTUAL_ITEMS true. */}
       {SHOW_VIRTUAL_ITEMS && <VirtualItems stamps={stamps} />}
-      <div className="max-w-md mx-auto px-4 pt-4">
+      {/* md:max-w-2xl (2026-10-10): same iPad-width treatment as Mailbox —
+          a phone column centered on a 13" iPad read as unfinished. */}
+      <div className="max-w-md md:max-w-2xl mx-auto px-4 pt-4">
         {/* Header */}
         <div className="flex items-center gap-4">
           <button type="button" onClick={() => (edit ? avatarRef.current?.click() : startEdit())} aria-label={edit ? "Change your photo" : "Edit profile"}
