@@ -198,8 +198,11 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
   };
 
   return (
-    <div className="px-4 pb-3">
-      <div className="max-w-md mx-auto">
+    // md: overrides (2026-10-10): on the iPad Home the shelf now mounts too
+    // (HomeTablet), where the phone's max-w-md left it a narrow centered strip
+    // — let it fill the tablet container; phones are untouched.
+    <div className="px-4 md:px-0 pb-3">
+      <div className="max-w-md md:max-w-none mx-auto">
         <div className="mb-2 px-0.5">
           <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))]" style={{ color: MUTED }}>
             {city ? `${city} · ` : ""}{earned} of {all.length}
