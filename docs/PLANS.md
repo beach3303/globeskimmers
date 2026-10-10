@@ -160,13 +160,15 @@ as landmarks. ChatGPT and Grok were consulted. Decisions:
 the founder's analytics, never shown on the stamp.
 (2) **Venues (stadiums, theme parks, malls) stamp anywhere on the property**: gates, entrance plaza,
 outside walls, its own parking. A nearby freeway or hotel doesn't count.
-(3) **A refused stamp shows "I'm here, but the app says no".** Tapping it ALWAYS grants the stamp,
+(3) **A refused stamp shows "I'm here, but the app is saying I'm not"** (founder's wording). Tapping it ALWAYS grants the stamp,
 from anywhere (founder's choice after the cheating risk was raised). That stamp is marked "reported"
 internally, below GPS/photo, and looks identical. Proof-gated features (City Board etc.) still need
-GPS or photo. The tap also files an admin report titled "I'm here, but the app says no" with: place
+GPS or photo. The tap also files an admin report titled "I'm here, but the app is saying I'm not" with: place
 name and id, city, date and time, the user's spot rounded to ~1 city block with a map link, distance
 from our pin, GPS accuracy, phone platform, an anonymous user code, and a status. Admin can export the
-list to Excel (CSV) and fix the map later.
+list to Excel (CSV) and fix the map later. EVERY tap is logged; no report is ever dropped or merged
+away. Refusals where the user didn't tap are also counted per place, with no position kept, so a
+place that fails silently still shows up.
 (4) **A stamp keeps only a rough zone**: inside / on-site / nearby, plus a distance band. Never the
 exact spot.
 Claude's technical calls:
