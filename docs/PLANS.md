@@ -233,6 +233,22 @@ suppressed, minors only inside totals. **The day organizer reports ship:** add t
 (Analytics, or Advertising or marketing if sold as promotion) to date of birth in Google Play Data safety
 and App Store App Privacy, and a privacy-policy line that anonymous age-band reports go to event partners.
 
+**Traveler photos on place pages (founder, 2026-10-10; after the 1.0.4 screenshots).**
+1. **Dish, drink and store photos join the place's gallery.** "Add a photo of what you ordered" or
+   "got here" photos go into the place's photo gallery after Google's 1-3 photos, in Places to Eat,
+   Coffee and convenience stores. Like Yelp: tap any photo to open a full-screen viewer that swipes
+   left and right with a thumbnail strip and a close button. Every photo is labelled by source
+   ("Google" vs "From travelers"), and every traveler photo has Report.
+2. **Things to Do takes traveler photos too**, to show what's inside a place and its favourite spots.
+   The prompt: "Help other travelers see what's inside: add your photo." The same proof as dish photos
+   applies (GPS at the place, or the photo's own location tag). The place is the subject, not people.
+3. **Sharing memory photos to a place, to save taps:** after adding memory photos to a stamp, the user
+   is offered "Share some of these on <place>'s page to help other travelers?" with per-photo
+   checkboxes, none ticked by default (private by default). Shared photos show without the user's
+   name. The user can delete any shared photo at any time, from the photo or from a "My shared photos"
+   list. Deleting the stamp or the account removes them.
+All of these run through gbModeratePhoto (fail-closed) and follow the teens & minors plan (in progress).
+
 **Reactions & guestbook (founder ask, 2026-09-30): mockup delivered, build awaits a yes.**
 The Blotter — BUILT + DEPLOYED 2026-09-30 (e282fb6; founder said yes to mockup v3
 https://claude.ai/artifact/XJgSMBnYPWJYNrUbwj82db). Ships to devices with the next OTA. Reactions are STAMPS pressed on the blotter around a
