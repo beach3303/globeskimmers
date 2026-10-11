@@ -96,11 +96,13 @@ export async function deleteStampPhoto(photo_id) {
   return { data, error };
 }
 
-// Buddy tagging via a SHARE LINK (consent-gated). Creates a pending tag + an
-// unguessable token link the user shares through the native share sheet
-// (WhatsApp / iMessage / etc.). Returns { token, url }.
-export async function createTagInvite({ stamp_id, from_name }) {
-  const { data, error } = await callWorker('passport/tag', { stamp_id, from_name });
+// Buddy tagging (consent-gated). With to_handle (2026-10-10) the tag is
+// addressed to that @username and lands in their Mailbox / passport inbox to
+// Allow or Decline. Without it: the original SHARE-LINK flow — a pending tag
+// + an unguessable token link for the native share sheet. Returns
+// { token, url?, to_handle? }.
+export async function createTagInvite({ stamp_id, from_name, to_handle }) {
+  const { data, error } = await callWorker('passport/tag', { stamp_id, from_name, ...(to_handle ? { to_handle } : {}) });
   return { data, error };
 }
 // Preview a tag by its share token (for the claim card). No auth needed.

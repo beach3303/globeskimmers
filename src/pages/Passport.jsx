@@ -6,7 +6,7 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead } from "@/lib/passport";
+import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead, socialFollow } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import { respectPlaceFor, needsRespectNote, isPlainArt } from "@/lib/respectPlaces";
@@ -119,8 +119,35 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
   const [confirmDel, setConfirmDel] = useState(false);
   const [dateVal, setDateVal] = useState(stamp.visited_on || "");
   const [tagBusy, setTagBusy] = useState(false);
-  // Create a share-link invite → hand it to the native share sheet so the user
-  // sends it via WhatsApp / iMessage / whatever they use. No app-sent email.
+  // Tag a friend (founder bug, 2026-10-10): the old flow ONLY minted a share
+  // link, so an in-app tag never had a recipient and the friend's Mailbox
+  // "tagged you" card never fired. Now: pick a friend by @username (the tag
+  // lands in their Mailbox to Allow/Decline), with the share link kept as the
+  // fallback for friends not on the app yet.
+  const [tagOpen, setTagOpen] = useState(false);
+  const [friends, setFriends] = useState(null); // null = not loaded yet
+  const openTagPicker = async () => {
+    if (tagOpen) { setTagOpen(false); return; }
+    setTagOpen(true);
+    if (friends === null) {
+      const { data } = await socialFollow("list");
+      const mine = []; const seen = new Set();
+      for (const f of [...(data?.following || []), ...(data?.followers || [])]) {
+        if (f.handle && f.status === "accepted" && !seen.has(f.user_id)) { seen.add(f.user_id); mine.push(f); }
+      }
+      setFriends(mine);
+    }
+  };
+  const tagFriend = async (h) => {
+    setTagBusy(true);
+    const { data, error } = await createTagInvite({ stamp_id: stamp.id, from_name: fromName, to_handle: h });
+    setTagBusy(false);
+    if (error) { showToast(error, "error"); return; }
+    setTagOpen(false);
+    showToast(`Tagged @${data?.to_handle || h} — it's waiting in their Mailbox 🛂`, "success");
+  };
+  // Share-link fallback — honest about delivery: the friend only gets it if
+  // the share sheet actually sends it (a dismissed sheet is NOT a sent invite).
   const shareInvite = async () => {
     setTagBusy(true);
     const { data, error } = await createTagInvite({ stamp_id: stamp.id, from_name: fromName });
@@ -128,10 +155,10 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
     if (error || !data?.url) { showToast(error || "Couldn't create invite", "error"); return; }
     const text = `I tagged you at ${stamp.name} on Globeskimmers 🛂 — add it to your Virtual Passport:`;
     try {
-      if (navigator.share) await navigator.share({ title: "Globeskimmers", text, url: data.url });
+      if (navigator.share) { await navigator.share({ title: "Globeskimmers", text, url: data.url }); showToast("Invite shared 📨", "success"); }
       else if (navigator.clipboard) { await navigator.clipboard.writeText(`${text} ${data.url}`); showToast("Invite link copied — paste it to your friend", "success"); }
-      else showToast("Invite ready", "success");
-    } catch { /* user dismissed the share sheet — no-op */ }
+      else showToast("Invite link created — your friend gets it only if you send it to them", "error");
+    } catch { showToast("Invite not sent", "error"); } // share sheet dismissed
   };
   const place = [stamp.city, stamp.region, stamp.country].filter(Boolean).join(", ");
   const photos = stamp.photos || [];
@@ -346,12 +373,40 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
       </button>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
 
-      {/* Tag who you were with — share a link (their app of choice); they
-          Allow/Decline the stamp on their own Virtual Passport */}
-      <button onClick={shareInvite} disabled={tagBusy} className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
+      {/* Tag who you were with — pick a friend (@username → their Mailbox,
+          Allow/Decline on their own Virtual Passport), or share a link for
+          friends not on the app yet */}
+      <button onClick={openTagPicker} disabled={tagBusy} className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
         style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13), fontWeight: 600 }}>
-        <UserPlus size={15} strokeWidth={2.2} /> {tagBusy ? "Preparing…" : "Tag who you were with"}
+        <UserPlus size={15} strokeWidth={2.2} /> {tagBusy ? "Tagging…" : "Tag who you were with"}
       </button>
+      {tagOpen && (
+        <div className="mt-2 rounded-xl p-3" style={{ background: IVORY_2, border: `1px solid ${RULE}` }}>
+          {friends === null ? (
+            <div className="flex items-center gap-2" style={{ color: INK2, fontSize: fs(12.5) }}>
+              <Loader2 size={14} className="animate-spin" /> Loading your friends…
+            </div>
+          ) : (<>
+            {friends.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {friends.slice(0, 12).map((f) => (
+                  <button key={f.user_id} onClick={() => tagFriend(f.handle)} disabled={tagBusy}
+                    className="rounded-full px-3 py-1.5"
+                    style={{ background: "#fff", color: TEAL_DEEP, border: `1px solid ${TEAL_DEEP}`, fontSize: fs(12), fontWeight: 600 }}>
+                    @{f.handle}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: INK2, fontSize: fs(12.5), margin: 0 }}>No friends with a @username yet — share an invite link instead.</p>
+            )}
+            <button onClick={shareInvite} disabled={tagBusy} className="mt-2 w-full rounded-lg py-2"
+              style={{ background: "#fff", color: INK2, border: `1px dashed ${RULE}`, fontSize: fs(12.5), fontWeight: 600 }}>
+              Share an invite link instead
+            </button>
+          </>)}
+        </div>
+      )}
       </>)}
     </div>
   );

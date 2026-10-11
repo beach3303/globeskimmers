@@ -1,7 +1,8 @@
-// Mailbox — the feed (Social P2). Postcards arrive later; v1 delivers what the
-// graph already proves: the stamps your people earned, newest first, reverse-
-// chronological only (never ranked), never coordinates, never photos yet. Plus
+// Mailbox — the feed (Social P2+). Friends' stamps AND postcards, newest
+// first, reverse-chronological only (never ranked), never coordinates. Plus
 // the follow controls: follow by @handle, and the teen-approval requests.
+// (The old "postcards arrive later" note here outlived the postcard launch
+// and misled a 2026-10-10 bug hunt — postcards render below at ~222.)
 import React, { useEffect, useState } from "react";
 import { Loader2, UserPlus } from "lucide-react";
 import { showToast } from "@/components/Toast";
