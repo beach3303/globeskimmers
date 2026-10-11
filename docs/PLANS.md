@@ -205,6 +205,13 @@ https://claude.ai/artifact/7Q5HTErHgpe6eV1dgsArQu (6 screens).
   for icons stands.
 - **Still to decide:** suggestion rate limits, a "Local Scout" badge for suggesters, and moderating the
   free text (it goes through gbModerate).
+**Teens plan Phase 0, first slab built 2026-10-11 (branch stamping-v2, deploys after 1.0.3 clears):**
+dish/coffee/store photos refuse accounts with no birthday (unknown age may not post); a teen receives
+postcards only from mutual friends whoever the sender is, an under-13 account receives none (send side
+AND feed read side); handle lookups are exact (ilike's `_` wildcard could match the wrong account, even
+in the admin Seal writes). The demo account got an adult birthday so reviewers can post dish photos.
+Still needing the founder's answers: the 8 decisions in docs/plans/teens-and-minors.md §9 (under-13
+freeze handling first — it gates the required-birthday step).
 **"Dream shelf" is renamed "Stamp shelf" (founder, 2026-10-10** — "people might not be dreaming to
 go there"). Visible strings and the App Store caption label only; internal names (DreamShelf.jsx, the
 /dream/shelf route, DREAM_VENUE, analytics event names) deliberately keep their dream names.
