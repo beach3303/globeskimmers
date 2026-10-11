@@ -11,9 +11,7 @@ SDK was removed October 2026) and no sale of personal data. Users worldwide.
 
 The product is a "virtual passport": users collect stamps at famous places
 (GPS-checked in the foreground, with consent, never background tracking), add
-their own photos, and share with friends (follows, postcards). Minimum age 13
-(16 in Australia); 13–17 accounts get restricted "teen" treatment (never
-public, mutual-friends-only contact). Privacy policy:
+their own photos, and share with friends (follows, postcards). Minimum age 13 (16 in Australia) — and as of October 11, 2026, accounts aged 13–17 have ALL social and publishing features switched off (they keep the travel tools and a private passport). The attached Teens & Minors Plan describes the restricted "teen" treatment we intend to re-enable after this consult. Privacy policy:
 https://globeskimmers.io/legal/privacy
 
 **Planned next (what this consult de-risks):** a birthday required of every

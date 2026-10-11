@@ -13468,6 +13468,7 @@ async function handlePassportShare(request, env) {
         const sp = await gbSocialProfile(env, user.id);
         if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
         if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Sharing isn\'t available on this account' }, 403);
+    if (gbTeenHold(sp)) return gbTeenHoldResp();
         if (sp.social_tier === 'teen') return jsonResponse({ error: 'Public passports open at 18 — you\'ll be able to share with friends soon' }, 403);
         // Fail-closed photo moderation the moment the journal becomes public:
         // unchecked photos get reviewed in the background; the public
@@ -14031,6 +14032,7 @@ async function handlePlaceDishAdd(request, env, ctx) {
     // birthday gate is the age check, and it must hold at every posting door.
     if (!sp?.birth_year) return jsonResponse({ error: 'Add your birthday in Settings to share photos', code: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Sharing isn\'t available on this account' }, 403);
+    if (gbTeenHold(sp)) return gbTeenHoldResp();
 
     // Where the place is: Google's location from the details cache when we have
     // it, otherwise the coordinates the finder listed it at.
@@ -14138,6 +14140,7 @@ async function handleOwnerNote(request, env, ctx) {
     if (sp === undefined) return jsonResponse({ error: 'Couldn’t check your account — try again' }, 503);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required', message: 'Add your birth year in Settings to send messages.' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Messages aren’t available on this account' }, 403);
+    if (gbTeenHold(sp)) return gbTeenHoldResp();
     if (env.GLOBESKIMMERS_KV) {
       const ck = `ownernote:${user.id}:${new Date().toISOString().slice(0, 10)}`;
       const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
@@ -14387,6 +14390,15 @@ function socialTierFor(year, country, md) {
   if (age < 18) return 'teen';
   return 'adult';
 }
+// Teen hold (founder, 2026-10-11): every social and publishing feature is
+// OFF for 13–17 until the teen-safety stack ships and counsel blesses the
+// plan (docs/plans/teens-and-minors.md). Travel tools and the PRIVATE
+// passport stay. The teen rails built throughout this file remain intact —
+// flip TEEN_SOCIAL_ENABLED to true to restore them exactly as designed.
+const TEEN_SOCIAL_ENABLED = false;
+const gbTeenHold = (sp) => !TEEN_SOCIAL_ENABLED && sp?.social_tier === 'teen';
+const gbTeenHoldResp = () => jsonResponse({ error: 'Social features open at 18 — your passport stays yours, private', code: 'teen_hold' }, 403);
+
 async function gbSocialProfile(env, userId) {
   const q = await gbRest(env, `social_profiles?user_id=eq.${userId}&select=*`, {});
   const row = (q.ok ? await q.json() : [])[0] || null;
@@ -14459,6 +14471,7 @@ async function handleSocialProfile(request, env, ctx) {
     if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined) {
       return jsonResponse({ profile: pick(mine) || null });
     }
+    if (gbTeenHold(mine)) return gbTeenHoldResp();
     const clean = (v, n) => (v == null ? null : String(v).replace(/https?:\S+/gi, '').replace(/\s+/g, ' ').trim().slice(0, n) || null);
     // Free-form places (2026-09-30): anything, up to 50, strings or the old
     // {name} objects — stored uniformly as [{name}].
@@ -14586,6 +14599,7 @@ async function handlePostcardSend(request, env, ctx) {
     const sp = await gbSocialProfile(env, user.id);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Postcards aren\'t available on this account' }, 403);
+    if (gbTeenHold(sp)) return gbTeenHoldResp();
 
     // Address it.
     let toUser = null;
@@ -14607,7 +14621,7 @@ async function handlePostcardSend(request, env, ctx) {
       // adult could postcard a teen without a follow-back). An under-13
       // account receives nothing, silently, exactly like a block.
       const rsp = await gbSocialProfile(env, t.user_id).catch(() => null);
-      if (rsp?.social_tier === 'blocked') return jsonResponse({ ok: true, muted: true });
+      if (rsp?.social_tier === 'blocked' || gbTeenHold(rsp)) return jsonResponse({ ok: true, muted: true });
       if (rsp?.social_tier === 'teen' && !(await gbMutualFriends(env, user.id, t.user_id))) {
         return jsonResponse({ error: 'You two need to follow each other to exchange postcards' }, 403);
       }
@@ -14843,6 +14857,7 @@ async function blGate(env, user, share, opts) {
   if (opts && opts.identity) {
     const sp = await gbSocialProfile(env, user.id);
     if (sp?.social_tier === 'blocked') return 'Not available';
+    if (gbTeenHold(sp)) return 'Social features open at 18 — your passport stays yours, private';
     if (sp?.social_tier === 'teen') {
       const f = await gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${share.user_id}&status=eq.accepted&select=follower_id&limit=1`, {});
       if (!(f.ok && (await f.json()).length)) return 'Follow this traveler first — you can sign once they accept';
@@ -15223,6 +15238,8 @@ async function handleSocialFollow(request, env, ctx) {
     }
 
     if (op === 'follow') {
+      const meSp = await gbSocialProfile(env, user.id).catch(() => null);
+      if (gbTeenHold(meSp)) return gbTeenHoldResp();
       const target = b.handle ? await gbHandleToUser(env, b.handle) : null;
       if (!target) return jsonResponse({ error: 'No traveler with that username' }, 404);
       if (target.user_id === user.id) return jsonResponse({ error: "That's you 🙂" }, 400);
@@ -15245,6 +15262,8 @@ async function handleSocialFollow(request, env, ctx) {
       const fid = String(b.user_id || '').replace(/[^0-9a-f-]/gi, '');
       if (!fid) return jsonResponse({ error: 'user_id required' }, 400);
       if (op === 'accept') {
+        const meSp = await gbSocialProfile(env, user.id).catch(() => null);
+        if (gbTeenHold(meSp)) return gbTeenHoldResp();
         await gbRest(env, `user_follows?follower_id=eq.${fid}&followee_id=eq.${user.id}&status=eq.pending`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'accepted', responded_at: new Date().toISOString() }) });
       } else {
         await gbRest(env, `user_follows?follower_id=eq.${fid}&followee_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
@@ -15292,6 +15311,7 @@ async function handleSocialFeed(request, env) {
     // are direct cards that predate the send-side rail.
     const mySp = await gbSocialProfile(env, user.id).catch(() => null);
     const teenMe = mySp?.social_tier === 'teen' || mySp?.social_tier === 'blocked';
+    if (gbTeenHold(mySp)) return jsonResponse({ rows: [], held: 'teen' });
     const bcastFrom = teenMe ? visible.filter((id) => mutual.has(id)) : visible;
     const [pcTo, pcBroadcast] = await Promise.all([
       gbRest(env, `postcards?to_user_id=eq.${user.id}&order=created_at.desc&limit=20&select=*`, {}),
@@ -15552,6 +15572,7 @@ async function handleSocialHandle(request, env, ctx) {
     const sp = await gbSocialProfile(env, user.id);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Usernames aren\'t available on this account' }, 403);
+    if (gbTeenHold(sp)) return gbTeenHoldResp();
     const held = await gbHeld(env, want);
     const myEmail = String(user.email || '').toLowerCase();
     const heldEmail = String(held?.email || '').toLowerCase();
@@ -15944,6 +15965,7 @@ async function handlePassportTag(request, env, ctx) {
       // and a teen tags only friends they follow each other with.
       const sp = await gbSocialProfile(env, user.id);
       if (sp?.social_tier === 'blocked') return jsonResponse({ error: "Tagging isn't available on this account" }, 403);
+      if (gbTeenHold(sp)) return gbTeenHoldResp();
       if (sp?.social_tier === 'teen' && !(await gbMutualFriends(env, user.id, t.user_id))) {
         return jsonResponse({ error: 'You can tag friends you follow each other with' }, 403);
       }
@@ -20197,6 +20219,7 @@ async function handleGuestbookSign(request, env, ctx) {
     if (sp === undefined) return jsonResponse({ error: 'Couldn\u2019t check your account \u2014 try again' }, 503);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required', message: 'Add your birth year in Settings to sign guestbooks.' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Guestbooks aren\u2019t available on this account' }, 403);
+    if (gbTeenHold(sp)) return gbTeenHoldResp();
     if (env.GLOBESKIMMERS_KV) {
       const ck = `gb:sign:${user.id}:${new Date().toISOString().slice(0, 10)}`;
       const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
@@ -20277,6 +20300,7 @@ async function handleGuestbookEdit(request, env, ctx) {
     if (sp === undefined) return jsonResponse({ error: 'Couldn\u2019t check your account \u2014 try again' }, 503);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required', message: 'Add your birth year in Settings to edit guestbook notes.' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Guestbooks aren\u2019t available on this account' }, 403);
+    if (gbTeenHold(sp)) return gbTeenHoldResp();
     if (env.GLOBESKIMMERS_KV) {
       const ck = `gb:edit:${user.id}:${new Date().toISOString().slice(0, 10)}`;
       const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
