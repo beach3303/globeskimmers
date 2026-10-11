@@ -242,7 +242,7 @@ mock-ups). The small label goes above in caps; line 2 is set in italic serif.
 | # | Screen | Small label | Line 1 | Line 2 (italic) |
 |---|---|---|---|---|
 | 1 | Memory photos (a stamp page with your photos) | MEMORY PHOTOS | Keep the faces, | not just the places |
-| 2 | Tag a friend (Details, date & tag a friend) | TAG A FRIEND | You were there together | keep the story together |
+| 2 | REPLACED (tag a friend parked 2026-10-10 until thousands of users) — founder picks: (a) Border/state-line stamp — BORDER CROSSINGS — "Crossed a border?" / "stamp it on the way"; or (b) Things to Do results — THINGS TO DO — "Know what's inside" / "before you go" | | | |
 | 3 | Stamp shelf (Icons of your region) | STAMP SHELF | Save it for someday | then make it happen |
 | 4 | Home (Stamps near you) | STAMPS NEAR YOU | Your next stamp | is just around the corner |
 | 5 | Places to Eat (results nearby) | PLACES TO EAT | Hungry somewhere new? | good food is close by |

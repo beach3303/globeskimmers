@@ -9,6 +9,7 @@ import { showToast } from "@/components/Toast";
 import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead, socialFollow } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
+import { TAGGING_ENABLED } from "@/lib/flags";
 import { respectPlaceFor, needsRespectNote, isPlainArt } from "@/lib/respectPlaces";
 import RespectPlaceSheet from "@/components/passport/RespectPlaceSheet";
 import { setStampArt } from "@/lib/passport";
@@ -375,7 +376,9 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
 
       {/* Tag who you were with — pick a friend (@username → their Mailbox,
           Allow/Decline on their own Virtual Passport), or share a link for
-          friends not on the app yet */}
+          friends not on the app yet. Hidden while TAGGING_ENABLED is false
+          (founder, 2026-10-10: parked until thousands of users). */}
+      {TAGGING_ENABLED && (<>
       <button onClick={openTagPicker} disabled={tagBusy} className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
         style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13), fontWeight: 600 }}>
         <UserPlus size={15} strokeWidth={2.2} /> {tagBusy ? "Tagging…" : "Tag who you were with"}
@@ -407,6 +410,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
           </>)}
         </div>
       )}
+      </>)}
       </>)}
     </div>
   );

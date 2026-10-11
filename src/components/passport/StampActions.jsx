@@ -16,6 +16,7 @@ import { readPhotoExif } from "@/lib/photoExif";
 import { logEvent } from "@/lib/analytics";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { countryCode } from "@/lib/countries";
+import { TAGGING_ENABLED } from "@/lib/flags";
 import { localISODate } from "@/lib/localDate";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { useDismissable } from "@/lib/dismissStack";
@@ -414,7 +415,9 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
             <Row icon={PencilLine} label="Send as a postcard" sub="This place's photo on the front, your words on the back" onClick={openCompose} />
           )}
           {!readOnly && (
-            <Row icon={PencilLine} label="Details, date & tag a friend" sub="Set the real visit date, invite who you were with" onClick={onDetails} />
+            TAGGING_ENABLED
+              ? <Row icon={PencilLine} label="Details, date & tag a friend" sub="Set the real visit date, invite who you were with" onClick={onDetails} />
+              : <Row icon={PencilLine} label="Details & visit date" sub="Set the real visit date" onClick={onDetails} />
           )}
           {!readOnly && !confirmDel && (
             <Row icon={Trash2} label="Delete this stamp" sub="Its photos go with it" tone="danger" onClick={() => setConfirmDel(true)} />
