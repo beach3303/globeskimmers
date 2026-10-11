@@ -271,6 +271,13 @@ S, M and L are rough sizes (small, medium, large). Server and app say where the 
 
 ## 9. Decisions for you
 
+**Answered by the founder, 2026-10-11:** 1 = (a) freeze, delete promptly, appeal restores access only.
+2 (teen gallery photos) = (a) allowed, anonymous, delayed. 7 (birthday after 18) = **(b) keep the full
+date** — overrides the recommendation; privacy policy must state purpose and retention, and question 3
+of the counsel brief covers it. 8 = (a) one focused consult — the brief is docs/legal/lawyer-brief-2026-10.md.
+Decisions 3, 4, 5, 6 default to the recommended (a) answers unless the founder overrides.
+
+
 1. **Under-13 handling.** (a) Freeze, delete quickly, appeal restores access only. (b) Block sign-up entirely. (c) Build parental consent, which is costly. **Recommend (a)**; the appeal window length is **(lawyer)**.
 2. **Teen photos in place galleries.** (a) Allowed, delayed 24h, place only. (b) Adults only. (c) 16–17 only. **Recommend (a).**
 3. **Teens sharing memory photos to a place page, and posting on City Board.** (a) Hidden for teens. (b) Opt-in, delayed 24h. **Recommend (a) for now.**

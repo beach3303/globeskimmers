@@ -205,6 +205,11 @@ https://claude.ai/artifact/7Q5HTErHgpe6eV1dgsArQu (6 screens).
   for icons stands.
 - **Still to decide:** suggestion rate limits, a "Local Scout" badge for suggesters, and moderating the
   free text (it goes through gbModerate).
+**Teens §9 decided (founder, 2026-10-11):** under-13 = freeze + prompt delete + access-only appeal;
+teen gallery photos = anonymous + 24h delay; birthday kept as FULL date after 18 (founder's call, against
+the rec — policy wording + counsel question 3 cover it); lawyer = yes, one focused consult. The brief
+(9 questions, attachments list, out-of-scope) is docs/legal/lawyer-brief-2026-10.md, published for
+sharing at https://claude.ai/artifact/BbJ8D95J16cARThHMptV8e. Remaining §9 items default to (a).
 **Teens plan Phase 0, first slab built 2026-10-11 (branch stamping-v2, deploys after 1.0.3 clears):**
 dish/coffee/store photos refuse accounts with no birthday (unknown age may not post); a teen receives
 postcards only from mutual friends whoever the sender is, an under-13 account receives none (send side
