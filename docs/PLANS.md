@@ -212,8 +212,8 @@ go there"). Visible strings and the App Store caption label only; internal names
 of users."** The UI entries are hidden behind `TAGGING_ENABLED = false` in src/lib/flags.js (the stamp
 sheet row now reads "Details & visit date"); the worker's to_handle lane, unblock, the Mailbox card,
 and old /t/<token> claim links all stay built and working, so flipping the flag brings it back whole.
-Screenshot 2 of the 1.0.4 set (was TAG A FRIEND) is being replaced — border-crossing stamp or Things
-to Do, founder to pick. Suggest a Place to Stamp is NOT affected: it stays queued (it needs no friend
+Screenshot 2 of the 1.0.4 set (was TAG A FRIEND) is now the border/state-line stamp page
+("BORDER CROSSINGS — Crossed a border? / stamp it on the way"; founder picked it 2026-10-10). Suggest a Place to Stamp is NOT affected: it stays queued (it needs no friend
 graph).
 **Tag a friend + the lost postcard (founder's real-world test, 2026-10-10; fixed on stamping-v2):**
 diagnosis confirmed in code. (1) Tag a friend never carried a recipient — the app only minted share
