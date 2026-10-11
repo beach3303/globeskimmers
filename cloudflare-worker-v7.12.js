@@ -14027,7 +14027,10 @@ async function handlePlaceDishAdd(request, env, ctx) {
     if (key.length < 2) return jsonResponse({ error: kind === 'coffee' ? 'What did you order?' : kind === 'store' ? 'What did you get?' : 'What dish is this?' }, 400);
 
     const sp = await gbSocialProfile(env, user.id).catch(() => null);
-    if (sp?.social_tier === 'blocked') return jsonResponse({ error: 'Sharing isn\'t available on this account' }, 403);
+    // Teens plan (2026-10-10): an unknown age may not post publicly — the
+    // birthday gate is the age check, and it must hold at every posting door.
+    if (!sp?.birth_year) return jsonResponse({ error: 'Add your birthday in Settings to share photos', code: 'age_required' }, 428);
+    if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Sharing isn\'t available on this account' }, 403);
 
     // Where the place is: Google's location from the details cache when we have
     // it, otherwise the coordinates the finder listed it at.
@@ -14599,6 +14602,15 @@ async function handlePostcardSend(request, env, ctx) {
         const mutual = a.ok && bq.ok && (await a.json()).length && (await bq.json()).length;
         if (!mutual) return jsonResponse({ error: 'You can send postcards to friends you follow each other with' }, 403);
       }
+      // Recipient rails (teens plan, 2026-10-10): a teen receives postcards
+      // only from mutual friends — whoever the sender is (the audit found an
+      // adult could postcard a teen without a follow-back). An under-13
+      // account receives nothing, silently, exactly like a block.
+      const rsp = await gbSocialProfile(env, t.user_id).catch(() => null);
+      if (rsp?.social_tier === 'blocked') return jsonResponse({ ok: true, muted: true });
+      if (rsp?.social_tier === 'teen' && !(await gbMutualFriends(env, user.id, t.user_id))) {
+        return jsonResponse({ error: 'You two need to follow each other to exchange postcards' }, 403);
+      }
       toUser = t.user_id;
     } else if (sp.social_tier === 'teen') {
       return jsonResponse({ error: 'Address your postcard to a friend — broadcast opens at 18' }, 403);
@@ -15159,7 +15171,7 @@ async function handleBlotterDoodleServe(request, env) {
 async function gbHandleToUser(env, handle) {
   const h = String(handle || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
   if (!h) return null;
-  const q = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(h)}&select=user_id,handle`, {});
+  const q = await gbRest(env, `passport_shares?handle=eq.${encodeURIComponent(h)}&select=user_id,handle`, {});
   return (q.ok ? await q.json() : [])[0] || null;
 }
 
@@ -15275,11 +15287,18 @@ async function handleSocialFeed(request, env) {
     // is a consented tag-like object; blocks were enforced at send) plus
     // BROADCAST cards from the people I follow.
     const origin = new URL(request.url).origin;
+    // A teen reader gets postcards from MUTUAL friends only (teens plan,
+    // 2026-10-10): broadcasts from non-mutual followees are skipped, and so
+    // are direct cards that predate the send-side rail.
+    const mySp = await gbSocialProfile(env, user.id).catch(() => null);
+    const teenMe = mySp?.social_tier === 'teen' || mySp?.social_tier === 'blocked';
+    const bcastFrom = teenMe ? visible.filter((id) => mutual.has(id)) : visible;
     const [pcTo, pcBroadcast] = await Promise.all([
       gbRest(env, `postcards?to_user_id=eq.${user.id}&order=created_at.desc&limit=20&select=*`, {}),
-      visible.length ? gbRest(env, `postcards?sender_id=in.(${visible.join(',')})&to_user_id=is.null&order=created_at.desc&limit=20&select=*`, {}) : Promise.resolve({ ok: false }),
+      bcastFrom.length ? gbRest(env, `postcards?sender_id=in.(${bcastFrom.join(',')})&to_user_id=is.null&order=created_at.desc&limit=20&select=*`, {}) : Promise.resolve({ ok: false }),
     ]);
-    const pcs = [...(pcTo.ok ? await pcTo.json() : []), ...(pcBroadcast.ok ? await pcBroadcast.json() : [])];
+    let pcs = [...(pcTo.ok ? await pcTo.json() : []), ...(pcBroadcast.ok ? await pcBroadcast.json() : [])];
+    if (teenMe) pcs = pcs.filter((pcrow) => pcrow.to_user_id !== user.id || mutual.has(pcrow.sender_id));
     const pcSenders = [...new Set(pcs.map((p) => p.sender_id))].filter((id) => !share[id]);
     if (pcSenders.length) {
       const [h2, p2] = await Promise.all([
@@ -15555,7 +15574,7 @@ async function handleSocialHandle(request, env, ctx) {
       if (used >= 2) return jsonResponse({ error: 'You can change your username again next month' }, 429);
       var changes = used + 1;
     }
-    const taken = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(want)}&select=user_id&limit=1`, {});
+    const taken = await gbRest(env, `passport_shares?handle=eq.${encodeURIComponent(want)}&select=user_id&limit=1`, {});
     const owner = (taken.ok ? await taken.json() : [])[0];
     if (owner && owner.user_id !== user.id) return await gbTakenResponse(env, want);
     const patch = { handle: want, handle_changed_at: new Date().toISOString(), handle_changes: typeof changes === 'number' ? changes : 0, updated_at: new Date().toISOString() };
@@ -15641,7 +15660,7 @@ async function handleAdminHeldHandles(request, env) {
       if (!/^[a-z0-9_]{3,20}$/.test(handle)) return jsonResponse({ error: '3\u201320 characters: letters, numbers, underscore' }, 400);
       if (HANDLE_RESERVED.has(handle) || /^gs_/.test(handle)) return jsonResponse({ error: 'That name is on the system reserved list already' }, 400);
       if (handleBlocked(handle)) return jsonResponse({ error: 'That name is on the blocked list (policy) — it cannot be held or claimed' }, 400);
-      const own = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}&select=user_id&limit=1`, {});
+      const own = await gbRest(env, `passport_shares?handle=eq.${encodeURIComponent(handle)}&select=user_id&limit=1`, {});
       if ((own.ok ? await own.json() : []).length) return jsonResponse({ error: 'A user already owns that handle' }, 409);
       const row = { handle, display_name: String(b.display_name || '').trim().slice(0, 60) || null, email: clean(b.email) || null, kind: b.kind === 'brand' ? 'brand' : 'family' };
       const w = await gbRest(env, 'held_handles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
@@ -15856,7 +15875,7 @@ async function handleAdminVerified(request, env) {
       const handle = String(b.handle || '').toLowerCase().trim().replace(/^@/, '');
       if (!handle) return jsonResponse({ error: 'Which @handle?' }, 400);
       if (!SEAL_TIERS.has(b.seal)) return jsonResponse({ error: 'Unknown seal color' }, 400);
-      const w = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}&verified=eq.true`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ seal: b.seal, updated_at: new Date().toISOString() }) });
+      const w = await gbRest(env, `passport_shares?handle=eq.${encodeURIComponent(handle)}&verified=eq.true`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ seal: b.seal, updated_at: new Date().toISOString() }) });
       const rows = w.ok ? await w.json() : [];
       if (!rows.length) return jsonResponse({ error: 'That account has no Seal to recolor' }, 404);
     }
@@ -15865,9 +15884,9 @@ async function handleAdminVerified(request, env) {
       if (!handle) return jsonResponse({ error: 'Which @handle?' }, 400);
       const seal = op === 'grant' ? (SEAL_TIERS.has(b.seal) ? b.seal : 'burgundy') : null;
       // Re-granting someone who already holds a Seal is a recolor: no letter.
-      const before = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}&select=verified`, {});
+      const before = await gbRest(env, `passport_shares?handle=eq.${encodeURIComponent(handle)}&select=verified`, {});
       const wasSealed = ((before.ok ? await before.json() : [])[0] || {}).verified === true;
-      const w = await gbRest(env, `passport_shares?handle=ilike.${encodeURIComponent(handle)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ verified: op === 'grant', seal, updated_at: new Date().toISOString() }) });
+      const w = await gbRest(env, `passport_shares?handle=eq.${encodeURIComponent(handle)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ verified: op === 'grant', seal, updated_at: new Date().toISOString() }) });
       const rows = w.ok ? await w.json() : [];
       if (!rows.length) return jsonResponse({ error: 'No user with that handle' }, 404);
       if (op === 'grant' && !wasSealed && (seal === 'gold' || seal === 'burgundy')) {
