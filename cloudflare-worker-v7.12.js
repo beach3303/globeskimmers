@@ -15171,14 +15171,18 @@ async function handleSocialFollow(request, env, ctx) {
     const op = String(b.op || 'list');
 
     if (op === 'list') {
-      const [fq, gq, names] = await Promise.all([
+      const [fq, gq, bq] = await Promise.all([
         gbRest(env, `user_follows?followee_id=eq.${user.id}&select=follower_id,status,created_at`, {}),
         gbRest(env, `user_follows?follower_id=eq.${user.id}&select=followee_id,status,created_at`, {}),
-        Promise.resolve(null),
+        // Blocks were write-only (2026-10-10): nothing listed them and nothing
+        // could remove one, while a block silently eats postcards and tags in
+        // BOTH directions — the founder's "postcard never arrived" case.
+        gbRest(env, `user_blocks?user_id=eq.${user.id}&select=blocked_user_id,created_at`, {}),
       ]);
       const followers = fq.ok ? await fq.json() : [];
       const following = gq.ok ? await gq.json() : [];
-      const ids = [...new Set([...followers.map((r) => r.follower_id), ...following.map((r) => r.followee_id)])].slice(0, 200);
+      const blocks = bq.ok ? await bq.json() : [];
+      const ids = [...new Set([...followers.map((r) => r.follower_id), ...following.map((r) => r.followee_id), ...blocks.map((r) => r.blocked_user_id)])].slice(0, 200);
       let who = {};
       if (ids.length) {
         const [hq, pq] = await Promise.all([
@@ -15193,7 +15197,17 @@ async function handleSocialFollow(request, env, ctx) {
         followers: followers.filter((r) => r.status === 'accepted').map((r) => shape(r, 'follower_id')),
         requests: followers.filter((r) => r.status === 'pending').map((r) => shape(r, 'follower_id')),
         following: following.map((r) => shape(r, 'followee_id')),
+        blocked: blocks.map((r) => shape({ ...r, status: 'blocked' }, 'blocked_user_id')),
       });
+    }
+
+    if (op === 'unblock') {
+      // Deletes only MY block row — never the other direction's.
+      const target = b.handle ? await gbHandleToUser(env, b.handle) : (b.user_id ? { user_id: String(b.user_id).replace(/[^0-9a-f-]/gi, '') } : null);
+      if (!target?.user_id) return jsonResponse({ error: 'Who?' }, 400);
+      await gbRest(env, `user_blocks?user_id=eq.${user.id}&blocked_user_id=eq.${target.user_id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_unblock', {}));
+      return jsonResponse({ ok: true });
     }
 
     if (op === 'follow') {
@@ -15887,6 +15901,11 @@ async function handlePassportTag(request, env, ctx) {
     const email = String(b.email || '').trim().toLowerCase() || null;
     if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return jsonResponse({ error: 'Enter a valid email' }, 400);
     if (email && email === String(user.email || '').toLowerCase()) return jsonResponse({ error: "That's your own email 🙂" }, 400);
+    // Tag a friend by @username (founder bug, 2026-10-10): the app's tag flow
+    // never carried a recipient — it only minted share links — so the fully
+    // built Mailbox "tagged you" card and Allow/Decline never fired for an
+    // in-app tag. Resolved exactly like a postcard's to_handle.
+    const handle = String(b.to_handle || '').trim().replace(/^@/, '').toLowerCase() || null;
     const sq = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}&select=*`, {});
     const stamp = (sq.ok ? await sq.json() : [])[0];
     if (!stamp) return jsonResponse({ error: 'Stamp not found' }, 404);
@@ -15897,7 +15916,20 @@ async function handlePassportTag(request, env, ctx) {
     if (count >= 30) return jsonResponse({ error: 'Daily tag limit reached — try again tomorrow.' }, 429);
     // Optional email → user resolution (passive inbox path; never returned to caller).
     let toUserId = null;
-    if (email) {
+    let toHandle = null;
+    if (handle) {
+      const t = await gbHandleToUser(env, handle);
+      if (!t) return jsonResponse({ error: 'No traveler with that username' }, 404);
+      if (t.user_id === user.id) return jsonResponse({ error: "That's you 🙂" }, 400);
+      // Same rails as postcards: a blocked-tier account can't address people,
+      // and a teen tags only friends they follow each other with.
+      const sp = await gbSocialProfile(env, user.id);
+      if (sp?.social_tier === 'blocked') return jsonResponse({ error: "Tagging isn't available on this account" }, 403);
+      if (sp?.social_tier === 'teen' && !(await gbMutualFriends(env, user.id, t.user_id))) {
+        return jsonResponse({ error: 'You can tag friends you follow each other with' }, 403);
+      }
+      toUserId = t.user_id; toHandle = t.handle || handle;
+    } else if (email) {
       try {
         const r = await gbRest(env, 'rpc/user_id_by_email', { method: 'POST', body: JSON.stringify({ p_email: email }) });
         if (r.ok) { const v = await r.json(); toUserId = (typeof v === 'string' ? v : (Array.isArray(v) ? v[0] : v?.user_id)) || null; }
@@ -15914,13 +15946,14 @@ async function handlePassportTag(request, env, ctx) {
     // A blocked pair never exchanges invites — but the tagger is never
     // told: the invite "sends" and simply expires on the other side.
     if (row.to_user_id && await gbBlockedEither(env, user.id, row.to_user_id)) {
-      return jsonResponse({ ok: true, token: row.token || null, muted: true });
+      // Never reveal a block: the response looks exactly like a delivered tag.
+      return jsonResponse({ ok: true, status: 'created', token, to_handle: toHandle, muted: true });
     }
     const ins = await gbRest(env, 'passport_tags', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!ins.ok) return jsonResponse({ error: 'Could not create invite', details: await ins.text().catch(() => '') }, 502);
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag', { is_user: !!toUserId, via: 'link' }));
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag', { is_user: !!toUserId, via: toHandle ? 'handle' : 'link' }));
     const origin = new URL(request.url).origin;
-    return jsonResponse({ status: 'created', token, url: `${origin}/t/${token}` });
+    return jsonResponse({ status: 'created', token, url: `${origin}/t/${token}`, to_handle: toHandle });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
