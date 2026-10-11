@@ -204,7 +204,21 @@ https://claude.ai/artifact/7Q5HTErHgpe6eV1dgsArQu (6 screens).
   "recommended by N people who've been there". It never uses the official icon art, so the fame bar
   for icons stands.
 - **Still to decide:** suggestion rate limits, a "Local Scout" badge for suggesters, and moderating the
-  free text (it goes through gbModerate). **Safety and privacy fixes — FIRST after Apple approval (privacy audit 2026-10-08; the policy now
+  free text (it goes through gbModerate).
+**Tag a friend + the lost postcard (founder's real-world test, 2026-10-10; fixed on stamping-v2):**
+diagnosis confirmed in code. (1) Tag a friend never carried a recipient — the app only minted share
+links, so the built "tagged you" Mailbox card never fired for an in-app tag. Fixed: the worker's
+passport/tag accepts to_handle (postcard rails: teens mutual-only, blocked tier refused, muted
+response never reveals a block), and the Passport tag flow now opens a friend picker with @username
+chips; the share link stays as the fallback and its toasts are honest about delivery. (2) A block in
+EITHER direction silently eats postcards and tags while telling the sender "sent" (by design), but
+blocks were write-only: invisible and irreversible. Fixed: social/follow op:list returns blocked[],
+op:unblock removes the caller's own block row. The founder's lost postcard is most likely a stray
+block row — check in Supabase SQL editor: `select * from api.user_blocks;` and
+`select created_at, sender_id, to_user_id, place_name from api.postcards order by created_at desc
+limit 20;` — delete the block row (both directions) and have the friend resend. Still open (optional):
+a "your tag was accepted" notice for the sender, and an Unblock button in Settings/Profile (the
+worker op exists; the UI rides a later OTA). **Safety and privacy fixes — FIRST after Apple approval (privacy audit 2026-10-08; the policy now
 states today's behavior honestly and gets stronger as each ships):** (1) account deletion removes
 everything — social profile + avatar, follows, blocks, postcards + photos, Blotter rows + doodles, dish
 posts + photos, owner notes, luggage/gear, handle requests, D1 events (Apple 5.1.1(v)); (2) Block and
