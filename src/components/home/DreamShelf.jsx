@@ -65,7 +65,7 @@ function DreamCard({ item, collected, sub, onOpen }) {
         onClick={onOpen}
         className="flex-none w-[150px] rounded-2xl overflow-hidden bg-white text-left border"
         style={{ borderColor: EDGE, boxShadow: "0 8px 20px -16px rgba(22,17,13,.4)" }}
-        aria-label={`Dream stamp: ${item.name}`}
+        aria-label={`Stamp shelf: ${item.name}`}
       >
         <div className="relative w-full" style={{ aspectRatio: "4 / 3", background: IVORY_2 }}>
           <img src={item.photoUrl} alt="" loading="lazy" onError={() => setPhotoFail(true)} className="w-full h-full object-cover" />
@@ -86,7 +86,7 @@ function DreamCard({ item, collected, sub, onOpen }) {
 
   const size = 104;
   return (
-    <button onClick={onOpen} className="flex-none text-center w-[150px]" aria-label={`Dream stamp: ${item.name}`}>
+    <button onClick={onOpen} className="flex-none text-center w-[150px]" aria-label={`Stamp shelf: ${item.name}`}>
       <div
         className="mx-auto flex items-center justify-center"
         style={{
@@ -207,7 +207,7 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
           <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))]" style={{ color: MUTED }}>
             {city ? `${city} · ` : ""}{earned} of {all.length}
           </div>
-          <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1] mt-0.5" style={{ color: INK }}>Dream shelf</div>
+          <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1] mt-0.5" style={{ color: INK }}>Stamp shelf</div>
           {dataLine && (
             <div className="font-mono uppercase tracking-[0.08em] text-[calc(10px*var(--fs))] mt-1" style={{ color: MUTED }}>
               {dataLine}

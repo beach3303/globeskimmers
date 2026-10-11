@@ -205,6 +205,9 @@ https://claude.ai/artifact/7Q5HTErHgpe6eV1dgsArQu (6 screens).
   for icons stands.
 - **Still to decide:** suggestion rate limits, a "Local Scout" badge for suggesters, and moderating the
   free text (it goes through gbModerate).
+**"Dream shelf" is renamed "Stamp shelf" (founder, 2026-10-10** — "people might not be dreaming to
+go there"). Visible strings and the App Store caption label only; internal names (DreamShelf.jsx, the
+/dream/shelf route, DREAM_VENUE, analytics event names) deliberately keep their dream names.
 **Tag a friend + the lost postcard (founder's real-world test, 2026-10-10; fixed on stamping-v2):**
 diagnosis confirmed in code. (1) Tag a friend never carried a recipient — the app only minted share
 links, so the built "tagged you" Mailbox card never fired for an in-app tag. Fixed: the worker's
