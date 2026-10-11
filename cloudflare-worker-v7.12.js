@@ -13511,6 +13511,9 @@ async function handlePassportPublic(request, env) {
     const q = await gbRest(env, `passport_shares?slug=eq.${slug}&select=user_id,is_public`, {});
     const share = (q.ok ? await q.json() : [])[0];
     if (!share) return jsonResponse({ private: true });
+    // Teen hold: a share link minted before the hold shows nothing to anyone.
+    const ownerSp = await gbSocialProfile(env, share.user_id).catch(() => null);
+    if (gbTeenHold(ownerSp)) return jsonResponse({ private: true });
     if (!share.is_public) {
       const viewer = await gbUser(request, env).catch(() => null);
       const friend = viewer && viewer.id !== share.user_id
@@ -14849,6 +14852,9 @@ async function blShareByOwner(env, ownerId) {
 async function blGate(env, user, share, opts) {
   if (!share) return 'Not found';
   if (user.id === share.user_id) return null; // the owner's own blotter
+  // Teen hold: a held teen's page opens for no one but them.
+  const osp = await gbSocialProfile(env, share.user_id).catch(() => null);
+  if (gbTeenHold(osp)) return 'Not found';
   // A private passport is still open to FRIENDS — mutual accepted follows
   // (founder, 2026-10-05) — so a friend can sign a private guestbook. A block
   // kills the follow edges, so a blocked viewer fails this and sees Not found.
@@ -15338,7 +15344,9 @@ async function handleSocialFeed(request, env) {
     }));
     const dayAgo = Date.now() - 24 * 3600 * 1000;
     const stampRows = ((sq && sq.ok) ? await sq.json() : [])
-      .filter((s) => prof[s.user_id]?.social_tier !== 'teen' || Date.parse(s.created_at) < dayAgo)
+      // Teen hold: a held teen's stamps reach no feed at all; with the hold
+      // off, the 24h teen delay applies as designed.
+      .filter((s) => prof[s.user_id]?.social_tier !== 'teen' || (TEEN_SOCIAL_ENABLED && Date.parse(s.created_at) < dayAgo))
       .slice(0, 30)
       .map((s) => ({
         type: 'stamp',
