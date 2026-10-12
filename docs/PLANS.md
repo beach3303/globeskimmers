@@ -225,7 +225,41 @@ wrong?"). Mocked-data captures checked on 2026-10-11; real-traffic results wait 
 (social/age) and after a birthday is entered; tier 'blocked' renders FrozenScreen in place of every route
 (frozen notice, two-tap delete-now, access-only appeal to support@globeskimmers.io, sign out); tier 'teen'
 shows TeenHoldNote instead of Mailbox, the Profile visibility switch and @username claim, the guestbook
-sign/doodle/owner-message doors, and hides the Home friends invite.
+sign/doodle/owner-message doors, and hides the Home friends invite. (5) **The stamping client half**
+(GPS redesign decisions above): the phone no longer refuses by distance — the worker decides with its
+shapes and footprints; GPS is the best of 2–3 fresh native readings (`getStampFix`); every refused
+attraction stamp (attraction page, the Passport's nearby prompt, Verify I'm here) shows "I’m here, but the
+app is saying I’m not", which resends the same request with `report:true` — always granted as 'reported',
+always filed — and a report's park within a resort comes from the card's own pin, never the bad reading;
+Verify I'm here is fixed (it never sent a reading, so it always failed on attractions since 10-03); admin
+page "📍 I’m here, but…" desk with status, per-place refusals and an Excel (CSV) download. Worker fixes
+found by the multi-agent review: EPCOT's one-word slug, variant stamps keep their parent (meta.parent_id),
+a report never moves an existing stamp's date, the place check runs on the claim (far = not_here with
+distance), Verify moves an "I was here" stamp onto its official id instead of duplicating it, refusal
+counts no longer double-count reports. Second review round: a report from the general Grand Canyon card keeps
+the Grand Canyon stamp (no rim from its pin); Verify refuses when the reading is at a different park or rim of
+the same place ("Your GPS puts you at Grand Canyon North Rim — this stamp is …"); older variant stamps find
+their parent by name near their pin; an untrusted reading on a stamp you already hold shows the report
+button; after a report the button reads "In your Virtual Passport" with no ✓; iPhone GPS keeps retrying
+while it warms up; Stamp a place keeps a city-block anchor. Also: toasts were off-centre and clipped on every
+phone (fixed). (6) **Crossing and airport prompts: live GPS only** (founder bug, 2026-10-11 — in Azusa,
+switching from a picked NYC back to "Explore where I am" asked to stamp a crossing into California). Both
+prompts — and the "You're here — stamp it" chips — now act only on a LIVE fix (`isLiveFix`: read in this
+app run, ≤ 30 min; ≤ 60 for the chips) — never a picked place, a manual switch or a restored last location.
+A state/country crossing needs the previous live fix to be in another state or country, within 8 h, at
+ground speed (≤ 300 km/h over less than an hour of readings, else ≤ 130 for a state, ≤ 250 for a country);
+not a flight (the fix is outside every airport fence, and no live reading was inside one since); and
+confirmed — both ends looked up again at street-block resolution (the everyday lookup shares one answer per
+~11 km tile) with a fresh best-of-readings fix. Unconfirmable = no prompt. UK England/Scotland/Wales/NI
+crossings now work (the lookup returns the nation). Border and airport stamps use the local date and a
+city-block spot. Trade-off: a crossing with no app use for 8 h on either side gets no prompt. Toasts: one
+container for the whole app (Settings' 9 messages and the frozen screen's now show), unique ids, stacked. (7) **Profile — one tap enlarges a virtual item or
+a travel buddy** (founder, 2026-10-11): the big picture with × (or a tap outside) to collapse; inside it,
+"Customize color & stickers" (items) or Sitting / Standing + "Rename or say goodbye" (buddies) open the
+editors that a tap used to open. Swiping a buddy still changes its pose, on the shelf and in the big view.
+**Ship order:** the worker must deploy BEFORE the OTA that carries this client — the deployed worker has
+no report path, so on the old worker the report button would only show an error. Check that /passport/stamp
+answers `report:true` with 200 `verified:'reported'`, then run the OTA.
 **TEEN HOLD (founder, 2026-10-11): all social OFF for 13–17, effective with the next worker deploy.**
 Teens keep every travel tool and a PRIVATE passport; every social/publishing door returns
 "Social features open at age 18 — your passport stays yours, private" (code teen_hold, 403). Doors held:
