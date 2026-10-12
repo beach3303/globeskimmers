@@ -174,6 +174,11 @@ function StampToken({ stamp, idx, onOpen, pageW, compact = false }) {
   const rot = compact ? (h % 9) - 4 : ((idx * 47 + 3) % 9) - 4;   // deterministic -4..+4°
   const nudge = compact ? 0 : ((idx * 53) % 26) - 13;            // deterministic -13..+12px horizontal
   const t = compact ? BOOK.text : 1;                              // caption type scale
+  // What kind of stamp this is comes first: `flag` below reads isLand, and
+  // reading it before its declaration threw for every country stamp.
+  const isAirport = stamp.kind === "airport";
+  const isLand = isLandCrossing(stamp);
+  const isCity = stamp.kind === "city";
   // A memorial stamp its owner chose to keep as text only prints typographic.
   const art = stamp.kind === "country" || isPlainArt(stamp) ? null : stampArtUrl(stamp.name, { entityId: stamp.entity_id, country: stamp.country });
   const showArt = !!art && !artFail;
@@ -181,9 +186,6 @@ function StampToken({ stamp, idx, onOpen, pageW, compact = false }) {
   // No bespoke art and not a country -> the typographic stamp carries its own
   // date and "I was here!" strike, so the duplicate lines below are suppressed.
   const showTypo = !showArt && !flag;
-  const isAirport = stamp.kind === "airport";
-  const isLand = isLandCrossing(stamp);
-  const isCity = stamp.kind === "city";
   const venue = isCity && stamp.name && stamp.name !== stamp.city ? stamp.name : null;
   const cityInk = CITY_INKS[hashStr(stamp.id || stamp.entity_id || stamp.name) % CITY_INKS.length];
   const placeInk = STAMP_INKS[hashStr(stamp.id || stamp.entity_id || stamp.name) % STAMP_INKS.length];
