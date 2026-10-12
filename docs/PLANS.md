@@ -212,7 +212,20 @@ hand-check still follow. (2) The **under-13 freeze**: freeze:<uid> marker at the
 photos while frozen (403 under_age), daily cron purge after FREEZE_PURGE_DAYS = 7 (placeholder pending
 counsel) via gbPurgeUserContent (now shared with account deletion and extended with postcards + follow
 edges), POST /admin/age-appeal restores access with a corrected birthday. Still missing from the purge:
-dish posts and their photos (Phase 1 item 6).
+dish posts and their photos (Phase 1 item 6). (3) The **Why-visit engine** (POST /attractions/why-visit —
+on open, never prefilled: encyclopedia summary by Wikidata id or a name match within 1 km, Google's
+editorial one-liner only when already cached, our row; Sonnet writes the Why-visit line + a two-paragraph
+story + up to 5 "what you can do" lines; code guards drop any number or proper name not in the inputs, an
+8-word copy, prices/hours/rules words, marketing words, "wiki"; KV wv:v1 with NO expiry, why_visit also
+written to D1; caps 300/day, 30/user, admin exempt; report flag) **and the attraction-page cards**: Why
+visit on top above the stamp button (line, can-do bullets, "Read the story"), Before you go after Parking
+(one row per rule with "What the official site says", source + checked date, Confirm link, "Something's
+wrong?"). Mocked-data captures checked on 2026-10-11; real-traffic results wait for the deploy and the
+30-place hand-check. (4) The **app side of the age tiers**: AuthContext reads the tier once per sign-in
+(social/age) and after a birthday is entered; tier 'blocked' renders FrozenScreen in place of every route
+(frozen notice, two-tap delete-now, access-only appeal to support@globeskimmers.io, sign out); tier 'teen'
+shows TeenHoldNote instead of Mailbox, the Profile visibility switch and @username claim, the guestbook
+sign/doodle/owner-message doors, and hides the Home friends invite.
 **TEEN HOLD (founder, 2026-10-11): all social OFF for 13–17, effective with the next worker deploy.**
 Teens keep every travel tool and a PRIVATE passport; every social/publishing door returns
 "Social features open at 18 — your passport stays yours, private" (code teen_hold, 403). Doors held:
