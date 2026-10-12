@@ -10,7 +10,7 @@
 // Deliberately different from StampsNearYou:
 //   - NO includeSecrets — secrets are found by being there, never dreamed;
 //   - the REGION, not a circle around you (founder, 2026-10-08): three rows —
-//     Icons of <region>, Local favorites, Worth a day trip — the same from
+//     Icons of <region>, Customer favorites, Worth a day trip — the same from
 //     every suburb; DISTANCE under every card from where you are, in the
 //     traveler's unit (miles in mile countries, km elsewhere, Settings
 //     override wins). Water in between gets an honest ⛴ FERRY tag.
@@ -133,8 +133,9 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
       try {
         // The REGION's shelf (founder, 2026-10-08): from Arcadia, Santa Clarita
         // or Van Nuys alike — Icons of Los Angeles (Disneyland to Six Flags),
-        // Local favorites (LACMA, the Original Farmers Market), Worth a day trip
-        // (San Diego Zoo, Legoland). No secrets: those are found by being there.
+        // Customer favorites (LACMA, the Original Farmers Market), Worth a day
+        // trip (San Diego Zoo, Legoland). The worker names the rows. No secrets:
+        // those are found by being there.
         // /passport/list marks what's collected (signed-out it's empty, never an error).
         const [shelf, pass] = await Promise.all([
           callWorker("dream/shelf", { latitude, longitude, cityName: cityName || "" }),

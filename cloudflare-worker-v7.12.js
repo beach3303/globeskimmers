@@ -5755,7 +5755,7 @@ async function handleSeedCity(request, env) {
 // POST /dream/shelf { latitude, longitude } →
 //   { metro: { name, lat, lng }, tiers: [{ key, title, items }] }
 //   icons   — world/national stamps within 90 km of the REGION's center
-//   local   — regional stamps there (locals' favorites with merit)
+//   local   — regional stamps there, titled "Customer favorites" (founder, 2026-10-12)
 //   daytrip — world (and the most famous national) stamps 90–300 km out
 // The region's center is the median point of the most famous stamps within
 // 60 km of the traveler, so every suburb lands on the same center; with fewer
@@ -5813,7 +5813,10 @@ async function handleDreamShelf(request, env) {
       metro: { name: metroName, lat: cLat, lng: cLng },
       tiers: [
         { key: 'icons', title: metroName ? `Icons of ${metroName}` : 'Icons nearby', items: icons },
-        { key: 'local', title: 'Local favorites', items: local },
+        // "Customer favorites" (founder, 2026-10-12): "Local favorite" now names
+        // the crowd-sourced stamp from Suggest a Place, so this row of official
+        // regional stamps took a name of its own.
+        { key: 'local', title: 'Customer favorites', items: local },
         { key: 'daytrip', title: 'Worth a day trip', items: daytrip },
       ].filter((t) => t.items.length),
     });
