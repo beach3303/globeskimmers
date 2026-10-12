@@ -13626,15 +13626,27 @@ async function ppFileStampReport(env, r) {
 // GPS verifies the visit, never the reason; the traveler can share it later.
 // Only for "I was here" and Stamp-a-place visits (iconic stamps aren't checked).
 const PP_SENSITIVE_TYPES = new Set(['hospital', 'general_hospital', 'doctor', 'dental_clinic', 'dentist', 'medical_lab', 'medical_clinic', 'physiotherapist', 'chiropractor', 'pharmacy', 'drugstore', 'health', 'school', 'primary_school', 'secondary_school', 'preschool', 'child_care_agency', 'courthouse', 'police', 'place_of_worship', 'church', 'mosque', 'synagogue', 'hindu_temple', 'buddhist_temple', 'funeral_home']);
-const PP_SENSITIVE_NAME = /\b(hospitals?|medical cent(?:er|re)|clinics?|urgent care|emergency room|health cent(?:er|re)|oncology|cancer|dialysis|hospice|fertility|ivf|planned parenthood|abortion|maternity|psychiatric|mental health|behavioral health|counsell?ing|rehab(?:ilitation)?|recovery cent(?:er|re)|treatment cent(?:er|re)|detox|addiction|sober living|shelter|crisis cent(?:er|re)|elementary school|middle school|high school|primary school|secondary school|preschool|kindergarten|daycare|courthouse|jail|prison|detention cent(?:er|re)|police station|immigration|church|mosque|synagogue|temple|chapel|parish|funeral home|mortuary)\b/i;
+const PP_SENSITIVE_NAME = /\b(hospitals?|medical cent(?:er|re)|clinics?|urgent care|emergency room|health cent(?:er|re)|oncology|cancer|dialysis|hospice|fertility|ivf|planned parenthood|abortion|maternity|psychiatric|mental health|behavioral health|counsell?ing|rehab(?:ilitation)?|recovery cent(?:er|re)|treatment cent(?:er|re)|detox|addiction|sober living|shelter|crisis cent(?:er|re)|elementary school|middle school|high school|primary school|secondary school|preschool|kindergarten|daycare|courthouse|jail|prison|detention cent(?:er|re)|police station|immigration|church|mosque|synagogue|temple|chapel|parish|cathedral|basilica|shrine|masjid|gurdwara|mandir|monastery|abbey|convent|priory|minster|pagoda|stupa|wat|jinja|funeral home|mortuary)\b/i;
+// Places of worship named in scripts without spaces, where \b sees no word (2026-10-12).
+const PP_SENSITIVE_CJK = /(神社|神宮|大社|天満宮|寺院|寺|庙|廟|教会|教堂|天主堂|礼拜堂|禮拜堂|聖堂|清真寺|モスク|사원|성당|교회|(?<![\u0E00-\u0E7F])\u0E27\u0E31\u0E14)/u;
+// …and in other languages. Letters, not \b, mark the word's edges: \b can't see
+// one before an accented letter ("église").
+const PP_SENSITIVE_INTL = /(?<![\p{L}\p{N}])(iglesia|parroquia|catedral|capilla|mezquita|sinagoga|templo|bas[ií]lica|[ée]glise|cath[ée]drale|chapelle|mosqu[ée]e|kirche|kapelle|kloster|moschee|chiesa|cattedrale|cappella|duomo|moschea|igreja|capela|mesquita|mosteiro)(?![\p{L}\p{N}])/iu;
 // Not sensitive whatever the name says ("Temple Bar", "Shelter Island Brewery").
 const PP_SENSITIVE_NOT = /\b(bar|brewery|brewing|pub|tavern|restaurant|caf[eé]|coffee|grill|kitchen|bistro|bakery|island|beach|street|road|avenue|hotel|museum|park)\b/i;
+// A square named after its cathedral or church ("Piazza del Duomo", "Plaza de
+// la Catedral") is a public square, not a place of worship.
+const PP_SQUARE_PHRASE = /(?<![\p{L}\p{N}])(?:piazza|plaza|pra[cç]a|place|platz|largo|square)\s+(?:(?:del|de la|de|do|da|du|della|dello|di|der|des|of(?: the)?)\s+)?(?:duomo|dom|catedral|cath[ée]drale|cattedrale|cathedral|iglesia|[ée]glise|chiesa|igreja|church|kirche|templo|temple|bas[ií]lica)(?![\p{L}\p{N}])/giu;
+// A worship word that only names a landform or a venue ("Cathedral Rock",
+// "Shrine Auditorium") is taken out before the check — a phrase, never a lone
+// word, so "Canyon Ridge Hospital" or "The Rock Church" still start private.
+const PP_LANDMARK_PHRASE = /\b(?:church|temple|chapel|cathedral|basilica|shrine|mosque|monastery|abbey|pagoda|minster|priory|convent)\s+(?:auditorium|theat(?:er|re)|stadium|arena|rocks?|peaks?|canyon|trail(?:head)?|spires?|butte|mountain)\b/gi;
 function ppSensitivePlace(name, types) {
   const t = (types || []).map(String).filter(Boolean);
   // Google's own place types decide when we have them; the name is the fallback.
   if (t.length) return t.some((x) => PP_SENSITIVE_TYPES.has(x));
-  const n = String(name || '');
-  return PP_SENSITIVE_NAME.test(n) && !PP_SENSITIVE_NOT.test(n);
+  const n = String(name || '').normalize('NFC').replace(PP_LANDMARK_PHRASE, ' ').replace(PP_SQUARE_PHRASE, ' ');
+  return (PP_SENSITIVE_NAME.test(n) || PP_SENSITIVE_CJK.test(n) || PP_SENSITIVE_INTL.test(n)) && !PP_SENSITIVE_NOT.test(n);
 }
 
 // Create or update a stamp (idempotent per user+kind+entity). Keeps the STRONGEST
