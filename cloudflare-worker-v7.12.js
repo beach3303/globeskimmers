@@ -2402,10 +2402,35 @@ async function handleAdminStampReports(request, env) {
       await env.DB.prepare('UPDATE stamp_reports SET status = ? WHERE id = ?').bind(status, id).run();
       return jsonResponse({ ok: true });
     }
-    const where = body?.open ? "WHERE status = 'new'" : '';
-    const limit = op === 'csv' ? 10000 : Math.min(500, Math.max(1, parseInt(body?.limit, 10) || 200));
-    const { results } = await env.DB.prepare(`SELECT * FROM stamp_reports ${where} ORDER BY id DESC LIMIT ?`).bind(limit).all();
-    const reports = results || [];
+    const openOnly = body?.open ? "status = 'new'" : null;
+    let reports = [];
+    let truncated = false;
+    if (op === 'csv') {
+      // Every report, paged 5,000 at a time (the list on screen stops at 500).
+      // A hard stop at 50,000 rows says so in the file and the response.
+      const CSV_MAX = 20000;   // a JSON export holds rows, lines, CSV and JSON at once: ~2.5 KB a row
+      let before = null;
+      for (;;) {
+        const conds = [openOnly, before != null ? 'id < ?' : null].filter(Boolean);
+        const stmt = env.DB.prepare(`SELECT * FROM stamp_reports ${conds.length ? `WHERE ${conds.join(' AND ')}` : ''} ORDER BY id DESC LIMIT 5000`);
+        const { results: page } = before != null ? await stmt.bind(before).all() : await stmt.all();
+        const rows = page || [];
+        reports.push(...rows);
+        if (rows.length < 5000) break;
+        if (reports.length >= CSV_MAX) {
+          // Exactly at the cap is complete; only a row beyond it means "more".
+          const more = await env.DB.prepare(`SELECT id FROM stamp_reports WHERE ${[openOnly, 'id < ?'].filter(Boolean).join(' AND ')} LIMIT 1`)
+            .bind(rows[rows.length - 1].id).first().catch(() => null);
+          truncated = !!more;
+          break;
+        }
+        before = rows[rows.length - 1].id;
+      }
+    } else {
+      const limit = Math.min(500, Math.max(1, parseInt(body?.limit, 10) || 200));
+      const { results } = await env.DB.prepare(`SELECT * FROM stamp_reports ${openOnly ? `WHERE ${openOnly}` : ''} ORDER BY id DESC LIMIT ?`).bind(limit).all();
+      reports = results || [];
+    }
     if (op === 'csv') {
       // Text a user typed must never run as a formula when Excel opens the file:
       // a leading = + - @ tab or CR gets an apostrophe (numbers and coordinates don't).
@@ -2415,7 +2440,7 @@ async function handleAdminStampReports(request, env) {
         return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
       };
       const head = ['Report', 'Date (UTC)', 'Place', 'City', 'Country', 'Place ID', 'Spot (about 1 block)', 'Map link', 'Distance from our pin (m)', 'Allowed distance (m)', 'GPS accuracy (m)', 'Why GPS said no', 'Result', 'Phone', 'App version', 'User code', 'Status'];
-      const why = { not_here: 'Outside our map for this place', proof_needed: 'No GPS reading', unlocatable: 'Place not on our map', unconfirmed: 'GPS not trusted (VPN or travel speed)' };
+      const why = { not_here: 'Outside our map for this place', other_variant: 'At another park or rim of this place', proof_needed: 'No GPS reading', unlocatable: 'Place not on our map', unconfirmed: 'GPS not trusted (VPN or travel speed)' };
       const lines = reports.map((r) => {
         const spot = r.spot_lat != null && r.spot_lng != null ? `${r.spot_lat}, ${r.spot_lng}` : '';
         const map = spot ? `https://www.google.com/maps/search/?api=1&query=${r.spot_lat},${r.spot_lng}` : '';
@@ -2425,15 +2450,24 @@ async function handleAdminStampReports(request, env) {
         ].map(cell).join(',');
       });
       // The byte-order mark makes Excel read accents and curly quotes correctly.
+      if (truncated) lines.push(cell(`(Export stopped at the newest ${reports.length} reports — ask for the rest)`));
       const csv = '﻿' + [head.map(cell).join(','), ...lines].join('\r\n');
-      return new Response(csv, { status: 200, headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="stamp-reports-${new Date().toISOString().slice(0, 10)}.csv"`, ...CORS_HEADERS } });
+      const filename = `stamp-reports-${new Date().toISOString().slice(0, 10)}.csv`;
+      // The app's admin page asks for it as JSON (its HTTP layer reads JSON, not a
+      // raw text/csv body) and hands it to the share sheet; a browser gets the file.
+      if (body?.as === 'json') return jsonResponse({ filename, csv, rows: reports.length, truncated });
+      return new Response(csv, { status: 200, headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${filename}"`, ...CORS_HEADERS } });
     }
     const since = Math.floor(Date.now() / 1000) - 30 * 86400;
+    // refusals = Stamp taps GPS refused; reported = report taps. A report
+    // resends the refused request, so it is counted under reported only —
+    // never again as a refusal (that read as a quiet failure that didn't happen).
     const { results: quiet } = await env.DB.prepare(
       `SELECT json_extract(payload, '$.name') AS name, json_extract(payload, '$.entity_id') AS entity_id,
-              COUNT(*) AS refusals, SUM(CASE WHEN json_extract(payload, '$.reported') THEN 1 ELSE 0 END) AS reported
+              SUM(CASE WHEN json_extract(payload, '$.reported') THEN 0 ELSE 1 END) AS refusals,
+              SUM(CASE WHEN json_extract(payload, '$.reported') THEN 1 ELSE 0 END) AS reported
          FROM events WHERE event_type = 'passport_stamp_refused' AND ts >= ?
-        GROUP BY entity_id ORDER BY refusals DESC LIMIT 50`
+        GROUP BY entity_id ORDER BY COUNT(*) DESC LIMIT 50`
     ).bind(since).all().catch(() => ({ results: [] }));
     const { results: totals } = await env.DB.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END) AS open FROM stamp_reports").all();
     return jsonResponse({ reports, total: totals?.[0]?.total || 0, open: totals?.[0]?.open || 0, refusals_30d: quiet || [] });
@@ -5099,14 +5133,19 @@ async function handleReverseGeocode(request, env) {
   // NOT a permanent copy of Google data — only coarse ADMIN fields are cached
   // (never the precise street formatted_address), for a bounded TTL. Retires
   // entirely once we reverse-geocode from our own OSM/Overture data.
-  const rLat = Math.round(Number(latitude) * 10) / 10;
-  const rLng = Math.round(Number(longitude) * 10) / 10;
-  const revKey = `revgeo_${rLat}_${rLng}`;
+  // `precise: true` (2026-10-11) is the border-crossing check: a ~110 m tile,
+  // so a tile straddling a state line can't name the wrong state — used only
+  // when a crossing is suspected, so it costs a call or two per crossing.
+  const step = body?.precise === true ? 1000 : 10;
+  const rLat = Math.round(Number(latitude) * step) / step;
+  const rLng = Math.round(Number(longitude) * step) / step;
+  const revKey = `${step === 1000 ? 'revgeoP_' : 'revgeo_'}${rLat}_${rLng}`;
   const REVGEO_TTL_SECONDS = 30 * 24 * 60 * 60;
   const canCache = env.GLOBESKIMMERS_KV && Number.isFinite(rLat) && Number.isFinite(rLng);
   if (canCache) {
     const hit = await env.GLOBESKIMMERS_KV.get(revKey, { type: 'json' }).catch(() => null);
-    if (hit && hit.country != null) {
+    // A UK tile cached before `region` existed can't name its nation: fetch again.
+    if (hit && hit.country != null && !(hit.region === undefined && hit.country === 'United Kingdom')) {
       const formatted_address = [hit.city, hit.state_or_country].filter(Boolean).join(', ');
       return jsonResponse({ ...hit, latitude, longitude, formatted_address, cached: true });
     }
@@ -5134,14 +5173,17 @@ async function handleReverseGeocode(request, env) {
     const country = countryComponent?.long_name || '';
     const stateOrCountry = (countryComponent?.short_name === 'US' || countryComponent?.short_name === 'CA')
       ? (stateComponent?.long_name || country) : country;
+    // The first-level region for every country (England / Scotland / Wales /
+    // Northern Ireland in the UK) — what the crossing prompts compare.
+    const region = stateComponent?.long_name || '';
 
     // Cache only the coarse admin fields (~30d). The precise street
     // formatted_address is returned fresh but NOT cached (not coarse-safe).
     if (canCache) {
-      await env.GLOBESKIMMERS_KV.put(revKey, JSON.stringify({ city, state_or_country: stateOrCountry, country }), { expirationTtl: REVGEO_TTL_SECONDS }).catch(() => {});
+      await env.GLOBESKIMMERS_KV.put(revKey, JSON.stringify({ city, state_or_country: stateOrCountry, country, region }), { expirationTtl: REVGEO_TTL_SECONDS }).catch(() => {});
     }
 
-    return jsonResponse({ city, state_or_country: stateOrCountry, country, latitude, longitude, formatted_address: result.formatted_address });
+    return jsonResponse({ city, state_or_country: stateOrCountry, country, region, latitude, longitude, formatted_address: result.formatted_address });
   } catch (e) {
     return jsonResponse({ error: 'Internal server error', details: e.message }, 500);
   }
@@ -6438,7 +6480,7 @@ async function ttdPlaceTruth(env, entityId, origin) {
   const k = ttdIdKind(entityId);
   if (k === 'd1' && env.ATTRACTIONS_DB) {
     const r = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(entityId).first().catch(() => null);
-    if (r && Number.isFinite(+r.lat) && Number.isFinite(+r.lng)) return { lat: +r.lat, lng: +r.lng, radius: ppStampRadius(r), shape: ppShapeFor(entityId, null) };
+    if (r && Number.isFinite(+r.lat) && Number.isFinite(+r.lng)) return { lat: +r.lat, lng: +r.lng, radius: ppStampRadius(r), shape: ppShapeFor(entityId, null), name: r.name || null };
     return null;
   }
   let gid = String(entityId).startsWith('places:') ? String(entityId).slice(7) : String(entityId).startsWith('owned:') ? await ttdGidFor(env, entityId) : null;
@@ -13412,9 +13454,12 @@ async function ppUpsertStamp(env, row) {
   if (existing) {
     const best = PP_VERIFY_RANK[row.verified] > PP_VERIFY_RANK[existing.verified] ? row.verified : existing.verified;
     const patch = { verified: best, updated_at: new Date().toISOString() };
-    if (row.visited_on) patch.visited_on = row.visited_on;
+    // A report ("I'm here, but the app is saying I'm not") can come from
+    // anywhere, so it never moves the date of a stamp you already hold.
+    if (row.visited_on && row.verified !== 'reported') patch.visited_on = row.visited_on;
     // A re-stamp adds the film to an older stamp of the same place, never replaces one.
     if (row.meta?.film && !existing.meta?.film) patch.meta = { ...(existing.meta || {}), film: row.meta.film };
+    if (row.meta?.parent_id && !existing.meta?.parent_id) patch.meta = { ...(patch.meta || existing.meta || {}), parent_id: row.meta.parent_id };
     // The rough zone only ever improves (reported < nearby < on_site < inside).
     const zNew = row.meta?.presence?.zone, zOld = existing.meta?.presence?.zone;
     if (zNew && !(zNew === 'reported' && best !== 'reported') && (!zOld || (PP_ZONE_RANK[zNew] ?? -1) > (PP_ZONE_RANK[zOld] ?? -1))) patch.meta = { ...(patch.meta || existing.meta || {}), presence: row.meta.presence };
@@ -13425,6 +13470,21 @@ async function ppUpsertStamp(env, row) {
   if (!ins.ok) throw new Error(await ins.text().catch(() => 'insert failed'));
   const created = (await ins.json())[0] || {};
   return { id: created.id, created: true, verified: row.verified };
+}
+
+// Move one of the caller's stamps (still under `fromId`) to `toId` — an "I
+// was here" stamp whose place has become an official stamp — unless they
+// already hold `toId`. The upsert that follows then upgrades it in place.
+async function ppMoveStampTo(env, userId, stampId, kind, fromId, toId, entityType = 'place') {
+  try {
+    if (!fromId || !toId || fromId === toId) return;
+    const have = await gbRest(env, `passport_stamps?user_id=eq.${userId}&kind=eq.${kind}&entity_id=eq.${encodeURIComponent(toId)}&select=id&limit=1`, {});
+    if (!have.ok || (await have.json()).length) return;
+    await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${userId}&entity_id=eq.${encodeURIComponent(fromId)}`, {
+      method: 'PATCH', headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ entity_id: toId, ...(entityType ? { entity_type: entityType } : {}), updated_at: new Date().toISOString() }),
+    });
+  } catch { /* best-effort: at worst the old second stamp appears, as before */ }
 }
 
 let PP_CC_BY_NAME = null;
@@ -13639,22 +13699,66 @@ async function handlePassportStamp(request, env, ctx) {
     // client resends the stamp with report:true. It is ALWAYS granted (as
     // 'reported', never \u2713 unless GPS passes after all) and ALWAYS filed.
     const reporting = b.report === true && kind === 'attraction';
-    let presence = null, refusal = null, meters = null, reach = null, reportEntity = entityId;
-    if (kind === 'attraction' && (verified === 'gps' || reporting)) {
+    let presence = null, refusal = null, meters = null, reach = null, reportEntity = entityId, variantParent = null;
+    // The place check runs on the CLAIM (b.verified), before the anti-spoof
+    // verdict above is applied (2026-10-11): a far-away reading is refused as
+    // not_here with its distance even when that verdict already distrusts it,
+    // and a reading inside the place that it distrusts is refused as
+    // 'unconfirmed' \u2014 and counted per place either way.
+    if (kind === 'attraction' && (b.verified === 'gps' || reporting)) {
       const hasFix = fix && Number.isFinite(fix.lat) && Number.isFinite(fix.lng);
       if (!hasFix && !reporting) return jsonResponse({ error: "We couldn\u2019t confirm you\u2019re here \u2014 open the place in the app while you\u2019re there and tap Stamp", code: 'proof_needed' }, 409);
       const k0 = ttdIdKind(entityId);
+      const rawId = entityId;
       if (k0 === 'google') entityId = `places:${entityId}`;
       else if (k0 === 'owned') entityId = `owned:${entityId}`;
-      const k1 = ttdIdKind(entityId);
+      // Verify I'm here on an older stamp stored under the bare id: that row moves
+      // to the prefixed id first, so it is upgraded in place, not duplicated.
+      if (entityId !== rawId && BL_UUID.test(String(b.stamp_id || ''))) await ppMoveStampTo(env, user.id, String(b.stamp_id), kind, rawId, entityId, null);
+      let k1 = ttdIdKind(entityId);
+      // A one-word park slug ('epcot') fails the variant pattern, which needs a
+      // hyphen; arriving as a landmark, it is a variant too — but only ever
+      // measured against a parent row we find, never the phone's own pin.
+      const oneWordVariant = k1 == null && b.entity_type === 'landmark' && /^[a-z0-9]+$/.test(entityId || '');
+      if (oneWordVariant) k1 = 'variant';
       const origin = new URL(request.url).origin;
       let truth = null;
       if (k1 === 'tagged' || k1 === 'd1') truth = await ttdPlaceTruth(env, entityId, origin);
-      else if (k1 === 'variant' && ttdIdKind(b.parent_id) === 'd1') truth = await ttdPlaceTruth(env, String(b.parent_id), origin);
-      else if (k1 === 'variant' && Number.isFinite(lat) && Number.isFinite(lng)) truth = { lat, lng, radius: ppStampRadius({ category: b.category }) }; // builds before parent_id
+      else if (k1 === 'variant') {
+        // A park or rim is measured against its parent place. Older variant
+        // stamps carry no parent id (Verify I'm here): their pin was copied
+        // from the parent row, so the parent is the row at that pin — or, when
+        // the row was re-pinned since (fix_parks moved the Disney rows to
+        // their gates), the nearest row within ~1.5 km named like the stamp.
+        if (ttdIdKind(b.parent_id) === 'd1') variantParent = String(b.parent_id);
+        else if (Number.isFinite(lat) && Number.isFinite(lng) && env.ATTRACTIONS_DB) {
+          const exact = await env.ATTRACTIONS_DB.prepare('SELECT id FROM attractions WHERE lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4 LIMIT 1')
+            .bind(lat - 1e-5, lat + 1e-5, lng - 1e-5, lng + 1e-5).first().catch(() => null);
+          let p = exact?.id && ttdIdKind(String(exact.id)) === 'd1' ? exact : null;
+          const core = String(name || '').replace(/\b(south|north|west|east)\s+rim\b|\(.*?\)|,.*$|\bpark\b/gi, ' ').replace(/\s+/g, ' ').trim().split(' ').slice(0, 2).join(' ').toLowerCase();
+          if (!p && core.length >= 4) {
+            const d = 0.015;
+            p = await env.ATTRACTIONS_DB.prepare('SELECT id FROM attractions WHERE lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4 AND lower(name) LIKE ?5 ORDER BY ((lat - ?6) * (lat - ?6) + (lng - ?7) * (lng - ?7)) LIMIT 1')
+              .bind(lat - d, lat + d, lng - d, lng + d, `%${core}%`, lat, lng).first().catch(() => null);
+            if (p && ttdIdKind(String(p.id)) !== 'd1') p = null;
+          }
+          if (p?.id) variantParent = String(p.id);
+        }
+        if (variantParent) truth = await ttdPlaceTruth(env, variantParent, origin);
+        // The phone's own pin is a last resort only for builds that predate
+        // parent_id: never when a named parent failed to resolve, and never
+        // for a one-word slug.
+        if (!truth && !variantParent && !oneWordVariant && ttdIdKind(b.parent_id) == null && Number.isFinite(lat) && Number.isFinite(lng)) {
+          truth = { lat, lng, radius: ppStampRadius({ category: b.category }) };
+        }
+      }
       reportEntity = entityId;
+      // Refusals are counted under the place a traveler opened: a park or
+      // rim's parent, so a refused tap and the report it leads to share a row.
+      const countedAs = variantParent || entityId;
+      const countedName = (variantParent && truth?.name) || name;
       if (!truth && !reporting) {
-        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: 'unlocatable', entity_id: entityId, name }));
+        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: 'unlocatable', entity_id: countedAs, name: countedName }));
         return jsonResponse({ error: 'We can\u2019t place this attraction on the map yet, so it can\u2019t be stamped right now', code: 'unlocatable' }, 409);
       }
       if (!truth) {
@@ -13668,6 +13772,10 @@ async function handlePassportStamp(request, env, ctx) {
         meters = truth.shape ? ppMetersToShape(truth.shape, fix.lat, fix.lng) : haversineMilesLoc(truth.lat, truth.lng, fix.lat, fix.lng) * 1609.34;
         reach = truth.shape ? truth.shape.buffer_m : truth.radius;
         if (meters > reach + slack) refusal = 'not_here';
+        // One parent can hold several parks or rims (a Grand Canyon footprint
+        // covers both rims): Verify I'm here sends which one the reading
+        // resolves to, and a different one is not this stamp. Only ever stricter.
+        else if (k1 === 'variant' && typeof b.fix_variant === 'string' && b.fix_variant && b.fix_variant !== entityId) refusal = 'other_variant';
         else presence = ppPresence(meters <= reach ? 'on_site' : 'nearby', meters, fix.acc, truth);
       }
       // The anti-spoof checks above can still have taken the \u2713 away.
@@ -13675,10 +13783,12 @@ async function handlePassportStamp(request, env, ctx) {
       if (refusal) {
         // Counted per place with no position (founder: a place that fails
         // quietly still shows up), whether or not the person reports it.
-        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: refusal, entity_id: entityId, name, d: ppBand(meters, [50, 150, 500, 1500, 5000]), radius_m: reach, acc: ppBand(fix?.acc, [20, 65, 100, 300]), reported: reporting }));
+        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: refusal, entity_id: countedAs, name: countedName, d: ppBand(meters, [50, 150, 500, 1500, 5000]), radius_m: reach, acc: ppBand(fix?.acc, [20, 65, 100, 300]), reported: reporting }));
         if (!reporting) {
-          if (refusal === 'not_here') return jsonResponse({ error: 'Your GPS doesn\u2019t show you at this place yet \u2014 stamping opens when you\u2019re here', code: 'not_here', distance_m: Math.round(meters), radius_m: reach }, 409);
-          // 'unconfirmed' falls through to the proof gate below, exactly as before.
+          if (refusal === 'not_here' || refusal === 'other_variant') return jsonResponse({ error: 'Your GPS doesn\u2019t show you at this place yet \u2014 stamping opens when you\u2019re here', code: 'not_here', distance_m: Math.round(meters), radius_m: reach, ...(refusal === 'other_variant' ? { other_variant: true } : {}) }, 409);
+          // 'unconfirmed' falls through to the proof gate below, exactly as
+          // before \u2014 and a reading we don't trust keeps no zone, re-keys nothing.
+          presence = null;
         } else {
           verified = 'reported';
           presence = ppPresence('reported', meters, fix?.acc, truth);
@@ -13689,7 +13799,13 @@ async function handlePassportStamp(request, env, ctx) {
         if (k1 === 'tagged') {
           // An iconic place becomes its official stamp (no duplicates); others stamp "I was here".
           const iconic = truth.gid ? await ttdStampFor(env, truth.gid, truth.name || name, truth.lat, truth.lng) : null;
-          if (iconic) { entityId = iconic.id; b.entity_type = 'place'; }
+          if (iconic) {
+            // Verify I'm here on an "I was here" stamp whose place has since
+            // become an official stamp: that row moves to the official id
+            // instead of a second stamp appearing beside it (2026-10-11).
+            if (BL_UUID.test(String(b.stamp_id || ''))) await ppMoveStampTo(env, user.id, String(b.stamp_id), kind, entityId, iconic.id);
+            entityId = iconic.id; b.entity_type = 'place';
+          }
           else { b.entity_type = 'local'; startPrivate = ppSensitivePlace(truth.name || name, truth.types); }
         }
       }
@@ -13724,7 +13840,9 @@ async function handlePassportStamp(request, env, ctx) {
     if (direction && entityId) entityId = `${entityId.split(':')[0]}:${visitedOn || new Date().toISOString().slice(0, 10)}:${direction === 'departure' ? 'dep' : 'arr'}`;
     // The page-one home-city stamp (onboarding "make your passport") marks
     // itself origin:true — the app renders it as the cover page, not a brag.
-    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}), ...(direction ? { direction } : {}), ...(mode ? { mode } : {}), ...(presence ? { presence } : {}) };
+    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}), ...(direction ? { direction } : {}), ...(mode ? { mode } : {}), ...(presence ? { presence } : {}),
+      // A park or rim keeps its parent place, so Verify I'm here measures it the same way.
+      ...(variantParent ? { parent_id: variantParent } : {}) };
     const row = {
       user_id: user.id, kind, tier,
       entity_type: b.entity_type ? String(b.entity_type) : null,
