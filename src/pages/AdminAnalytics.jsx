@@ -13,10 +13,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
-import { exportCsv } from '@/lib/adminExport';
+import { exportCsv, saveCsvText } from '@/lib/adminExport';
 import { callWorker } from '@/lib/callWorker';
+import { openPartner } from '@/lib/openPartner';
 import { createPageUrl } from '@/utils';
-import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap, Users, UserCheck, Mail } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap, Users, UserCheck, Mail, MapPin } from 'lucide-react';
 import { isAdminEmail } from '@/lib/admins';
 import OfficialSeal from '@/components/passport/OfficialSeal';
 
@@ -332,6 +333,120 @@ function TravelerPull() {
               </div>
             </div>
           )}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// "I'm here, but the app is saying I'm not" (founder, 2026-10-10): every tap,
+// newest first — the place, how far GPS put the traveler from our pin and the
+// allowed distance, GPS accuracy, the spot rounded to about a city block (none
+// for minors), phone and app version, an anonymous user code — with a status
+// to work the list down (the stamp was granted either way). Under it, the
+// quiet refusals per place (30 days, no positions), and an Excel download.
+const SR_WHY = { not_here: 'Outside our map for this place', other_variant: 'At another park or rim of this place', proof_needed: 'No GPS reading', unlocatable: 'Place not on our map', unconfirmed: 'GPS not trusted (VPN or travel speed)' };
+const SR_TONE = { new: COLORS.amber, fixed: COLORS.green, ignored: COLORS.gray };
+function StampReportsDesk({ refreshKey }) {
+  const [openOnly, setOpenOnly] = React.useState(true);
+  // ok: the numbers on screen came from a successful load (a failed one keeps
+  // what was there and says so — never "0 new").
+  const [st, setSt] = React.useState({ reports: [], total: 0, open: 0, refusals: [], error: null, loaded: false, ok: false });
+  const [csvBusy, setCsvBusy] = React.useState(false);
+  const [statusBusy, setStatusBusy] = React.useState(null);
+  const [actionError, setActionError] = React.useState(null);   // an export or status change that failed
+  const [note, setNote] = React.useState(null);
+  const seq = React.useRef(0);
+  const openRef = React.useRef(openOnly);
+  openRef.current = openOnly;
+  const load = async () => {
+    const my = ++seq.current;
+    const { data, error } = await callWorker('admin/stamp-reports', { op: 'list', open: openRef.current, limit: 200 });
+    if (my !== seq.current) return; // a newer load (the other filter, a refresh) owns the screen
+    const err = error || data?.error || null;
+    if (err) { setSt((s) => ({ ...s, error: err, loaded: true })); return; }
+    setSt({ reports: data?.reports || [], total: data?.total || 0, open: data?.open || 0, refusals: data?.refusals_30d || [], error: null, loaded: true, ok: true });
+  };
+  React.useEffect(() => { load(); }, [openOnly, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Switching the filter clears the list until the new one arrives, so the
+  // other filter's rows (or a false "No reports yet") never show under it.
+  const showOpen = (v) => {
+    if (v === openOnly) return;
+    setSt((s) => ({ ...s, reports: [], loaded: false }));
+    setOpenOnly(v);
+  };
+  const setStatus = async (id, status) => {
+    setStatusBusy(id); setActionError(null);
+    const { data, error } = await callWorker('admin/stamp-reports', { op: 'status', id, status });
+    setStatusBusy(null);
+    if (error || data?.error) { setActionError(`Couldn’t update that report: ${error || data.error}`); return; }
+    load();
+  };
+  const download = async () => {
+    if (csvBusy) return;
+    setCsvBusy(true); setNote(null); setActionError(null);
+    const { data, error } = await callWorker('admin/stamp-reports', { op: 'csv', as: 'json' }, { timeoutMs: 60000 });
+    if (error || !data?.csv) { setCsvBusy(false); setActionError(`Couldn’t export: ${error || data?.error || 'no file came back'}`); return; }
+    if (data.truncated) setNote(`The file holds the newest ${data.rows} reports — there are more than that.`);
+    try { await saveCsvText(data.filename || `stamp-reports-${today()}.csv`, data.csv); }
+    catch (e) { setActionError(`Couldn’t save the file: ${e?.message || e}`); }
+    finally { setCsvBusy(false); }
+  };
+  const when = (iso) => String(iso || '').slice(0, 16).replace('T', ' ');
+  const link = { fontSize: 12, background: 'none', border: 'none', padding: 0, cursor: 'pointer' };
+  const placeTotal = (q) => (q.refusals || 0) + (q.reported || 0);
+  const maxQuiet = Math.max(1, ...st.refusals.map(placeTotal));
+  return (
+    <Section title={`📍 “I’m here, but the app is saying I’m not” — ${st.ok ? st.open : '—'} new`} icon={MapPin}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <button type="button" style={{ ...xbtn, background: openOnly ? COLORS.dark : '#fff', color: openOnly ? '#fff' : '#3A3128' }} onClick={() => showOpen(true)}>New only</button>
+        <button type="button" style={{ ...xbtn, background: !openOnly ? COLORS.dark : '#fff', color: !openOnly ? '#fff' : '#3A3128' }} onClick={() => showOpen(false)}>All{st.ok ? ` ${st.total}` : ''}</button>
+        <button type="button" style={xbtn} onClick={load} aria-label="Reload the list">↻</button>
+        <button type="button" style={{ ...xbtn, marginLeft: 'auto' }} onClick={download} disabled={csvBusy}>{csvBusy ? 'Preparing…' : '⬇ Excel (CSV)'}</button>
+      </div>
+      <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>Every tap is here — the stamp was granted either way. Fix the place&rsquo;s map, then mark it fixed.</div>
+      {st.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>Couldn&rsquo;t load the latest: {st.error}</div>}
+      {actionError && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{actionError}</div>}
+      {note && <div style={{ fontSize: 12, color: COLORS.amber, marginBottom: 8 }}>{note}</div>}
+      {!st.loaded && !st.error && <div style={{ fontSize: 13, color: COLORS.gray, padding: '12px 0' }}>Loading…</div>}
+      {st.loaded && st.ok && !st.error && st.reports.length === 0 && (
+        <div style={{ fontSize: 13, color: COLORS.gray, padding: '12px 0' }}>
+          {openOnly && st.total > 0 ? `Nothing new — all ${st.total} handled.` : 'No reports yet. When GPS refuses a stamp and the traveler taps “I’m here, but the app is saying I’m not”, it lands here.'}
+        </div>
+      )}
+      {st.reports.map((r) => (
+        <div key={r.id} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border}` }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
+            <span style={{ fontWeight: 700, color: COLORS.dark }}>{r.place_name}</span>
+            <span style={{ color: COLORS.gray, fontSize: 12 }}>{[r.city, r.country].filter(Boolean).join(', ')}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: SR_TONE[r.status] || COLORS.gray }}>{r.status}</span>
+            <span style={{ color: COLORS.gray, marginLeft: 'auto', fontSize: 12 }}>{when(r.created_at)} UTC</span>
+          </div>
+          <div style={{ fontSize: 12.5, color: COLORS.dark, marginTop: 4 }}>
+            {SR_WHY[r.refusal] || r.refusal || 'GPS passed on retry'}
+            {r.distance_m != null ? ` · ${r.distance_m} m from our pin` : ''}
+            {r.radius_m != null ? ` (allowed ${r.radius_m} m)` : ''}
+            {r.accuracy_m != null ? ` · GPS ±${r.accuracy_m} m` : ''}
+          </div>
+          <div style={{ fontSize: 12, color: COLORS.gray, marginTop: 2 }}>
+            {[r.outcome, [r.platform, r.app_version].filter(Boolean).join(' '), r.user_code ? `user ${r.user_code}` : null, r.entity_id].filter(Boolean).join(' · ')}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 6 }}>
+            {r.spot_lat != null && r.spot_lng != null && (
+              <button type="button" style={{ ...link, color: COLORS.accent }} onClick={() => openPartner(`https://www.google.com/maps/search/?api=1&query=${r.spot_lat},${r.spot_lng}`)}>Spot on the map (≈1 block)</button>
+            )}
+            {r.status !== 'fixed' && <button type="button" disabled={statusBusy === r.id} style={{ ...link, color: COLORS.green }} onClick={() => setStatus(r.id, 'fixed')}>Fixed</button>}
+            {r.status !== 'ignored' && <button type="button" disabled={statusBusy === r.id} style={{ ...link, color: COLORS.gray }} onClick={() => setStatus(r.id, 'ignored')}>Ignore</button>}
+            {r.status !== 'new' && <button type="button" disabled={statusBusy === r.id} style={{ ...link, color: COLORS.amber }} onClick={() => setStatus(r.id, 'new')}>Reopen</button>}
+          </div>
+        </div>
+      ))}
+      {st.refusals.length > 0 && (
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
+          <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray, marginBottom: 8 }}>Refusals per place · 30 days · no positions kept</div>
+          {st.refusals.map((q, i) => (
+            <BarRow key={q.entity_id || `${q.name}-${i}`} label={`${q.name || q.entity_id || 'Unknown place'} · ${q.refusals || 0} refused${q.reported ? `, ${q.reported} reported` : ''}`} count={placeTotal(q)} max={maxQuiet} color={COLORS.amber} />
+          ))}
         </div>
       )}
     </Section>
@@ -758,6 +873,8 @@ export default function AdminAnalytics() {
             <VirtualItemsReport />
 
             <TravelerPull />
+
+            <StampReportsDesk refreshKey={generatedAt} />
 
             <Section title={`🛡️ Safety reports — ${reports.rows.length} open`} icon={Mail} empty={reports.error ? `Couldn't load reports: ${reports.error}` : reports.rows.length === 0 ? 'No open reports. Shared-passport reports land here; a child-safety reason gets 24h triage.' : null}>
               {reports.rows.map((r) => (
