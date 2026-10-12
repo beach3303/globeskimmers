@@ -9,7 +9,7 @@
 // footprint — checked here, then again by the worker against its own
 // coordinates (the fix rides along for that check and is never stored).
 import React, { useEffect, useState } from "react";
-import { DollarSign, MapPin } from "lucide-react";
+import { BookOpen, ClipboardList, DollarSign, MapPin } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { addStamp, metersBetween, setStampNote, setStampArt } from "@/lib/passport";
 import { respectPlaceFor } from "@/lib/respectPlaces";
@@ -358,6 +358,162 @@ export function ParkingCard({ visit, website }) {
   );
 }
 
+// One polling hook for the on-open lookups (why-visit, before-you-go): the
+// worker answers { pending } while another open is writing the same place.
+function useOnOpenLookup(route, id, timeoutMs) {
+  const [out, setOut] = useState(id ? "loading" : null);
+  useEffect(() => {
+    if (!id) { setOut(null); return undefined; }
+    let gone = false;
+    setOut("loading");
+    (async () => {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const { data, error } = await callWorker(route, { id }, { timeoutMs });
+        if (gone) return;
+        if (data?.pending) { await new Promise((r) => setTimeout(r, 8000)); if (gone) return; continue; }
+        setOut(data && data.ok ? data : { ok: false, busy: data?.error === "busy" || error === "busy", official_site: data?.official_site || null });
+        return;
+      }
+      if (!gone) setOut({ ok: false });
+    })();
+    return () => { gone = true; };
+  }, [route, id, timeoutMs]);
+  return out;
+}
+export const useWhyVisit = (id) => useOnOpenLookup("attractions/why-visit", id, 60000);
+export const useBeforeYouGo = (id) => useOnOpenLookup("attractions/before-you-go", id, 90000);
+
+// "Something's wrong?" — clears the saved text/facts so the next open redoes
+// the lookup, and lands on the admin's event list. One tap per card per open.
+function ReportLine({ route, id, children }) {
+  const [sent, setSent] = useState(false);
+  if (!id) return null;
+  if (sent) return <p style={{ marginTop: 8, fontSize: fs(12), color: INK3 }}>Thanks — we&rsquo;ll look at this place again.</p>;
+  return (
+    <button type="button" onClick={async () => { setSent(true); await callWorker(route, { id, report: true }); showToast("Thanks — we'll recheck this place", "success"); }}
+      style={{ marginTop: 8, fontSize: fs(12), color: INK3, textDecoration: "underline", textAlign: "left" }}>{children}</button>
+  );
+}
+
+// Why visit (top of the page, above the stamp) + what you can do + the story.
+// Everything here is ours, written once from public records and kept; a line
+// the guards rejected is simply absent, so an empty card never renders.
+export function WhyVisitCard({ wv, id, firstLine }) {
+  const [open, setOpen] = useState(false);
+  const why = (wv && wv !== "loading" && wv.ok && wv.why_visit) || firstLine || null;
+  const canDo = wv && wv !== "loading" && wv.ok && Array.isArray(wv.can_do) ? wv.can_do : [];
+  const story = wv && wv !== "loading" && wv.ok && wv.story ? String(wv.story).split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean) : [];
+  if (wv === "loading" && !why) {
+    return (
+      <div style={{ background: "#fff", border: `1px solid ${RULE}`, borderRadius: 16, padding: "14px 16px" }}>
+        {[88, 70].map((w) => <div key={w} aria-hidden="true" className="animate-pulse" style={{ height: 12, width: `${w}%`, borderRadius: 6, background: "#ECE6D8", marginTop: w === 88 ? 2 : 8 }} />)}
+      </div>
+    );
+  }
+  if (!why && !canDo.length && !story.length) return null;
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${RULE}`, borderRadius: 16, padding: "14px 16px" }}>
+      {why && (
+        <>
+          <div style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".14em", textTransform: "uppercase", color: STAMP, marginBottom: 6 }}>Why visit</div>
+          <p style={{ fontFamily: SERIF, fontSize: fs(18), lineHeight: 1.28, color: INK }}>{why}</p>
+        </>
+      )}
+      {canDo.length > 0 && (
+        <ul style={{ marginTop: why ? 10 : 0 }}>
+          {canDo.map((l, i) => <li key={i} style={{ display: "flex", gap: 8, fontSize: fs(13.5), color: INK, padding: "3px 0" }}><span style={{ color: STAMP }}>·</span><span>{l}</span></li>)}
+        </ul>
+      )}
+      {story.length > 0 && (
+        <div style={{ marginTop: 10, borderTop: `1px solid ${RULE}`, paddingTop: 8 }}>
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: fs(13.5), fontWeight: 600, color: "#6D28D9" }}>
+            <BookOpen size={15} /> {open ? "Hide the story ▴" : "Read the story ▾"}
+          </button>
+          {open && story.map((p, i) => <p key={i} style={{ marginTop: 8, fontSize: fs(14), lineHeight: 1.5, color: INK }}>{p}</p>)}
+        </div>
+      )}
+      {wv && wv !== "loading" && wv.ok && <ReportLine route="attractions/why-visit" id={id}>Something&rsquo;s off?</ReportLine>}
+    </div>
+  );
+}
+
+// Before you go — the place's own published visiting rules, each line backed
+// by a quote from the official site. Nothing here is inferred: a rule we
+// couldn't find is "unknown", and the card says so.
+const BYG_LIMITS = { faith: "some areas are for worshippers only", gender: "some areas are separated by gender", age: "age limits apply", tour_only: "entry is by guided tour only", permit: "a permit is needed", dress_enforced: "dress rules are enforced at the door", other: "see the rule below" };
+const BYG_DRESS = { cover_shoulders: "Cover your shoulders", cover_knees: "Cover your knees", women_cover_hair: "Women cover their hair", men_cover_head: "Men cover their heads", remove_shoes: "Remove your shoes", wraps_provided: "Wraps are provided at the door", other: "" };
+const BYG_SECURITY = { bag_check: "Bag check at the entrance", no_large_bags: "No large bags", lockers: "Lockers are available", id_required: "Bring ID", other: "" };
+const BYG_CLOSURE = { prayer: "Prayer times", service: "Services", ceremony: "Ceremonies", weekly: "Weekly closure", seasonal: "Seasonal closure", other: "Closure" };
+const minutesText = (m) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${m} min`);
+function BygRow({ icon, head, text, quote, tone }) {
+  const [open, setOpen] = useState(false);
+  const color = tone === "amber" ? "#8A5A00" : tone === "red" ? "#B3261E" : tone === "green" ? "#2E7D46" : INK;
+  return (
+    <div style={{ padding: "8px 0", borderTop: `1px solid ${RULE}` }}>
+      <p style={{ fontSize: fs(14), fontWeight: 600, color, display: "flex", gap: 8 }}><span aria-hidden="true">{icon}</span><span>{head}</span></p>
+      {text && text !== head && <p style={{ fontSize: fs(13.5), color: INK, marginTop: 2, paddingLeft: 26 }}>{text}</p>}
+      {quote && (
+        <div style={{ paddingLeft: 26 }}>
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} style={{ marginTop: 3, fontSize: fs(12), color: INK3, textDecoration: "underline" }}>{open ? "Hide what the site says" : "What the official site says"}</button>
+          {open && <p style={{ marginTop: 4, fontSize: fs(12.5), lineHeight: 1.45, color: INK3, fontStyle: "italic" }}>&ldquo;{quote}&rdquo;</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+export function BeforeYouGoCard({ byg, id, website }) {
+  const icon = <ClipboardList size={18} color="#8A5A00" />;
+  if (!byg) return null;
+  if (byg === "loading") {
+    return (
+      <Card icon={icon} title="Before you go">
+        <p style={{ fontSize: fs(13), color: INK3, marginBottom: 8 }}>Reading the official site for visiting rules…</p>
+        {[70, 58].map((w) => <div key={w} aria-hidden="true" className="animate-pulse" style={{ height: 12, width: `${w}%`, borderRadius: 6, background: "#ECE6D8", marginTop: 6 }} />)}
+      </Card>
+    );
+  }
+  const official = byg.official_site || website || null;
+  if (!byg.ok || !byg.found) {
+    return (
+      <Card icon={icon} title="Before you go">
+        <p style={{ fontSize: fs(13.5), color: INK }}>{byg.busy ? "Rule lookups are paused for today." : "We couldn't find published visiting rules for this place."} Check the official site before you go.</p>
+        <div style={{ marginTop: 6 }}><OfficialLink url={official} label="Visiting information on the official site" /></div>
+      </Card>
+    );
+  }
+  const rows = [];
+  const e = byg.entry;
+  if (e?.value === "open_to_all") rows.push({ icon: "🚪", head: "Open to all visitors", text: e.text, quote: e.quote, tone: "green", src: e.source_url });
+  if (e?.value === "restricted") rows.push({ icon: "🚪", head: `Entry is limited — ${(e.limits || []).map((l) => BYG_LIMITS[l]).filter(Boolean).join("; ") || "see below"}`, text: e.text, quote: e.quote, tone: "amber", src: e.source_url });
+  if (e?.value === "closed_to_visitors") rows.push({ icon: "🚪", head: "Not open to visitors", text: e.text, quote: e.quote, tone: "red", src: e.source_url });
+  const d = byg.dress;
+  if (d?.value === "stated") rows.push({ icon: "👕", head: (d.items || []).map((x) => BYG_DRESS[x]).filter(Boolean).join(" · ") || "Dress rules apply", text: d.text, quote: d.quote, tone: "amber", src: d.source_url });
+  const r = byg.reservation;
+  if (r?.value) rows.push({ icon: "🎟️", head: r.value === "required" ? "Book ahead — required" : r.value === "recommended" ? "Booking ahead is recommended" : "No booking needed", text: r.text, quote: r.quote, tone: r.value === "required" ? "amber" : "ink", src: r.source_url });
+  const t = byg.time_needed;
+  if (Number.isFinite(+t?.value)) rows.push({ icon: "⏱️", head: `Plan about ${minutesText(+t.value)}`, text: t.text, quote: t.quote, tone: "ink", src: t.source_url });
+  for (const c of (byg.closures?.items || [])) rows.push({ icon: "🕰️", head: BYG_CLOSURE[c.kind] || "Closure", text: c.text, quote: c.quote, tone: "amber", src: c.source_url });
+  const p = byg.photography;
+  if (p?.value) rows.push({ icon: "📷", head: p.value === "allowed" ? "Photos are allowed" : p.value === "restricted" ? "Photos are limited in places" : "No photos inside", text: p.text, quote: p.quote, tone: p.value === "allowed" ? "green" : "amber", src: p.source_url });
+  const s = byg.security;
+  if (s?.value === "stated") rows.push({ icon: "🎒", head: (s.items || []).map((x) => BYG_SECURITY[x]).filter(Boolean).join(" · ") || "Security checks", text: s.text, quote: s.quote, tone: "ink", src: s.source_url });
+  const a = byg.accessibility;
+  if (a?.value === "stated") rows.push({ icon: "♿", head: "Accessibility", text: a.text, quote: a.quote, tone: "ink", src: a.source_url });
+  for (const o of (byg.other_rules || [])) rows.push({ icon: "ℹ️", head: o.text, text: null, quote: o.quote, tone: "ink", src: o.source_url });
+  const firstSrc = rows.find((x) => x.src)?.src || null;
+  return (
+    <Card icon={icon} title="Before you go">
+      <div style={{ marginTop: -8 }}>{rows.map((row, i) => <BygRow key={i} {...row} />)}</div>
+      <p style={{ marginTop: 10, fontSize: fs(11.5), color: INK3 }}>
+        From <button type="button" onClick={() => openPartner(firstSrc || official)} style={{ textDecoration: "underline", color: "inherit" }}>{hostOf(firstSrc || official) || "the official site"}</button>
+        {byg.checked_at ? ` · checked ${checkedOn(byg.checked_at)}` : ""} · rules can change
+      </p>
+      <VerifyLink url={verifyUrlFor(firstSrc, official)} label="Confirm on the official website" />
+      <ReportLine route="attractions/before-you-go" id={id}>Something&rsquo;s wrong?</ReportLine>
+    </Card>
+  );
+}
+
 // Everything above, for one attraction card. children: the card's own details
 // (hours, AI, website) — they sit above the guestbook, which comes last.
 export default function AttractionExtras({ a, formatDistance, isTablet, children }) {
@@ -368,12 +524,18 @@ export default function AttractionExtras({ a, formatDistance, isTablet, children
   // taps), else on the Google place (owned places resolve to theirs).
   const visitId = link === undefined ? null : (link.stamp?.id || link.gid || (kind === "d1" ? pid : null));
   const visit = useVisitInfo(visitId);
+  // Why-visit and the visiting rules key the same way (founder, 2026-10-11:
+  // written on open, kept forever; no prefill).
+  const wv = useWhyVisit(visitId);
+  const byg = useBeforeYouGo(visitId);
   const name = a.displayName?.text || a.name || "";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
+      <WhyVisitCard wv={wv} id={visitId} firstLine={a.whyVisit || null} />
       {link !== undefined && <StampHereButton a={a} link={link} formatDistance={formatDistance} isTablet={isTablet} />}
       <TicketsCard visit={visit} website={a.websiteUri} />
       <ParkingCard visit={visit} website={a.websiteUri} />
+      <BeforeYouGoCard byg={byg} id={visitId} website={a.websiteUri} />
       {children}
       <div>
         <div style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".12em", textTransform: "uppercase", color: INK3, margin: "6px 2px 8px" }}>📖 Guestbook</div>
