@@ -17,6 +17,7 @@ import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
 import LandStamp from "@/components/passport/LandStamp";
+import LocalFavoriteStamp, { isLocalFavorite, localFavoriteLine } from "@/components/passport/LocalFavoriteStamp";
 import { useLocation, isLiveFix } from "@/components/location/LocationContext";
 import PassportBook, { packBookPages, readFontScale, fitsTogether } from "@/components/passport/PassportBook";
 import BlotterStrip from "@/components/passport/Blotter";
@@ -77,6 +78,13 @@ function VerifiedBadge({ verified }) {
 function Chip({ children, bg, color }) {
   return <span style={{ background: bg, color, fontSize: fs(10.5), fontFamily: SANS, fontWeight: 600 }} className="px-2 py-0.5 rounded-full leading-tight inline-block">{children}</span>;
 }
+// A Local favorite always says who vouched for it (founder, 2026-10-12), in
+// the words the booklet prints under the stamp: how many people who've been
+// there had recommended the place when this stamp was earned.
+function LocalFavoriteChip({ stamp }) {
+  const line = localFavoriteLine(stamp);
+  return <Chip bg="#E8F4F2" color="#0A5F58">Local favorite · {line.charAt(0).toLowerCase() + line.slice(1)}</Chip>;
+}
 
 function Stat({ n, label }) {
   return (
@@ -107,14 +115,17 @@ function TripNote({ stamp, readOnly }) {
 function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }) {
   const isHome = stamp.kind === "city" && homeCity && String(stamp.city || "").toLowerCase() === String(homeCity).toLowerCase();
   const k = KIND[stamp.kind] || KIND.attraction;
+  // A Local favorite (founder, 2026-10-12) prints its own teal stamp: never
+  // the icon art, never the typographic stamp.
+  const localFav = isLocalFavorite(stamp);
   // Bespoke landmark stamp art (falls back to the category emoji if none exists).
   // Country stamps use the flag, not bespoke art.
-  const artUrl = stamp.kind === "country" || isPlainArt(stamp) ? null : stampArtUrl(stamp.name, { entityId: stamp.entity_id, country: stamp.country });
+  const artUrl = localFav || stamp.kind === "country" || isPlainArt(stamp) ? null : stampArtUrl(stamp.name, { entityId: stamp.entity_id, country: stamp.country });
   const [artFailed, setArtFailed] = useState(false);
   const showArt = !!artUrl && !artFailed;
   // Country stamps keep the flag; every other kind falls back to a typographic
   // stamp instead of the category emoji, so no stamp ever looks unfinished.
-  const showTypo = stamp.kind !== "country" && !showArt;
+  const showTypo = stamp.kind !== "country" && !showArt && !localFav;
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [showDate, setShowDate] = useState(false);
@@ -270,6 +281,11 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
 
   return (
     <div className="bg-white rounded-[20px] p-4" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
+      {localFav && (
+        <div className="flex justify-center mb-3">
+          <LocalFavoriteStamp name={stamp.name} city={stamp.city} country={stamp.country} date={stamp.visited_on} width={150} strength={STAMP_INK_STRENGTH} />
+        </div>
+      )}
       {showTypo && (
         <div className="flex justify-center mb-3">
           <TypographicStamp
@@ -288,7 +304,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
       )}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2.5 min-w-0">
-          {!showArt && !showTypo && <div className="shrink-0 rounded-xl flex items-center justify-center" style={{ width: 42, height: 42, background: IVORY_2, fontSize: 22 }}>{k.icon}</div>}
+          {!showArt && !showTypo && !localFav && <div className="shrink-0 rounded-xl flex items-center justify-center" style={{ width: 42, height: 42, background: IVORY_2, fontSize: 22 }}>{k.icon}</div>}
           <div className="min-w-0">
             <p className="truncate" style={{ fontFamily: SERIF, fontSize: fs(19), color: INK, lineHeight: 1.15 }}>{stamp.name}</p>
             {place && <p className="truncate" style={{ color: INK3, fontSize: fs(12), fontFamily: MONO }}>{place}</p>}
@@ -327,6 +343,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
 
       <div className="flex items-center gap-2 flex-wrap mt-2.5">
         {isHome && <Chip bg="#F3E2C7" color={STAMP}>🏠 Home</Chip>}
+        {localFav && <LocalFavoriteChip stamp={stamp} />}
         <VerifiedBadge verified={stamp.verified} />
         {readOnly ? (
           stamp.visited_on && <span className="inline-flex items-center gap-1" style={{ color: INK3, fontSize: fs(12) }}><Calendar size={12} color={INK3} /> {fmtDate(stamp.visited_on)}</span>

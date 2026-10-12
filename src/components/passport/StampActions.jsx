@@ -25,6 +25,7 @@ import { localISODate } from "@/lib/localDate";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { useDismissable } from "@/lib/dismissStack";
 import PostcardCompose from "@/components/passport/PostcardCompose";
+import { isLocalFavorite, localFavoriteLine } from "@/components/passport/LocalFavoriteStamp";
 import { socialFollow, setStampNote, setStampVisibility, setStampArt } from "@/lib/passport";
 import { respectPlaceFor } from "@/lib/respectPlaces";
 
@@ -56,6 +57,9 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   const navigate = useNavigate();
   // An attraction stamp opens its place's Things to Do card (prices, guestbook…).
   const canSeePlace = stamp.kind === "attraction" && !!stamp.entity_id;
+  // A Local favorite (lf:<id>) opens its own page (openAttraction routes it)
+  // and always says who recommended it (founder rule, 2026-10-12).
+  const isLocalFav = isLocalFavorite(stamp);
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(null); // "photos" | "layout" | "delete" | null
   const [confirmDel, setConfirmDel] = useState(false);
@@ -291,6 +295,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
           <div className="min-w-0">
             <p className="truncate" style={{ fontFamily: SERIF, fontSize: fs(21), color: INK, lineHeight: 1.15 }}>{stamp.name}</p>
             {place && <p className="truncate" style={{ fontFamily: MONO, fontSize: fs(11.5), color: INK3, marginTop: 2 }}>{place}</p>}
+            {isLocalFav && <p style={{ fontSize: fs(12.5), fontWeight: 600, color: "#0A5F58", marginTop: 4, lineHeight: 1.3 }}>{localFavoriteLine(stamp)}</p>}
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="flex-none w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
             <X size={17} color={INK} strokeWidth={2.2} />
@@ -481,7 +486,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
               onClick={checkPhotos} disabled={busy === "check"} />
           )}
           {canSeePlace && (
-            <Row icon={MapPin} label="See this place" sub="Prices, parking, tips and its guestbook"
+            <Row icon={MapPin} label="See this place" sub={isLocalFav ? "Who recommends it, and why" : "Prices, parking, tips and its guestbook"}
               onClick={() => { onClose?.(); openAttraction(navigate, { id: stamp.entity_id, name: stamp.name, lat: stamp.lat, lng: stamp.lng }, "From your passport"); }} />
           )}
           {!readOnly && (
