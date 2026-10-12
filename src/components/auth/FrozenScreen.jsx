@@ -18,7 +18,11 @@ export default function FrozenScreen() {
   const { user, deleteAccount, logout } = useAuth();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The only address this screen shows is the support one (founder, 2026-10-11).
+  // The account's own address rides in the unseen mail body so an appeal can be
+  // matched to its account whatever address it is sent from.
   const email = user?.email || '';
+  const appealHref = `mailto:${APPEAL_TO}?subject=${encodeURIComponent('Age appeal')}${email ? `&body=${encodeURIComponent(`GlobeSkimmers account: ${email}`)}` : ''}`;
 
   const erase = async () => {
     if (!confirming) { setConfirming(true); return; }
@@ -46,8 +50,7 @@ export default function FrozenScreen() {
         )}
         <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${RULE}` }}>
           <p style={{ fontSize: fs(13), lineHeight: 1.5, color: INK2 }}>
-            Entered the wrong birthday? Email <a href={`mailto:${APPEAL_TO}?subject=Age%20appeal`} style={{ color: STAMP, textDecoration: 'underline' }}>{APPEAL_TO}</a>
-            {email ? <> from <b style={{ color: INK }}>{email}</b></> : ' from this account’s email address'} with the subject &ldquo;Age appeal&rdquo;.
+            Entered the wrong birthday? Email <a href={appealHref} style={{ color: STAMP, textDecoration: 'underline' }}>{APPEAL_TO}</a> with the subject &ldquo;Age appeal&rdquo;.
             An appeal can only restore access &mdash; nothing else about the account changes.
           </p>
         </div>
