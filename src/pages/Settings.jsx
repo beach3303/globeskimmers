@@ -19,6 +19,7 @@ import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
 import { useLocation, readOpenBehavior, writeOpenBehavior } from "@/components/location/LocationContext";
 import { clearAppCache } from "@/lib/clearAppCache";
+import { showToast } from "@/components/Toast";   // the stub that swallowed this page's 9 messages is gone (2026-10-11)
 
 // ADMIN_EMAILS now imported from @/lib/admins (single source of truth, 4 admins).
 
@@ -395,11 +396,6 @@ const LANGUAGES = [
   { code: "yo", name: "Yoruba", flag: "🇳🇬" },
   { code: "zu", name: "Zulu", flag: "🇿🇦" },
 ].sort((a, b) => a.name.localeCompare(b.name));
-
-const showToast = (message, type) => {
-  // Toast surface intentionally no-op pending a real toast system.
-  void message; void type;
-};
 
 export default function SettingsPage() {
   const navigate = useNavigate();

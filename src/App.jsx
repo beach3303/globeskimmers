@@ -6,6 +6,7 @@ import { BrowserRouter as Router, Route, Routes, useNavigate, useLocation } from
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AuthGate from '@/components/auth/AuthGate';
+import { ToastContainer } from '@/components/Toast';
 import FrozenScreen from '@/components/auth/FrozenScreen';
 import { FontScaleProvider } from '@/components/a11y/FontScaleContext';
 
@@ -94,6 +95,9 @@ function App() {
           <ScrollToTop />
           <AuthenticatedApp />
         </Router>
+        {/* Once, above every screen — the sign-in gate and the frozen screen
+            render outside Layout, and their messages must show too. */}
+        <ToastContainer />
       </QueryClientProvider>
     </AuthProvider>
     </FontScaleProvider>

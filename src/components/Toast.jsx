@@ -1,22 +1,26 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle, XCircle, Info, AlertTriangle, X } from "lucide-react";
 
 const Toast = ({ message, type = "success", duration = 3000, onClose }) => {
   const [isVisible, setIsVisible] = useState(true);
+  // The latest onClose without restarting the timer: the container re-renders
+  // whenever another toast comes or goes.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsVisible(false);
-      setTimeout(onClose, 300); // Wait for exit animation
+      setTimeout(() => closeRef.current?.(), 300); // Wait for exit animation
     }, duration);
 
     return () => clearTimeout(timer);
-  }, [duration, onClose]);
+  }, [duration]);
 
   const handleClose = () => {
     setIsVisible(false);
-    setTimeout(onClose, 300);
+    setTimeout(() => closeRef.current?.(), 300);
   };
 
   const icons = {
@@ -33,6 +37,9 @@ const Toast = ({ message, type = "success", duration = 3000, onClose }) => {
     warning: "bg-yellow-500"
   };
 
+  // Laid out by the container — top centre, stacked one under another — so
+  // two messages at once both show (2026-10-11). The animation moves only y
+  // and scale; nothing here may set its own fixed position or x.
   return (
     <AnimatePresence>
       {isVisible && (
@@ -41,7 +48,7 @@ const Toast = ({ message, type = "success", duration = 3000, onClose }) => {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -50, scale: 0.9 }}
           transition={{ duration: 0.3, ease: "easeOut" }}
-          className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-[9999] ${colors[type]} text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 min-w-[320px] max-w-[90vw]`}
+          className={`${colors[type]} text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 min-w-[320px] max-w-[90vw]`}
         >
           {icons[type]}
           <span className="flex-1 text-sm font-medium">{message}</span>
@@ -57,6 +64,10 @@ const Toast = ({ message, type = "success", duration = 3000, onClose }) => {
   );
 };
 
+// One id per toast, ever: two toasts fired in the same millisecond used to
+// share a Date.now() id, and one could stick on screen for good.
+let toastSeq = 0;
+
 // Toast Container Component
 export const ToastContainer = () => {
   const [toasts, setToasts] = useState([]);
@@ -64,13 +75,13 @@ export const ToastContainer = () => {
   useEffect(() => {
     const handleShowToast = (event) => {
       const { message, type, duration } = event.detail;
-      const id = Date.now();
-      
+      const id = ++toastSeq;
+
       setToasts(prev => [...prev, { id, message, type, duration }]);
     };
 
     window.addEventListener('globeskimmers:showToast', handleShowToast);
-    
+
     return () => {
       window.removeEventListener('globeskimmers:showToast', handleShowToast);
     };
@@ -82,7 +93,7 @@ export const ToastContainer = () => {
 
   return (
     <div className="fixed top-0 left-0 right-0 z-[10050] pointer-events-none">
-      <div className="flex flex-col items-center gap-2 pt-4">
+      <div className="flex flex-col items-center gap-2 pt-20">
         {toasts.map(toast => (
           <div key={toast.id} className="pointer-events-auto">
             <Toast

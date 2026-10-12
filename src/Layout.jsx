@@ -4,7 +4,6 @@ import { useAuth } from "@/lib/AuthContext";
 import { createPageUrl } from "@/utils";
 import useSwipeDownDismiss from "@/lib/swipeDismiss";
 import PWASetup from "@/components/PWASetup";
-import { ToastContainer } from "@/components/Toast";
 import { LocationProvider } from "@/components/location/LocationContext";
 import LocationMismatchSheet from "@/components/location/LocationMismatchSheet";
 import LocationAutoFollowOffer from "@/components/location/LocationAutoFollowOffer";
@@ -126,7 +125,6 @@ export default function Layout({ children, currentPageName }) {
   return (
     <>
       <PWASetup />
-      <ToastContainer />
       <LocationProvider>
         <div className="min-h-screen font-sans gs-app-bg" style={{ background: IVORY }}>
           {/* Brand banner — teal gradient (redesign primitive). Fixed top
