@@ -13,7 +13,7 @@
 // Chrome is found at the same path boot-check uses. ws comes from the
 // dependency tree (vite's). This is capture tooling only — never shipped.
 import { spawn } from 'node:child_process';
-import { writeFileSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
@@ -58,6 +58,11 @@ await S('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5
 await S('Emulation.setGeolocationOverride', { latitude: LAT, longitude: LNG, accuracy: 12 });
 await S('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
 await S('Page.enable', {});
+// --inject <file>: a script that runs before the app on EVERY document (e.g.
+// a window.fetch patch that answers a worker route the branch hasn't deployed
+// yet, or a tier the demo account doesn't have), so states can be captured.
+const INJECT = arg('inject', null);
+if (INJECT) await S('Page.addScriptToEvaluateOnNewDocument', { source: readFileSync(INJECT, 'utf8') });
 await S('Page.navigate', { url: URLARG });
 await sleep(WAIT);
 
