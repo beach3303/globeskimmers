@@ -11,18 +11,19 @@
 import React, { useEffect, useState } from "react";
 import { BookOpen, ClipboardList, DollarSign, MapPin } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
-import { addStamp, metersBetween, setStampNote, setStampArt } from "@/lib/passport";
+import { addStamp, reportStamp, STAMP_REFUSALS, metersBetween, setStampNote, setStampArt } from "@/lib/passport";
 import { respectPlaceFor } from "@/lib/respectPlaces";
 import RespectPlaceSheet from "@/components/passport/RespectPlaceSheet";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { resolveStampVariant } from "@/lib/stampVariants";
 import { countryCode } from "@/lib/countries";
 import { localISODate } from "@/lib/localDate";
-import { getCurrentPositionSmart } from "@/lib/geolocation";
+import { getStampFix } from "@/lib/geolocation";
 import { showToast } from "@/components/Toast";
 import { openPartner } from "@/lib/openPartner";
 import Guestbook from "@/components/Guestbook";
-import { useLocation } from "@/components/location/LocationContext";
+import { useLocation, isLiveFix } from "@/components/location/LocationContext";
+import { useDistanceUnit } from "@/components/location/distanceUnit";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -71,7 +72,17 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
   const link = resolved?.stamp || null;
   const [busy, setBusy] = useState(false);
   const [stamped, setStamped] = useState(false);
-  const [notHere, setNotHere] = useState(null); // null | { meters } | { noFix: true } | { message }
+  // A refusal (founder, 2026-10-10) — what the phone or the worker said, with
+  // the request itself so "I'm here, but the app is saying I'm not" can resend
+  // it as a report: null | { why, meters?, message?, req }.
+  const [refused, setRefused] = useState(null);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [wasReported, setWasReported] = useState(false);
+  const [wasHeld, setWasHeld] = useState(false);   // the stamp was already in the passport
+  // Distances in the traveler's mi/km (cafés and restaurants pass no formatter).
+  const { activeLocation } = useLocation();
+  const units = useDistanceUnit(activeLocation);
+  const fmtDist = formatDistance || units.formatDistance;
   const [stampedId, setStampedId] = useState(null);
   const [startedPrivate, setStartedPrivate] = useState(false);
   const [memory, setMemory] = useState("");
@@ -100,72 +111,124 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
   const kind = idKind(pid);
   const iconic = !!link;
 
-  const stamp = async () => {
-    if (busy || stamped) return;
-    setBusy(true); setNotHere(null);
-    const placeLat = Number(link?.lat ?? a.lat), placeLng = Number(link?.lng ?? a.lng);
-    let fix = null, meters = null;
-    try {
-      const pos = await getCurrentPositionSmart({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
-      fix = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy ?? null };
-      meters = metersBetween(fix.lat, fix.lng, placeLat, placeLng);
-    } catch { /* no fix → can't verify right now */ }
-    if (!fix || !Number.isFinite(meters)) { setBusy(false); setNotHere({ noFix: true }); return; }
-    const radius = stampRadiusFor(iconic
-      ? { footprint_radius_m: link.footprint_radius_m, category: link.category }
-      : { types: a.types, category: a.activityCategory });
-    if (meters > radius + Math.min(fix.acc || 0, 100)) { setBusy(false); setNotHere({ meters }); return; }
-
-    const parts = placeParts(a.formattedAddress);
-    const country = link?.country || parts.country || null;
-    const variant = iconic ? resolveStampVariant({ name: link.name, lat: fix.lat, lng: fix.lng, country, verified: "gps" }) : null;
-    const gid = resolved?.gid || (kind === "google" ? pid : null);
-    const entityId = variant ? variant.entity_id
-      : iconic ? link.id
-      : gid ? `places:${gid}`
-      : kind === "owned" ? `owned:${pid}`
-      : pid;
-    const stampName = variant ? variant.name : (link?.name || name);
-    const { data, error } = await addStamp({
-      kind: "attraction",
-      entity_type: variant ? "landmark" : "place",
-      entity_id: entityId,
-      name: stampName,
-      city: link?.city || parts.city,
-      region: parts.region,
-      country,
-      cc: countryCode(country) || (/^[A-Za-z]{2}$/.test(country || "") ? country.toUpperCase() : undefined),
-      lat: Number.isFinite(placeLat) ? placeLat : null,
-      lng: Number.isFinite(placeLng) ? placeLng : null,
-      visited_on: localISODate(),
-      local_hour: new Date().getHours(),
-      verified: "gps",
-      category: (link?.category || a.activityCategory || (a.types || [])[0]) || undefined,
-      ...(variant && link?.id ? { parent_id: link.id } : {}),   // the worker measures a variant from its parent
-      fix,
-    });
-    setBusy(false);
-    if (data?.code === "not_here" && Number.isFinite(data.distance_m)) { setNotHere({ meters: data.distance_m }); return; }
-    if (data?.code === "not_here" || data?.code === "unlocatable" || data?.code === "proof_needed") { setNotHere({ message: data.error || null }); return; }
-    if (error) { showToast(/sign in/i.test(error) ? "Sign in to stamp your Virtual Passport" : error, "error"); return; }
+  // A grant, from GPS or from a report: the stamp is in either way. A report
+  // never says ✓ — the worker answers with the stamp's strongest proof ever,
+  // which can be an older GPS visit, not what this tap proved.
+  const granted = (data, req, viaReport) => {
     setStamped(true);
+    setRefused(null);
     setStampedId(data?.id || null);
     setStartedPrivate(data?.private === true);
-    showToast(iconic ? "✓ Verified — added to your Virtual Passport 🛂" : "✓ “I was here” — added to your Virtual Passport 🛂", "success");
+    setWasReported(!!viaReport);
+    setWasHeld(!!data?.updated);
+    showToast(viaReport
+      ? (data?.updated ? "Already in your Virtual Passport — thanks for telling us" : "Stamped — added to your Virtual Passport 🛂")
+      : data?.verified === "gps"
+        ? (iconic ? "✓ Verified — added to your Virtual Passport 🛂" : "✓ “I was here” — added to your Virtual Passport 🛂")
+        : "Stamped — added to your Virtual Passport 🛂", "success");
     // A place of respect (founder, 2026-10-04): its message first; a memorial also asks illustrated or text only.
-    const place = respectPlaceFor({ kind: "attraction", name: stampName });
-    if (place && data?.id) setRespect({ place, stamp: { id: data.id, name: stampName, city: link?.city || parts.city, country, entity_id: entityId } });
+    const place = respectPlaceFor({ kind: "attraction", name: req.stampName });
+    if (place && data?.id) setRespect({ place, stamp: { id: data.id, name: req.stampName, city: req.city, country: req.country, entity_id: req.entityId } });
   };
+
+  const stamp = async () => {
+    if (busy || stamped || reportBusy) return;
+    setBusy(true); setRefused(null);
+    const placeLat = Number(link?.lat ?? a.lat), placeLng = Number(link?.lng ?? a.lng);
+    // The best of 2–3 fresh readings. The worker, not the phone, decides
+    // whether that's inside the place — its map has the street shapes and
+    // footprints (founder, 2026-10-10: the Walk of Fame refused a stamp under
+    // the Dolby Theatre because the phone measured to a single pin).
+    let fix = null, noFix = null;
+    try { fix = await getStampFix(); }
+    catch (e) { noFix = e?.code === 1 ? "denied" : "no_fix"; }
+    const parts = placeParts(a.formattedAddress);
+    const country = link?.country || parts.country || null;
+    const gid = resolved?.gid || (kind === "google" ? pid : null);
+    const city = link?.city || parts.city;
+    // One request per variant choice. A park within a resort (Disney,
+    // Universal, the Grand Canyon rims) is picked by where GPS puts you; a
+    // report — sent exactly when GPS is wrong — takes the card's own place
+    // instead (its pin: a single park resolves to itself, a resort keeps the
+    // resort stamp), so it never grants the park nearest a bad reading.
+    const build = (variant) => {
+      const entityId = variant ? variant.entity_id
+        : iconic ? link.id
+        : gid ? `places:${gid}`
+        : kind === "owned" ? `owned:${pid}`
+        : pid;
+      const stampName = variant ? variant.name : (link?.name || name);
+      const payload = {
+        kind: "attraction",
+        entity_type: variant ? "landmark" : "place",
+        entity_id: entityId,
+        name: stampName,
+        city,
+        region: parts.region,
+        country,
+        cc: countryCode(country) || (/^[A-Za-z]{2}$/.test(country || "") ? country.toUpperCase() : undefined),
+        lat: Number.isFinite(placeLat) ? placeLat : null,
+        lng: Number.isFinite(placeLng) ? placeLng : null,
+        visited_on: localISODate(),
+        local_hour: new Date().getHours(),
+        verified: "gps",
+        category: (link?.category || a.activityCategory || (a.types || [])[0]) || undefined,
+        ...(variant && link?.id ? { parent_id: link.id } : {}),   // the worker measures a variant from its parent
+        ...(fix ? { fix: { lat: fix.lat, lng: fix.lng, ...(Number.isFinite(fix.acc) ? { acc: fix.acc } : {}) } } : {}),
+      };
+      return { payload, stampName, city, country, entityId };
+    };
+    const pinVariant = iconic ? resolveStampVariant({ name: link.name, lat: placeLat, lng: placeLng, country, verified: "self" }) : null;
+    const reportReq = build(pinVariant);
+    if (!fix) { setBusy(false); setRefused({ why: noFix, req: reportReq }); return; }
+    const req = build(iconic ? resolveStampVariant({ name: link.name, lat: fix.lat, lng: fix.lng, country, verified: "gps" }) : null);
+    const { data, error } = await addStamp(req.payload);
+    setBusy(false);
+    if (STAMP_REFUSALS.includes(data?.code)) {
+      // proof_needed WITH a fix: the worker measured you inside but didn't
+      // trust the reading (a VPN, or impossible travel since your last stamp).
+      setRefused({ why: data.code === "proof_needed" ? "unconfirmed" : data.code, meters: Number.isFinite(data.distance_m) ? data.distance_m : null, message: data.error || null, req: reportReq });
+      return;
+    }
+    if (error) { showToast(/sign in/i.test(error) ? "Sign in to stamp your Virtual Passport" : error, "error"); return; }
+    // A GPS claim that comes back without GPS means the worker measured you
+    // inside but didn't trust the reading (a VPN, or impossible travel) on a
+    // stamp you already hold — a refusal like any other, so the report button.
+    if (data?.verified !== "gps") { setRefused({ why: "unconfirmed", meters: null, message: null, req: reportReq }); return; }
+    granted(data, req, false);
+  };
+
+  // "I'm here, but the app is saying I'm not" — always grants, always files.
+  const report = async () => {
+    if (!refused || reportBusy || stamped) return;
+    setReportBusy(true);
+    const { data, error } = await reportStamp(refused.req.payload);
+    setReportBusy(false);
+    if (error || !data?.id) { showToast(/sign in/i.test(error || "") ? "Sign in to stamp your Virtual Passport" : (error || "Couldn’t send that — try again"), "error"); return; }
+    granted(data, refused.req, true);
+  };
+  const away = (m) => fmtDist(m / 1609.34);
+  const refusalText = (r) => (
+    r.why === "denied" ? "Location is off for GlobeSkimmers — turn it on in Settings, then tap Stamp again."
+      : r.why === "no_fix" ? "We couldn’t get a GPS reading just now — step outside or give it a moment, then tap Stamp again."
+      : r.why === "unlocatable" ? "We can’t place this attraction on our map yet."
+      : r.why === "unconfirmed" ? "We couldn’t confirm your GPS reading — a VPN, or a long trip today, can cause this."
+      : Number.isFinite(r.meters) ? `Your GPS puts you about ${away(r.meters)} from ${name} on our map.`
+      : r.message || "Your GPS doesn’t show you at this place yet."
+  );
 
   return (
     <div>
       {respect && <RespectPlaceSheet stamp={respect.stamp} place={respect.place} onChoose={chooseArt} onLater={() => setRespect(null)} />}
-      <button type="button" onClick={stamp} disabled={busy || stamped}
+      <button type="button" onClick={stamp} disabled={busy || stamped || reportBusy}
         style={{ width: "100%", borderRadius: isTablet ? 16 : 14, padding: fs(isTablet ? 15 : 12), border: "none", cursor: "pointer", fontFamily: "inherit",
-          fontSize: fs(isTablet ? 18 : 14.5), fontWeight: 700, background: stamped ? "#E7F3EA" : STAMP, color: stamped ? "#266A3B" : "#fff" }}>
-        {busy ? "Checking you are here…" : stamped ? "✓ In your Virtual Passport" : iconic ? "📍 Stamp it — I'm here" : "📍 I was here — get the stamp"}
+          fontSize: fs(isTablet ? 18 : 14.5), fontWeight: 700, background: stamped ? (wasReported ? "#F3EEE3" : "#E7F3EA") : STAMP, color: stamped ? (wasReported ? INK : "#266A3B") : "#fff" }}>
+        {busy ? "Checking you are here…" : stamped ? (wasReported ? "In your Virtual Passport" : "✓ In your Virtual Passport") : iconic ? "📍 Stamp it — I'm here" : "📍 I was here — get the stamp"}
       </button>
-      {!stamped && !notHere && (
+      {stamped && wasReported && (
+        <p style={{ marginTop: 6, fontSize: fs(12.5), color: INK3, textAlign: "center" }}>Thanks for telling us — we&rsquo;ll check our map for {name}.</p>
+      )}
+      {!stamped && !refused && (
         <p style={{ fontSize: fs(11.5), color: INK3, textAlign: "center", marginTop: 5 }}>
           {iconic ? "An official GlobeSkimmers stamp" : "A typographic “I was here” stamp"} · only at the place, by GPS ·{" "}
           <button type="button" onClick={() => setHowOpen((v) => !v)} style={{ textDecoration: "underline", color: "inherit" }}>How stamps work</button>
@@ -184,7 +247,8 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
           This may be a sensitive place ❤️ — this stamp starts private, so only you can see it. You can share it from your Passport anytime.
         </p>
       )}
-      {stamped && stampedId && !memSaved && (
+      {/* Not for a stamp already held: saving would replace its note, which this page never showed. */}
+      {stamped && stampedId && !memSaved && !wasHeld && (
         <div style={{ marginTop: 10, borderRadius: 14, border: `1px solid ${RULE}`, background: "#fff", padding: "12px 12px 10px" }}>
           <div style={{ fontFamily: SERIF, fontSize: fs(18), color: INK, lineHeight: 1.2 }}>Want to remember something about this moment?</div>
           <div style={{ fontSize: fs(12), color: INK3, marginTop: 2 }}>🔒 Optional, and only you can see it — share it on your passport later if you like.</div>
@@ -198,13 +262,15 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
           </div>
         </div>
       )}
-      {notHere && (
-        <p style={{ marginTop: 8, borderRadius: 12, border: "1px solid #FCD9A8", background: "#FFF8EC", padding: "10px 12px", fontSize: fs(13), color: "#7A4A0C" }}>
-          {notHere.noFix
-            ? "We need your location to stamp this — turn on Location for Globeskimmers, then tap again."
-            : notHere.message ? notHere.message
-            : `This stamp is earned at the place${Number.isFinite(notHere.meters) ? ` — you're about ${formatDistance ? formatDistance(notHere.meters / 1609.34) : `${(notHere.meters / 1000).toFixed(1)} km`} away` : ""}. Tap again when you're here.`}
-        </p>
+      {refused && !stamped && (
+        <div style={{ marginTop: 8, borderRadius: 12, border: "1px solid #FCD9A8", background: "#FFF8EC", padding: "10px 12px" }}>
+          <p style={{ fontSize: fs(13), color: "#7A4A0C" }}>{refusalText(refused)}</p>
+          <button type="button" onClick={report} disabled={reportBusy}
+            style={{ marginTop: 8, width: "100%", borderRadius: 10, padding: fs(9), border: `1.5px solid ${STAMP}`, background: "#fff", color: STAMP, fontWeight: 700, fontSize: fs(13.5), fontFamily: "inherit", cursor: "pointer" }}>
+            {reportBusy ? "Sending…" : "I’m here, but the app is saying I’m not"}
+          </button>
+          <p style={{ marginTop: 5, fontSize: fs(11.5), color: "#7A4A0C", textAlign: "center" }}>You&rsquo;ll get the stamp, and we&rsquo;ll check our map for this place.</p>
+        </div>
       )}
     </div>
   );
@@ -215,7 +281,8 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
 // the place; the worker re-checks against Google's location.
 export function HereStamp({ place, formatDistance }) {
   const { currentGpsLocation } = useLocation();
-  const g = currentGpsLocation?.coordinates;
+  // A reading from this app run only — never yesterday's café, restored.
+  const g = isLiveFix(currentGpsLocation, 60 * 60 * 1000) ? currentGpsLocation.coordinates : null;
   const lat = Number(place?.lat), lng = Number(place?.lng);
   if (!g || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   if (metersBetween(g.latitude, g.longitude, lat, lng) > stampRadiusFor({ types: place.types }) + 50) return null;

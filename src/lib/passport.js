@@ -3,6 +3,7 @@
 // it), so nothing here trusts a client-supplied user id. See the meaning model:
 // docs/PASSPORT_MEANING_MODEL.md.
 import { callWorker } from '@/lib/callWorker';
+import { appInfo } from '@/lib/appInfo';
 
 // Great-circle metres between two coords (for GPS-verify: am I really here?).
 export function metersBetween(aLat, aLng, bLat, bLng) {
@@ -21,6 +22,20 @@ export async function addStamp(opts) {
   const { data, error } = await callWorker('passport/stamp', opts || {});
   return { data, error };
 }
+
+// "I'm here, but the app is saying I'm not" (founder, 2026-10-10): resend a
+// refused attraction stamp with report:true. The worker ALWAYS grants it (as
+// 'reported' — below GPS and photo, no ✓, the same stamp art) and files the
+// admin report: the spot rounded to about a city block (none for minors),
+// distance from our pin, GPS accuracy, phone platform and app version.
+// Send the same request that was refused, with the same fix.
+export async function reportStamp(opts) {
+  const { platform, version } = await appInfo();
+  return addStamp({ ...(opts || {}), report: true, platform, ...(version ? { app_version: version } : {}) });
+}
+
+// Codes on which the worker refuses an attraction stamp (409).
+export const STAMP_REFUSALS = ['not_here', 'unlocatable', 'proof_needed'];
 
 // The user's whole passport: { stamps:[{...,photos:[]}], stats:{...} }.
 export async function listPassport() {
