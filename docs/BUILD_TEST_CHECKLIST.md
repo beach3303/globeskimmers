@@ -1683,3 +1683,42 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Gates: node --check, eslint, no-undef 0, build 0, boot-check ✅.
 - **Activate (founder):** `npx wrangler d1 execute globeskimmers-attractions --remote --file=scripts/institutions/data/load_institutions.sql`
   then push (worker deploys) and `npm run ota`.
+
+## 2026-10-12 — Suggest a Place to Stamp: crowd-sourced Local favorites (branch stamping-v2)
+- Founder: "Next in the queue is Suggest a Place to Stamp-- let's do this"; approved the 6-screen mockup
+  (https://claude.ai/artifact/7Q5HTErHgpe6eV1dgsArQu). Decisions: docs/PLANS.md (2026-10-10 + item (8)).
+- Worker: D1 tables ps_places / ps_votes / ps_likes in globeskimmers-events, created on first use (no SQL).
+  Routes /places/suggest/check, /places/suggest, /places/suggestions (near · liked · new · mine),
+  /places/suggestion, /places/like, /admin/place-suggestions (list · decide · csv), GET /ps-photo/<key>.
+  lf:<id> stamps: 150 m GPS circle at the approved pin, entity_type local_favorite, meta.local_favorite.count.
+  Purge block 1f (votes, R2 photos, likes). Side fix: the anti-spoof home-country read sends Accept-Profile.
+- App: Home section (phone + iPad) with a one-time "Your suggestion is now a stamp" note; Suggest form + thanks;
+  Suggested places; Local favorite page; Admin → Place suggestions with Excel; Local favorite stamp in the
+  booklet and its card; "See this place" on an lf stamp opens its page.
+- Fix (own commit): the passport booklet threw for every kind 'country' stamp — on main since 4285ad7.
+- Founder 2026-10-12: the Dream shelf row "Local favorites" is renamed "Customer favorites" (the worker's
+  /dream/shelf title), so "Local favorite" only ever means the crowd-sourced stamp. Live with the worker deploy.
+- Site: privacy policy + delete-account page cover suggestions (deploy with the merge to main).
+- Review (71 agents) fixes: /places/report + ps_reports (3 reports hide a place: status 'held'); admin
+  Reported tab with Remove ('removed') / Keep at any count; town derived server-side (psGeoAt, the
+  revgeoP_ cache); D1 daily counter ps_rate; lf stamps take the approved row's name/town/pin and start
+  private when sensitive; a forged entity_type local_favorite is cleared; purge removes places only that
+  person suggested; toasts are announced to screen readers.
+- Second review (52 agents) fixes: /ps-photo/ serves only open/approved places (1-day cache) and Remove deletes
+  the R2 photos; approve/decline only from 'open' (409 'stale'); public summaries round an open place's pin to 3
+  decimals and drop the locals/visitors split (admin keeps both + up to 6 photos); report insert + count in one
+  batch; a report on a no-longer-approved lf: stamp is filed (409 'not_listed'); PP_SENSITIVE_NAME gains
+  cathedral/basilica/shrine/masjid/gurdwara/mandir/monastery/abbey/pagoda/wat… plus CJK words.
+- Third round: the desk's photo links carry a one-hour signature so a held/declined place's photos show there
+  (private, no-store); "Add your home city" opens an on-page picker (the draft stays); Tab stays inside the report
+  sheet and photo viewers; a vanished place's like says so; StampActions shows the disclosure; CJK brackets break
+  cleanly; the share-story disclosure stays one line (~24 px of 1080).
+- Final verification (24 agents) fixes: PP_SENSITIVE_NOT back to HEAD's list + PP_LANDMARK_PHRASE (phrase-only
+  exceptions); PP_SENSITIVE_INTL (es/fr/de/it/pt) and more CJK/Thai words; psPubPin drives the shown pin, distance,
+  the near list's 60 km cut-off, its order and the SQL pre-cut; "Pin the centre" on the pin map; latest home pick wins.
+- Gates: node --check, eslint clean, no-undef (only the 5 pre-existing), build 0, boot-check ✅; worker harness
+  181/181 + real router; browser harnesses 143/143 (shared), 444/444 (form), 293/293 (lists); stamp layout: all
+  3,050 previously-fitting names unchanged, 72 overflows now fit, 0 kinsoku violations in 8,000 fuzzed layouts;
+  screens captured with mocked routes.
+- **Activate:** after Apple approves — merge stamping-v2 into main (worker + site deploy), check
+  /places/suggestions answers 200 with `places`, then `npm run ota`. No SQL to run.

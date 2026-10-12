@@ -257,9 +257,53 @@ container for the whole app (Settings' 9 messages and the frozen screen's now sh
 a travel buddy** (founder, 2026-10-11): the big picture with × (or a tap outside) to collapse; inside it,
 "Customize color & stickers" (items) or Sitting / Standing + "Rename or say goodbye" (buddies) open the
 editors that a tap used to open. Swiping a buddy still changes its pose, on the shelf and in the big view.
+(8) **Suggest a Place to Stamp — built 2026-10-12** (founder: "let's do this", "i love the mockup"), as the
+decisions above and the 6-screen mockup say. Server: D1 tables ps_places / ps_votes / ps_likes in the events
+database, made on first use (no SQL to run); suggest, check, everyone's list (near / most liked / newest /
+mine), one place, likes, the admin desk (Ready / Approved / Declined, Approve / Decline, Excel), photos at
+/ps-photo/. Locals = home pin within 50 km (or the same home city when no pin); visitors = a GPS- or
+photo-proven stamp within 25 km. The same name within 1 km is the same place. Suggesting needs an adult
+birthday (teens held, may like). Name, "Other" text and photos are moderated (photos fail closed). Choices
+made in the build: a place you DECLINED refuses new suggestions with "We've already reviewed this place, and
+it won't become a stamp" (nothing kept); Home tells a suggester once when their place becomes a stamp ("We'll
+let you know" on the thanks screen is real); photo links carry no account id; account deletion removes votes,
+photos and likes. The Local favorite stamp: id lf:<n>, the approved pin with a 150 m GPS circle, its own teal
+stamp (never icon art) and "recommended by N people who've been there" on the stamp's card. Also on iPad
+Home. Fix riding along, its own commit: the booklet crashed for every kind 'country' stamp (on main since
+2026-10-05). The privacy policy and delete-account page now cover suggestions; they deploy with the merge.
+A 71-agent review then changed four things: (a) a suggestion is user content shown from its first vote, so
+every one has a **Report** button (an App Store rule for user content); 3 reports hide a place until you
+decide, and the desk's new **Reported** tab offers Remove / Keep at any count (your bell rings on a first
+report); (b) the server works out the town from the pin and never stores what a phone sends; (c) a Local
+favorite stamp takes the approved place's own name, town and pin, starts private when the place is
+sensitive (a chapel, a clinic), and no other stamp can wear the look; (d) deleting an account removes a
+place only that person suggested. Also: an atomic daily limit, Android back closes the map and photo views,
+screen readers now hear every toast in the app. A second review (52 agents) then tightened the takedown and
+privacy: a hidden or removed place's photos are no longer served and Remove deletes them; Approve / Decline only
+act on a place that is still open (a card loaded before reports hid it says "This place changed"); until a place
+is approved, others see its pin only to about 100 m (a "Use my location" pin may be someone's home), and the
+form says the pin is where you're standing; the locals/visitors split is admin-only; cathedrals, shrines,
+mosques, gurdwaras, temples and the like now start private as visits and Local favorites (official icon stamps
+are unchanged); a report on a removed Local favorite is still filed; the
+desk shows each place's photos (even a hidden one, through one-hour signed links); each message is spoken once
+to screen readers. "Add your home city" now picks it on the Suggest page (the draft stays) and says it is saved to
+the profile. The shared-story disclosure under a Local favorite stays one line at about 24 px of a 1080-px story
+(30 px would need two lines). A final verification (24 agents) caught that the landmark exceptions had made
+"Canyon Ridge Hospital"-style names start public: the exception is now an exact phrase ("Cathedral Rock",
+"Shrine Auditorium") and places of worship are also recognized in Spanish, French, German, Italian, Portuguese,
+Thai, Chinese and Japanese; the near list now cuts off and orders by the same ~100 m pin it shows; keyboard users
+can pin the map's centre; the newest home-city pick wins.
+**Decided (founder, 2026-10-12):** the Dream shelf's row of official regional stamps (LACMA, Christ
+Cathedral, the Getty Villa) is now **"Customer favorites"** — "Local favorite" belongs to the crowd-sourced
+stamp. The worker names the rows, so it changes with the worker deploy (no OTA needed).
+**Still to decide (founder):** the daily limit (10 for now); a "Local Scout" badge; whether the admin desk
+may reverse a decision; the stamp's bottom line "RECOMMENDED BY
+LOCALS" (from the mockup) is printed even when every recommender was a visitor — keep it, or require at
+least one local before Approve.
 **Ship order:** the worker must deploy BEFORE the OTA that carries this client — the deployed worker has
 no report path, so on the old worker the report button would only show an error. Check that /passport/stamp
-answers `report:true` with 200 `verified:'reported'`, then run the OTA.
+answers `report:true` with 200 `verified:'reported'`, and that /places/suggestions answers 200 with
+`places`, then run the OTA.
 **TEEN HOLD (founder, 2026-10-11): all social OFF for 13–17, effective with the next worker deploy.**
 Teens keep every travel tool and a PRIVATE passport; every social/publishing door returns
 "Social features open at age 18 — your passport stays yours, private" (code teen_hold, 403). Doors held:
