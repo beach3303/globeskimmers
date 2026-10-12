@@ -205,6 +205,14 @@ https://claude.ai/artifact/7Q5HTErHgpe6eV1dgsArQu (6 screens).
   for icons stands.
 - **Still to decide:** suggestion rate limits, a "Local Scout" badge for suggesters, and moderating the
   free text (it goes through gbModerate).
+**Built 2026-10-11 on the branch, ships in the post-approval wave:** (1) the **Before-you-go engine**
+(POST /attractions/before-you-go — quote-backed facts or unknown, allowed sources only, batched support
+check, byg:v1 90d/30d, caps, report flag); the app cards, the Why-visit batch writer and the 30-place
+hand-check still follow. (2) The **under-13 freeze**: freeze:<uid> marker at the age gate, no stamps or
+photos while frozen (403 under_age), daily cron purge after FREEZE_PURGE_DAYS = 7 (placeholder pending
+counsel) via gbPurgeUserContent (now shared with account deletion and extended with postcards + follow
+edges), POST /admin/age-appeal restores access with a corrected birthday. Still missing from the purge:
+dish posts and their photos (Phase 1 item 6).
 **TEEN HOLD (founder, 2026-10-11): all social OFF for 13–17, effective with the next worker deploy.**
 Teens keep every travel tool and a PRIVATE passport; every social/publishing door returns
 "Social features open at 18 — your passport stays yours, private" (code teen_hold, 403). Doors held:
