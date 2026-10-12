@@ -11,14 +11,17 @@
  * (page views, search queries, zero-result rates, dish gallery usage).
  */
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { exportCsv, saveCsvText } from '@/lib/adminExport';
 import { callWorker } from '@/lib/callWorker';
 import { openPartner } from '@/lib/openPartner';
 import { createPageUrl } from '@/utils';
-import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap, Users, UserCheck, Mail, MapPin } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap, Users, UserCheck, Mail, MapPin, MapPinPlus } from 'lucide-react';
 import { isAdminEmail } from '@/lib/admins';
+import { adminPlaceSuggestions, REPORT_REASONS, REVIEW_AT } from '@/lib/suggestions';
+import { showToast } from '@/components/Toast';
+import { PhotoView } from '@/components/home/SuggestPlaceSection';
 import OfficialSeal from '@/components/passport/OfficialSeal';
 
 const SEAL_TIER_LABEL = { gold: 'Gold · Honored', burgundy: 'Burgundy · Official', teal: 'Teal · GlobeSkimmers team', 'sunshine-heart': 'Sunshine ♥ · Friends & Family', 'sunshine-star': 'Sunshine ★ · Friends & Family' };
@@ -453,6 +456,266 @@ function StampReportsDesk({ refreshKey }) {
   );
 }
 
+// Suggest a Place to Stamp (founder decisions 2026-10-10): the review desk.
+// Only places with 5 or more suggestions show here, and the count keeps going.
+// Approve makes the place a Local favorite stamp — nothing goes live without
+// it; Decline takes it off every list. Each card: where (and the map), the
+// count, locals vs visitors, likes, the top reasons and the "Other" texts,
+// and (2026-10-12) its photos — up to 6, each opens full screen — so nothing
+// is approved or kept unseen; an approved place's name opens its page.
+// Reported (2026-10-12): places people reported, at any count — three
+// reports hide an open place until it's decided here. Remove takes it down
+// for everyone; Keep clears the reports and puts a hidden place back.
+// Excel export: every place with 5+, whatever its status.
+const PSD_TABS = [['ready', 'Ready'], ['approved', 'Approved'], ['declined', 'Declined'], ['reported', 'Reported']];
+const PSD_DONE = {
+  approved: { text: 'Approved: now a Local favorite stamp', background: '#E8F4F2', color: '#0A5F58' },
+  declined: { text: 'Declined', background: '#EFEBE2', color: '#3D4550' },
+  removed: { text: 'Removed', background: '#EFEBE2', color: '#3D4550' },
+  keep: { text: 'Kept — reports cleared', background: '#E8F4F2', color: '#0A5F58' },
+};
+const PSD_VERB = { approved: 'approve', declined: 'decline', removed: 'remove', keep: 'keep' };
+const PSD_EMPTY = {
+  ready: 'Nothing to review. A place shows here once 5 people suggest it.',
+  approved: 'No Local favorites yet.',
+  declined: 'Nothing declined.',
+  reported: 'No reports. A place shows here when someone reports it, whatever its count.',
+};
+const PSD_NOTE = {
+  review: 'Only places with 5 or more suggestions show here. Counts keep going after 5. Approve makes it a Local favorite stamp — nothing goes live without it.',
+  reported: 'Places people reported, at any count. Three reports hide an open place until you decide; an approved stamp stays up and is only flagged. Remove takes it off every list; Keep clears the reports.',
+};
+// Where a reported place stands, when it isn't simply open.
+const PSD_STATUS = {
+  held: { text: 'Hidden until you decide', background: '#FFF3DC', color: '#8A5A00' },
+  approved: { text: 'Approved stamp', background: '#E8F4F2', color: '#0A5F58' },
+};
+const psdCount = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const psdDay = (iso) => (iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
+// "3 reports: Offensive or unkind (2), Spam or advertising (1)" — most first.
+const psdReports = (r) => {
+  const parts = REPORT_REASONS.map((x) => ({ label: x.label, n: Number(r?.reasons?.[x.key]) || 0 })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n);
+  return `${psdCount(r?.n || 0, 'report', 'reports')}${parts.length ? `: ${parts.map((x) => `${x.label} (${x.n})`).join(', ')}` : ''}`;
+};
+// The tab counts after a decision made here, so they move at once (the next
+// load brings the server's own). Ready = open with 5+; Reported = held, or
+// open or approved with reports left; a decline leaves Reported, a removal
+// leaves everything, and Keep puts a hidden place with 5+ back in Ready.
+function psdCountsAfter(c, p, decision) {
+  const next = { ...c };
+  const move = (k, d) => { next[k] = Math.max(0, (next[k] || 0) + d); };
+  const ready = p.status === 'review' || (p.status === 'open' && p.count >= REVIEW_AT);
+  const reported = p.status === 'held' || (p.reports?.n || 0) > 0;
+  if (decision === 'approved' || decision === 'declined') {
+    if (ready) move('ready', -1);
+    move(decision, 1);
+    if (decision === 'declined' && reported) move('reported', -1);
+  } else if (decision === 'removed') {
+    if (ready) move('ready', -1);
+    if (p.status === 'approved') move('approved', -1);
+    if (reported) move('reported', -1);
+  } else if (decision === 'keep') {
+    if (reported) move('reported', -1);
+    if (p.status === 'held' && p.count >= REVIEW_AT) move('ready', 1);
+  }
+  return next;
+}
+function PlaceSuggestionsDesk({ refreshKey }) {
+  const [tab, setTab] = React.useState('ready');
+  // ok: the counts on screen came from a successful load (a failed one keeps
+  // what was there and says so — never "0 ready").
+  const [st, setSt] = React.useState({ places: [], counts: null, error: null, loaded: false, ok: false });
+  const [decided, setDecided] = React.useState({});     // id → the decision made on this screen
+  const [busyId, setBusyId] = React.useState(null);
+  const [csvBusy, setCsvBusy] = React.useState(false);
+  const [actionError, setActionError] = React.useState(null);   // a decision or export that failed
+  const [allTexts, setAllTexts] = React.useState({});   // id → every "Other" text shown
+  const [photo, setPhoto] = React.useState(null);       // { src, name }: the photo open full screen
+  const [broken, setBroken] = React.useState({});       // photo url → it didn't load (tried again on the next load)
+  const seq = React.useRef(0);
+  const listing = React.useRef(false);   // the newest list request is still on its way
+  const tabRef = React.useRef(tab);
+  tabRef.current = tab;
+  const load = async () => {
+    const my = ++seq.current;
+    listing.current = true;
+    const { data, error } = await adminPlaceSuggestions({ op: 'list', tab: tabRef.current });
+    if (my !== seq.current) return; // a newer load (another tab, a refresh) or a decision owns the screen
+    listing.current = false;
+    if (error) { setSt((s) => ({ ...s, error, loaded: true })); return; }
+    setDecided({});
+    setBroken({});
+    setSt({ places: data?.places || [], counts: data?.counts || null, error: null, loaded: true, ok: true });
+  };
+  React.useEffect(() => { load(); }, [tab, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Switching tabs clears the list until the new one arrives, so the other
+  // tab's places (or a false "Nothing to review") never show under it.
+  const showTab = (t) => {
+    if (t === tab) return;
+    setSt((s) => ({ ...s, places: [], loaded: false }));
+    setTab(t);
+  };
+  const decide = async (p, decision) => {
+    if (busyId) return;
+    if (decision === 'removed' && !window.confirm('Remove this place for everyone?')) return;
+    setBusyId(p.id); setActionError(null);
+    const { data, error } = await adminPlaceSuggestions({ op: 'decide', id: p.id, decision });
+    setBusyId(null);
+    // Approve / Decline on a card that went stale — reports hid the place, or
+    // it was decided on another device (2026-10-12): nothing was changed, so
+    // the tab loads again to show where it stands (a newer load still wins).
+    if (data?.code === 'stale') {
+      showToast('This place changed since the list loaded — here’s where it stands now.', 'info');
+      load();
+      return;
+    }
+    if (error) { setActionError(`Couldn’t ${PSD_VERB[decision]} ${p.name}: ${error}`); return; }
+    // A list asked for before this decision landed would put the card back
+    // undecided, and the counts with it: it no longer owns the screen. One
+    // still on its way is asked again — the new answer has the decision in it.
+    const again = listing.current;
+    seq.current += 1;
+    listing.current = false;
+    // The card keeps its place with the decision on it; the tab counts move now.
+    setDecided((d) => ({ ...d, [p.id]: decision }));
+    setSt((s) => (s.counts ? { ...s, counts: psdCountsAfter(s.counts, p, decision) } : s));
+    if (again) load();
+  };
+  const download = async () => {
+    if (csvBusy) return;
+    setCsvBusy(true); setActionError(null);
+    const { data, error } = await adminPlaceSuggestions({ op: 'csv', as: 'json' }, { timeoutMs: 60000 });
+    if (error || !data?.csv) { setCsvBusy(false); setActionError(`Couldn’t export: ${error || 'no file came back'}`); return; }
+    try { await saveCsvText(data.filename || `place-suggestions-${today()}.csv`, data.csv); }
+    catch (e) { setActionError(`Couldn’t save the file: ${e?.message || e}`); }
+    finally { setCsvBusy(false); }
+  };
+  const link = { fontSize: 12, background: 'none', border: 'none', padding: 0, cursor: 'pointer' };
+  const counts = st.ok ? st.counts : null;
+  const reportedTab = tab === 'reported';
+  const pill = { display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: 11.5, fontWeight: 700 };
+  const act = (dim) => ({ flex: 1, minHeight: 42, borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: dim ? 0.6 : 1 });
+  const thumb = { width: 56, height: 56, flex: 'none', borderRadius: 8, background: '#EFEBE2' };
+  return (
+    <Section title={`⭐ Place suggestions — ${counts ? counts.ready : '—'} ready${counts?.reported ? ` · ${counts.reported} reported` : ''}`} icon={MapPinPlus}>
+      {photo && <PhotoView src={photo.src} alt={`A photo of ${photo.name}`} onClose={() => setPhoto(null)} />}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        {PSD_TABS.map(([k, label]) => (
+          <button key={k} type="button" style={{ ...xbtn, background: tab === k ? COLORS.dark : '#fff', color: tab === k ? '#fff' : '#3A3128' }} onClick={() => showTab(k)}>
+            {label} · {counts ? counts[k] || 0 : '—'}
+          </button>
+        ))}
+        <button type="button" style={xbtn} onClick={load} aria-label="Reload the list">↻</button>
+        <button type="button" style={{ ...xbtn, marginLeft: 'auto' }} onClick={download} disabled={csvBusy}>{csvBusy ? 'Preparing…' : '⬇ Excel (CSV)'}</button>
+      </div>
+      <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>{reportedTab ? PSD_NOTE.reported : PSD_NOTE.review}</div>
+      {st.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>Couldn&rsquo;t load the latest: {st.error}</div>}
+      {actionError && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{actionError}</div>}
+      {!st.loaded && !st.error && <div style={{ fontSize: 13, color: COLORS.gray, padding: '12px 0' }}>Loading…</div>}
+      {st.loaded && st.ok && !st.error && st.places.length === 0 && (
+        <div style={{ fontSize: 13, color: COLORS.gray, padding: '12px 0' }}>{PSD_EMPTY[tab]}</div>
+      )}
+      {st.places.map((p) => {
+        // On Reported, an approved place is still waiting on Remove or Keep.
+        const done = decided[p.id] || (!reportedTab && (p.status === 'approved' || p.status === 'declined') ? p.status : null);
+        const look = done ? PSD_DONE[done] : null;
+        const stands = reportedTab && !decided[p.id] ? PSD_STATUS[p.status] : null;
+        const where = [p.city, p.region, p.country].filter(Boolean).join(', ');
+        const texts = Array.isArray(p.other_texts) ? p.other_texts : [];
+        const shown = allTexts[p.id] ? texts : texts.slice(0, 3);
+        const busy = busyId === p.id;
+        // Where it stands now, a decision made here included (Keep leaves the
+        // status as it was): an approved place's name opens its Local
+        // favorite page; a removed place's photos were deleted with it.
+        const now = decided[p.id] && decided[p.id] !== 'keep' ? decided[p.id] : p.status;
+        const photos = now !== 'removed' && Array.isArray(p.photos) ? p.photos.filter(Boolean).slice(0, 6) : [];
+        return (
+          <div key={p.id} style={{ padding: '12px 0', borderTop: `1px solid ${COLORS.border}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.dark, overflowWrap: 'anywhere' }}>
+                  {now === 'approved' ? (
+                    <Link to={`${createPageUrl('LocalFavorite')}?id=${encodeURIComponent(p.id)}`} style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 2 }}>{p.name}</Link>
+                  ) : p.name}
+                </div>
+                <div style={{ fontSize: 12.5, color: COLORS.gray, marginTop: 2 }}>
+                  {where || 'No town on record'} · <button type="button" style={{ ...link, fontSize: 12.5, fontWeight: 600, color: COLORS.accent }}
+                    onClick={() => openPartner(p.map_url || `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`)}>map</button>
+                </div>
+              </div>
+              <div style={{ flex: 'none', textAlign: 'right' }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.dark, lineHeight: 1.1 }}>{p.count}</div>
+                <div style={{ fontSize: 11.5, color: COLORS.gray }}>{p.count === 1 ? 'suggestion' : 'suggestions'}</div>
+              </div>
+            </div>
+            {((p.reports?.n || 0) > 0 || stands) && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 6 }}>
+                {(p.reports?.n || 0) > 0 && <span style={{ fontSize: 12.5, fontWeight: 600, color: '#9A3412', lineHeight: 1.4 }}>{psdReports(p.reports)}</span>}
+                {stands && <span style={{ ...pill, background: stands.background, color: stands.color }}>{stands.text}</span>}
+              </div>
+            )}
+            <div style={{ fontSize: 12.5, color: '#3D4550', marginTop: 6 }}>
+              {psdCount(p.locals || 0, 'local', 'locals')}, {psdCount(p.visitors || 0, 'visitor', 'visitors')} · {psdCount(p.likes || 0, 'like', 'likes')}
+            </div>
+            {p.reasons?.length > 0 && (
+              <div style={{ fontSize: 12.5, color: '#3D4550', marginTop: 4, lineHeight: 1.4 }}>Top reasons: {p.reasons.map((r) => `${r.short} (${r.n})`).join(', ')}</div>
+            )}
+            {shown.map((t, i) => (
+              <div key={i} style={{ fontSize: 12.5, color: COLORS.gray, fontStyle: 'italic', lineHeight: 1.4, marginTop: 4 }}>&ldquo;{t}&rdquo;</div>
+            ))}
+            {texts.length > shown.length && (
+              <button type="button" style={{ ...link, color: COLORS.accent, marginTop: 4 }} onClick={() => setAllTexts((a) => ({ ...a, [p.id]: true }))}>All {texts.length} in their own words</button>
+            )}
+            {photos.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {photos.map((src, i) => (broken[src] ? (
+                  <div key={src} style={{ ...thumb, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4, fontSize: 10.5, lineHeight: 1.2, color: COLORS.gray, textAlign: 'center' }}>
+                    Couldn&rsquo;t load
+                  </div>
+                ) : (
+                  <button key={src} type="button" onClick={() => setPhoto({ src, name: p.name })} aria-label={`Open photo ${i + 1} of ${photos.length}: ${p.name}`}
+                    style={{ ...thumb, padding: 0, border: 'none', overflow: 'hidden', cursor: 'pointer' }}>
+                    <img src={src} alt="" loading="lazy" onError={() => setBroken((b) => ({ ...b, [src]: true }))}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  </button>
+                )))}
+              </div>
+            )}
+            <div style={{ fontSize: 11.5, color: COLORS.gray, marginTop: 4 }}>
+              First suggested {psdDay(p.created_at)}{p.decided_at ? ` · decided ${psdDay(p.decided_at)}` : ''}
+            </div>
+            {look ? (
+              <div style={{ marginTop: 9, minHeight: 40, borderRadius: 10, background: look.background, color: look.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13.5, fontWeight: 600 }}>{look.text}</div>
+            ) : reportedTab ? (
+              <div style={{ display: 'flex', gap: 8, marginTop: 9 }}>
+                <button type="button" disabled={busy} onClick={() => decide(p, 'removed')}
+                  style={{ ...act(busy), border: '1px solid #E4C3BC', background: '#fff', color: '#B42318' }}>
+                  Remove
+                </button>
+                <button type="button" disabled={busy} onClick={() => decide(p, 'keep')}
+                  style={{ ...act(busy), border: '1px solid #d8d2c6', background: '#fff', color: COLORS.dark }}>
+                  Keep
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, marginTop: 9 }}>
+                <button type="button" disabled={busy} onClick={() => decide(p, 'approved')}
+                  style={{ flex: 1, minHeight: 42, borderRadius: 10, border: 'none', background: '#0E7C73', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
+                  Approve as Local favorite
+                </button>
+                <button type="button" disabled={busy} onClick={() => decide(p, 'declined')}
+                  style={{ flex: 'none', minHeight: 42, padding: '0 14px', borderRadius: 10, border: '1px solid #d8d2c6', background: '#fff', color: COLORS.dark, fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
+                  Decline
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </Section>
+  );
+}
+
 function Section({ title, icon: Icon, children, empty }) {
   return (
     <div style={{ background: COLORS.card, borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
@@ -875,6 +1138,8 @@ export default function AdminAnalytics() {
             <TravelerPull />
 
             <StampReportsDesk refreshKey={generatedAt} />
+
+            <PlaceSuggestionsDesk refreshKey={generatedAt} />
 
             <Section title={`🛡️ Safety reports — ${reports.rows.length} open`} icon={Mail} empty={reports.error ? `Couldn't load reports: ${reports.error}` : reports.rows.length === 0 ? 'No open reports. Shared-passport reports land here; a child-safety reason gets 24h triage.' : null}>
               {reports.rows.map((r) => (

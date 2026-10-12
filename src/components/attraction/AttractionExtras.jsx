@@ -68,7 +68,10 @@ export function useAttractionLink(a) {
   return link;
 }
 
-export function StampHereButton({ a, link: resolved, formatDistance, isTablet }) {
+// localFavorite (founder, 2026-10-10): an approved suggestion's lf:<id> stamp —
+// its own hint line, and never a landmark variant, whose official art a
+// Local favorite must not wear ("Niagara Falls overlook" is not Niagara Falls).
+export function StampHereButton({ a, link: resolved, formatDistance, isTablet, localFavorite = false }) {
   const link = resolved?.stamp || null;
   const [busy, setBusy] = useState(false);
   const [stamped, setStamped] = useState(false);
@@ -178,10 +181,11 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
       };
       return { payload, stampName, city, country, entityId };
     };
-    const pinVariant = iconic ? resolveStampVariant({ name: link.name, lat: placeLat, lng: placeLng, country, verified: "self" }) : null;
+    const variants = iconic && !localFavorite;
+    const pinVariant = variants ? resolveStampVariant({ name: link.name, lat: placeLat, lng: placeLng, country, verified: "self" }) : null;
     const reportReq = build(pinVariant);
     if (!fix) { setBusy(false); setRefused({ why: noFix, req: reportReq }); return; }
-    const req = build(iconic ? resolveStampVariant({ name: link.name, lat: fix.lat, lng: fix.lng, country, verified: "gps" }) : null);
+    const req = build(variants ? resolveStampVariant({ name: link.name, lat: fix.lat, lng: fix.lng, country, verified: "gps" }) : null);
     const { data, error } = await addStamp(req.payload);
     setBusy(false);
     if (STAMP_REFUSALS.includes(data?.code)) {
@@ -230,7 +234,7 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
       )}
       {!stamped && !refused && (
         <p style={{ fontSize: fs(11.5), color: INK3, textAlign: "center", marginTop: 5 }}>
-          {iconic ? "An official GlobeSkimmers stamp" : "A typographic “I was here” stamp"} · only at the place, by GPS ·{" "}
+          {localFavorite ? "A Local favorite stamp" : iconic ? "An official GlobeSkimmers stamp" : "A typographic “I was here” stamp"} · only at the place, by GPS ·{" "}
           <button type="button" onClick={() => setHowOpen((v) => !v)} style={{ textDecoration: "underline", color: "inherit" }}>How stamps work</button>
         </p>
       )}

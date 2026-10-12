@@ -8,6 +8,7 @@ import StampsNearYou from '@/components/home/StampsNearYou';
 import DreamShelf from '@/components/home/DreamShelf';
 import PassportHero from '@/components/home/PassportHero';
 import FriendsTravels from '@/components/home/FriendsTravels';
+import SuggestPlaceSection from '@/components/home/SuggestPlaceSection';
 import SmartSearchBar from '@/components/search/SmartSearchBar';
 import SmartSearchOverlay from '@/components/search/SmartSearchOverlay';
 import DestinationStrip from '@/components/search/DestinationStrip';
@@ -217,6 +218,12 @@ export default function HomeTablet({
           <DreamShelf {...dreamShelf} />
         </div>
       )}
+
+      {/* ── SUGGEST A PLACE — on the phone it sits below the Dream shelf
+             (founder decisions 2026-10-10); the iPad gets it in the same
+             place. It brings its own top margin and renders nothing while it
+             loads or has nothing to show. ─────────────────────────────── */}
+      <SuggestPlaceSection wide />
 
       {/* ── EXPLORE MORE — 3-col gradient cards ───────────────────────── */}
       <div className="mt-9">

@@ -56,6 +56,7 @@ import ConvenienceStore from './pages/ConvenienceStore';
 import CultureInformation from './pages/CultureInformation';
 import DemandReport from './pages/DemandReport';
 import Home from './pages/Home';
+import LocalFavorite from './pages/LocalFavorite';
 import Mailbox from './pages/Mailbox';
 import MoneyExchange from './pages/MoneyExchange';
 import Onboarding from './pages/Onboarding';
@@ -67,6 +68,8 @@ import RestroomFinder from './pages/RestroomFinder';
 import SavedLocations from './pages/SavedLocations';
 import Settings from './pages/Settings';
 import Shopping from './pages/Shopping';
+import SuggestPlace from './pages/SuggestPlace';
+import Suggestions from './pages/Suggestions';
 import ThingsToDo from './pages/ThingsToDo';
 import Weather from './pages/Weather';
 import __Layout from './Layout.jsx';
@@ -82,6 +85,7 @@ export const PAGES = {
     "CultureInformation": CultureInformation,
     "DemandReport": DemandReport,
     "Home": Home,
+    "LocalFavorite": LocalFavorite,
     "Mailbox": Mailbox,
     "MoneyExchange": MoneyExchange,
     "Onboarding": Onboarding,
@@ -93,6 +97,8 @@ export const PAGES = {
     "SavedLocations": SavedLocations,
     "Settings": Settings,
     "Shopping": Shopping,
+    "SuggestPlace": SuggestPlace,
+    "Suggestions": Suggestions,
     "ThingsToDo": ThingsToDo,
     "Weather": Weather,
 }
