@@ -1046,6 +1046,88 @@ async function handleLogEvent(request, env) {
 // user with the SERVICE ROLE key. Removing the auth.users row cascades
 // public.profiles + public.login_events (FK ON DELETE CASCADE).
 // Requires the Worker secret SUPABASE_SERVICE_ROLE_KEY (`wrangler secret put`).
+// Everything a traveler created, removed: guestbook notes anonymized and
+// their photos down, stamps + memory photos + R2 objects, tags, share link,
+// postcards they sent (and their photos), follow edges both ways, and their
+// "I'm here" reports. Shared by account deletion and the under-age freeze
+// (which keeps the auth user so an appeal can restore ACCESS). Best-effort
+// throughout: a failure in one block never stops the next.
+async function gbPurgeUserContent(env, userId) {
+  const SUPABASE_URL = env.SUPABASE_URL || 'https://bkaxadiyehddzkiuheea.supabase.co';
+  const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SERVICE_KEY || !userId) return;
+  // 1b) Anonymize their PUBLIC guestbook notes (keep the tip, drop the identity —
+  //     Apple 5.1.1 / GDPR) + remove their PRIVATE visit records. Best-effort.
+  try {
+    // Purge their uploaded photos from R2 first (the tips stay, anonymized; the
+    // photos come DOWN — honoring deletion, not just anonymizing).
+    try {
+      const pr = await fetch(`${SUPABASE_URL}/rest/v1/guestbook_entries?user_id=eq.${userId}&photo_key=not.is.null&select=photo_key`, {
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      });
+      if (pr.ok && env.MEDIA) {
+        const withPhotos = await pr.json();
+        await Promise.all((withPhotos || []).map((r) => env.MEDIA.delete(r.photo_key).catch(() => {})));
+      }
+    } catch { /* R2 purge best-effort */ }
+    await fetch(`${SUPABASE_URL}/rest/v1/guestbook_entries?user_id=eq.${userId}`, {
+      method: 'PATCH',
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ user_id: null, display_name: 'A traveler', home_city: null, photo_key: null, photo_url: null }),
+    });
+    await fetch(`${SUPABASE_URL}/rest/v1/guestbook_visits?user_id=eq.${userId}`, {
+      method: 'DELETE',
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    });
+  } catch { /* anonymization is best-effort; still delete the account */ }
+
+  // 1c) Passport is PRIVATE (not public UGC) → fully DELETE the user's stamps +
+  //     memory photos + their R2 objects. Best-effort.
+  try {
+    try {
+      const pr = await fetch(`${SUPABASE_URL}/rest/v1/passport_stamp_photos?user_id=eq.${userId}&select=photo_key`, {
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      });
+      if (pr.ok && env.MEDIA) {
+        const rows = await pr.json();
+        await Promise.all((rows || []).map((r) => env.MEDIA.delete(r.photo_key).catch(() => {})));
+      }
+    } catch { /* R2 purge best-effort */ }
+    // Delete stamps (cascades photo rows via FK).
+    await fetch(`${SUPABASE_URL}/rest/v1/passport_stamps?user_id=eq.${userId}`, {
+      method: 'DELETE',
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    });
+    // Remove buddy-tags they sent or received + their share link.
+    await fetch(`${SUPABASE_URL}/rest/v1/passport_tags?or=(from_user_id.eq.${userId},to_user_id.eq.${userId})`, {
+      method: 'DELETE',
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    });
+    await fetch(`${SUPABASE_URL}/rest/v1/passport_shares?user_id=eq.${userId}`, {
+      method: 'DELETE',
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    });
+  } catch { /* passport purge best-effort; still delete the account */ }
+
+  // 1d) Their "I'm here, but the app is saying I'm not" reports (events D1,
+  //     keyed by the same anonymous code the report used). Best-effort.
+  try {
+    if (env.DB) {
+      await env.DB.prepare(STAMP_REPORT_SQL).run();
+      const code = (await sha256Hex(`${userId}:stamp-report`)).slice(0, 8);
+      await env.DB.prepare('DELETE FROM stamp_reports WHERE user_code = ?').bind(code).run();
+    }
+  } catch { /* report purge best-effort; still delete the account */ }
+
+  // 1e) Postcards they sent (+ their R2 photos) and follow edges both ways.
+  try {
+    const pq = await fetch(`${SUPABASE_URL}/rest/v1/postcards?sender_id=eq.${userId}&select=photo_key`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Accept-Profile': 'api' } });
+    if (pq.ok && env.MEDIA) await Promise.all(((await pq.json()) || []).map((r) => r.photo_key && env.MEDIA.delete(r.photo_key).catch(() => {})));
+    await gbRest(env, `postcards?sender_id=eq.${userId}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+    await gbRest(env, `user_follows?or=(follower_id.eq.${userId},followee_id.eq.${userId})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+  } catch { /* best-effort */ }
+}
+
 async function handleDeleteAccount(request, env) {
   try {
     const authHeader = request.headers.get('Authorization') || '';
@@ -1066,68 +1148,7 @@ async function handleDeleteAccount(request, env) {
     const userId = who?.id;
     if (!userId) return jsonResponse({ error: 'Could not identify account' }, 401);
 
-    // 1b) Anonymize their PUBLIC guestbook notes (keep the tip, drop the identity —
-    //     Apple 5.1.1 / GDPR) + remove their PRIVATE visit records. Best-effort.
-    try {
-      // Purge their uploaded photos from R2 first (the tips stay, anonymized; the
-      // photos come DOWN — honoring deletion, not just anonymizing).
-      try {
-        const pr = await fetch(`${SUPABASE_URL}/rest/v1/guestbook_entries?user_id=eq.${userId}&photo_key=not.is.null&select=photo_key`, {
-          headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-        });
-        if (pr.ok && env.MEDIA) {
-          const withPhotos = await pr.json();
-          await Promise.all((withPhotos || []).map((r) => env.MEDIA.delete(r.photo_key).catch(() => {})));
-        }
-      } catch { /* R2 purge best-effort */ }
-      await fetch(`${SUPABASE_URL}/rest/v1/guestbook_entries?user_id=eq.${userId}`, {
-        method: 'PATCH',
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify({ user_id: null, display_name: 'A traveler', home_city: null, photo_key: null, photo_url: null }),
-      });
-      await fetch(`${SUPABASE_URL}/rest/v1/guestbook_visits?user_id=eq.${userId}`, {
-        method: 'DELETE',
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-      });
-    } catch { /* anonymization is best-effort; still delete the account */ }
-
-    // 1c) Passport is PRIVATE (not public UGC) → fully DELETE the user's stamps +
-    //     memory photos + their R2 objects. Best-effort.
-    try {
-      try {
-        const pr = await fetch(`${SUPABASE_URL}/rest/v1/passport_stamp_photos?user_id=eq.${userId}&select=photo_key`, {
-          headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-        });
-        if (pr.ok && env.MEDIA) {
-          const rows = await pr.json();
-          await Promise.all((rows || []).map((r) => env.MEDIA.delete(r.photo_key).catch(() => {})));
-        }
-      } catch { /* R2 purge best-effort */ }
-      // Delete stamps (cascades photo rows via FK).
-      await fetch(`${SUPABASE_URL}/rest/v1/passport_stamps?user_id=eq.${userId}`, {
-        method: 'DELETE',
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-      });
-      // Remove buddy-tags they sent or received + their share link.
-      await fetch(`${SUPABASE_URL}/rest/v1/passport_tags?or=(from_user_id.eq.${userId},to_user_id.eq.${userId})`, {
-        method: 'DELETE',
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-      });
-      await fetch(`${SUPABASE_URL}/rest/v1/passport_shares?user_id=eq.${userId}`, {
-        method: 'DELETE',
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-      });
-    } catch { /* passport purge best-effort; still delete the account */ }
-
-    // 1d) Their "I'm here, but the app is saying I'm not" reports (events D1,
-    //     keyed by the same anonymous code the report used). Best-effort.
-    try {
-      if (env.DB) {
-        await env.DB.prepare(STAMP_REPORT_SQL).run();
-        const code = (await sha256Hex(`${userId}:stamp-report`)).slice(0, 8);
-        await env.DB.prepare('DELETE FROM stamp_reports WHERE user_code = ?').bind(code).run();
-      }
-    } catch { /* report purge best-effort; still delete the account */ }
+    await gbPurgeUserContent(env, userId);
 
     // 2) Hard-delete the auth user (cascades profiles + login_events).
     const delRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
@@ -13379,6 +13400,7 @@ async function handlePassportStamp(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in to stamp your passport' }, 401);
+    if (gbUnderAge(await gbSocialProfile(env, user.id).catch(() => null))) return gbUnderAgeResp();
     const b = await request.json().catch(() => ({}));
     const name = String(b.name || '').trim();
     if (!name) return jsonResponse({ error: 'name required' }, 400);
@@ -13895,6 +13917,7 @@ async function handlePassportPhotoUpload(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in to add a photo' }, 401);
+    if (gbUnderAge(await gbSocialProfile(env, user.id).catch(() => null))) return gbUnderAgeResp();
     if (!env.MEDIA) return jsonResponse({ error: 'Photo storage not configured' }, 500);
     const b = await request.json().catch(() => ({}));
     const stampId = String(b.stamp_id || '');
@@ -14618,6 +14641,61 @@ const TEEN_SOCIAL_ENABLED = false;
 const gbTeenHold = (sp) => !TEEN_SOCIAL_ENABLED && sp?.social_tier === 'teen';
 const gbTeenHoldResp = () => jsonResponse({ error: 'Social features open at 18 — your passport stays yours, private', code: 'teen_hold' }, 403);
 
+// Under-minimum-age FREEZE (founder decision 2026-10-11, teens plan §3): a
+// birthday under the minimum age freezes the account at once — no stamps,
+// photos or social — its content is deleted after FREEZE_PURGE_DAYS by the
+// daily cron, and an appeal (admin, /admin/age-appeal) restores ACCESS only,
+// never deleted content. The exact deletion window is pending counsel
+// (brief question 2); 7 days is the placeholder.
+const FREEZE_PURGE_DAYS = 7;
+const gbUnderAge = (sp) => sp?.social_tier === 'blocked';
+const gbUnderAgeResp = () => jsonResponse({ error: "GlobeSkimmers isn't available on this account", code: 'under_age' }, 403);
+async function gbMarkFrozen(env, userId) {
+  const kv = env.GLOBESKIMMERS_KV; if (!kv || !userId) return;
+  const k = `freeze:${userId}`;
+  if (await kv.get(k).catch(() => null)) return;
+  await kv.put(k, JSON.stringify({ at: new Date().toISOString() })).catch(() => {});
+  await gbLogEvent(env, 'age_frozen', {}).catch(() => {});
+}
+// Daily: delete the content of accounts frozen longer than FREEZE_PURGE_DAYS.
+async function freezeSweep(env) {
+  const kv = env.GLOBESKIMMERS_KV; if (!kv) return;
+  const cutoff = Date.now() - FREEZE_PURGE_DAYS * 86400000;
+  let cursor;
+  do {
+    const page = await kv.list({ prefix: 'freeze:', cursor });
+    for (const { name } of page.keys) {
+      const rec = await kv.get(name, { type: 'json' }).catch(() => null);
+      if (!rec || rec.purged_at || Date.parse(rec.at || 0) > cutoff) continue;
+      const userId = name.slice('freeze:'.length);
+      await gbPurgeUserContent(env, userId);
+      await kv.put(name, JSON.stringify({ ...rec, purged_at: new Date().toISOString() })).catch(() => {});
+      await gbLogEvent(env, 'age_frozen_purged', {}).catch(() => {});
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+}
+// POST /admin/age-appeal { user_id, birth_year, birth_md } — an adult who
+// mistyped: the corrected birthday recomputes the tier and lifts the freeze.
+// Deleted content does not come back.
+async function handleAdminAgeAppeal(request, env, ctx) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  try {
+    const b = await request.json().catch(() => ({}));
+    const uid = String(b.user_id || '').replace(/[^0-9a-f-]/gi, '');
+    const md = /^\d{2}-\d{2}$/.test(String(b.birth_md || '')) ? String(b.birth_md) : null;
+    const tier = uid && md ? socialTierFor(b.birth_year, String(b.country || ''), md) : null;
+    if (!tier) return jsonResponse({ error: 'user_id, birth_year and birth_md (MM-DD) required' }, 400);
+    const now = new Date().toISOString();
+    const w = await gbRest(env, `social_profiles?user_id=eq.${uid}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ birth_year: Math.round(Number(b.birth_year)), birth_md: md, birth_year_at: now, social_tier: tier, updated_at: now }) });
+    if (!w.ok) return jsonResponse({ error: 'Could not update' }, 502);
+    if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.delete(`freeze:${uid}`).catch(() => {});
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'age_appeal', { tier }));
+    return jsonResponse({ ok: true, tier });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function gbSocialProfile(env, userId) {
   const q = await gbRest(env, `social_profiles?user_id=eq.${userId}&select=*`, {});
   const row = (q.ok ? await q.json() : [])[0] || null;
@@ -14629,6 +14707,7 @@ async function gbSocialProfile(env, userId) {
     const t = socialTierFor(row.birth_year, row.country_at_gate, row.birth_md);
     if (t && t !== row.social_tier) {
       row.social_tier = t;
+      if (t === 'blocked') await gbMarkFrozen(env, userId);
       try { await gbRest(env, `social_profiles?user_id=eq.${userId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ social_tier: t, updated_at: new Date().toISOString() }) }); } catch { /* derived value still used this request */ }
     }
   }
@@ -14653,6 +14732,7 @@ async function handleSocialAge(request, env, ctx) {
       if (mine?.birth_md) return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null, birth_md: mine.birth_md, locked: true });
       const patch = { birth_md: md, updated_at: new Date().toISOString() };
       if (mine?.birth_year) patch.social_tier = socialTierFor(mine.birth_year, mine.country_at_gate || request.headers.get('cf-ipcountry') || '', md) || mine.social_tier;
+      if (patch.social_tier === 'blocked') await gbMarkFrozen(env, user.id);
       const w = mine
         ? await gbRest(env, `social_profiles?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) })
         : await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, birth_md: md }) });
@@ -14671,6 +14751,7 @@ async function handleSocialAge(request, env, ctx) {
       ? await gbRest(env, `social_profiles?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) })
       : await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
+    if (tier === 'blocked') await gbMarkFrozen(env, user.id);
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_age_set', { tier }));
     return jsonResponse({ set: true, tier });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
@@ -21465,6 +21546,7 @@ export default {
       if (pathname === '/admin-user-stats') return await handleAdminUserStats(request, env);
       if (pathname === '/contact' && request.method === 'POST') return await handleContactSubmit(request, env);
       if (pathname === '/admin/contact' && request.method === 'POST') return await handleAdminContact(request, env);
+      if (pathname === '/admin/age-appeal' && request.method === 'POST') return await handleAdminAgeAppeal(request, env, ctx);
       if (pathname === '/admin/stamp-reports' && request.method === 'POST') return await handleAdminStampReports(request, env);
       if (pathname === '/analytics-query') return await handleAnalyticsQuery(request, env);
       if (pathname === '/admin/passport-monthly' && request.method === 'POST') return await handleAdminPassportMonthly(request, env);
@@ -21694,6 +21776,8 @@ export default {
       // swallow — INSERT OR REPLACE makes any day safely replayable while its
       // raw events (kept 180d) still exist; a failed night costs nothing yet
     }
+    // Under-age freeze: delete content of accounts frozen past the window.
+    try { await freezeSweep(env); } catch (_e) { /* tomorrow's cron tries again */ }
   }
 };
 // CI test Mon May 11 06:28:51 PDT 2026
