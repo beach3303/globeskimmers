@@ -1049,8 +1049,9 @@ async function handleLogEvent(request, env) {
 // Requires the Worker secret SUPABASE_SERVICE_ROLE_KEY (`wrangler secret put`).
 // Everything a traveler created, removed: guestbook notes anonymized and
 // their photos down, stamps + memory photos + R2 objects, tags, share link,
-// postcards they sent (and their photos), follow edges both ways, and their
-// "I'm here" reports. Shared by account deletion and the under-age freeze
+// postcards they sent (and their photos), follow edges both ways, their
+// "I'm here" reports, and their place suggestions (and photos) and likes.
+// Shared by account deletion and the under-age freeze
 // (which keeps the auth user so an appeal can restore ACCESS). Best-effort
 // throughout: a failure in one block never stops the next.
 async function gbPurgeUserContent(env, userId) {
@@ -1127,6 +1128,39 @@ async function gbPurgeUserContent(env, userId) {
     await gbRest(env, `postcards?sender_id=eq.${userId}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
     await gbRest(env, `user_follows?or=(follower_id.eq.${userId},followee_id.eq.${userId})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
   } catch { /* best-effort */ }
+
+  // 1f) Their place suggestions (+ their photos in R2), likes, reports and
+  //     daily counts (events D1). A place only they had suggested goes too —
+  //     its name and pin were theirs — unless the founder already decided it
+  //     (an approved place has other people's stamps; a declined or removed
+  //     one keeps its decision). A place others suggested stays, without them.
+  try {
+    if (env.DB) {
+      await psEnsure(env);
+      const { results } = await env.DB.prepare('SELECT place_id, photo_key FROM ps_votes WHERE user_id = ?').bind(userId).all();
+      if (env.MEDIA) await Promise.all((results || []).filter((r) => r.photo_key).map((r) => env.MEDIA.delete(r.photo_key).catch(() => {})));
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM ps_votes WHERE user_id = ?').bind(userId),
+        env.DB.prepare('DELETE FROM ps_likes WHERE user_id = ?').bind(userId),
+        env.DB.prepare('DELETE FROM ps_reports WHERE user_id = ?').bind(userId),
+        env.DB.prepare('DELETE FROM ps_rate WHERE user_id = ?').bind(userId),
+      ]);
+      const ids = [...new Set((results || []).map((r) => r.place_id))];
+      for (let i = 0; i < ids.length; i += 90) {   // D1 binds at most 100 values a query
+        const chunk = ids.slice(i, i + 90);
+        const { results: gone } = await env.DB.prepare(`SELECT id FROM ps_places WHERE id IN (${chunk.map(() => '?').join(',')})
+            AND status IN ('open', 'held') AND NOT EXISTS (SELECT 1 FROM ps_votes v WHERE v.place_id = ps_places.id)`).bind(...chunk).all();
+        const g = (gone || []).map((r) => r.id);
+        if (!g.length) continue;
+        const qs = g.map(() => '?').join(',');
+        await env.DB.batch([
+          env.DB.prepare(`DELETE FROM ps_likes WHERE place_id IN (${qs})`).bind(...g),
+          env.DB.prepare(`DELETE FROM ps_reports WHERE place_id IN (${qs})`).bind(...g),
+          env.DB.prepare(`DELETE FROM ps_places WHERE id IN (${qs})`).bind(...g),
+        ]);
+      }
+    }
+  } catch { /* suggestion purge best-effort; still delete the account */ }
 }
 
 async function handleDeleteAccount(request, env) {
@@ -2381,6 +2415,15 @@ async function handleAdminContact(request, env) {
   }
 }
 
+// One cell of an admin spreadsheet export. Text a user typed must never run as
+// a formula when Excel opens the file: a leading = + - @ tab or CR gets an
+// apostrophe (numbers and coordinates don't). Shared by every admin CSV.
+function csvCell(v) {
+  let t = v == null ? '' : String(v);
+  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(t) && !/^-?\d+(\.\d+)?(, -?\d+(\.\d+)?)?$/.test(t)) t = `'${t}`;
+  return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+}
+
 // POST /admin/stamp-reports { op?: 'list' | 'status' | 'csv', id?, status?, open? }
 // The founder's "I'm here, but the app is saying I'm not" list (2026-10-10):
 // every report, newest first; 'status' marks one new / fixed / ignored; 'csv'
@@ -2432,13 +2475,8 @@ async function handleAdminStampReports(request, env) {
       reports = results || [];
     }
     if (op === 'csv') {
-      // Text a user typed must never run as a formula when Excel opens the file:
-      // a leading = + - @ tab or CR gets an apostrophe (numbers and coordinates don't).
-      const cell = (v) => {
-        let t = v == null ? '' : String(v);
-        if (typeof v === 'string' && /^[=+\-@\t\r]/.test(t) && !/^-?\d+(\.\d+)?(, -?\d+(\.\d+)?)?$/.test(t)) t = `'${t}`;
-        return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
-      };
+      // Formula-safe cells (csvCell): text a user typed never runs in Excel.
+      const cell = csvCell;
       const head = ['Report', 'Date (UTC)', 'Place', 'City', 'Country', 'Place ID', 'Spot (about 1 block)', 'Map link', 'Distance from our pin (m)', 'Allowed distance (m)', 'GPS accuracy (m)', 'Why GPS said no', 'Result', 'Phone', 'App version', 'User code', 'Status'];
       const why = { not_here: 'Outside our map for this place', other_variant: 'At another park or rim of this place', proof_needed: 'No GPS reading', unlocatable: 'Place not on our map', unconfirmed: 'GPS not trusted (VPN or travel speed)' };
       const lines = reports.map((r) => {
@@ -6480,6 +6518,12 @@ async function ttdStampFor(env, gid, name, lat, lng, { write = true } = {}) {
 }
 // Where a place really is (for the stamp distance check): our D1 row, else Google.
 async function ttdPlaceTruth(env, entityId, origin) {
+  // A Local favorite (lf:<id>, founder 2026-10-10): the approved suggested
+  // place's own pin and a 150 m circle. Not approved = nowhere to stamp.
+  if (String(entityId || '').startsWith('lf:')) {
+    const lf = await psApprovedPlace(env, entityId);
+    return lf ? { lat: lf.lat, lng: lf.lng, radius: 150, shape: null, name: lf.name } : null;
+  }
   const k = ttdIdKind(entityId);
   if (k === 'd1' && env.ATTRACTIONS_DB) {
     const r = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(entityId).first().catch(() => null);
@@ -13463,6 +13507,8 @@ async function ppUpsertStamp(env, row) {
     // A re-stamp adds the film to an older stamp of the same place, never replaces one.
     if (row.meta?.film && !existing.meta?.film) patch.meta = { ...(existing.meta || {}), film: row.meta.film };
     if (row.meta?.parent_id && !existing.meta?.parent_id) patch.meta = { ...(patch.meta || existing.meta || {}), parent_id: row.meta.parent_id };
+    // A Local favorite keeps the count it was first stamped with; one without it gets it.
+    if (row.meta?.local_favorite && !existing.meta?.local_favorite) patch.meta = { ...(patch.meta || existing.meta || {}), local_favorite: row.meta.local_favorite };
     // The rough zone only ever improves (reported < nearby < on_site < inside).
     const zNew = row.meta?.presence?.zone, zOld = existing.meta?.presence?.zone;
     if (zNew && !(zNew === 'reported' && best !== 'reported') && (!zOld || (PP_ZONE_RANK[zNew] ?? -1) > (PP_ZONE_RANK[zOld] ?? -1))) patch.meta = { ...(patch.meta || existing.meta || {}), presence: row.meta.presence };
@@ -13499,7 +13545,10 @@ function ppCcForCountryName(name) {
       const dn = new Intl.DisplayNames(['en'], { type: 'region' });
       for (let a = 65; a <= 90; a++) for (let c = 65; c <= 90; c++) {
         const code = String.fromCharCode(a, c);
-        try { const n = dn.of(code); if (n && n !== code) PP_CC_BY_NAME.set(n.toLowerCase(), code); } catch { /* not a region */ }
+        // Retired codes ICU still names (UK, FX, SU, YU, ZR…) came later in the
+        // loop and overwrote the real ones: "United Kingdom" read as UK, never
+        // Cloudflare's GB (2026-10-12). Only a code that is its own canonical form counts.
+        try { if (new Intl.Locale(`und-${code}`).region !== code) continue; const n = dn.of(code); if (n && n !== code) PP_CC_BY_NAME.set(n.toLowerCase(), code); } catch { /* not a region */ }
       }
     } catch { /* no ICU: the exemption just never applies */ }
   }
@@ -13657,7 +13706,7 @@ async function handlePassportStamp(request, env, ctx) {
     if (!user) return jsonResponse({ error: 'Sign in to stamp your passport' }, 401);
     if (gbUnderAge(await gbSocialProfile(env, user.id).catch(() => null))) return gbUnderAgeResp();
     const b = await request.json().catch(() => ({}));
-    const name = String(b.name || '').trim();
+    let name = String(b.name || '').trim();   // a Local favorite takes its approved name below
     if (!name) return jsonResponse({ error: 'name required' }, 400);
     const kind = PP_KINDS.includes(String(b.kind || '').toLowerCase()) ? String(b.kind).toLowerCase() : 'attraction';
     const tier = kind === 'attraction' ? 'mark' : 'page';
@@ -13679,7 +13728,9 @@ async function handlePassportStamp(request, env, ctx) {
       if (/^[A-Z]{2}$/.test(ipCC) && ipCC !== 'XX' && ipCC !== 'T1' && /^[A-Z]{2}$/.test(claimCC) && ipCC !== claimCC) {
         let roamingHome = false;
         try {
-          const pr = await fetch(`${GB_URL(env)}/rest/v1/profiles?id=eq.${user.id}&select=home_country`, { headers: { apikey: GB_KEY(env), Authorization: `Bearer ${GB_KEY(env)}` } });
+          // profiles lives in the public schema: without the header this read hit
+          // the default one and failed, so the exemption never applied (2026-10-12).
+          const pr = await fetch(`${GB_URL(env)}/rest/v1/profiles?id=eq.${user.id}&select=home_country`, { headers: { apikey: GB_KEY(env), Authorization: `Bearer ${GB_KEY(env)}`, 'Accept-Profile': 'public' } });
           const home = pr.ok ? (await pr.json())[0]?.home_country : null;
           roamingHome = !!home && ppCcForCountryName(home) === ipCC;
         } catch { /* treat as a mismatch */ }
@@ -13853,11 +13904,55 @@ async function handlePassportStamp(request, env, ctx) {
     const direction = mayDirect && ['arrival', 'departure'].includes(b.direction) ? b.direction : null;
     const mode = direction && ['car', 'train', 'ship'].includes(b.mode) ? b.mode : null;
     if (direction && entityId) entityId = `${entityId.split(':')[0]}:${visitedOn || new Date().toISOString().slice(0, 10)}:${direction === 'departure' ? 'dep' : 'arr'}`;
+    // A Local favorite (founder, 2026-10-10): an approved suggested place
+    // stamps in its own style, never the icon art, and always carries how many
+    // people recommended it (meta.local_favorite.count, at stamping time). An
+    // lf: id that isn't an approved place stamps nothing.
+    // Every "I'm here, but the app is saying I'm not" tap is filed, granted or
+    // not, and even when saving the stamp fails. (Defined before the Local
+    // favorite check, which can refuse one too; it reads the request's town,
+    // which a Local favorite has already swapped for the approved place's.)
+    const fileReport = async (outcome) => {
+      if (!reporting || !ctx) return;
+      const userCode = (await sha256Hex(`${user.id}:stamp-report`)).slice(0, 8);
+      // A minor's report keeps no spot at all, only the distance (teens & minors
+      // plan, 2026-10-10). Unknown age counts as a minor.
+      const sp = await gbSocialProfile(env, user.id).catch(() => null);
+      const spotOk = sp?.social_tier === 'adult';
+      ctx.waitUntil(ppFileStampReport(env, {
+        name, entity_id: reportEntity, city: b.city ? String(b.city).slice(0, 120) : null, country: b.country ? String(b.country).slice(0, 120) : null,
+        fix: spotOk ? fix : { acc: fix?.acc }, meters, reach, refusal, outcome,
+        platform: String(b.platform || '').slice(0, 20) || null, app_version: String(b.app_version || '').slice(0, 30) || null, user_code: userCode,
+      }));
+    };
+    let localFav = null;
+    if (String(entityId || '').startsWith('lf:')) {
+      const lf = kind === 'attraction' ? await psApprovedPlace(env, entityId) : null;
+      if (!lf) {
+        // Not (or no longer) an approved Local favorite — e.g. removed after
+        // reports. The tap is still filed, and a holder hears their stamp stays.
+        await fileReport('refused: not an approved Local favorite');
+        return jsonResponse({ error: b.stamp_id ? 'This place is no longer a Local favorite — your stamp stays in your passport.' : 'This place isn’t a Local favorite right now.', code: 'not_listed' }, 409);
+      }
+      b.entity_type = 'local_favorite';
+      localFav = { count: lf.count };
+      // The approved place speaks for itself (2026-10-12): its own name, town
+      // and pin, never the request's — and a sensitive one (a chapel, a
+      // clinic) starts private like any other place.
+      name = lf.name || name;
+      b.city = lf.city; b.region = lf.region; b.country = lf.country;
+      lat = lf.lat; lng = lf.lng;
+      startPrivate = ppSensitivePlace(name, []);
+    } else if (String(b.entity_type || '') === 'local_favorite') {
+      // Only an approved lf:<id> may carry the Local favorite look.
+      b.entity_type = null;
+    }
     // The page-one home-city stamp (onboarding "make your passport") marks
     // itself origin:true — the app renders it as the cover page, not a brag.
     const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}), ...(direction ? { direction } : {}), ...(mode ? { mode } : {}), ...(presence ? { presence } : {}),
       // A park or rim keeps its parent place, so Verify I'm here measures it the same way.
-      ...(variantParent ? { parent_id: variantParent } : {}) };
+      ...(variantParent ? { parent_id: variantParent } : {}),
+      ...(localFav ? { local_favorite: localFav } : {}) };
     const row = {
       user_id: user.id, kind, tier,
       entity_type: b.entity_type ? String(b.entity_type) : null,
@@ -13890,20 +13985,6 @@ async function handlePassportStamp(request, env, ctx) {
         }, 409);
       }
     }
-    // Every "I'm here, but the app is saying I'm not" tap is filed, granted or
-    // not, and even when saving the stamp fails.
-    const fileReport = async (outcome) => {
-      if (!reporting || !ctx) return;
-      const userCode = (await sha256Hex(`${user.id}:stamp-report`)).slice(0, 8);
-      // A minor's report keeps no spot at all, only the distance (teens & minors
-      // plan, 2026-10-10). Unknown age counts as a minor.
-      const sp = await gbSocialProfile(env, user.id).catch(() => null);
-      const spotOk = sp?.social_tier === 'adult';
-      ctx.waitUntil(ppFileStampReport(env, {
-        name, entity_id: reportEntity, city: row.city, country: row.country, fix: spotOk ? fix : { acc: fix?.acc }, meters, reach, refusal, outcome,
-        platform: String(b.platform || '').slice(0, 20) || null, app_version: String(b.app_version || '').slice(0, 30) || null, user_code: userCode,
-      }));
-    };
     let result;
     try { result = await ppUpsertStamp(env, row); }
     catch (e) { await fileReport(`stamp failed: ${String(e?.message || e).slice(0, 120)}`); throw e; }
@@ -14650,6 +14731,743 @@ async function handlePlaceDishAdd(request, env, ctx) {
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'dish_post', { kind, proof, replaced: !!old, favorite }));
     return jsonResponse({ ok: true, id: saved.id, dish, url: photoUrl, proof, replaced: !!old });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// ── Suggest a Place to Stamp (founder decisions 2026-10-10) ──────────────────
+// Crowd-sourced Local favorites. LOCALS (home within 50 km) and VISITORS (a
+// proven stamp within 25 km) suggest a real, public place with one reason. The
+// same name within 1 km is the same place, so a duplicate adds to its count;
+// one person counts once per place (a repeat updates their reason or photo,
+// never the count). Everyone sees every suggestion with its count, and likes
+// have no limit. At 5 suggestions the founder reviews a place
+// (/admin/place-suggestions) and nothing goes live without that approval: an
+// approved place becomes a "Local favorite" stamp (entity id lf:<id>) that
+// always discloses how many people recommended it and never uses the icon
+// art. Tables live in the events D1, created lazily once per isolate. Counts
+// are derived on read, never stored, so a deletion can't make them drift; a
+// place with no suggestions left is hidden everywhere. Teens are held from
+// suggesting (it is publishing) but may like; frozen accounts get nothing.
+const PS_REASONS = [
+  { key: 'views', label: 'Breathtaking views or a great photo spot', short: 'Views & photos' },
+  { key: 'walk', label: 'A fun walk, hike or place to explore', short: 'Walk or hike' },
+  { key: 'history', label: 'Local history or culture', short: 'History & culture' },
+  { key: 'family', label: 'Great for families and kids', short: 'Families' },
+  { key: 'gem', label: 'A hidden gem locals love', short: 'Hidden gem' },
+  { key: 'other', label: 'Other (write your own)', short: 'Other' },
+];
+const PS_REASON_KEYS = new Set(PS_REASONS.map((r) => r.key));
+const PS_REVIEW_AT = 5;     // suggestions before the founder reviews a place
+const PS_DAILY_MAX = 10;    // suggestions per person per day: the default until the founder decides
+const PS_LOCAL_KM = 50, PS_VISITOR_KM = 25, PS_SAME_KM = 1, PS_NEAR_KM = 60;
+const PS_SQL = [
+  `CREATE TABLE IF NOT EXISTS ps_places (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  name_key TEXT NOT NULL,
+  lat REAL NOT NULL,
+  lng REAL NOT NULL,
+  city TEXT,
+  region TEXT,
+  country TEXT,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  decided_at TEXT
+)`,
+  'CREATE INDEX IF NOT EXISTS ps_places_geo ON ps_places(lat, lng)',
+  `CREATE TABLE IF NOT EXISTS ps_votes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  place_id INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  other_text TEXT,
+  who TEXT NOT NULL,
+  photo_key TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(place_id, user_id)
+)`,
+  // "My suggestions" (the Home notice) and the account purge look votes up by person.
+  'CREATE INDEX IF NOT EXISTS ps_votes_user ON ps_votes(user_id)',
+  `CREATE TABLE IF NOT EXISTS ps_likes (
+  place_id INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  UNIQUE(place_id, user_id, reason)
+)`,
+  // Reports (2026-10-12): a suggestion is public from its first vote, so anyone
+  // can report one; one report per person per place. resolved = the founder
+  // kept or removed the place.
+  `CREATE TABLE IF NOT EXISTS ps_reports (
+  place_id INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  resolved INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(place_id, user_id)
+)`,
+  'CREATE INDEX IF NOT EXISTS ps_reports_open ON ps_reports(resolved, place_id)',
+  // The daily suggestion count, counted in one atomic statement (KV's
+  // read-then-write let a burst of requests past the limit).
+  `CREATE TABLE IF NOT EXISTS ps_rate (
+  user_id TEXT NOT NULL,
+  day TEXT NOT NULL,
+  n INTEGER NOT NULL,
+  UNIQUE(user_id, day)
+)`,
+];
+let PS_READY = false;
+async function psEnsure(env) {
+  if (PS_READY) return;
+  await env.DB.batch(PS_SQL.map((s) => env.DB.prepare(s)));
+  PS_READY = true;
+}
+
+// The duplicate key (also how cities are compared): accents stripped, lower
+// case, anything but letters and digits one space, a leading "the " dropped.
+// Letters of every script count: [a-z0-9] alone would leave a Japanese or
+// Greek name an empty key that matched every other one nearby.
+const psNameKey = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/[^\p{L}\p{N}\p{M}]+/gu, ' ').trim().replace(/^the /, '');
+const psKm = (lat1, lng1, lat2, lng2) => haversineMilesLoc(lat1, lng1, lat2, lng2) * 1.609344;
+const psText = (v, n) => (v == null ? null : String(v).replace(/\s+/g, ' ').trim().slice(0, n) || null);
+// A place id from 12, "12" or "lf:12".
+const psId = (v) => { const m = /^(?:lf:)?(\d{1,12})$/.exec(String(v ?? '').trim()); return m ? Number(m[1]) : null; };
+// open | approved | declined | held (hidden by reports until the founder
+// decides) | removed (taken down by the founder). Only open and approved show.
+const psStatus = (status, count) => (status && status !== 'open' ? status : count >= PS_REVIEW_AT ? 'review' : 'open');
+const PS_REPORT_REASONS = new Set(['not_real', 'offensive', 'private', 'spam', 'other']);
+// The pin others may see (2026-10-12): an open place's to 3 decimals (~110 m),
+// since "Use my location" may have pinned it where a suggester lives; an
+// approved place, which the founder has looked at, exactly (it is stamped
+// there). Every public use — the pin shown, the distance, the near list's cut-
+// off and order — goes through this, so the exact pin can't be worked out.
+const psPubPin = (p, admin = false) => (admin || p.status === 'approved'
+  ? { lat: p.lat, lng: p.lng }
+  : { lat: Math.round(p.lat * 1000) / 1000, lng: Math.round(p.lng * 1000) / 1000 });
+const PS_REPORTS_HIDE = 3;   // distinct reports that hide an open place until the founder decides
+const psMapUrl = (p) => `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`;
+// A real point, kept to 5 decimals (about a metre); null when missing or 0,0.
+function psPoint(b) {
+  const num = (v) => (v == null || v === '' ? NaN : Number(v));
+  const lat = num(b?.lat), lng = num(b?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) return null;
+  return { lat: Math.round(lat * 1e5) / 1e5, lng: Math.round(lng * 1e5) / 1e5 };
+}
+// A lat/lng box around a point: the index-friendly first cut (the exact
+// distance is checked after). Near a pole or the 180th meridian the
+// longitude is left open.
+function psBox(lat, lng, km) {
+  const dLat = (km / 111.195) * 1.01, cos = Math.cos(lat * Math.PI / 180);
+  const dLng = cos > 0.05 ? (km / 111.195 / cos) * 1.05 : 360;
+  const open = lng - dLng < -180 || lng + dLng > 180;
+  return { lat1: lat - dLat, lat2: lat + dLat, lng1: open ? -180 : lng - dLng, lng2: open ? 180 : lng + dLng, open };
+}
+
+// The town, region and country at a point, worked out here (2026-10-12): a
+// client's values are never stored or trusted — they were shown to everyone
+// unchecked, and the no-pin "local" check compared against them. The same
+// precise ~110 m tile and KV cache as /reverse-geocode with precise:true, so
+// the form's own lookup a moment earlier has usually warmed it. null when the
+// point can't be named (a later suggestion fills the gaps).
+async function psGeoAt(env, lat, lng) {
+  const key = `revgeoP_${Math.round(lat * 1000) / 1000}_${Math.round(lng * 1000) / 1000}`;
+  const kv = env.GLOBESKIMMERS_KV;
+  const pick = (h) => ({ city: psText(h.city, 120), region: psText(h.region, 120), country: psText(h.country, 120) });
+  if (kv) {
+    const hit = await kv.get(key, { type: 'json' }).catch(() => null);
+    if (hit && hit.country != null && hit.region !== undefined) return pick(hit);
+  }
+  if (!env.GOOGLE_API_KEY) return null;
+  try {
+    const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${env.GOOGLE_API_KEY}`);
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (d.status !== 'OK' || !d.results?.length) return null;
+    const comps = d.results[0].address_components || [];
+    const cityC = comps.find((c) => hasType(c, 'locality') || hasType(c, 'sublocality') || hasType(c, 'postal_town') || hasType(c, 'administrative_area_level_3') || hasType(c, 'administrative_area_level_2'));
+    const stateC = comps.find((c) => hasType(c, 'administrative_area_level_1'));
+    const countryC = comps.find((c) => hasType(c, 'country'));
+    const country = countryC?.long_name || '';
+    // The same coarse admin fields /reverse-geocode caches, in its format.
+    const out = { city: cityC?.long_name || '', state_or_country: (countryC?.short_name === 'US' || countryC?.short_name === 'CA') ? (stateC?.long_name || country) : country, country, region: stateC?.long_name || '' };
+    if (kv) await kv.put(key, JSON.stringify(out), { expirationTtl: 30 * 86400 }).catch(() => {});
+    return pick(out);
+  } catch { return null; }
+}
+
+// Who may suggest at a point: a LOCAL (home pin within 50 km; with no pin,
+// the same home city, case and accents ignored) or a VISITOR (a proven stamp
+// — gps, photo_loc or photo_ai — within 25 km). Profiles live in the public
+// schema; stamps in the default one.
+async function psEligibility(env, userId, lat, lng, city) {
+  let home = null;
+  try {
+    const pr = await gbRest(env, `profiles?id=eq.${userId}&select=home_city,home_lat,home_lng,home_country`, { headers: { 'Accept-Profile': 'public' } });
+    home = pr.ok ? (await pr.json())[0] || null : null;
+  } catch { /* no profile read: not a local */ }
+  const homeCity = psText(home?.home_city, 120);
+  const pinned = home?.home_lat != null && home?.home_lng != null && Number.isFinite(+home.home_lat) && Number.isFinite(+home.home_lng);
+  const local = pinned
+    ? psKm(+home.home_lat, +home.home_lng, lat, lng) <= PS_LOCAL_KM
+    : !!psNameKey(homeCity) && psNameKey(homeCity) === psNameKey(city);
+  if (local) return { eligible: true, who: 'local', home_city: homeCity };
+  try {
+    const bx = psBox(lat, lng, PS_VISITOR_KM), f = (v) => v.toFixed(6);
+    const lngs = bx.open ? '' : `&lng=gte.${f(bx.lng1)}&lng=lte.${f(bx.lng2)}`;
+    const r = await gbRest(env, `passport_stamps?user_id=eq.${userId}&verified=in.(gps,photo_loc,photo_ai)&lat=gte.${f(bx.lat1)}&lat=lte.${f(bx.lat2)}${lngs}&select=lat,lng&limit=200`, {});
+    const near = (r.ok ? await r.json() : []).some((s) => s.lat != null && s.lng != null && psKm(lat, lng, +s.lat, +s.lng) <= PS_VISITOR_KM);
+    if (near) return { eligible: true, who: 'visitor', home_city: homeCity };
+  } catch { /* no stamps read: not a visitor */ }
+  return { eligible: false, who: null, home_city: homeCity };
+}
+
+// The place a suggestion belongs to: the same name key within 1 km, whatever
+// its status (a declined place keeps its decision). The oldest row wins, so
+// two people adding the same new place at once end up on one.
+async function psFindPlace(env, key, lat, lng) {
+  const bx = psBox(lat, lng, PS_SAME_KM + 0.1);   // a public pin sits at most ~56 m from the stored one
+  const { results } = await env.DB.prepare('SELECT * FROM ps_places WHERE name_key = ?1 AND lat BETWEEN ?2 AND ?3 AND lng BETWEEN ?4 AND ?5 ORDER BY id LIMIT 50')
+    .bind(key, bx.lat1, bx.lat2, bx.lng1, bx.lng2).all();
+  // Measured from the public pin (psPubPin, 2026-10-12): which place a probe
+  // point lands on must not reveal more than the lists already show.
+  return (results || []).find((p) => { const pin = psPubPin(p); return psKm(lat, lng, pin.lat, pin.lng) <= PS_SAME_KM; }) || null;
+}
+
+// The approved place behind a Local favorite stamp id (lf:<id>) with its
+// suggestion count, or null (unknown, not approved, or no table yet).
+async function psApprovedPlace(env, entityId) {
+  const m = /^lf:(\d{1,12})$/.exec(String(entityId || ''));
+  if (!m || !env.DB) return null;
+  const p = await env.DB.prepare("SELECT p.*, (SELECT COUNT(*) FROM ps_votes v WHERE v.place_id = p.id) AS cnt FROM ps_places p WHERE p.id = ? AND p.status = 'approved'")
+    .bind(Number(m[1])).first().catch(() => null);
+  if (!p || !Number.isFinite(+p.lat) || !Number.isFinite(+p.lng)) return null;
+  return { id: p.id, name: p.name, lat: +p.lat, lng: +p.lng, city: p.city || null, region: p.region || null, country: p.country || null, count: Number(p.cnt) || 0 };
+}
+
+// PlaceSummary for each row, in order, counted right now. `me` fills `my`
+// (my suggestion and my likes), `at` the distance from a point, and `texts`
+// every "Other" text, newest first. `admin` (the founder's desk and export)
+// adds the locals/visitors split, up to 6 photos whatever the status, and the
+// exact pin. Everyone else (2026-10-12) gets an open place's pin to 3 decimals
+// (~110 m) — "Use my location" may have pinned it where a suggester lives —
+// with the distance measured from that same rounded pin; an approved place,
+// which the founder has looked at, keeps its exact pin for stamping.
+async function psSummaries(env, rows, { me = null, at = null, origin = '', texts = false, admin = false } = {}) {
+  if (!rows.length) return [];
+  const reads = [];
+  for (let i = 0; i < rows.length; i += 90) {   // D1 binds at most 100 values a query
+    const ids = rows.slice(i, i + 90).map((p) => p.id), qs = ids.map(() => '?').join(',');
+    reads.push(['votes', env.DB.prepare(`SELECT place_id, reason, who, COUNT(*) AS n FROM ps_votes WHERE place_id IN (${qs}) GROUP BY place_id, reason, who`).bind(...ids)]);
+    reads.push(['likes', env.DB.prepare(`SELECT place_id, reason, COUNT(*) AS n FROM ps_likes WHERE place_id IN (${qs}) GROUP BY place_id, reason`).bind(...ids)]);
+    // The newest photo: SQLite takes a bare column from the MAX() row.
+    reads.push(['covers', env.DB.prepare(`SELECT place_id, photo_key, MAX(updated_at) AS newest FROM ps_votes WHERE place_id IN (${qs}) AND photo_key IS NOT NULL GROUP BY place_id`).bind(...ids)]);
+    if (me) {
+      reads.push(['mine', env.DB.prepare(`SELECT place_id, reason FROM ps_votes WHERE user_id = ? AND place_id IN (${qs})`).bind(me, ...ids)]);
+      reads.push(['myLikes', env.DB.prepare(`SELECT place_id, reason FROM ps_likes WHERE user_id = ? AND place_id IN (${qs})`).bind(me, ...ids)]);
+    }
+    if (texts) reads.push(['others', env.DB.prepare(`SELECT place_id, other_text FROM ps_votes WHERE place_id IN (${qs}) AND other_text IS NOT NULL ORDER BY updated_at DESC`).bind(...ids)]);
+    if (admin) reads.push(['photos', env.DB.prepare(`SELECT place_id, photo_key FROM ps_votes WHERE place_id IN (${qs}) AND photo_key IS NOT NULL ORDER BY updated_at DESC`).bind(...ids)]);
+  }
+  const res = await env.DB.batch(reads.map((r) => r[1]));
+  const got = {};   // read name → place id → rows
+  res.forEach((out, i) => {
+    const m = got[reads[i][0]] || (got[reads[i][0]] = new Map());
+    for (const r of out.results || []) { if (!m.has(r.place_id)) m.set(r.place_id, []); m.get(r.place_id).push(r); }
+  });
+  const of = (name, id) => got[name]?.get(id) || [];
+  return rows.map((p) => {
+    let count = 0, locals = 0, visitors = 0;
+    const n = {}, liked = {};
+    for (const v of of('votes', p.id)) {
+      count += v.n;
+      if (v.who === 'local') locals += v.n; else if (v.who === 'visitor') visitors += v.n;
+      n[v.reason] = (n[v.reason] || 0) + v.n;
+    }
+    for (const l of of('likes', p.id)) liked[l.reason] = l.n;
+    // Most suggested first; a tie keeps the form's order.
+    const reasons = PS_REASONS.filter((r) => n[r.key] > 0).map((r) => ({ ...r, n: n[r.key], likes: liked[r.key] || 0 })).sort((a, b) => b.n - a.n);
+    const cover = of('covers', p.id)[0]?.photo_key;
+    const mine = of('mine', p.id)[0];
+    const myLikes = of('myLikes', p.id).map((l) => l.reason);
+    const { lat, lng } = psPubPin(p, admin);
+    return {
+      id: p.id, name: p.name, city: p.city || null, region: p.region || null, country: p.country || null, lat, lng,
+      status: psStatus(p.status, count), count, likes: liked[''] || 0,
+      reasons, top_reason: reasons[0]?.key || null,
+      cover_url: cover ? `${origin}/ps-photo/${cover}` : null,
+      distance_km: at ? Math.round(psKm(at.lat, at.lng, lat, lng) * 10) / 10 : null,
+      my: { suggested: !!mine, reason: mine?.reason || null, liked: myLikes.includes(''), liked_reasons: myLikes.filter(Boolean) },
+      ...(texts ? { other_texts: of('others', p.id).map((o) => o.other_text) } : {}),
+      ...(admin ? { locals, visitors, photos: of('photos', p.id).slice(0, 6).map((r) => `${origin}/ps-photo/${r.photo_key}`) } : {}),
+    };
+  });
+}
+
+// POST /places/suggest/check { lat, lng } → { eligible, who, home_city }
+// The Suggest form's banner, once a point is set.
+async function handlePlaceSuggestCheck(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to suggest a place' }, 401);
+    const sp = await gbSocialProfile(env, user.id).catch(() => null);
+    if (gbUnderAge(sp)) return gbUnderAgeResp();
+    if (gbTeenHold(sp)) return gbTeenHoldResp();
+    const b = await request.json().catch(() => ({}));
+    const pt = psPoint(b);
+    if (!pt) return jsonResponse({ error: 'Set where the place is first' }, 400);
+    const geo = await psGeoAt(env, pt.lat, pt.lng);   // the town from the point, not the request
+    return jsonResponse(await psEligibility(env, user.id, pt.lat, pt.lng, geo?.city || null));
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /places/suggest { name, lat, lng, reason, other_text?, image? } (the town is worked out here)
+//   → { ok, added, place: PlaceSummary }. added = false when this person had
+// already suggested the place (their reason / photo is updated instead).
+async function handlePlaceSuggest(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to suggest a place' }, 401);
+    if (!env.DB) return jsonResponse({ error: 'DB not configured' }, 500);
+    // Suggesting is publishing: the age doors of every posting door. An
+    // unknown age may not post publicly (teens plan, 2026-10-10).
+    const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (sp === undefined) return jsonResponse({ error: 'Couldn’t check your account — try again' }, 503);
+    if (gbUnderAge(sp)) return gbUnderAgeResp();
+    if (gbTeenHold(sp)) return gbTeenHoldResp();
+    if (!sp?.birth_year) return jsonResponse({ error: 'Add your birthday in Settings to suggest a place', code: 'age_required' }, 428);
+    const b = await request.json().catch(() => ({}));
+    const pt = psPoint(b);
+    if (!pt) return jsonResponse({ error: 'Set where the place is first' }, 400);
+    const name = psText(b.name, 200) || '';
+    const key = psNameKey(name);
+    if (name.length < 2 || name.length > 80 || !key) return jsonResponse({ error: 'Enter the place’s name (2–80 characters)' }, 400);
+    const reason = String(b.reason || '');
+    if (!PS_REASON_KEYS.has(reason)) return jsonResponse({ error: 'Pick why you recommend it' }, 400);
+    const other = reason === 'other' ? psText(b.other_text, 400) || '' : null;
+    if (other !== null && (other.length < 2 || other.length > 140)) return jsonResponse({ error: 'Tell us why (2–140 characters)' }, 400);
+    // A place the founder already declined or removed keeps that decision, and
+    // one hidden by reports waits for it: say so now, before a photo is checked
+    // or a vote is kept that no list would show.
+    await psEnsure(env);
+    const prior = (await psFindPlace(env, key, pt.lat, pt.lng))?.status;
+    if (prior === 'declined' || prior === 'removed') {
+      return jsonResponse({ error: 'We’ve already reviewed this place, and it won’t become a stamp.', code: 'declined' }, 409);
+    }
+    if (prior === 'held') return jsonResponse({ error: 'This place is being reviewed — try again later.', code: 'held' }, 409);
+    // The optional photo: a data URL or bare base64, JPEG / PNG / WebP by its
+    // own bytes, up to 4 MB. Moderated below, before anything is stored.
+    let img = null;
+    if (b.image) {
+      if (!env.MEDIA) return jsonResponse({ error: 'Photo storage not configured' }, 500);
+      const data = String(b.image).replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '').replace(/\s/g, '');
+      let bytes;
+      try { bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0)); } catch { return jsonResponse({ error: 'Bad image data' }, 400); }
+      const type = bytes[0] === 0xff && bytes[1] === 0xd8 ? 'image/jpeg'
+        : bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 ? 'image/png'
+        : String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP' ? 'image/webp' : null;
+      if (!type || bytes.length < 500 || bytes.length > 4 * 1024 * 1024) return jsonResponse({ error: 'Please pick a photo (JPEG, PNG or WebP, under 4 MB)' }, 400);
+      img = { data, bytes, type, ext: type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg' };
+    }
+    // 10 a day, counted per attempt like guestbook notes — in one atomic D1
+    // statement, so a burst of parallel requests can't slip past it.
+    const day = new Date().toISOString().slice(0, 10);
+    const rate = await env.DB.prepare('INSERT INTO ps_rate (user_id, day, n) VALUES (?1, ?2, 1) ON CONFLICT(user_id, day) DO UPDATE SET n = n + 1 RETURNING n')
+      .bind(user.id, day).first();
+    if (Number(rate?.n) === 1 && ctx) {   // once a day per person: drop counts older than yesterday
+      const old = new Date(Date.now() - 2 * 86400e3).toISOString().slice(0, 10);
+      ctx.waitUntil(env.DB.prepare('DELETE FROM ps_rate WHERE day < ?').bind(old).run().catch(() => {}));
+    }
+    if (Number(rate?.n) > PS_DAILY_MAX) return jsonResponse({ error: 'That’s a lot of suggestions for one day — try again tomorrow', code: 'busy' }, 429);
+    // The name and the reason are public at once: no links, and the moderation door.
+    if (/https?:\/\/|\bwww\./i.test(`${name} ${other || ''}`) || !(await gbModerate(env, other ? `${name}\n${other}` : name)).allow) {
+      return jsonResponse({ error: 'Please keep it about the place, and kind.', code: 'moderated' }, 400);
+    }
+    // The town comes from the point, never the request: it is shown to
+    // everyone, and the no-pin "local" check compares against it.
+    const geo = await psGeoAt(env, pt.lat, pt.lng);
+    const city = geo?.city || null, region = geo?.region || null, country = geo?.country || null;
+    const elig = await psEligibility(env, user.id, pt.lat, pt.lng, city);
+    if (!elig.eligible) return jsonResponse({ error: "Suggestions come from locals and people who've been — get a stamp near here first.", code: 'not_eligible' }, 403);
+    if (img) {
+      const v = await gbModeratePhoto(env, img.data, img.type);   // fails closed
+      if (!v.allow) {
+        if (ctx) ctx.waitUntil(gbLogEvent(env, 'place_suggest_photo_blocked', { reason: v.reason || 'content' }));
+        return jsonResponse({ error: "That photo can't be used — please share a photo of the place.", code: 'photo_blocked' }, 400);
+      }
+    }
+
+    const now = new Date().toISOString();
+    let place = await psFindPlace(env, key, pt.lat, pt.lng);
+    const orphan = place?.status === 'open' && !(await env.DB.prepare('SELECT 1 AS x FROM ps_votes WHERE place_id = ? LIMIT 1').bind(place.id).first());
+    if (orphan) {
+      // Nobody's suggestion is left on this row (its suggester deleted their
+      // account): it starts over as this person's — their name, pin and town.
+      await env.DB.prepare('UPDATE ps_places SET name = ?1, lat = ?2, lng = ?3, city = ?4, region = ?5, country = ?6, created_at = ?7, updated_at = ?7 WHERE id = ?8')
+        .bind(name, pt.lat, pt.lng, city, region, country, now, place.id).run();
+      place = { ...place, name, lat: pt.lat, lng: pt.lng, city, region, country, created_at: now, updated_at: now };
+    } else if (place) {
+      await env.DB.prepare('UPDATE ps_places SET updated_at = ?1, city = COALESCE(city, ?2), region = COALESCE(region, ?3), country = COALESCE(country, ?4) WHERE id = ?5')
+        .bind(now, city, region, country, place.id).run();
+      place = { ...place, city: place.city || city, region: place.region || region, country: place.country || country };
+    } else {
+      const ins = await env.DB.prepare("INSERT INTO ps_places (name, name_key, lat, lng, city, region, country, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'open', ?8, ?8)")
+        .bind(name, key, pt.lat, pt.lng, city, region, country, now).run();
+      const newId = ins?.meta?.last_row_id;
+      place = await psFindPlace(env, key, pt.lat, pt.lng);
+      // Someone added the same place a moment earlier: theirs wins, the empty twin goes.
+      if (place && newId && place.id !== newId) await env.DB.prepare('DELETE FROM ps_places WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM ps_votes WHERE place_id = ?1)').bind(newId).run().catch(() => {});
+      if (!place) return jsonResponse({ error: 'Could not save — try again' }, 502);
+    }
+    const prev = await env.DB.prepare('SELECT photo_key FROM ps_votes WHERE place_id = ? AND user_id = ?').bind(place.id, user.id).first();
+    let photoKey = null;
+    if (img) {
+      // No account id in a public link (2026-10-12): the vote row keeps the key,
+      // so the purge still finds every photo without it.
+      photoKey = `ps/${place.id}/${crypto.randomUUID()}.${img.ext}`;
+      await env.MEDIA.put(photoKey, img.bytes, { httpMetadata: { contentType: img.type, cacheControl: 'public, max-age=31536000, immutable' } });
+    }
+    // One vote per person per place: a repeat updates the reason (and the
+    // photo, when a new one comes), never the count.
+    try {
+      await env.DB.prepare(`INSERT INTO ps_votes (place_id, user_id, reason, other_text, who, photo_key, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+        ON CONFLICT(place_id, user_id) DO UPDATE SET reason = excluded.reason, other_text = excluded.other_text, who = excluded.who,
+          photo_key = COALESCE(excluded.photo_key, ps_votes.photo_key), updated_at = excluded.updated_at`)
+        .bind(place.id, user.id, reason, other, elig.who, photoKey, now).run();
+    } catch (e) {
+      if (photoKey) await env.MEDIA.delete(photoKey).catch(() => {});
+      throw e;
+    }
+    // A new photo replaces the older one, which comes down from R2.
+    if (photoKey && prev?.photo_key && prev.photo_key !== photoKey) await env.MEDIA.delete(prev.photo_key).catch(() => {});
+    const added = !prev;
+    const [summary] = await psSummaries(env, [place], { me: user.id, origin: new URL(request.url).origin });
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'place_suggest', { place_id: place.id, added, who: elig.who, reason, count: summary.count }));
+    return jsonResponse({ ok: true, added, place: summary });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /places/suggestions { lat?, lng?, sort: 'near'|'liked'|'new'|'mine', limit? } → { places }
+// Open and approved places with at least one suggestion, never declined ones.
+// near: within 60 km by distance (nothing without a point); liked: most
+// liked first; new: newest first; mine: the ones I suggested. Any signed-in
+// traveler may read.
+async function handlePlaceSuggestions(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in', places: [] }, 401);
+    const spRead = gbSocialProfile(env, user.id).catch(() => null);
+    if (!env.DB) return jsonResponse({ places: [] });
+    await psEnsure(env);
+    const b = await request.json().catch(() => ({}));
+    const at = psPoint(b);
+    const sort = ['near', 'liked', 'new', 'mine'].includes(b.sort) ? b.sort : at ? 'near' : 'new';
+    const limit = Math.min(50, Math.max(1, parseInt(b.limit, 10) || 20));
+    const LIVE = "p.status IN ('open', 'approved') AND EXISTS (SELECT 1 FROM ps_votes v WHERE v.place_id = p.id)";
+    let rows = [];
+    if (sort === 'near' && at) {
+      const bx = psBox(at.lat, at.lng, PS_NEAR_KM), k = Math.max(0.05, Math.cos(at.lat * Math.PI / 180));
+      // The first cut orders by the public pin too (see psPubPin), so a crowded
+      // area's 200-row limit can't hint at an exact one.
+      const PLAT = "(CASE WHEN p.status = 'approved' THEN p.lat ELSE ROUND(p.lat, 3) END)", PLNG = "(CASE WHEN p.status = 'approved' THEN p.lng ELSE ROUND(p.lng, 3) END)";
+      const { results } = await env.DB.prepare(`SELECT p.* FROM ps_places p WHERE ${LIVE} AND p.lat BETWEEN ?1 AND ?2 AND p.lng BETWEEN ?3 AND ?4
+          ORDER BY (${PLAT} - ?5) * (${PLAT} - ?5) + ((${PLNG} - ?6) * ?7) * ((${PLNG} - ?6) * ?7), p.id LIMIT 200`)
+        .bind(bx.lat1, bx.lat2, bx.lng1, bx.lng2, at.lat, at.lng, k).all();
+      // Cut off and ordered by the public pin, never the exact one.
+      rows = (results || []).map((p) => { const pin = psPubPin(p); return { p, km: psKm(at.lat, at.lng, pin.lat, pin.lng) }; })
+        .filter((x) => x.km <= PS_NEAR_KM).sort((x, y) => x.km - y.km || x.p.id - y.p.id).slice(0, limit).map((x) => x.p);
+    } else if (sort === 'liked') {
+      const { results } = await env.DB.prepare(`SELECT p.*, (SELECT COUNT(*) FROM ps_likes l WHERE l.place_id = p.id AND l.reason = '') AS lk,
+          (SELECT COUNT(*) FROM ps_votes v WHERE v.place_id = p.id) AS cnt
+        FROM ps_places p WHERE ${LIVE} ORDER BY lk DESC, cnt DESC, p.id DESC LIMIT ?1`).bind(limit).all();
+      rows = results || [];
+    } else if (sort === 'new') {
+      const { results } = await env.DB.prepare(`SELECT p.* FROM ps_places p WHERE ${LIVE} ORDER BY p.created_at DESC, p.id DESC LIMIT ?1`).bind(limit).all();
+      rows = results || [];
+    } else if (sort === 'mine') {
+      // The places I suggested that are still open, and the ones approved
+      // AFTER my suggestion, latest decision first: how Home keeps "We'll let
+      // you know if it becomes a stamp". Recommending a place that was already
+      // a Local favorite is never announced as my place becoming one. (Both
+      // times are toISOString(), so comparing the text compares the time; a
+      // repeat suggestion keeps its first created_at.)
+      const { results } = await env.DB.prepare(`SELECT p.* FROM ps_places p JOIN ps_votes v ON v.place_id = p.id AND v.user_id = ?1
+          WHERE p.status = 'open' OR (p.status = 'approved' AND p.decided_at > v.created_at)
+          ORDER BY COALESCE(p.decided_at, p.updated_at) DESC, p.id DESC LIMIT ?2`).bind(user.id, limit).all();
+      rows = results || [];
+    }
+    if (gbUnderAge(await spRead)) return gbUnderAgeResp();
+    return jsonResponse({ places: await psSummaries(env, rows, { me: user.id, at, origin: new URL(request.url).origin }) });
+  } catch (e) { return jsonResponse({ error: e.message, places: [] }, 500); }
+}
+
+// POST /places/suggestion { id, lat?, lng? } → { place: PlaceDetail }: the
+// summary plus the 5 newest "Other" texts and the 6 newest photos. 404 for an
+// unknown, declined, held or removed place, or one with no suggestions left.
+async function handlePlaceSuggestion(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    if (gbUnderAge(await gbSocialProfile(env, user.id).catch(() => null))) return gbUnderAgeResp();
+    const b = await request.json().catch(() => ({}));
+    const id = psId(b.id);
+    if (!id || !env.DB) return jsonResponse({ error: 'Not found' }, 404);
+    await psEnsure(env);
+    const p = await env.DB.prepare('SELECT * FROM ps_places WHERE id = ?').bind(id).first();
+    if (!p || !['open', 'approved'].includes(p.status)) return jsonResponse({ error: 'Not found' }, 404);
+    const origin = new URL(request.url).origin;
+    const [s] = await psSummaries(env, [p], { me: user.id, at: psPoint(b), origin });
+    if (!s.count) return jsonResponse({ error: 'Not found' }, 404);
+    const [texts, photos] = await env.DB.batch([
+      env.DB.prepare('SELECT other_text FROM ps_votes WHERE place_id = ? AND other_text IS NOT NULL ORDER BY updated_at DESC LIMIT 5').bind(id),
+      env.DB.prepare('SELECT photo_key FROM ps_votes WHERE place_id = ? AND photo_key IS NOT NULL ORDER BY updated_at DESC LIMIT 6').bind(id),
+    ]);
+    return jsonResponse({ place: { ...s, other_texts: (texts.results || []).map((r) => r.other_text), photos: (photos.results || []).map((r) => `${origin}/ps-photo/${r.photo_key}`) } });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /places/like { id, reason?: '' | key, on } → { ok, likes, reason_likes, my }
+// Likes have no limit (founder): one per person per place and per reason
+// ("I agree"), as a toggle, and the totals just grow. Teens may like.
+async function handlePlaceLike(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to like a place' }, 401);
+    if (gbUnderAge(await gbSocialProfile(env, user.id).catch(() => null))) return gbUnderAgeResp();
+    if (!env.DB) return jsonResponse({ error: 'DB not configured' }, 500);
+    const b = await request.json().catch(() => ({}));
+    const id = psId(b.id);
+    const reason = b.reason == null ? '' : String(b.reason);
+    if (!id || typeof b.on !== 'boolean' || (reason && !PS_REASON_KEYS.has(reason))) return jsonResponse({ error: 'id, on and a known reason required' }, 400);
+    await psEnsure(env);
+    const live = await env.DB.prepare("SELECT id FROM ps_places WHERE id = ?1 AND status IN ('open', 'approved') AND EXISTS (SELECT 1 FROM ps_votes WHERE place_id = ?1)").bind(id).first();
+    if (!live) return jsonResponse({ error: 'Not found' }, 404);
+    if (b.on) await env.DB.prepare('INSERT OR IGNORE INTO ps_likes (place_id, user_id, reason, created_at) VALUES (?, ?, ?, ?)').bind(id, user.id, reason, new Date().toISOString()).run();
+    else await env.DB.prepare('DELETE FROM ps_likes WHERE place_id = ? AND user_id = ? AND reason = ?').bind(id, user.id, reason).run();
+    const [all, vote, mine] = await env.DB.batch([
+      env.DB.prepare('SELECT reason, COUNT(*) AS n FROM ps_likes WHERE place_id = ? GROUP BY reason').bind(id),
+      env.DB.prepare('SELECT reason FROM ps_votes WHERE place_id = ? AND user_id = ?').bind(id, user.id),
+      env.DB.prepare('SELECT reason FROM ps_likes WHERE place_id = ? AND user_id = ?').bind(id, user.id),
+    ]);
+    const reasonLikes = Object.fromEntries(PS_REASONS.map((r) => [r.key, 0]));
+    let likes = 0;
+    for (const r of all.results || []) { if (r.reason === '') likes = r.n; else if (PS_REASON_KEYS.has(r.reason)) reasonLikes[r.reason] = r.n; }
+    const myVote = (vote.results || [])[0], myLikes = (mine.results || []).map((r) => r.reason);
+    return jsonResponse({ ok: true, likes, reason_likes: reasonLikes, my: { suggested: !!myVote, reason: myVote?.reason || null, liked: myLikes.includes(''), liked_reasons: myLikes.filter(Boolean) } });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /places/report { id, reason } → { ok, already } (2026-10-12)
+// A suggestion is public from its first vote, so anyone signed in may report
+// one — teens too: reporting is a safety door, not publishing. One report per
+// person per place. Three distinct reports hide an open place ('held') until
+// the founder decides on the admin desk's Reported tab; an approved place
+// stays up (people hold its stamp) and is only flagged. The founder's bell
+// rings for a place's first report and when one is hidden.
+async function handlePlaceReport(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to report a place' }, 401);
+    if (gbUnderAge(await gbSocialProfile(env, user.id).catch(() => null))) return gbUnderAgeResp();
+    if (!env.DB) return jsonResponse({ error: 'DB not configured' }, 500);
+    const b = await request.json().catch(() => ({}));
+    const id = psId(b.id);
+    const reason = String(b.reason || '');
+    if (!id || !PS_REPORT_REASONS.has(reason)) return jsonResponse({ error: 'id and a known reason required' }, 400);
+    await psEnsure(env);
+    const p = await env.DB.prepare("SELECT id, name, status FROM ps_places WHERE id = ? AND status IN ('open', 'approved', 'held')").bind(id).first();
+    if (!p) return jsonResponse({ error: 'Not found' }, 404);
+    const now = new Date().toISOString();
+    // The insert and the count in one batch (one transaction): of two reports
+    // landing together, exactly one sees n = 1 and rings the bell.
+    const [ins, open] = await env.DB.batch([
+      env.DB.prepare('INSERT OR IGNORE INTO ps_reports (place_id, user_id, reason, created_at) VALUES (?, ?, ?, ?)').bind(id, user.id, reason, now),
+      env.DB.prepare('SELECT COUNT(*) AS n FROM ps_reports WHERE place_id = ? AND resolved = 0').bind(id),
+    ]);
+    const already = !(Number(ins?.meta?.changes) > 0);
+    if (!already) {
+      const n = Number(open?.results?.[0]?.n) || 0;
+      let hidden = false;
+      if (p.status === 'open' && n >= PS_REPORTS_HIDE) {
+        const up = await env.DB.prepare("UPDATE ps_places SET status = 'held', updated_at = ? WHERE id = ? AND status = 'open'").bind(now, id).run();
+        hidden = Number(up?.meta?.changes) > 0;
+      }
+      if (ctx && (n === 1 || hidden)) {
+        ctx.waitUntil(founderAlert(env, `🚩 A place suggestion was reported${hidden ? ` ${n} times — hidden until you decide` : ''}: "${p.name}" (${reason}). Admin → Place suggestions → Reported.`, 'report'));
+      }
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'place_report', { place_id: id, reason, n, hidden }));
+    }
+    return jsonResponse({ ok: true, already });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// Signed photo links for the founder's desk (2026-10-12): /ps-photo/ serves
+// only open and approved places, but deciding Keep / Remove on a place that
+// reports hid means seeing its photos. An <img> can't carry the admin's
+// sign-in, so the desk's links carry a one-hour signature instead.
+const PS_SIGN_TTL = 3600;
+async function psPhotoSig(env, key, exp) {
+  const secret = env.PS_PHOTO_SECRET || env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY;
+  if (!secret) return null;
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(`ps-photo:${secret}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(`${key}|${exp}`)));
+  return [...mac.slice(0, 16)].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+async function psSignedPhotoUrl(env, url, exp) {
+  const key = String(url).split('/ps-photo/')[1];
+  const sig = key ? await psPhotoSig(env, key, exp) : null;
+  return sig ? `${url}?exp=${exp}&sig=${sig}` : url;
+}
+
+// GET /ps-photo/<key> — a suggestion photo from R2: public like guestbook
+// photos, moderated before it was stored. Only ps/ keys, and only while the
+// place is open or approved.
+async function handlePlaceSuggestPhotoServe(request, env) {
+  try {
+    if (!env.MEDIA) return new Response('Not found', { status: 404 });
+    const key = decodeURIComponent(new URL(request.url).pathname.replace(/^\/ps-photo\//, ''));
+    if (!/^ps\/\d{1,12}\/(?:[0-9a-f-]{36}\/)?[0-9a-f-]{36}\.(?:jpg|png|webp)$/i.test(key)) return new Response('Bad key', { status: 400 });
+    // Only an open or approved place's photos are served (2026-10-12): a place
+    // hidden by reports or removed by the founder takes its photos down too.
+    const gone = new Response('Not found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
+    if (!env.DB) return gone;
+    const place = await env.DB.prepare('SELECT status FROM ps_places WHERE id = ?').bind(Number(/^ps\/(\d{1,12})\//.exec(key)[1])).first().catch(() => null);
+    if (!place) return gone;
+    const shown = ['open', 'approved'].includes(place.status);
+    if (!shown) {
+      // The founder's desk: a signed, unexpired link (see psPhotoSig).
+      const q = new URL(request.url).searchParams;
+      const exp = Number(q.get('exp')), sig = String(q.get('sig') || '');
+      const want = Number.isFinite(exp) && exp > Date.now() / 1000 ? await psPhotoSig(env, key, exp) : null;
+      let same = !!want && want.length === sig.length;
+      for (let i = 0; same && i < want.length; i++) same = want.charCodeAt(i) === sig.charCodeAt(i);
+      if (!same) return gone;
+    }
+    const obj = await env.MEDIA.get(key);
+    if (!obj) return new Response('Not found', { status: 404 });
+    const headers = new Headers();
+    headers.set('Content-Type', obj.httpMetadata?.contentType || 'image/jpeg');
+    // A day, not a year: a takedown has to reach phones that saw the photo.
+    // A hidden place's photo (the desk's signed link) is never cached.
+    headers.set('Cache-Control', shown ? 'public, max-age=86400' : 'private, no-store');
+    headers.set('Access-Control-Allow-Origin', '*');
+    headers.set('X-Content-Type-Options', 'nosniff');
+    if (obj.httpEtag) headers.set('ETag', obj.httpEtag);
+    return new Response(obj.body, { headers });
+  } catch { return new Response('Error', { status: 500 }); }
+}
+
+// POST /admin/place-suggestions { op: 'list'|'decide'|'csv', tab?, id?, decision?, as? }
+// The founder's review desk: places with 5 or more suggestions, plus any
+// reported place. list → { places: AdminPlace[], counts }: Ready (open, 5+) /
+// Approved / Declined / Reported (unresolved reports or hidden by them, any
+// count; each place carries reports { n, reasons }). decide → Approve (a Local
+// favorite stamp) or Decline a place with 5+; Remove (a takedown) or Keep (the
+// reports were wrong) at any count. csv → every place with 5+ as a
+// spreadsheet Excel opens directly.
+async function handleAdminPlaceSuggestions(request, env, ctx) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  try {
+    if (!env.DB) return jsonResponse({ error: 'DB not configured', places: [] }, 500);
+    await psEnsure(env);
+    const body = await request.json().catch(() => ({}));
+    const op = ['list', 'decide', 'csv'].includes(body?.op) ? body.op : 'list';
+    const origin = new URL(request.url).origin;
+    const CNT = '(SELECT COUNT(*) FROM ps_votes v WHERE v.place_id = p.id)';
+    const HAS = 'EXISTS (SELECT 1 FROM ps_votes v WHERE v.place_id = p.id)';
+    // Unresolved reports, or hidden by them: the Reported tab (2026-10-12).
+    const REPORTED = "(p.status = 'held' OR EXISTS (SELECT 1 FROM ps_reports r WHERE r.place_id = p.id AND r.resolved = 0))";
+    if (op === 'decide') {
+      const id = psId(body?.id);
+      const decision = ['approved', 'declined', 'removed', 'keep'].includes(body?.decision) ? body.decision : null;
+      if (!id || !decision) return jsonResponse({ error: 'id and decision required' }, 400);
+      const p = await env.DB.prepare(`SELECT p.id, p.status, ${CNT} AS cnt FROM ps_places p WHERE p.id = ?`).bind(id).first();
+      if (!p) return jsonResponse({ error: 'Not found' }, 404);
+      // Approve and Decline are the review, at 5 or more. Remove (a takedown)
+      // and Keep (the reports were wrong) work at any count (2026-10-12).
+      if ((decision === 'approved' || decision === 'declined') && p.cnt < PS_REVIEW_AT) {
+        return jsonResponse({ error: `A place is reviewed once ${PS_REVIEW_AT} people suggest it` }, 409);
+      }
+      const now = new Date().toISOString();
+      const resolve = env.DB.prepare('UPDATE ps_reports SET resolved = 1 WHERE place_id = ?').bind(id);
+      if (decision === 'keep') {
+        await env.DB.batch([resolve, env.DB.prepare("UPDATE ps_places SET status = 'open', updated_at = ?1 WHERE id = ?2 AND status = 'held'").bind(now, id)]);
+      } else if (decision === 'removed') {
+        // A takedown is final for the photos (2026-10-12): they come out of R2.
+        const { results: ph } = await env.DB.prepare('SELECT photo_key FROM ps_votes WHERE place_id = ? AND photo_key IS NOT NULL').bind(id).all();
+        await env.DB.batch([
+          env.DB.prepare('UPDATE ps_places SET status = ?1, decided_at = ?2, updated_at = ?2 WHERE id = ?3').bind(decision, now, id),
+          resolve,
+          env.DB.prepare('UPDATE ps_votes SET photo_key = NULL WHERE place_id = ?').bind(id),
+        ]);
+        if (env.MEDIA) await Promise.all((ph || []).map((r) => env.MEDIA.delete(r.photo_key).catch(() => {})));
+      } else {
+        // Only from 'open': a card loaded before reports hid the place, or
+        // before it was decided on another device, can't publish it.
+        const up = await env.DB.prepare("UPDATE ps_places SET status = ?1, decided_at = ?2, updated_at = ?2 WHERE id = ?3 AND status = 'open'").bind(decision, now, id).run();
+        if (!(Number(up?.meta?.changes) > 0)) return jsonResponse({ error: 'This place changed since the list loaded. Reload to see where it stands.', code: 'stale' }, 409);
+      }
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'place_decided', { place_id: id, decision, count: p.cnt, from: p.status }));
+      return jsonResponse({ ok: true });
+    }
+    if (op === 'csv') {
+      const { results } = await env.DB.prepare(`SELECT p.*, ${CNT} AS cnt FROM ps_places p WHERE ${CNT} >= ? ORDER BY cnt DESC, p.id LIMIT 5000`).bind(PS_REVIEW_AT).all();
+      const rows = results || [];
+      const places = await psSummaries(env, rows, { origin, texts: true, admin: true });
+      const head = ['Place', 'City', 'Region', 'Country', 'Lat', 'Lng', 'Map link', 'Status', 'Suggestions', 'Locals', 'Visitors', 'Likes', 'Top reasons', 'Other texts', 'First suggested', 'Decided'];
+      const statusName = { open: 'Ready', review: 'Ready', approved: 'Approved', declined: 'Declined', held: 'Hidden by reports', removed: 'Removed' };
+      const when = (v) => String(v || '').replace('T', ' ').slice(0, 16);
+      const lines = places.map((s, i) => [
+        s.name, s.city, s.region, s.country, s.lat, s.lng, psMapUrl(s), statusName[s.status], s.count, s.locals, s.visitors, s.likes,
+        s.reasons.map((r) => `${r.short} (${r.n})`).join(', '), s.other_texts.join(' | '), when(rows[i].created_at), when(rows[i].decided_at),
+      ].map(csvCell).join(','));
+      // The byte-order mark makes Excel read accents and curly quotes correctly.
+      const csv = '\uFEFF' + [head.map(csvCell).join(','), ...lines].join('\r\n');
+      const filename = `place-suggestions-${new Date().toISOString().slice(0, 10)}.csv`;
+      // The app's admin page asks for it as JSON (its HTTP layer reads JSON) and
+      // hands it to the share sheet; a browser gets the file.
+      if (body?.as === 'json') return jsonResponse({ filename, csv, rows: places.length });
+      return new Response(csv, { status: 200, headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${filename}"`, ...CORS_HEADERS } });
+    }
+    const tab = ['ready', 'approved', 'declined', 'reported'].includes(body?.tab) ? body.tab : 'ready';
+    const limit = Math.min(500, Math.max(1, parseInt(body?.limit, 10) || 200));
+    const OPEN_REPORTS = '(SELECT COUNT(*) FROM ps_reports r WHERE r.place_id = p.id AND r.resolved = 0)';
+    const list = tab === 'ready'
+      ? env.DB.prepare(`SELECT p.*, ${CNT} AS cnt FROM ps_places p WHERE p.status = 'open' AND ${CNT} >= ?1 ORDER BY cnt DESC, p.id LIMIT ?2`).bind(PS_REVIEW_AT, limit)
+      : tab === 'reported'
+        // Any count — a takedown can't wait for 5 suggestions. Most reported first.
+        ? env.DB.prepare(`SELECT p.* FROM ps_places p WHERE p.status IN ('open', 'approved', 'held') AND ${REPORTED} ORDER BY ${OPEN_REPORTS} DESC, p.updated_at DESC LIMIT ?1`).bind(limit)
+        : env.DB.prepare(`SELECT p.* FROM ps_places p WHERE p.status = ?1 AND ${HAS} ORDER BY p.decided_at DESC, p.id DESC LIMIT ?2`).bind(tab, limit);
+    const [{ results }, { results: totals }] = await env.DB.batch([list, env.DB.prepare(`SELECT
+        COALESCE(SUM(CASE WHEN p.status = 'open' AND ${CNT} >= ?1 THEN 1 ELSE 0 END), 0) AS ready,
+        COALESCE(SUM(CASE WHEN p.status = 'approved' AND ${HAS} THEN 1 ELSE 0 END), 0) AS approved,
+        COALESCE(SUM(CASE WHEN p.status = 'declined' AND ${HAS} THEN 1 ELSE 0 END), 0) AS declined,
+        COALESCE(SUM(CASE WHEN p.status IN ('open', 'approved', 'held') AND ${REPORTED} THEN 1 ELSE 0 END), 0) AS reported
+      FROM ps_places p`).bind(PS_REVIEW_AT)]);
+    const rows = results || [];
+    // Each place's unresolved reports by reason (D1 binds at most 100 values a query).
+    const reports = new Map();
+    for (let i = 0; i < rows.length; i += 90) {
+      const ids = rows.slice(i, i + 90).map((r) => r.id);
+      const { results: rr } = await env.DB.prepare(`SELECT place_id, reason, COUNT(*) AS n FROM ps_reports WHERE resolved = 0 AND place_id IN (${ids.map(() => '?').join(',')}) GROUP BY place_id, reason`).bind(...ids).all();
+      for (const r of rr || []) {
+        const m = reports.get(r.place_id) || { n: 0, reasons: {} };
+        m.n += Number(r.n) || 0; m.reasons[r.reason] = Number(r.n) || 0;
+        reports.set(r.place_id, m);
+      }
+    }
+    const places = (await psSummaries(env, rows, { origin, texts: true, admin: true }))
+      .map((s, i) => ({ ...s, created_at: rows[i].created_at, decided_at: rows[i].decided_at || null, map_url: psMapUrl(s), reports: reports.get(rows[i].id) || { n: 0, reasons: {} } }));
+    // Signed for an hour, so the desk sees a hidden or declined place's photos too.
+    const exp = Math.floor(Date.now() / 1000) + PS_SIGN_TTL;
+    for (const pl of places) pl.photos = await Promise.all((pl.photos || []).map((u) => psSignedPhotoUrl(env, u, exp)));
+    const t = totals?.[0] || {};
+    return jsonResponse({ places, counts: { ready: t.ready || 0, approved: t.approved || 0, declined: t.declined || 0, reported: t.reported || 0 } });
+  } catch (e) {
+    return jsonResponse({ error: e?.message || 'Failed', places: [] }, 500);
+  }
 }
 
 // ── Private messages to a place's owner (founder, 2026-10-05) ────────────────
@@ -21861,6 +22679,7 @@ export default {
       if (pathname === '/admin/contact' && request.method === 'POST') return await handleAdminContact(request, env);
       if (pathname === '/admin/age-appeal' && request.method === 'POST') return await handleAdminAgeAppeal(request, env, ctx);
       if (pathname === '/admin/stamp-reports' && request.method === 'POST') return await handleAdminStampReports(request, env);
+      if (pathname === '/admin/place-suggestions' && request.method === 'POST') return await handleAdminPlaceSuggestions(request, env, ctx);
       if (pathname === '/analytics-query') return await handleAnalyticsQuery(request, env);
       if (pathname === '/admin/passport-monthly' && request.method === 'POST') return await handleAdminPassportMonthly(request, env);
       if (pathname.startsWith('/places/details/')) return await handlePlaceDetails(request, env);
@@ -21929,6 +22748,7 @@ export default {
       // Passport (personal, private)
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
       if (pathname.startsWith('/dish-photo/') && request.method === 'GET') return await handleDishPhotoServe(request, env);
+      if (pathname.startsWith('/ps-photo/') && request.method === 'GET') return await handlePlaceSuggestPhotoServe(request, env);
       if (pathname === '/attractions/visit-info' && request.method === 'POST') return await handleAttractionVisitInfo(request, env, ctx);
       if (pathname === '/attractions/before-you-go' && request.method === 'POST') return await handleAttractionBeforeYouGo(request, env, ctx);
       if (pathname === '/attractions/why-visit' && request.method === 'POST') return await handleAttractionWhyVisit(request, env, ctx);
@@ -21937,6 +22757,13 @@ export default {
       if (pathname === '/places/dishes' && request.method === 'POST') return await handlePlaceDishes(request, env);
       if (pathname === '/places/dishes/add' && request.method === 'POST') return await handlePlaceDishAdd(request, env, ctx);
       if (pathname === '/places/dishes/delete' && request.method === 'POST') return await handlePlaceDishDelete(request, env);
+      // Suggest a Place to Stamp (founder decisions 2026-10-10)
+      if (pathname === '/places/suggest/check' && request.method === 'POST') return await handlePlaceSuggestCheck(request, env);
+      if (pathname === '/places/suggest' && request.method === 'POST') return await handlePlaceSuggest(request, env, ctx);
+      if (pathname === '/places/suggestions' && request.method === 'POST') return await handlePlaceSuggestions(request, env);
+      if (pathname === '/places/suggestion' && request.method === 'POST') return await handlePlaceSuggestion(request, env);
+      if (pathname === '/places/like' && request.method === 'POST') return await handlePlaceLike(request, env);
+      if (pathname === '/places/report' && request.method === 'POST') return await handlePlaceReport(request, env, ctx);
       if (pathname.startsWith('/pc-photo/') && request.method === 'GET') return await handlePostcardPhotoServe(request, env);
       if (pathname.startsWith('/av-photo/') && request.method === 'GET') return await handleAvatarServe(request, env);
       if (pathname.startsWith('/bl-doodle/') && request.method === 'GET') return await handleBlotterDoodleServe(request, env);
