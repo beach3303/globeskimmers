@@ -279,6 +279,19 @@ suppressed, minors only inside totals. **The day organizer reports ship:** add t
 (Analytics, or Advertising or marketing if sold as promotion) to date of birth in Google Play Data safety
 and App Store App Privacy, and a privacy-policy line that anonymous age-band reports go to event partners.
 
+**"Why visit" + "Before you go" — founder decisions 2026-10-11:** separate official-site lookup (not
+folded into prices); the worship fallback line YES; "Why visit" sits at the TOP of the page, above the
+Stamp button. Prefill scale still open — the founder asked for mockups first: 5 researched examples
+(Statue of Liberty tickets/steps, Top of the Rock history/photo spots, Color Factory what's-inside,
+Blue Mosque rules/respect, Griffith free/parking) are at https://claude.ai/artifact/Jxm11wEpu5756VyUxRDtdK,
+every fact wearing a source chip (green = free: Wikipedia/Wikidata/OSM/our words; amber = paid: the
+one-time ~13¢ official-site read, Google reviews 3.2¢/page-load). Ownership stance recorded: facts are
+free, OUR summary sentences are ours forever, official-site quotes stay short + attributed. The
+founder's 2026-10-11 question list (what is it, who built it, what's inside, steps, ticket strategy,
+best photo spot, crowd windows — the Color Factory / Pedestal / Rockefeller standard) is the
+acceptance bar for this layer. Shared traveler photos additionally get an optional "what's this spot
+called?" label (e.g. "From the cable car"); the traveler always owns their photo (we display under
+license, delete anytime).
 **Traveler photos on place pages (founder, 2026-10-10; after the 1.0.4 screenshots).**
 1. **Dish, drink and store photos join the place's gallery.** "Add a photo of what you ordered" or
    "got here" photos go into the place's photo gallery after Google's 1-3 photos, in Places to Eat,
