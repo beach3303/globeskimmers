@@ -284,6 +284,7 @@ function normalizePlace(place, baseUrl = '', includeReviews = false) {
     priceLevel,
     primaryType: place.primaryType || null,
     primaryTypeDisplay: place.primaryTypeDisplayName?.text || null,
+    editorialSummary: place.editorialSummary?.text || null,   // Google's one-liner; a Why-visit input (2026-10-11)
     types: place.types || [],
     phone: place.nationalPhoneNumber || place.internationalPhoneNumber || null,
     nationalPhoneNumber: place.nationalPhoneNumber || '',
@@ -6884,6 +6885,185 @@ async function handleAttractionBeforeYouGo(request, env, ctx) {
         searches: ask.usage?.searches || 0, stop: ask.stop || null, error: ask.error ? ask.error.slice(0, 200) : null,
       }).catch(() => {});
       return ask.error ? { ok: false, error: 'lookup_failed', official_site: site || null } : out;
+    })();
+    if (ctx) ctx.waitUntil(work.catch(() => {}));
+    return jsonResponse(await work);
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// ── "Why visit" + the story + what you can do (founder, 2026-10-11) ──────────
+// Written ON OPEN (no prefill — demand leads), from FREE facts only — the
+// encyclopedia summary (by the row's Wikidata id, or a name match within 1 km
+// of the pin; never named in the app), Google's editorial summary when the
+// place's details are already cached (no new paid call is ever made here),
+// and our own row — and kept FOREVER (KV wv:v1, no expiry; why_visit also
+// lands in D1). Every guard is code: numbers and proper names must come from
+// the inputs, no 8-word run copied from a source, no prices/hours/rules words
+// in the Why-visit line, no marketing words, never "wiki". A line that fails
+// is simply hidden — the page never shows a guess.
+const WV_VERSION = 'v1';
+const WV_DAILY_CAP = 300, WV_USER_CAP = 30;
+const WV_MARKETING = /\b(must[- ]see|breathtaking|hidden gem|bucket[- ]list|stunning|unforgettable|world[- ]class|jaw[- ]dropping|magical|amazing|incredible|awe[- ]inspiring|unmissable|iconic)\b/i;
+const WV_RULES = /(\$|€|£|¥|\b(tickets?|admission|prices?|fees?|free entry|opens? (at|from)|closes? at|closed on|dress code|forbidden|prohibited|not allowed|must book|reservations?)\b)/i;
+const WV_PROMPT = [
+  'You write for a travel app that never guesses. Using ONLY the facts given (nothing from memory), write three things about ONE place, as JSON inside <json></json>:',
+  '"why_visit": one or two sentences, 25 to 45 words, in plain warm English: what it is, then why people go or what they see there. No prices, hours or rules. No marketing words.',
+  '"story": two short paragraphs separated by a blank line, 60 to 110 words in total: the history and the human story — who, when, why — only from the facts given.',
+  '"can_do": 3 to 5 lines of at most 12 words each, each starting with a verb, about what a visitor can actually do, see or reach there — ONLY if the facts say so (climb, enter, walk, picnic, eat, touch, swim…). Fewer lines is better than an invented one; an empty list is fine.',
+  'Copy no phrase of 8 or more words from the facts. Every number and every proper name you write must appear in the facts. Places of worship are described as places of worship first, respectfully. Never write the word "wiki" or name any source.',
+].join(' ');
+
+// The nearest Wikidata item with this name (within 1 km of the pin) — free,
+// and the distance check keeps another town's namesake out.
+async function wvFindQid(name, lat, lng) {
+  if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const s = await wikiJson(`https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=en&limit=5&format=json`).catch(() => null);
+  const ids = (s?.search || []).map((x) => x.id).filter((x) => /^Q\d+$/.test(x)).slice(0, 5);
+  if (!ids.length) return null;
+  const e = await wikiJson(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids.join('|')}&props=claims&format=json`).catch(() => null);
+  let best = null;
+  for (const q of ids) {
+    const c = e?.entities?.[q]?.claims?.P625?.[0]?.mainsnak?.datavalue?.value;
+    if (!c) continue;
+    const d = calcDistance(lat, lng, +c.latitude, +c.longitude) * 1000;
+    if (d <= 1000 && (!best || d < best.d)) best = { q, d };
+  }
+  return best ? best.q : null;
+}
+async function wvFacts(env, row) {
+  const facts = { name: row.name, where: row.address || [row.city, row.country].filter(Boolean).join(', ') || null, category: row.category || null, description: row.description || null, extract: null, wd: null, google: row.google || null };
+  let q = String(row.qid || (String(row.id).match(/Q\d+/) || [])[0] || '');
+  if (!/^Q\d+$/.test(q)) q = (await wvFindQid(row.name, +row.lat, +row.lng).catch(() => null)) || '';
+  if (/^Q\d+$/.test(q)) {
+    try {
+      const e = await wikiJson(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${q}&props=sitelinks|descriptions&format=json`);
+      const ent = e?.entities?.[q];
+      facts.wd = ent?.descriptions?.en?.value || null;
+      const title = ent?.sitelinks?.enwiki?.title;
+      if (title) {
+        const sum = await wikiJson(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`);
+        if (sum?.extract) facts.extract = String(sum.extract).slice(0, 1800);
+      }
+    } catch { /* free facts are best-effort */ }
+  }
+  // Google's editorial summary, only from a details record we already hold.
+  if (!facts.google && env.GLOBESKIMMERS_KV && ttdIdKind(row.id) === 'd1') {
+    try {
+      const gid = await env.GLOBESKIMMERS_KV.get(`d1gid:${row.id}`);
+      const d = gid && gid !== 'none' ? await getFromCache(env, `details_${gid}`) : null;
+      if (typeof d?.data?.editorialSummary === 'string' && d.data.editorialSummary.trim()) facts.google = d.data.editorialSummary.trim().slice(0, 400);
+    } catch { /* optional */ }
+  }
+  return facts;
+}
+function wvGuard(text, facts, { maxChars, minWords, maxWords, noRules }) {
+  if (typeof text !== 'string') return null;
+  const t = text.replace(/[ \t]+/g, ' ').replace(/\s*\n\s*\n\s*/g, '\n\n').replace(/ *\n */g, '\n').trim();
+  if (!t || t.length > maxChars) return null;
+  const words = t.split(/\s+/);
+  if (words.length < minWords || words.length > maxWords) return null;
+  if (/wiki/i.test(t) || WV_MARKETING.test(t) || (noRules && WV_RULES.test(t))) return null;
+  const pool = [facts.name, facts.where, facts.category, facts.description, facts.extract, facts.wd, facts.google].filter(Boolean).join(' ');
+  const poolLower = pool.toLowerCase();
+  // Every number must be in the facts.
+  for (const n of (t.match(/\d+(?:[.,]\d+)?/g) || [])) if (!pool.includes(n)) return null;
+  // Every proper name (a capitalized word that doesn't open its sentence) must be in the facts.
+  for (const sentence of t.split(/(?<=[.!?])\s+|\n+/)) {
+    const toks = sentence.split(/\s+/);
+    for (let i = 1; i < toks.length; i++) {
+      const w = toks[i].replace(/^[("'“‘]+|[)"'”’.,;:!?]+$/g, '');
+      if (/^[A-Z][a-zA-Z’'-]+$/.test(w) && !poolLower.includes(w.toLowerCase())) return null;
+    }
+  }
+  // No 8-word run copied from any source text.
+  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim().split(' ');
+  const outW = norm(t);
+  for (const src of [facts.extract, facts.google, facts.description].filter(Boolean)) {
+    const sw = norm(src); const grams = new Set();
+    for (let i = 0; i + 8 <= sw.length; i++) grams.add(sw.slice(i, i + 8).join(' '));
+    for (let i = 0; i + 8 <= outW.length; i++) if (grams.has(outW.slice(i, i + 8).join(' '))) return null;
+  }
+  return t;
+}
+
+// POST /attractions/why-visit { id } → { why_visit, story, can_do, checked_at }.
+// { id, report: true } is "Something's wrong?": clears the saved text so the
+// next open rewrites it, and logs wv_reported for the admin.
+async function handleAttractionWhyVisit(request, env, ctx) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.id || '').trim();
+    if (!id || id.length > 200) return jsonResponse({ error: 'id required' }, 400);
+    const kv = env.GLOBESKIMMERS_KV;
+    const cacheKey = `wv:${WV_VERSION}:${id}`;
+    const user = await gbUser(request, env);
+    if (b.report === true) {
+      if (!user) return jsonResponse({ error: 'sign_in' }, 401);
+      if (kv) await kv.delete(cacheKey).catch(() => {});
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'wv_reported', { id }));
+      return jsonResponse({ ok: true, cleared: true });
+    }
+    const cached = kv ? await kv.get(cacheKey, { type: 'json' }).catch(() => null) : null;
+    if (cached) return jsonResponse({ ...cached, _cache: 'hit' });
+    if (!user) return jsonResponse({ error: 'sign_in' }, 401);
+    if (!env.ANTHROPIC_API_KEY) return jsonResponse({ error: 'not configured' }, 500);
+    let row = null;
+    if (ttdIdKind(id) === 'google') {
+      const d = await ttdPlaceDetails(env, id, new URL(request.url).origin);
+      if (d) row = { id, name: d.name, address: d.address || '', lat: d.latitude, lng: d.longitude, category: d.primaryTypeDisplay || null, description: null, google: d.editorialSummary || null };
+    } else if (env.ATTRACTIONS_DB) {
+      row = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(id).first().catch(() => null);
+    }
+    if (!row) return jsonResponse({ error: 'Not found' }, 404);
+    // The founder's prewarm script runs as admin and skips the daily caps.
+    let isAdmin = false;
+    try { isAdmin = !(await requireAdmin(request, env)); } catch { isAdmin = false; }
+    if (kv) {
+      if (await kv.get(`wv:lock:${id}`).catch(() => null)) return jsonResponse({ pending: true });
+      if (!isAdmin) {
+        const day = new Date().toISOString().slice(0, 10);
+        const gk = `wv:cap:${day}`, uk = `wv:cap:${user.id}:${day}`;
+        const [g, u] = await Promise.all([kv.get(gk).catch(() => 0), kv.get(uk).catch(() => 0)]);
+        if ((Number(g) || 0) >= WV_DAILY_CAP || (Number(u) || 0) >= WV_USER_CAP) return jsonResponse({ ok: false, error: 'busy' }, 429);
+        await Promise.all([
+          kv.put(gk, String((Number(g) || 0) + 1), { expirationTtl: 2 * 86400 }),
+          kv.put(uk, String((Number(u) || 0) + 1), { expirationTtl: 2 * 86400 }),
+        ]).catch(() => {});
+      }
+      await kv.put(`wv:lock:${id}`, '1', { expirationTtl: 90 }).catch(() => {});
+    }
+    const work = (async () => {
+      const facts = await wvFacts(env, row);
+      const enough = !!(facts.extract || facts.google || (facts.description && facts.description.length > 80));
+      let why = null, story = null, canDo = [], usage = null;
+      if (enough) {
+        const factText = ['Name: ' + facts.name, facts.where ? 'Where: ' + facts.where : '', facts.category ? 'Category: ' + facts.category : '', facts.wd ? 'Short description: ' + facts.wd : '', facts.description ? 'Our note: ' + facts.description : '', facts.google ? 'Editorial summary: ' + facts.google : '', facts.extract ? 'Encyclopedia summary: ' + facts.extract : ''].filter(Boolean).join('\n');
+        const r = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          body: JSON.stringify({ model: VISIT_INFO_MODEL, max_tokens: 700, system: WV_PROMPT, messages: [{ role: 'user', content: factText }] }),
+        }).catch(() => null);
+        const d = r && r.ok ? await r.json().catch(() => null) : null;
+        usage = d?.usage || null;
+        const txt = (d?.content || []).filter((x) => x.type === 'text').map((x) => x.text).join('');
+        const m = txt.match(/<json>([\s\S]*?)<\/json>/);
+        let raw = null; try { raw = m ? JSON.parse(m[1]) : null; } catch { raw = null; }
+        if (raw) {
+          why = wvGuard(raw.why_visit, facts, { maxChars: 300, minWords: 15, maxWords: 50, noRules: true });
+          story = wvGuard(raw.story, facts, { maxChars: 800, minWords: 40, maxWords: 130, noRules: false });
+          canDo = (Array.isArray(raw.can_do) ? raw.can_do : []).map((l) => wvGuard(l, facts, { maxChars: 90, minWords: 2, maxWords: 12, noRules: true })).filter(Boolean).slice(0, 5);
+        }
+      }
+      // A line a person already blessed in D1 stays the Why-visit, forever.
+      const existing = typeof row.why_visit === 'string' && row.why_visit.trim().length > 20 ? row.why_visit.trim() : null;
+      const out = { ok: true, why_visit: existing || why, story, can_do: canDo, checked_at: new Date().toISOString() };
+      if (kv && (out.why_visit || story || canDo.length)) await kv.put(cacheKey, JSON.stringify(out)).catch(() => {}); // no expiry: ours, forever
+      if (kv) await kv.delete(`wv:lock:${id}`).catch(() => {});
+      if (!existing && why && env.ATTRACTIONS_DB && ttdIdKind(id) === 'd1') {
+        await env.ATTRACTIONS_DB.prepare("UPDATE attractions SET why_visit = ?1 WHERE id = ?2 AND (why_visit IS NULL OR why_visit = '')").bind(why, id).run().catch(() => {});
+      }
+      await gbLogEvent(env, 'wv_written', { id, enough, why: !!out.why_visit, story: !!story, can_do: canDo.length, extract: !!facts.extract, google: !!facts.google, in_tok: usage?.input_tokens || 0, out_tok: usage?.output_tokens || 0 }).catch(() => {});
+      return out;
     })();
     if (ctx) ctx.waitUntil(work.catch(() => {}));
     return jsonResponse(await work);
@@ -21618,6 +21798,7 @@ export default {
       if (pathname.startsWith('/dish-photo/') && request.method === 'GET') return await handleDishPhotoServe(request, env);
       if (pathname === '/attractions/visit-info' && request.method === 'POST') return await handleAttractionVisitInfo(request, env, ctx);
       if (pathname === '/attractions/before-you-go' && request.method === 'POST') return await handleAttractionBeforeYouGo(request, env, ctx);
+      if (pathname === '/attractions/why-visit' && request.method === 'POST') return await handleAttractionWhyVisit(request, env, ctx);
       if (pathname === '/attractions/link' && request.method === 'POST') return await handleAttractionLink(request, env);
       if (pathname === '/activities/one' && request.method === 'POST') return await handleActivityOne(request, env);
       if (pathname === '/places/dishes' && request.method === 'POST') return await handlePlaceDishes(request, env);
