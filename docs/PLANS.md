@@ -228,13 +228,13 @@ shows TeenHoldNote instead of Mailbox, the Profile visibility switch and @userna
 sign/doodle/owner-message doors, and hides the Home friends invite.
 **TEEN HOLD (founder, 2026-10-11): all social OFF for 13–17, effective with the next worker deploy.**
 Teens keep every travel tool and a PRIVATE passport; every social/publishing door returns
-"Social features open at 18 — your passport stays yours, private" (code teen_hold, 403). Doors held:
+"Social features open at age 18 — your passport stays yours, private" (code teen_hold, 403). Doors held:
 public share, dish/coffee/store photos, owner notes, profile writes (name/bio/website/favorites/dreams),
 postcards (send; teen recipients drop silently like blocks), signing friends' pages/blotter, follow +
 accept (decline/unfollow/list/block stay, for safety), the feed (empty with held:'teen'), usernames,
 tag-by-handle, both guestbook doors. One switch restores the built rails: TEEN_SOCIAL_ENABLED in the
 worker. Privacy policy ¶minors rewritten to say this (dated Oct 11); the counsel brief now states the
-posture and asks the lawyer to bless the re-enable plan. App-side "opens at 18" empty states ride a
+posture and asks the lawyer to bless the re-enable plan. App-side "opens at age 18" empty states ride a
 later OTA; until then teens see the server message.
 **Teens §9 decided (founder, 2026-10-11):** under-13 = freeze + prompt delete + access-only appeal;
 teen gallery photos = anonymous + 24h delay; birthday kept as FULL date after 18 (founder's call, against

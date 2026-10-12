@@ -13887,7 +13887,7 @@ async function handlePassportShare(request, env) {
         if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
         if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Sharing isn\'t available on this account' }, 403);
     if (gbTeenHold(sp)) return gbTeenHoldResp();
-        if (sp.social_tier === 'teen') return jsonResponse({ error: 'Public passports open at 18 — you\'ll be able to share with friends soon' }, 403);
+        if (sp.social_tier === 'teen') return jsonResponse({ error: 'Public passports open at age 18 — you\'ll be able to share with friends soon' }, 403);
         // Fail-closed photo moderation the moment the journal becomes public:
         // unchecked photos get reviewed in the background; the public
         // serializer only ever shows status 'ok'.
@@ -14819,7 +14819,7 @@ function socialTierFor(year, country, md) {
 // flip TEEN_SOCIAL_ENABLED to true to restore them exactly as designed.
 const TEEN_SOCIAL_ENABLED = false;
 const gbTeenHold = (sp) => !TEEN_SOCIAL_ENABLED && sp?.social_tier === 'teen';
-const gbTeenHoldResp = () => jsonResponse({ error: 'Social features open at 18 — your passport stays yours, private', code: 'teen_hold' }, 403);
+const gbTeenHoldResp = () => jsonResponse({ error: 'Social features open at age 18 — your passport stays yours, private', code: 'teen_hold' }, 403);
 
 // Under-minimum-age FREEZE (founder decision 2026-10-11, teens plan §3): a
 // birthday under the minimum age freezes the account at once — no stamps,
@@ -15107,7 +15107,7 @@ async function handlePostcardSend(request, env, ctx) {
       }
       toUser = t.user_id;
     } else if (sp.social_tier === 'teen') {
-      return jsonResponse({ error: 'Address your postcard to a friend — broadcast opens at 18' }, 403);
+      return jsonResponse({ error: 'Address your postcard to a friend — broadcast opens at age 18' }, 403);
     } else {
       const fq = await gbRest(env, `user_follows?followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, { headers: { Prefer: 'count=exact', Range: '0-0' } });
       const followers = parseInt((fq.headers.get('content-range') || '').split('/')[1] || '0', 10);
@@ -15340,7 +15340,7 @@ async function blGate(env, user, share, opts) {
   if (opts && opts.identity) {
     const sp = await gbSocialProfile(env, user.id);
     if (sp?.social_tier === 'blocked') return 'Not available';
-    if (gbTeenHold(sp)) return 'Social features open at 18 — your passport stays yours, private';
+    if (gbTeenHold(sp)) return 'Social features open at age 18 — your passport stays yours, private';
     if (sp?.social_tier === 'teen') {
       const f = await gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${share.user_id}&status=eq.accepted&select=follower_id&limit=1`, {});
       if (!(f.ok && (await f.json()).length)) return 'Follow this traveler first — you can sign once they accept';
