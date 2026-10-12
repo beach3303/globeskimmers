@@ -279,8 +279,13 @@ suppressed, minors only inside totals. **The day organizer reports ship:** add t
 (Analytics, or Advertising or marketing if sold as promotion) to date of birth in Google Play Data safety
 and App Store App Privacy, and a privacy-policy line that anonymous age-band reports go to event partners.
 
-**"Why visit" + "Before you go" — founder decisions 2026-10-11:** PREFILL DECIDED (founder, 2026-10-11,
-after the cost analysis): **top 200 world icons now (~$30), everything else on first open** — and the
+**"Why visit" + "Before you go" — founder decisions 2026-10-11:** PREFILL DECIDED (founder, 2026-10-11, revised the same day):
+**no prefill — on-open only, $0 upfront.** Demand leads: the admin stream already shows what people
+actually stamp (founderAlert pings each new stamp; analytics counts stamps and page opens by place),
+so pages fill exactly where real interest lands. The first opener of any place sees a brief
+"gathering the story…" state for a few seconds — the build must make that state pretty. The top-200
+prefill script stays written and ready: run it once (~$30) right before any marketing push, so icon
+pages are full when strangers arrive. The rest stands: and the
 cost envelope (~$50–80/month at 100 daily users, ceiling ~$1,900/month at full catalog) is APPROVED on
 one condition: cache and keep everything we can forever. Doctrine: OUR layer (Why-visit lines, history,
 what-you-can-do, AI-details permanent cache, traveler photos, guestbook) is kept FOREVER; only the
