@@ -262,6 +262,24 @@ export const AuthProvider = ({ children }) => {
     setSession(null); setUser(null); setProfile(null); setCanRefresh(false);
   }, [user, session]);
 
+  // Social tier from the worker's age gate: 'adult' | 'teen' | 'blocked' |
+  // null (no birthday yet). 'blocked' (under 13) freezes the whole app
+  // (App.jsx shows FrozenScreen); 'teen' holds the social doors until 18
+  // (founder, 2026-10-11). Re-read after the birthday is entered.
+  const [socialTier, setSocialTier] = useState(null);
+  const refreshSocialTier = useCallback(async () => {
+    try {
+      const { data } = await callWorker('social/age', {});
+      const t = data?.tier || null;
+      setSocialTier(t);
+      return t;
+    } catch { return null; }
+  }, []);
+  useEffect(() => {
+    if (!user?.id) { setSocialTier(null); return; }
+    refreshSocialTier();
+  }, [user?.id, refreshSocialTier]);
+
   // canRefresh = admin email (always) OR an email an admin granted in the
   // Supabase `refresh_access` table. Re-evaluated whenever the user changes, so
   // revoking access takes effect on the user's next sign-in.
@@ -290,7 +308,9 @@ export const AuthProvider = ({ children }) => {
     authError,
     canRefresh,
     signInTick,
+    socialTier,
     // actions
+    refreshSocialTier,
     signInWithProvider,
     signInWithApple: signInApple,
     signInWithEmail,
@@ -307,7 +327,7 @@ export const AuthProvider = ({ children }) => {
     checkUserAuth: refreshProfile,
     navigateToLogin: () => {}, // gate is rendered by App.jsx now; no redirect
   }), [
-    session, user, profile, isLoadingAuth, authError, canRefresh, signInTick,
+    session, user, profile, isLoadingAuth, authError, canRefresh, signInTick, socialTier, refreshSocialTier,
     signInWithProvider, signInApple, signInWithEmail, signUpWithEmail,
     verifyEmailOtp, refreshProfile, bumpWelcomeSplashCount, logout, deleteAccount,
   ]);

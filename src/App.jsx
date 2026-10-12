@@ -6,6 +6,7 @@ import { BrowserRouter as Router, Route, Routes, useNavigate, useLocation } from
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AuthGate from '@/components/auth/AuthGate';
+import FrozenScreen from '@/components/auth/FrozenScreen';
 import { FontScaleProvider } from '@/components/a11y/FontScaleContext';
 
 const { Pages, Layout, mainPage } = pagesConfig;
@@ -25,7 +26,7 @@ const ScrollToTop = () => {
 };
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isAuthenticated } = useAuth();
+  const { isLoadingAuth, isAuthenticated, socialTier } = useAuth();
   const navigate = useNavigate();
   const wasAuthenticated = useRef(false);
 
@@ -52,6 +53,12 @@ const AuthenticatedApp = () => {
   // routes render until the user signs in or signs up.
   if (!isAuthenticated) {
     return <AuthGate />;
+  }
+
+  // An under-13 birthday freezes the whole account (founder, 2026-10-11):
+  // only the frozen notice, delete-now and the access-only appeal remain.
+  if (socialTier === 'blocked') {
+    return <FrozenScreen />;
   }
 
   // Authenticated → render the app. Onboarding gating happens in Layout.

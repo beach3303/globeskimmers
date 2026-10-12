@@ -13,6 +13,8 @@ import InviteButton from "@/components/passport/InviteButton";
 import PostcardCompose from "@/components/passport/PostcardCompose";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { useAuth } from "@/lib/AuthContext";
+import TeenHoldNote from "@/components/social/TeenHoldNote";
 
 // One line per thing that happened to you — the activity the dot announces.
 function activityLine(a) {
@@ -44,6 +46,7 @@ const when = (iso) => {
 
 export default function MailboxPage() {
   const navigate = useNavigate();
+  const { socialTier, refreshSocialTier } = useAuth();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [me, setMe] = useState(null);           // my handle (null until claimed)
@@ -69,12 +72,13 @@ export default function MailboxPage() {
       const { error: yErr } = await setAgeGate(dob.year, dob.md);
       if (yErr && yErr !== "age_required") { setClaimBusy(false); showToast(yErr, "error"); return; }
       setClaimNeedYear(false);
+      refreshSocialTier(); // a teen sees the hold, an under-13 the freeze, right away
     }
     const { handle: h, suggestions, error } = await setHandle(want);
     setClaimBusy(false);
     if (error === "age_required") {
       const osYear = birthYearFromRange(await readOsAgeRange());
-      if (osYear) { const { error: aErr } = await setAgeGate(osYear); if (!aErr) { claim(); return; } }
+      if (osYear) { const { error: aErr } = await setAgeGate(osYear); if (!aErr) { refreshSocialTier(); claim(); return; } }
       setClaimNeedYear(true); showToast("One thing first — your birthday", "success"); return;
     }
     setClaimSugs(error ? (suggestions || []) : []);
@@ -104,6 +108,19 @@ export default function MailboxPage() {
   };
   const respond = async (user_id, op) => { await socialFollow(op, { user_id }); load(); };
   const unfollow = async (user_id) => { await socialFollow("unfollow", { user_id }); load(); };
+
+  // 13–17: the whole social page is the hold note (founder, 2026-10-11).
+  if (socialTier === "teen") {
+    return (
+      <div className="min-h-screen pb-28" style={{ background: IVORY }}>
+        <div className="max-w-md md:max-w-2xl mx-auto px-4 pt-6">
+          <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: STAMP }}>Globeskimmers · Mailbox</div>
+          <h1 style={{ fontFamily: SERIF, fontSize: fs(28), color: INK, lineHeight: 1.05, marginTop: 4 }}>Where your people went</h1>
+          <TeenHoldNote className="mt-4" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-28" style={{ background: IVORY }}>

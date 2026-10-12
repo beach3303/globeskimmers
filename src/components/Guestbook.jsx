@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
 import { DoodlePad } from "@/components/passport/Blotter";
 import OwnerNoteSheet from "@/components/OwnerNoteSheet";
+import TeenHoldNote from "@/components/social/TeenHoldNote";
 
 const PROMPTS = [
   { key: "tip", label: "💡 Tip for visitors", hint: "One thing you wish you'd known before you came…" },
@@ -57,7 +58,7 @@ function resizePhoto(file, maxDim = 1280, quality = 0.82) {
 }
 
 export default function Guestbook({ entityType = "place", entityId, entityName, onCount, startComposing = false }) {
-  const { user, profile, isAuthenticated } = useAuth();
+  const { user, profile, isAuthenticated, socialTier } = useAuth();
   const [entries, setEntries] = useState([]);
   const publicCount = entries.filter((e) => !e.review_status || e.review_status === "ok").length;
   useEffect(() => { onCount?.(publicCount); }, [publicCount]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -159,8 +160,10 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
 
   return (
     <div className="space-y-3">
-      {/* Sign CTA */}
-      {isAuthenticated ? (
+      {/* Sign CTA — a 13–17 account reads, never posts (founder, 2026-10-11) */}
+      {isAuthenticated && socialTier === "teen" ? (
+        <TeenHoldNote />
+      ) : isAuthenticated ? (
         !composing ? (
           <div className="flex gap-2">
             <button
@@ -332,7 +335,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
       {/* Lightbox */}
       {/* The quiet door for anything not kind (founder, 2026-10-05): a private
           message to the owner — never posted; screened before delivery. */}
-      {isAuthenticated && !composing && (
+      {isAuthenticated && !composing && socialTier !== "teen" && (
         <button type="button" onClick={() => setOwnerNote(true)}
           className="w-full mt-2 py-1.5 text-center"
           style={{ fontSize: "calc(12px*var(--fs))", color: "#736657", fontFamily: "inherit" }}>

@@ -20,6 +20,7 @@ import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import InviteButton from "@/components/passport/InviteButton";
 import OfficialSeal from "@/components/passport/OfficialSeal";
+import TeenHoldNote from "@/components/social/TeenHoldNote";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -35,7 +36,7 @@ const flagFor = (country) => {
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, socialTier, refreshSocialTier } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stamps, setStamps] = useState([]);
   const [stats, setStats] = useState({});
@@ -123,6 +124,8 @@ export default function ProfilePage() {
       const { error: ageErr } = await setAgeGate(dob.year, dob.md);
       if (ageErr && ageErr !== "age_required") { setShareBusy(false); showToast(ageErr, "error"); return; }
       setNeedYear(false);
+      const tier = await refreshSocialTier(); // a teen sees the hold, an under-13 the freeze, right away
+      if (tier === "teen" || tier === "blocked") { setShareBusy(false); return; }
     }
     const next = !share.is_public;
     const { data, error } = await getShareLink(next);
@@ -132,7 +135,7 @@ export default function ProfilePage() {
       const osYear = birthYearFromRange(os);
       if (osYear) {
         const { error: ageErr } = await setAgeGate(osYear);
-        if (!ageErr) { setShareBusy(false); toggleShare(); return; }
+        if (!ageErr) { refreshSocialTier(); setShareBusy(false); toggleShare(); return; }
       }
       setNeedYear(true); showToast("One thing first — your birthday", "success"); return;
     }
@@ -190,7 +193,7 @@ export default function ProfilePage() {
               {handle ? (<>
                 @{handle}
                 {handleVerified && <OfficialSeal size={13} tier={sealTier || "burgundy"} />}
-              </>) : (
+              </>) : socialTier === "teen" ? null : (
                 <button type="button" onClick={() => navigate(createPageUrl("Settings"))} style={{ background: "none", border: 0, padding: 0, color: TEAL, textDecoration: "underline", textUnderlineOffset: 2, fontFamily: MONO, fontSize: fs(11.5) }}>
                   Claim your @username →
                 </button>
@@ -305,8 +308,9 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Visibility */}
-        <div className="rounded-[16px] p-4 mt-6" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
+        {/* Visibility — a 13–17 account sees the hold instead (founder, 2026-10-11) */}
+        {socialTier === "teen" && <TeenHoldNote className="mt-6" />}
+        {socialTier !== "teen" && <div className="rounded-[16px] p-4 mt-6" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div style={{ fontFamily: SERIF, fontSize: fs(17), color: INK }}>{share.is_public ? "Your passport is public" : "Your passport is private"}</div>
@@ -335,7 +339,7 @@ export default function ProfilePage() {
               <span className="truncate" style={{ fontFamily: MONO, fontSize: fs(11.5), color: INK2 }}>{share.url}</span>
             </button>
           )}
-        </div>
+        </div>}
 
         {/* Passport door + luggage */}
         <button type="button" onClick={() => navigate(createPageUrl("Passport"))} className="w-full rounded-[16px] p-4 mt-4 flex items-center justify-between" style={{ background: "#0C2B50", border: "1px solid #D6A64A" }}>

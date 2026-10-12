@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { socialFeed, socialFollow } from "@/lib/passport";
+import { useAuth } from "@/lib/AuthContext";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -21,6 +22,7 @@ const when = (iso) => {
 
 export default function FriendsTravels({ wide = false }) {
   const navigate = useNavigate();
+  const { socialTier } = useAuth();
   const [rows, setRows] = useState(null);       // null = loading
   const [following, setFollowing] = useState(0);
   const [dismissed, setDismissed] = useState(() => { try { return localStorage.getItem(DISMISS_KEY) === "1"; } catch { return false; } });
@@ -36,7 +38,7 @@ export default function FriendsTravels({ wide = false }) {
     return () => { gone = true; };
   }, []);
 
-  if (rows === null) return null;
+  if (rows === null || socialTier === "teen") return null; // social is held until 18 — no invite, no feed
   const pad = wide ? "pb-3" : "px-4 pb-3";
   const box = wide ? "" : "max-w-md mx-auto";
   const toMailbox = () => navigate(createPageUrl("Mailbox"));
