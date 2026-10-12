@@ -818,6 +818,14 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 
 ## Waiting on the founder
 
+- **Apple, 2026-10-12: reply to App Review to take the bug-fix approval.** Build 13 (1.0.3) was rejected again
+  under Guideline 4 for the Sign in with Apple logo, but Apple marked it eligible for a "Bug Fix Submission": reply
+  that the build includes bug fixes (the iPadOS launch crash fix) and ask them to approve it now; the Sign in with
+  Apple fix then goes in the next update. Why the reviewer still saw the old logo: build 13's own screens predate
+  the 2026-10-10 fix (3a73df2), and the over-the-air update only applies on a cold start that finishes the
+  download within 8 seconds (`autoSplashscreenTimeout`), otherwise on the next launch. The next binary (build 14)
+  must be built from code that has 3a73df2, so the fix is inside the app itself.
+
 - globeskimmers.com (M1): never ours. The founder owns globeskimmers.io only (confirmed 2026-09-14). The .com sits in the registry redemption period at Domain Esta Aqui, LLC (Network Solutions / SnapNames group) and likely deletes around 2026-09-20. Decide whether to backorder it at a drop-catch service (DropCatch, SnapNames, GoDaddy) before then, or let it go. Nothing in the app, website or store listing depends on it.
 - Approve "Mobility needs" and its choices (G110).
 - Flights (N9): **approved in principle 2026-09-24** — founder: "let's allow flight booking." Founder's hard requirements, same day: **GlobeSkimmers must earn on every flight** (so "at cost" is out), the traveler gets a **confirmation email** from bookings@globeskimmers.io, and the booking **lands in My Trips** with cancel — "mimic hotel booking". **Brief delivered the same day (Claude memory: flights-in-app-brief): recommended supplier is Nuitée's flights product** — Nuitée is merchant of record and charges the card through the same Stripe SDK as hotels, the markup is set in the dashboard (Flights → Commission; start 3–5%, not 12%, penalties 0), fees are 1% of ticket value (min €2, max €10) plus €25 per voluntary change, and the email, My Trips row and cancel copy the hotel lane. Duffel is out for now: its card path forbids any markup, needs pre-approval plus a written fraud procedure, puts chargebacks on us and asks for a deposit. Awaiting the founder: confirm Nuitée + the markup %, submit "Request Flights API Access" (sandbox and production, answers drafted), decide the support model (First Line recommended) and the seller-of-travel question. Build ≈ 15 working days, sandbox first. No flight booking code exists yet; the Duffel test token on the worker is unused.
