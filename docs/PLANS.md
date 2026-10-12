@@ -279,7 +279,16 @@ suppressed, minors only inside totals. **The day organizer reports ship:** add t
 (Analytics, or Advertising or marketing if sold as promotion) to date of birth in Google Play Data safety
 and App Store App Privacy, and a privacy-policy line that anonymous age-band reports go to event partners.
 
-**"Why visit" + "Before you go" — founder decisions 2026-10-11:** separate official-site lookup (not
+**"Why visit" + "Before you go" — founder decisions 2026-10-11:** PREFILL DECIDED (founder, 2026-10-11,
+after the cost analysis): **top 200 world icons now (~$30), everything else on first open** — and the
+cost envelope (~$50–80/month at 100 daily users, ceiling ~$1,900/month at full catalog) is APPROVED on
+one condition: cache and keep everything we can forever. Doctrine: OUR layer (Why-visit lines, history,
+what-you-can-do, AI-details permanent cache, traveler photos, guestbook) is kept FOREVER; only the
+perishable facts refresh on schedule (Google data 30 days — their terms cap caching; official-site
+facts re-checked every 90 days so closures and price changes never linger). On-open works worldwide:
+the first traveler to open any uncached place (Lahore, Mumbai, Paris alike) triggers the lookups and
+the card fills in seconds, then it's free for everyone after. Claude reads official sites in any
+language and writes the lines in English. separate official-site lookup (not
 folded into prices); the worship fallback line YES; "Why visit" sits at the TOP of the page, above the
 Stamp button. Prefill scale still open — the founder asked for mockups first: 5 researched examples
 (Statue of Liberty tickets/steps, Top of the Rock history/photo spots, Color Factory what's-inside,
