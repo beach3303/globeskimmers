@@ -17,13 +17,14 @@ import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
 import LandStamp from "@/components/passport/LandStamp";
-import { useLocation } from "@/components/location/LocationContext";
+import { useLocation, isLiveFix } from "@/components/location/LocationContext";
 import PassportBook, { packBookPages, readFontScale, fitsTogether } from "@/components/passport/PassportBook";
 import BlotterStrip from "@/components/passport/Blotter";
 import { isAdminEmail } from "@/lib/admins";
 import { countryCode } from "@/lib/countries";
 import { localISODate } from "@/lib/localDate";
 import { stampRadiusFor } from "@/lib/stampRadius";
+import { getStampFix } from "@/lib/geolocation";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { readPhotoExif } from "@/lib/photoExif";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
@@ -477,11 +478,19 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
   // No preset → start from where GPS says you are (founder, 2026-10-05:
   // "provide them the city where they currently are"). The city field is
   // filled, not locked — the GPS check at submit is what verifies the stamp.
-  const { activeLocation } = useLocation();
-  const sensed = !preset && activeLocation?.address?.city ? {
-    city: activeLocation.address.city,
-    country: activeLocation.address.country || "",
-    lat: activeLocation.coordinates?.latitude, lng: activeLocation.coordinates?.longitude,
+  // The sensed point is only ever kept to about a city block (3 decimals,
+  // the founder's own rough-zone size, 2026-10-10): with no spot picked it
+  // becomes the stamp's location — never the exact spot — while staying close
+  // enough for the 400 m photo-location proof and Verify I'm here.
+  // "Where you are" is a live GPS reading from this app run — never the place
+  // you are browsing or an old restored fix (founder, 2026-10-11).
+  const { currentGpsLocation } = useLocation();
+  const rough = (v) => (Number.isFinite(+v) ? Math.round(+v * 1000) / 1000 : null);
+  const live = isLiveFix(currentGpsLocation, 60 * 60 * 1000) ? currentGpsLocation : null;
+  const sensed = !preset && live?.address?.city ? {
+    city: live.address.city,
+    country: live.address.country || "",
+    lat: rough(live.coordinates?.latitude), lng: rough(live.coordinates?.longitude),
   } : null;
   const [cityQ, setCityQ] = useState(preset?.city || sensed?.city || "");
   const [city, setCity] = useState(preset?.city || sensed?.city || "");
@@ -517,6 +526,13 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
   const onPickPhotos = (e) => { const f = [...(e.target.files || [])]; e.target.value = ""; setPhotos((p) => [...p, ...f].slice(0, 4)); };
   const submit = async () => {
     const cityName = (city || cityQ).trim();
+    // The sensed spot and country belong to where you are: they anchor the
+    // stamp only while the city still names that place (accents, case and a
+    // ", Country" tail don't count as a change). A city typed in elsewhere
+    // keeps no anchor, so a photo taken here can't prove it.
+    const sameCity = (x, y) => { const n = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(",")[0].trim().toLowerCase(); return !!n(x) && n(x) === n(y); };
+    const sensedOnly = !!sensed && !!coords && coords.lat === sensed.lat && coords.lng === sensed.lng;
+    const dropSensed = sensedOnly && !sameCity(cityName, sensed.city);
     if (!cityName) { showToast("Add a city first", "error"); return; }
     setBusy(true);
     // No stamp without proof (founder, 2026-10-03): being there now (GPS at the
@@ -531,11 +547,11 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     let verified = "self";
     const spot = venueSpot || null;
     if (spot && dateVal === localISODate()) {
-      const pos = await new Promise((res) => {
-        if (!navigator.geolocation) return res(null);
-        navigator.geolocation.getCurrentPosition(res, () => res(null), { enableHighAccuracy: true, timeout: 7000, maximumAge: 60000 });
-      });
-      if (pos && metersBetween(pos.coords.latitude, pos.coords.longitude, spot.lat, spot.lng) <= stampRadiusFor({ name: venue, category: spot.category })) verified = "gps";
+      // The native GPS, best of 2–3 readings (founder, 2026-10-10). Visits have
+      // no map on the worker, so the phone measures, with the same accuracy
+      // allowance the worker gives (capped at 100 m).
+      const fix = await getStampFix().catch(() => null);
+      if (fix && metersBetween(fix.lat, fix.lng, spot.lat, spot.lng) <= stampRadiusFor({ name: venue, category: spot.category }) + Math.min(fix.acc ?? 0, 100)) verified = "gps";
     }
     if (verified !== "gps" && photos.length === 0) {
       setBusy(false);
@@ -545,10 +561,12 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     const { data, error } = await addStamp({
       kind: "city", entity_type: "visit", entity_id,
       name: venue.trim() || cityName, city: cityName, region: null,
-      country: country || null, cc: cc || undefined,
-      lat: spot?.lat ?? coords?.lat ?? null, lng: spot?.lng ?? coords?.lng ?? null,
+      country: (dropSensed && country === sensed.country ? null : country) || null, cc: cc || undefined,
+      lat: spot?.lat ?? (dropSensed ? null : coords?.lat) ?? null, lng: spot?.lng ?? (dropSensed ? null : coords?.lng) ?? null,
       visited_on: dateVal, local_hour: new Date().getHours(), verified,
-      ...(verified !== "gps" ? { await_proof: true } : {}),
+      // Photos attached → the photo path too, so a GPS claim the worker
+      // distrusts (a VPN, a travel eSIM) still gets its photos tried as proof.
+      ...(verified !== "gps" || photos.length ? { await_proof: true } : {}),
     });
     if (error || !data?.id) { setBusy(false); showToast(error || "Could not add stamp", "error"); return; }
     if (data.private) showToast("This may be a sensitive place ❤️ — the stamp starts private. Share it from the stamp anytime.", "success");
