@@ -296,8 +296,11 @@ can pin the map's centre; the newest home-city pick wins.
 **Decided (founder, 2026-10-12):** the Dream shelf's row of official regional stamps (LACMA, Christ
 Cathedral, the Getty Villa) is now **"Customer favorites"** — "Local favorite" belongs to the crowd-sourced
 stamp. The worker names the rows, so it changes with the worker deploy (no OTA needed).
-**Still to decide (founder):** the daily limit (10 for now); a "Local Scout" badge; whether the admin desk
-may reverse a decision; the stamp's bottom line "RECOMMENDED BY
+**Decided (founder, 2026-10-12):** the daily limit stays at 10 suggestions per person; no "Local Scout"
+badge. Cost per suggestion: a Google map lookup (about half a cent, cached per ~110 m spot) and a Claude Haiku
+safety check of the words (a small fraction of a cent), plus one for a photo — about a cent at most, so ten a day
+caps one person at roughly 10 cents a day; likes, reports and browsing cost nothing extra.
+**Still to decide (founder):** whether the admin desk may reverse a decision (asked 2026-10-12); the stamp's bottom line "RECOMMENDED BY
 LOCALS" (from the mockup) is printed even when every recommender was a visitor — keep it, or require at
 least one local before Approve.
 **Ship order:** the worker must deploy BEFORE the OTA that carries this client — the deployed worker has
