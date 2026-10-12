@@ -6539,8 +6539,10 @@ async function visitOfficialSite(row) {
 // One Claude turn with web search + fetch; continues across pause_turn.
 // host: the official site's domain — web search then searches only that site. No
 // host: search anywhere except resellers (to find the official site first).
-async function visitAsk(env, userText, host) {
+async function visitAsk(env, userText, host, opts = {}) {
   const messages = [{ role: 'user', content: userText }];
+  const system = opts.system || VISIT_INFO_PROMPT;
+  const fetchMax = opts.fetchMax || 5;
   const blocks = [];
   let usage = { input_tokens: 0, output_tokens: 0, searches: 0 };
   for (let round = 0; round < 4; round++) {
@@ -6548,11 +6550,11 @@ async function visitAsk(env, userText, host) {
       method: 'POST',
       headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'web-fetch-2025-09-10', 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: VISIT_INFO_MODEL, max_tokens: 4000, system: VISIT_INFO_PROMPT,
+        model: VISIT_INFO_MODEL, max_tokens: 4000, system,
         output_config: { effort: 'low' },
         tools: [
           { type: 'web_search_20250305', name: 'web_search', max_uses: 4, ...(host ? { allowed_domains: [host] } : { blocked_domains: VISIT_RESELLERS }) },
-          { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 5, max_content_tokens: 8000 },
+          { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: fetchMax, max_content_tokens: 8000, ...(opts.citations ? { citations: { enabled: true } } : {}) },
         ],
         messages,
       }),
@@ -6651,6 +6653,220 @@ function visitVerify(raw, ev) {
       source_url: textOf(pk.source_url) ? pk.source_url : (options[0]?.source_url || null),
     },
   };
+}
+
+// ── "Before you go" (docs/plans/before-you-go.md, founder decisions 2026-10-11)
+// The published visiting rules of ONE place — who may enter, dress, photos,
+// closures, booking, bags, access — each fact either backed by the place's own
+// words (an exact quote from a really-fetched page on an allowed source) or
+// "unknown". Never inferred from the religion, category, country or memory.
+const BYG_VERSION = 'v1';
+const BYG_TTL = 90 * 86400;        // facts found
+const BYG_EMPTY_TTL = 30 * 86400;  // everything unknown — recheck sooner
+const BYG_DAILY_CAP = 150, BYG_USER_CAP = 20;
+// Official tourism bodies outside gov domains (hand-kept, small on purpose).
+const BYG_OFFICIAL_BODIES = ['japan.travel', 'visitlondon.com', 'parisjetaime.com', 'australia.com', 'visitcalifornia.com', 'nycgo.com', 'nyctourism.com', 'visitsingapore.com', 'goturkiye.com', 'visitdubai.com'];
+const BYG_GOV_RE = /(^|\.)((gov|gouv|gob|go|govt)\.[a-z]{2,3}|gov|gc\.ca|govt\.nz)$/i;
+// The card never editorializes about a faith or a rule; these words may appear
+// only inside a source's own quote (same spirit as the AI-details word guard).
+const BYG_TONE_RE = /\b(strict|conservative|unfortunately|sadly|banned|forbidden|not welcome|discriminat|backward|exotic)\b/i;
+const BYG_ENTRY = new Set(['open_to_all', 'restricted', 'closed_to_visitors', 'unknown']);
+const BYG_ENTRY_LIMITS = new Set(['faith', 'gender', 'age', 'tour_only', 'permit', 'dress_enforced', 'other']);
+const BYG_DRESS_ITEMS = new Set(['cover_shoulders', 'cover_knees', 'women_cover_hair', 'men_cover_head', 'remove_shoes', 'wraps_provided', 'other']);
+const BYG_CLOSURE_KINDS = new Set(['prayer', 'service', 'ceremony', 'weekly', 'seasonal', 'other']);
+const BYG_SECURITY_ITEMS = new Set(['bag_check', 'no_large_bags', 'lockers', 'id_required', 'other']);
+const BYG_PROMPT = [
+  'You find the PUBLISHED visiting rules of ONE place for a travel app that never guesses.',
+  'Start from the official site when given: web_fetch it, then follow ITS links to visitor information, FAQ, plan-your-visit, etiquette or rules pages (often PDFs). When pages fetch empty, web_search that site for "dress code", "visitor guidelines", "photography", "prayer times" or "mass times". Fetch at most 6 pages; only fetch URLs you saw in a fetched page or a search result.',
+  'Report ONLY what a fetched page or a cited search result states. Never use what places of this kind usually require, never your memory. A rule not written on a page you read is "unknown".',
+  'For EVERY backed fact: quote = the source’s exact words (20–200 characters, verbatim, original language), quote_lang = its language code, source_url = the exact page, text = our plain-English line (at most 140 characters) written neutrally and respectfully, as the place’s request, never a judgment — say who MAY enter, never who is barred; no adjectives about the faith or the rule.',
+  'Finish with ONLY the JSON inside <json></json> tags:',
+  '{"entry":{"value":"open_to_all|restricted|closed_to_visitors|unknown","limits":["faith|gender|age|tour_only|permit|dress_enforced|other"],"text":"...","quote":"...","quote_lang":"en","source_url":"url"},',
+  '"dress":{"value":"stated|unknown","items":["cover_shoulders|cover_knees|women_cover_hair|men_cover_head|remove_shoes|wraps_provided|other"],"text":"...","quote":"...","quote_lang":"en","source_url":"url"},',
+  '"photography":{"value":"allowed|restricted|not_allowed|unknown","text":"...","quote":"...","quote_lang":"en","source_url":"url"},',
+  '"closures":{"value":"stated|unknown","items":[{"kind":"prayer|service|ceremony|weekly|seasonal|other","text":"...","quote":"...","quote_lang":"en","source_url":"url"}]},',
+  '"reservation":{"value":"required|recommended|not_needed|unknown","text":"...","quote":"...","quote_lang":"en","source_url":"url"},',
+  '"security":{"value":"stated|unknown","items":["bag_check|no_large_bags|lockers|id_required|other"],"text":"...","quote":"...","quote_lang":"en","source_url":"url"},',
+  '"accessibility":{"value":"stated|unknown","text":"<only the place’s own terms>","quote":"...","quote_lang":"en","source_url":"url"},',
+  '"time_needed":{"value":90,"text":"...","quote":"...","quote_lang":"en","source_url":"url"},',
+  '"other_rules":[{"text":"...","quote":"...","quote_lang":"en","source_url":"url"}]}',
+  'Any fact without a quote you really read: {"value":"unknown"}.',
+].join(' ');
+
+// Normalize both sides before asking "is this quote really on that page?"
+// (NFKC, lower case, straight quotes, one dash, no zero-widths, one space).
+function bygNorm(t) {
+  return String(t || '').normalize('NFKC').toLowerCase()
+    .replace(/[‘’‚‛]/g, "'").replace(/[“”„‟]/g, '"')
+    .replace(/[‐-―−]/g, '-').replace(/[​-‍﻿]/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
+// Allowed source for a fact: the official site (or a subdomain), a government
+// domain, or a listed tourism body. Resellers, platforms (Wikipedia included),
+// blogs and news never qualify. strict (entry: restricted) drops tourism bodies.
+function bygAllowedSource(url, officialHost, strict) {
+  const h = visitHost(url);
+  if (!h) return false;
+  if (visitOnList(url, VISIT_RESELLERS) || visitOnList(url, VISIT_PLATFORMS)) return false;
+  if (officialHost && (h === officialHost || h.endsWith('.' + officialHost))) return true;
+  if (BYG_GOV_RE.test(h)) return true;
+  if (!strict && BYG_OFFICIAL_BODIES.some((d) => h === d || h.endsWith('.' + d))) return true;
+  return false;
+}
+// One cheap support check for the whole batch: does each quote support its
+// line? (The plan priced this per fact; one batched call is the same check at
+// a fraction of the cost.) Fails closed: no answer means no fact.
+async function bygSupports(env, pairs) {
+  if (!pairs.length) return [];
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001', max_tokens: 200,
+        system: 'For each numbered pair, answer whether QUOTE (any language) genuinely supports LINE — the line claims nothing the quote does not say. Reply ONLY a JSON array of booleans, one per pair, in order.',
+        messages: [{ role: 'user', content: pairs.map((x, i) => (i + 1) + '. LINE: ' + x.text + '\nQUOTE: ' + x.quote).join('\n\n') }],
+      }),
+    });
+    if (!r.ok) return pairs.map(() => false);
+    const d = await r.json();
+    const m = (d.content || []).filter((x) => x.type === 'text').map((x) => x.text).join('').match(/\[[^\]]*\]/);
+    const arr = m ? JSON.parse(m[0]) : null;
+    return pairs.map((_, i) => arr?.[i] === true);
+  } catch { return pairs.map(() => false); }
+}
+// Every rule enforced by code, never trusted to the model: allowed source,
+// quote really on the fetched page, every number in the line present in the
+// quote, tone words rejected, then the batched support check.
+async function bygVerify(env, raw, ev, officialHost) {
+  const UNK = { value: 'unknown' };
+  const out = { entry: UNK, dress: UNK, photography: UNK, closures: UNK, reservation: UNK, security: UNK, accessibility: UNK, time_needed: UNK, other_rules: [] };
+  if (!raw || typeof raw !== 'object') return out;
+  const candidates = []; // { slot, fact } pending the support check
+  const pageText = (u) => { const t = ev.pages.get(visitUrlKey(u)); return t ? bygNorm(t) : null; };
+  const backed = (f, strict) => {
+    if (!f || typeof f !== 'object') return null;
+    const quote = typeof f.quote === 'string' ? f.quote.trim() : '';
+    const text = typeof f.text === 'string' ? f.text.replace(/\s+/g, ' ').trim().slice(0, 140) : '';
+    if (quote.length < 20 || quote.length > 220 || !text) return null;
+    if (BYG_TONE_RE.test(text)) return null;
+    if (!bygAllowedSource(f.source_url, officialHost, strict)) return null;
+    const page = pageText(f.source_url);
+    if (!page || !page.includes(bygNorm(quote))) return null;
+    const nq = bygNorm(quote);
+    for (const n of (text.match(/\d+(?:[.,:]\d+)?/g) || [])) { if (!nq.includes(bygNorm(n))) return null; }
+    return { text, quote, quote_lang: /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(String(f.quote_lang || '')) ? String(f.quote_lang) : 'en', source_url: String(f.source_url) };
+  };
+  const take = (slot, f, extra) => { const b2 = backed(f, slot === 'entry' && f?.value === 'restricted'); if (b2) candidates.push({ slot, fact: { ...extra, ...b2 } }); };
+
+  const e = raw.entry;
+  if (e && BYG_ENTRY.has(e.value) && e.value !== 'unknown') take('entry', e, { value: e.value, limits: (Array.isArray(e.limits) ? e.limits : []).filter((x) => BYG_ENTRY_LIMITS.has(x)).slice(0, 4) });
+  const dr = raw.dress;
+  if (dr && dr.value === 'stated') take('dress', dr, { value: 'stated', items: (Array.isArray(dr.items) ? dr.items : []).filter((x) => BYG_DRESS_ITEMS.has(x)).slice(0, 6) });
+  const ph = raw.photography;
+  if (ph && ['allowed', 'restricted', 'not_allowed'].includes(ph.value)) take('photography', ph, { value: ph.value });
+  for (const it of (Array.isArray(raw.closures?.items) ? raw.closures.items : []).slice(0, 4)) {
+    if (BYG_CLOSURE_KINDS.has(it?.kind)) take('closure', it, { kind: it.kind });
+  }
+  const rv = raw.reservation;
+  if (rv && ['required', 'recommended', 'not_needed'].includes(rv.value)) take('reservation', rv, { value: rv.value });
+  const sec = raw.security;
+  if (sec && sec.value === 'stated') take('security', sec, { value: 'stated', items: (Array.isArray(sec.items) ? sec.items : []).filter((x) => BYG_SECURITY_ITEMS.has(x)).slice(0, 5) });
+  const ac = raw.accessibility;
+  if (ac && ac.value === 'stated') take('accessibility', ac, { value: 'stated' });
+  const tn = raw.time_needed;
+  if (tn && Number.isFinite(+tn.value) && +tn.value >= 10 && +tn.value <= 24 * 60) take('time_needed', tn, { value: Math.round(+tn.value) });
+  for (const orr of (Array.isArray(raw.other_rules) ? raw.other_rules : []).slice(0, 3)) take('other_rule', orr, {});
+
+  const verdicts = await bygSupports(env, candidates.map((c) => ({ text: c.fact.text, quote: c.fact.quote })));
+  const closures = [], others = [];
+  candidates.forEach((c, i) => {
+    if (!verdicts[i]) return; // unsupported → stays unknown
+    if (c.slot === 'closure') closures.push(c.fact);
+    else if (c.slot === 'other_rule') others.push(c.fact);
+    else out[c.slot] = c.fact;
+  });
+  if (closures.length) out.closures = { value: 'stated', items: closures };
+  out.other_rules = others;
+  return out;
+}
+
+// POST /attractions/before-you-go { id } → the verified facts (cached 90 days;
+// 30 when everything is unknown). { id, report: true } is "Something's wrong?":
+// clears the saved result so the next open rechecks, and logs byg_reported.
+async function handleAttractionBeforeYouGo(request, env, ctx) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.id || '').trim();
+    if (!id || id.length > 200) return jsonResponse({ error: 'id required' }, 400);
+    const kv = env.GLOBESKIMMERS_KV;
+    const cacheKey = 'byg:' + BYG_VERSION + ':' + id;
+    const user = await gbUser(request, env);
+    if (b.report === true) {
+      if (!user) return jsonResponse({ error: 'sign_in' }, 401);
+      if (kv) await kv.delete(cacheKey).catch(() => {});
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'byg_reported', { id }));
+      return jsonResponse({ ok: true, cleared: true });
+    }
+    const cached = kv ? await kv.get(cacheKey, { type: 'json' }).catch(() => null) : null;
+    if (cached) return jsonResponse({ ...cached, _cache: 'hit' });
+    if (!user) return jsonResponse({ error: 'sign_in', message: 'Sign in to look up visiting rules' }, 401);
+    if (!env.ANTHROPIC_API_KEY) return jsonResponse({ error: 'not configured' }, 500);
+
+    let row = null;
+    if (ttdIdKind(id) === 'google') {
+      const dd = await ttdPlaceDetails(env, id, new URL(request.url).origin);
+      if (dd) row = { id, name: dd.name, address: dd.formattedAddress || dd.address || '', website: dd.websiteUri || dd.website || null };
+    } else if (env.ATTRACTIONS_DB) {
+      row = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(id).first().catch(() => null);
+    }
+    if (!row) return jsonResponse({ error: 'Not found' }, 404);
+
+    // The founder's prewarm script runs as admin and skips the daily caps.
+    let isAdmin = false;
+    try { isAdmin = !(await requireAdmin(request, env)); } catch { isAdmin = false; }
+    if (kv) {
+      if (await kv.get('byg:lock:' + id).catch(() => null)) return jsonResponse({ pending: true });
+      if (!isAdmin) {
+        const day = new Date().toISOString().slice(0, 10);
+        const gk = 'byg:cap:' + day, uk = 'byg:cap:' + user.id + ':' + day;
+        const [g, u] = await Promise.all([kv.get(gk).catch(() => 0), kv.get(uk).catch(() => 0)]);
+        if ((Number(g) || 0) >= BYG_DAILY_CAP || (Number(u) || 0) >= BYG_USER_CAP) return jsonResponse({ error: 'busy', message: 'Rule lookups are paused for today — check the official site' }, 429);
+        await Promise.all([
+          kv.put(gk, String((Number(g) || 0) + 1), { expirationTtl: 2 * 86400 }),
+          kv.put(uk, String((Number(u) || 0) + 1), { expirationTtl: 2 * 86400 }),
+        ]).catch(() => {});
+      }
+      await kv.put('byg:lock:' + id, '1', { expirationTtl: 120 }).catch(() => {});
+    }
+
+    const work = (async () => {
+      const site = await visitOfficialSite(row);
+      const where = row.address || [row.city, row.country].filter(Boolean).join(', ');
+      const host = site && !visitOnList(site, VISIT_PLATFORMS) ? visitHost(site) : null;
+      const ask = await visitAsk(env,
+        'Place: ' + row.name + (where ? '\nWhere: ' + where : '') + (site ? '\nOfficial website (from Wikidata/our records): ' + site : '') + '\nFind this place’s published visiting rules.',
+        host, { system: BYG_PROMPT, fetchMax: 6, citations: true });
+      const finalText = ask.blocks.filter((x) => x?.type === 'text').map((x) => x.text).join('\n');
+      const m = finalText.match(/<json>([\s\S]*?)<\/json>/);
+      let raw = null;
+      try { raw = m ? JSON.parse(m[1]) : null; } catch { raw = null; }
+      const ev = visitEvidence(ask.blocks);
+      const facts = await bygVerify(env, raw, ev, host);
+      const found = ['entry', 'dress', 'photography', 'closures', 'reservation', 'security', 'accessibility', 'time_needed'].some((k) => facts[k]?.value && facts[k].value !== 'unknown') || facts.other_rules.length > 0;
+      const out = { ok: true, found, checked_at: new Date().toISOString(), official_site: site || null, ...facts };
+      if (kv && !ask.error) await kv.put(cacheKey, JSON.stringify(out), { expirationTtl: found ? BYG_TTL : BYG_EMPTY_TTL }).catch(() => {});
+      if (kv) await kv.delete('byg:lock:' + id).catch(() => {});
+      await gbLogEvent(env, 'byg_lookup', {
+        id, found, facts: Object.keys(facts).filter((k) => facts[k]?.value && facts[k].value !== 'unknown').length,
+        fetched: ev.pages.size, in_tok: ask.usage?.input_tokens || 0, out_tok: ask.usage?.output_tokens || 0,
+        searches: ask.usage?.searches || 0, stop: ask.stop || null, error: ask.error ? ask.error.slice(0, 200) : null,
+      }).catch(() => {});
+      return ask.error ? { ok: false, error: 'lookup_failed', official_site: site || null } : out;
+    })();
+    if (ctx) ctx.waitUntil(work.catch(() => {}));
+    return jsonResponse(await work);
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
 async function handleAttractionVisitInfo(request, env, ctx) {
@@ -21319,6 +21535,7 @@ export default {
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
       if (pathname.startsWith('/dish-photo/') && request.method === 'GET') return await handleDishPhotoServe(request, env);
       if (pathname === '/attractions/visit-info' && request.method === 'POST') return await handleAttractionVisitInfo(request, env, ctx);
+      if (pathname === '/attractions/before-you-go' && request.method === 'POST') return await handleAttractionBeforeYouGo(request, env, ctx);
       if (pathname === '/attractions/link' && request.method === 'POST') return await handleAttractionLink(request, env);
       if (pathname === '/activities/one' && request.method === 'POST') return await handleActivityOne(request, env);
       if (pathname === '/places/dishes' && request.method === 'POST') return await handlePlaceDishes(request, env);
