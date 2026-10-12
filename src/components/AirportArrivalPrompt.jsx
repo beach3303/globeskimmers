@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { useLocation } from "@/components/location/LocationContext";
+import { useLocation, isLiveFix } from "@/components/location/LocationContext";
 import { useAuth } from "@/lib/AuthContext";
 import { addStamp, setStampNote } from "@/lib/passport";
 import { showToast } from "@/components/Toast";
-import { airportAt } from "@/lib/airports";
+import { airportAt, markAirportVisit } from "@/lib/airports";
+import { localISODate } from "@/lib/localDate";
 import AirportStamp from "@/components/passport/AirportStamp";
 
 // ============================================================================
@@ -17,7 +18,7 @@ import AirportStamp from "@/components/passport/AirportStamp";
 // v2 (2026-10-05): entries are "IATA:YYYY-MM-DD" so a return visit re-asks; the
 // old per-airport-forever key is retired so everyone gets the new ask.
 const KEY = "pp_prompted_airport_v2";
-const dayKey = (iata) => `${iata}:${new Date().toISOString().slice(0, 10)}`;
+const dayKey = (iata) => `${iata}:${localISODate()}`;   // the traveler's own day, not UTC's
 const regionName = (cc) => {
   try { return new Intl.DisplayNames(["en"], { type: "region" }).of(cc) || cc; } catch { return cc; }
 };
@@ -27,7 +28,7 @@ const saveSet = (s) => { try { localStorage.setItem(KEY, JSON.stringify([...s]))
 const suggestOn = () => { try { return localStorage.getItem("pp_suggest_arrivals") !== "0"; } catch { return true; } };
 
 export default function AirportArrivalPrompt() {
-  const { activeLocation, locationMode } = useLocation();
+  const { currentGpsLocation } = useLocation();
   const { isAuthenticated } = useAuth();
   const [pending, setPending] = useState(null); // { iata, city, countryCode, lat, lng }
   const [busy, setBusy] = useState(false);
@@ -35,19 +36,25 @@ export default function AirportArrivalPrompt() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!isAuthenticated || locationMode !== "current" || !suggestOn()) return;
-      const c = activeLocation?.coordinates;
+      if (!isAuthenticated || !suggestOn()) return;
+      // LIVE GPS only (founder, 2026-10-11): a fix the phone took in this app
+      // run, in the last 30 minutes — never a picked destination (switching
+      // back from a picked airport) or a restored last location (yesterday's
+      // fix at LAX).
+      if (!isLiveFix(currentGpsLocation)) return;
+      const c = currentGpsLocation.coordinates;
       if (!c || !Number.isFinite(c.latitude) || !Number.isFinite(c.longitude)) return;
       // Only prompt when GPS is INSIDE the airport perimeter (terminals/runways/
       // planes) — not drive-bys or people waiting outside. Any airport, domestic
       // or international; consent-gated; one prompt per airport (localStorage).
       const ap = await airportAt(c.latitude, c.longitude, c.accuracy);
       if (cancelled || !ap || !ap.iata) return;
+      markAirportVisit();   // a flight, for the border-crossing prompt
       if (getSet().has(dayKey(ap.iata))) return; // already asked here today
       setPending({ iata: ap.iata, city: ap.city || ap.name, countryCode: ap.cc, lat: ap.lat, lng: ap.lng });
     })();
     return () => { cancelled = true; };
-  }, [activeLocation, locationMode, isAuthenticated]);
+  }, [currentGpsLocation, isAuthenticated]);
 
   const close = (markHandled) => {
     if (markHandled && pending) { const s = getSet(); s.add(dayKey(pending.iata)); saveSet(s); }
@@ -69,7 +76,7 @@ export default function AirportArrivalPrompt() {
   const add = async (direction) => {
     if (!pending || busy) return;
     setBusy(direction);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localISODate();
     const { data, error } = await addStamp({
       kind: "airport", tier: "page", entity_type: "airport", entity_id: pending.iata,
       name: `${pending.city} (${pending.iata})`, city: pending.city, country: pending.countryCode,
@@ -103,7 +110,7 @@ export default function AirportArrivalPrompt() {
     );
   }
   if (!pending) return null;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localISODate();
   const country = regionName(pending.countryCode);
   const choice = (direction, label, sub) => (
     <button onClick={() => add(direction)} disabled={!!busy}

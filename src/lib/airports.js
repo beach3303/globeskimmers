@@ -66,3 +66,14 @@ export async function airportAt(lat, lng, acc) {
     return d && d.airport ? d.airport : null;
   } catch { return null; }
 }
+
+// When a live GPS reading was last inside an airport fence (founder,
+// 2026-10-11): a state or country "crossing" that went through an airport was
+// a flight, so the land-border prompt stays quiet and the airport prompt owns it.
+const AIRPORT_SEEN = "pp_last_airport_at";
+export function markAirportVisit() {
+  try { localStorage.setItem(AIRPORT_SEEN, String(Date.now())); } catch { /* ignore */ }
+}
+export function lastAirportVisit() {
+  try { return Number(localStorage.getItem(AIRPORT_SEEN)) || 0; } catch { return 0; }
+}

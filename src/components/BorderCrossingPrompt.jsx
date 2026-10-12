@@ -1,11 +1,14 @@
-import React, { useEffect, useState } from "react";
-import { useLocation } from "@/components/location/LocationContext";
+import React, { useEffect, useRef, useState } from "react";
+import { useLocation, isLiveFix } from "@/components/location/LocationContext";
 import { useAuth } from "@/lib/AuthContext";
-import { addStamp } from "@/lib/passport";
+import { addStamp, metersBetween } from "@/lib/passport";
 import { showToast } from "@/components/Toast";
-import { nearestAirport } from "@/lib/airports";
+import { airportAt, markAirportVisit, lastAirportVisit } from "@/lib/airports";
 import { countryCode } from "@/lib/countries";
 import { regionInfo } from "@/lib/stateNicknames";
+import { callWorker } from "@/lib/callWorker";
+import { getStampFix } from "@/lib/geolocation";
+import { localISODate } from "@/lib/localDate";
 import LandStamp from "@/components/passport/LandStamp";
 
 // ============================================================================
@@ -16,69 +19,120 @@ import LandStamp from "@/components/passport/LandStamp";
 //     cruise stop): the checkpoint stamp, Entry / Exit, by car, train or ship;
 //   · a new US STATE or UK NATION (California → Nevada, England → Scotland):
 //     the welcome-sign stamp with the state's claim ("The Silver State").
-// Consent-gated (never auto), foreground only, no background tracking. An
-// airport nearby hands the moment to AirportArrivalPrompt instead.
+// Consent-gated (never auto), foreground only, no background tracking. Inside
+// an airport fence the moment belongs to AirportArrivalPrompt instead.
 // ============================================================================
-const LAST = "pp_last_country";
-const LAST_REGION = "pp_last_region";
+// LIVE GPS ONLY (founder, 2026-10-11: switching from a picked city, NYC, back
+// to "where I am" in Azusa asked to stamp a crossing into California). The
+// prompt used to read whichever place the app was SHOWING. Now a crossing is
+// two LIVE fixes the phone took itself (isLiveFix: this app run, ≤ 30 min —
+// never a picked destination or a restored last location):
+//   · the previous live fix (BASE, with its time) was in another state or
+//     country, recently (≤ 8 h: the app sensed the trip), at ground speed
+//     (≤ 300 km/h over less than an hour of readings, else ≤ 130 for a state
+//     line and ≤ 250 for a country, so trains count);
+//   · not a flight: the fix isn't inside an airport fence, and no live
+//     reading was inside one since the previous fix;
+//   · confirmed: both ends looked up again at street-block resolution (the
+//     everyday lookup shares one answer per ~11 km tile, which can name the
+//     wrong state near a line), "now" from the best of 2–3 fresh readings.
+// A crossing that can't be confirmed is a missed prompt, never a wrong one.
+const BASE = "pp_live_region_v2";   // { cc, region, lat, lng, at } of the last live fix
+const RECENT_MS = 8 * 3600 * 1000;
 const suggestOn = () => { try { return localStorage.getItem("pp_city_prompt") !== "0"; } catch { return true; } };
-const readLS = (k) => { try { return localStorage.getItem(k) || ""; } catch { return ""; } };
+const readBase = () => { try { return JSON.parse(localStorage.getItem(BASE) || "null"); } catch { return null; } };
+const writeBase = (v) => { try { localStorage.setItem(BASE, JSON.stringify(v)); } catch { /* ignore */ } };
 const writeLS = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
+// A border stamp keeps about a city block, never the exact spot (founder, 2026-10-10).
+const rough = (v) => Math.round(v * 1000) / 1000;
+let judging = false;   // one crossing judged at a time, app-wide
+
+// The decision on its own: prev = the last live fix's place, fix = this one,
+// both { cc, region, lat, lng, at }. null = no prompt; else 'country' | 'region'.
+function crossingKind(prev, fix) {
+  if (!prev?.cc || !Number.isFinite(prev.at) || !Number.isFinite(prev.lat) || !Number.isFinite(prev.lng)) return null;   // first live fix: the baseline
+  const sameCountry = prev.cc === fix.cc;
+  if (sameCountry && (!fix.region || !prev.region || fix.region === prev.region)) return null;
+  const hours = (fix.at - prev.at) / 3.6e6;
+  if (!(hours > 0) || fix.at - prev.at > RECENT_MS) return null;   // not a trip the app sensed
+  const km = metersBetween(prev.lat, prev.lng, fix.lat, fix.lng) / 1000;
+  // Over a short span an interstate, a fast train or the readings' own noise
+  // can top 130 km/h; over hours a car averages far less, a plane far more.
+  const cap = hours < 1 ? 300 : sameCountry ? 130 : 250;
+  if (km / hours > cap) return null;   // a flight, not a road or rail crossing
+  return sameCountry ? "region" : "country";
+}
+// The country and state/nation at a point, from the precise (~110 m) lookup.
+async function placeAt(lat, lng) {
+  const { data, error } = await callWorker("reverse-geocode", { latitude: lat, longitude: lng, precise: true });
+  if (error || !data || data.error || !data.country) return null;
+  const cc = (countryCode(data.country) || "").toUpperCase();
+  if (!cc) return null;
+  const region = data.country === "United Kingdom" ? String(data.region || "")
+    : data.state_or_country && data.state_or_country !== data.country ? String(data.state_or_country) : "";
+  return { cc, region: region.trim() };
+}
 const regionName = (cc) => { try { return new Intl.DisplayNames(["en"], { type: "region" }).of(cc) || cc; } catch { return cc; } };
 const flagFor = (cc) => (/^[a-z]{2}$/i.test(cc || "")
   ? String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
   : "🌍");
 
 export default function BorderCrossingPrompt() {
-  const { activeLocation, locationMode } = useLocation();
+  const { currentGpsLocation } = useLocation();
   const { isAuthenticated } = useAuth();
   // { type:'country', cc, country, lat, lng } | { type:'region', cc, country, region, info, lat, lng }
   const [pending, setPending] = useState(null);
   const [busy, setBusy] = useState(false);
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
 
   useEffect(() => {
-    let cancelled = false;
     (async () => {
-      if (!isAuthenticated || locationMode !== "current" || !suggestOn() || pending) return;
-      const c = activeLocation?.coordinates;
-      const cc = (countryCode(activeLocation?.address?.country) || "").toUpperCase();
+      if (!isAuthenticated || !suggestOn() || pending || judging) return;
+      const g = currentGpsLocation;
+      if (!isLiveFix(g)) return;   // never a picked place, never an old fix
+      const at = g.fixedAt;
+      const c = g.coordinates;
+      const cc = (countryCode(g.address?.country) || "").toUpperCase();
       if (!cc || !c || !Number.isFinite(c.latitude) || !Number.isFinite(c.longitude)) return;
-      const region = String(activeLocation?.address?.state || "").trim();
-      const regionKey = region ? `${cc}:${region}` : "";
-      const lastC = readLS(LAST), lastR = readLS(LAST_REGION);
-      if (!lastC) { writeLS(LAST, cc); writeLS(LAST_REGION, regionKey); return; } // first run → baseline, no prompt
-      if (cc !== lastC) {
-        // A new country — and we're already across. A nearby airport owns it.
-        const ap = await nearestAirport(c.latitude, c.longitude, 12);
-        if (cancelled) return;
-        writeLS(LAST_REGION, regionKey);
-        if (ap) { writeLS(LAST, cc); return; }
-        setPending({ type: "country", cc, country: regionName(cc), lat: c.latitude, lng: c.longitude });
-        return;
-      }
-      // Same country — a new state / nation inside it (US + UK only).
-      const info = regionInfo(cc, region);
-      if (info && regionKey && lastR && regionKey !== lastR) {
-        setPending({ type: "region", cc, country: regionName(cc), region, info, lat: c.latitude, lng: c.longitude });
-        return;
-      }
-      if (regionKey && regionKey !== lastR) writeLS(LAST_REGION, regionKey);
+      const region = String(g.address?.state || "").trim();
+      const prev = readBase();
+      if (prev && Number(prev.at) >= at) return;   // already judged
+      // A state the lookup didn't resolve keeps the last known one, so a gap
+      // never reads as a crossing back into it.
+      const keep = (f) => writeBase({ ...f, region: f.region || (prev?.cc === f.cc ? prev.region || "" : "") });
+      const fix = { cc, region, lat: c.latitude, lng: c.longitude, at };
+      if (!crossingKind(prev, fix)) { keep(fix); return; }
+      judging = true;
+      try {
+        // Inside an airport fence: the airport prompt owns this moment.
+        const ap = await airportAt(fix.lat, fix.lng, c.accuracy).catch(() => null);
+        if (ap) { markAirportVisit(); keep(fix); return; }
+        // Through an airport since the last live fix: a flight, not a drive.
+        if (lastAirportVisit() > prev.at) { keep(fix); return; }
+        const now = await getStampFix().catch(() => null);
+        const pt = now ? { lat: now.lat, lng: now.lng, at: Date.now() } : { lat: fix.lat, lng: fix.lng, at };
+        const [was, is] = await Promise.all([placeAt(prev.lat, prev.lng), placeAt(pt.lat, pt.lng)]);
+        if (!was || !is) { keep(fix); return; }   // can't confirm: missed, never wrong
+        keep({ cc: is.cc, region: is.region, ...pt });
+        const kind = is.cc !== was.cc ? "country" : is.region && was.region && is.region !== was.region ? "region" : null;
+        if (!kind || !alive.current) return;
+        if (kind === "country") { setPending({ type: "country", cc: is.cc, country: regionName(is.cc), lat: rough(pt.lat), lng: rough(pt.lng) }); return; }
+        // Same country — a new state / nation inside it (US + UK only).
+        const info = regionInfo(is.cc, is.region);
+        if (info) setPending({ type: "region", cc: is.cc, country: regionName(is.cc), region: is.region, info, lat: rough(pt.lat), lng: rough(pt.lng) });
+      } finally { judging = false; }
     })();
-    return () => { cancelled = true; };
-  }, [activeLocation, locationMode, isAuthenticated, pending]);
+  }, [currentGpsLocation, isAuthenticated, pending]);
 
-  const settle = () => {
-    if (!pending) return;
-    writeLS(LAST, pending.cc);
-    writeLS(LAST_REGION, pending.type === "region" ? `${pending.cc}:${pending.region}` : readLS(LAST_REGION));
-    setPending(null);
-  };
+  // The live fix is already the baseline, so closing never re-asks for it.
+  const settle = () => { if (pending) setPending(null); };
   const turnOff = () => { writeLS("pp_city_prompt", "0"); settle(); };
 
   const add = async (direction) => {
     if (!pending || busy) return;
     setBusy(direction);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localISODate();
     const isRegion = pending.type === "region";
     const { data, error } = await addStamp(isRegion ? {
       kind: "state", tier: "page", entity_type: "border", entity_id: pending.info.abbr,
@@ -100,7 +154,7 @@ export default function BorderCrossingPrompt() {
   };
 
   if (!pending) return null;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localISODate();
   const isRegion = pending.type === "region";
   const stampFor = (direction) => (isRegion
     ? <LandStamp template="state" name={pending.region} sub={pending.info.nickname} date={today} direction={direction} width={134} />

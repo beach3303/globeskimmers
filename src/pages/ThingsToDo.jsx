@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
-import { useLocation } from "@/components/location/LocationContext";
+import { useLocation, isLiveFix } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
@@ -823,7 +823,9 @@ export default function ThingsToDoFinder() {
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
   const {activeLocation,currentGpsLocation}=useLocation();
   const routerLocation=useRouterLocation();
-  const gpsLat=currentGpsLocation?.coordinates?.latitude??null; const gpsLng=currentGpsLocation?.coordinates?.longitude??null;
+  // "You're here" needs a reading from this app run — never a restored old fix.
+  const liveGps=isLiveFix(currentGpsLocation,60*60*1000)?currentGpsLocation:null;
+  const gpsLat=liveGps?.coordinates?.latitude??null; const gpsLng=liveGps?.coordinates?.longitude??null;
   const lat=activeLocation?.coordinates?.latitude; const lng=activeLocation?.coordinates?.longitude;
   const locLabel=getLocationLabel(activeLocation);
   const isCity=isCityLocation(activeLocation);
