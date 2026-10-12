@@ -54,6 +54,7 @@ const Toast = ({ message, type = "success", duration = 3000, onClose }) => {
           <span className="flex-1 text-sm font-medium">{message}</span>
           <button
             onClick={handleClose}
+            aria-label="Dismiss"
             className="hover:bg-white/20 rounded-lg p-1 transition-colors"
           >
             <X className="w-4 h-4" />
@@ -74,10 +75,10 @@ export const ToastContainer = () => {
 
   useEffect(() => {
     const handleShowToast = (event) => {
-      const { message, type, duration } = event.detail;
+      const { message, type, duration, silent } = event.detail;
       const id = ++toastSeq;
 
-      setToasts(prev => [...prev, { id, message, type, duration }]);
+      setToasts(prev => [...prev, { id, message, type, duration, silent: silent === true }]);
     };
 
     window.addEventListener('globeskimmers:showToast', handleShowToast);
@@ -105,14 +106,23 @@ export const ToastContainer = () => {
           </div>
         ))}
       </div>
+      {/* What VoiceOver and TalkBack hear (2026-10-12): each new message once,
+          as it lands — never the Dismiss buttons or the toasts still on screen.
+          Always mounted, or the first message would be missed. A silent toast
+          (its words are already spoken elsewhere, e.g. an inline alert) only
+          shows. */}
+      <div role="status" aria-live="polite" aria-atomic="false" className="sr-only">
+        {toasts.filter(toast => !toast.silent).map(toast => <div key={toast.id}>{toast.message}</div>)}
+      </div>
     </div>
   );
 };
 
-// Helper function to show toast from anywhere
-export const showToast = (message, type = "success", duration = 3000) => {
+// Helper function to show toast from anywhere. opts.silent: show it, but don't
+// have screen readers read it (the same words are already spoken elsewhere).
+export const showToast = (message, type = "success", duration = 3000, opts = {}) => {
   window.dispatchEvent(new CustomEvent('globeskimmers:showToast', {
-    detail: { message, type, duration }
+    detail: { message, type, duration, silent: opts?.silent === true }
   }));
 };
 
