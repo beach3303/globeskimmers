@@ -11,7 +11,11 @@ import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, Badge
 import { useNavigate } from "react-router-dom";
 import { openAttraction } from "@/lib/openAttraction";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, uploadStampPhoto, deleteStamp, deleteStampPhoto, setStampLayout, setStampPos, setStampPageWith, clearStampFilm, isPhotoFirst, checkStampPhotos, isVerified, proofToast } from "@/lib/passport";
+import { addStamp, reportStamp, STAMP_REFUSALS, metersBetween, uploadStampPhoto, deleteStamp, deleteStampPhoto, setStampLayout, setStampPos, setStampPageWith, clearStampFilm, isPhotoFirst, checkStampPhotos, isVerified, proofToast } from "@/lib/passport";
+import { getStampFix } from "@/lib/geolocation";
+import { resolveStampVariant } from "@/lib/stampVariants";
+import { useLocation } from "@/components/location/LocationContext";
+import { useDistanceUnit } from "@/components/location/distanceUnit";
 import { readPhotoExif } from "@/lib/photoExif";
 import { logEvent } from "@/lib/analytics";
 import { stampRadiusFor } from "@/lib/stampRadius";
@@ -173,37 +177,89 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
     onChanged?.();
   };
   // "Verify I'm here" (founder, 2026-09-28): a stamp that isn't GPS-verified
-  // can earn the ✓ while you're standing there — one fix, within the place's
-  // stamp radius (an airport's perimeter is wide, 3 km). The re-stamp upgrades
-  // it in place (gps > photo > self); the worker still cross-checks country and
-  // travel speed, so a VPN or a spoofed fix leaves it as it was.
+  // can earn the ✓ while you're standing there. The re-stamp upgrades it in
+  // place (gps > photo > self); the worker still cross-checks country and
+  // travel speed, so a VPN or a spoofed fix leaves it as it was. Fixed
+  // 2026-10-11: it now sends the GPS reading (the worker has required one for
+  // every attraction stamp since 10-03, so Verify always failed on them), uses
+  // the native GPS (best of 2–3 readings), and lets the worker judge an
+  // attraction against its own map. Airports and visits have no map on the
+  // worker, so the phone still measures those (an airport's perimeter: 3 km).
   const canVerify = !readOnly && stamp.verified !== "gps" && !!stamp.entity_id && Number.isFinite(+stamp.lat) && Number.isFinite(+stamp.lng) && (+stamp.lat !== 0 || +stamp.lng !== 0);
+  const [verifyRefused, setVerifyRefused] = useState(null); // { why, meters, payload } — the worker said no
+  const { activeLocation } = useLocation();
+  const units = useDistanceUnit(activeLocation);
+  const verifyAway = (m) => units.formatDistance(m / 1609.34);   // the traveler's mi/km
   const verifyHere = async () => {
-    setBusy("verify");
-    const pos = await new Promise((res) => {
-      if (!navigator.geolocation) return res(null);
-      navigator.geolocation.getCurrentPosition(res, () => res(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
-    });
-    if (!pos) { setBusy(null); showToast("Turn on location for GlobeSkimmers to verify this stamp", "error"); return; }
-    const m = metersBetween(pos.coords.latitude, pos.coords.longitude, +stamp.lat, +stamp.lng);
-    const radius = stamp.kind === "airport" ? 3000 : stampRadiusFor({ name: stamp.name });
-    if (m > radius) {
+    setBusy("verify"); setVerifyRefused(null);
+    const attraction = stamp.kind === "attraction";
+    let fix = null, noFix = null;
+    try { fix = await getStampFix(); }
+    catch (e) { noFix = e?.code === 1 ? "denied" : "no_fix"; }
+    if (!fix) {
       setBusy(null);
-      showToast(`You're about ${m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`} from ${stamp.name} — verify while you're there`, "error");
+      showToast(noFix === "denied" ? "Turn on location for GlobeSkimmers to verify this stamp" : "We couldn't get a GPS reading just now — try again in a moment", "error");
       return;
+    }
+    if (!attraction) {
+      const m = metersBetween(fix.lat, fix.lng, +stamp.lat, +stamp.lng);
+      const radius = stamp.kind === "airport" ? 3000 : stampRadiusFor({ name: stamp.name });
+      if (m > radius + Math.min(fix.acc ?? 0, 100)) {
+        setBusy(null);
+        showToast(`You're about ${verifyAway(m)} from ${stamp.name} — verify while you're there`, "error");
+        return;
+      }
     }
     const c = String(stamp.country || "");
     const cc = /^[A-Za-z]{2}$/.test(c) ? c.toUpperCase() : (countryCode(c) || undefined);
-    const { data, error } = await addStamp({
+    // A park or rim: which one does the reading put you at? A parent place can
+    // hold several (one Grand Canyon footprint covers both rims), so the
+    // worker refuses a Verify whose reading resolves to a different one.
+    const fixVariant = stamp.entity_type === "landmark" ? resolveStampVariant({ name: stamp.name, lat: fix.lat, lng: fix.lng, country: stamp.country, verified: "gps" }) : null;
+    const payload = {
       kind: stamp.kind, tier: stamp.tier, entity_type: stamp.entity_type, entity_id: stamp.entity_id,
       name: stamp.name, city: stamp.city, region: stamp.region, country: stamp.country, cc,
       lat: +stamp.lat, lng: +stamp.lng, visited_on: stamp.visited_on || localISODate(),
       local_hour: new Date().getHours(), verified: "gps",
-    });
+      fix: { lat: fix.lat, lng: fix.lng, ...(Number.isFinite(fix.acc) ? { acc: fix.acc } : {}) },
+      // A park or rim is measured against its parent place, like on the
+      // attraction page (stamps keep it since 2026-10-11; the worker finds
+      // older ones by their pin) — and this row is upgraded in place.
+      ...(stamp.meta?.parent_id ? { parent_id: stamp.meta.parent_id } : {}),
+      stamp_id: stamp.id,
+      ...(fixVariant ? { fix_variant: fixVariant.entity_id } : {}),
+    };
+    const { data, error } = await addStamp(payload);
     setBusy(null);
+    if (attraction && STAMP_REFUSALS.includes(data?.code)) {
+      // At another park or rim of the same place — only when the worker says
+      // that was the reason (a plain distance refusal is not "you're at X").
+      const elsewhere = data.other_variant === true && fixVariant && fixVariant.entity_id !== stamp.entity_id ? fixVariant.name : null;
+      setVerifyRefused({ why: elsewhere ? "elsewhere" : data.code === "proof_needed" ? "unconfirmed" : data.code, elsewhere, meters: Number.isFinite(data.distance_m) ? data.distance_m : null, payload });
+      return;
+    }
     if (error) { showToast(error, "error"); return; }
-    if (data?.verified === "gps") { showToast("✓ Verified — you're really here", "success"); onChanged?.(); }
+    // An "I was here" stamp whose place now has an official stamp you already
+    // hold: the ✓ lands on that official stamp, so say so.
+    if (data?.verified === "gps") { showToast(data.id && data.id !== stamp.id ? `✓ Verified — on your official ${stamp.name} stamp` : "✓ Verified — you're really here", "success"); onChanged?.(); }
+    // Measured inside, but the reading wasn't trusted (a VPN, or impossible
+    // travel): a refusal like any other, so the report button is offered.
+    else if (attraction) setVerifyRefused({ why: "unconfirmed", meters: null, payload });
     else showToast("Couldn't confirm your location (VPN or roaming?) — the stamp stays as it was", "error");
+  };
+  // "I'm here, but the app is saying I'm not" (founder, 2026-10-10): the stamp
+  // is already yours, so this just tells us the map is wrong here — the report
+  // lands on the admin list, and the stamp keeps its strongest proof.
+  const reportVerify = async () => {
+    if (!verifyRefused || busy) return;
+    setBusy("report");
+    const { data, error } = await reportStamp(verifyRefused.payload);
+    setBusy(null);
+    if (error || !data?.id) { showToast(error || "Couldn't send that — try again", "error"); return; }
+    setVerifyRefused(null);
+    // A report never says ✓ (founder, 2026-10-10).
+    showToast(`Thanks for telling us — we'll check our map for ${stamp.name}`, "success");
+    onChanged?.();
   };
   // Place recognition on photos already on the stamp (stored without their
   // location tags, so recognition is the proof left for them).
@@ -400,7 +456,24 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
           {canVerify && (
             <Row icon={busy === "verify" ? Loader2 : BadgeCheck} label="Verify I'm here"
               sub="Uses your location once to earn the green ✓ — works while you're at the place"
-              onClick={verifyHere} disabled={busy === "verify"} />
+              onClick={verifyHere} disabled={busy === "verify" || busy === "report"} />
+          )}
+          {canVerify && verifyRefused && (
+            <div className="rounded-[14px] px-3.5 py-3" style={{ background: "#FFF8EC", border: "1px solid #FCD9A8" }}>
+              <p style={{ fontSize: fs(13), color: "#7A4A0C", lineHeight: 1.4 }}>
+                {verifyRefused.why === "elsewhere" ? `Your GPS puts you at ${verifyRefused.elsewhere} — this stamp is ${stamp.name}.`
+                  : verifyRefused.why === "unlocatable" ? "We can’t place this attraction on our map yet."
+                  : verifyRefused.why === "unconfirmed" ? "We couldn’t confirm your GPS reading — a VPN, or a long trip today, can cause this."
+                  : Number.isFinite(verifyRefused.meters) ? `Your GPS puts you about ${verifyAway(verifyRefused.meters)} from ${stamp.name} on our map.`
+                  : "Your GPS doesn’t show you at this place yet."}
+              </p>
+              {/* Every refusal offers it, the "another park or rim" one too (founder rule). */}
+              <button type="button" onClick={reportVerify} disabled={!!busy} className="w-full rounded-[10px] py-2 mt-2 font-bold disabled:opacity-60"
+                style={{ background: "#fff", color: STAMP, border: `1.5px solid ${STAMP}`, fontSize: fs(13), fontFamily: "inherit" }}>
+                {busy === "report" ? "Sending…" : "I’m here, but the app is saying I’m not"}
+              </button>
+              <p className="text-center" style={{ fontSize: fs(11), color: "#7A4A0C", marginTop: 4 }}>Your stamp stays yours — we&rsquo;ll check our map for this place.</p>
+            </div>
           )}
           {canCheckPhotos && (
             <Row icon={busy === "check" ? Loader2 : ScanSearch} label="Check my photos for proof"
